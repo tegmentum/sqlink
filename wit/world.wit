@@ -1,0 +1,23 @@
+package sqlite:wasm@0.1.0;
+
+world sqlite-world {
+    // Export both low-level and high-level SQLite APIs
+    // WASI filesystem/clock/random support is handled internally
+    // via the wasi-sdk libc, not through WIT imports
+    export low-level;
+    export high-level;
+}
+
+// World with extension support
+// This world includes the extension API for creating custom functions,
+// collations, and hooks. It requires the host to implement the callbacks.
+world sqlite-extensible {
+    // Export all SQLite APIs
+    export low-level;
+    export high-level;
+    export extension;
+
+    // Import callbacks that SQLite will invoke
+    // The host must provide implementations of these callbacks
+    import extension-callbacks;
+}

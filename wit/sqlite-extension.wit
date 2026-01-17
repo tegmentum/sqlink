@@ -1,0 +1,327 @@
+// SQLite Extension API
+// Allows defining custom SQL functions, collations, and hooks
+
+interface extension {
+    // =========================================================================
+    // Value Types and Accessors
+    // =========================================================================
+
+    /// Types of SQL values
+    enum value-type {
+        integer,
+        float,
+        text,
+        blob,
+        null,
+    }
+
+    /// A SQL value (read-only)
+    /// Represents a value passed to a function or returned from a query
+    record sql-value {
+        value-type: value-type,
+        int-value: option<s64>,
+        float-value: option<f64>,
+        text-value: option<string>,
+        blob-value: option<list<u8>>,
+    }
+
+    // =========================================================================
+    // Function Handles
+    // =========================================================================
+
+    /// Handle to a registered function (for unregistration)
+    type function-handle = u64;
+
+    /// Handle to a collation (for unregistration)
+    type collation-handle = u64;
+
+    /// Handle to a hook (for removal)
+    type hook-handle = u64;
+
+    /// Database handle (from low-level API)
+    type db-handle = u64;
+
+    // =========================================================================
+    // Function Flags
+    // =========================================================================
+
+    /// Flags for function creation
+    flags function-flags {
+        /// Function is deterministic (same inputs always produce same output)
+        deterministic,
+        /// Function has side effects (direct only)
+        direct-only,
+    }
+
+    // =========================================================================
+    // Extension Error
+    // =========================================================================
+
+    /// Error type for extension operations
+    record extension-error {
+        code: s32,
+        message: string,
+    }
+
+    // =========================================================================
+    // Scalar Function Registration
+    // =========================================================================
+
+    /// Register a scalar SQL function
+    /// The function-id is used to identify this function in callbacks
+    /// num-args: -1 for variadic functions
+    register-scalar-function: func(
+        db: db-handle,
+        name: string,
+        num-args: s32,
+        func-flags: function-flags,
+        function-id: u64,
+    ) -> result<function-handle, extension-error>;
+
+    /// Unregister a previously registered function
+    unregister-function: func(
+        handle: function-handle,
+    ) -> result<_, extension-error>;
+
+    // =========================================================================
+    // Aggregate Function Registration
+    // =========================================================================
+
+    /// Register an aggregate SQL function (like SUM, COUNT, etc.)
+    /// The function-id is used to identify this function in step/finalize callbacks
+    register-aggregate-function: func(
+        db: db-handle,
+        name: string,
+        num-args: s32,
+        func-flags: function-flags,
+        function-id: u64,
+    ) -> result<function-handle, extension-error>;
+
+    // =========================================================================
+    // Collation Registration
+    // =========================================================================
+
+    /// Register a custom collation sequence
+    /// The collation-id is used to identify this collation in compare callbacks
+    register-collation: func(
+        db: db-handle,
+        name: string,
+        collation-id: u64,
+    ) -> result<collation-handle, extension-error>;
+
+    /// Unregister a collation
+    unregister-collation: func(
+        handle: collation-handle,
+    ) -> result<_, extension-error>;
+
+    // =========================================================================
+    // Hook Registration
+    // =========================================================================
+
+    /// Type of update operation
+    enum update-type {
+        insert,
+        update,
+        delete,
+    }
+
+    /// Set an update hook
+    /// The hook-id is used in update callbacks
+    set-update-hook: func(
+        db: db-handle,
+        hook-id: u64,
+    ) -> result<hook-handle, extension-error>;
+
+    /// Remove an update hook
+    remove-update-hook: func(
+        handle: hook-handle,
+    ) -> result<_, extension-error>;
+
+    /// Set a commit hook
+    set-commit-hook: func(
+        db: db-handle,
+        hook-id: u64,
+    ) -> result<hook-handle, extension-error>;
+
+    /// Remove a commit hook
+    remove-commit-hook: func(
+        handle: hook-handle,
+    ) -> result<_, extension-error>;
+
+    /// Set a rollback hook
+    set-rollback-hook: func(
+        db: db-handle,
+        hook-id: u64,
+    ) -> result<hook-handle, extension-error>;
+
+    /// Remove a rollback hook
+    remove-rollback-hook: func(
+        handle: hook-handle,
+    ) -> result<_, extension-error>;
+
+    /// Set busy timeout in milliseconds
+    set-busy-timeout: func(
+        db: db-handle,
+        ms: s32,
+    ) -> result<_, extension-error>;
+
+    // =========================================================================
+    // Authorizer
+    // =========================================================================
+
+    /// Authorization action codes
+    enum auth-action {
+        create-index,
+        create-table,
+        create-temp-index,
+        create-temp-table,
+        create-temp-trigger,
+        create-temp-view,
+        create-trigger,
+        create-view,
+        delete,
+        drop-index,
+        drop-table,
+        drop-temp-index,
+        drop-temp-table,
+        drop-temp-trigger,
+        drop-temp-view,
+        drop-trigger,
+        drop-view,
+        insert,
+        pragma,
+        read,
+        select,
+        transaction,
+        update,
+        attach,
+        detach,
+        alter-table,
+        reindex,
+        analyze,
+        create-vtable,
+        drop-vtable,
+        function,
+        savepoint,
+        recursive,
+    }
+
+    /// Authorization result
+    enum auth-result {
+        /// Allow the action
+        ok,
+        /// Deny the action with an error
+        deny,
+        /// Silently ignore the action
+        ignore,
+    }
+
+    /// Set the authorizer
+    /// The auth-id is used in authorizer callbacks
+    set-authorizer: func(
+        db: db-handle,
+        auth-id: u64,
+    ) -> result<hook-handle, extension-error>;
+
+    /// Remove the authorizer
+    remove-authorizer: func(
+        handle: hook-handle,
+    ) -> result<_, extension-error>;
+}
+
+/// Callback interface that host components must import
+/// This interface defines the callbacks that SQLite will invoke
+interface extension-callbacks {
+    use extension.{sql-value, value-type, update-type, auth-action, auth-result};
+
+    // =========================================================================
+    // Scalar Function Callback
+    // =========================================================================
+
+    /// Called when a scalar function is invoked
+    /// function-id: the ID registered with register-scalar-function
+    /// args: the arguments passed to the function
+    /// Returns: the result value
+    on-scalar-function: func(
+        function-id: u64,
+        args: list<sql-value>,
+    ) -> result<sql-value, string>;
+
+    // =========================================================================
+    // Aggregate Function Callbacks
+    // =========================================================================
+
+    /// Called for each row during aggregate computation
+    /// function-id: the ID registered with register-aggregate-function
+    /// context-id: unique ID for this aggregation context
+    /// args: the arguments for this row
+    on-aggregate-step: func(
+        function-id: u64,
+        context-id: u64,
+        args: list<sql-value>,
+    );
+
+    /// Called to get the final aggregate result
+    /// function-id: the ID registered with register-aggregate-function
+    /// context-id: unique ID for this aggregation context
+    /// Returns: the final aggregate value
+    on-aggregate-finalize: func(
+        function-id: u64,
+        context-id: u64,
+    ) -> result<sql-value, string>;
+
+    // =========================================================================
+    // Collation Callback
+    // =========================================================================
+
+    /// Called to compare two strings for a custom collation
+    /// collation-id: the ID registered with register-collation
+    /// Returns: negative if a < b, zero if a == b, positive if a > b
+    on-collation-compare: func(
+        collation-id: u64,
+        a: string,
+        b: string,
+    ) -> s32;
+
+    // =========================================================================
+    // Hook Callbacks
+    // =========================================================================
+
+    /// Called when a row is updated
+    /// hook-id: the ID set with set-update-hook
+    on-update: func(
+        hook-id: u64,
+        op: update-type,
+        database: string,
+        table: string,
+        rowid: s64,
+    );
+
+    /// Called before a commit
+    /// hook-id: the ID set with set-commit-hook
+    /// Returns: true to convert commit to rollback, false to proceed
+    on-commit: func(
+        hook-id: u64,
+    ) -> bool;
+
+    /// Called after a rollback
+    /// hook-id: the ID set with set-rollback-hook
+    on-rollback: func(
+        hook-id: u64,
+    );
+
+    // =========================================================================
+    // Authorizer Callback
+    // =========================================================================
+
+    /// Called to authorize a SQL action
+    /// auth-id: the ID set with set-authorizer
+    on-authorize: func(
+        auth-id: u64,
+        action: auth-action,
+        arg1: option<string>,
+        arg2: option<string>,
+        database: option<string>,
+        trigger: option<string>,
+    ) -> auth-result;
+}

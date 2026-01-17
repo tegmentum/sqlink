@@ -1,0 +1,24 @@
+{
+  "name": "extension-manager",
+  "version": "0.1.0",
+  "description": "SQL interface for managing SQLite WASM extensions",
+  "license": "MIT",
+  "authors": ["SQLite WASM Team"],
+  "repository": "https://github.com/anthropics/sqlite-wasm",
+  "homepage": "https://github.com/anthropics/sqlite-wasm#readme",
+  "keywords": ["sqlite", "extension", "manager", "registry"],
+  "categories": ["utility"],
+  "min_sqlite_version": "3.39.0",
+  "exports": [
+    "wasm_sync",
+    "wasm_search",
+    "wasm_list",
+    "wasm_install",
+    "wasm_uninstall",
+    "wasm_info",
+    "wasm_update",
+    "wasm_registry_version"
+  ],
+  "dependencies": [],
+  "function_id_start": 200
+}

@@ -1,0 +1,978 @@
+#!/usr/bin/env python3
+"""
+SQLite WASM Extension Manager
+
+A CLI tool for discovering, installing, and managing SQLite WASM extensions
+distributed via OCI registries.
+
+Usage:
+    sqlite-wasm-ext search <query>           Search for extensions
+    sqlite-wasm-ext install <name>           Install from OCI registry
+    sqlite-wasm-ext uninstall <name>         Uninstall an extension
+    sqlite-wasm-ext list                     List installed extensions
+    sqlite-wasm-ext info <name>              Show extension details
+    sqlite-wasm-ext sync                     Sync registry from remote
+    sqlite-wasm-ext update [name]            Update extensions
+    sqlite-wasm-ext publish <path>           Publish to OCI registry
+"""
+
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import sqlite3
+import subprocess
+import sys
+import tarfile
+import tempfile
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
+
+# ============================================================================
+# Configuration
+# ============================================================================
+
+DEFAULT_REGISTRY_URL = "https://raw.githubusercontent.com/anthropics/sqlite-wasm-extensions/main/registry/index.json"
+DEFAULT_DATA_DIR = Path.home() / ".sqlite-wasm"
+EXTENSIONS_DIR = "extensions"
+DB_FILE = "registry.db"
+
+# OCI Registry defaults
+DEFAULT_OCI_REGISTRY = "ghcr.io"
+DEFAULT_OCI_NAMESPACE = "anthropics/sqlite-wasm-extensions"
+
+# ============================================================================
+# Data Classes
+# ============================================================================
+
+@dataclass
+class ExtensionInfo:
+    """Extension metadata from registry."""
+    name: str
+    version: str
+    description: str
+    license: str = ""
+    authors: List[str] = field(default_factory=list)
+    repository: str = ""
+    homepage: str = ""
+    keywords: List[str] = field(default_factory=list)
+    categories: List[str] = field(default_factory=list)
+    oci_artifact: str = ""  # e.g., ghcr.io/anthropics/sqlite-wasm-extensions/text:0.1.0
+    checksum: str = ""      # sha256:...
+    size_bytes: int = 0
+    min_sqlite_version: str = ""
+    exports: List[str] = field(default_factory=list)
+    dependencies: List[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, data: Dict) -> 'ExtensionInfo':
+        return cls(
+            name=data.get('name', ''),
+            version=data.get('version', ''),
+            description=data.get('description', ''),
+            license=data.get('license', ''),
+            authors=data.get('authors', []),
+            repository=data.get('repository', ''),
+            homepage=data.get('homepage', ''),
+            keywords=data.get('keywords', []),
+            categories=data.get('categories', []),
+            oci_artifact=data.get('oci_artifact', ''),
+            checksum=data.get('checksum', ''),
+            size_bytes=data.get('size_bytes', 0),
+            min_sqlite_version=data.get('min_sqlite_version', ''),
+            exports=data.get('exports', []),
+            dependencies=data.get('dependencies', []),
+        )
+
+@dataclass
+class InstalledExtension:
+    """Locally installed extension."""
+    name: str
+    version: str
+    installed_at: str
+    path: str
+    checksum: str = ""
+    oci_artifact: str = ""
+
+# ============================================================================
+# OCI Registry Client
+# ============================================================================
+
+class OCIClient:
+    """Client for pulling artifacts from OCI registries."""
+
+    # OCI media types
+    WASM_LAYER_TYPE = "application/vnd.wasm.content.layer.v1+wasm"
+    TAR_LAYER_TYPE = "application/vnd.oci.image.layer.v1.tar+gzip"
+
+    def __init__(self, registry: str = DEFAULT_OCI_REGISTRY):
+        self.registry = registry
+        self._token_cache: Dict[str, str] = {}
+
+    def parse_reference(self, ref: str) -> Tuple[str, str, str]:
+        """Parse OCI reference into (registry, repository, tag)."""
+        # Format: registry/namespace/name:tag
+        # e.g., ghcr.io/anthropics/sqlite-wasm-extensions/text:0.1.0
+
+        if '/' not in ref:
+            raise ValueError(f"Invalid OCI reference: {ref}")
+
+        # Split off tag
+        if ':' in ref:
+            ref_no_tag, tag = ref.rsplit(':', 1)
+        else:
+            ref_no_tag, tag = ref, 'latest'
+
+        parts = ref_no_tag.split('/')
+        if len(parts) < 2:
+            raise ValueError(f"Invalid OCI reference: {ref}")
+
+        # First part is registry if it contains a dot or port
+        if '.' in parts[0] or ':' in parts[0]:
+            registry = parts[0]
+            repository = '/'.join(parts[1:])
+        else:
+            registry = 'docker.io'
+            repository = ref_no_tag
+
+        return registry, repository, tag
+
+    def _get_token(self, registry: str, repository: str) -> Optional[str]:
+        """Get authentication token for registry using curl."""
+        cache_key = f"{registry}/{repository}"
+        if cache_key in self._token_cache:
+            return self._token_cache[cache_key]
+
+        # GitHub Container Registry auth
+        if registry == 'ghcr.io':
+            # Try anonymous token first
+            try:
+                url = f"https://ghcr.io/token?scope=repository:{repository}:pull"
+                cmd = ['curl', '-sS', '-L', '-H', 'User-Agent: sqlite-wasm-ext/1.0', url]
+                result = subprocess.run(cmd, capture_output=True, timeout=30)
+                if result.returncode == 0:
+                    data = json.loads(result.stdout.decode())
+                    token = data.get('token')
+                    if token:
+                        self._token_cache[cache_key] = token
+                        return token
+            except Exception:
+                pass
+
+        return None
+
+    def _make_request(self, url: str, registry: str, repository: str,
+                      accept: str = None) -> bytes:
+        """Make authenticated request to registry using curl."""
+        cmd = ['curl', '-sS', '-L', '--fail', '-o', '-']
+
+        # Add headers
+        cmd.extend(['-H', 'User-Agent: sqlite-wasm-ext/1.0'])
+
+        if accept:
+            cmd.extend(['-H', f'Accept: {accept}'])
+
+        token = self._get_token(registry, repository)
+        if token:
+            cmd.extend(['-H', f'Authorization: Bearer {token}'])
+
+        cmd.append(url)
+
+        result = subprocess.run(cmd, capture_output=True, timeout=60)
+        if result.returncode != 0:
+            error_msg = result.stderr.decode().strip()
+            raise URLError(f"curl failed: {error_msg}")
+
+        return result.stdout
+
+    def pull(self, reference: str, dest_dir: Path) -> bool:
+        """Pull extension from OCI registry."""
+        registry, repository, tag = self.parse_reference(reference)
+
+        print(f"  Pulling {reference}...")
+
+        try:
+            # Get manifest
+            manifest_url = f"https://{registry}/v2/{repository}/manifests/{tag}"
+            accept = "application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json"
+
+            manifest_data = self._make_request(manifest_url, registry, repository, accept)
+            manifest = json.loads(manifest_data.decode())
+
+            # Find the layer (WASM or tar.gz)
+            layers = manifest.get('layers', [])
+            if not layers:
+                print("Error: No layers found in manifest")
+                return False
+
+            # Look for our content layer
+            layer = None
+            for l in layers:
+                media_type = l.get('mediaType', '')
+                if media_type in [self.WASM_LAYER_TYPE, self.TAR_LAYER_TYPE,
+                                  'application/octet-stream']:
+                    layer = l
+                    break
+
+            if not layer:
+                # Fall back to first layer
+                layer = layers[0]
+
+            digest = layer.get('digest', '')
+            size = layer.get('size', 0)
+
+            print(f"  Downloading layer ({size:,} bytes)...")
+
+            # Download layer
+            blob_url = f"https://{registry}/v2/{repository}/blobs/{digest}"
+            blob_data = self._make_request(blob_url, registry, repository)
+
+            # Verify checksum
+            if digest.startswith('sha256:'):
+                expected = digest[7:]
+                actual = hashlib.sha256(blob_data).hexdigest()
+                if actual != expected:
+                    print(f"Error: Checksum mismatch!")
+                    print(f"  Expected: {expected}")
+                    print(f"  Actual: {actual}")
+                    return False
+                print("  Checksum verified")
+
+            # Extract or write
+            dest_dir.mkdir(parents=True, exist_ok=True)
+
+            media_type = layer.get('mediaType', '')
+            if media_type == self.TAR_LAYER_TYPE or blob_data[:2] == b'\x1f\x8b':
+                # It's a gzipped tar
+                with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                    tmp.write(blob_data)
+                    tmp_path = tmp.name
+
+                with tarfile.open(tmp_path, 'r:gz') as tar:
+                    tar.extractall(dest_dir)
+                os.unlink(tmp_path)
+            else:
+                # Write as-is (single file)
+                ext_file = dest_dir / 'extension.wasm'
+                ext_file.write_bytes(blob_data)
+
+            return True
+
+        except HTTPError as e:
+            if e.code == 401:
+                print(f"Error: Authentication required for {registry}")
+                print("  Set OCI_TOKEN environment variable or login with:")
+                print(f"  docker login {registry}")
+            elif e.code == 404:
+                print(f"Error: Extension not found: {reference}")
+            else:
+                print(f"Error: HTTP {e.code}: {e.reason}")
+            return False
+        except Exception as e:
+            print(f"Error: Failed to pull: {e}")
+            return False
+
+    def push(self, source_path: Path, reference: str, token: str = None) -> bool:
+        """Push extension to OCI registry."""
+        registry, repository, tag = self.parse_reference(reference)
+
+        print(f"  Pushing to {reference}...")
+
+        if not token:
+            token = os.environ.get('OCI_TOKEN') or os.environ.get('GITHUB_TOKEN')
+
+        if not token:
+            print("Error: No authentication token provided")
+            print("  Set OCI_TOKEN or GITHUB_TOKEN environment variable")
+            return False
+
+        try:
+            # Create tarball if source is a directory
+            if source_path.is_dir():
+                with tempfile.NamedTemporaryFile(suffix='.tar.gz', delete=False) as tmp:
+                    with tarfile.open(tmp.name, 'w:gz') as tar:
+                        for item in source_path.iterdir():
+                            if not item.name.startswith('.'):
+                                tar.add(item, arcname=item.name)
+                    blob_path = Path(tmp.name)
+                    media_type = self.TAR_LAYER_TYPE
+            else:
+                blob_path = source_path
+                media_type = self.WASM_LAYER_TYPE
+
+            # Read blob
+            blob_data = blob_path.read_bytes()
+            blob_digest = f"sha256:{hashlib.sha256(blob_data).hexdigest()}"
+            blob_size = len(blob_data)
+
+            headers = {
+                'User-Agent': 'sqlite-wasm-ext/1.0',
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/octet-stream',
+            }
+
+            # Upload blob
+            print(f"  Uploading blob ({blob_size:,} bytes)...")
+
+            # Start upload
+            upload_url = f"https://{registry}/v2/{repository}/blobs/uploads/"
+            req = Request(upload_url, method='POST', headers=headers)
+
+            with urlopen(req, timeout=60) as resp:
+                location = resp.headers.get('Location')
+
+            if not location:
+                print("Error: Failed to initiate upload")
+                return False
+
+            # Complete upload
+            if '?' in location:
+                upload_url = f"{location}&digest={blob_digest}"
+            else:
+                upload_url = f"{location}?digest={blob_digest}"
+
+            req = Request(upload_url, data=blob_data, method='PUT', headers=headers)
+            with urlopen(req, timeout=120) as resp:
+                pass
+
+            # Create and push manifest
+            manifest = {
+                "schemaVersion": 2,
+                "mediaType": "application/vnd.oci.image.manifest.v1+json",
+                "config": {
+                    "mediaType": "application/vnd.oci.image.config.v1+json",
+                    "digest": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+                    "size": 2
+                },
+                "layers": [{
+                    "mediaType": media_type,
+                    "digest": blob_digest,
+                    "size": blob_size
+                }]
+            }
+
+            manifest_data = json.dumps(manifest).encode()
+
+            print("  Pushing manifest...")
+            manifest_url = f"https://{registry}/v2/{repository}/manifests/{tag}"
+            headers['Content-Type'] = 'application/vnd.oci.image.manifest.v1+json'
+            req = Request(manifest_url, data=manifest_data, method='PUT', headers=headers)
+
+            with urlopen(req, timeout=60) as resp:
+                pass
+
+            # Cleanup temp file
+            if source_path.is_dir():
+                os.unlink(blob_path)
+
+            print(f"  Published: {reference}")
+            print(f"  Digest: {blob_digest}")
+            return True
+
+        except HTTPError as e:
+            print(f"Error: HTTP {e.code}: {e.reason}")
+            if e.code == 401:
+                print("  Check your authentication token")
+            return False
+        except Exception as e:
+            print(f"Error: Failed to push: {e}")
+            return False
+
+# ============================================================================
+# Database Management
+# ============================================================================
+
+class RegistryDatabase:
+    """Local SQLite database for registry cache and installed extensions."""
+
+    SCHEMA = """
+    CREATE TABLE IF NOT EXISTS extensions (
+        name TEXT PRIMARY KEY,
+        version TEXT NOT NULL,
+        description TEXT,
+        license TEXT,
+        authors TEXT,
+        repository TEXT,
+        homepage TEXT,
+        keywords TEXT,
+        categories TEXT,
+        oci_artifact TEXT,
+        checksum TEXT,
+        size_bytes INTEGER,
+        min_sqlite_version TEXT,
+        exports TEXT,
+        dependencies TEXT,
+        updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS installed (
+        name TEXT PRIMARY KEY,
+        version TEXT NOT NULL,
+        installed_at TEXT NOT NULL,
+        path TEXT NOT NULL,
+        checksum TEXT,
+        oci_artifact TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS metadata (
+        key TEXT PRIMARY KEY,
+        value TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_extensions_keywords ON extensions(keywords);
+    CREATE INDEX IF NOT EXISTS idx_extensions_categories ON extensions(categories);
+    """
+
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self.conn = sqlite3.connect(str(db_path))
+        self.conn.row_factory = sqlite3.Row
+        self._init_schema()
+
+    def _init_schema(self):
+        self.conn.executescript(self.SCHEMA)
+        self.conn.commit()
+
+    def close(self):
+        self.conn.close()
+
+    def upsert_extension(self, ext: ExtensionInfo):
+        self.conn.execute("""
+            INSERT OR REPLACE INTO extensions
+            (name, version, description, license, authors, repository, homepage,
+             keywords, categories, oci_artifact, checksum, size_bytes,
+             min_sqlite_version, exports, dependencies, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            ext.name, ext.version, ext.description, ext.license,
+            json.dumps(ext.authors), ext.repository, ext.homepage,
+            json.dumps(ext.keywords), json.dumps(ext.categories),
+            ext.oci_artifact, ext.checksum, ext.size_bytes,
+            ext.min_sqlite_version, json.dumps(ext.exports),
+            json.dumps(ext.dependencies), datetime.now(timezone.utc).isoformat()
+        ))
+        self.conn.commit()
+
+    def get_extension(self, name: str) -> Optional[ExtensionInfo]:
+        row = self.conn.execute(
+            "SELECT * FROM extensions WHERE name = ?", (name,)
+        ).fetchone()
+        if row:
+            return self._row_to_extension(row)
+        return None
+
+    def search_extensions(self, query: str) -> List[ExtensionInfo]:
+        query = f"%{query.lower()}%"
+        rows = self.conn.execute("""
+            SELECT * FROM extensions
+            WHERE LOWER(name) LIKE ?
+               OR LOWER(description) LIKE ?
+               OR LOWER(keywords) LIKE ?
+               OR LOWER(categories) LIKE ?
+            ORDER BY name
+        """, (query, query, query, query)).fetchall()
+        return [self._row_to_extension(row) for row in rows]
+
+    def list_extensions(self) -> List[ExtensionInfo]:
+        rows = self.conn.execute(
+            "SELECT * FROM extensions ORDER BY name"
+        ).fetchall()
+        return [self._row_to_extension(row) for row in rows]
+
+    def _row_to_extension(self, row) -> ExtensionInfo:
+        return ExtensionInfo(
+            name=row['name'],
+            version=row['version'],
+            description=row['description'] or '',
+            license=row['license'] or '',
+            authors=json.loads(row['authors'] or '[]'),
+            repository=row['repository'] or '',
+            homepage=row['homepage'] or '',
+            keywords=json.loads(row['keywords'] or '[]'),
+            categories=json.loads(row['categories'] or '[]'),
+            oci_artifact=row['oci_artifact'] or '',
+            checksum=row['checksum'] or '',
+            size_bytes=row['size_bytes'] or 0,
+            min_sqlite_version=row['min_sqlite_version'] or '',
+            exports=json.loads(row['exports'] or '[]'),
+            dependencies=json.loads(row['dependencies'] or '[]'),
+        )
+
+    def install_extension(self, name: str, version: str, path: str,
+                          checksum: str = "", oci_artifact: str = ""):
+        self.conn.execute("""
+            INSERT OR REPLACE INTO installed
+            (name, version, installed_at, path, checksum, oci_artifact)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (name, version, datetime.now(timezone.utc).isoformat(),
+              path, checksum, oci_artifact))
+        self.conn.commit()
+
+    def uninstall_extension(self, name: str):
+        self.conn.execute("DELETE FROM installed WHERE name = ?", (name,))
+        self.conn.commit()
+
+    def get_installed(self, name: str) -> Optional[InstalledExtension]:
+        row = self.conn.execute(
+            "SELECT * FROM installed WHERE name = ?", (name,)
+        ).fetchone()
+        if row:
+            return InstalledExtension(
+                name=row['name'],
+                version=row['version'],
+                installed_at=row['installed_at'],
+                path=row['path'],
+                checksum=row['checksum'] or '',
+                oci_artifact=row['oci_artifact'] or ''
+            )
+        return None
+
+    def list_installed(self) -> List[InstalledExtension]:
+        rows = self.conn.execute(
+            "SELECT * FROM installed ORDER BY name"
+        ).fetchall()
+        return [
+            InstalledExtension(
+                name=row['name'],
+                version=row['version'],
+                installed_at=row['installed_at'],
+                path=row['path'],
+                checksum=row['checksum'] or '',
+                oci_artifact=row['oci_artifact'] or ''
+            )
+            for row in rows
+        ]
+
+    def set_metadata(self, key: str, value: str):
+        self.conn.execute(
+            "INSERT OR REPLACE INTO metadata (key, value) VALUES (?, ?)",
+            (key, value)
+        )
+        self.conn.commit()
+
+    def get_metadata(self, key: str) -> Optional[str]:
+        row = self.conn.execute(
+            "SELECT value FROM metadata WHERE key = ?", (key,)
+        ).fetchone()
+        return row['value'] if row else None
+
+# ============================================================================
+# Extension Manager
+# ============================================================================
+
+class ExtensionManager:
+    """Main class for managing SQLite WASM extensions."""
+
+    def __init__(self, data_dir: Path = DEFAULT_DATA_DIR,
+                 registry_url: str = DEFAULT_REGISTRY_URL):
+        self.data_dir = data_dir
+        self.registry_url = registry_url
+        self.extensions_dir = data_dir / EXTENSIONS_DIR
+        self.db = RegistryDatabase(data_dir / DB_FILE)
+        self.oci = OCIClient()
+
+        self.extensions_dir.mkdir(parents=True, exist_ok=True)
+
+    def close(self):
+        self.db.close()
+
+    # ========================================================================
+    # Registry Sync
+    # ========================================================================
+
+    def sync(self, url: Optional[str] = None) -> int:
+        """Sync local registry cache from remote."""
+        url = url or self.registry_url
+        print(f"Syncing registry from {url}...")
+
+        try:
+            if url.startswith('file://') or os.path.exists(url):
+                path = url.replace('file://', '')
+                with open(path, 'r') as f:
+                    data = json.load(f)
+            else:
+                req = Request(url, headers={'User-Agent': 'sqlite-wasm-ext/1.0'})
+                with urlopen(req, timeout=30) as response:
+                    data = json.loads(response.read().decode())
+
+            extensions = data.get('extensions', [])
+            count = 0
+
+            for ext_data in extensions:
+                ext = ExtensionInfo.from_dict(ext_data)
+                self.db.upsert_extension(ext)
+                count += 1
+
+            self.db.set_metadata('registry_version', data.get('version', ''))
+            self.db.set_metadata('registry_updated', data.get('updated', ''))
+            self.db.set_metadata('last_sync', datetime.now(timezone.utc).isoformat())
+
+            print(f"Synced {count} extension(s)")
+            return count
+
+        except (URLError, HTTPError) as e:
+            print(f"Error: Failed to fetch registry: {e}", file=sys.stderr)
+            return -1
+        except json.JSONDecodeError as e:
+            print(f"Error: Invalid registry format: {e}", file=sys.stderr)
+            return -1
+
+    # ========================================================================
+    # Search & List
+    # ========================================================================
+
+    def search(self, query: str) -> List[ExtensionInfo]:
+        return self.db.search_extensions(query)
+
+    def list_available(self) -> List[ExtensionInfo]:
+        return self.db.list_extensions()
+
+    def list_installed(self) -> List[InstalledExtension]:
+        return self.db.list_installed()
+
+    def info(self, name: str) -> Optional[ExtensionInfo]:
+        return self.db.get_extension(name)
+
+    # ========================================================================
+    # Install & Uninstall
+    # ========================================================================
+
+    def install(self, name: str, version: Optional[str] = None,
+                force: bool = False) -> bool:
+        """Install an extension from OCI registry."""
+        installed = self.db.get_installed(name)
+        if installed and not force:
+            print(f"Extension '{name}' is already installed (version {installed.version})")
+            print("Use --force to reinstall")
+            return False
+
+        ext = self.db.get_extension(name)
+        if not ext:
+            print(f"Error: Extension '{name}' not found in registry")
+            print("Try running 'sqlite-wasm-ext sync' to update the registry")
+            return False
+
+        if not ext.oci_artifact:
+            print(f"Error: Extension '{name}' has no OCI artifact")
+            print("This extension may need to be built and published first")
+            return False
+
+        print(f"Installing {name} v{ext.version}...")
+
+        # Check dependencies
+        for dep in ext.dependencies:
+            dep_installed = self.db.get_installed(dep)
+            if not dep_installed:
+                print(f"  Installing dependency: {dep}")
+                if not self.install(dep):
+                    print(f"Error: Failed to install dependency '{dep}'")
+                    return False
+
+        # Download from OCI registry
+        ext_dir = self.extensions_dir / name
+        if ext_dir.exists():
+            shutil.rmtree(ext_dir)
+
+        if not self.oci.pull(ext.oci_artifact, ext_dir):
+            return False
+
+        # Record installation
+        self.db.install_extension(
+            name=name,
+            version=ext.version,
+            path=str(ext_dir),
+            checksum=ext.checksum,
+            oci_artifact=ext.oci_artifact
+        )
+
+        print(f"Successfully installed {name} v{ext.version}")
+        print(f"  Location: {ext_dir}")
+        print(f"  Exports: {', '.join(ext.exports[:5])}{'...' if len(ext.exports) > 5 else ''}")
+        return True
+
+    def uninstall(self, name: str) -> bool:
+        """Uninstall an extension."""
+        installed = self.db.get_installed(name)
+        if not installed:
+            print(f"Error: Extension '{name}' is not installed")
+            return False
+
+        print(f"Uninstalling {name}...")
+
+        ext_dir = Path(installed.path)
+        if ext_dir.exists():
+            shutil.rmtree(ext_dir)
+
+        self.db.uninstall_extension(name)
+
+        print(f"Successfully uninstalled {name}")
+        return True
+
+    # ========================================================================
+    # Update
+    # ========================================================================
+
+    def update(self, name: Optional[str] = None) -> int:
+        """Update installed extensions."""
+        self.sync()
+
+        installed = self.list_installed()
+        if name:
+            installed = [i for i in installed if i.name == name]
+
+        updated = 0
+        for inst in installed:
+            ext = self.db.get_extension(inst.name)
+            if ext and ext.version != inst.version:
+                print(f"Updating {inst.name}: {inst.version} -> {ext.version}")
+                if self.install(inst.name, force=True):
+                    updated += 1
+
+        if updated == 0:
+            print("All extensions are up to date")
+
+        return updated
+
+    # ========================================================================
+    # Publish
+    # ========================================================================
+
+    def publish(self, source_path: Path, name: str, version: str,
+                registry: str = None, namespace: str = None) -> bool:
+        """Publish extension to OCI registry."""
+        if not source_path.exists():
+            print(f"Error: Path does not exist: {source_path}")
+            return False
+
+        registry = registry or DEFAULT_OCI_REGISTRY
+        namespace = namespace or DEFAULT_OCI_NAMESPACE
+        reference = f"{registry}/{namespace}/{name}:{version}"
+
+        print(f"Publishing {name} v{version}...")
+        return self.oci.push(source_path, reference)
+
+
+# ============================================================================
+# CLI Interface
+# ============================================================================
+
+def main():
+    parser = argparse.ArgumentParser(
+        prog='sqlite-wasm-ext',
+        description='SQLite WASM Extension Manager - Install extensions from OCI registries',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  sqlite-wasm-ext sync                           # Update registry cache
+  sqlite-wasm-ext search text                    # Search for text extensions
+  sqlite-wasm-ext install text                   # Install from OCI registry
+  sqlite-wasm-ext list                           # List installed extensions
+  sqlite-wasm-ext info text                      # Show extension details
+  sqlite-wasm-ext uninstall text                 # Remove extension
+  sqlite-wasm-ext update                         # Update all extensions
+  sqlite-wasm-ext publish ./my-ext text 1.0.0   # Publish to registry
+
+OCI Registry Authentication:
+  Set OCI_TOKEN or GITHUB_TOKEN environment variable for authenticated access.
+  For GitHub Container Registry: export GITHUB_TOKEN=ghp_...
+        """
+    )
+
+    parser.add_argument('-r', '--registry', type=str,
+                        default=DEFAULT_REGISTRY_URL,
+                        help='Registry index URL')
+    parser.add_argument('-d', '--data-dir', type=Path,
+                        default=DEFAULT_DATA_DIR,
+                        help='Data directory (default: ~/.sqlite-wasm)')
+    parser.add_argument('-v', '--verbose', action='store_true',
+                        help='Verbose output')
+
+    subparsers = parser.add_subparsers(dest='command', help='Commands')
+
+    # sync
+    sync_parser = subparsers.add_parser('sync', help='Sync registry from remote')
+    sync_parser.add_argument('--url', type=str, help='Override registry URL')
+
+    # search
+    search_parser = subparsers.add_parser('search', help='Search for extensions')
+    search_parser.add_argument('query', type=str, help='Search query')
+
+    # install
+    install_parser = subparsers.add_parser('install', help='Install from OCI registry')
+    install_parser.add_argument('name', type=str, help='Extension name')
+    install_parser.add_argument('--version', type=str, help='Specific version')
+    install_parser.add_argument('--force', '-f', action='store_true',
+                                help='Force reinstall')
+
+    # uninstall
+    uninstall_parser = subparsers.add_parser('uninstall', help='Uninstall an extension')
+    uninstall_parser.add_argument('name', type=str, help='Extension name')
+
+    # list
+    list_parser = subparsers.add_parser('list', help='List extensions')
+    list_parser.add_argument('--installed', '-i', action='store_true',
+                             help='List installed only')
+    list_parser.add_argument('--available', '-a', action='store_true',
+                             help='List available only')
+
+    # info
+    info_parser = subparsers.add_parser('info', help='Show extension details')
+    info_parser.add_argument('name', type=str, help='Extension name')
+
+    # update
+    update_parser = subparsers.add_parser('update', help='Update extensions')
+    update_parser.add_argument('name', type=str, nargs='?', help='Extension name (optional)')
+
+    # publish
+    publish_parser = subparsers.add_parser('publish', help='Publish to OCI registry')
+    publish_parser.add_argument('path', type=Path, help='Extension directory or tarball')
+    publish_parser.add_argument('name', type=str, help='Extension name')
+    publish_parser.add_argument('version', type=str, help='Version tag')
+    publish_parser.add_argument('--registry', type=str, default=DEFAULT_OCI_REGISTRY,
+                                help=f'OCI registry (default: {DEFAULT_OCI_REGISTRY})')
+    publish_parser.add_argument('--namespace', type=str, default=DEFAULT_OCI_NAMESPACE,
+                                help=f'OCI namespace (default: {DEFAULT_OCI_NAMESPACE})')
+
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        return 1
+
+    mgr = ExtensionManager(
+        data_dir=args.data_dir,
+        registry_url=args.registry
+    )
+
+    try:
+        if args.command == 'sync':
+            result = mgr.sync(args.url if hasattr(args, 'url') else None)
+            return 0 if result >= 0 else 1
+
+        elif args.command == 'search':
+            results = mgr.search(args.query)
+            if not results:
+                print(f"No extensions found matching '{args.query}'")
+                return 0
+
+            print(f"Found {len(results)} extension(s):\n")
+            for ext in results:
+                installed = mgr.db.get_installed(ext.name)
+                status = f" [installed: {installed.version}]" if installed else ""
+                print(f"  {ext.name} ({ext.version}){status}")
+                print(f"    {ext.description}")
+                if ext.oci_artifact:
+                    print(f"    OCI: {ext.oci_artifact}")
+                print()
+            return 0
+
+        elif args.command == 'install':
+            return 0 if mgr.install(args.name, args.version, args.force) else 1
+
+        elif args.command == 'uninstall':
+            return 0 if mgr.uninstall(args.name) else 1
+
+        elif args.command == 'list':
+            if args.installed or not args.available:
+                installed = mgr.list_installed()
+                if installed:
+                    print("Installed extensions:")
+                    print("-" * 60)
+                    for inst in installed:
+                        print(f"  {inst.name} ({inst.version})")
+                        print(f"    Installed: {inst.installed_at}")
+                        print(f"    Path: {inst.path}")
+                        if inst.oci_artifact:
+                            print(f"    OCI: {inst.oci_artifact}")
+                        print()
+                elif not args.available:
+                    print("No extensions installed")
+                    print("Use 'sqlite-wasm-ext sync' to update registry")
+                    print("Use 'sqlite-wasm-ext install <name>' to install")
+
+            if args.available or not args.installed:
+                available = mgr.list_available()
+                if available:
+                    print("\nAvailable extensions:")
+                    print("-" * 60)
+                    for ext in available:
+                        installed = mgr.db.get_installed(ext.name)
+                        status = " [installed]" if installed else ""
+                        print(f"  {ext.name} ({ext.version}){status}")
+                        print(f"    {ext.description}")
+                        if ext.oci_artifact:
+                            print(f"    OCI: {ext.oci_artifact}")
+                        print()
+                elif not args.installed:
+                    print("\nNo extensions in registry")
+                    print("Use 'sqlite-wasm-ext sync' to update")
+            return 0
+
+        elif args.command == 'info':
+            ext = mgr.info(args.name)
+            if not ext:
+                print(f"Extension '{args.name}' not found")
+                return 1
+
+            installed = mgr.db.get_installed(args.name)
+
+            print(f"Extension: {ext.name}")
+            print("=" * 60)
+            print(f"Version:     {ext.version}")
+            print(f"Description: {ext.description}")
+            print(f"License:     {ext.license}")
+            print(f"Authors:     {', '.join(ext.authors)}")
+            print(f"Repository:  {ext.repository}")
+            print(f"Homepage:    {ext.homepage}")
+            print(f"Categories:  {', '.join(ext.categories)}")
+            print(f"Keywords:    {', '.join(ext.keywords)}")
+            print(f"Min SQLite:  {ext.min_sqlite_version}")
+            print(f"Size:        {ext.size_bytes:,} bytes")
+            print(f"Checksum:    {ext.checksum}")
+            print(f"OCI Artifact: {ext.oci_artifact}")
+            print(f"\nExports ({len(ext.exports)}):")
+            for export in ext.exports[:15]:
+                print(f"  - {export}")
+            if len(ext.exports) > 15:
+                print(f"  ... and {len(ext.exports) - 15} more")
+
+            if ext.dependencies:
+                print(f"\nDependencies:")
+                for dep in ext.dependencies:
+                    print(f"  - {dep}")
+
+            if installed:
+                print(f"\nInstalled:")
+                print(f"  Version:   {installed.version}")
+                print(f"  Date:      {installed.installed_at}")
+                print(f"  Path:      {installed.path}")
+            else:
+                print(f"\nNot installed")
+                print(f"  Use: sqlite-wasm-ext install {ext.name}")
+
+            return 0
+
+        elif args.command == 'update':
+            mgr.update(args.name if hasattr(args, 'name') else None)
+            return 0
+
+        elif args.command == 'publish':
+            return 0 if mgr.publish(args.path, args.name, args.version,
+                                     args.registry, args.namespace) else 1
+
+        else:
+            parser.print_help()
+            return 1
+
+    finally:
+        mgr.close()
+
+
+if __name__ == '__main__':
+    sys.exit(main())

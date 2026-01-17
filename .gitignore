@@ -1,0 +1,33 @@
+# Build directories
+build/
+cmake-build-*/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Downloaded dependencies
+deps/zlib/
+wasi-sdk-*/
+
+# Compiled objects
+*.o
+*.obj
+*.a
+*.lib
+*.wasm
+*.cwasm
+
+# Archives
+*.tar.gz
+*.zip
+
+# Generated
+compile_commands.json

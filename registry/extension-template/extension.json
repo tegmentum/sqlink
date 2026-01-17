@@ -1,0 +1,18 @@
+{
+  "name": "my-extension",
+  "version": "0.1.0",
+  "description": "A description of what this extension does",
+  "license": "MIT",
+  "authors": ["Your Name <email@example.com>"],
+  "repository": "https://github.com/username/my-extension",
+  "homepage": "https://github.com/username/my-extension#readme",
+  "keywords": ["sqlite", "extension", "custom"],
+  "categories": ["text-processing"],
+  "min_sqlite_version": "3.39.0",
+  "exports": [
+    "my_function1",
+    "my_function2"
+  ],
+  "dependencies": [],
+  "function_id_start": 1000
+}
