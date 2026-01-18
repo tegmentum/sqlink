@@ -20,6 +20,15 @@ AR := $(WASI_SDK)/bin/llvm-ar
 # Target triple
 TARGET := wasm32-wasip2
 
+# WASM feature flags for better performance
+# SIMD provides 128-bit vector operations for faster data processing
+# Can be disabled with WASM_SIMD=0 for maximum compatibility
+WASM_SIMD ?= 1
+WASM_FEATURES :=
+ifeq ($(WASM_SIMD),1)
+    WASM_FEATURES += -msimd128
+endif
+
 # SQLite configuration flags
 # Note: FTS5, RTREE, GEOPOLY, JSON1 are built as separate WASM extensions
 SQLITE_CFLAGS := \
@@ -47,6 +56,7 @@ CFLAGS := \
     -I$(DEPS_DIR)/sqlite \
     -I$(SRC_DIR) \
     -I$(BINDINGS_DIR) \
+    $(WASM_FEATURES) \
     $(SQLITE_CFLAGS)
 
 # Linker flags for reactor (library) mode
@@ -109,6 +119,7 @@ help:
 	@echo "  SQLITE_VERSION    SQLite version (default: 3480000)"
 	@echo "  WASI_SDK_VERSION  wasi-sdk version (default: 29)"
 	@echo "  ZIP_WASM          Path to zip-wasm component (for cli-zip/cli-full)"
+	@echo "  WASM_SIMD         Enable SIMD instructions (default: 1, set to 0 to disable)"
 
 # Download dependencies
 deps: wasi-sdk sqlite
@@ -234,6 +245,7 @@ CLI_CFLAGS := \
     -I$(DEPS_DIR)/sqlite \
     -I$(SRC_DIR) \
     -D_WASI_EMULATED_PROCESS_CLOCKS \
+    $(WASM_FEATURES) \
     $(SQLITE_CFLAGS)
 
 CLI_LDFLAGS := \
@@ -278,6 +290,7 @@ CFLAGS_EXT := \
     -I$(DEPS_DIR)/sqlite \
     -I$(SRC_DIR) \
     -I$(BINDINGS_EXT_DIR) \
+    $(WASM_FEATURES) \
     $(SQLITE_CFLAGS)
 
 # Object files for extensible build
@@ -342,6 +355,7 @@ EXT_CFLAGS := \
     -Wno-unused-parameter \
     -I$(DEPS_DIR)/sqlite \
     -I$(SRC_DIR) \
+    $(WASM_FEATURES) \
     $(SQLITE_CFLAGS)
 
 EXT_LDFLAGS := \
