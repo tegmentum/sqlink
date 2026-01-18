@@ -542,11 +542,25 @@ class SqliteRepl {
   async loadSql(sql: string, source: string = 'input'): Promise<void> {
     this.terminal.writeln(`\x1b[90mExecuting SQL from ${source}...\x1b[0m`)
 
-    // Split into individual statements
+    // Helper to strip leading comment and empty lines from a SQL block
+    const stripComments = (s: string): string => {
+      const lines = s.split('\n')
+      while (lines.length > 0) {
+        const trimmed = lines[0].trim()
+        if (trimmed.startsWith('--') || trimmed.length === 0) {
+          lines.shift()
+        } else {
+          break
+        }
+      }
+      return lines.join('\n').trim()
+    }
+
+    // Split into individual statements on semicolons
     const statements = sql
-      .split(/;(?=(?:[^']*'[^']*')*[^']*$)/)
-      .map(s => s.trim())
-      .filter(s => s.length > 0 && !s.startsWith('--'))
+      .split(';')
+      .map(s => stripComments(s))
+      .filter(s => s.length > 0)
 
     let executed = 0
     let errors = 0
