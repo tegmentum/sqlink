@@ -99,10 +99,13 @@ static void sqlite_wasm_init(void) {
 /*
  * Shutdown handler
  *
- * Clean up SQLite resources when the component is unloaded.
+ * Note: We don't use __attribute__((destructor)) because it causes
+ * "indirect call type mismatch" errors in WASI during exit cleanup.
+ * Since WASM linear memory is reclaimed when the module terminates,
+ * explicit cleanup is not necessary. If explicit shutdown is needed,
+ * call this function directly before exit.
  */
-__attribute__((destructor))
-static void sqlite_wasm_shutdown(void) {
+void sqlite_wasm_shutdown(void) {
     if (g_initialized) {
         sqlite3_shutdown();
         g_initialized = 0;

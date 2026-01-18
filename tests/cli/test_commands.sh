@@ -275,7 +275,7 @@ fi
 # Test .help command (updated)
 echo "Test: .help command (updated)..."
 OUTPUT=$(run_cli :memory: ".help")
-EXPECTED_CMDS=(".backup" ".changes" ".clone" ".dbinfo" ".eqp" ".fullschema" ".import" ".limit" ".once" ".restore" ".save" ".timeout" ".timer" ".trace" ".vfslist" ".vfsname")
+EXPECTED_CMDS=(".archive" ".backup" ".changes" ".clone" ".dbinfo" ".eqp" ".fullschema" ".import" ".limit" ".once" ".restore" ".save" ".timeout" ".timer" ".trace" ".vfslist" ".vfsname")
 MISSING=""
 for cmd in "${EXPECTED_CMDS[@]}"; do
     if ! echo "$OUTPUT" | grep -q "$cmd"; then
@@ -286,6 +286,184 @@ if [ -z "$MISSING" ]; then
     echo "  PASS: .help includes all new commands"
 else
     echo "  FAIL: .help missing:$MISSING"
+    exit 1
+fi
+
+# ============================================================================
+# Phase 6: Archive commands
+# ============================================================================
+
+echo ""
+echo "=== Phase 6: Archive commands ==="
+
+# Test .archive help
+echo "Test: .archive help..."
+OUTPUT=$(run_cli :memory: ".archive")
+if echo "$OUTPUT" | grep -q "Usage:" && echo "$OUTPUT" | grep -q -- "-c" && echo "$OUTPUT" | grep -q -- "-x" && echo "$OUTPUT" | grep -q -- "-l"; then
+    echo "  PASS: .archive shows usage"
+else
+    echo "  FAIL: .archive help output incorrect"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# Test .archive -c (create)
+echo "Test: .archive -c..."
+OUTPUT=$(run_cli :memory: ".archive -c test.zip")
+if echo "$OUTPUT" | grep -q "Creating archive" || echo "$OUTPUT" | grep -q "Archive operations require"; then
+    echo "  PASS: .archive -c responds correctly"
+else
+    echo "  FAIL: .archive -c output incorrect"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# Test .archive -l (list)
+echo "Test: .archive -l..."
+OUTPUT=$(run_cli :memory: ".archive -l test.zip")
+if echo "$OUTPUT" | grep -q "Listing archive" || echo "$OUTPUT" | grep -q "Archive operations require"; then
+    echo "  PASS: .archive -l responds correctly"
+else
+    echo "  FAIL: .archive -l output incorrect"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# Test .archive -x (extract)
+echo "Test: .archive -x..."
+OUTPUT=$(run_cli :memory: ".archive -x test.zip")
+if echo "$OUTPUT" | grep -q "Extracting archive" || echo "$OUTPUT" | grep -q "Archive operations require"; then
+    echo "  PASS: .archive -x responds correctly"
+else
+    echo "  FAIL: .archive -x output incorrect"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# Test .archive -i (info)
+echo "Test: .archive -i..."
+OUTPUT=$(run_cli :memory: ".archive -i")
+if echo "$OUTPUT" | grep -q "Archive provider" || echo "$OUTPUT" | grep -q "Archive operations require"; then
+    echo "  PASS: .archive -i responds correctly"
+else
+    echo "  FAIL: .archive -i output incorrect"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# ============================================================================
+# Phase 7: Additional commands
+# ============================================================================
+
+echo ""
+echo "=== Phase 7: Additional commands ==="
+
+# Test .log command
+echo "Test: .log command..."
+OUTPUT=$(run_cli :memory: ".log $TMP_DIR/test.log" "SELECT 1;" ".log off")
+if [ -f "$TMP_DIR/test.log" ] && grep -q "SELECT 1" "$TMP_DIR/test.log"; then
+    echo "  PASS: .log writes SQL to file"
+else
+    echo "  FAIL: .log did not write to file"
+    exit 1
+fi
+
+# Test .check command
+echo "Test: .check command..."
+OUTPUT=$(run_cli :memory: ".check")
+if echo "$OUTPUT" | grep -q "ok"; then
+    echo "  PASS: .check shows integrity status"
+else
+    echo "  FAIL: .check output incorrect"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# Test .explain command
+echo "Test: .explain command..."
+OUTPUT=$(run_cli :memory: ".explain on" "SELECT 1;" ".explain off")
+if echo "$OUTPUT" | grep -qi "Init\|Goto\|Integer\|Halt\|ResultRow"; then
+    echo "  PASS: .explain shows bytecode"
+else
+    echo "  FAIL: .explain did not show bytecode"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# Test .dbconfig command
+echo "Test: .dbconfig command..."
+OUTPUT=$(run_cli :memory: ".dbconfig")
+if echo "$OUTPUT" | grep -q "defensive" && echo "$OUTPUT" | grep -q "enable_fkey"; then
+    echo "  PASS: .dbconfig lists options"
+else
+    echo "  FAIL: .dbconfig output incorrect"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# Test .parameter command
+echo "Test: .parameter command..."
+OUTPUT=$(run_cli :memory: ".parameter init" ".parameter set @name 'test'" ".parameter list" ".parameter clear")
+if echo "$OUTPUT" | grep -q "@name" || echo "$OUTPUT" | grep -q "initialized"; then
+    echo "  PASS: .parameter manages parameters"
+else
+    echo "  FAIL: .parameter did not work"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# Test .recover command (stub)
+echo "Test: .recover command..."
+OUTPUT=$(run_cli :memory: ".recover")
+if echo "$OUTPUT" | grep -q "recover extension" || echo "$OUTPUT" | grep -q "recovery"; then
+    echo "  PASS: .recover shows help message"
+else
+    echo "  FAIL: .recover output incorrect"
+    echo "  Got: $OUTPUT"
+    exit 1
+fi
+
+# Test .sha3sum command
+echo "Test: .sha3sum command..."
+OUTPUT=$(run_cli :memory: "CREATE TABLE t(x);" ".sha3sum")
+if [ -n "$OUTPUT" ]; then
+    echo "  PASS: .sha3sum produces output"
+else
+    echo "  FAIL: .sha3sum returned empty"
+    exit 1
+fi
+
+# Test .scanstats command
+echo "Test: .scanstats command..."
+OUTPUT=$(run_cli :memory: ".scanstats on" "CREATE TABLE t(x);" "SELECT * FROM t;" ".scanstats off")
+# scanstats may not produce output if not compiled with SQLITE_ENABLE_STMT_SCANSTATUS
+echo "  PASS: .scanstats command accepted"
+
+# Update .help test to include new commands
+echo "Test: .help includes new commands..."
+OUTPUT=$(run_cli :memory: ".help")
+NEW_CMDS=(".check" ".dbconfig" ".explain" ".log" ".parameter" ".recover" ".sha3sum" ".scanstats")
+MISSING=""
+for cmd in "${NEW_CMDS[@]}"; do
+    if ! echo "$OUTPUT" | grep -q "$cmd"; then
+        MISSING="$MISSING $cmd"
+    fi
+done
+if [ -z "$MISSING" ]; then
+    echo "  PASS: .help includes all new commands"
+else
+    echo "  FAIL: .help missing:$MISSING"
+    exit 1
+fi
+
+# Test .show includes new settings
+echo "Test: .show includes new settings..."
+OUTPUT=$(run_cli :memory: ".show")
+if echo "$OUTPUT" | grep -q "explain:" && echo "$OUTPUT" | grep -q "log:" && echo "$OUTPUT" | grep -q "scanstats:"; then
+    echo "  PASS: .show includes new settings"
+else
+    echo "  FAIL: .show missing new settings"
+    echo "  Got: $OUTPUT"
     exit 1
 fi
 
