@@ -29,6 +29,16 @@ const loadingEl = document.getElementById('loading')!
 const loadingText = document.getElementById('loading-text')!
 const errorEl = document.getElementById('error')!
 const containerEl = document.getElementById('terminal-container')!
+const fileInput = document.getElementById('file-input') as HTMLInputElement
+const btnUpload = document.getElementById('btn-upload')!
+const btnDemo = document.getElementById('btn-demo')!
+const btnExport = document.getElementById('btn-export')!
+const btnSave = document.getElementById('btn-save')!
+const btnLoad = document.getElementById('btn-load')!
+const storageStatus = document.getElementById('storage-status')!
+
+// OPFS storage constants
+const OPFS_FILENAME = 'sqlite-wasm-demo.db'
 
 function showError(message: string) {
   loadingEl.style.display = 'none'
@@ -70,6 +80,49 @@ async function getCoreModule(path: string): Promise<WebAssembly.Module> {
 
   return module
 }
+
+// OPFS helpers
+async function hasOPFS(): Promise<boolean> {
+  try {
+    return 'getDirectory' in navigator.storage
+  } catch {
+    return false
+  }
+}
+
+async function saveToOPFS(data: Uint8Array): Promise<void> {
+  const root = await navigator.storage.getDirectory()
+  const fileHandle = await root.getFileHandle(OPFS_FILENAME, { create: true })
+  const writable = await fileHandle.createWritable()
+  // Copy to a fresh ArrayBuffer to avoid TypeScript ArrayBufferLike issues
+  const buffer = new ArrayBuffer(data.byteLength)
+  new Uint8Array(buffer).set(data)
+  await writable.write(buffer)
+  await writable.close()
+}
+
+async function loadFromOPFS(): Promise<Uint8Array | null> {
+  try {
+    const root = await navigator.storage.getDirectory()
+    const fileHandle = await root.getFileHandle(OPFS_FILENAME)
+    const file = await fileHandle.getFile()
+    const buffer = await file.arrayBuffer()
+    return new Uint8Array(buffer)
+  } catch {
+    return null
+  }
+}
+
+async function _deleteFromOPFS(): Promise<void> {
+  try {
+    const root = await navigator.storage.getDirectory()
+    await root.removeEntry(OPFS_FILENAME)
+  } catch {
+    // File may not exist
+  }
+}
+// Export for potential future use
+export { _deleteFromOPFS as deleteFromOPFS }
 
 // REPL class for interactive SQL
 class SqliteRepl {
@@ -148,17 +201,16 @@ class SqliteRepl {
     this.terminal.writeln('\x1b[1;35mSQLite WASM Terminal\x1b[0m')
     this.terminal.writeln('\x1b[90mSQLite running in WebAssembly with extension support\x1b[0m')
     this.terminal.writeln('')
-    this.terminal.writeln('\x1b[36mAvailable extension manager commands:\x1b[0m')
-    this.terminal.writeln('  SELECT wasm_search(\'text\');     -- Search extensions')
-    this.terminal.writeln('  SELECT wasm_list();             -- List installed')
-    this.terminal.writeln('  SELECT wasm_info(\'text\');       -- Extension info')
-    this.terminal.writeln('  SELECT wasm_install(\'text\');    -- Install extension')
+    this.terminal.writeln('\x1b[36mData loading:\x1b[0m')
+    this.terminal.writeln('  .demo                   -- Load demo database')
+    this.terminal.writeln('  .fetch <url>            -- Load SQL/CSV from URL')
+    this.terminal.writeln('  Drag & drop SQL/CSV files onto terminal')
     this.terminal.writeln('')
     this.terminal.writeln('\x1b[36mBuilt-in functions:\x1b[0m')
     this.terminal.writeln('  uuid(), reverse(), math_sqrt(), regexp()')
     this.terminal.writeln('  text_upper(), text_lower(), repeat(), char_length()')
     this.terminal.writeln('')
-    this.terminal.writeln('Type \x1b[33m.help\x1b[0m for more commands, \x1b[33m.quit\x1b[0m to exit')
+    this.terminal.writeln('Type \x1b[33m.help\x1b[0m for commands, \x1b[33m.demo\x1b[0m to load sample data')
     this.terminal.writeln('')
   }
 
@@ -229,7 +281,7 @@ class SqliteRepl {
     this.terminal.write(text)
   }
 
-  private handleEnter() {
+  private async handleEnter() {
     const input = this.inputBuffer.trim()
     this.inputBuffer = ''
     this.cursorPos = 0
@@ -242,7 +294,7 @@ class SqliteRepl {
 
     // Check for meta commands
     if (input.startsWith('.')) {
-      this.handleMetaCommand(input)
+      await this.handleMetaCommand(input)
       this.showPrompt()
       return
     }
@@ -272,8 +324,9 @@ class SqliteRepl {
     this.showPrompt()
   }
 
-  private handleMetaCommand(cmd: string) {
-    const parts = cmd.split(/\s+/)
+  private async handleMetaCommand(cmd: string) {
+    const parts = cmd.match(/(?:[^\s"]+|"[^"]*")+/g)
+    if (!parts || parts.length === 0) return
     const command = parts[0].toLowerCase()
 
     switch (command) {
@@ -282,8 +335,19 @@ class SqliteRepl {
         this.terminal.writeln('  .help              Show this help')
         this.terminal.writeln('  .tables            List tables')
         this.terminal.writeln('  .schema [table]    Show schema')
-        this.terminal.writeln('  .quit              Exit')
+        this.terminal.writeln('  .fetch <url>       Load SQL/CSV from URL')
+        this.terminal.writeln('  .import <csv> <table>  Import CSV file to table')
+        this.terminal.writeln('  .demo              Load demo database')
+        this.terminal.writeln('  .export            Export database as SQL')
+        this.terminal.writeln('  .save              Save to browser storage')
+        this.terminal.writeln('  .load              Load from browser storage')
         this.terminal.writeln('  .clear             Clear screen')
+        this.terminal.writeln('  .quit              Exit')
+        this.terminal.writeln('')
+        this.terminal.writeln('\x1b[36mWASM Extension Commands:\x1b[0m')
+        this.terminal.writeln('  .loadext <url>     Load WASM extension from URL')
+        this.terminal.writeln('  .unloadext <name>  Unload WASM extension')
+        this.terminal.writeln('  .extensions        List loaded WASM extensions')
         break
 
       case '.tables':
@@ -298,6 +362,41 @@ class SqliteRepl {
         }
         break
 
+      case '.fetch':
+        if (!parts[1]) {
+          this.terminal.writeln('\x1b[31mUsage: .fetch <url>\x1b[0m')
+          this.terminal.writeln('  Example: .fetch https://example.com/data.sql')
+        } else {
+          await this.loadFromUrl(parts[1].replace(/^"|"$/g, ''))
+        }
+        break
+
+      case '.demo':
+        await this.loadDemo()
+        break
+
+      case '.export':
+        const sql = this.exportSql()
+        if (sql) {
+          const blob = new Blob([sql], { type: 'application/sql' })
+          const url = URL.createObjectURL(blob)
+          const a = document.createElement('a')
+          a.href = url
+          a.download = 'export.sql'
+          a.click()
+          URL.revokeObjectURL(url)
+          this.terminal.writeln('\x1b[32mDatabase exported to export.sql\x1b[0m')
+        }
+        break
+
+      case '.save':
+        await this.saveToStorage()
+        break
+
+      case '.load':
+        await this.loadFromStorage()
+        break
+
       case '.quit':
       case '.exit':
         this.terminal.writeln('\x1b[90mGoodbye!\x1b[0m')
@@ -306,6 +405,43 @@ class SqliteRepl {
 
       case '.clear':
         this.terminal.clear()
+        break
+
+      case '.loadext':
+        if (!parts[1]) {
+          this.terminal.writeln('\x1b[31mUsage: .loadext <url>\x1b[0m')
+          this.terminal.writeln('  Example: .loadext /extensions/fts5.wasm')
+        } else {
+          await this.loadWasmExtension(parts[1].replace(/^"|"$/g, ''))
+        }
+        break
+
+      case '.unloadext':
+        if (!parts[1]) {
+          this.terminal.writeln('\x1b[31mUsage: .unloadext <name>\x1b[0m')
+        } else {
+          const unloaded = extensionCallbacks.unloadWasmExtension(parts[1])
+          if (unloaded) {
+            this.terminal.writeln(`\x1b[32mUnloaded extension: ${parts[1]}\x1b[0m`)
+          } else {
+            this.terminal.writeln(`\x1b[31mExtension '${parts[1]}' not found\x1b[0m`)
+          }
+        }
+        break
+
+      case '.extensions':
+        const exts = extensionCallbacks.listWasmExtensions()
+        if (exts.length === 0) {
+          this.terminal.writeln('\x1b[90mNo WASM extensions loaded\x1b[0m')
+          this.terminal.writeln('Use .loadext <url> to load a WASM extension')
+        } else {
+          this.terminal.writeln('\x1b[36mLoaded WASM Extensions:\x1b[0m')
+          for (const ext of exts) {
+            this.terminal.writeln(`  ${ext.name} v${ext.version}`)
+            this.terminal.writeln(`    Path: ${ext.path}`)
+            this.terminal.writeln(`    Functions: ${ext.functions.join(', ') || '(none exported)'}`)
+          }
+        }
         break
 
       default:
@@ -398,6 +534,321 @@ class SqliteRepl {
 
     this.terminal.writeln(`\x1b[90m(${rows.length} row${rows.length !== 1 ? 's' : ''})\x1b[0m`)
   }
+
+  // ============================================================================
+  // Data Loading Methods
+  // ============================================================================
+
+  async loadSql(sql: string, source: string = 'input'): Promise<void> {
+    this.terminal.writeln(`\x1b[90mExecuting SQL from ${source}...\x1b[0m`)
+
+    // Split into individual statements
+    const statements = sql
+      .split(/;(?=(?:[^']*'[^']*')*[^']*$)/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0 && !s.startsWith('--'))
+
+    let executed = 0
+    let errors = 0
+
+    for (const stmt of statements) {
+      try {
+        const preparedStmt = this.sqlite.lowLevel.prepare(this.db, stmt + ';')
+        while (this.sqlite.lowLevel.step(preparedStmt) === 'row') {
+          // Execute all rows
+        }
+        this.sqlite.lowLevel.finalize(preparedStmt)
+        executed++
+      } catch (e) {
+        errors++
+        const msg = e instanceof Error ? e.message : String(e)
+        this.terminal.writeln(`\x1b[31mError in statement: ${msg}\x1b[0m`)
+        this.terminal.writeln(`\x1b[90m  ${stmt.substring(0, 60)}${stmt.length > 60 ? '...' : ''}\x1b[0m`)
+      }
+    }
+
+    this.terminal.writeln(`\x1b[32mExecuted ${executed} statements${errors > 0 ? `, ${errors} errors` : ''}\x1b[0m`)
+  }
+
+  async loadCsv(csv: string, tableName: string): Promise<void> {
+    this.terminal.writeln(`\x1b[90mImporting CSV into table '${tableName}'...\x1b[0m`)
+
+    const lines = csv.split(/\r?\n/).filter(l => l.trim().length > 0)
+    if (lines.length < 2) {
+      this.terminal.writeln('\x1b[31mCSV must have header row and at least one data row\x1b[0m')
+      return
+    }
+
+    // Parse header
+    const headers = this.parseCsvLine(lines[0])
+    const columns = headers.map(h => h.replace(/[^a-zA-Z0-9_]/g, '_'))
+
+    // Create table
+    const createSql = `CREATE TABLE IF NOT EXISTS ${tableName} (${columns.map(c => `${c} TEXT`).join(', ')});`
+    try {
+      const stmt = this.sqlite.lowLevel.prepare(this.db, createSql)
+      this.sqlite.lowLevel.step(stmt)
+      this.sqlite.lowLevel.finalize(stmt)
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      this.terminal.writeln(`\x1b[31mError creating table: ${msg}\x1b[0m`)
+      return
+    }
+
+    // Insert data
+    let inserted = 0
+    for (let i = 1; i < lines.length; i++) {
+      const values = this.parseCsvLine(lines[i])
+      if (values.length !== columns.length) continue
+
+      const escapedValues = values.map(v => `'${v.replace(/'/g, "''")}'`)
+      const insertSql = `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${escapedValues.join(', ')});`
+
+      try {
+        const stmt = this.sqlite.lowLevel.prepare(this.db, insertSql)
+        this.sqlite.lowLevel.step(stmt)
+        this.sqlite.lowLevel.finalize(stmt)
+        inserted++
+      } catch (e) {
+        // Skip row on error
+      }
+    }
+
+    this.terminal.writeln(`\x1b[32mImported ${inserted} rows into '${tableName}'\x1b[0m`)
+  }
+
+  private parseCsvLine(line: string): string[] {
+    const result: string[] = []
+    let current = ''
+    let inQuotes = false
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i]
+
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"'
+          i++
+        } else {
+          inQuotes = !inQuotes
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim())
+        current = ''
+      } else {
+        current += char
+      }
+    }
+
+    result.push(current.trim())
+    return result
+  }
+
+  async loadFromUrl(url: string): Promise<void> {
+    this.terminal.writeln(`\x1b[90mFetching ${url}...\x1b[0m`)
+
+    try {
+      const response = await fetch(url)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
+      const content = await response.text()
+      const isCSV = url.endsWith('.csv') || response.headers.get('content-type')?.includes('csv')
+
+      if (isCSV) {
+        const tableName = url.split('/').pop()?.replace(/\.[^.]+$/, '') || 'imported'
+        await this.loadCsv(content, tableName)
+      } else {
+        await this.loadSql(content, url)
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      this.terminal.writeln(`\x1b[31mError fetching URL: ${msg}\x1b[0m`)
+    }
+  }
+
+  async loadDemo(): Promise<void> {
+    await this.loadFromUrl('/demo.sql')
+  }
+
+  exportSql(): string {
+    const tables: string[] = []
+    const data: string[] = []
+
+    // Get table schemas
+    try {
+      const stmt = this.sqlite.lowLevel.prepare(
+        this.db,
+        "SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;"
+      )
+
+      while (this.sqlite.lowLevel.step(stmt) === 'row') {
+        const name = this.sqlite.lowLevel.columnText(stmt, 0)
+        const sql = this.sqlite.lowLevel.columnText(stmt, 1)
+        tables.push(sql + ';')
+
+        // Get table data
+        const dataStmt = this.sqlite.lowLevel.prepare(this.db, `SELECT * FROM ${name};`)
+        const colCount = this.sqlite.lowLevel.columnCount(dataStmt)
+        const columns: string[] = []
+        for (let i = 0; i < colCount; i++) {
+          columns.push(this.sqlite.lowLevel.columnName(dataStmt, i))
+        }
+
+        while (this.sqlite.lowLevel.step(dataStmt) === 'row') {
+          const values: string[] = []
+          for (let i = 0; i < colCount; i++) {
+            const type = this.sqlite.lowLevel.getColumnType(dataStmt, i)
+            switch (type) {
+              case 'null':
+                values.push('NULL')
+                break
+              case 'integer':
+                values.push(String(this.sqlite.lowLevel.columnInt64(dataStmt, i)))
+                break
+              case 'float':
+                values.push(String(this.sqlite.lowLevel.columnDouble(dataStmt, i)))
+                break
+              case 'text':
+                values.push(`'${this.sqlite.lowLevel.columnText(dataStmt, i).replace(/'/g, "''")}'`)
+                break
+              case 'blob':
+                values.push("X'" + Array.from(this.sqlite.lowLevel.columnBlob(dataStmt, i)).map(b => b.toString(16).padStart(2, '0')).join('') + "'")
+                break
+            }
+          }
+          data.push(`INSERT INTO ${name} (${columns.join(', ')}) VALUES (${values.join(', ')});`)
+        }
+        this.sqlite.lowLevel.finalize(dataStmt)
+      }
+      this.sqlite.lowLevel.finalize(stmt)
+
+      // Get views
+      const viewStmt = this.sqlite.lowLevel.prepare(
+        this.db,
+        "SELECT sql FROM sqlite_master WHERE type='view' ORDER BY name;"
+      )
+      while (this.sqlite.lowLevel.step(viewStmt) === 'row') {
+        const sql = this.sqlite.lowLevel.columnText(viewStmt, 0)
+        if (sql) tables.push(sql + ';')
+      }
+      this.sqlite.lowLevel.finalize(viewStmt)
+
+      // Get indexes
+      const indexStmt = this.sqlite.lowLevel.prepare(
+        this.db,
+        "SELECT sql FROM sqlite_master WHERE type='index' AND sql IS NOT NULL ORDER BY name;"
+      )
+      while (this.sqlite.lowLevel.step(indexStmt) === 'row') {
+        const sql = this.sqlite.lowLevel.columnText(indexStmt, 0)
+        if (sql) tables.push(sql + ';')
+      }
+      this.sqlite.lowLevel.finalize(indexStmt)
+
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      this.terminal.writeln(`\x1b[31mError exporting: ${msg}\x1b[0m`)
+      return ''
+    }
+
+    return '-- SQLite WASM Export\n-- Generated: ' + new Date().toISOString() + '\n\n' +
+           tables.join('\n\n') + '\n\n' + data.join('\n')
+  }
+
+  async saveToStorage(): Promise<boolean> {
+    if (!await hasOPFS()) {
+      this.terminal.writeln('\x1b[31mOPFS not supported in this browser\x1b[0m')
+      return false
+    }
+
+    this.terminal.writeln('\x1b[90mSaving to browser storage...\x1b[0m')
+
+    try {
+      const sql = this.exportSql()
+      const encoder = new TextEncoder()
+      const data = encoder.encode(sql)
+      await saveToOPFS(data)
+      this.terminal.writeln('\x1b[32mDatabase saved to browser storage\x1b[0m')
+      this.updateStorageStatus()
+      return true
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      this.terminal.writeln(`\x1b[31mError saving: ${msg}\x1b[0m`)
+      return false
+    }
+  }
+
+  async loadFromStorage(): Promise<boolean> {
+    if (!await hasOPFS()) {
+      this.terminal.writeln('\x1b[31mOPFS not supported in this browser\x1b[0m')
+      return false
+    }
+
+    this.terminal.writeln('\x1b[90mLoading from browser storage...\x1b[0m')
+
+    try {
+      const data = await loadFromOPFS()
+      if (!data) {
+        this.terminal.writeln('\x1b[33mNo saved database found\x1b[0m')
+        return false
+      }
+
+      const decoder = new TextDecoder()
+      const sql = decoder.decode(data)
+      await this.loadSql(sql, 'browser storage')
+      return true
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      this.terminal.writeln(`\x1b[31mError loading: ${msg}\x1b[0m`)
+      return false
+    }
+  }
+
+  private async updateStorageStatus(): Promise<void> {
+    if (await hasOPFS()) {
+      const data = await loadFromOPFS()
+      if (data) {
+        const kb = (data.length / 1024).toFixed(1)
+        storageStatus.textContent = `Saved: ${kb} KB`
+      } else {
+        storageStatus.textContent = ''
+      }
+    }
+  }
+
+  async handleFile(file: File): Promise<void> {
+    const content = await file.text()
+    const ext = file.name.split('.').pop()?.toLowerCase()
+
+    if (ext === 'csv') {
+      const tableName = file.name.replace(/\.[^.]+$/, '').replace(/[^a-zA-Z0-9_]/g, '_')
+      await this.loadCsv(content, tableName)
+    } else {
+      await this.loadSql(content, file.name)
+    }
+
+    this.showPrompt()
+  }
+
+  // ============================================================================
+  // WASM Extension Loading
+  // ============================================================================
+
+  async loadWasmExtension(url: string): Promise<void> {
+    this.terminal.writeln(`\x1b[90mLoading WASM extension from ${url}...\x1b[0m`)
+
+    try {
+      const ext = await extensionCallbacks.loadWasmExtension(url)
+      this.terminal.writeln(`\x1b[32mLoaded extension: ${ext.name} v${ext.version}\x1b[0m`)
+      if (ext.functions.length > 0) {
+        this.terminal.writeln(`\x1b[90mExported functions: ${ext.functions.join(', ')}\x1b[0m`)
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      this.terminal.writeln(`\x1b[31mError loading extension: ${msg}\x1b[0m`)
+    }
+  }
 }
 
 async function main() {
@@ -483,6 +934,83 @@ async function main() {
     // Create and start REPL
     const repl = new SqliteRepl(terminal, sqlite)
     await repl.init()
+
+    // Setup file upload button
+    btnUpload.addEventListener('click', () => fileInput.click())
+
+    fileInput.addEventListener('change', async () => {
+      const file = fileInput.files?.[0]
+      if (file) {
+        await repl.handleFile(file)
+        fileInput.value = ''
+      }
+    })
+
+    // Setup demo button
+    btnDemo.addEventListener('click', async () => {
+      await repl.loadDemo()
+      repl['showPrompt']()
+    })
+
+    // Setup export button
+    btnExport.addEventListener('click', () => {
+      const sql = repl.exportSql()
+      if (sql) {
+        const blob = new Blob([sql], { type: 'application/sql' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = 'export.sql'
+        a.click()
+        URL.revokeObjectURL(url)
+        terminal.writeln('\x1b[32mDatabase exported to export.sql\x1b[0m')
+        repl['showPrompt']()
+      }
+    })
+
+    // Setup OPFS save/load buttons
+    btnSave.addEventListener('click', async () => {
+      await repl.saveToStorage()
+      repl['showPrompt']()
+    })
+
+    btnLoad.addEventListener('click', async () => {
+      await repl.loadFromStorage()
+      repl['showPrompt']()
+    })
+
+    // Setup drag and drop
+    containerEl.addEventListener('dragover', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      containerEl.classList.add('drag-over')
+    })
+
+    containerEl.addEventListener('dragleave', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      containerEl.classList.remove('drag-over')
+    })
+
+    containerEl.addEventListener('drop', async (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      containerEl.classList.remove('drag-over')
+
+      const file = e.dataTransfer?.files[0]
+      if (file) {
+        await repl.handleFile(file)
+      }
+    })
+
+    // Check for saved data on startup
+    if (await hasOPFS()) {
+      const data = await loadFromOPFS()
+      if (data) {
+        const kb = (data.length / 1024).toFixed(1)
+        storageStatus.textContent = `Saved: ${kb} KB`
+      }
+    }
 
   } catch (err) {
     console.error('Error:', err)

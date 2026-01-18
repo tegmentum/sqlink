@@ -1,0 +1,41 @@
+// Extension Loader API
+// Allows dynamically loading and unloading WASM extension components
+
+interface extension-loader {
+    // =========================================================================
+    // Extension Information
+    // =========================================================================
+
+    /// Information about a loaded extension
+    record extension-info {
+        /// Name of the extension
+        name: string,
+        /// Version string
+        version: string,
+        /// List of SQL functions provided by this extension
+        functions: list<string>,
+    }
+
+    /// Error returned by loader operations
+    record loader-error {
+        code: s32,
+        message: string,
+    }
+
+    // =========================================================================
+    // Extension Loading
+    // =========================================================================
+
+    /// Load a WASM extension component by path
+    /// Returns extension info on success
+    load-extension: func(path: string) -> result<extension-info, loader-error>;
+
+    /// Unload an extension by name
+    unload-extension: func(name: string) -> result<_, loader-error>;
+
+    /// List all currently loaded extensions
+    list-extensions: func() -> list<extension-info>;
+
+    /// Check if an extension is loaded
+    is-extension-loaded: func(name: string) -> bool;
+}

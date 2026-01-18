@@ -2,7 +2,7 @@
 # Download wasi-sdk toolchain
 set -euo pipefail
 
-WASI_SDK_VERSION="${WASI_SDK_VERSION:-25}"
+WASI_SDK_VERSION="${WASI_SDK_VERSION:-29}"
 WASI_SDK_MAJOR="${WASI_SDK_VERSION}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

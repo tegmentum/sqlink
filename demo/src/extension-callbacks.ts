@@ -97,6 +97,10 @@ export const FUNC_WASM_UPDATE = 206n
 export const FUNC_WASM_REGISTRY_VERSION = 207n
 export const FUNC_WASM_INIT = 208n
 
+// URL/HTTP function IDs (300+)
+export const FUNC_FETCH_TEXT = 300n
+export const FUNC_FETCH_JSON = 301n
+
 // ============================================================================
 // Extension Manager State
 // ============================================================================
@@ -518,4 +522,107 @@ export function registerCommitHook(hookId: bigint, callback: () => boolean) {
 
 export function registerRollbackHook(hookId: bigint, callback: () => void) {
   rollbackHooks.set(hookId, callback)
+}
+
+// ============================================================================
+// WASM Extension Loading Support
+// ============================================================================
+
+// Loaded extension info
+export interface LoadedWasmExtension {
+  name: string
+  version: string
+  path: string
+  functions: string[]
+  module?: WebAssembly.Module
+  instance?: WebAssembly.Instance
+}
+
+// Map of loaded WASM extensions
+const loadedWasmExtensions = new Map<string, LoadedWasmExtension>()
+
+/**
+ * Load a WASM extension from a URL or path
+ * This implements the extension-loader interface for browser environments
+ */
+export async function loadWasmExtension(path: string): Promise<LoadedWasmExtension> {
+  // Extract extension name from path
+  const basename = path.split('/').pop()?.split('\\').pop() || path
+  const name = basename.replace(/\.wasm$/, '')
+
+  if (loadedWasmExtensions.has(name)) {
+    throw new Error(`Extension '${name}' is already loaded`)
+  }
+
+  // Fetch and compile the WASM module
+  const response = await fetch(path)
+  if (!response.ok) {
+    throw new Error(`Failed to fetch extension: ${response.statusText}`)
+  }
+
+  const module = await WebAssembly.compileStreaming(response)
+
+  // For now, we use a simple instantiation without linking
+  // In a full implementation, we would link the extension to SQLite APIs
+  const instance = await WebAssembly.instantiate(module, {})
+
+  // Try to get extension info from exported functions
+  let version = '1.0.0'
+  const functions: string[] = []
+
+  // Check for get-info export
+  if (typeof (instance.exports as Record<string, unknown>)['get-info'] === 'function') {
+    try {
+      const info = ((instance.exports as Record<string, unknown>)['get-info'] as () => unknown)()
+      if (info && typeof info === 'object') {
+        version = (info as { version?: string }).version || version
+      }
+    } catch {
+      // Ignore errors reading info
+    }
+  }
+
+  // Collect exported function names
+  for (const [key, value] of Object.entries(instance.exports)) {
+    if (typeof value === 'function' && !key.startsWith('_')) {
+      functions.push(key)
+    }
+  }
+
+  const extension: LoadedWasmExtension = {
+    name,
+    version,
+    path,
+    functions,
+    module,
+    instance
+  }
+
+  loadedWasmExtensions.set(name, extension)
+  return extension
+}
+
+/**
+ * Unload a WASM extension by name
+ */
+export function unloadWasmExtension(name: string): boolean {
+  if (!loadedWasmExtensions.has(name)) {
+    return false
+  }
+  loadedWasmExtensions.delete(name)
+  return true
+}
+
+/**
+ * List all loaded WASM extensions
+ */
+export function listWasmExtensions(): LoadedWasmExtension[] {
+  return Array.from(loadedWasmExtensions.values())
+}
+
+/**
+ * Check if an extension is loaded
+ */
+export function isWasmExtensionLoaded(name: string): boolean {
+  return loadedWasmExtensions.has(name)
 }

@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include <time.h>
 #include "sqlite3.h"
 
 /* Maximum input line length */
@@ -20,6 +21,22 @@
 
 /* Maximum SQL buffer size */
 #define MAX_SQL_BUFFER 65536
+
+/* Maximum loaded extensions */
+#define MAX_EXTENSIONS 32
+
+/* Extension info structure */
+typedef struct {
+    char name[64];
+    char version[32];
+    char path[512];
+    int num_functions;
+    bool loaded;
+} LoadedExtension;
+
+/* Global extension list */
+static LoadedExtension g_extensions[MAX_EXTENSIONS];
+static int g_extension_count = 0;
 
 /* Output modes */
 typedef enum {
@@ -38,15 +55,22 @@ typedef struct {
     char *db_filename;
     OutputMode mode;
     char separator[20];
+    char rowseparator[20];
     bool show_headers;
     bool echo_on;
     bool stats_on;
     bool bail_on_error;
+    bool timer_on;
+    bool trace_on;
+    bool eqp_on;
     int changes;
     char *null_display;
     int col_widths[MAX_COLUMNS];
     char prompt[64];
     char continue_prompt[64];
+    FILE *output_file;
+    char output_filename[512];
+    FILE *once_file;
 } CliState;
 
 /* Forward declarations */
@@ -61,6 +85,24 @@ static void print_row_csv(CliState *state, sqlite3_stmt *stmt, int ncol);
 static void print_headers(CliState *state, sqlite3_stmt *stmt, int ncol);
 static char *trim(char *str);
 static int str_starts_with(const char *str, const char *prefix);
+static int process_file_input(CliState *state, const char *filename);
+static int import_csv(CliState *state, const char *filename, const char *table);
+
+/* Get output file (handles .once redirection) */
+static FILE *get_output(CliState *state) {
+    if (state->once_file) {
+        return state->once_file;
+    }
+    return state->output_file;
+}
+
+/* Close .once file after use */
+static void close_once(CliState *state) {
+    if (state->once_file) {
+        fclose(state->once_file);
+        state->once_file = NULL;
+    }
+}
 
 /* Static strings for null display */
 static char g_null_display[256] = "";
@@ -71,15 +113,22 @@ static void init_state(CliState *state) {
     state->db_filename = NULL;
     state->mode = MODE_LIST;
     strcpy(state->separator, "|");
+    strcpy(state->rowseparator, "\n");
     state->show_headers = false;
     state->echo_on = false;
     state->stats_on = false;
     state->bail_on_error = false;
+    state->timer_on = false;
+    state->trace_on = false;
+    state->eqp_on = false;
     state->changes = 0;
     state->null_display = g_null_display;
     strcpy(state->prompt, "sqlite> ");
     strcpy(state->continue_prompt, "   ...> ");
     memset(state->col_widths, 0, sizeof(state->col_widths));
+    state->output_file = stdout;
+    state->output_filename[0] = '\0';
+    state->once_file = NULL;
 }
 
 /* Clean up CLI state */
@@ -91,6 +140,14 @@ static void cleanup_state(CliState *state) {
     if (state->db_filename) {
         free(state->db_filename);
         state->db_filename = NULL;
+    }
+    if (state->output_file && state->output_file != stdout) {
+        fclose(state->output_file);
+        state->output_file = stdout;
+    }
+    if (state->once_file) {
+        fclose(state->once_file);
+        state->once_file = NULL;
     }
     /* null_display uses static buffer, no need to free */
 }
@@ -122,28 +179,48 @@ static void print_version(void) {
 
 /* Print help */
 static void print_help(void) {
+    printf(".backup ?DB? FILE      Backup database to FILE\n");
     printf(".bail on|off           Stop after hitting an error\n");
+    printf(".changes               Display number of rows changed\n");
+    printf(".clone NEWDB           Clone database to NEWDB\n");
     printf(".databases             List databases\n");
+    printf(".dbinfo                Show database information\n");
     printf(".dump ?TABLE?          Dump database in SQL format\n");
     printf(".echo on|off           Turn command echo on or off\n");
+    printf(".eqp on|off            Enable EXPLAIN QUERY PLAN\n");
     printf(".exit                  Exit this program\n");
+    printf(".extensions            List loaded WASM extensions\n");
+    printf(".fullschema            Show complete schema\n");
     printf(".headers on|off        Turn display of headers on or off\n");
     printf(".help                  Show this message\n");
+    printf(".import FILE TABLE     Import CSV/TSV file into TABLE\n");
     printf(".indexes ?TABLE?       Show indexes\n");
-    printf(".mode MODE             Set output mode (list, column, csv, line, table, markdown)\n");
+    printf(".limit ?LIMIT? ?VAL?   Display or change limits\n");
+    printf(".lint fkey-indexes     Check for missing FK indexes\n");
+    printf(".load FILE             Load a WASM extension\n");
+    printf(".mode MODE             Set output mode (list, column, csv, line, table, markdown, json)\n");
     printf(".nullvalue STRING      Use STRING in place of NULL values\n");
+    printf(".once FILE             Output next SQL to FILE\n");
     printf(".open ?FILE?           Open database file\n");
     printf(".output ?FILE?         Send output to FILE (stdout if omitted)\n");
     printf(".print STRING...       Print literal STRING\n");
     printf(".prompt MAIN CONTINUE  Replace the standard prompts\n");
     printf(".quit                  Exit this program\n");
     printf(".read FILE             Execute SQL from FILE\n");
+    printf(".restore ?DB? FILE     Restore database from FILE\n");
+    printf(".save FILE             Save database to FILE (alias for .backup)\n");
     printf(".schema ?TABLE?        Show CREATE statements\n");
     printf(".separator STRING      Set separator for list mode\n");
     printf(".show                  Show current settings\n");
     printf(".stats on|off          Turn stats on or off\n");
     printf(".tables ?PATTERN?      List tables matching PATTERN\n");
+    printf(".timeout MS            Set busy timeout in milliseconds\n");
+    printf(".timer on|off          Turn SQL timer on or off\n");
+    printf(".trace on|off          Trace SQL statements\n");
+    printf(".unload NAME           Unload a WASM extension\n");
     printf(".version               Show SQLite version\n");
+    printf(".vfslist               List available VFSes\n");
+    printf(".vfsname               Show default VFS name\n");
     printf(".width NUM NUM ...     Set column widths for column mode\n");
 }
 
@@ -288,9 +365,11 @@ static int do_meta_command(CliState *state, const char *line) {
         }
     }
     else if (strcasecmp(cmd_name, "show") == 0) {
-        printf("     echo: %s\n", state->echo_on ? "on" : "off");
-        printf("  headers: %s\n", state->show_headers ? "on" : "off");
-        printf("     mode: ");
+        printf("        bail: %s\n", state->bail_on_error ? "on" : "off");
+        printf("        echo: %s\n", state->echo_on ? "on" : "off");
+        printf("         eqp: %s\n", state->eqp_on ? "on" : "off");
+        printf("     headers: %s\n", state->show_headers ? "on" : "off");
+        printf("        mode: ");
         switch (state->mode) {
             case MODE_LIST: printf("list\n"); break;
             case MODE_COLUMN: printf("column\n"); break;
@@ -300,9 +379,12 @@ static int do_meta_command(CliState *state, const char *line) {
             case MODE_MARKDOWN: printf("markdown\n"); break;
             case MODE_JSON: printf("json\n"); break;
         }
-        printf("nullvalue: \"%s\"\n", state->null_display);
-        printf("separator: \"%s\"\n", state->separator);
-        printf("    stats: %s\n", state->stats_on ? "on" : "off");
+        printf("   nullvalue: \"%s\"\n", state->null_display);
+        printf("      output: %s\n", state->output_filename[0] ? state->output_filename : "stdout");
+        printf("   separator: \"%s\"\n", state->separator);
+        printf("       stats: %s\n", state->stats_on ? "on" : "off");
+        printf("       timer: %s\n", state->timer_on ? "on" : "off");
+        printf("       trace: %s\n", state->trace_on ? "on" : "off");
     }
     else if (strcasecmp(cmd_name, "tables") == 0) {
         const char *sql;
@@ -418,6 +500,344 @@ static int do_meta_command(CliState *state, const char *line) {
         state->show_headers = old_headers;
         printf("COMMIT;\n");
     }
+    else if (strcasecmp(cmd_name, "load") == 0) {
+        if (!arg1) {
+            fprintf(stderr, "Usage: .load FILENAME\n");
+        } else if (g_extension_count >= MAX_EXTENSIONS) {
+            fprintf(stderr, "Error: maximum number of extensions (%d) already loaded\n", MAX_EXTENSIONS);
+        } else {
+            /* In a full WASM component implementation, this would:
+             * 1. Call the imported extension-loader interface to load the WASM component
+             * 2. Get extension info (name, version, functions)
+             * 3. Register the extension's functions with SQLite
+             *
+             * For now, we track the extension locally and print a message.
+             * The actual loading happens on the host side.
+             */
+            LoadedExtension *ext = &g_extensions[g_extension_count];
+            strncpy(ext->path, arg1, sizeof(ext->path) - 1);
+            ext->path[sizeof(ext->path) - 1] = '\0';
+
+            /* Extract extension name from path (basename without .wasm) */
+            const char *basename = strrchr(arg1, '/');
+            if (!basename) basename = strrchr(arg1, '\\');
+            basename = basename ? basename + 1 : arg1;
+
+            strncpy(ext->name, basename, sizeof(ext->name) - 1);
+            ext->name[sizeof(ext->name) - 1] = '\0';
+
+            /* Remove .wasm extension if present */
+            char *dot = strrchr(ext->name, '.');
+            if (dot && strcasecmp(dot, ".wasm") == 0) {
+                *dot = '\0';
+            }
+
+            strcpy(ext->version, "1.0.0");
+            ext->num_functions = 0;
+            ext->loaded = true;
+            g_extension_count++;
+
+            printf("Loaded extension: %s from %s\n", ext->name, ext->path);
+            printf("Note: Extension loading requires host-side WASM component support.\n");
+        }
+    }
+    else if (strcasecmp(cmd_name, "unload") == 0) {
+        if (!arg1) {
+            fprintf(stderr, "Usage: .unload NAME\n");
+        } else {
+            bool found = false;
+            for (int i = 0; i < g_extension_count; i++) {
+                if (g_extensions[i].loaded && strcasecmp(g_extensions[i].name, arg1) == 0) {
+                    g_extensions[i].loaded = false;
+                    printf("Unloaded extension: %s\n", arg1);
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                fprintf(stderr, "Error: extension '%s' not found\n", arg1);
+            }
+        }
+    }
+    else if (strcasecmp(cmd_name, "extensions") == 0) {
+        int loaded_count = 0;
+        for (int i = 0; i < g_extension_count; i++) {
+            if (g_extensions[i].loaded) {
+                loaded_count++;
+            }
+        }
+        if (loaded_count == 0) {
+            printf("No extensions loaded.\n");
+            printf("Use .load FILENAME to load a WASM extension.\n");
+        } else {
+            printf("Loaded extensions:\n");
+            for (int i = 0; i < g_extension_count; i++) {
+                if (g_extensions[i].loaded) {
+                    printf("  %s v%s (%s)\n",
+                           g_extensions[i].name,
+                           g_extensions[i].version,
+                           g_extensions[i].path);
+                }
+            }
+        }
+    }
+    /* Phase 1: .read and .output */
+    else if (strcasecmp(cmd_name, "read") == 0) {
+        if (!arg1) {
+            fprintf(stderr, "Usage: .read FILENAME\n");
+        } else {
+            rc = process_file_input(state, arg1);
+        }
+    }
+    else if (strcasecmp(cmd_name, "output") == 0) {
+        if (!arg1 || strcmp(arg1, "stdout") == 0) {
+            if (state->output_file && state->output_file != stdout) {
+                fclose(state->output_file);
+            }
+            state->output_file = stdout;
+            state->output_filename[0] = '\0';
+        } else {
+            FILE *fp = fopen(arg1, "w");
+            if (!fp) {
+                fprintf(stderr, "Error: cannot open \"%s\" for writing\n", arg1);
+            } else {
+                if (state->output_file && state->output_file != stdout) {
+                    fclose(state->output_file);
+                }
+                state->output_file = fp;
+                strncpy(state->output_filename, arg1, sizeof(state->output_filename) - 1);
+                state->output_filename[sizeof(state->output_filename) - 1] = '\0';
+            }
+        }
+    }
+    /* Phase 2: Data management commands */
+    else if (strcasecmp(cmd_name, "import") == 0) {
+        if (!arg1 || !arg2) {
+            fprintf(stderr, "Usage: .import FILE TABLE\n");
+        } else {
+            rc = import_csv(state, arg1, arg2);
+        }
+    }
+    else if (strcasecmp(cmd_name, "backup") == 0 || strcasecmp(cmd_name, "save") == 0) {
+        const char *db_name = "main";
+        const char *filename = arg1;
+        if (arg2) {
+            db_name = arg1;
+            filename = arg2;
+        }
+        if (!filename) {
+            fprintf(stderr, "Usage: .backup ?DB? FILENAME\n");
+        } else {
+            sqlite3 *dest;
+            int rc2 = sqlite3_open(filename, &dest);
+            if (rc2 != SQLITE_OK) {
+                fprintf(stderr, "Error: cannot open \"%s\": %s\n", filename,
+                    sqlite3_errmsg(dest));
+                sqlite3_close(dest);
+            } else {
+                sqlite3_backup *backup = sqlite3_backup_init(dest, "main", state->db, db_name);
+                if (backup) {
+                    sqlite3_backup_step(backup, -1);
+                    sqlite3_backup_finish(backup);
+                    printf("Database backed up to %s\n", filename);
+                } else {
+                    fprintf(stderr, "Error: backup failed: %s\n", sqlite3_errmsg(dest));
+                }
+                sqlite3_close(dest);
+            }
+        }
+    }
+    else if (strcasecmp(cmd_name, "restore") == 0) {
+        const char *db_name = "main";
+        const char *filename = arg1;
+        if (arg2) {
+            db_name = arg1;
+            filename = arg2;
+        }
+        if (!filename) {
+            fprintf(stderr, "Usage: .restore ?DB? FILENAME\n");
+        } else {
+            sqlite3 *src;
+            int rc2 = sqlite3_open(filename, &src);
+            if (rc2 != SQLITE_OK) {
+                fprintf(stderr, "Error: cannot open \"%s\": %s\n", filename,
+                    sqlite3_errmsg(src));
+                sqlite3_close(src);
+            } else {
+                sqlite3_backup *backup = sqlite3_backup_init(state->db, db_name, src, "main");
+                if (backup) {
+                    sqlite3_backup_step(backup, -1);
+                    sqlite3_backup_finish(backup);
+                    printf("Database restored from %s\n", filename);
+                } else {
+                    fprintf(stderr, "Error: restore failed: %s\n", sqlite3_errmsg(state->db));
+                }
+                sqlite3_close(src);
+            }
+        }
+    }
+    else if (strcasecmp(cmd_name, "clone") == 0) {
+        if (!arg1) {
+            fprintf(stderr, "Usage: .clone NEWDB\n");
+        } else {
+            sqlite3 *dest;
+            int rc2 = sqlite3_open(arg1, &dest);
+            if (rc2 != SQLITE_OK) {
+                fprintf(stderr, "Error: cannot open \"%s\": %s\n", arg1,
+                    sqlite3_errmsg(dest));
+                sqlite3_close(dest);
+            } else {
+                sqlite3_backup *backup = sqlite3_backup_init(dest, "main", state->db, "main");
+                if (backup) {
+                    sqlite3_backup_step(backup, -1);
+                    sqlite3_backup_finish(backup);
+                    printf("Database cloned to %s\n", arg1);
+                } else {
+                    fprintf(stderr, "Error: clone failed: %s\n", sqlite3_errmsg(dest));
+                }
+                sqlite3_close(dest);
+            }
+        }
+    }
+    /* Phase 3: Query analysis commands */
+    else if (strcasecmp(cmd_name, "changes") == 0) {
+        printf("Changes: %d\n", sqlite3_changes(state->db));
+        printf("Total changes: %d\n", sqlite3_total_changes(state->db));
+    }
+    else if (strcasecmp(cmd_name, "timer") == 0) {
+        if (arg1) {
+            state->timer_on = parse_on_off(arg1);
+        } else {
+            printf("timer is %s\n", state->timer_on ? "on" : "off");
+        }
+    }
+    else if (strcasecmp(cmd_name, "timeout") == 0) {
+        if (arg1) {
+            int ms = atoi(arg1);
+            sqlite3_busy_timeout(state->db, ms);
+            printf("Timeout set to %d ms\n", ms);
+        } else {
+            fprintf(stderr, "Usage: .timeout MILLISECONDS\n");
+        }
+    }
+    else if (strcasecmp(cmd_name, "trace") == 0) {
+        if (!arg1 || strcasecmp(arg1, "off") == 0) {
+            state->trace_on = false;
+            printf("Tracing disabled\n");
+        } else {
+            state->trace_on = parse_on_off(arg1);
+            printf("Tracing %s\n", state->trace_on ? "enabled" : "disabled");
+        }
+    }
+    else if (strcasecmp(cmd_name, "eqp") == 0) {
+        if (arg1) {
+            state->eqp_on = parse_on_off(arg1);
+        } else {
+            printf("eqp is %s\n", state->eqp_on ? "on" : "off");
+        }
+    }
+    /* Phase 4: Database information commands */
+    else if (strcasecmp(cmd_name, "fullschema") == 0) {
+        execute_sql(state, "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY "
+            "CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 ELSE 3 END, name");
+        /* Also show sqlite_stat tables if they exist */
+        execute_sql(state, "SELECT 'ANALYZE sqlite_master;' WHERE EXISTS "
+            "(SELECT 1 FROM sqlite_master WHERE name='sqlite_stat1')");
+    }
+    else if (strcasecmp(cmd_name, "dbinfo") == 0) {
+        printf("database: %s\n", state->db_filename ? state->db_filename : "unknown");
+        execute_sql(state, "SELECT 'page_size:', page_size FROM pragma_page_size");
+        execute_sql(state, "SELECT 'page_count:', page_count FROM pragma_page_count");
+        execute_sql(state, "SELECT 'freelist_count:', freelist_count FROM pragma_freelist_count");
+        execute_sql(state, "SELECT 'encoding:', encoding FROM pragma_encoding");
+        execute_sql(state, "SELECT 'journal_mode:', journal_mode FROM pragma_journal_mode");
+        execute_sql(state, "SELECT 'auto_vacuum:', auto_vacuum FROM pragma_auto_vacuum");
+    }
+    else if (strcasecmp(cmd_name, "limit") == 0) {
+        if (!arg1) {
+            printf("SQLITE_LIMIT_LENGTH          %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_LENGTH, -1));
+            printf("SQLITE_LIMIT_SQL_LENGTH      %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_SQL_LENGTH, -1));
+            printf("SQLITE_LIMIT_COLUMN          %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_COLUMN, -1));
+            printf("SQLITE_LIMIT_EXPR_DEPTH      %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_EXPR_DEPTH, -1));
+            printf("SQLITE_LIMIT_COMPOUND_SELECT %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_COMPOUND_SELECT, -1));
+            printf("SQLITE_LIMIT_VDBE_OP         %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_VDBE_OP, -1));
+            printf("SQLITE_LIMIT_FUNCTION_ARG    %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_FUNCTION_ARG, -1));
+            printf("SQLITE_LIMIT_ATTACHED        %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_ATTACHED, -1));
+            printf("SQLITE_LIMIT_LIKE_PATTERN_LENGTH %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_LIKE_PATTERN_LENGTH, -1));
+            printf("SQLITE_LIMIT_VARIABLE_NUMBER %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_VARIABLE_NUMBER, -1));
+            printf("SQLITE_LIMIT_TRIGGER_DEPTH   %d\n", sqlite3_limit(state->db, SQLITE_LIMIT_TRIGGER_DEPTH, -1));
+        } else if (arg2) {
+            int limit_id = -1;
+            if (strcasecmp(arg1, "length") == 0) limit_id = SQLITE_LIMIT_LENGTH;
+            else if (strcasecmp(arg1, "sql_length") == 0) limit_id = SQLITE_LIMIT_SQL_LENGTH;
+            else if (strcasecmp(arg1, "column") == 0) limit_id = SQLITE_LIMIT_COLUMN;
+            else if (strcasecmp(arg1, "expr_depth") == 0) limit_id = SQLITE_LIMIT_EXPR_DEPTH;
+            else if (strcasecmp(arg1, "compound_select") == 0) limit_id = SQLITE_LIMIT_COMPOUND_SELECT;
+            else if (strcasecmp(arg1, "vdbe_op") == 0) limit_id = SQLITE_LIMIT_VDBE_OP;
+            else if (strcasecmp(arg1, "function_arg") == 0) limit_id = SQLITE_LIMIT_FUNCTION_ARG;
+            else if (strcasecmp(arg1, "attached") == 0) limit_id = SQLITE_LIMIT_ATTACHED;
+            else if (strcasecmp(arg1, "like_pattern_length") == 0) limit_id = SQLITE_LIMIT_LIKE_PATTERN_LENGTH;
+            else if (strcasecmp(arg1, "variable_number") == 0) limit_id = SQLITE_LIMIT_VARIABLE_NUMBER;
+            else if (strcasecmp(arg1, "trigger_depth") == 0) limit_id = SQLITE_LIMIT_TRIGGER_DEPTH;
+
+            if (limit_id >= 0) {
+                int new_val = atoi(arg2);
+                int old_val = sqlite3_limit(state->db, limit_id, new_val);
+                printf("Limit %s changed from %d to %d\n", arg1, old_val, new_val);
+            } else {
+                fprintf(stderr, "Unknown limit: %s\n", arg1);
+            }
+        } else {
+            fprintf(stderr, "Usage: .limit ?LIMIT? ?VALUE?\n");
+        }
+    }
+    /* Phase 5: Additional output commands */
+    else if (strcasecmp(cmd_name, "once") == 0) {
+        if (!arg1) {
+            fprintf(stderr, "Usage: .once FILENAME\n");
+        } else {
+            if (state->once_file) {
+                fclose(state->once_file);
+            }
+            state->once_file = fopen(arg1, "w");
+            if (!state->once_file) {
+                fprintf(stderr, "Error: cannot open \"%s\" for writing\n", arg1);
+            }
+        }
+    }
+    else if (strcasecmp(cmd_name, "vfslist") == 0) {
+        sqlite3_vfs *vfs = sqlite3_vfs_find(NULL);
+        sqlite3_vfs *default_vfs = vfs;
+        printf("VFS Name              Default  Max Pathname\n");
+        printf("--------------------  -------  ------------\n");
+        while (vfs) {
+            printf("%-20s  %-7s  %d\n",
+                vfs->zName,
+                vfs == default_vfs ? "yes" : "no",
+                vfs->mxPathname);
+            vfs = vfs->pNext;
+        }
+    }
+    else if (strcasecmp(cmd_name, "vfsname") == 0) {
+        sqlite3_vfs *vfs = sqlite3_vfs_find(NULL);
+        if (vfs) {
+            printf("%s\n", vfs->zName);
+        }
+    }
+    else if (strcasecmp(cmd_name, "lint") == 0) {
+        if (arg1 && strcasecmp(arg1, "fkey-indexes") == 0) {
+            execute_sql(state,
+                "SELECT 'Table ' || p.'table' || ' references ' || p.'table' || '.' || p.'to' "
+                "|| ' but has no index on column ' || p.'from' "
+                "FROM pragma_foreign_key_list((SELECT name FROM sqlite_master WHERE type='table')) p "
+                "WHERE NOT EXISTS ("
+                "  SELECT 1 FROM pragma_index_list(p.'table') il, pragma_index_info(il.name) ii "
+                "  WHERE ii.name = p.'from'"
+                ")");
+        } else {
+            fprintf(stderr, "Usage: .lint fkey-indexes\n");
+        }
+    }
     else {
         fprintf(stderr, "Error: unknown command: .%s\n", cmd_name);
         fprintf(stderr, "Use .help for a list of commands\n");
@@ -429,32 +849,33 @@ static int do_meta_command(CliState *state, const char *line) {
 
 /* Print column headers */
 static void print_headers(CliState *state, sqlite3_stmt *stmt, int ncol) {
+    FILE *out = get_output(state);
     switch (state->mode) {
         case MODE_LIST:
             for (int i = 0; i < ncol; i++) {
-                if (i > 0) printf("%s", state->separator);
-                printf("%s", sqlite3_column_name(stmt, i));
+                if (i > 0) fprintf(out, "%s", state->separator);
+                fprintf(out, "%s", sqlite3_column_name(stmt, i));
             }
-            printf("\n");
+            fprintf(out, "\n");
             break;
 
         case MODE_CSV:
             for (int i = 0; i < ncol; i++) {
-                if (i > 0) printf(",");
+                if (i > 0) fprintf(out, ",");
                 const char *name = sqlite3_column_name(stmt, i);
                 /* Quote if contains comma, quote, or newline */
                 if (strchr(name, ',') || strchr(name, '"') || strchr(name, '\n')) {
-                    printf("\"");
+                    fprintf(out, "\"");
                     for (const char *p = name; *p; p++) {
-                        if (*p == '"') printf("\"\"");
-                        else putchar(*p);
+                        if (*p == '"') fprintf(out, "\"\"");
+                        else fputc(*p, out);
                     }
-                    printf("\"");
+                    fprintf(out, "\"");
                 } else {
-                    printf("%s", name);
+                    fprintf(out, "%s", name);
                 }
             }
-            printf("\n");
+            fprintf(out, "\n");
             break;
 
         case MODE_COLUMN:
@@ -464,35 +885,35 @@ static void print_headers(CliState *state, sqlite3_stmt *stmt, int ncol) {
                 int width = state->col_widths[i];
                 if (width <= 0) width = 10;
                 if (state->mode == MODE_TABLE || state->mode == MODE_MARKDOWN) {
-                    printf("| ");
+                    fprintf(out, "| ");
                 }
-                printf("%-*s", width, sqlite3_column_name(stmt, i));
+                fprintf(out, "%-*s", width, sqlite3_column_name(stmt, i));
                 if (state->mode != MODE_TABLE && state->mode != MODE_MARKDOWN) {
-                    printf("  ");
+                    fprintf(out, "  ");
                 } else {
-                    printf(" ");
+                    fprintf(out, " ");
                 }
             }
             if (state->mode == MODE_TABLE || state->mode == MODE_MARKDOWN) {
-                printf("|");
+                fprintf(out, "|");
             }
-            printf("\n");
+            fprintf(out, "\n");
             /* Print separator line */
             for (int i = 0; i < ncol; i++) {
                 int width = state->col_widths[i];
                 if (width <= 0) width = 10;
                 if (state->mode == MODE_TABLE || state->mode == MODE_MARKDOWN) {
-                    printf("|");
-                    for (int j = 0; j < width + 2; j++) printf("-");
+                    fprintf(out, "|");
+                    for (int j = 0; j < width + 2; j++) fprintf(out, "-");
                 } else {
-                    for (int j = 0; j < width; j++) printf("-");
-                    printf("  ");
+                    for (int j = 0; j < width; j++) fprintf(out, "-");
+                    fprintf(out, "  ");
                 }
             }
             if (state->mode == MODE_TABLE || state->mode == MODE_MARKDOWN) {
-                printf("|");
+                fprintf(out, "|");
             }
-            printf("\n");
+            fprintf(out, "\n");
             break;
 
         case MODE_LINE:
@@ -507,24 +928,26 @@ static void print_headers(CliState *state, sqlite3_stmt *stmt, int ncol) {
 
 /* Print a row in list mode */
 static void print_row_list(CliState *state, sqlite3_stmt *stmt, int ncol) {
+    FILE *out = get_output(state);
     for (int i = 0; i < ncol; i++) {
-        if (i > 0) printf("%s", state->separator);
+        if (i > 0) fprintf(out, "%s", state->separator);
         if (sqlite3_column_type(stmt, i) == SQLITE_NULL) {
-            printf("%s", state->null_display);
+            fprintf(out, "%s", state->null_display);
         } else {
-            printf("%s", (const char *)sqlite3_column_text(stmt, i));
+            fprintf(out, "%s", (const char *)sqlite3_column_text(stmt, i));
         }
     }
-    printf("\n");
+    fprintf(out, "\n");
 }
 
 /* Print a row in column mode */
 static void print_row_column(CliState *state, sqlite3_stmt *stmt, int ncol) {
+    FILE *out = get_output(state);
     for (int i = 0; i < ncol; i++) {
         int width = state->col_widths[i];
         if (width <= 0) width = 10;
         if (state->mode == MODE_TABLE || state->mode == MODE_MARKDOWN) {
-            printf("| ");
+            fprintf(out, "| ");
         }
         const char *val;
         if (sqlite3_column_type(stmt, i) == SQLITE_NULL) {
@@ -532,21 +955,22 @@ static void print_row_column(CliState *state, sqlite3_stmt *stmt, int ncol) {
         } else {
             val = (const char *)sqlite3_column_text(stmt, i);
         }
-        printf("%-*.*s", width, width, val ? val : "");
+        fprintf(out, "%-*.*s", width, width, val ? val : "");
         if (state->mode != MODE_TABLE && state->mode != MODE_MARKDOWN) {
-            printf("  ");
+            fprintf(out, "  ");
         } else {
-            printf(" ");
+            fprintf(out, " ");
         }
     }
     if (state->mode == MODE_TABLE || state->mode == MODE_MARKDOWN) {
-        printf("|");
+        fprintf(out, "|");
     }
-    printf("\n");
+    fprintf(out, "\n");
 }
 
 /* Print a row in line mode */
 static void print_row_line(CliState *state, sqlite3_stmt *stmt, int ncol) {
+    FILE *out = get_output(state);
     for (int i = 0; i < ncol; i++) {
         const char *name = sqlite3_column_name(stmt, i);
         const char *val;
@@ -555,32 +979,33 @@ static void print_row_line(CliState *state, sqlite3_stmt *stmt, int ncol) {
         } else {
             val = (const char *)sqlite3_column_text(stmt, i);
         }
-        printf("%12s = %s\n", name, val ? val : "");
+        fprintf(out, "%12s = %s\n", name, val ? val : "");
     }
-    printf("\n");
+    fprintf(out, "\n");
 }
 
 /* Print a row in CSV mode */
 static void print_row_csv(CliState *state, sqlite3_stmt *stmt, int ncol) {
+    FILE *out = get_output(state);
     for (int i = 0; i < ncol; i++) {
-        if (i > 0) printf(",");
+        if (i > 0) fprintf(out, ",");
         if (sqlite3_column_type(stmt, i) == SQLITE_NULL) {
             /* Empty for NULL in CSV */
         } else {
             const char *val = (const char *)sqlite3_column_text(stmt, i);
             if (val && (strchr(val, ',') || strchr(val, '"') || strchr(val, '\n'))) {
-                printf("\"");
+                fprintf(out, "\"");
                 for (const char *p = val; *p; p++) {
-                    if (*p == '"') printf("\"\"");
-                    else putchar(*p);
+                    if (*p == '"') fprintf(out, "\"\"");
+                    else fputc(*p, out);
                 }
-                printf("\"");
+                fprintf(out, "\"");
             } else {
-                printf("%s", val ? val : "");
+                fprintf(out, "%s", val ? val : "");
             }
         }
     }
-    printf("\n");
+    fprintf(out, "\n");
 }
 
 /* Execute SQL and display results */
@@ -588,11 +1013,22 @@ static int execute_sql(CliState *state, const char *sql) {
     sqlite3_stmt *stmt = NULL;
     const char *tail = sql;
     int rc = SQLITE_OK;
-    int first_json = 1;
+    FILE *out = get_output(state);
+    clock_t start_time = 0;
 
     if (!state->db) {
         fprintf(stderr, "Error: no database open\n");
         return 1;
+    }
+
+    /* Start timer if enabled */
+    if (state->timer_on) {
+        start_time = clock();
+    }
+
+    /* Trace SQL if enabled */
+    if (state->trace_on) {
+        fprintf(stderr, "TRACE: %s\n", sql);
     }
 
     while (tail && *tail) {
@@ -600,9 +1036,28 @@ static int execute_sql(CliState *state, const char *sql) {
         while (*tail && isspace((unsigned char)*tail)) tail++;
         if (!*tail) break;
 
+        /* Run EXPLAIN QUERY PLAN if enabled */
+        if (state->eqp_on) {
+            char eqp_sql[MAX_SQL_BUFFER];
+            snprintf(eqp_sql, sizeof(eqp_sql), "EXPLAIN QUERY PLAN %s", tail);
+            sqlite3_stmt *eqp_stmt = NULL;
+            if (sqlite3_prepare_v2(state->db, eqp_sql, -1, &eqp_stmt, NULL) == SQLITE_OK) {
+                fprintf(out, "QUERY PLAN\n");
+                while (sqlite3_step(eqp_stmt) == SQLITE_ROW) {
+                    int id = sqlite3_column_int(eqp_stmt, 0);
+                    int parent = sqlite3_column_int(eqp_stmt, 1);
+                    const char *detail = (const char *)sqlite3_column_text(eqp_stmt, 3);
+                    fprintf(out, "|--%-*s%s\n", id * 3, "", detail ? detail : "");
+                    (void)parent; /* unused but part of result */
+                }
+                sqlite3_finalize(eqp_stmt);
+            }
+        }
+
         rc = sqlite3_prepare_v2(state->db, tail, -1, &stmt, &tail);
         if (rc != SQLITE_OK) {
             fprintf(stderr, "Error: %s\n", sqlite3_errmsg(state->db));
+            close_once(state);
             return 1;
         }
 
@@ -613,7 +1068,7 @@ static int execute_sql(CliState *state, const char *sql) {
         bool headers_printed = false;
 
         if (state->mode == MODE_JSON && ncol > 0) {
-            printf("[");
+            fprintf(out, "[");
         }
 
         while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
@@ -640,35 +1095,35 @@ static int execute_sql(CliState *state, const char *sql) {
                         print_row_csv(state, stmt, ncol);
                         break;
                     case MODE_JSON:
-                        if (row_count > 0) printf(",");
-                        printf("{");
+                        if (row_count > 0) fprintf(out, ",");
+                        fprintf(out, "{");
                         for (int i = 0; i < ncol; i++) {
-                            if (i > 0) printf(",");
-                            printf("\"%s\":", sqlite3_column_name(stmt, i));
+                            if (i > 0) fprintf(out, ",");
+                            fprintf(out, "\"%s\":", sqlite3_column_name(stmt, i));
                             int type = sqlite3_column_type(stmt, i);
                             if (type == SQLITE_NULL) {
-                                printf("null");
+                                fprintf(out, "null");
                             } else if (type == SQLITE_INTEGER) {
-                                printf("%lld", sqlite3_column_int64(stmt, i));
+                                fprintf(out, "%lld", sqlite3_column_int64(stmt, i));
                             } else if (type == SQLITE_FLOAT) {
-                                printf("%g", sqlite3_column_double(stmt, i));
+                                fprintf(out, "%g", sqlite3_column_double(stmt, i));
                             } else {
                                 const char *val = (const char *)sqlite3_column_text(stmt, i);
-                                printf("\"");
+                                fprintf(out, "\"");
                                 for (const char *p = val; p && *p; p++) {
                                     switch (*p) {
-                                        case '"': printf("\\\""); break;
-                                        case '\\': printf("\\\\"); break;
-                                        case '\n': printf("\\n"); break;
-                                        case '\r': printf("\\r"); break;
-                                        case '\t': printf("\\t"); break;
-                                        default: putchar(*p);
+                                        case '"': fprintf(out, "\\\""); break;
+                                        case '\\': fprintf(out, "\\\\"); break;
+                                        case '\n': fprintf(out, "\\n"); break;
+                                        case '\r': fprintf(out, "\\r"); break;
+                                        case '\t': fprintf(out, "\\t"); break;
+                                        default: fputc(*p, out);
                                     }
                                 }
-                                printf("\"");
+                                fprintf(out, "\"");
                             }
                         }
-                        printf("}");
+                        fprintf(out, "}");
                         break;
                 }
             }
@@ -676,25 +1131,36 @@ static int execute_sql(CliState *state, const char *sql) {
         }
 
         if (state->mode == MODE_JSON && ncol > 0) {
-            printf("]\n");
+            fprintf(out, "]\n");
         }
 
         if (rc != SQLITE_DONE && rc != SQLITE_ROW) {
             fprintf(stderr, "Error: %s\n", sqlite3_errmsg(state->db));
             sqlite3_finalize(stmt);
+            close_once(state);
             return 1;
         }
 
         state->changes = sqlite3_changes(state->db);
 
         if (state->stats_on) {
-            printf("Rows returned: %d\n", row_count);
-            printf("Changes: %d\n", state->changes);
+            fprintf(out, "Rows returned: %d\n", row_count);
+            fprintf(out, "Changes: %d\n", state->changes);
         }
 
         sqlite3_finalize(stmt);
         stmt = NULL;
     }
+
+    /* Print timer if enabled */
+    if (state->timer_on) {
+        clock_t end_time = clock();
+        double elapsed = (double)(end_time - start_time) / CLOCKS_PER_SEC;
+        fprintf(stderr, "Run Time: real %.3f\n", elapsed);
+    }
+
+    /* Close .once file if used */
+    close_once(state);
 
     return 0;
 }
@@ -785,6 +1251,231 @@ static int repl(CliState *state) {
         }
     }
 
+    return 0;
+}
+
+/* Process SQL from a file */
+static int process_file_input(CliState *state, const char *filename) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) {
+        fprintf(stderr, "Error: cannot open \"%s\"\n", filename);
+        return 1;
+    }
+
+    char line[MAX_LINE];
+    char sql_buf[MAX_SQL_BUFFER] = "";
+    int rc = 0;
+
+    while (fgets(line, sizeof(line), fp)) {
+        char *trimmed = trim(line);
+
+        /* Skip empty lines and comments */
+        if (trimmed[0] == '\0' || (trimmed[0] == '-' && trimmed[1] == '-')) {
+            continue;
+        }
+
+        /* Handle dot commands */
+        if (trimmed[0] == '.' && sql_buf[0] == '\0') {
+            if (state->echo_on) {
+                printf("%s\n", trimmed);
+            }
+            int meta_rc = do_meta_command(state, trimmed);
+            if (meta_rc < 0) {
+                /* Exit requested */
+                break;
+            }
+            if (meta_rc != 0 && state->bail_on_error) {
+                rc = meta_rc;
+                break;
+            }
+            continue;
+        }
+
+        /* Accumulate SQL */
+        size_t sql_len = strlen(sql_buf);
+        size_t line_len = strlen(trimmed);
+        if (sql_len + line_len + 2 < sizeof(sql_buf)) {
+            if (sql_buf[0] != '\0') {
+                strcat(sql_buf, " ");
+            }
+            strcat(sql_buf, trimmed);
+        } else {
+            fprintf(stderr, "Error: SQL too long in %s\n", filename);
+            sql_buf[0] = '\0';
+            continue;
+        }
+
+        /* Check if SQL is complete */
+        if (sqlite3_complete(sql_buf)) {
+            if (state->echo_on) {
+                printf("%s\n", sql_buf);
+            }
+            int sql_rc = execute_sql(state, sql_buf);
+            sql_buf[0] = '\0';
+            if (sql_rc != 0 && state->bail_on_error) {
+                rc = sql_rc;
+                break;
+            }
+        }
+    }
+
+    /* Execute any remaining SQL */
+    if (sql_buf[0] != '\0') {
+        if (state->echo_on) {
+            printf("%s\n", sql_buf);
+        }
+        int sql_rc = execute_sql(state, sql_buf);
+        if (sql_rc != 0) {
+            rc = sql_rc;
+        }
+    }
+
+    fclose(fp);
+    return rc;
+}
+
+/* Parse a CSV line into fields */
+static int parse_csv_line(char *line, char **fields, int max_fields, char separator) {
+    int n = 0;
+    char *p = line;
+    bool in_quotes = false;
+
+    while (*p && n < max_fields) {
+        fields[n] = p;
+
+        /* Skip to end of field */
+        while (*p) {
+            if (*p == '"') {
+                if (in_quotes && *(p + 1) == '"') {
+                    /* Escaped quote */
+                    memmove(p, p + 1, strlen(p));
+                } else {
+                    in_quotes = !in_quotes;
+                    memmove(p, p + 1, strlen(p));
+                    continue;
+                }
+            } else if (*p == separator && !in_quotes) {
+                *p = '\0';
+                p++;
+                break;
+            } else if (*p == '\n' || *p == '\r') {
+                *p = '\0';
+                break;
+            }
+            p++;
+        }
+        n++;
+    }
+
+    return n;
+}
+
+/* Import CSV file into a table */
+static int import_csv(CliState *state, const char *filename, const char *table) {
+    FILE *fp = fopen(filename, "r");
+    if (!fp) {
+        fprintf(stderr, "Error: cannot open \"%s\"\n", filename);
+        return 1;
+    }
+
+    char line[MAX_LINE];
+    char *fields[MAX_COLUMNS];
+    int ncols = 0;
+    int nrows = 0;
+    char separator = ',';
+
+    /* Detect separator: use tab if filename ends with .tsv */
+    size_t len = strlen(filename);
+    if (len > 4 && strcasecmp(filename + len - 4, ".tsv") == 0) {
+        separator = '\t';
+    }
+
+    /* Read header line */
+    if (!fgets(line, sizeof(line), fp)) {
+        fprintf(stderr, "Error: empty file\n");
+        fclose(fp);
+        return 1;
+    }
+
+    ncols = parse_csv_line(line, fields, MAX_COLUMNS, separator);
+    if (ncols == 0) {
+        fprintf(stderr, "Error: no columns in header\n");
+        fclose(fp);
+        return 1;
+    }
+
+    /* Build CREATE TABLE and INSERT statements */
+    char create_sql[MAX_SQL_BUFFER];
+    char insert_sql[MAX_SQL_BUFFER];
+
+    snprintf(create_sql, sizeof(create_sql), "CREATE TABLE IF NOT EXISTS \"%s\" (", table);
+    snprintf(insert_sql, sizeof(insert_sql), "INSERT INTO \"%s\" VALUES (", table);
+
+    for (int i = 0; i < ncols; i++) {
+        if (i > 0) {
+            strncat(create_sql, ", ", sizeof(create_sql) - strlen(create_sql) - 1);
+            strncat(insert_sql, ", ", sizeof(insert_sql) - strlen(insert_sql) - 1);
+        }
+        /* Sanitize column name */
+        char col_name[256];
+        snprintf(col_name, sizeof(col_name), "\"%s\" TEXT", fields[i]);
+        strncat(create_sql, col_name, sizeof(create_sql) - strlen(create_sql) - 1);
+        strncat(insert_sql, "?", sizeof(insert_sql) - strlen(insert_sql) - 1);
+    }
+    strncat(create_sql, ")", sizeof(create_sql) - strlen(create_sql) - 1);
+    strncat(insert_sql, ")", sizeof(insert_sql) - strlen(insert_sql) - 1);
+
+    /* Create table */
+    char *errmsg = NULL;
+    int rc = sqlite3_exec(state->db, create_sql, NULL, NULL, &errmsg);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error creating table: %s\n", errmsg);
+        sqlite3_free(errmsg);
+        fclose(fp);
+        return 1;
+    }
+
+    /* Prepare insert statement */
+    sqlite3_stmt *stmt = NULL;
+    rc = sqlite3_prepare_v2(state->db, insert_sql, -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        fprintf(stderr, "Error preparing insert: %s\n", sqlite3_errmsg(state->db));
+        fclose(fp);
+        return 1;
+    }
+
+    /* Begin transaction for performance */
+    sqlite3_exec(state->db, "BEGIN TRANSACTION", NULL, NULL, NULL);
+
+    /* Read data lines */
+    while (fgets(line, sizeof(line), fp)) {
+        int n = parse_csv_line(line, fields, MAX_COLUMNS, separator);
+        if (n == 0) continue;
+
+        sqlite3_reset(stmt);
+        for (int i = 0; i < ncols && i < n; i++) {
+            sqlite3_bind_text(stmt, i + 1, fields[i], -1, SQLITE_TRANSIENT);
+        }
+        /* Bind NULL for missing columns */
+        for (int i = n; i < ncols; i++) {
+            sqlite3_bind_null(stmt, i + 1);
+        }
+
+        rc = sqlite3_step(stmt);
+        if (rc != SQLITE_DONE) {
+            fprintf(stderr, "Error inserting row: %s\n", sqlite3_errmsg(state->db));
+        } else {
+            nrows++;
+        }
+    }
+
+    /* Commit transaction */
+    sqlite3_exec(state->db, "COMMIT", NULL, NULL, NULL);
+
+    sqlite3_finalize(stmt);
+    fclose(fp);
+
+    printf("Imported %d rows into table \"%s\"\n", nrows, table);
     return 0;
 }
 

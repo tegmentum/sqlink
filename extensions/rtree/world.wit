@@ -1,0 +1,49 @@
+package sqlite:ext-rtree@0.1.0;
+
+/// R-Tree Spatial Index Extension
+/// Provides spatial indexing capabilities for SQLite
+world rtree-extension {
+    /// Get extension metadata
+    export get-info: func() -> extension-info;
+
+    /// Extension metadata
+    record extension-info {
+        name: string,
+        version: string,
+        functions: list<function-def>,
+    }
+
+    /// Function definition
+    record function-def {
+        name: string,
+        num-args: s32,
+        function-id: u64,
+    }
+
+    /// Initialize the extension with a database connection
+    export init: func(db-handle: u64) -> result<_, string>;
+
+    /// SQL value types for callbacks
+    enum value-type {
+        integer,
+        float,
+        text,
+        blob,
+        null,
+    }
+
+    /// A SQL value
+    record sql-value {
+        value-type: value-type,
+        int-value: option<s64>,
+        float-value: option<f64>,
+        text-value: option<string>,
+        blob-value: option<list<u8>>,
+    }
+
+    /// Callback invoked when extension functions are called
+    export on-function-call: func(
+        function-id: u64,
+        args: list<sql-value>,
+    ) -> result<sql-value, string>;
+}

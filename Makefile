@@ -1,7 +1,7 @@
 # SQLite WASM Component Makefile
 # Builds SQLite as a WebAssembly component targeting WASI Preview 2
 
-.PHONY: all clean deps sqlite wasi-sdk bindings build test help cli
+.PHONY: all clean deps sqlite wasi-sdk bindings build test test-cli help cli extensions
 
 # Directories
 PROJECT_ROOT := $(shell pwd)
@@ -21,16 +21,12 @@ AR := $(WASI_SDK)/bin/llvm-ar
 TARGET := wasm32-wasip2
 
 # SQLite configuration flags
+# Note: FTS5, RTREE, GEOPOLY, JSON1 are built as separate WASM extensions
 SQLITE_CFLAGS := \
     -DSQLITE_THREADSAFE=1 \
-    -DSQLITE_ENABLE_FTS5 \
-    -DSQLITE_ENABLE_RTREE \
-    -DSQLITE_ENABLE_GEOPOLY \
     -DSQLITE_ENABLE_MATH_FUNCTIONS \
     -DSQLITE_ENABLE_COLUMN_METADATA \
-    -DSQLITE_ENABLE_JSON1 \
     -DSQLITE_ENABLE_STAT4 \
-    -DSQLITE_OMIT_LOAD_EXTENSION \
     -DSQLITE_OMIT_LOCALTIME \
     -DSQLITE_TEMP_STORE=2 \
     -DSQLITE_OS_OTHER=1 \
@@ -102,12 +98,13 @@ help:
 	@echo "  build        Build the core WASM module"
 	@echo "  component    Convert core module to component"
 	@echo "  cli          Build the SQLite CLI (sqlite-cli.wasm)"
+	@echo "  extensions   Build all WASM extensions (FTS5, R-Tree, JSON1, GeoPoly)"
 	@echo "  test         Run tests"
 	@echo "  clean        Remove build artifacts"
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  SQLITE_VERSION  SQLite version (default: 3480000)"
-	@echo "  WASI_SDK_VERSION  wasi-sdk version (default: 25)"
+	@echo "  WASI_SDK_VERSION  wasi-sdk version (default: 29)"
 
 # Download dependencies
 deps: wasi-sdk sqlite
@@ -214,6 +211,11 @@ test-integration: $(COMPONENT_WASM)
 		echo "jco not found, skipping JavaScript integration tests"; \
 	fi
 
+test-cli: $(CLI_WASM)
+	@echo "Running CLI tests..."
+	@./tests/cli/test_load.sh
+	@./tests/cli/test_commands.sh
+
 # CLI build
 CLI_SRC := $(SRC_DIR)/cli/sqlite_cli.c
 CLI_WASM := $(BUILD_DIR)/sqlite-cli.wasm
@@ -316,10 +318,121 @@ extensible: bindings-ext $(EXTENSIBLE_WASM)
 
 .PHONY: extensible
 
+# =============================================================================
+# Extension builds
+# =============================================================================
+
+EXTENSIONS_DIR := $(PROJECT_ROOT)/extensions
+EXT_BUILD_DIR := $(BUILD_DIR)/extensions
+
+# Extension compiler flags (reactor mode with extension-specific flags)
+EXT_CFLAGS := \
+    --target=$(TARGET) \
+    --sysroot=$(WASI_SYSROOT) \
+    -O2 \
+    -g \
+    -Wall \
+    -Wextra \
+    -Wno-unused-parameter \
+    -I$(DEPS_DIR)/sqlite \
+    -I$(SRC_DIR) \
+    $(SQLITE_CFLAGS)
+
+EXT_LDFLAGS := \
+    --target=$(TARGET) \
+    --sysroot=$(WASI_SYSROOT) \
+    -mexec-model=reactor \
+    -Wl,--export-dynamic \
+    -Wl,--no-entry
+
+# Create extension build directory
+$(EXT_BUILD_DIR):
+	mkdir -p $(EXT_BUILD_DIR)
+
+# FTS5 Extension
+FTS5_WASM := $(EXT_BUILD_DIR)/fts5.wasm
+FTS5_OBJS := $(EXT_BUILD_DIR)/fts5_ext.o $(BUILD_DIR)/sqlite3_fts5.o
+
+$(BUILD_DIR)/sqlite3_fts5.o: $(SQLITE_SRC) | $(BUILD_DIR)
+	@echo "Compiling SQLite with FTS5..."
+	$(CC) $(EXT_CFLAGS) -DSQLITE_ENABLE_FTS5 -c $< -o $@
+
+$(EXT_BUILD_DIR)/fts5_ext.o: $(EXTENSIONS_DIR)/fts5/fts5_ext.c | $(EXT_BUILD_DIR)
+	@echo "Compiling FTS5 extension wrapper..."
+	$(CC) $(EXT_CFLAGS) -DSQLITE_ENABLE_FTS5 -c $< -o $@
+
+$(FTS5_WASM): $(FTS5_OBJS)
+	@echo "Linking FTS5 extension..."
+	$(CC) $(EXT_LDFLAGS) $(FTS5_OBJS) -o $@
+	@echo "Built: $@"
+	@ls -lh $@
+
+# R-Tree Extension
+RTREE_WASM := $(EXT_BUILD_DIR)/rtree.wasm
+RTREE_OBJS := $(EXT_BUILD_DIR)/rtree_ext.o $(BUILD_DIR)/sqlite3_rtree.o
+
+$(BUILD_DIR)/sqlite3_rtree.o: $(SQLITE_SRC) | $(BUILD_DIR)
+	@echo "Compiling SQLite with R-Tree..."
+	$(CC) $(EXT_CFLAGS) -DSQLITE_ENABLE_RTREE -c $< -o $@
+
+$(EXT_BUILD_DIR)/rtree_ext.o: $(EXTENSIONS_DIR)/rtree/rtree_ext.c | $(EXT_BUILD_DIR)
+	@echo "Compiling R-Tree extension wrapper..."
+	$(CC) $(EXT_CFLAGS) -DSQLITE_ENABLE_RTREE -c $< -o $@
+
+$(RTREE_WASM): $(RTREE_OBJS)
+	@echo "Linking R-Tree extension..."
+	$(CC) $(EXT_LDFLAGS) $(RTREE_OBJS) -o $@
+	@echo "Built: $@"
+	@ls -lh $@
+
+# JSON1 Extension
+JSON1_WASM := $(EXT_BUILD_DIR)/json1.wasm
+JSON1_OBJS := $(EXT_BUILD_DIR)/json1_ext.o $(BUILD_DIR)/sqlite3_json1.o
+
+$(BUILD_DIR)/sqlite3_json1.o: $(SQLITE_SRC) | $(BUILD_DIR)
+	@echo "Compiling SQLite with JSON1..."
+	$(CC) $(EXT_CFLAGS) -DSQLITE_ENABLE_JSON1 -c $< -o $@
+
+$(EXT_BUILD_DIR)/json1_ext.o: $(EXTENSIONS_DIR)/json1/json1_ext.c | $(EXT_BUILD_DIR)
+	@echo "Compiling JSON1 extension wrapper..."
+	$(CC) $(EXT_CFLAGS) -DSQLITE_ENABLE_JSON1 -c $< -o $@
+
+$(JSON1_WASM): $(JSON1_OBJS)
+	@echo "Linking JSON1 extension..."
+	$(CC) $(EXT_LDFLAGS) $(JSON1_OBJS) -o $@
+	@echo "Built: $@"
+	@ls -lh $@
+
+# GeoPoly Extension (requires R-Tree)
+GEOPOLY_WASM := $(EXT_BUILD_DIR)/geopoly.wasm
+GEOPOLY_OBJS := $(EXT_BUILD_DIR)/geopoly_ext.o $(BUILD_DIR)/sqlite3_geopoly.o
+
+$(BUILD_DIR)/sqlite3_geopoly.o: $(SQLITE_SRC) | $(BUILD_DIR)
+	@echo "Compiling SQLite with GeoPoly..."
+	$(CC) $(EXT_CFLAGS) -DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_RTREE -c $< -o $@
+
+$(EXT_BUILD_DIR)/geopoly_ext.o: $(EXTENSIONS_DIR)/geopoly/geopoly_ext.c | $(EXT_BUILD_DIR)
+	@echo "Compiling GeoPoly extension wrapper..."
+	$(CC) $(EXT_CFLAGS) -DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_RTREE -c $< -o $@
+
+$(GEOPOLY_WASM): $(GEOPOLY_OBJS)
+	@echo "Linking GeoPoly extension..."
+	$(CC) $(EXT_LDFLAGS) $(GEOPOLY_OBJS) -o $@
+	@echo "Built: $@"
+	@ls -lh $@
+
+# Build all extensions
+extensions: $(FTS5_WASM) $(RTREE_WASM) $(JSON1_WASM) $(GEOPOLY_WASM)
+	@echo ""
+	@echo "All extensions built:"
+	@ls -lh $(EXT_BUILD_DIR)/*.wasm
+
+# =============================================================================
 # Clean build artifacts
 clean:
 	rm -rf $(BUILD_DIR)
 	rm -rf $(BINDINGS_DIR)
+	rm -rf $(BINDINGS_EXT_DIR)
 
 # Clean everything including dependencies
 distclean: clean
