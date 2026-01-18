@@ -36,4 +36,7 @@ world sqlite-cli {
 
     // Import extension loader for .load command support
     import extension-loader;
+
+    // Import ZIP operations for .archive command support
+    import zip-operations;
 }

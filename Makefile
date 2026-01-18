@@ -98,13 +98,17 @@ help:
 	@echo "  build        Build the core WASM module"
 	@echo "  component    Convert core module to component"
 	@echo "  cli          Build the SQLite CLI (sqlite-cli.wasm)"
+	@echo "  cli-zip      Build CLI composed with zip-wasm (.archive support)"
+	@echo "  cli-common   Build CLI composed with FTS5 + JSON1"
+	@echo "  cli-full     Build CLI with all extensions + ZIP support"
 	@echo "  extensions   Build all WASM extensions (FTS5, R-Tree, JSON1, GeoPoly)"
 	@echo "  test         Run tests"
 	@echo "  clean        Remove build artifacts"
 	@echo ""
 	@echo "Environment variables:"
-	@echo "  SQLITE_VERSION  SQLite version (default: 3480000)"
+	@echo "  SQLITE_VERSION    SQLite version (default: 3480000)"
 	@echo "  WASI_SDK_VERSION  wasi-sdk version (default: 29)"
+	@echo "  ZIP_WASM          Path to zip-wasm component (for cli-zip/cli-full)"
 
 # Download dependencies
 deps: wasi-sdk sqlite
@@ -229,11 +233,13 @@ CLI_CFLAGS := \
     -Wall \
     -I$(DEPS_DIR)/sqlite \
     -I$(SRC_DIR) \
+    -D_WASI_EMULATED_PROCESS_CLOCKS \
     $(SQLITE_CFLAGS)
 
 CLI_LDFLAGS := \
     --target=$(TARGET) \
-    --sysroot=$(WASI_SYSROOT)
+    --sysroot=$(WASI_SYSROOT) \
+    -lwasi-emulated-process-clocks
 
 # CLI object files
 CLI_OBJS := \
@@ -260,7 +266,7 @@ cli: $(CLI_WASM)
 # Extensible build (with extension API)
 EXTENSIBLE_WASM := $(BUILD_DIR)/sqlite-extensible.wasm
 
-# Compiler flags for extensible build (includes bindings-ext)
+# Compiler flags for extensible build (includes both bindings dirs)
 CFLAGS_EXT := \
     --target=$(TARGET) \
     --sysroot=$(WASI_SYSROOT) \
@@ -271,6 +277,7 @@ CFLAGS_EXT := \
     -Wno-unused-parameter \
     -I$(DEPS_DIR)/sqlite \
     -I$(SRC_DIR) \
+    -I$(BINDINGS_DIR) \
     -I$(BINDINGS_EXT_DIR) \
     $(SQLITE_CFLAGS)
 
@@ -426,6 +433,77 @@ extensions: $(FTS5_WASM) $(RTREE_WASM) $(JSON1_WASM) $(GEOPOLY_WASM)
 	@echo ""
 	@echo "All extensions built:"
 	@ls -lh $(EXT_BUILD_DIR)/*.wasm
+
+# =============================================================================
+# WASM Component Composition
+# =============================================================================
+
+# Path to zip-wasm component (set via environment or use default)
+ZIP_WASM ?= $(HOME)/git/zip-wasm/build/zip-wasm.wasm
+
+# Composed CLI with ZIP support
+CLI_ZIP_WASM := $(BUILD_DIR)/sqlite-cli-zip.wasm
+
+# Compose CLI with zip-wasm for .archive command support
+$(CLI_ZIP_WASM): $(CLI_WASM) $(ZIP_WASM)
+	@echo "Composing CLI with zip-wasm..."
+	@if [ -f "$(ZIP_WASM)" ]; then \
+		wasm-tools compose $(CLI_WASM) \
+			-d zip-operations=$(ZIP_WASM) \
+			-o $@; \
+		echo "Built: $@"; \
+		ls -lh $@; \
+	else \
+		echo "Warning: zip-wasm not found at $(ZIP_WASM)"; \
+		echo "Set ZIP_WASM environment variable or build zip-wasm first"; \
+		echo "Skipping composition, copying CLI without ZIP support"; \
+		cp $(CLI_WASM) $@; \
+	fi
+
+cli-zip: $(CLI_ZIP_WASM)
+
+# Compose CLI with common extensions (FTS5 + JSON1)
+CLI_COMMON_WASM := $(BUILD_DIR)/sqlite-cli-common.wasm
+
+$(CLI_COMMON_WASM): $(CLI_WASM) $(FTS5_WASM) $(JSON1_WASM)
+	@echo "Composing CLI with common extensions..."
+	wasm-tools compose $(CLI_WASM) \
+		-d fts5=$(FTS5_WASM) \
+		-d json1=$(JSON1_WASM) \
+		-o $@
+	@echo "Built: $@"
+	@ls -lh $@
+
+cli-common: $(CLI_COMMON_WASM)
+
+# Compose CLI with all features (extensions + ZIP)
+CLI_FULL_WASM := $(BUILD_DIR)/sqlite-cli-full.wasm
+
+$(CLI_FULL_WASM): $(CLI_WASM) $(FTS5_WASM) $(JSON1_WASM) $(RTREE_WASM) $(GEOPOLY_WASM)
+	@echo "Composing full CLI..."
+	@if [ -f "$(ZIP_WASM)" ]; then \
+		wasm-tools compose $(CLI_WASM) \
+			-d fts5=$(FTS5_WASM) \
+			-d json1=$(JSON1_WASM) \
+			-d rtree=$(RTREE_WASM) \
+			-d geopoly=$(GEOPOLY_WASM) \
+			-d zip-operations=$(ZIP_WASM) \
+			-o $@; \
+	else \
+		wasm-tools compose $(CLI_WASM) \
+			-d fts5=$(FTS5_WASM) \
+			-d json1=$(JSON1_WASM) \
+			-d rtree=$(RTREE_WASM) \
+			-d geopoly=$(GEOPOLY_WASM) \
+			-o $@; \
+		echo "Note: Built without ZIP support (zip-wasm not found)"; \
+	fi
+	@echo "Built: $@"
+	@ls -lh $@
+
+cli-full: extensions $(CLI_FULL_WASM)
+
+.PHONY: cli-zip cli-common cli-full
 
 # =============================================================================
 # Clean build artifacts
