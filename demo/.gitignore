@@ -1,0 +1,6 @@
+node_modules/
+dist/
+*.local
+
+# Generated WASM files (regenerate with: npx jco transpile ../build/sqlite-extensible.wasm -o src/sqlite --name sqlite --instantiation async)
+src/sqlite/*.wasm

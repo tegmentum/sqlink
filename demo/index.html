@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SQLite WASM Terminal</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #16213e;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid #0f3460;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #e94560;
+    }
+
+    header p {
+      font-size: 0.875rem;
+      color: #888;
+      margin-top: 0.25rem;
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1rem;
+      gap: 1rem;
+    }
+
+    #terminal-container {
+      flex: 1;
+      background: #0f0f23;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #0f3460;
+      min-height: 400px;
+    }
+
+    #loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid #0f3460;
+      border-top-color: #e94560;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #loading-text {
+      color: #888;
+    }
+
+    #error {
+      display: none;
+      background: #2d1f1f;
+      border: 1px solid #e94560;
+      border-radius: 8px;
+      padding: 1rem;
+      color: #e94560;
+    }
+
+    footer {
+      padding: 1rem 2rem;
+      text-align: center;
+      font-size: 0.75rem;
+      color: #666;
+      border-top: 1px solid #0f3460;
+    }
+
+    footer a {
+      color: #e94560;
+      text-decoration: none;
+    }
+
+    footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SQLite WASM Terminal</h1>
+    <p>SQLite running in your browser via WebAssembly</p>
+  </header>
+
+  <main>
+    <div id="terminal-container">
+      <div id="loading">
+        <div class="spinner"></div>
+        <div id="loading-text">Loading SQLite WASM...</div>
+      </div>
+    </div>
+    <div id="error"></div>
+  </main>
+
+  <footer>
+    Powered by <a href="https://github.com/AnyWhichWay/sqlite-wasm">sqlite-wasm</a>
+    and <a href="https://github.com/AnyWhichWay/wasi-polyfill">wasi-polyfill</a>
+  </footer>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
