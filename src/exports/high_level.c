@@ -206,7 +206,14 @@ exports_sqlite_wasm_high_level_constructor_connection(
     }
 
     char *path_cstr = string_to_cstr(path);
-    int rc = sqlite3_open_v2(path_cstr ? path_cstr : ":memory:", &conn->db, flags, NULL);
+    /* File-backed modes must use the WASI VFS so the database
+     * actually hits the filesystem; the default VFS is the in-memory
+     * memvfs. Memory mode (and a missing path) stay on the default. */
+    const char *vfs =
+        (mode == EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_MEMORY || !path_cstr)
+            ? NULL
+            : "wasivfs";
+    int rc = sqlite3_open_v2(path_cstr ? path_cstr : ":memory:", &conn->db, flags, vfs);
     if (path_cstr) free(path_cstr);
 
     if (rc != SQLITE_OK) {
@@ -922,9 +929,13 @@ bool exports_sqlite_wasm_high_level_open_file(
     memset(conn, 0, sizeof(*conn));
 
     char *path_cstr = string_to_cstr(path);
+    /* open_file is explicitly file-backed: use the WASI VFS (the
+     * default VFS is the in-memory memvfs, which would silently drop
+     * the file). Fall back to the default only if no path is given. */
+    const char *vfs = path_cstr ? "wasivfs" : NULL;
     int rc = sqlite3_open_v2(path_cstr ? path_cstr : ":memory:", &conn->db,
                              SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE,
-                             NULL);
+                             vfs);
     if (path_cstr) free(path_cstr);
 
     if (rc != SQLITE_OK) {
