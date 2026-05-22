@@ -117,7 +117,7 @@ help:
 	@echo ""
 	@echo "Environment variables:"
 	@echo "  SQLITE_VERSION    SQLite version (default: 3480000)"
-	@echo "  WASI_SDK_VERSION  wasi-sdk version (default: 29)"
+	@echo "  WASI_SDK_VERSION  wasi-sdk version (default: 33)"
 	@echo "  ZIP_WASM          Path to zip-wasm component (for cli-zip/cli-full)"
 	@echo "  WASM_SIMD         Enable SIMD instructions (default: 1, set to 0 to disable)"
 

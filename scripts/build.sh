@@ -8,7 +8,7 @@ BUILD_TYPE="${BUILD_TYPE:-Release}"
 
 # Find WASI SDK
 if [[ -z "${WASI_SDK_PREFIX}" ]]; then
-    for loc in "$HOME/wasi-sdk-24.0" "$HOME/wasi-sdk-29" "$HOME/wasi-sdk" "/opt/wasi-sdk"; do
+    for loc in "$HOME/wasi-sdk-33" "$HOME/wasi-sdk" "/opt/wasi-sdk"; do
         [[ -d "$loc" ]] && export WASI_SDK_PREFIX="$loc" && break
     done
 fi
