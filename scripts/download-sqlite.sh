@@ -4,8 +4,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPS_DIR="$(cd "$SCRIPT_DIR/../deps" && pwd)"
 
-SQLITE_VERSION="3450100"
-SQLITE_YEAR="2024"
+SQLITE_VERSION="3530100"
+SQLITE_YEAR="2026"
 SQLITE_URL="https://sqlite.org/${SQLITE_YEAR}/sqlite-amalgamation-${SQLITE_VERSION}.zip"
 
 mkdir -p "$DEPS_DIR"
