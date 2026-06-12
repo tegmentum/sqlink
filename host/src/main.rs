@@ -1,21 +1,14 @@
-//! `sqlite-wasm-run` — reference command-mode runner for
-//! `sqlite-cli-unified`-world components.
+//! `sqlite-wasm-run` — reference runner for SQLite-in-WebAssembly
+//! components.
 //!
-//! Equivalent to `wasmtime run <component>` for SQLite-in-WebAssembly
-//! binaries, but additionally provides the `sqlite:wasm/extension-
-//! loader` interface so the in-WASM `.load` command can route file
-//! reads + policy enforcement out to the host instead of asking the
-//! sandboxed SQLite to do it.
-//!
-//! Usage:
-//!     sqlite-wasm-run <path-to-component.wasm> [-- args...]
-//!
-//! For composed binaries that already have every slot wired (e.g.
-//! `sqlite-cli-demo.wasm` from `make cli-demo-test`), the host
-//! provides only WASI + extension-loader. For binaries with
-//! unsatisfied slot imports, an additional `--plug ext.wasm` flag (a
-//! follow-up) would let this binary do the composition at start
-//! time instead of requiring a separate `wac plug` step.
+//! Two modes:
+//!   - Command-mode (default): instantiate as a `wasi:cli/run`-style
+//!     component and call `run` once. Used by sqlite-cli-demo.wasm
+//!     and similar C-based binaries.
+//!   - Reactor mode (`--reactor`): instantiate as a reactor exporting
+//!     `sqlite:wasm/cli`. The host drives the REPL — call init, loop
+//!     calling eval per line, exit when is_done. Required by cli-rust
+//!     to enable async-stackful spi.execute re-entry.
 
 use std::env;
 use std::path::PathBuf;
@@ -27,9 +20,6 @@ use wasmtime_wasi::{WasiCtxBuilder, ResourceTable};
 
 use sqlite_wasm_host::{bindings, HostWrap, LoaderData, Host};
 
-/// HostState passed to wasmtime; carries WASI resources + a reference
-/// to the loader so the (future) extension-loader host functions can
-/// hand off loads to the shared registry.
 struct State {
     wasi: wasmtime_wasi::WasiCtx,
     resources: ResourceTable,
@@ -46,11 +36,12 @@ impl wasmtime_wasi::WasiView for State {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: sqlite-wasm-run <component.wasm> [-- guest-args...]");
+    eprintln!("usage: sqlite-wasm-run [--reactor] <component.wasm> [-- guest-args...]");
     std::process::exit(2);
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 || args[1] == "-h" || args[1] == "--help" {
         usage();
@@ -85,34 +76,24 @@ fn main() -> Result<()> {
         .map_err(|e| anyhow!("compile component: {e}"))?;
 
     let mut linker: Linker<State> = Linker::new(&engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("wire WASI: {e}"))?;
 
-    // Wire the sqlite:wasm/extension-loader interface so the in-WASM
-    // CLI's `.load /path/ext.wasm` command can route through here.
     bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
         &mut linker,
         |state: &mut State| HostWrap { host: &mut state.host },
     )
     .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
 
-    // Wire the cross-component dispatch interface so the in-WASM
-    // xFunc trampoline registered for loaded extensions' functions
-    // can reach back into the host and dispatch into the loaded
-    // component.
     bindings::sqlite::wasm::dispatch::add_to_linker::<_, LoaderData>(
         &mut linker,
         |state: &mut State| HostWrap { host: &mut state.host },
     )
     .map_err(|e| anyhow!("wire dispatch: {e}"))?;
 
-    // Build the WASI context: pass guest args through, inherit stdio,
-    // inherit env vars so DEBUG flags and the like flow through.
     let mut wasi_builder = WasiCtxBuilder::new();
     wasi_builder.inherit_stdio();
     wasi_builder.inherit_env();
-    // wasi:cli expects argv[0] to be the program name. Match
-    // `wasmtime run` behavior.
     let argv0 = component_path
         .file_name()
         .and_then(|s| s.to_str())
@@ -129,28 +110,23 @@ fn main() -> Result<()> {
     };
 
     let mut store = Store::new(&engine, state);
-    // Generous defaults — match sqlite-wasm-loader's behavior so this
-    // host runs CLI binaries that don't set Policy explicitly.
     store.set_fuel(u64::MAX / 2)?;
     store.set_epoch_deadline(1_000_000_000_000);
 
     if reactor_mode {
-        run_reactor(&mut store, &component, &linker)
+        run_reactor(&mut store, &component, &linker).await
     } else {
-        // Instantiate as a wasi:cli/command-mode component. The wasmtime
-        // command crate handles the entry-point lookup + run invocation.
-        let command = wasmtime_wasi::p2::bindings::sync::Command::instantiate(
+        let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(
             &mut store, &component, &linker,
         )
+        .await
         .map_err(|e| anyhow!("instantiate: {e}"))?;
 
         let result = command
             .wasi_cli_run()
             .call_run(&mut store)
+            .await
             .map_err(|e| {
-                // Print the full error chain so traps surface with their
-                // reason (epoch interrupt, oob, fuel exhaustion, ...)
-                // rather than the call-site message alone.
                 eprintln!("trap: {e:?}");
                 anyhow!("wasi:cli/run.run: {e}")
             })?;
@@ -162,47 +138,48 @@ fn main() -> Result<()> {
     }
 }
 
-/// Drive a reactor-shape cli-rust component. Owns the REPL loop
-/// in Rust: read line, call cli.eval, print output, check is_done.
-fn run_reactor(
+async fn run_reactor(
     store: &mut Store<State>,
     component: &Component,
     linker: &Linker<State>,
 ) -> Result<()> {
-    use std::io::{BufRead, BufReader, Write};
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
-    let reactor = sqlite_wasm_host::reactor::SqliteCliReactor::instantiate(
+    let reactor = sqlite_wasm_host::reactor::SqliteCliReactor::instantiate_async(
         &mut *store, component, linker,
     )
+    .await
     .map_err(|e| anyhow!("instantiate reactor: {e}"))?;
 
     let cli = reactor.sqlite_wasm_cli();
     cli.call_init(&mut *store)
+        .await
         .map_err(|e| anyhow!("cli.init trap: {e}"))?
         .map_err(|e| anyhow!("cli.init returned: {e}"))?;
 
-    let stdin = std::io::stdin();
-    let mut input = BufReader::new(stdin.lock());
-    let mut stdout = std::io::stdout();
+    let mut input = BufReader::new(tokio::io::stdin()).lines();
+    let mut stdout = tokio::io::stdout();
     let mut buffered = String::new();
 
     loop {
         let prompt = cli
             .call_current_prompt(&mut *store, &buffered)
+            .await
             .map_err(|e| anyhow!("cli.current_prompt: {e}"))?;
-        let _ = stdout.write_all(prompt.as_bytes());
-        let _ = stdout.flush();
+        let _ = stdout.write_all(prompt.as_bytes()).await;
+        let _ = stdout.flush().await;
 
-        let mut line = String::new();
-        match input.read_line(&mut line) {
-            Ok(0) => break, // EOF
-            Ok(_) => {}
+        let line = match input.next_line().await {
+            Ok(Some(l)) => l,
+            Ok(None) => break,
             Err(e) => return Err(anyhow!("stdin: {e}")),
-        }
+        };
         buffered.push_str(&line);
+        buffered.push('\n');
 
         let complete = cli
             .call_is_statement_complete(&mut *store, &buffered)
+            .await
             .map_err(|e| anyhow!("cli.is_statement_complete: {e}"))?;
         if !complete {
             continue;
@@ -210,12 +187,17 @@ fn run_reactor(
 
         let out = cli
             .call_eval(&mut *store, &buffered)
+            .await
             .map_err(|e| anyhow!("cli.eval: {e}"))?;
-        let _ = stdout.write_all(out.as_bytes());
-        let _ = stdout.flush();
+        let _ = stdout.write_all(out.as_bytes()).await;
+        let _ = stdout.flush().await;
         buffered.clear();
 
-        if cli.call_is_done(&mut *store).map_err(|e| anyhow!("cli.is_done: {e}"))? {
+        if cli
+            .call_is_done(&mut *store)
+            .await
+            .map_err(|e| anyhow!("cli.is_done: {e}"))?
+        {
             break;
         }
     }

@@ -23,7 +23,10 @@ wasmtime = { version = "45.0.1", features = [
     "component-model",
     "cranelift",
     "parallel-compilation",
+    "async",
 ] }
 wasmtime-wasi = "45.0.1"
 parking_lot = "0.12"
 tracing = "0.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util"] }
+async-trait = "0.1"

@@ -44,6 +44,8 @@ pub mod bindings {
     wasmtime::component::bindgen!({
         path: "../wit",
         world: "extension-loader-host",
+        imports: { default: async },
+        exports: { default: async },
     });
 }
 
@@ -57,6 +59,8 @@ pub mod loaded {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
         world: "minimal",
+        imports: { default: async },
+        exports: { default: async },
     });
 }
 
@@ -69,6 +73,8 @@ pub mod loaded_stateful {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
         world: "stateful",
+        imports: { default: async },
+        exports: { default: async },
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
@@ -88,6 +94,8 @@ pub mod loaded_collating {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
         world: "collating",
+        imports: { default: async },
+        exports: { default: async },
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
@@ -106,6 +114,8 @@ pub mod loaded_authorizing {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
         world: "authorizing",
+        imports: { default: async },
+        exports: { default: async },
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
@@ -124,6 +134,8 @@ pub mod reactor {
     wasmtime::component::bindgen!({
         path: "../wit",
         world: "sqlite-cli-reactor",
+        imports: { default: async },
+        exports: { default: async },
     });
 }
 
@@ -135,6 +147,8 @@ pub mod loaded_hooked {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
         world: "hooked",
+        imports: { default: async },
+        exports: { default: async },
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
@@ -322,7 +336,7 @@ impl wasmtime_wasi::WasiView for LoadedState {
 impl loaded::sqlite::extension::types::Host for LoadedState {}
 impl loaded::sqlite::extension::policy::Host for LoadedState {}
 impl loaded::sqlite::extension::http::Host for LoadedState {
-    fn handle(
+    async fn handle(
         &mut self,
         _req: loaded::sqlite::extension::http::Request,
     ) -> std::result::Result<
@@ -339,7 +353,7 @@ impl loaded::sqlite::extension::http::Host for LoadedState {
 /// today's loadable extensions exercise these; real impls land when
 /// the first extension that needs to run SQL inside the host arrives.
 impl loaded::sqlite::extension::spi::Host for LoadedState {
-    fn execute(
+    async fn execute(
         &mut self,
         _sql: String,
         _params: Vec<loaded::sqlite::extension::types::SqlValue>,
@@ -353,7 +367,7 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
             message: "spi.execute not implemented in dispatch host".to_string(),
         })
     }
-    fn execute_scalar(
+    async fn execute_scalar(
         &mut self,
         _sql: String,
         _params: Vec<loaded::sqlite::extension::types::SqlValue>,
@@ -367,7 +381,7 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
             message: "spi.execute-scalar not implemented in dispatch host".to_string(),
         })
     }
-    fn execute_batch(
+    async fn execute_batch(
         &mut self,
         _sql: String,
     ) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
@@ -380,32 +394,32 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
 }
 
 impl loaded::sqlite::extension::logging::Host for LoadedState {
-    fn log(&mut self, _level: loaded::sqlite::extension::types::LogLevel, message: String) {
+    async fn log(&mut self, _level: loaded::sqlite::extension::types::LogLevel, message: String) {
         eprintln!("[loaded-ext] {message}");
     }
-    fn error(&mut self, msg: String) { eprintln!("[loaded-ext ERROR] {msg}"); }
-    fn warn(&mut self, msg: String) { eprintln!("[loaded-ext WARN] {msg}"); }
-    fn info(&mut self, msg: String) { eprintln!("[loaded-ext INFO] {msg}"); }
-    fn debug(&mut self, msg: String) { eprintln!("[loaded-ext DEBUG] {msg}"); }
+    async fn error(&mut self, msg: String) { eprintln!("[loaded-ext ERROR] {msg}"); }
+    async fn warn(&mut self, msg: String) { eprintln!("[loaded-ext WARN] {msg}"); }
+    async fn info(&mut self, msg: String) { eprintln!("[loaded-ext INFO] {msg}"); }
+    async fn debug(&mut self, msg: String) { eprintln!("[loaded-ext DEBUG] {msg}"); }
 }
 
 /// Persistent key/value state. Backed by the per-extension
 /// `Arc<Mutex<HashMap<…>>>` cloned in from `LoadedExtension`, so
 /// writes survive across the per-call Stores each dispatch builds.
 impl loaded_stateful::sqlite::extension::state::Host for LoadedState {
-    fn get(&mut self, key: String) -> Option<loaded::sqlite::extension::types::SqlValue> {
+    async fn get(&mut self, key: String) -> Option<loaded::sqlite::extension::types::SqlValue> {
         self.state.lock().get(&key).cloned()
     }
-    fn set(&mut self, key: String, value: loaded::sqlite::extension::types::SqlValue) {
+    async fn set(&mut self, key: String, value: loaded::sqlite::extension::types::SqlValue) {
         self.state.lock().insert(key, value);
     }
-    fn delete(&mut self, key: String) -> bool {
+    async fn delete(&mut self, key: String) -> bool {
         self.state.lock().remove(&key).is_some()
     }
-    fn keys(&mut self) -> Vec<String> {
+    async fn keys(&mut self) -> Vec<String> {
         self.state.lock().keys().cloned().collect()
     }
-    fn clear(&mut self) {
+    async fn clear(&mut self) {
         self.state.lock().clear();
     }
 }
@@ -414,10 +428,10 @@ impl loaded_stateful::sqlite::extension::state::Host for LoadedState {
 /// expiry; loaded extensions are typically short-lived enough that
 /// this is acceptable as a starting point.
 impl loaded_stateful::sqlite::extension::cache::Host for LoadedState {
-    fn get(&mut self, key: String) -> Option<loaded::sqlite::extension::types::SqlValue> {
+    async fn get(&mut self, key: String) -> Option<loaded::sqlite::extension::types::SqlValue> {
         self.cache.lock().get(&key).cloned()
     }
-    fn set(
+    async fn set(
         &mut self,
         key: String,
         value: loaded::sqlite::extension::types::SqlValue,
@@ -425,22 +439,22 @@ impl loaded_stateful::sqlite::extension::cache::Host for LoadedState {
     ) {
         self.cache.lock().insert(key, value);
     }
-    fn delete(&mut self, key: String) -> bool {
+    async fn delete(&mut self, key: String) -> bool {
         self.cache.lock().remove(&key).is_some()
     }
-    fn exists(&mut self, key: String) -> bool {
+    async fn exists(&mut self, key: String) -> bool {
         self.cache.lock().contains_key(&key)
     }
-    fn clear(&mut self) {
+    async fn clear(&mut self) {
         self.cache.lock().clear();
     }
 }
 
 impl loaded::sqlite::extension::config::Host for LoadedState {
-    fn get(&mut self, _key: String) -> Option<String> { None }
-    fn set(&mut self, _key: String, _value: String) -> bool { false }
-    fn sqlite_version(&mut self) -> String { String::from("0.0.0") }
-    fn extension_version(&mut self) -> String { String::from("0.1.0") }
+    async fn get(&mut self, _key: String) -> Option<String> { None }
+    async fn set(&mut self, _key: String, _value: String) -> bool { false }
+    async fn sqlite_version(&mut self) -> String { String::from("0.0.0") }
+    async fn extension_version(&mut self) -> String { String::from("0.1.0") }
 }
 
 /// HasData tag for the loaded-extension linker setup.
@@ -553,7 +567,7 @@ pub struct CollationEntry {
 #[derive(Clone)]
 pub struct Host {
     engine: Engine,
-    components: Arc<RwLock<HashMap<String, LoadedExtension>>>,
+    components: Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>>,
 }
 
 impl Host {
@@ -562,6 +576,7 @@ impl Host {
     pub fn new() -> Result<Self> {
         let mut config = Config::new();
         config.wasm_component_model(true);
+        config.async_support(true);
         config.consume_fuel(true);
         config.epoch_interruption(true);
         config.cranelift_opt_level(wasmtime::OptLevel::Speed);
@@ -589,7 +604,7 @@ impl Host {
     /// `extension-loader` WIT interface (wiring lives in a host impl
     /// added by a wasmtime::component::Linker — sketched in the
     /// README, planned as the natural next iteration).
-    pub fn load_extension(&self, path: PathBuf, policy: Policy) -> Result<String> {
+    pub async fn load_extension(&self, path: PathBuf, policy: Policy) -> Result<String> {
         let bytes = std::fs::read(&path)
             .map_err(|e| anyhow!("read {}: {e}", path.display()))?;
         let component = Component::from_binary(&self.engine, &bytes)
@@ -622,6 +637,7 @@ impl Host {
         let manifest = instance
             .sqlite_extension_metadata()
             .call_describe(&mut store)
+            .await
             .map_err(|e| anyhow!("call describe: {e}"))?;
 
         let name = if !manifest.name.is_empty() {
@@ -673,7 +689,7 @@ impl Host {
 
         self.components.write().insert(
             name.clone(),
-            LoadedExtension {
+            Arc::new(LoadedExtension {
                 name: name.clone(),
                 version,
                 component,
@@ -686,7 +702,7 @@ impl Host {
                 has_commit_hook: manifest.has_commit_hook,
                 state: Arc::new(Mutex::new(HashMap::new())),
                 cache: Arc::new(Mutex::new(HashMap::new())),
-            },
+            }),
         );
 
         Ok(name)
@@ -696,18 +712,21 @@ impl Host {
     /// Builds a fresh per-call Store, instantiates the loaded
     /// component, calls `scalar-function.call(func_id, args)`,
     /// returns the result variant.
-    pub fn dispatch_scalar(
+    pub async fn dispatch_scalar(
         &self,
         ext_name: &str,
         func_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
         let linker = make_loaded_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext)?;
         let instance = loaded::Minimal::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name}: {e}"))?;
 
@@ -722,6 +741,7 @@ impl Host {
         let result = instance
             .sqlite_extension_scalar_function()
             .call_call(&mut store, func_id, &loaded_args)
+            .await
             .map_err(|e| anyhow!("call_call: {e}"))?;
         match result {
             Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
@@ -733,19 +753,22 @@ impl Host {
     /// the loaded component as `Stateful` (requires aggregate-function
     /// export); fails cleanly if the extension was built against the
     /// minimal world.
-    pub fn dispatch_aggregate_step(
+    pub async fn dispatch_aggregate_step(
         &self,
         ext_name: &str,
         func_id: u64,
         context_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
         let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext)?;
         let instance = loaded_stateful::Stateful::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
 
@@ -757,30 +780,35 @@ impl Host {
         let result = instance
             .sqlite_extension_aggregate_function()
             .call_step(&mut store, func_id, context_id, &loaded_args)
+            .await
             .map_err(|e| anyhow!("call_step: {e}"))?;
         Ok(result)
     }
 
     /// Finalize an aggregate; produces its final value and releases
     /// any state keyed by `context_id`.
-    pub fn dispatch_aggregate_finalize(
+    pub async fn dispatch_aggregate_finalize(
         &self,
         ext_name: &str,
         func_id: u64,
         context_id: u64,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
         let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext)?;
         let instance = loaded_stateful::Stateful::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
 
         let result = instance
             .sqlite_extension_aggregate_function()
             .call_finalize(&mut store, func_id, context_id)
+            .await
             .map_err(|e| anyhow!("call_finalize: {e}"))?;
         match result {
             Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
@@ -791,24 +819,28 @@ impl Host {
     /// Forward a collation compare to a loaded extension's
     /// `collation.compare`. Returns < 0 / 0 / > 0 per SQLite's
     /// collation contract.
-    pub fn dispatch_collation(
+    pub async fn dispatch_collation(
         &self,
         ext_name: &str,
         collation_id: u64,
         a: &str,
         b: &str,
     ) -> Result<i32> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
         let linker = make_loaded_collating_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext)?;
         let instance = loaded_collating::Collating::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as collating: {e}"))?;
         let result = instance
             .sqlite_extension_collation()
             .call_compare(&mut store, collation_id, a, b)
+            .await
             .map_err(|e| anyhow!("call_compare: {e}"))?;
         Ok(result)
     }
@@ -817,7 +849,7 @@ impl Host {
     /// `authorizer.authorize` export. Errors bubble as anyhow; the
     /// HostWrap layer translates them to Deny so SQL doesn't see a
     /// trap.
-    pub fn dispatch_authorize(
+    pub async fn dispatch_authorize(
         &self,
         ext_name: &str,
         action: bindings::sqlite::extension::types::AuthAction,
@@ -826,12 +858,15 @@ impl Host {
         database: Option<String>,
         trigger: Option<String>,
     ) -> Result<bindings::sqlite::extension::types::AuthResult> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
         let linker = make_loaded_authorizing_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext)?;
         let instance =
             loaded_authorizing::Authorizing::instantiate(&mut store, &ext.component, &linker)
                 .map_err(|e| anyhow!("instantiate {ext_name} as authorizing: {e}"))?;
@@ -847,13 +882,14 @@ impl Host {
                 database.as_deref(),
                 trigger.as_deref(),
             )
+            .await
             .map_err(|e| anyhow!("call_authorize: {e}"))?;
         Ok(convert_auth_result_from_loaded(result))
     }
 
     /// Route a row-level update hook to the loaded extension's
     /// `update-hook.on-update` export.
-    pub fn dispatch_on_update(
+    pub async fn dispatch_on_update(
         &self,
         ext_name: &str,
         operation: bindings::sqlite::extension::types::UpdateOperation,
@@ -861,12 +897,15 @@ impl Host {
         table: &str,
         rowid: i64,
     ) -> Result<()> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
         let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext)?;
         let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
         instance
@@ -878,39 +917,48 @@ impl Host {
                 table,
                 rowid,
             )
+            .await
             .map_err(|e| anyhow!("call_on_update: {e}"))
     }
 
     /// Route a pre-commit hook. `true` lets the commit proceed; `false`
     /// converts it to a rollback (SQLite's standard semantics).
-    pub fn dispatch_on_commit(&self, ext_name: &str) -> Result<bool> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+    pub async fn dispatch_on_commit(&self, ext_name: &str) -> Result<bool> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
         let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext)?;
         let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
         instance
             .sqlite_extension_commit_hook()
             .call_on_commit(&mut store)
+            .await
             .map_err(|e| anyhow!("call_on_commit: {e}"))
     }
 
     /// Route a post-rollback notification.
-    pub fn dispatch_on_rollback(&self, ext_name: &str) -> Result<()> {
-        let components = self.components.read();
-        let ext = components
-            .get(ext_name)
-            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+    pub async fn dispatch_on_rollback(&self, ext_name: &str) -> Result<()> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
         let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext)?;
         let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
         instance
             .sqlite_extension_commit_hook()
             .call_on_rollback(&mut store)
+            .await
             .map_err(|e| anyhow!("call_on_rollback: {e}"))
     }
 
@@ -1064,19 +1112,19 @@ fn convert_update_op_to_loaded(
 }
 
 impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
-    fn scalar_call(
+    async fn scalar_call(
         &mut self,
         ext_name: String,
         func_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String> {
-        match self.host.dispatch_scalar(&ext_name, func_id, args) {
+        match self.host.dispatch_scalar(&ext_name, func_id, args).await {
             Ok(inner) => inner,
             Err(e) => Err(e.to_string()),
         }
     }
 
-    fn aggregate_step(
+    async fn aggregate_step(
         &mut self,
         ext_name: String,
         func_id: u64,
@@ -1086,13 +1134,14 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         match self
             .host
             .dispatch_aggregate_step(&ext_name, func_id, context_id, args)
+            .await
         {
             Ok(inner) => inner,
             Err(e) => Err(e.to_string()),
         }
     }
 
-    fn aggregate_finalize(
+    async fn aggregate_finalize(
         &mut self,
         ext_name: String,
         func_id: u64,
@@ -1101,13 +1150,14 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         match self
             .host
             .dispatch_aggregate_finalize(&ext_name, func_id, context_id)
+            .await
         {
             Ok(inner) => inner,
             Err(e) => Err(e.to_string()),
         }
     }
 
-    fn collation_compare(
+    async fn collation_compare(
         &mut self,
         ext_name: String,
         collation_id: u64,
@@ -1117,7 +1167,7 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         // Bool/i32-return host functions can't surface errors; on
         // failure we treat a and b as equal so SQL doesn't see a
         // bogus ordering. Errors are logged so they're not silent.
-        match self.host.dispatch_collation(&ext_name, collation_id, &a, &b) {
+        match self.host.dispatch_collation(&ext_name, collation_id, &a, &b).await {
             Ok(r) => r,
             Err(e) => {
                 tracing::error!(
@@ -1128,7 +1178,7 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         }
     }
 
-    fn authorize(
+    async fn authorize(
         &mut self,
         ext_name: String,
         action: bindings::sqlite::extension::types::AuthAction,
@@ -1139,7 +1189,7 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
     ) -> bindings::sqlite::extension::types::AuthResult {
         match self.host.dispatch_authorize(
             &ext_name, action, arg1, arg2, database, trigger,
-        ) {
+        ).await {
             Ok(r) => r,
             Err(e) => {
                 // On host error, fall back to Deny so an
@@ -1150,7 +1200,7 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         }
     }
 
-    fn on_update(
+    async fn on_update(
         &mut self,
         ext_name: String,
         operation: bindings::sqlite::extension::types::UpdateOperation,
@@ -1160,13 +1210,13 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
     ) {
         if let Err(e) = self.host.dispatch_on_update(
             &ext_name, operation, &database, &table, rowid,
-        ) {
+        ).await {
             tracing::error!("on_update {ext_name}: {e}");
         }
     }
 
-    fn on_commit(&mut self, ext_name: String) -> bool {
-        match self.host.dispatch_on_commit(&ext_name) {
+    async fn on_commit(&mut self, ext_name: String) -> bool {
+        match self.host.dispatch_on_commit(&ext_name).await {
             Ok(should_proceed) => should_proceed,
             Err(e) => {
                 tracing::error!("on_commit {ext_name}: {e}");
@@ -1178,21 +1228,21 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         }
     }
 
-    fn on_rollback(&mut self, ext_name: String) {
-        if let Err(e) = self.host.dispatch_on_rollback(&ext_name) {
+    async fn on_rollback(&mut self, ext_name: String) {
+        if let Err(e) = self.host.dispatch_on_rollback(&ext_name).await {
             tracing::error!("on_rollback {ext_name}: {e}");
         }
     }
 }
 
 impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
-    fn load_extension(
+    async fn load_extension(
         &mut self,
         path: String,
         options: bindings::sqlite::extension::policy::LoadOptions,
     ) -> std::result::Result<Manifest, LoaderError> {
         let policy = policy_from_load_options(&options);
-        match self.host.load_extension(PathBuf::from(&path), policy) {
+        match self.host.load_extension(PathBuf::from(&path), policy).await {
             Ok(name) => {
                 let components = self.host.components.read();
                 if let Some(ext) = components.get(&name) {
@@ -1213,23 +1263,23 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         }
     }
 
-    fn unload_extension(&mut self, name: String) -> std::result::Result<(), LoaderError> {
+    async fn unload_extension(&mut self, name: String) -> std::result::Result<(), LoaderError> {
         self.host.unload(&name).map_err(|e| LoaderError {
             code: 1,
             message: e.to_string(),
         })
     }
 
-    fn list_extensions(&mut self) -> Vec<Manifest> {
+    async fn list_extensions(&mut self) -> Vec<Manifest> {
         let names = self.host.list();
         let components = self.host.components.read();
         names
             .iter()
-            .filter_map(|n| components.get(n).map(manifest_for_ext))
+            .filter_map(|n| components.get(n).map(|e| manifest_for_ext(e.as_ref())))
             .collect()
     }
 
-    fn is_extension_loaded(&mut self, name: String) -> bool {
+    async fn is_extension_loaded(&mut self, name: String) -> bool {
         self.host.is_loaded(&name)
     }
 }
