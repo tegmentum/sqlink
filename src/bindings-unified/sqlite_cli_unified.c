@@ -74,6 +74,15 @@ extern int32_t __wasm_import_sqlite_wasm_extension_loader_is_extension_loaded(ui
 __attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("scalar-call")))
 extern void __wasm_import_sqlite_wasm_dispatch_scalar_call(uint8_t *, size_t, int64_t, uint8_t *, size_t, uint8_t *);
 
+__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("aggregate-step")))
+extern void __wasm_import_sqlite_wasm_dispatch_aggregate_step(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("aggregate-finalize")))
+extern void __wasm_import_sqlite_wasm_dispatch_aggregate_finalize(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("collation-compare")))
+extern int32_t __wasm_import_sqlite_wasm_dispatch_collation_compare(uint8_t *, size_t, int64_t, uint8_t *, size_t, uint8_t *, size_t);
+
 // Imported Functions from `sqlite:wasm/zip-operations@0.1.0`
 
 __attribute__((__import_module__("sqlite:wasm/zip-operations@0.1.0"), __import_name__("create-archive")))
@@ -1453,6 +1462,13 @@ void sqlite_wasm_dispatch_result_sql_value_string_free(sqlite_wasm_dispatch_resu
   }
 }
 
+void sqlite_wasm_dispatch_result_void_string_free(sqlite_wasm_dispatch_result_void_string_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
 void sqlite_wasm_zip_operations_archive_info_free(sqlite_wasm_zip_operations_archive_info_t *ptr) {
   sqlite_cli_unified_string_free(&ptr->name);
   sqlite_cli_unified_string_free(&ptr->version);
@@ -2507,6 +2523,87 @@ bool sqlite_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_name, uin
     *err = result.val.err;
     return 0;
   }
+}
+
+bool sqlite_wasm_dispatch_aggregate_step(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlite_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_wasm_dispatch_aggregate_step((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (int64_t) (context_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlite_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlite_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_wasm_dispatch_aggregate_finalize((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (int64_t) (context_id), ptr);
+  sqlite_wasm_dispatch_result_sql_value_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_extension_types_sql_value_t variant;
+      variant.tag = (int32_t) *((uint8_t*) (ptr + 8));
+      switch ((int32_t) variant.tag) {
+        case 0: {
+          break;
+        }
+        case 1: {
+          variant.val.integer = *((int64_t*) (ptr + 16));
+          break;
+        }
+        case 2: {
+          variant.val.real = *((double*) (ptr + 16));
+          break;
+        }
+        case 3: {
+          variant.val.text = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 4: {
+          variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+      }
+
+      result.val.ok = variant;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+int32_t sqlite_wasm_dispatch_collation_compare(sqlite_cli_unified_string_t *ext_name, uint64_t collation_id, sqlite_cli_unified_string_t *a, sqlite_cli_unified_string_t *b) {
+  int32_t ret = __wasm_import_sqlite_wasm_dispatch_collation_compare((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (collation_id), (uint8_t *) (*a).ptr, (*a).len, (uint8_t *) (*b).ptr, (*b).len);
+  return ret;
 }
 
 bool sqlite_wasm_zip_operations_create_archive(sqlite_cli_unified_string_t *path, sqlite_wasm_zip_operations_error_code_t *err) {

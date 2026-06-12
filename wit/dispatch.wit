@@ -31,4 +31,39 @@ interface dispatch {
         func-id: u64,
         args: list<sql-value>,
     ) -> result<sql-value, string>;
+
+    /// One row's contribution to an aggregate. `context-id` is
+    /// per-aggregation and assigned by the in-WASM trampoline (it
+    /// stashes a u64 counter inside the
+    /// `sqlite3_aggregate_context` memory the SQLite engine
+    /// allocates for each pending aggregation). The loaded
+    /// extension uses `context-id` to thread its own running state
+    /// between `step` and `finalize`.
+    aggregate-step: func(
+        ext-name: string,
+        func-id: u64,
+        context-id: u64,
+        args: list<sql-value>,
+    ) -> result<_, string>;
+
+    /// Produce the aggregate's final value and release any state
+    /// keyed by `context-id`. The trampoline calls this once per
+    /// aggregation after the last `aggregate-step` for that
+    /// `context-id`.
+    aggregate-finalize: func(
+        ext-name: string,
+        func-id: u64,
+        context-id: u64,
+    ) -> result<sql-value, string>;
+
+    /// Compare two strings under the collation identified by
+    /// `collation-id`. Return < 0 if a < b, 0 if a == b, > 0 if a > b.
+    /// The loaded extension's `collation.compare` does the actual
+    /// comparison; this dispatch wrapper just routes the call.
+    collation-compare: func(
+        ext-name: string,
+        collation-id: u64,
+        a: string,
+        b: string,
+    ) -> s32;
 }

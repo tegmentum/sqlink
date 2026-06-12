@@ -625,6 +625,13 @@ typedef struct {
   } val;
 } sqlite_wasm_dispatch_result_sql_value_string_t;
 
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlite_wasm_dispatch_result_void_string_t;
+
 // Archive information
 typedef struct sqlite_wasm_zip_operations_archive_info_t {
   sqlite_cli_unified_string_t   name;
@@ -1101,6 +1108,24 @@ extern bool sqlite_wasm_extension_loader_is_extension_loaded(sqlite_cli_unified_
 // returns an error, or if the loaded component doesn't actually
 // export `sqlite:extension/scalar-function`.
 extern bool sqlite_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, sqlite_wasm_dispatch_list_sql_value_t *args, sqlite_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// One row's contribution to an aggregate. `context-id` is
+// per-aggregation and assigned by the in-WASM trampoline (it
+// stashes a u64 counter inside the
+// `sqlite3_aggregate_context` memory the SQLite engine
+// allocates for each pending aggregation). The loaded
+// extension uses `context-id` to thread its own running state
+// between `step` and `finalize`.
+extern bool sqlite_wasm_dispatch_aggregate_step(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlite_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err);
+// Produce the aggregate's final value and release any state
+// keyed by `context-id`. The trampoline calls this once per
+// aggregation after the last `aggregate-step` for that
+// `context-id`.
+extern bool sqlite_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlite_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// Compare two strings under the collation identified by
+// `collation-id`. Return < 0 if a < b, 0 if a == b, > 0 if a > b.
+// The loaded extension's `collation.compare` does the actual
+// comparison; this dispatch wrapper just routes the call.
+extern int32_t sqlite_wasm_dispatch_collation_compare(sqlite_cli_unified_string_t *ext_name, uint64_t collation_id, sqlite_cli_unified_string_t *a, sqlite_cli_unified_string_t *b);
 
 // Imported Functions from `sqlite:wasm/zip-operations@0.1.0`
 // Create a new ZIP archive from files
@@ -1339,6 +1364,8 @@ void sqlite_wasm_dispatch_sql_value_free(sqlite_wasm_dispatch_sql_value_t *ptr);
 void sqlite_wasm_dispatch_list_sql_value_free(sqlite_wasm_dispatch_list_sql_value_t *ptr);
 
 void sqlite_wasm_dispatch_result_sql_value_string_free(sqlite_wasm_dispatch_result_sql_value_string_t *ptr);
+
+void sqlite_wasm_dispatch_result_void_string_free(sqlite_wasm_dispatch_result_void_string_t *ptr);
 
 void sqlite_wasm_zip_operations_archive_info_free(sqlite_wasm_zip_operations_archive_info_t *ptr);
 

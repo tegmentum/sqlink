@@ -444,6 +444,64 @@ impl Host {
         }
     }
 
+    /// Forward one row's contribution to an aggregate.
+    ///
+    /// Note: today's `minimal` world doesn't export `aggregate-function`,
+    /// so loaded extensions that declare aggregates must be built
+    /// against a wider world. The call site below would target a
+    /// future `loaded::Aggregateful::instantiate` bindgen alongside
+    /// the existing `Minimal`. Until that lands, this routes through
+    /// the same dispatch path the scalar one uses and the loaded
+    /// component is responsible for exposing the right interface.
+    pub fn dispatch_aggregate_step(
+        &self,
+        ext_name: &str,
+        func_id: u64,
+        context_id: u64,
+        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+    ) -> Result<std::result::Result<(), String>> {
+        let _ = (ext_name, func_id, context_id, args);
+        // Structural placeholder: returns Ok(Err(...)) so the C
+        // trampoline surfaces a clean SQL error rather than a host
+        // trap. Replace with real instantiate + call once the
+        // wider-world bindgen is added.
+        Ok(Err(format!(
+            "aggregate-step dispatch not implemented yet for {ext_name}/{func_id}"
+        )))
+    }
+
+    /// Finalize an aggregate; produces its final value and releases
+    /// any state keyed by `context_id`.
+    pub fn dispatch_aggregate_finalize(
+        &self,
+        ext_name: &str,
+        func_id: u64,
+        context_id: u64,
+    ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+        let _ = (ext_name, func_id, context_id);
+        Ok(Err(format!(
+            "aggregate-finalize dispatch not implemented yet for {ext_name}/{func_id}"
+        )))
+    }
+
+    /// Forward a collation compare to a loaded extension's
+    /// `collation.compare`. Returns < 0 / 0 / > 0 per SQLite's
+    /// collation contract.
+    pub fn dispatch_collation(
+        &self,
+        ext_name: &str,
+        collation_id: u64,
+        a: &str,
+        b: &str,
+    ) -> Result<i32> {
+        let _ = (ext_name, collation_id, a, b);
+        // Structural placeholder until the bindgen against the
+        // collation-exporting world lands.
+        Err(anyhow!(
+            "collation dispatch not implemented yet for {ext_name}/{collation_id}"
+        ))
+    }
+
     pub fn unload(&self, name: &str) -> Result<()> {
         if self.components.write().remove(name).is_some() {
             Ok(())
@@ -537,6 +595,58 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         match self.host.dispatch_scalar(&ext_name, func_id, args) {
             Ok(inner) => inner,
             Err(e) => Err(e.to_string()),
+        }
+    }
+
+    fn aggregate_step(
+        &mut self,
+        ext_name: String,
+        func_id: u64,
+        context_id: u64,
+        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+    ) -> std::result::Result<(), String> {
+        match self
+            .host
+            .dispatch_aggregate_step(&ext_name, func_id, context_id, args)
+        {
+            Ok(inner) => inner,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    fn aggregate_finalize(
+        &mut self,
+        ext_name: String,
+        func_id: u64,
+        context_id: u64,
+    ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String> {
+        match self
+            .host
+            .dispatch_aggregate_finalize(&ext_name, func_id, context_id)
+        {
+            Ok(inner) => inner,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    fn collation_compare(
+        &mut self,
+        ext_name: String,
+        collation_id: u64,
+        a: String,
+        b: String,
+    ) -> i32 {
+        // Bool/i32-return host functions can't surface errors; on
+        // failure we treat a and b as equal so SQL doesn't see a
+        // bogus ordering. Errors are logged so they're not silent.
+        match self.host.dispatch_collation(&ext_name, collation_id, &a, &b) {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::error!(
+                    "collation_compare {ext_name}/{collation_id}: {e}"
+                );
+                0
+            }
         }
     }
 }

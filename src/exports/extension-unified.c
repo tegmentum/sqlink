@@ -534,11 +534,121 @@ static void wasm_dyn_xfunc(sqlite3_context *ctx, int argc, sqlite3_value **argv)
     sqlite_extension_types_sql_value_free(&ret);
 }
 
+/* Per-aggregation context-id counter. SQLite calls xStep with the
+ * same `sqlite3_context*` for every row in one aggregation; the
+ * aggregate-context memory it allocates (via
+ * `sqlite3_aggregate_context`) is where we stash the id we give the
+ * loaded extension so it can thread its running state between step
+ * and finalize. Counter is monotonic per process. */
+static uint64_t g_agg_ctx_counter = 1;
+
+/* Look up (or allocate) the host-side context id for this
+ * aggregation. First call for a given xStep series allocates fresh
+ * memory and writes a new counter value; subsequent calls return
+ * the stored id. Returns 0 on allocation failure (loaded extension
+ * should treat that as "no state available"). */
+static uint64_t agg_ctx_id(sqlite3_context *ctx) {
+    uint64_t *slot = (uint64_t *)sqlite3_aggregate_context(ctx, sizeof(uint64_t));
+    if (!slot) return 0;
+    if (*slot == 0) {
+        *slot = g_agg_ctx_counter++;
+        /* g_agg_ctx_counter wraps after 2^64 calls — fine. */
+    }
+    return *slot;
+}
+
+static void wasm_dyn_xstep(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+    dynamic_dispatch_t *d = (dynamic_dispatch_t *)sqlite3_user_data(ctx);
+
+    sqlite_extension_types_sql_value_t *args =
+        (sqlite_extension_types_sql_value_t *)malloc(
+            sizeof(*args) * (argc > 0 ? argc : 1));
+    if (!args) {
+        sqlite3_result_error_nomem(ctx);
+        return;
+    }
+    for (int i = 0; i < argc; i++) {
+        sqlite_to_wit(argv[i], &args[i]);
+    }
+
+    sqlite_cli_unified_string_t ext_name_wit = {
+        (uint8_t *)d->ext_name, strlen(d->ext_name)};
+    sqlite_wasm_dispatch_list_sql_value_t slot_args = {
+        (sqlite_wasm_dispatch_sql_value_t *)args, (size_t)argc};
+    sqlite_cli_unified_string_t err = {NULL, 0};
+    uint64_t cid = agg_ctx_id(ctx);
+
+    bool ok = sqlite_wasm_dispatch_aggregate_step(
+        &ext_name_wit, d->func_id, cid, &slot_args, &err);
+    free(args);
+
+    if (!ok) {
+        char *emsg = to_cstring(&err);
+        sqlite3_result_error(ctx, emsg ? emsg : "aggregate-step error", -1);
+        free(emsg);
+        sqlite_cli_unified_string_free(&err);
+    }
+}
+
+static void wasm_dyn_xfinal(sqlite3_context *ctx) {
+    dynamic_dispatch_t *d = (dynamic_dispatch_t *)sqlite3_user_data(ctx);
+
+    sqlite_cli_unified_string_t ext_name_wit = {
+        (uint8_t *)d->ext_name, strlen(d->ext_name)};
+    sqlite_extension_types_sql_value_t ret;
+    sqlite_cli_unified_string_t err = {NULL, 0};
+    /* xFinal is called once per aggregation regardless of whether
+     * xStep ran (e.g. SELECT agg() with no rows). sqlite3_aggregate_
+     * context with size=0 returns existing memory if any, else NULL.
+     * If NULL, hand the extension a 0 id — it can treat that as
+     * "no rows seen, return your zero value". */
+    uint64_t *slot = (uint64_t *)sqlite3_aggregate_context(ctx, 0);
+    uint64_t cid = slot ? *slot : 0;
+
+    bool ok = sqlite_wasm_dispatch_aggregate_finalize(
+        &ext_name_wit, d->func_id, cid, &ret, &err);
+    if (!ok) {
+        char *emsg = to_cstring(&err);
+        sqlite3_result_error(ctx, emsg ? emsg : "aggregate-finalize error", -1);
+        free(emsg);
+        sqlite_cli_unified_string_free(&err);
+        return;
+    }
+    wit_to_sqlite_result(ctx, &ret);
+    sqlite_extension_types_sql_value_free(&ret);
+}
+
+/* Dispatch entry for a registered collation. Same shape as
+ * dynamic_dispatch_t but referenced via sqlite3_create_collation's
+ * pArg instead of sqlite3_user_data. */
+typedef struct {
+    char *ext_name;
+    uint64_t collation_id;
+} dynamic_collation_t;
+
+static int wasm_dyn_xcompare(
+    void *pArg,
+    int n1, const void *p1,
+    int n2, const void *p2
+) {
+    dynamic_collation_t *c = (dynamic_collation_t *)pArg;
+
+    sqlite_cli_unified_string_t ext_name_wit = {
+        (uint8_t *)c->ext_name, strlen(c->ext_name)};
+    sqlite_cli_unified_string_t a = {(uint8_t *)p1, (size_t)n1};
+    sqlite_cli_unified_string_t b = {(uint8_t *)p2, (size_t)n2};
+
+    int32_t r = sqlite_wasm_dispatch_collation_compare(
+        &ext_name_wit, c->collation_id, &a, &b);
+    return (int)r;
+}
+
 void wasm_register_dynamic_manifest(
     sqlite3 *db,
     const char *ext_name,
     const sqlite_extension_metadata_manifest_t *manifest
 ) {
+    /* Scalar functions */
     for (size_t i = 0; i < manifest->scalar_functions.len; i++) {
         sqlite_extension_metadata_scalar_function_spec_t *spec =
             &manifest->scalar_functions.ptr[i];
@@ -562,6 +672,64 @@ void wasm_register_dynamic_manifest(
 
         sqlite3_create_function_v2(db, name, spec->num_args, flags,
                                    entry, wasm_dyn_xfunc, NULL, NULL, NULL);
+        free(name);
+    }
+
+    /* Aggregate functions (step + finalize). The window-mode
+     * methods (value + inverse) aren't dispatched yet. */
+    for (size_t i = 0; i < manifest->aggregate_functions.len; i++) {
+        sqlite_extension_metadata_aggregate_function_spec_t *spec =
+            &manifest->aggregate_functions.ptr[i];
+
+        dynamic_dispatch_t *entry =
+            (dynamic_dispatch_t *)malloc(sizeof(*entry));
+        if (!entry) continue;
+        entry->ext_name = strdup(ext_name);
+        if (!entry->ext_name) { free(entry); continue; }
+        entry->func_id = spec->id;
+
+        char *name = malloc(spec->name.len + 1);
+        if (!name) { free(entry->ext_name); free(entry); continue; }
+        memcpy(name, spec->name.ptr, spec->name.len);
+        name[spec->name.len] = '\0';
+
+        int flags = SQLITE_UTF8;
+        if (spec->func_flags & 1) flags |= SQLITE_DETERMINISTIC;
+        if (spec->func_flags & 2) flags |= SQLITE_DIRECTONLY;
+        if (spec->func_flags & 4) flags |= SQLITE_INNOCUOUS;
+
+        sqlite3_create_function_v2(
+            db, name, spec->num_args, flags, entry,
+            NULL,                   /* xFunc — N/A for aggregates */
+            wasm_dyn_xstep,
+            wasm_dyn_xfinal,
+            NULL                    /* xDestroy */
+        );
+        free(name);
+    }
+
+    /* Custom collations */
+    for (size_t i = 0; i < manifest->collations.len; i++) {
+        sqlite_extension_metadata_collation_spec_t *spec =
+            &manifest->collations.ptr[i];
+
+        dynamic_collation_t *entry =
+            (dynamic_collation_t *)malloc(sizeof(*entry));
+        if (!entry) continue;
+        entry->ext_name = strdup(ext_name);
+        if (!entry->ext_name) { free(entry); continue; }
+        entry->collation_id = spec->id;
+
+        char *name = malloc(spec->name.len + 1);
+        if (!name) { free(entry->ext_name); free(entry); continue; }
+        memcpy(name, spec->name.ptr, spec->name.len);
+        name[spec->name.len] = '\0';
+
+        sqlite3_create_collation_v2(
+            db, name, SQLITE_UTF8,
+            entry, wasm_dyn_xcompare,
+            NULL                    /* xDestroy */
+        );
         free(name);
     }
 }
