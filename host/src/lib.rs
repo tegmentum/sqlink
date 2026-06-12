@@ -140,6 +140,20 @@ pub mod reactor {
     });
 }
 
+/// Bindgen for compose:dynlink-shape extensions (Fiji functions).
+/// See PLAN-compose-integration.md for the integration plan.
+/// CP1's validation: this bindgen must build for the WIT to be
+/// consumable. CP2 fills in the Host trait for the `linker`
+/// interface; CP5 builds a Fiji function against `dynlink-guest`.
+pub mod compose {
+    wasmtime::component::bindgen!({
+        path: "../wit",
+        world: "compose-host-stub",
+        imports: { default: async },
+        exports: { default: async },
+    });
+}
+
 /// Bindgen for resolver-shape extensions. The `resolving` world
 /// exports `resolver.resolve(uri) -> result<list<u8>, string>`
 /// on top of the minimal metadata + scalar-function bootstrap.

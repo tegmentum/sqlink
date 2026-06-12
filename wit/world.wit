@@ -40,3 +40,12 @@ world sqlite-cli {
     // Import ZIP operations for .archive command support
     import zip-operations;
 }
+
+/// CP1 validation stub for the compose-orchestration integration.
+/// A minimum world that imports `compose:dynlink/linker` so our
+/// host-side bindgen can build against the vendored WIT. CP2
+/// implements the actual Host trait; CP6 wires it into the load
+/// path. See PLAN-compose-integration.md.
+world compose-host-stub {
+    import compose:dynlink/linker@0.1.0;
+}
