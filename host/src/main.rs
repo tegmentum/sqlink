@@ -110,13 +110,13 @@ async fn main() -> Result<()> {
 
     bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
         &mut linker,
-        |state: &mut State| HostWrap { host: &mut state.host },
+        |state: &mut State| HostWrap { host: &mut state.host, resources: Some(&mut state.resources) },
     )
     .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
 
     bindings::sqlite::wasm::dispatch::add_to_linker::<_, LoaderData>(
         &mut linker,
-        |state: &mut State| HostWrap { host: &mut state.host },
+        |state: &mut State| HostWrap { host: &mut state.host, resources: Some(&mut state.resources) },
     )
     .map_err(|e| anyhow!("wire dispatch: {e}"))?;
 

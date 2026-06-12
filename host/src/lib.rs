@@ -22,6 +22,7 @@
 //! itself is fully functional in this crate.
 
 pub mod cache;
+pub mod compose_provider;
 pub mod policy;
 
 use std::collections::HashMap;
@@ -151,7 +152,98 @@ pub mod compose {
         world: "compose-host-stub",
         imports: { default: async },
         exports: { default: async },
+        with: {
+            "compose:dynlink/linker@0.1.0.instance": super::ComposeInstance,
+        },
     });
+}
+
+/// Host-side resource backing the guest-visible `linker.instance`.
+/// Stored in the wasmtime ResourceTable; the guest sees an opaque
+/// handle and can only call `invoke` on it. CP2 wires this into the
+/// linker Host trait.
+pub struct ComposeInstance {
+    /// Which provider this handle dispatches to. Cloned (cheap) from
+    /// the Host's compose_providers map at resolve time.
+    pub provider: Arc<compose_provider::ProviderHandle>,
+}
+
+// CP2 wiring: the linker Host trait. Routes resolve_by_id through
+// the Host's compose_providers map, hands out ComposeInstance
+// resources, and dispatches invoke calls to the provider's handler.
+use wasmtime::component::Resource;
+
+fn compose_err(message: impl Into<String>) -> compose::sys::compose::types::Error {
+    compose::sys::compose::types::Error {
+        code: compose::sys::compose::types::ErrorCode::InternalError,
+        message: message.into(),
+        context: None,
+    }
+}
+
+impl<'a> compose::compose::dynlink::linker::Host for HostWrap<'a> {
+    async fn resolve_by_digest(
+        &mut self,
+        _digest: Vec<u8>,
+    ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
+        Err(compose::sys::compose::types::Error {
+            code: compose::sys::compose::types::ErrorCode::NotImplemented,
+            message: "resolve-by-digest needs CP7's CAS bridge".to_string(),
+            context: None,
+        })
+    }
+
+    async fn resolve_by_id(
+        &mut self,
+        id: String,
+    ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
+        let resources = self
+            .resources
+            .as_deref_mut()
+            .ok_or_else(|| compose_err("compose linker not wired into this Store"))?;
+        let Some(provider) = self.host.get_compose_provider(&id) else {
+            return Err(compose_err(format!(
+                "no compose provider registered for id {id:?}"
+            )));
+        };
+        resources
+            .push(ComposeInstance { provider })
+            .map_err(|e| compose_err(format!("resource table push: {e}")))
+    }
+}
+
+impl<'a> compose::compose::dynlink::linker::HostInstance for HostWrap<'a> {
+    async fn invoke(
+        &mut self,
+        handle: Resource<ComposeInstance>,
+        method: String,
+        payload: Vec<u8>,
+    ) -> std::result::Result<Vec<u8>, compose::sys::compose::types::Error> {
+        let resources = self
+            .resources
+            .as_deref_mut()
+            .ok_or_else(|| compose_err("compose linker not wired into this Store"))?;
+        let inst = resources
+            .get(&handle)
+            .map_err(|e| compose_err(format!("invalid handle: {e}")))?;
+        let provider = Arc::clone(&inst.provider);
+        provider
+            .invoke(&method, &payload)
+            .await
+            .map_err(|e| compose_err(e))
+    }
+
+    async fn drop(
+        &mut self,
+        handle: Resource<ComposeInstance>,
+    ) -> wasmtime::Result<()> {
+        if let Some(resources) = self.resources.as_deref_mut() {
+            if let Err(e) = resources.delete(handle) {
+                return Err(wasmtime::Error::msg(format!("{e}")));
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Bindgen for resolver-shape extensions. The `resolving` world
@@ -884,6 +976,11 @@ pub struct Host {
     resolvers: Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>>,
     /// CAS cache for resolved bytes.
     cache: Arc<RwLock<Option<cache::Cache>>>,
+    /// Built-in compose:dynlink providers, keyed by registry id.
+    /// `linker.resolve_by_id` looks here first; digest-based
+    /// resolution would route through `cache` once CP7 lands the
+    /// CAS bridge.
+    compose_providers: Arc<RwLock<HashMap<String, compose_provider::ProviderHandle>>>,
 }
 
 impl Host {
@@ -906,6 +1003,47 @@ impl Host {
             db_path: Arc::new(RwLock::new(String::new())),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
+            compose_providers: Arc::new(RwLock::new(HashMap::new())),
+        })
+    }
+
+    /// Register a built-in compose:dynlink provider under `id`.
+    /// Called by `sqlite-wasm-run` at startup after wiring the cli's
+    /// shared rusqlite::Connection. Resolves the `linker.resolve_by_id`
+    /// path on the host side without bytes or instantiation.
+    pub fn register_compose_provider(
+        &self,
+        id: &str,
+        provider: compose_provider::ProviderHandle,
+    ) {
+        self.compose_providers
+            .write()
+            .insert(id.to_string(), provider);
+    }
+
+    /// (id, kind) pairs for every registered compose provider.
+    pub fn list_compose_providers(&self) -> Vec<(String, &'static str)> {
+        self.compose_providers
+            .read()
+            .iter()
+            .map(|(id, p)| {
+                let kind = match p.kind {
+                    compose_provider::ProviderKind::SqliteRuntime { .. } => "sqlite-runtime",
+                };
+                (id.clone(), kind)
+            })
+            .collect()
+    }
+
+    /// Internal: look up a compose provider by id, sharing the Arc.
+    pub fn get_compose_provider(&self, id: &str) -> Option<Arc<compose_provider::ProviderHandle>> {
+        self.compose_providers.read().get(id).map(|p| {
+            // Provider stored as ProviderHandle; we need Arc. Convert
+            // by wrapping. Cheap (Arc::new copies ProviderKind fields
+            // which are themselves Arc-shared).
+            Arc::new(compose_provider::ProviderHandle {
+                kind: p.kind.clone(),
+            })
         })
     }
 
@@ -1514,6 +1652,12 @@ impl wasmtime::component::HasData for LoaderData {
 /// sees a structured result instead of an instance crash.
 pub struct HostWrap<'a> {
     pub host: &'a mut Host,
+    /// wasmtime resource table for compose:dynlink/linker.instance
+    /// handles. Borrowed from the per-Store state by the linker
+    /// closure each call. Optional because non-reactor command-mode
+    /// runs don't need compose plumbing; a None here makes the
+    /// linker Host methods return InternalError if called.
+    pub resources: Option<&'a mut wasmtime_wasi::ResourceTable>,
 }
 
 /// Convert a SqlValue from the extension-loader-host bindgen's type
