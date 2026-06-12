@@ -56,8 +56,25 @@ fn main() -> Result<()> {
         usage();
     }
 
-    let component_path = PathBuf::from(&args[1]);
-    let guest_args: Vec<String> = args.iter().skip_while(|a| *a != "--").skip(1).cloned().collect();
+    let mut reactor_mode = false;
+    let mut positional: Vec<String> = Vec::new();
+    let mut after_dashes = false;
+    for a in args.iter().skip(1) {
+        if after_dashes {
+            positional.push(a.clone());
+        } else if a == "--" {
+            after_dashes = true;
+        } else if a == "--reactor" {
+            reactor_mode = true;
+        } else {
+            positional.push(a.clone());
+        }
+    }
+    if positional.is_empty() {
+        usage();
+    }
+    let component_path = PathBuf::from(&positional[0]);
+    let guest_args: Vec<String> = positional.iter().skip(1).cloned().collect();
 
     let host = Host::new()?;
     let engine = host.engine().clone();
@@ -117,26 +134,90 @@ fn main() -> Result<()> {
     store.set_fuel(u64::MAX / 2)?;
     store.set_epoch_deadline(1_000_000_000_000);
 
-    // Instantiate as a wasi:cli/command-mode component. The wasmtime
-    // command crate handles the entry-point lookup + run invocation.
-    let command = wasmtime_wasi::p2::bindings::sync::Command::instantiate(
-        &mut store, &component, &linker,
-    )
-    .map_err(|e| anyhow!("instantiate: {e}"))?;
+    if reactor_mode {
+        run_reactor(&mut store, &component, &linker)
+    } else {
+        // Instantiate as a wasi:cli/command-mode component. The wasmtime
+        // command crate handles the entry-point lookup + run invocation.
+        let command = wasmtime_wasi::p2::bindings::sync::Command::instantiate(
+            &mut store, &component, &linker,
+        )
+        .map_err(|e| anyhow!("instantiate: {e}"))?;
 
-    let result = command
-        .wasi_cli_run()
-        .call_run(&mut store)
-        .map_err(|e| {
-            // Print the full error chain so traps surface with their
-            // reason (epoch interrupt, oob, fuel exhaustion, ...)
-            // rather than the call-site message alone.
-            eprintln!("trap: {e:?}");
-            anyhow!("wasi:cli/run.run: {e}")
-        })?;
+        let result = command
+            .wasi_cli_run()
+            .call_run(&mut store)
+            .map_err(|e| {
+                // Print the full error chain so traps surface with their
+                // reason (epoch interrupt, oob, fuel exhaustion, ...)
+                // rather than the call-site message alone.
+                eprintln!("trap: {e:?}");
+                anyhow!("wasi:cli/run.run: {e}")
+            })?;
 
-    match result {
-        Ok(()) => Ok(()),
-        Err(()) => Err(anyhow!("component exited with error")),
+        match result {
+            Ok(()) => Ok(()),
+            Err(()) => Err(anyhow!("component exited with error")),
+        }
     }
+}
+
+/// Drive a reactor-shape cli-rust component. Owns the REPL loop
+/// in Rust: read line, call cli.eval, print output, check is_done.
+fn run_reactor(
+    store: &mut Store<State>,
+    component: &Component,
+    linker: &Linker<State>,
+) -> Result<()> {
+    use std::io::{BufRead, BufReader, Write};
+
+    let reactor = sqlite_wasm_host::reactor::SqliteCliReactor::instantiate(
+        &mut *store, component, linker,
+    )
+    .map_err(|e| anyhow!("instantiate reactor: {e}"))?;
+
+    let cli = reactor.sqlite_wasm_cli();
+    cli.call_init(&mut *store)
+        .map_err(|e| anyhow!("cli.init trap: {e}"))?
+        .map_err(|e| anyhow!("cli.init returned: {e}"))?;
+
+    let stdin = std::io::stdin();
+    let mut input = BufReader::new(stdin.lock());
+    let mut stdout = std::io::stdout();
+    let mut buffered = String::new();
+
+    loop {
+        let prompt = cli
+            .call_current_prompt(&mut *store, &buffered)
+            .map_err(|e| anyhow!("cli.current_prompt: {e}"))?;
+        let _ = stdout.write_all(prompt.as_bytes());
+        let _ = stdout.flush();
+
+        let mut line = String::new();
+        match input.read_line(&mut line) {
+            Ok(0) => break, // EOF
+            Ok(_) => {}
+            Err(e) => return Err(anyhow!("stdin: {e}")),
+        }
+        buffered.push_str(&line);
+
+        let complete = cli
+            .call_is_statement_complete(&mut *store, &buffered)
+            .map_err(|e| anyhow!("cli.is_statement_complete: {e}"))?;
+        if !complete {
+            continue;
+        }
+
+        let out = cli
+            .call_eval(&mut *store, &buffered)
+            .map_err(|e| anyhow!("cli.eval: {e}"))?;
+        let _ = stdout.write_all(out.as_bytes());
+        let _ = stdout.flush();
+        buffered.clear();
+
+        if cli.call_is_done(&mut *store).map_err(|e| anyhow!("cli.is_done: {e}"))? {
+            break;
+        }
+    }
+    Ok(())
 }

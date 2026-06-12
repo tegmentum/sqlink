@@ -117,6 +117,16 @@ pub mod loaded_authorizing {
     });
 }
 
+/// Bindgen for the reactor-shape CLI component (cli-rust). The
+/// host uses this to drive the REPL — call init, then loop calling
+/// eval with each line of user input. See PLAN-reactor-cli-async-host.md.
+pub mod reactor {
+    wasmtime::component::bindgen!({
+        path: "../wit",
+        world: "sqlite-cli-reactor",
+    });
+}
+
 /// Used when a loaded extension declares `has-update-hook` and/or
 /// `has-commit-hook`. The `hooked` world exports `update-hook` and
 /// `commit-hook` together; we use one bindgen for both since SQLite's
