@@ -1000,10 +1000,33 @@ fn do_load(input: &str) -> String {
             if r.is_ok() { c_count += 1; }
         }
 
+        // -- Authorizer --
+        // rusqlite's `hooks` feature doesn't expose
+        // sqlite3_set_authorizer, so go through libsqlite3-sys with
+        // the raw sqlite3* handle. AuthDispatch is leaked
+        // intentionally: rusqlite owns the connection lifetime;
+        // the trampoline borrows the leaked data while the
+        // authorizer is active. .unload re-sets the authorizer to
+        // NULL but doesn't reclaim the leak — bounded by
+        // load+unload cycles per process, which is small.
+        if manifest.has_authorizer {
+            let dispatch_data: *mut AuthDispatch = Box::into_raw(Box::new(AuthDispatch {
+                ext_name: ext_name.clone(),
+            }));
+            unsafe {
+                let db = conn.handle();
+                libsqlite3_sys::sqlite3_set_authorizer(
+                    db,
+                    Some(xauth_trampoline),
+                    dispatch_data as *mut std::ffi::c_void,
+                );
+            }
+            h_count += 1;
+        }
+
         // -- Hooks --
         // update_hook fires AFTER row writes. commit_hook returns
-        // bool (true = abort/rollback). authorizer not exposed by
-        // rusqlite's hooks feature; needs raw FFI to wire — deferred.
+        // bool (true = abort/rollback).
         if manifest.has_update_hook {
             let ext_n = ext_name.clone();
             use bindings::sqlite::extension::types::UpdateOperation as Op;
@@ -1071,6 +1094,99 @@ fn wit_to_rusqlite(v: bindings::sqlite::extension::types::SqlValue) -> rusqlite:
 
 thread_local! {
     static AGG_CTX_COUNTER: RefCell<u64> = const { RefCell::new(1) };
+}
+
+// -------------------------------------------------------------------
+// Authorizer dispatch — raw FFI because rusqlite's `hooks` feature
+// doesn't expose sqlite3_set_authorizer.
+// -------------------------------------------------------------------
+
+struct AuthDispatch {
+    ext_name: String,
+}
+
+/// Map a SQLite SQLITE_* action code to the WIT auth-action enum.
+/// Unknown codes (newer SQLite versions adding ones not in our
+/// types.wit) map to Read as a safe default.
+fn sqlite_code_to_auth_action(op: i32) -> bindings::sqlite::extension::types::AuthAction {
+    use bindings::sqlite::extension::types::AuthAction as A;
+    use libsqlite3_sys as ffi;
+    match op {
+        ffi::SQLITE_CREATE_INDEX => A::CreateIndex,
+        ffi::SQLITE_CREATE_TABLE => A::CreateTable,
+        ffi::SQLITE_CREATE_TEMP_INDEX => A::CreateTempIndex,
+        ffi::SQLITE_CREATE_TEMP_TABLE => A::CreateTempTable,
+        ffi::SQLITE_CREATE_TEMP_TRIGGER => A::CreateTempTrigger,
+        ffi::SQLITE_CREATE_TEMP_VIEW => A::CreateTempView,
+        ffi::SQLITE_CREATE_TRIGGER => A::CreateTrigger,
+        ffi::SQLITE_CREATE_VIEW => A::CreateView,
+        ffi::SQLITE_DELETE => A::Delete,
+        ffi::SQLITE_DROP_INDEX => A::DropIndex,
+        ffi::SQLITE_DROP_TABLE => A::DropTable,
+        ffi::SQLITE_DROP_TEMP_INDEX => A::DropTempIndex,
+        ffi::SQLITE_DROP_TEMP_TABLE => A::DropTempTable,
+        ffi::SQLITE_DROP_TEMP_TRIGGER => A::DropTempTrigger,
+        ffi::SQLITE_DROP_TEMP_VIEW => A::DropTempView,
+        ffi::SQLITE_DROP_TRIGGER => A::DropTrigger,
+        ffi::SQLITE_DROP_VIEW => A::DropView,
+        ffi::SQLITE_INSERT => A::Insert,
+        ffi::SQLITE_PRAGMA => A::Pragma,
+        ffi::SQLITE_READ => A::Read,
+        ffi::SQLITE_SELECT => A::Select,
+        ffi::SQLITE_TRANSACTION => A::Transaction,
+        ffi::SQLITE_UPDATE => A::Update,
+        ffi::SQLITE_ATTACH => A::Attach,
+        ffi::SQLITE_DETACH => A::Detach,
+        ffi::SQLITE_ALTER_TABLE => A::AlterTable,
+        ffi::SQLITE_REINDEX => A::Reindex,
+        ffi::SQLITE_ANALYZE => A::Analyze,
+        ffi::SQLITE_CREATE_VTABLE => A::CreateVtable,
+        ffi::SQLITE_DROP_VTABLE => A::DropVtable,
+        ffi::SQLITE_FUNCTION => A::Function,
+        ffi::SQLITE_SAVEPOINT => A::Savepoint,
+        ffi::SQLITE_RECURSIVE => A::Recursive,
+        _ => A::Read,
+    }
+}
+
+fn auth_result_to_sqlite_code(r: bindings::sqlite::extension::types::AuthResult) -> i32 {
+    use bindings::sqlite::extension::types::AuthResult as R;
+    use libsqlite3_sys as ffi;
+    match r {
+        R::Ok => ffi::SQLITE_OK,
+        R::Deny => ffi::SQLITE_DENY,
+        R::Ignore => ffi::SQLITE_IGNORE,
+    }
+}
+
+/// `xAuth` callback signature SQLite expects. Reads the AuthDispatch
+/// out of `user_data` and routes through `dispatch::authorize`.
+/// Errors fall back to SQLITE_DENY so an unauthorized action
+/// doesn't slip through on dispatch failure.
+unsafe extern "C" fn xauth_trampoline(
+    user_data: *mut std::ffi::c_void,
+    op: std::ffi::c_int,
+    arg1: *const std::ffi::c_char,
+    arg2: *const std::ffi::c_char,
+    arg3: *const std::ffi::c_char,
+    arg4: *const std::ffi::c_char,
+) -> std::ffi::c_int {
+    fn c_to_opt(p: *const std::ffi::c_char) -> Option<String> {
+        if p.is_null() { None } else {
+            unsafe { std::ffi::CStr::from_ptr(p) }.to_str().ok().map(|s| s.to_string())
+        }
+    }
+    let d = &*(user_data as *const AuthDispatch);
+    let action = sqlite_code_to_auth_action(op);
+    let r = bindings::sqlite::wasm::dispatch::authorize(
+        &d.ext_name,
+        action,
+        c_to_opt(arg1).as_deref(),
+        c_to_opt(arg2).as_deref(),
+        c_to_opt(arg3).as_deref(),
+        c_to_opt(arg4).as_deref(),
+    );
+    auth_result_to_sqlite_code(r)
 }
 
 /// Heuristic for URI detection: starts with a scheme followed by
