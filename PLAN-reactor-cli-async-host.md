@@ -1,5 +1,35 @@
 # Plan: Reactor CLI + Async Host (Follow-Up 4 — in-WASM SPI)
 
+## Revision (2026-06-12) — wit-bindgen-c can't lift async-stackful
+
+After Step 1 landed, an investigation of wasmtime 45's
+`concurrent.rs` source revealed that sync-lifted exports raise
+`Trap::CannotEnterComponent` when re-entered while another call is
+on the stack:
+
+> Unless this is a callback-less (i.e. stackful) async-lifted
+> export, we need to record that the instance cannot be entered
+> until the call returns.
+
+wit-bindgen-c generates sync-lifted exports only. Async-stackful
+lifts come from wit-bindgen-rust (via cargo-component). Keeping
+the CLI in C and trying to re-enter it from `spi.execute` will
+trap.
+
+**Revised direction: rewrite the CLI in Rust via cargo-component.**
+Real cost ~2 weeks. The rest of this document is being updated to
+reflect that direction. Step 2 (strip main, expose eval from C)
+is replaced with Step 2' (new cli-rust crate). Steps 3, 4, 5
+remain conceptually the same. Step 6 (reentrancy validation)
+moves earlier since async-stackful lifts are the load-bearing
+assumption.
+
+See PLAN-reactor-cli-rust.md for the revised step list.
+
+---
+
+## Original plan (sync-lift-based — superseded)
+
 ## Overview
 
 The `spi.execute` / `spi.query` calls that loaded extensions make
