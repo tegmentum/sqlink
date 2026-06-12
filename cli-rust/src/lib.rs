@@ -283,12 +283,20 @@ impl LowLevelGuest for CliReactor {
 // =========================================================================
 
 pub struct HlConnection {
-    conn: RefCell<rusqlite::Connection>,
+    conn: std::rc::Rc<RefCell<rusqlite::Connection>>,
 }
 
 pub struct HlStatement {
-    _conn_handle: u32, // borrow-back handle; not used in MVP
+    conn: std::rc::Rc<RefCell<rusqlite::Connection>>,
     sql: String,
+    /// 1-indexed positional bindings, sparse via Vec::resize.
+    bindings: RefCell<Vec<rusqlite::types::Value>>,
+    /// Cached column names (lazy — populated on first execute/query/step).
+    column_names: RefCell<Vec<String>>,
+    /// For step()-style iteration: once non-empty, step pops from the
+    /// front. Lazily populated on first step() by running query() and
+    /// materializing every row.
+    cursor_buf: RefCell<Option<std::collections::VecDeque<Vec<rusqlite::types::Value>>>>,
 }
 
 fn hl_err(e: &rusqlite::Error) -> HlDatabaseError {
@@ -327,13 +335,13 @@ impl HighLevelGuest for CliReactor {
     fn version_number() -> i32 { rusqlite::version_number() }
     fn open_memory() -> Result<Connection, HlDatabaseError> {
         match rusqlite::Connection::open_in_memory() {
-            Ok(c) => Ok(Connection::new(HlConnection { conn: RefCell::new(c) })),
+            Ok(c) => Ok(Connection::new(HlConnection { conn: std::rc::Rc::new(RefCell::new(c)) })),
             Err(e) => Err(hl_err(&e)),
         }
     }
     fn open_file(path: String) -> Result<Connection, HlDatabaseError> {
         match rusqlite::Connection::open(&path) {
-            Ok(c) => Ok(Connection::new(HlConnection { conn: RefCell::new(c) })),
+            Ok(c) => Ok(Connection::new(HlConnection { conn: std::rc::Rc::new(RefCell::new(c)) })),
             Err(e) => Err(hl_err(&e)),
         }
     }
@@ -348,7 +356,7 @@ impl GuestConnection for HlConnection {
             _ => rusqlite::Connection::open(&path),
         };
         HlConnection {
-            conn: RefCell::new(conn.unwrap_or_else(|_| rusqlite::Connection::open_in_memory().unwrap())),
+            conn: std::rc::Rc::new(RefCell::new(conn.unwrap_or_else(|_| rusqlite::Connection::open_in_memory().unwrap()))),
         }
     }
 
@@ -396,7 +404,20 @@ impl GuestConnection for HlConnection {
     }
 
     fn prepare(&self, sql: String) -> Result<Statement, HlDatabaseError> {
-        Ok(Statement::new(HlStatement { _conn_handle: 0, sql }))
+        // Validate the SQL parses; rusqlite::prepare borrows from the
+        // connection so we can't store the Statement, but we can use
+        // the prepare call to catch syntax errors early.
+        {
+            let conn = self.conn.borrow();
+            conn.prepare(&sql).map_err(|e| hl_err(&e))?;
+        }
+        Ok(Statement::new(HlStatement {
+            conn: self.conn.clone(),
+            sql,
+            bindings: RefCell::new(Vec::new()),
+            column_names: RefCell::new(Vec::new()),
+            cursor_buf: RefCell::new(None),
+        }))
     }
 
     fn begin_transaction(&self) -> Result<(), HlDatabaseError> {
@@ -412,23 +433,144 @@ impl GuestConnection for HlConnection {
     fn last_error(&self) -> Option<HlDatabaseError> { None }
 }
 
+impl HlStatement {
+    fn bound_params(&self) -> Vec<rusqlite::types::Value> {
+        self.bindings.borrow().clone()
+    }
+}
+
 impl GuestStatement for HlStatement {
-    fn bind(&self, _index: i32, _value: HlValue) -> Result<(), HlDatabaseError> { Ok(()) }
-    fn bind_all(&self, _params: Vec<HlValue>) -> Result<(), HlDatabaseError> { Ok(()) }
+    fn bind(&self, index: i32, value: HlValue) -> Result<(), HlDatabaseError> {
+        let idx = (index as usize).saturating_sub(1);
+        let mut b = self.bindings.borrow_mut();
+        if b.len() <= idx { b.resize(idx + 1, rusqlite::types::Value::Null); }
+        b[idx] = hl_value_to_rusqlite(value);
+        Ok(())
+    }
+
+    fn bind_all(&self, params: Vec<HlValue>) -> Result<(), HlDatabaseError> {
+        let mut b = self.bindings.borrow_mut();
+        b.clear();
+        for v in params { b.push(hl_value_to_rusqlite(v)); }
+        Ok(())
+    }
+
     fn execute(&self) -> Result<ExecResult, HlDatabaseError> {
-        Ok(ExecResult { changes: 0, last_insert_rowid: 0 })
+        let conn = self.conn.borrow();
+        let params = self.bound_params();
+        let changes = conn
+            .execute(&self.sql, rusqlite::params_from_iter(params.iter()))
+            .map_err(|e| hl_err(&e))?;
+        Ok(ExecResult {
+            changes: changes as i32,
+            last_insert_rowid: conn.last_insert_rowid(),
+        })
     }
+
     fn query(&self) -> Result<HlQueryResult, HlDatabaseError> {
-        Ok(HlQueryResult { column_names: vec![], rows: vec![] })
+        let conn = self.conn.borrow();
+        let mut stmt = conn.prepare(&self.sql).map_err(|e| hl_err(&e))?;
+        let col_count = stmt.column_count();
+        let column_names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+        *self.column_names.borrow_mut() = column_names.clone();
+        let params = self.bound_params();
+        let mut rows = stmt.query(rusqlite::params_from_iter(params.iter())).map_err(|e| hl_err(&e))?;
+        let mut out_rows: Vec<bindings::exports::sqlite::wasm::high_level::Row> = Vec::new();
+        while let Some(row) = rows.next().map_err(|e| hl_err(&e))? {
+            let mut columns: Vec<HlValue> = Vec::with_capacity(col_count);
+            for i in 0..col_count {
+                let v: rusqlite::types::Value = row.get(i).map_err(|e| hl_err(&e))?;
+                columns.push(rusqlite_to_hl_value(v));
+            }
+            out_rows.push(bindings::exports::sqlite::wasm::high_level::Row { columns });
+        }
+        Ok(HlQueryResult { column_names, rows: out_rows })
     }
+
     fn step(&self) -> Result<Option<bindings::exports::sqlite::wasm::high_level::Row>, HlDatabaseError> {
-        Ok(None)
+        // First step materializes the full result into cursor_buf;
+        // subsequent steps pop. Trades streaming for borrow-checker
+        // simplicity (rusqlite::Rows borrows from the Statement
+        // which borrows from the Connection — can't store either
+        // here without self-referential storage).
+        let needs_init = self.cursor_buf.borrow().is_none();
+        if needs_init {
+            let conn = self.conn.borrow();
+            let mut stmt = conn.prepare(&self.sql).map_err(|e| hl_err(&e))?;
+            let col_count = stmt.column_count();
+            let names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+            *self.column_names.borrow_mut() = names;
+            let params = self.bound_params();
+            let mut rows = stmt.query(rusqlite::params_from_iter(params.iter())).map_err(|e| hl_err(&e))?;
+            let mut buf: std::collections::VecDeque<Vec<rusqlite::types::Value>> =
+                std::collections::VecDeque::new();
+            while let Some(row) = rows.next().map_err(|e| hl_err(&e))? {
+                let mut r = Vec::with_capacity(col_count);
+                for i in 0..col_count {
+                    let v: rusqlite::types::Value = row.get(i).map_err(|e| hl_err(&e))?;
+                    r.push(v);
+                }
+                buf.push_back(r);
+            }
+            *self.cursor_buf.borrow_mut() = Some(buf);
+        }
+        let mut g = self.cursor_buf.borrow_mut();
+        let buf = g.as_mut().unwrap();
+        Ok(buf.pop_front().map(|raw| bindings::exports::sqlite::wasm::high_level::Row {
+            columns: raw.into_iter().map(rusqlite_to_hl_value).collect(),
+        }))
     }
-    fn reset(&self) -> Result<(), HlDatabaseError> { Ok(()) }
-    fn clear_bindings(&self) -> Result<(), HlDatabaseError> { Ok(()) }
-    fn column_count(&self) -> i32 { 0 }
-    fn column_names(&self) -> Vec<String> { Vec::new() }
-    fn parameter_count(&self) -> i32 { 0 }
+
+    fn reset(&self) -> Result<(), HlDatabaseError> {
+        // Reset clears the iteration cursor so step() re-runs the
+        // query. Bindings are preserved (per sqlite3_reset semantics).
+        *self.cursor_buf.borrow_mut() = None;
+        Ok(())
+    }
+
+    fn clear_bindings(&self) -> Result<(), HlDatabaseError> {
+        self.bindings.borrow_mut().clear();
+        Ok(())
+    }
+
+    fn column_count(&self) -> i32 {
+        let cached = self.column_names.borrow();
+        if !cached.is_empty() { return cached.len() as i32; }
+        drop(cached);
+        let conn = self.conn.borrow();
+        let stmt = match conn.prepare(&self.sql) {
+            Ok(s) => s,
+            Err(_) => return 0,
+        };
+        let n = stmt.column_count() as i32;
+        drop(stmt);
+        n
+    }
+
+    fn column_names(&self) -> Vec<String> {
+        let cached = self.column_names.borrow();
+        if !cached.is_empty() { return cached.clone(); }
+        drop(cached);
+        let conn = self.conn.borrow();
+        let stmt = match conn.prepare(&self.sql) {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
+        let names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+        drop(stmt);
+        names
+    }
+
+    fn parameter_count(&self) -> i32 {
+        let conn = self.conn.borrow();
+        let stmt = match conn.prepare(&self.sql) {
+            Ok(s) => s,
+            Err(_) => return 0,
+        };
+        let n = stmt.parameter_count() as i32;
+        drop(stmt);
+        n
+    }
 }
 
 // =========================================================================
