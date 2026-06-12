@@ -46,3 +46,6 @@ blake3 = "1.5"
 tempfile = "3.13"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+# CBOR codec for the sqlite-runtime compose provider — see
+# host/COMPOSE-PROTOCOL.md for the wire shape.
+ciborium = "0.2"
