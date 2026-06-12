@@ -1,0 +1,50 @@
+package sqlite:wasm@0.1.0;
+
+/// SQLite-in-WASM with the unified sqlite:extension contract.
+///
+/// Replaces the legacy `sqlite-cli` world's imperative
+/// `register-scalar-function` flow with a declarative one: the host
+/// (sqlite-wasm itself, internally) calls each composed extension's
+/// per-slot `describe()` at startup, registers the manifest entries
+/// with SQLite, and dispatches by calling the slot's `call()` when
+/// SQL invokes a function.
+///
+/// Exports:
+///   - low-level / high-level — SQLite's own API
+///   - sqlite:extension/types — sql-value variant + associated enums
+///   - sqlite:extension/spi — execute / execute-scalar / execute-batch
+///     so composed extensions can run SQL
+///   - sqlite:extension/logging — structured logging from extensions
+///   - sqlite:extension/config — version / config lookups
+///
+/// Imports:
+///   - Per-extension slot interfaces (fts5-slot, json1-slot,
+///     rtree-slot, geopoly-slot). Each slot is structurally identical
+///     to `metadata.describe + scalar-function.call` but has a
+///     distinct identity so `wasm-tools compose -d <name>=...` and
+///     `wac compose` can wire each composed extension to its own
+///     dispatch port. Unwired slots mean the extension isn't included
+///     in this binary; the host tolerates this.
+///   - extension-loader — host-implemented dynamic load (.load)
+///   - zip-operations — host-implemented .archive support
+///
+/// The legacy `sqlite-cli` world stays for the imperative-register
+/// build path until that path is retired. New work targets this
+/// world.
+world sqlite-cli-unified {
+    export low-level;
+    export high-level;
+
+    export sqlite:extension/types@0.1.0;
+    export sqlite:extension/spi@0.1.0;
+    export sqlite:extension/logging@0.1.0;
+    export sqlite:extension/config@0.1.0;
+
+    import fts5-slot;
+    import json1-slot;
+    import rtree-slot;
+    import geopoly-slot;
+
+    import extension-loader;
+    import zip-operations;
+}

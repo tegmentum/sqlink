@@ -105,6 +105,7 @@ help:
 	@echo "  sqlite       Download SQLite amalgamation"
 	@echo "  wasi-sdk     Download wasi-sdk toolchain"
 	@echo "  bindings     Generate C bindings from WIT"
+	@echo "  bindings-unified  Generate bindings for the unified-WIT world (task #12)"
 	@echo "  build        Build the core WASM module"
 	@echo "  component    Convert core module to component"
 	@echo "  cli          Build the SQLite CLI (sqlite-cli.wasm)"
@@ -150,6 +151,27 @@ $(BINDINGS_EXT_DIR)/sqlite_extensible.h: $(WIT_DIR)/world.wit $(WIT_DIR)/sqlite-
 	@echo "Generating C bindings for extensible world..."
 	@mkdir -p $(BINDINGS_EXT_DIR)
 	wit-bindgen c $(WIT_DIR) --world sqlite-extensible --out-dir $(BINDINGS_EXT_DIR)
+
+# Generate bindings for the unified-WIT world (task #12 target shape).
+#
+# Uses the canonical sqlite:extension contract via the sqlite-loader-wit
+# submodule, exposed to wit-bindgen via wit/deps/sqlite-extension as a
+# symlink. The C glue that consumes these bindings (a successor to
+# src/exports/extension.c) hasn't landed yet; this target exists so the
+# binding shape can be inspected and iterated on without disturbing the
+# legacy sqlite-extensible build path.
+BINDINGS_UNIFIED_DIR := $(SRC_DIR)/bindings-unified
+WIT_UNIFIED_DEPS := $(WIT_DIR)/deps/sqlite-extension/types.wit \
+                    $(WIT_DIR)/deps/sqlite-extension/host-spi.wit \
+                    $(WIT_DIR)/deps/sqlite-extension/guest.wit \
+                    $(WIT_DIR)/deps/sqlite-extension/policy.wit
+
+bindings-unified: $(BINDINGS_UNIFIED_DIR)/sqlite_cli_unified.h
+
+$(BINDINGS_UNIFIED_DIR)/sqlite_cli_unified.h: $(WIT_DIR)/unified-world.wit $(WIT_DIR)/wasm-slots.wit $(WIT_DIR)/sqlite-low-level.wit $(WIT_DIR)/sqlite-high-level.wit $(WIT_DIR)/extension-loader.wit $(WIT_DIR)/zip-operations.wit $(WIT_UNIFIED_DEPS)
+	@echo "Generating C bindings for sqlite-cli-unified world..."
+	@mkdir -p $(BINDINGS_UNIFIED_DIR)
+	wit-bindgen c $(WIT_DIR) --world sqlite-cli-unified --out-dir $(BINDINGS_UNIFIED_DIR)
 
 # Create build directory
 $(BUILD_DIR):
