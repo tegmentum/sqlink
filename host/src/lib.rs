@@ -377,14 +377,75 @@ impl loaded::sqlite::extension::policy::Host for LoadedState {}
 impl loaded::sqlite::extension::http::Host for LoadedState {
     async fn handle(
         &mut self,
-        _req: loaded::sqlite::extension::http::Request,
+        req: loaded::sqlite::extension::http::Request,
     ) -> std::result::Result<
         loaded::sqlite::extension::http::Response,
         loaded::sqlite::extension::http::HttpError,
     > {
-        Err(loaded::sqlite::extension::http::HttpError::Other(
-            "http not implemented in dispatch host".to_string(),
-        ))
+        use loaded::sqlite::extension::http::{HttpError, Method, Response, Scheme};
+        let scheme_str = match req.scheme.unwrap_or(Scheme::Https) {
+            Scheme::Http => "http",
+            Scheme::Https => "https",
+            Scheme::Other(s) => return Err(HttpError::InvalidUrl(format!("unsupported scheme {s}"))),
+        };
+        let authority = req
+            .authority
+            .ok_or_else(|| HttpError::InvalidUrl("missing authority".to_string()))?;
+        let path_q = req.path_with_query.unwrap_or_else(|| "/".to_string());
+        let url = format!("{scheme_str}://{authority}{path_q}");
+
+        let method = match req.method {
+            Method::Get => reqwest::Method::GET,
+            Method::Head => reqwest::Method::HEAD,
+            Method::Post => reqwest::Method::POST,
+            Method::Put => reqwest::Method::PUT,
+            Method::Delete => reqwest::Method::DELETE,
+            Method::Connect => reqwest::Method::CONNECT,
+            Method::Options => reqwest::Method::OPTIONS,
+            Method::Trace => reqwest::Method::TRACE,
+            Method::Patch => reqwest::Method::PATCH,
+            Method::Other(s) => reqwest::Method::from_bytes(s.as_bytes())
+                .map_err(|e| HttpError::Other(e.to_string()))?,
+        };
+
+        // Build the request. Use the blocking client to avoid an
+        // additional executor handoff inside the already-async
+        // Host trait method body. tokio::task::spawn_blocking would
+        // be more correct under heavy load; v1 just calls.
+        let client = reqwest::blocking::Client::builder()
+            .timeout(req.timeout_ms.map(|ms| std::time::Duration::from_millis(ms as u64))
+                .unwrap_or(std::time::Duration::from_secs(30)))
+            .build()
+            .map_err(|e| HttpError::Other(e.to_string()))?;
+
+        let mut builder = client.request(method, &url);
+        for (k, v) in &req.headers {
+            builder = builder.header(k, v.as_slice());
+        }
+        if let Some(body) = req.body {
+            builder = builder.body(body);
+        }
+        let resp = match builder.send() {
+            Ok(r) => r,
+            Err(e) => {
+                let msg = e.to_string();
+                if e.is_timeout() {
+                    return Err(HttpError::TimedOut);
+                }
+                if e.is_connect() {
+                    return Err(HttpError::ConnectionError(msg));
+                }
+                return Err(HttpError::Other(msg));
+            }
+        };
+        let status = resp.status().as_u16();
+        let headers: Vec<(String, Vec<u8>)> = resp
+            .headers()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.as_bytes().to_vec()))
+            .collect();
+        let body = resp.bytes().map_err(|e| HttpError::Other(e.to_string()))?.to_vec();
+        Ok(Response { status, headers, body })
     }
 }
 

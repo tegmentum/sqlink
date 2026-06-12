@@ -30,6 +30,12 @@ parking_lot = "0.12"
 tracing = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util"] }
 async-trait = "0.1"
+# Real http impl for the http-resolver component path. blocking to
+# stay sync within the (currently sync) Host trait method body —
+# the parent async call already yielded, so blocking briefly here
+# is OK for v1; future revision uses async reqwest with proper
+# cooperative scheduling.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
 # Host-side SQLite for the hybrid SPI path. Loaded extensions'
 # spi.execute opens a fresh Connection here against the same file
 # the cli is using, so they see committed schema + data without
