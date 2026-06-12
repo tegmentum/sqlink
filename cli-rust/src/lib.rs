@@ -15,7 +15,21 @@
 //! See PLAN-reactor-cli-async-host.md (revised section) for the
 //! architectural background — wit-bindgen-c can't async-lift, so
 //! the CLI surface that handles `spi.execute` re-entry must be
-//! Rust, but it does NOT need to be the SQLite engine itself.
+//! Rust.
+//!
+//! Build:
+//!
+//! ```sh
+//! CC_wasm32_wasip1=$WASI_SDK/bin/clang \
+//! AR_wasm32_wasip1=$WASI_SDK/bin/ar \
+//! CFLAGS_wasm32_wasip1="--sysroot=$WASI_SDK/share/wasi-sysroot --target=wasm32-wasip1" \
+//!   cargo component build --release
+//! ```
+//!
+//! rusqlite is the SQLite integration; its `bundled` feature
+//! compiles `sqlite3.c` via cc-rs against the active target. The
+//! env vars above point cc-rs at wasi-sdk's clang so it finds the
+//! wasi sysroot. Verified compiling cleanly under wasi-sdk 33.
 
 #[allow(warnings)]
 mod bindings;
