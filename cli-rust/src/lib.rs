@@ -879,10 +879,15 @@ fn do_load(input: &str) -> String {
     };
     let ext_name = manifest.name.clone();
     ensure_cli_conn();
-    let registered = CLI_CONN.with(|c| {
+    let (scalars, aggregates, collations, hooks) = CLI_CONN.with(|c| {
         let g = c.borrow();
         let conn = g.as_ref().expect("init opened connection");
-        let mut count = 0;
+        let mut s_count = 0;
+        let mut a_count = 0;
+        let mut c_count = 0;
+        let mut h_count = 0;
+
+        // -- Scalars --
         for spec in &manifest.scalar_functions {
             let ext_n = ext_name.clone();
             let func_id = spec.id;
@@ -898,34 +903,150 @@ fn do_load(input: &str) -> String {
                     let mut wit_args: Vec<WitSqlValue> = Vec::with_capacity(n);
                     for i in 0..n {
                         let v: rusqlite::types::Value = ctx.get(i).unwrap_or(rusqlite::types::Value::Null);
-                        wit_args.push(match v {
-                            rusqlite::types::Value::Null => WitSqlValue::Null,
-                            rusqlite::types::Value::Integer(i) => WitSqlValue::Integer(i),
-                            rusqlite::types::Value::Real(r) => WitSqlValue::Real(r),
-                            rusqlite::types::Value::Text(s) => WitSqlValue::Text(s),
-                            rusqlite::types::Value::Blob(b) => WitSqlValue::Blob(b),
-                        });
+                        wit_args.push(rusqlite_to_wit(v));
                     }
                     match dispatch::scalar_call(&ext_n, func_id, &wit_args) {
-                        Ok(WitSqlValue::Null) => Ok(rusqlite::types::Value::Null),
-                        Ok(WitSqlValue::Integer(i)) => Ok(rusqlite::types::Value::Integer(i)),
-                        Ok(WitSqlValue::Real(r)) => Ok(rusqlite::types::Value::Real(r)),
-                        Ok(WitSqlValue::Text(s)) => Ok(rusqlite::types::Value::Text(s)),
-                        Ok(WitSqlValue::Blob(b)) => Ok(rusqlite::types::Value::Blob(b)),
+                        Ok(v) => Ok(wit_to_rusqlite(v)),
                         Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
                     }
                 },
             );
-            if r.is_ok() {
-                count += 1;
+            if r.is_ok() { s_count += 1; }
+        }
+
+        // -- Aggregates --
+        // rusqlite's Aggregate trait demands an init/step/finalize
+        // struct. We synthesize one per-aggregate via an
+        // AggDispatcher that owns the (ext_name, func_id) pair and
+        // delegates to the host's aggregate_step / aggregate_finalize.
+        struct AggDispatcher { ext_name: String, func_id: u64 }
+        impl rusqlite::functions::Aggregate<u64, rusqlite::types::Value> for AggDispatcher {
+            fn init(&self, _ctx: &mut rusqlite::functions::Context<'_>) -> rusqlite::Result<u64> {
+                Ok(next_agg_context_id())
+            }
+            fn step(&self, ctx: &mut rusqlite::functions::Context<'_>, acc: &mut u64) -> rusqlite::Result<()> {
+                let n = ctx.len();
+                let mut wit_args: Vec<WitSqlValue> = Vec::with_capacity(n);
+                for i in 0..n {
+                    let v: rusqlite::types::Value = ctx.get(i).unwrap_or(rusqlite::types::Value::Null);
+                    wit_args.push(rusqlite_to_wit(v));
+                }
+                match dispatch::aggregate_step(&self.ext_name, self.func_id, *acc, &wit_args) {
+                    Ok(()) => Ok(()),
+                    Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
+                }
+            }
+            fn finalize(&self, _ctx: &mut rusqlite::functions::Context<'_>, acc: Option<u64>) -> rusqlite::Result<rusqlite::types::Value> {
+                let ctx_id = acc.unwrap_or(0);
+                match dispatch::aggregate_finalize(&self.ext_name, self.func_id, ctx_id) {
+                    Ok(v) => Ok(wit_to_rusqlite(v)),
+                    Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
+                }
             }
         }
-        count
+        for spec in &manifest.aggregate_functions {
+            let r = conn.create_aggregate_function(
+                &spec.name,
+                spec.num_args,
+                rusqlite::functions::FunctionFlags::SQLITE_UTF8
+                    | rusqlite::functions::FunctionFlags::SQLITE_DIRECTONLY,
+                AggDispatcher { ext_name: ext_name.clone(), func_id: spec.id },
+            );
+            if r.is_ok() { a_count += 1; }
+        }
+
+        // -- Collations --
+        for spec in &manifest.collations {
+            let ext_n = ext_name.clone();
+            let coll_id = spec.id;
+            let r = conn.create_collation(&spec.name, move |a: &str, b: &str| {
+                let n = dispatch::collation_compare(&ext_n, coll_id, a, b);
+                if n < 0 { std::cmp::Ordering::Less }
+                else if n > 0 { std::cmp::Ordering::Greater }
+                else { std::cmp::Ordering::Equal }
+            });
+            if r.is_ok() { c_count += 1; }
+        }
+
+        // -- Hooks --
+        // update_hook fires AFTER row writes. commit_hook returns
+        // bool (true = abort/rollback). authorizer not exposed by
+        // rusqlite's hooks feature; needs raw FFI to wire — deferred.
+        if manifest.has_update_hook {
+            let ext_n = ext_name.clone();
+            use bindings::sqlite::extension::types::UpdateOperation as Op;
+            conn.update_hook(Some(move |action: rusqlite::hooks::Action, db: &str, table: &str, rowid: i64| {
+                let op = match action {
+                    rusqlite::hooks::Action::SQLITE_INSERT => Op::Insert,
+                    rusqlite::hooks::Action::SQLITE_UPDATE => Op::Update,
+                    rusqlite::hooks::Action::SQLITE_DELETE => Op::Delete,
+                    _ => return,
+                };
+                dispatch::on_update(&ext_n, op, db, table, rowid);
+            }));
+            h_count += 1;
+        }
+        if manifest.has_commit_hook {
+            let ext_n = ext_name.clone();
+            conn.commit_hook(Some(move || {
+                // rusqlite's hook expects bool where TRUE = abort.
+                // WIT on_commit returns TRUE = proceed. Invert.
+                !dispatch::on_commit(&ext_n)
+            }));
+            let ext_n2 = ext_name.clone();
+            conn.rollback_hook(Some(move || {
+                dispatch::on_rollback(&ext_n2);
+            }));
+            h_count += 1;
+        }
+
+        (s_count, a_count, c_count, h_count)
     });
+    let total = scalars + aggregates + collations + hooks;
+    let mut bits = Vec::new();
+    if scalars > 0 { bits.push(format!("{scalars} scalar")); }
+    if aggregates > 0 { bits.push(format!("{aggregates} aggregate")); }
+    if collations > 0 { bits.push(format!("{collations} collation")); }
+    if hooks > 0 { bits.push(format!("{hooks} hook")); }
+    let detail = if bits.is_empty() { "0 functions".to_string() } else { bits.join(", ") };
     format!(
-        "Loaded extension: {} {} from {} ({} functions)\n",
-        manifest.name, manifest.version, path, registered
+        "Loaded extension: {} {} from {} ({total} registered: {detail})\n",
+        manifest.name, manifest.version, path
     )
+}
+
+fn rusqlite_to_wit(v: rusqlite::types::Value) -> bindings::sqlite::extension::types::SqlValue {
+    use bindings::sqlite::extension::types::SqlValue as V;
+    match v {
+        rusqlite::types::Value::Null => V::Null,
+        rusqlite::types::Value::Integer(i) => V::Integer(i),
+        rusqlite::types::Value::Real(r) => V::Real(r),
+        rusqlite::types::Value::Text(s) => V::Text(s),
+        rusqlite::types::Value::Blob(b) => V::Blob(b),
+    }
+}
+
+fn wit_to_rusqlite(v: bindings::sqlite::extension::types::SqlValue) -> rusqlite::types::Value {
+    use bindings::sqlite::extension::types::SqlValue as V;
+    match v {
+        V::Null => rusqlite::types::Value::Null,
+        V::Integer(i) => rusqlite::types::Value::Integer(i),
+        V::Real(r) => rusqlite::types::Value::Real(r),
+        V::Text(s) => rusqlite::types::Value::Text(s),
+        V::Blob(b) => rusqlite::types::Value::Blob(b),
+    }
+}
+
+thread_local! {
+    static AGG_CTX_COUNTER: RefCell<u64> = const { RefCell::new(1) };
+}
+fn next_agg_context_id() -> u64 {
+    AGG_CTX_COUNTER.with(|c| {
+        let mut g = c.borrow_mut();
+        let id = *g;
+        *g = g.wrapping_add(1).max(1);
+        id
+    })
 }
 
 // .unload <name> — drop the host's registry entry. The scalar

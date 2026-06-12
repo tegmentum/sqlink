@@ -13,7 +13,7 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 # bundled compiles sqlite3.c via the cc crate against the active
 # target (wasm32-wasip2 under cargo-component). The unblocker for
 # the whole port — if this fails we need a different integration.
-rusqlite = { version = "0.32", features = ["bundled", "functions"] }
+rusqlite = { version = "0.32", features = ["bundled", "functions", "hooks", "collation"] }
 # Exposes sqlite3_complete for is_statement_complete. Same major
 # version as rusqlite's transitive dep so no double-link.
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
