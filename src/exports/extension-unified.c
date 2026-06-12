@@ -643,6 +643,130 @@ static int wasm_dyn_xcompare(
     return (int)r;
 }
 
+/* Dispatch entry for an installed hook (authorizer / update / commit
+ * / rollback). Only the ext-name is needed since hook callbacks
+ * don't carry a per-callback id — there's at most one hook of each
+ * kind per db (sqlite3_set_authorizer etc. are db-global). */
+typedef struct {
+    char *ext_name;
+} dynamic_hook_t;
+
+/* Map a SQLite SQLITE_* action code to our generated auth-action
+ * enum. The enum's declaration order in types.wit matches the order
+ * below; if we add new variants there we have to extend this. */
+static sqlite_wasm_dispatch_auth_action_t sqlite_action_to_wit(int op) {
+    switch (op) {
+        case SQLITE_CREATE_INDEX:        return SQLITE_EXTENSION_TYPES_AUTH_ACTION_CREATE_INDEX;
+        case SQLITE_CREATE_TABLE:        return SQLITE_EXTENSION_TYPES_AUTH_ACTION_CREATE_TABLE;
+        case SQLITE_CREATE_TEMP_INDEX:   return SQLITE_EXTENSION_TYPES_AUTH_ACTION_CREATE_TEMP_INDEX;
+        case SQLITE_CREATE_TEMP_TABLE:   return SQLITE_EXTENSION_TYPES_AUTH_ACTION_CREATE_TEMP_TABLE;
+        case SQLITE_CREATE_TEMP_TRIGGER: return SQLITE_EXTENSION_TYPES_AUTH_ACTION_CREATE_TEMP_TRIGGER;
+        case SQLITE_CREATE_TEMP_VIEW:    return SQLITE_EXTENSION_TYPES_AUTH_ACTION_CREATE_TEMP_VIEW;
+        case SQLITE_CREATE_TRIGGER:      return SQLITE_EXTENSION_TYPES_AUTH_ACTION_CREATE_TRIGGER;
+        case SQLITE_CREATE_VIEW:         return SQLITE_EXTENSION_TYPES_AUTH_ACTION_CREATE_VIEW;
+        case SQLITE_DELETE:              return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DELETE;
+        case SQLITE_DROP_INDEX:          return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DROP_INDEX;
+        case SQLITE_DROP_TABLE:          return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DROP_TABLE;
+        case SQLITE_DROP_TEMP_INDEX:     return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DROP_TEMP_INDEX;
+        case SQLITE_DROP_TEMP_TABLE:     return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DROP_TEMP_TABLE;
+        case SQLITE_DROP_TEMP_TRIGGER:   return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DROP_TEMP_TRIGGER;
+        case SQLITE_DROP_TEMP_VIEW:      return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DROP_TEMP_VIEW;
+        case SQLITE_DROP_TRIGGER:        return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DROP_TRIGGER;
+        case SQLITE_DROP_VIEW:           return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DROP_VIEW;
+        case SQLITE_INSERT:              return SQLITE_EXTENSION_TYPES_AUTH_ACTION_INSERT;
+        case SQLITE_PRAGMA:              return SQLITE_EXTENSION_TYPES_AUTH_ACTION_PRAGMA;
+        case SQLITE_READ:                return SQLITE_EXTENSION_TYPES_AUTH_ACTION_READ;
+        case SQLITE_SELECT:              return SQLITE_EXTENSION_TYPES_AUTH_ACTION_SELECT;
+        case SQLITE_TRANSACTION:         return SQLITE_EXTENSION_TYPES_AUTH_ACTION_TRANSACTION;
+        case SQLITE_UPDATE:              return SQLITE_EXTENSION_TYPES_AUTH_ACTION_UPDATE;
+        case SQLITE_ATTACH:              return SQLITE_EXTENSION_TYPES_AUTH_ACTION_ATTACH;
+        case SQLITE_DETACH:              return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DETACH;
+        case SQLITE_ALTER_TABLE:         return SQLITE_EXTENSION_TYPES_AUTH_ACTION_ALTER_TABLE;
+        case SQLITE_REINDEX:             return SQLITE_EXTENSION_TYPES_AUTH_ACTION_REINDEX;
+        case SQLITE_ANALYZE:             return SQLITE_EXTENSION_TYPES_AUTH_ACTION_ANALYZE;
+        case SQLITE_CREATE_VTABLE:       return SQLITE_EXTENSION_TYPES_AUTH_ACTION_CREATE_VTABLE;
+        case SQLITE_DROP_VTABLE:         return SQLITE_EXTENSION_TYPES_AUTH_ACTION_DROP_VTABLE;
+        case SQLITE_FUNCTION:            return SQLITE_EXTENSION_TYPES_AUTH_ACTION_FUNCTION;
+        case SQLITE_SAVEPOINT:           return SQLITE_EXTENSION_TYPES_AUTH_ACTION_SAVEPOINT;
+        case SQLITE_RECURSIVE:           return SQLITE_EXTENSION_TYPES_AUTH_ACTION_RECURSIVE;
+        /* Newer codes (COPY etc.) aren't represented in our WIT enum
+         * yet; route them through `read` as a safe default. */
+        default:                         return SQLITE_EXTENSION_TYPES_AUTH_ACTION_READ;
+    }
+}
+
+static int wit_auth_result_to_sqlite(sqlite_wasm_dispatch_auth_result_t r) {
+    switch (r) {
+        case SQLITE_EXTENSION_TYPES_AUTH_RESULT_OK:     return SQLITE_OK;
+        case SQLITE_EXTENSION_TYPES_AUTH_RESULT_DENY:   return SQLITE_DENY;
+        case SQLITE_EXTENSION_TYPES_AUTH_RESULT_IGNORE: return SQLITE_IGNORE;
+        default:                                      return SQLITE_OK;
+    }
+}
+
+static int wasm_dyn_xauthorizer(
+    void *pArg, int op,
+    const char *a1, const char *a2,
+    const char *db, const char *trigger
+) {
+    dynamic_hook_t *h = (dynamic_hook_t *)pArg;
+    sqlite_cli_unified_string_t ext_name_wit = {
+        (uint8_t *)h->ext_name, strlen(h->ext_name)};
+
+    /* The four optionals: SQLite passes NULL for absent arguments. */
+    sqlite_cli_unified_string_t a1w, a2w, dbw, trw;
+    sqlite_cli_unified_string_t *pa1 = NULL, *pa2 = NULL,
+                                *pdb = NULL, *ptr = NULL;
+    if (a1)      { a1w = (sqlite_cli_unified_string_t){(uint8_t *)a1, strlen(a1)}; pa1 = &a1w; }
+    if (a2)      { a2w = (sqlite_cli_unified_string_t){(uint8_t *)a2, strlen(a2)}; pa2 = &a2w; }
+    if (db)      { dbw = (sqlite_cli_unified_string_t){(uint8_t *)db, strlen(db)}; pdb = &dbw; }
+    if (trigger) { trw = (sqlite_cli_unified_string_t){(uint8_t *)trigger, strlen(trigger)}; ptr = &trw; }
+
+    sqlite_wasm_dispatch_auth_result_t r = sqlite_wasm_dispatch_authorize(
+        &ext_name_wit, sqlite_action_to_wit(op), pa1, pa2, pdb, ptr);
+    return wit_auth_result_to_sqlite(r);
+}
+
+static void wasm_dyn_xupdate(
+    void *pArg, int op,
+    char const *db, char const *table,
+    sqlite3_int64 rowid
+) {
+    dynamic_hook_t *h = (dynamic_hook_t *)pArg;
+    sqlite_cli_unified_string_t ext_name_wit = {
+        (uint8_t *)h->ext_name, strlen(h->ext_name)};
+
+    sqlite_wasm_dispatch_update_operation_t wit_op;
+    switch (op) {
+        case SQLITE_INSERT: wit_op = SQLITE_EXTENSION_TYPES_UPDATE_OPERATION_INSERT; break;
+        case SQLITE_UPDATE: wit_op = SQLITE_EXTENSION_TYPES_UPDATE_OPERATION_UPDATE; break;
+        case SQLITE_DELETE: wit_op = SQLITE_EXTENSION_TYPES_UPDATE_OPERATION_DELETE; break;
+        default: return;
+    }
+
+    sqlite_cli_unified_string_t dbw = {
+        (uint8_t *)(db ? db : ""), db ? strlen(db) : 0};
+    sqlite_cli_unified_string_t tw = {
+        (uint8_t *)(table ? table : ""), table ? strlen(table) : 0};
+    sqlite_wasm_dispatch_on_update(&ext_name_wit, wit_op, &dbw, &tw, rowid);
+}
+
+/* SQLite's commit hook returns non-zero to convert the commit to a
+ * rollback. Our WIT returns bool where true = proceed. Invert. */
+static int wasm_dyn_xcommit(void *pArg) {
+    dynamic_hook_t *h = (dynamic_hook_t *)pArg;
+    sqlite_cli_unified_string_t ext_name_wit = {
+        (uint8_t *)h->ext_name, strlen(h->ext_name)};
+    return sqlite_wasm_dispatch_on_commit(&ext_name_wit) ? 0 : 1;
+}
+
+static void wasm_dyn_xrollback(void *pArg) {
+    dynamic_hook_t *h = (dynamic_hook_t *)pArg;
+    sqlite_cli_unified_string_t ext_name_wit = {
+        (uint8_t *)h->ext_name, strlen(h->ext_name)};
+    sqlite_wasm_dispatch_on_rollback(&ext_name_wit);
+}
+
 void wasm_register_dynamic_manifest(
     sqlite3 *db,
     const char *ext_name,
@@ -731,6 +855,107 @@ void wasm_register_dynamic_manifest(
             NULL                    /* xDestroy */
         );
         free(name);
+    }
+
+    /* Hooks. SQLite's sqlite3_set_authorizer / update_hook /
+     * commit_hook / rollback_hook are db-global: at most one
+     * callback can be active per db. Loading a second hook-class
+     * extension overwrites the first. We log via stderr (the host's
+     * own logger isn't reachable from this side) so the operator
+     * sees the displaced extension. */
+    if (manifest->has_authorizer) {
+        dynamic_hook_t *h = (dynamic_hook_t *)malloc(sizeof(*h));
+        if (h) {
+            h->ext_name = strdup(ext_name);
+            if (h->ext_name) {
+                sqlite3_set_authorizer(db, wasm_dyn_xauthorizer, h);
+            } else {
+                free(h);
+            }
+        }
+    }
+    if (manifest->has_update_hook) {
+        dynamic_hook_t *h = (dynamic_hook_t *)malloc(sizeof(*h));
+        if (h) {
+            h->ext_name = strdup(ext_name);
+            if (h->ext_name) {
+                sqlite3_update_hook(db, wasm_dyn_xupdate, h);
+            } else {
+                free(h);
+            }
+        }
+    }
+    if (manifest->has_commit_hook) {
+        dynamic_hook_t *commit_h = (dynamic_hook_t *)malloc(sizeof(*commit_h));
+        dynamic_hook_t *rb_h = (dynamic_hook_t *)malloc(sizeof(*rb_h));
+        if (commit_h && rb_h) {
+            commit_h->ext_name = strdup(ext_name);
+            rb_h->ext_name = strdup(ext_name);
+            if (commit_h->ext_name && rb_h->ext_name) {
+                sqlite3_commit_hook(db, wasm_dyn_xcommit, commit_h);
+                sqlite3_rollback_hook(db, wasm_dyn_xrollback, rb_h);
+            } else {
+                free(commit_h->ext_name);
+                free(commit_h);
+                free(rb_h->ext_name);
+                free(rb_h);
+            }
+        } else {
+            free(commit_h);
+            free(rb_h);
+        }
+    }
+}
+
+/* Tear down anything wasm_register_dynamic_manifest installed.
+ * Called from the `.unload` path so trampolines don't fire into a
+ * dropped extension. SQLite's hook functions accept NULL to disable
+ * them; create_function / create_collation entries can be removed
+ * by re-registering with the same name and NULL callbacks. The
+ * per-trampoline malloc'd dispatch entries leak — that's bounded
+ * by the number of register/unregister cycles per process, which
+ * is small. */
+void wasm_unregister_dynamic_manifest(
+    sqlite3 *db,
+    const sqlite_extension_metadata_manifest_t *manifest
+) {
+    for (size_t i = 0; i < manifest->scalar_functions.len; i++) {
+        sqlite_extension_metadata_scalar_function_spec_t *spec =
+            &manifest->scalar_functions.ptr[i];
+        char *name = malloc(spec->name.len + 1);
+        if (!name) continue;
+        memcpy(name, spec->name.ptr, spec->name.len);
+        name[spec->name.len] = '\0';
+        sqlite3_create_function_v2(db, name, spec->num_args, SQLITE_UTF8,
+                                   NULL, NULL, NULL, NULL, NULL);
+        free(name);
+    }
+    for (size_t i = 0; i < manifest->aggregate_functions.len; i++) {
+        sqlite_extension_metadata_aggregate_function_spec_t *spec =
+            &manifest->aggregate_functions.ptr[i];
+        char *name = malloc(spec->name.len + 1);
+        if (!name) continue;
+        memcpy(name, spec->name.ptr, spec->name.len);
+        name[spec->name.len] = '\0';
+        sqlite3_create_function_v2(db, name, spec->num_args, SQLITE_UTF8,
+                                   NULL, NULL, NULL, NULL, NULL);
+        free(name);
+    }
+    for (size_t i = 0; i < manifest->collations.len; i++) {
+        sqlite_extension_metadata_collation_spec_t *spec =
+            &manifest->collations.ptr[i];
+        char *name = malloc(spec->name.len + 1);
+        if (!name) continue;
+        memcpy(name, spec->name.ptr, spec->name.len);
+        name[spec->name.len] = '\0';
+        sqlite3_create_collation_v2(db, name, SQLITE_UTF8, NULL, NULL, NULL);
+        free(name);
+    }
+    if (manifest->has_authorizer)  sqlite3_set_authorizer(db, NULL, NULL);
+    if (manifest->has_update_hook) sqlite3_update_hook(db, NULL, NULL);
+    if (manifest->has_commit_hook) {
+        sqlite3_commit_hook(db, NULL, NULL);
+        sqlite3_rollback_hook(db, NULL, NULL);
     }
 }
 

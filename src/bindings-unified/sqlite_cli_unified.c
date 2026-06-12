@@ -83,6 +83,18 @@ extern void __wasm_import_sqlite_wasm_dispatch_aggregate_finalize(uint8_t *, siz
 __attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("collation-compare")))
 extern int32_t __wasm_import_sqlite_wasm_dispatch_collation_compare(uint8_t *, size_t, int64_t, uint8_t *, size_t, uint8_t *, size_t);
 
+__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("authorize")))
+extern int32_t __wasm_import_sqlite_wasm_dispatch_authorize(uint8_t *, size_t, int32_t, int32_t, uint8_t *, size_t, int32_t, uint8_t *, size_t, int32_t, uint8_t *, size_t, int32_t, uint8_t *, size_t);
+
+__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("on-update")))
+extern void __wasm_import_sqlite_wasm_dispatch_on_update(uint8_t *, size_t, int32_t, uint8_t *, size_t, uint8_t *, size_t, int64_t);
+
+__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("on-commit")))
+extern int32_t __wasm_import_sqlite_wasm_dispatch_on_commit(uint8_t *, size_t);
+
+__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("on-rollback")))
+extern void __wasm_import_sqlite_wasm_dispatch_on_rollback(uint8_t *, size_t);
+
 // Imported Functions from `sqlite:wasm/zip-operations@0.1.0`
 
 __attribute__((__import_module__("sqlite:wasm/zip-operations@0.1.0"), __import_name__("create-archive")))
@@ -2604,6 +2616,92 @@ bool sqlite_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t *ext_na
 int32_t sqlite_wasm_dispatch_collation_compare(sqlite_cli_unified_string_t *ext_name, uint64_t collation_id, sqlite_cli_unified_string_t *a, sqlite_cli_unified_string_t *b) {
   int32_t ret = __wasm_import_sqlite_wasm_dispatch_collation_compare((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (collation_id), (uint8_t *) (*a).ptr, (*a).len, (uint8_t *) (*b).ptr, (*b).len);
   return ret;
+}
+
+sqlite_wasm_dispatch_auth_result_t sqlite_wasm_dispatch_authorize(sqlite_cli_unified_string_t *ext_name, sqlite_wasm_dispatch_auth_action_t action, sqlite_cli_unified_string_t *maybe_arg1, sqlite_cli_unified_string_t *maybe_arg2, sqlite_cli_unified_string_t *maybe_database, sqlite_cli_unified_string_t *maybe_trigger) {
+  sqlite_cli_unified_option_string_t arg1;
+  arg1.is_some = maybe_arg1 != NULL;if (maybe_arg1) {
+    arg1.val = *maybe_arg1;
+  }
+  sqlite_cli_unified_option_string_t arg2;
+  arg2.is_some = maybe_arg2 != NULL;if (maybe_arg2) {
+    arg2.val = *maybe_arg2;
+  }
+  sqlite_cli_unified_option_string_t database;
+  database.is_some = maybe_database != NULL;if (maybe_database) {
+    database.val = *maybe_database;
+  }
+  sqlite_cli_unified_option_string_t trigger;
+  trigger.is_some = maybe_trigger != NULL;if (maybe_trigger) {
+    trigger.val = *maybe_trigger;
+  }
+  int32_t option;
+  uint8_t * option1;
+  size_t option2;
+  if ((arg1).is_some) {
+    const sqlite_cli_unified_string_t *payload0 = &(arg1).val;
+    option = 1;
+    option1 = (uint8_t *) (*payload0).ptr;
+    option2 = (*payload0).len;
+  } else {
+    option = 0;
+    option1 = 0;
+    option2 = 0;
+  }
+  int32_t option5;
+  uint8_t * option6;
+  size_t option7;
+  if ((arg2).is_some) {
+    const sqlite_cli_unified_string_t *payload4 = &(arg2).val;
+    option5 = 1;
+    option6 = (uint8_t *) (*payload4).ptr;
+    option7 = (*payload4).len;
+  } else {
+    option5 = 0;
+    option6 = 0;
+    option7 = 0;
+  }
+  int32_t option10;
+  uint8_t * option11;
+  size_t option12;
+  if ((database).is_some) {
+    const sqlite_cli_unified_string_t *payload9 = &(database).val;
+    option10 = 1;
+    option11 = (uint8_t *) (*payload9).ptr;
+    option12 = (*payload9).len;
+  } else {
+    option10 = 0;
+    option11 = 0;
+    option12 = 0;
+  }
+  int32_t option15;
+  uint8_t * option16;
+  size_t option17;
+  if ((trigger).is_some) {
+    const sqlite_cli_unified_string_t *payload14 = &(trigger).val;
+    option15 = 1;
+    option16 = (uint8_t *) (*payload14).ptr;
+    option17 = (*payload14).len;
+  } else {
+    option15 = 0;
+    option16 = 0;
+    option17 = 0;
+  }
+  int32_t ret = __wasm_import_sqlite_wasm_dispatch_authorize((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int32_t) action, option, option1, option2, option5, option6, option7, option10, option11, option12, option15, option16, option17);
+  return ret;
+}
+
+void sqlite_wasm_dispatch_on_update(sqlite_cli_unified_string_t *ext_name, sqlite_wasm_dispatch_update_operation_t operation, sqlite_cli_unified_string_t *database, sqlite_cli_unified_string_t *table, int64_t rowid) {
+  __wasm_import_sqlite_wasm_dispatch_on_update((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int32_t) operation, (uint8_t *) (*database).ptr, (*database).len, (uint8_t *) (*table).ptr, (*table).len, rowid);
+}
+
+bool sqlite_wasm_dispatch_on_commit(sqlite_cli_unified_string_t *ext_name) {
+  int32_t ret = __wasm_import_sqlite_wasm_dispatch_on_commit((uint8_t *) (*ext_name).ptr, (*ext_name).len);
+  return ret;
+}
+
+void sqlite_wasm_dispatch_on_rollback(sqlite_cli_unified_string_t *ext_name) {
+  __wasm_import_sqlite_wasm_dispatch_on_rollback((uint8_t *) (*ext_name).ptr, (*ext_name).len);
 }
 
 bool sqlite_wasm_zip_operations_create_archive(sqlite_cli_unified_string_t *path, sqlite_wasm_zip_operations_error_code_t *err) {

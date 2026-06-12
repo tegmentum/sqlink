@@ -99,6 +99,43 @@ pub mod loaded_collating {
     });
 }
 
+/// Used when a loaded extension declares `has-authorizer` in its
+/// manifest. The `authorizing` world exports `authorizer.authorize`
+/// in addition to the minimal-shape metadata.
+pub mod loaded_authorizing {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "authorizing",
+        with: {
+            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+        },
+    });
+}
+
+/// Used when a loaded extension declares `has-update-hook` and/or
+/// `has-commit-hook`. The `hooked` world exports `update-hook` and
+/// `commit-hook` together; we use one bindgen for both since SQLite's
+/// hook API treats them as orthogonal concerns within one db.
+pub mod loaded_hooked {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "hooked",
+        with: {
+            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+        },
+    });
+}
+
 use bindings::sqlite::extension::policy::Capability as WitCapability;
 use bindings::sqlite::wasm::extension_loader::{LoaderError, Manifest};
 
@@ -154,7 +191,7 @@ fn policy_from_load_options(
 /// in-WASM caller from a LoadedExtension's recorded function specs.
 /// Now that load_extension calls describe() at load time and stores
 /// the scalar_functions, this returns the real names/ids/arities.
-fn stub_manifest(ext: &LoadedExtension) -> Manifest {
+fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
     use bindings::sqlite::extension::metadata::{
         AggregateFunctionSpec, CollationSpec, ScalarFunctionSpec,
     };
@@ -199,9 +236,9 @@ fn stub_manifest(ext: &LoadedExtension) -> Manifest {
                 name: c.name.clone(),
             })
             .collect(),
-        has_authorizer: false,
-        has_update_hook: false,
-        has_commit_hook: false,
+        has_authorizer: ext.has_authorizer,
+        has_update_hook: ext.has_update_hook,
+        has_commit_hook: ext.has_commit_hook,
         declared_capabilities: vec![],
     }
 }
@@ -232,6 +269,16 @@ pub struct LoadedExtension {
     pub aggregate_functions: Vec<AggregateFunctionEntry>,
     /// Collation specs declared in the manifest.
     pub collations: Vec<CollationEntry>,
+    /// Whether the extension declared an `authorizer` export. Used by
+    /// the in-WASM CLI to decide whether to install a sqlite3_set_
+    /// authorizer trampoline pointing at this extension.
+    pub has_authorizer: bool,
+    /// Whether the extension exports an `update-hook`.
+    pub has_update_hook: bool,
+    /// Whether the extension exports a `commit-hook` (rollback hook is
+    /// paired with commit on the wasm side; SQLite separates them but
+    /// our WIT keeps them together).
+    pub has_commit_hook: bool,
     /// Persistent per-extension state backing the `state` interface.
     pub state: SharedKv,
     /// In-memory cache backing the `cache` interface. TTLs from the
@@ -428,6 +475,28 @@ fn make_loaded_collating_linker(engine: &Engine) -> Result<Linker<LoadedState>> 
     Ok(linker)
 }
 
+/// Build a Linker pre-wired for an `authorizing`-world loaded
+/// extension. Used when dispatching authorizer callbacks.
+fn make_loaded_authorizing_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+    let mut linker: Linker<LoadedState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
+    loaded_authorizing::Authorizing::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
+        .map_err(|e| anyhow!("loaded-ext authorizing: {e}"))?;
+    Ok(linker)
+}
+
+/// Build a Linker pre-wired for a `hooked`-world loaded extension.
+/// Used when dispatching update / commit / rollback hook callbacks.
+fn make_loaded_hooked_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+    let mut linker: Linker<LoadedState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
+    loaded_hooked::Hooked::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
+        .map_err(|e| anyhow!("loaded-ext hooked: {e}"))?;
+    Ok(linker)
+}
+
 /// Construct a fresh Store + LoadedState for one dispatch into a
 /// loaded extension. Each dispatch gets its own Store so per-call
 /// fuel is re-supplied and shared global state doesn't leak.
@@ -531,6 +600,9 @@ impl Host {
             scalar_functions: Vec::new(),
             aggregate_functions: Vec::new(),
             collations: Vec::new(),
+            has_authorizer: false,
+            has_update_hook: false,
+            has_commit_hook: false,
             state: Arc::new(Mutex::new(HashMap::new())),
             cache: Arc::new(Mutex::new(HashMap::new())),
         };
@@ -599,6 +671,9 @@ impl Host {
                 scalar_functions,
                 aggregate_functions,
                 collations,
+                has_authorizer: manifest.has_authorizer,
+                has_update_hook: manifest.has_update_hook,
+                has_commit_hook: manifest.has_commit_hook,
                 state: Arc::new(Mutex::new(HashMap::new())),
                 cache: Arc::new(Mutex::new(HashMap::new())),
             },
@@ -728,6 +803,107 @@ impl Host {
         Ok(result)
     }
 
+    /// Route a SQLite authorizer callback to the loaded extension's
+    /// `authorizer.authorize` export. Errors bubble as anyhow; the
+    /// HostWrap layer translates them to Deny so SQL doesn't see a
+    /// trap.
+    pub fn dispatch_authorize(
+        &self,
+        ext_name: &str,
+        action: bindings::sqlite::extension::types::AuthAction,
+        arg1: Option<String>,
+        arg2: Option<String>,
+        database: Option<String>,
+        trigger: Option<String>,
+    ) -> Result<bindings::sqlite::extension::types::AuthResult> {
+        let components = self.components.read();
+        let ext = components
+            .get(ext_name)
+            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let linker = make_loaded_authorizing_linker(&self.engine)?;
+        let mut store = build_loaded_store(&self.engine, ext)?;
+        let instance =
+            loaded_authorizing::Authorizing::instantiate(&mut store, &ext.component, &linker)
+                .map_err(|e| anyhow!("instantiate {ext_name} as authorizing: {e}"))?;
+
+        let action_w = convert_auth_action_to_loaded(action);
+        let result = instance
+            .sqlite_extension_authorizer()
+            .call_authorize(
+                &mut store,
+                action_w,
+                arg1.as_deref(),
+                arg2.as_deref(),
+                database.as_deref(),
+                trigger.as_deref(),
+            )
+            .map_err(|e| anyhow!("call_authorize: {e}"))?;
+        Ok(convert_auth_result_from_loaded(result))
+    }
+
+    /// Route a row-level update hook to the loaded extension's
+    /// `update-hook.on-update` export.
+    pub fn dispatch_on_update(
+        &self,
+        ext_name: &str,
+        operation: bindings::sqlite::extension::types::UpdateOperation,
+        database: &str,
+        table: &str,
+        rowid: i64,
+    ) -> Result<()> {
+        let components = self.components.read();
+        let ext = components
+            .get(ext_name)
+            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let linker = make_loaded_hooked_linker(&self.engine)?;
+        let mut store = build_loaded_store(&self.engine, ext)?;
+        let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
+            .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
+        instance
+            .sqlite_extension_update_hook()
+            .call_on_update(
+                &mut store,
+                convert_update_op_to_loaded(operation),
+                database,
+                table,
+                rowid,
+            )
+            .map_err(|e| anyhow!("call_on_update: {e}"))
+    }
+
+    /// Route a pre-commit hook. `true` lets the commit proceed; `false`
+    /// converts it to a rollback (SQLite's standard semantics).
+    pub fn dispatch_on_commit(&self, ext_name: &str) -> Result<bool> {
+        let components = self.components.read();
+        let ext = components
+            .get(ext_name)
+            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let linker = make_loaded_hooked_linker(&self.engine)?;
+        let mut store = build_loaded_store(&self.engine, ext)?;
+        let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
+            .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
+        instance
+            .sqlite_extension_commit_hook()
+            .call_on_commit(&mut store)
+            .map_err(|e| anyhow!("call_on_commit: {e}"))
+    }
+
+    /// Route a post-rollback notification.
+    pub fn dispatch_on_rollback(&self, ext_name: &str) -> Result<()> {
+        let components = self.components.read();
+        let ext = components
+            .get(ext_name)
+            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let linker = make_loaded_hooked_linker(&self.engine)?;
+        let mut store = build_loaded_store(&self.engine, ext)?;
+        let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
+            .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
+        instance
+            .sqlite_extension_commit_hook()
+            .call_on_rollback(&mut store)
+            .map_err(|e| anyhow!("call_on_rollback: {e}"))
+    }
+
     pub fn unload(&self, name: &str) -> Result<()> {
         if self.components.write().remove(name).is_some() {
             Ok(())
@@ -811,6 +987,72 @@ fn convert_sql_value_from_loaded(
     }
 }
 
+fn convert_auth_action_to_loaded(
+    a: bindings::sqlite::extension::types::AuthAction,
+) -> loaded::sqlite::extension::types::AuthAction {
+    use bindings::sqlite::extension::types::AuthAction as From;
+    use loaded::sqlite::extension::types::AuthAction as To;
+    match a {
+        From::CreateIndex => To::CreateIndex,
+        From::CreateTable => To::CreateTable,
+        From::CreateTempIndex => To::CreateTempIndex,
+        From::CreateTempTable => To::CreateTempTable,
+        From::CreateTempTrigger => To::CreateTempTrigger,
+        From::CreateTempView => To::CreateTempView,
+        From::CreateTrigger => To::CreateTrigger,
+        From::CreateView => To::CreateView,
+        From::Delete => To::Delete,
+        From::DropIndex => To::DropIndex,
+        From::DropTable => To::DropTable,
+        From::DropTempIndex => To::DropTempIndex,
+        From::DropTempTable => To::DropTempTable,
+        From::DropTempTrigger => To::DropTempTrigger,
+        From::DropTempView => To::DropTempView,
+        From::DropTrigger => To::DropTrigger,
+        From::DropView => To::DropView,
+        From::Insert => To::Insert,
+        From::Pragma => To::Pragma,
+        From::Read => To::Read,
+        From::Select => To::Select,
+        From::Transaction => To::Transaction,
+        From::Update => To::Update,
+        From::Attach => To::Attach,
+        From::Detach => To::Detach,
+        From::AlterTable => To::AlterTable,
+        From::Reindex => To::Reindex,
+        From::Analyze => To::Analyze,
+        From::CreateVtable => To::CreateVtable,
+        From::DropVtable => To::DropVtable,
+        From::Function => To::Function,
+        From::Savepoint => To::Savepoint,
+        From::Recursive => To::Recursive,
+    }
+}
+
+fn convert_auth_result_from_loaded(
+    r: loaded::sqlite::extension::types::AuthResult,
+) -> bindings::sqlite::extension::types::AuthResult {
+    use bindings::sqlite::extension::types::AuthResult as To;
+    use loaded::sqlite::extension::types::AuthResult as From;
+    match r {
+        From::Ok => To::Ok,
+        From::Deny => To::Deny,
+        From::Ignore => To::Ignore,
+    }
+}
+
+fn convert_update_op_to_loaded(
+    op: bindings::sqlite::extension::types::UpdateOperation,
+) -> loaded::sqlite::extension::types::UpdateOperation {
+    use bindings::sqlite::extension::types::UpdateOperation as From;
+    use loaded::sqlite::extension::types::UpdateOperation as To;
+    match op {
+        From::Insert => To::Insert,
+        From::Update => To::Update,
+        From::Delete => To::Delete,
+    }
+}
+
 impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
     fn scalar_call(
         &mut self,
@@ -875,6 +1117,62 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
             }
         }
     }
+
+    fn authorize(
+        &mut self,
+        ext_name: String,
+        action: bindings::sqlite::extension::types::AuthAction,
+        arg1: Option<String>,
+        arg2: Option<String>,
+        database: Option<String>,
+        trigger: Option<String>,
+    ) -> bindings::sqlite::extension::types::AuthResult {
+        match self.host.dispatch_authorize(
+            &ext_name, action, arg1, arg2, database, trigger,
+        ) {
+            Ok(r) => r,
+            Err(e) => {
+                // On host error, fall back to Deny so an
+                // unauthorized action doesn't slip through silently.
+                tracing::error!("authorize {ext_name}: {e}");
+                bindings::sqlite::extension::types::AuthResult::Deny
+            }
+        }
+    }
+
+    fn on_update(
+        &mut self,
+        ext_name: String,
+        operation: bindings::sqlite::extension::types::UpdateOperation,
+        database: String,
+        table: String,
+        rowid: i64,
+    ) {
+        if let Err(e) = self.host.dispatch_on_update(
+            &ext_name, operation, &database, &table, rowid,
+        ) {
+            tracing::error!("on_update {ext_name}: {e}");
+        }
+    }
+
+    fn on_commit(&mut self, ext_name: String) -> bool {
+        match self.host.dispatch_on_commit(&ext_name) {
+            Ok(should_proceed) => should_proceed,
+            Err(e) => {
+                tracing::error!("on_commit {ext_name}: {e}");
+                // Convert the commit to a rollback on dispatch error
+                // so we don't silently accept a transaction the
+                // extension wasn't able to see.
+                false
+            }
+        }
+    }
+
+    fn on_rollback(&mut self, ext_name: String) {
+        if let Err(e) = self.host.dispatch_on_rollback(&ext_name) {
+            tracing::error!("on_rollback {ext_name}: {e}");
+        }
+    }
 }
 
 impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
@@ -888,7 +1186,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             Ok(name) => {
                 let components = self.host.components.read();
                 if let Some(ext) = components.get(&name) {
-                    Ok(stub_manifest(ext))
+                    Ok(manifest_for_ext(ext))
                 } else {
                     // Should not happen — we just inserted it under
                     // this name.
@@ -917,7 +1215,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         let components = self.host.components.read();
         names
             .iter()
-            .filter_map(|n| components.get(n).map(stub_manifest))
+            .filter_map(|n| components.get(n).map(manifest_for_ext))
             .collect()
     }
 

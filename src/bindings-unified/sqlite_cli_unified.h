@@ -612,6 +612,12 @@ typedef struct {
 
 typedef sqlite_extension_types_sql_value_t sqlite_wasm_dispatch_sql_value_t;
 
+typedef sqlite_extension_types_auth_action_t sqlite_wasm_dispatch_auth_action_t;
+
+typedef sqlite_extension_types_auth_result_t sqlite_wasm_dispatch_auth_result_t;
+
+typedef sqlite_extension_types_update_operation_t sqlite_wasm_dispatch_update_operation_t;
+
 typedef struct {
   sqlite_wasm_dispatch_sql_value_t *ptr;
   size_t len;
@@ -1126,6 +1132,20 @@ extern bool sqlite_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t 
 // The loaded extension's `collation.compare` does the actual
 // comparison; this dispatch wrapper just routes the call.
 extern int32_t sqlite_wasm_dispatch_collation_compare(sqlite_cli_unified_string_t *ext_name, uint64_t collation_id, sqlite_cli_unified_string_t *a, sqlite_cli_unified_string_t *b);
+// Route a SQLite authorizer callback to the loaded extension
+// named `ext-name` (which must have declared `has-authorizer`
+// in its manifest). Return value follows SQLite's auth-action
+// contract: ok = permit, deny = block with error, ignore = no-op.
+extern sqlite_wasm_dispatch_auth_result_t sqlite_wasm_dispatch_authorize(sqlite_cli_unified_string_t *ext_name, sqlite_wasm_dispatch_auth_action_t action, sqlite_cli_unified_string_t *maybe_arg1, sqlite_cli_unified_string_t *maybe_arg2, sqlite_cli_unified_string_t *maybe_database, sqlite_cli_unified_string_t *maybe_trigger);
+// Route a row-level update notification to the loaded extension
+// (declared `has-update-hook`). Fires after the row write
+// commits to the page cache; the host has no way to veto.
+extern void sqlite_wasm_dispatch_on_update(sqlite_cli_unified_string_t *ext_name, sqlite_wasm_dispatch_update_operation_t operation, sqlite_cli_unified_string_t *database, sqlite_cli_unified_string_t *table, int64_t rowid);
+// Route a pre-commit hook. Returning false converts the commit
+// to a rollback (SQLite's standard `xCommitHook != 0` semantics).
+extern bool sqlite_wasm_dispatch_on_commit(sqlite_cli_unified_string_t *ext_name);
+// Route a post-rollback notification.
+extern void sqlite_wasm_dispatch_on_rollback(sqlite_cli_unified_string_t *ext_name);
 
 // Imported Functions from `sqlite:wasm/zip-operations@0.1.0`
 // Create a new ZIP archive from files

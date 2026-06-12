@@ -19,7 +19,7 @@ package sqlite:wasm@0.1.0;
 /// the per-slot direct calls in extension-unified.c. This interface
 /// only fires for slots registered via the dynamic `.load` path.
 interface dispatch {
-    use sqlite:extension/types@0.1.0.{sql-value};
+    use sqlite:extension/types@0.1.0.{sql-value, auth-action, auth-result, update-operation};
 
     /// Invoke `func-id` on the extension previously loaded under
     /// `ext-name`, with the given arguments. Errors out if no such
@@ -66,4 +66,35 @@ interface dispatch {
         a: string,
         b: string,
     ) -> s32;
+
+    /// Route a SQLite authorizer callback to the loaded extension
+    /// named `ext-name` (which must have declared `has-authorizer`
+    /// in its manifest). Return value follows SQLite's auth-action
+    /// contract: ok = permit, deny = block with error, ignore = no-op.
+    authorize: func(
+        ext-name: string,
+        action: auth-action,
+        arg1: option<string>,
+        arg2: option<string>,
+        database: option<string>,
+        trigger: option<string>,
+    ) -> auth-result;
+
+    /// Route a row-level update notification to the loaded extension
+    /// (declared `has-update-hook`). Fires after the row write
+    /// commits to the page cache; the host has no way to veto.
+    on-update: func(
+        ext-name: string,
+        operation: update-operation,
+        database: string,
+        table: string,
+        rowid: s64,
+    );
+
+    /// Route a pre-commit hook. Returning false converts the commit
+    /// to a rollback (SQLite's standard `xCommitHook != 0` semantics).
+    on-commit: func(ext-name: string) -> bool;
+
+    /// Route a post-rollback notification.
+    on-rollback: func(ext-name: string);
 }
