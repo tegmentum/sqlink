@@ -1435,11 +1435,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlite-extension-policy"
+version = "0.1.0"
+
+[[package]]
 name = "sqlite-wasm-host"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "parking_lot",
+ "sqlite-extension-policy",
  "tracing",
  "wasmtime",
  "wasmtime-wasi",

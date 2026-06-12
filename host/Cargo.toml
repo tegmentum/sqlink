@@ -14,6 +14,10 @@ name = "sqlite_wasm_host"
 path = "src/lib.rs"
 
 [dependencies]
+# Canonical Policy / Capability / HttpPolicy / PolicyError types,
+# shared with sqlite-wasm-loader/runtimes/{wasmtime,wamr}.
+sqlite-extension-policy = { path = "../sqlite-loader-wit" }
+
 anyhow = "1.0"
 wasmtime = { version = "45.0.1", features = [
     "component-model",
