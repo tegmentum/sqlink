@@ -47,6 +47,14 @@ extern void __wasm_import_sqlite_wasm_geopoly_slot_describe(uint8_t *);
 __attribute__((__import_module__("sqlite:wasm/geopoly-slot@0.1.0"), __import_name__("call")))
 extern void __wasm_import_sqlite_wasm_geopoly_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
 
+// Imported Functions from `sqlite:wasm/demo-slot@0.1.0`
+
+__attribute__((__import_module__("sqlite:wasm/demo-slot@0.1.0"), __import_name__("describe")))
+extern void __wasm_import_sqlite_wasm_demo_slot_describe(uint8_t *);
+
+__attribute__((__import_module__("sqlite:wasm/demo-slot@0.1.0"), __import_name__("call")))
+extern void __wasm_import_sqlite_wasm_demo_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
+
 // Imported Functions from `sqlite:wasm/extension-loader@0.1.0`
 
 __attribute__((__import_module__("sqlite:wasm/extension-loader@0.1.0"), __import_name__("load-extension")))
@@ -1352,6 +1360,33 @@ void sqlite_wasm_geopoly_slot_result_sql_value_string_free(sqlite_wasm_geopoly_s
   }
 }
 
+void sqlite_wasm_demo_slot_sql_value_free(sqlite_wasm_demo_slot_sql_value_t *ptr) {
+  sqlite_extension_types_sql_value_free(ptr);
+}
+
+void sqlite_wasm_demo_slot_manifest_free(sqlite_wasm_demo_slot_manifest_t *ptr) {
+  sqlite_extension_metadata_manifest_free(ptr);
+}
+
+void sqlite_wasm_demo_slot_list_sql_value_free(sqlite_wasm_demo_slot_list_sql_value_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_wasm_demo_slot_sql_value_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_wasm_demo_slot_sql_value_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlite_wasm_demo_slot_result_sql_value_string_free(sqlite_wasm_demo_slot_result_sql_value_string_t *ptr) {
+  if (!ptr->is_err) {
+    sqlite_wasm_demo_slot_sql_value_free(&ptr->val.ok);
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
 void sqlite_wasm_extension_loader_extension_info_free(sqlite_wasm_extension_loader_extension_info_t *ptr) {
   sqlite_cli_unified_string_free(&ptr->name);
   sqlite_cli_unified_string_free(&ptr->version);
@@ -2124,6 +2159,75 @@ bool sqlite_wasm_geopoly_slot_call(uint64_t func_id, sqlite_wasm_geopoly_slot_li
   uint8_t *ptr = (uint8_t *) &ret_area;
   __wasm_import_sqlite_wasm_geopoly_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
   sqlite_wasm_geopoly_slot_result_sql_value_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_extension_types_sql_value_t variant;
+      variant.tag = (int32_t) *((uint8_t*) (ptr + 8));
+      switch ((int32_t) variant.tag) {
+        case 0: {
+          break;
+        }
+        case 1: {
+          variant.val.integer = *((int64_t*) (ptr + 16));
+          break;
+        }
+        case 2: {
+          variant.val.real = *((double*) (ptr + 16));
+          break;
+        }
+        case 3: {
+          variant.val.text = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 4: {
+          variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+      }
+
+      result.val.ok = variant;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+void sqlite_wasm_demo_slot_describe(sqlite_wasm_demo_slot_manifest_t *ret) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(13*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_wasm_demo_slot_describe(ptr);
+  *ret = (sqlite_extension_metadata_manifest_t) {
+    (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) },
+    (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr + (4*sizeof(void*))))), (*((size_t*) (ptr + (5*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr + (6*sizeof(void*))))), (*((size_t*) (ptr + (7*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr + (8*sizeof(void*))))), (*((size_t*) (ptr + (9*sizeof(void*))))) },
+    (bool) (int32_t) *((uint8_t*) (ptr + (10*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (1+10*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (2+10*sizeof(void*)))),
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (11*sizeof(void*))))), (*((size_t*) (ptr + (12*sizeof(void*))))) },
+  };
+}
+
+bool sqlite_wasm_demo_slot_call(uint64_t func_id, sqlite_wasm_demo_slot_list_sql_value_t *args, sqlite_wasm_demo_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_wasm_demo_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlite_wasm_demo_slot_result_sql_value_string_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;

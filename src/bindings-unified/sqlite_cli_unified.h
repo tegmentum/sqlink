@@ -562,6 +562,23 @@ typedef struct {
   } val;
 } sqlite_wasm_geopoly_slot_result_sql_value_string_t;
 
+typedef sqlite_extension_types_sql_value_t sqlite_wasm_demo_slot_sql_value_t;
+
+typedef sqlite_extension_metadata_manifest_t sqlite_wasm_demo_slot_manifest_t;
+
+typedef struct {
+  sqlite_wasm_demo_slot_sql_value_t *ptr;
+  size_t len;
+} sqlite_wasm_demo_slot_list_sql_value_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_wasm_demo_slot_sql_value_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlite_wasm_demo_slot_result_sql_value_string_t;
+
 // =========================================================================
 // Extension Information
 // =========================================================================
@@ -1054,6 +1071,10 @@ extern bool sqlite_wasm_rtree_slot_call(uint64_t func_id, sqlite_wasm_rtree_slot
 extern void sqlite_wasm_geopoly_slot_describe(sqlite_wasm_geopoly_slot_manifest_t *ret);
 extern bool sqlite_wasm_geopoly_slot_call(uint64_t func_id, sqlite_wasm_geopoly_slot_list_sql_value_t *args, sqlite_wasm_geopoly_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
 
+// Imported Functions from `sqlite:wasm/demo-slot@0.1.0`
+extern void sqlite_wasm_demo_slot_describe(sqlite_wasm_demo_slot_manifest_t *ret);
+extern bool sqlite_wasm_demo_slot_call(uint64_t func_id, sqlite_wasm_demo_slot_list_sql_value_t *args, sqlite_wasm_demo_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+
 // Imported Functions from `sqlite:wasm/extension-loader@0.1.0`
 // =========================================================================
 // Extension Loading
@@ -1279,6 +1300,14 @@ void sqlite_wasm_geopoly_slot_manifest_free(sqlite_wasm_geopoly_slot_manifest_t 
 void sqlite_wasm_geopoly_slot_list_sql_value_free(sqlite_wasm_geopoly_slot_list_sql_value_t *ptr);
 
 void sqlite_wasm_geopoly_slot_result_sql_value_string_free(sqlite_wasm_geopoly_slot_result_sql_value_string_t *ptr);
+
+void sqlite_wasm_demo_slot_sql_value_free(sqlite_wasm_demo_slot_sql_value_t *ptr);
+
+void sqlite_wasm_demo_slot_manifest_free(sqlite_wasm_demo_slot_manifest_t *ptr);
+
+void sqlite_wasm_demo_slot_list_sql_value_free(sqlite_wasm_demo_slot_list_sql_value_t *ptr);
+
+void sqlite_wasm_demo_slot_result_sql_value_string_free(sqlite_wasm_demo_slot_result_sql_value_string_t *ptr);
 
 void sqlite_wasm_extension_loader_extension_info_free(sqlite_wasm_extension_loader_extension_info_t *ptr);
 

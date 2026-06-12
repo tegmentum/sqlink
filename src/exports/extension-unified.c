@@ -196,7 +196,7 @@ void exports_sqlite_extension_config_extension_version(sqlite_cli_unified_string
 
 /* Identifies a single registered function in the dispatch table.
  * Stashed as sqlite3_create_function_v2's user-data argument. */
-enum slot_id { SLOT_FTS5, SLOT_JSON1, SLOT_RTREE, SLOT_GEOPOLY, SLOT_COUNT };
+enum slot_id { SLOT_FTS5, SLOT_JSON1, SLOT_RTREE, SLOT_GEOPOLY, SLOT_DEMO, SLOT_COUNT };
 
 typedef struct {
     enum slot_id slot;
@@ -234,6 +234,11 @@ extern bool sqlite_wasm_geopoly_slot_call(uint64_t func_id,
                                           sqlite_wasm_geopoly_slot_list_sql_value_t *args,
                                           sqlite_wasm_geopoly_slot_sql_value_t *ret,
                                           sqlite_cli_unified_string_t *err);
+extern void sqlite_wasm_demo_slot_describe(sqlite_wasm_demo_slot_manifest_t *ret);
+extern bool sqlite_wasm_demo_slot_call(uint64_t func_id,
+                                       sqlite_wasm_demo_slot_list_sql_value_t *args,
+                                       sqlite_wasm_demo_slot_sql_value_t *ret,
+                                       sqlite_cli_unified_string_t *err);
 
 /* Convert one sqlite3_value to the canonical variant sql-value.
  * Memory: TEXT and BLOB cases copy bytes via malloc; the freed-by-cabi
@@ -366,6 +371,13 @@ static void wasm_ext_xfunc(sqlite3_context *ctx, int argc, sqlite3_value **argv)
                                                (sqlite_wasm_geopoly_slot_sql_value_t *)&ret, &err);
             break;
         }
+        case SLOT_DEMO: {
+            sqlite_wasm_demo_slot_list_sql_value_t slot_args = {
+                (sqlite_wasm_demo_slot_sql_value_t *)args, (size_t)argc};
+            ok = sqlite_wasm_demo_slot_call(d->func_id, &slot_args,
+                                            (sqlite_wasm_demo_slot_sql_value_t *)&ret, &err);
+            break;
+        }
         default:
             free(args);
             sqlite3_result_error(ctx, "unknown slot", -1);
@@ -466,6 +478,12 @@ static int register_all_slots(sqlite3 *db, char **pzErrMsg,
         sqlite_wasm_geopoly_slot_describe(&m);
         register_slot_scalars(db, SLOT_GEOPOLY, (sqlite_wasm_fts5_slot_manifest_t *)&m);
         sqlite_wasm_geopoly_slot_manifest_free(&m);
+    }
+    {
+        sqlite_wasm_demo_slot_manifest_t m;
+        sqlite_wasm_demo_slot_describe(&m);
+        register_slot_scalars(db, SLOT_DEMO, (sqlite_wasm_fts5_slot_manifest_t *)&m);
+        sqlite_wasm_demo_slot_manifest_free(&m);
     }
     return SQLITE_OK;
 }

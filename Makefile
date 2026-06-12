@@ -535,6 +535,48 @@ extensions: $(FTS5_WASM) $(RTREE_WASM) $(JSON1_WASM) $(GEOPOLY_WASM)
 	@echo "All extensions built:"
 	@ls -lh $(EXT_BUILD_DIR)/*.wasm
 
+# Demo extension (unified-WIT demonstration; pairs with `unified` target).
+# Exports sqlite:wasm/demo-slot and implements wasm_reverse + wasm_double.
+DEMO_DIR := $(EXTENSIONS_DIR)/wasm-demo
+DEMO_WASM := $(EXT_BUILD_DIR)/wasm-demo.wasm
+DEMO_BINDINGS := $(DEMO_DIR)/src
+
+$(DEMO_BINDINGS)/demo_extension.h: $(DEMO_DIR)/wit/world.wit $(DEMO_DIR)/wit/deps/sqlite-wasm/wasm-slots.wit
+	@echo "Generating demo extension bindings..."
+	wit-bindgen c $(DEMO_DIR)/wit --world demo-extension --out-dir $(DEMO_BINDINGS)
+
+$(EXT_BUILD_DIR)/demo_ext.o: $(DEMO_DIR)/demo_ext.c $(DEMO_BINDINGS)/demo_extension.h | $(EXT_BUILD_DIR)
+	@echo "Compiling demo extension wrapper..."
+	$(CC) $(EXT_CFLAGS) -I$(DEMO_BINDINGS) -c $< -o $@
+
+$(EXT_BUILD_DIR)/demo_extension.o: $(DEMO_BINDINGS)/demo_extension.c $(DEMO_BINDINGS)/demo_extension.h | $(EXT_BUILD_DIR)
+	@echo "Compiling generated demo bindings..."
+	$(CC) $(EXT_CFLAGS) -I$(DEMO_BINDINGS) -c $< -o $@
+
+$(DEMO_WASM): $(EXT_BUILD_DIR)/demo_ext.o $(EXT_BUILD_DIR)/demo_extension.o $(DEMO_BINDINGS)/demo_extension_component_type.o
+	@echo "Linking demo extension..."
+	$(CC) $(EXT_LDFLAGS) $^ -o $@
+	@echo "Built: $@"
+	@ls -lh $@
+
+extension-demo: $(DEMO_WASM)
+
+# Compose the demo extension into the unified host. Produces a single
+# wasm where every sqlite:wasm/<name>-slot import is satisfied — the
+# real impls for demo-slot (wasm_reverse, wasm_double) and stub
+# manifests for the four legacy slots.
+COMPOSED_DEMO_WASM := $(BUILD_DIR)/sqlite-demo-composed.wasm
+
+$(COMPOSED_DEMO_WASM): $(UNIFIED_WASM) $(DEMO_WASM)
+	@echo "Composing sqlite-unified + wasm-demo via wac plug..."
+	wac plug --plug $(DEMO_WASM) $(UNIFIED_WASM) -o $@
+	@echo "Built: $@"
+	@ls -lh $@
+
+cli-demo: $(COMPOSED_DEMO_WASM)
+
+.PHONY: extension-demo cli-demo
+
 # =============================================================================
 # WASM Component Composition
 # =============================================================================

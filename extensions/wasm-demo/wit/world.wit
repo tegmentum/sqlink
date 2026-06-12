@@ -1,0 +1,18 @@
+package sqlite:wasm-demo@0.1.0;
+
+/// Demonstration extension that exercises the unified-WIT dispatch
+/// path end to end.
+///
+/// Exports `demo-slot` with real implementations (wasm_reverse,
+/// wasm_double) and also exports stub implementations of the four
+/// other slots (fts5-slot / json1-slot / rtree-slot / geopoly-slot)
+/// so a single `wac plug` against sqlite-unified.wasm satisfies every
+/// host import in one shot. The stub slots' manifests are empty —
+/// the host iterates them, finds no functions, and registers nothing.
+world demo-extension {
+    export sqlite:wasm/demo-slot@0.1.0;
+    export sqlite:wasm/fts5-slot@0.1.0;
+    export sqlite:wasm/json1-slot@0.1.0;
+    export sqlite:wasm/rtree-slot@0.1.0;
+    export sqlite:wasm/geopoly-slot@0.1.0;
+}

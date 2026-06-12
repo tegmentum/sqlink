@@ -44,6 +44,7 @@ world sqlite-cli-unified {
     import json1-slot;
     import rtree-slot;
     import geopoly-slot;
+    import demo-slot;
 
     import extension-loader;
     import zip-operations;
