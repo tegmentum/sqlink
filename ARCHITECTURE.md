@@ -31,6 +31,38 @@ READMEs and PLAN-*.md files have the detail.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
+## Three deployment shapes
+
+The runtime supports three distinct extension/function shapes,
+all living alongside each other in the same `sqlite-wasm-run`
+binary:
+
+1. **`sqlite:extension`-world extensions** — the original shape.
+   Self-contained wasm components that target one of the worlds
+   in `sqlite-loader-wit` (minimal, stateful, collating,
+   authorizing, hooked, full). Loaded via `.load <path>`,
+   register SQL functions / aggregates / collations / hooks /
+   authorizers with the cli's SQLite, run via the dispatch
+   protocol. Today's test/agg/coll/hook/spi/auth/live-spi
+   extensions all use this shape.
+
+2. **Resolver components** — sit in front of `.load`, fetch
+   bytes from URIs the cli doesn't know how to read directly.
+   Targets the `resolving` world. Registered with
+   `.register-resolver <scheme> <path>`; consulted on
+   `.load <scheme>://...`. The http-resolver demonstrates.
+
+3. **Fiji functions** — tiny wasm components that resolve
+   shared runtime providers at runtime via
+   `compose:dynlink/linker` (the `webassembly-component-orchestration`
+   project's "dlopen for components" pattern). Target the
+   `fiji-function` world; export
+   `sqlite:wasm/fiji.run() -> result<string, string>`. Loaded
+   via `.fiji <path>` — instantiates, calls run(), prints output.
+   ~150 KB per function vs. ~12 KB-each-but-needs-2MB-runtime
+   for `sqlite:extension`-shape. See `AUTHORING-FIJI-FUNCTIONS.md`
+   and `host/COMPOSE-PROTOCOL.md` for the writeup.
+
 ## Two CLIs, on purpose
 
 | | sqlite-cli-demo.wasm (C) | sqlite_cli_rust.wasm (Rust) |

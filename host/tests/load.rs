@@ -72,3 +72,45 @@ async fn double_unload_errors() {
     let err = host.unload("never-loaded").err().expect("must error");
     assert!(err.to_string().contains("never-loaded"));
 }
+
+#[tokio::test]
+async fn fiji_function_resolves_sqlite_runtime() {
+    use sqlite_wasm_host::compose_provider::ProviderHandle;
+    use std::sync::Arc;
+    use parking_lot::Mutex;
+
+    let mut fiji_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    fiji_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/fiji_hello.wasm");
+    if !fiji_path.exists() {
+        eprintln!("skipping: fiji_hello.wasm not built");
+        return;
+    }
+
+    // Open a temp file-backed db; populate with N tables; expect
+    // the fiji function to report N.
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("t.db");
+    {
+        let c = rusqlite::Connection::open(&db_path).unwrap();
+        c.execute_batch(
+            "CREATE TABLE a(x); CREATE TABLE b(y); CREATE TABLE c(z);"
+        ).unwrap();
+    }
+
+    let host = Host::new().unwrap();
+
+    // Register sqlite-runtime against the same file.
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let conn_arc = Arc::new(Mutex::new(Some(conn)));
+    host.register_compose_provider(
+        "sqlite-runtime",
+        ProviderHandle::new_sqlite_runtime(conn_arc),
+    );
+
+    let output = host
+        .run_fiji_function(fiji_path, Policy::deny_all())
+        .await
+        .expect("fiji run");
+
+    assert!(output.contains("3 table(s)"), "got: {output:?}");
+}
