@@ -49,6 +49,7 @@ async fn main() -> Result<()> {
 
     let mut reactor_mode = false;
     let mut db_path = String::new();
+    let mut cache_dir: Option<String> = None;
     let mut positional: Vec<String> = Vec::new();
     let mut after_dashes = false;
     let mut i = 1;
@@ -68,6 +69,14 @@ async fn main() -> Result<()> {
                 eprintln!("--db expects a path");
                 usage();
             }
+        } else if a == "--cache-dir" {
+            i += 1;
+            if i < args.len() {
+                cache_dir = Some(args[i].clone());
+            } else {
+                eprintln!("--cache-dir expects a path");
+                usage();
+            }
         } else {
             positional.push(a.clone());
         }
@@ -81,6 +90,13 @@ async fn main() -> Result<()> {
 
     let host = Host::new()?;
     host.set_db_path(&db_path);
+
+    // Open the CAS cache. Default location honors --cache-dir,
+    // SQLITE_WASM_CACHE_DIR, XDG_CACHE_HOME, then ~/.cache.
+    let cache_root = sqlite_wasm_host::cache::Cache::default_root(cache_dir.as_deref())?;
+    let cache = sqlite_wasm_host::cache::Cache::open(cache_root)?;
+    host.set_cache(cache);
+
     let engine = host.engine().clone();
 
     let component_bytes = std::fs::read(&component_path)

@@ -845,12 +845,12 @@ impl Host {
                 std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))
             }
             other => {
-                let resolver = self
-                    .resolvers
-                    .read()
-                    .get(other)
-                    .cloned()
-                    .ok_or_else(|| anyhow!("no resolver registered for scheme {other}:"))?;
+                let resolver = {
+                    let g = self.resolvers.read();
+                    g.get(other)
+                        .cloned()
+                        .ok_or_else(|| anyhow!("no resolver registered for scheme {other}:"))?
+                };
                 let linker = make_loaded_resolving_linker(&self.engine)?;
                 let mut store = build_loaded_store(&self.engine, &resolver, self.db_path())?;
                 let instance = loaded_resolving::Resolving::instantiate_async(
@@ -881,18 +881,22 @@ impl Host {
             let path = uri.strip_prefix("file://").or_else(|| uri.strip_prefix("file:")).unwrap_or(uri);
             return self.load_extension(PathBuf::from(path), policy).await;
         }
-        // blake3: pinned hash — refuse if not cached.
+        // blake3: pinned hash — refuse if not cached. Scope the
+        // cache read so the guard doesn't span the .await.
         if let Some(hex) = uri.strip_prefix("blake3:") {
-            let g = self.cache.read();
-            let cache = g
-                .as_ref()
-                .ok_or_else(|| anyhow!("blake3: scheme requires --cache-dir or default"))?;
-            let path = cache
-                .lookup_by_hash(hex)
-                .ok_or_else(|| anyhow!("blake3:{hex} not in cache"))?;
+            let path = {
+                let g = self.cache.read();
+                let cache = g
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("blake3: scheme requires --cache-dir or default"))?;
+                cache
+                    .lookup_by_hash(hex)
+                    .ok_or_else(|| anyhow!("blake3:{hex} not in cache"))?
+            };
             return self.load_extension(path, policy).await;
         }
-        // Regular URI: check cache first.
+        // Regular URI: check cache first. Scope the read guard so
+        // it doesn't span an .await.
         let cached_path = {
             let g = self.cache.read();
             g.as_ref().and_then(|c| {
@@ -913,6 +917,12 @@ impl Host {
             cache.lookup_by_hash(&hash).ok_or_else(|| anyhow!("internal: just-cached"))?
         };
         self.load_extension(path, policy).await
+    }
+
+    /// Snapshot ref to the components map. Internal — used by
+    /// HostWrap to avoid re-locking across await boundaries.
+    fn components_arc(&self) -> Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>> {
+        self.components.clone()
     }
 
     /// Set the database path the cli is using. Called by sqlite-wasm-run
@@ -1638,6 +1648,70 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
 
     async fn is_extension_loaded(&mut self, name: String) -> bool {
         self.host.is_loaded(&name)
+    }
+
+    async fn load_extension_from_uri(
+        &mut self,
+        uri: String,
+        options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<Manifest, LoaderError> {
+        let policy = policy_from_load_options(&options);
+        match self.host.load_extension_from_uri(&uri, policy).await {
+            Ok(name) => {
+                let components = self.host.components.read();
+                components
+                    .get(&name)
+                    .map(|e| manifest_for_ext(e.as_ref()))
+                    .ok_or_else(|| LoaderError {
+                        code: 1,
+                        message: format!("internal: ext {name} vanished after URI load"),
+                    })
+            }
+            Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
+        }
+    }
+
+    async fn register_resolver(
+        &mut self,
+        scheme: String,
+        path: String,
+        options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<String, LoaderError> {
+        let policy = policy_from_load_options(&options);
+        self.host
+            .register_resolver(&scheme, PathBuf::from(&path), policy)
+            .await
+            .map_err(|e| LoaderError { code: 1, message: e.to_string() })
+    }
+
+    async fn unregister_resolver(&mut self, scheme: String) -> std::result::Result<(), LoaderError> {
+        self.host
+            .unregister_resolver(&scheme)
+            .map_err(|e| LoaderError { code: 1, message: e.to_string() })
+    }
+
+    async fn list_resolvers(&mut self) -> Vec<(String, String)> {
+        self.host.list_resolvers()
+    }
+
+    async fn list_cache_uris(&mut self) -> Vec<bindings::sqlite::wasm::extension_loader::UriCacheEntry> {
+        let g = self.host.cache.read();
+        let Some(cache) = g.as_ref() else { return Vec::new(); };
+        cache
+            .list_uris()
+            .into_iter()
+            .map(|e| bindings::sqlite::wasm::extension_loader::UriCacheEntry {
+                uri: e.uri,
+                hash: e.hash,
+                fetched_at: e.fetched_at,
+            })
+            .collect()
+    }
+
+    async fn purge_cache(&mut self) -> u64 {
+        let g = self.host.cache.read();
+        let Some(cache) = g.as_ref() else { return 0; };
+        cache.purge().unwrap_or(0) as u64
     }
 }
 

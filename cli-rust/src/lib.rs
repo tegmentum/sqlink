@@ -115,6 +115,15 @@ impl SpiGuest for CliReactor {
     fn execute_batch(_sql: String) -> Result<i64, SpiSqliteError> {
         Err(spi_not_impl("execute-batch"))
     }
+    fn execute_live(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiQueryResult, SpiSqliteError> {
+        Err(spi_not_impl("execute-live"))
+    }
+    fn execute_scalar_live(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiSqlValue, SpiSqliteError> {
+        Err(spi_not_impl("execute-scalar-live"))
+    }
+    fn execute_batch_live(_sql: String) -> Result<i64, SpiSqliteError> {
+        Err(spi_not_impl("execute-batch-live"))
+    }
 }
 
 // =========================================================================
@@ -623,6 +632,18 @@ impl CliGuest for CliReactor {
         if let Some(rest) = trimmed.strip_prefix(".open") {
             return do_open(rest.trim());
         }
+        if let Some(rest) = trimmed.strip_prefix(".register-resolver ") {
+            return do_register_resolver(rest.trim());
+        }
+        if let Some(rest) = trimmed.strip_prefix(".unregister-resolver ") {
+            return do_unregister_resolver(rest.trim());
+        }
+        if trimmed == ".resolvers" {
+            return do_list_resolvers();
+        }
+        if trimmed.starts_with(".cache") {
+            return do_cache(trimmed.strip_prefix(".cache").unwrap_or("").trim());
+        }
         ensure_cli_conn();
         // Dispatch other dot-commands first; only fall through to
         // SQL on a None result.
@@ -873,9 +894,20 @@ fn do_load(input: &str) -> String {
         epoch_deadline_ms: epoch,
     };
     let path = &path;
-    let manifest = match extension_loader::load_extension(path, &opts) {
-        Ok(m) => m,
-        Err(e) => return format!("Error loading {path}: {} (code {})\n", e.message, e.code),
+    // Route URIs through load_extension_from_uri; non-URIs through
+    // the regular load_extension. Detection: anything matching
+    // "<scheme>:[//]rest" with scheme != C-drive-letter shape.
+    let is_uri = looks_like_uri(path);
+    let manifest = if is_uri {
+        match extension_loader::load_extension_from_uri(path, &opts) {
+            Ok(m) => m,
+            Err(e) => return format!("Error loading {path}: {} (code {})\n", e.message, e.code),
+        }
+    } else {
+        match extension_loader::load_extension(path, &opts) {
+            Ok(m) => m,
+            Err(e) => return format!("Error loading {path}: {} (code {})\n", e.message, e.code),
+        }
     };
     let ext_name = manifest.name.clone();
     ensure_cli_conn();
@@ -1039,6 +1071,89 @@ fn wit_to_rusqlite(v: bindings::sqlite::extension::types::SqlValue) -> rusqlite:
 
 thread_local! {
     static AGG_CTX_COUNTER: RefCell<u64> = const { RefCell::new(1) };
+}
+
+/// Heuristic for URI detection: starts with a scheme followed by
+/// `:` and is at least 2 chars before the colon. Avoids matching
+/// Windows drive letters like `C:\path` (single-letter scheme).
+fn looks_like_uri(s: &str) -> bool {
+    if let Some(colon) = s.find(':') {
+        if colon < 2 { return false; }
+        let scheme = &s[..colon];
+        scheme.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.')
+    } else { false }
+}
+
+// --- New dot-commands for resolvers + cache ---
+
+fn do_register_resolver(arg: &str) -> String {
+    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
+    use bindings::sqlite::wasm::extension_loader;
+
+    let mut parts = arg.splitn(2, char::is_whitespace);
+    let scheme = parts.next().unwrap_or("").trim();
+    let path = parts.next().unwrap_or("").trim();
+    if scheme.is_empty() || path.is_empty() {
+        return "Usage: .register-resolver SCHEME PATH\n".to_string();
+    }
+    let opts = LoadOptions {
+        grant: vec![Capability::Http, Capability::Spi],
+        http_policy: None,
+        fs_policy: None,
+        fuel_per_call: None,
+        memory_limit_bytes: None,
+        epoch_deadline_ms: None,
+    };
+    match extension_loader::register_resolver(scheme, path, &opts) {
+        Ok(name) => format!("Registered resolver: {scheme} -> {name}\n"),
+        Err(e) => format!("Error registering {scheme}: {} (code {})\n", e.message, e.code),
+    }
+}
+
+fn do_unregister_resolver(arg: &str) -> String {
+    use bindings::sqlite::wasm::extension_loader;
+    match extension_loader::unregister_resolver(arg) {
+        Ok(()) => format!("Unregistered resolver: {arg}\n"),
+        Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+    }
+}
+
+fn do_list_resolvers() -> String {
+    use bindings::sqlite::wasm::extension_loader;
+    let resolvers = extension_loader::list_resolvers();
+    if resolvers.is_empty() {
+        return "(no resolvers registered)\n".to_string();
+    }
+    let mut out = String::new();
+    for (scheme, ext) in resolvers {
+        out.push_str(&format!("{scheme}: -> {ext}\n"));
+    }
+    out
+}
+
+fn do_cache(arg: &str) -> String {
+    use bindings::sqlite::wasm::extension_loader;
+    match arg {
+        "list" | "" => {
+            let entries = extension_loader::list_cache_uris();
+            if entries.is_empty() {
+                return "(cache empty)\n".to_string();
+            }
+            let mut out = String::new();
+            for e in entries {
+                out.push_str(&format!("{} -> {} ({}s ago)\n",
+                    e.uri,
+                    &e.hash[..16],
+                    e.fetched_at));
+            }
+            out
+        }
+        "clear" | "purge" => {
+            let n = extension_loader::purge_cache();
+            format!("Purged {n} cache files\n")
+        }
+        _ => format!("Usage: .cache [list|clear]\n"),
+    }
 }
 fn next_agg_context_id() -> u64 {
     AGG_CTX_COUNTER.with(|c| {

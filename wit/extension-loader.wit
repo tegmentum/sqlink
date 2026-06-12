@@ -45,4 +45,41 @@ interface extension-loader {
 
     /// True iff an extension with the given name is currently loaded.
     is-extension-loaded: func(name: string) -> bool;
+
+    /// Load an extension from a URI (file:/blake3:/https:/oci:/...).
+    /// The host's CAS cache stores resolved bytes by their blake3
+    /// hash; the URI → hash binding lets repeated loads skip the
+    /// resolver. file: and blake3: schemes are handled in-host;
+    /// other schemes route through a registered resolver component.
+    load-extension-from-uri: func(
+        uri: string,
+        options: load-options,
+    ) -> result<manifest, loader-error>;
+
+    /// Register `path` as the resolver for `scheme`. The path
+    /// points at a `resolving`-world component the host loads
+    /// like any other extension (policy applied identically).
+    register-resolver: func(
+        scheme: string,
+        path: string,
+        options: load-options,
+    ) -> result<string, loader-error>;
+
+    /// Drop the resolver registered for `scheme`.
+    unregister-resolver: func(scheme: string) -> result<_, loader-error>;
+
+    /// (scheme, extension-name) pairs for every registered resolver.
+    list-resolvers: func() -> list<tuple<string, string>>;
+
+    /// One row per entry in the CAS cache's uri_index.
+    record uri-cache-entry {
+        uri: string,
+        hash: string,
+        fetched-at: u64,
+    }
+    /// List every URI → hash binding the cache has seen.
+    list-cache-uris: func() -> list<uri-cache-entry>;
+    /// Drop every cached byte + every uri_index entry. Returns the
+    /// number of files removed.
+    purge-cache: func() -> u64;
 }
