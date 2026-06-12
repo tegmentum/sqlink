@@ -35,3 +35,8 @@ async-trait = "0.1"
 # the cli is using, so they see committed schema + data without
 # needing to re-enter the cli reactor.
 rusqlite = { version = "0.32", features = ["bundled"] }
+# Content-addressed cache for resolved extension components.
+blake3 = "1.5"
+tempfile = "3.13"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

@@ -21,6 +21,7 @@
 //! and is tracked as a follow-up in the README; the loader interface
 //! itself is fully functional in this crate.
 
+pub mod cache;
 pub mod policy;
 
 use std::collections::HashMap;
@@ -136,6 +137,28 @@ pub mod reactor {
         world: "sqlite-cli-reactor",
         imports: { default: async },
         exports: { default: async },
+    });
+}
+
+/// Bindgen for resolver-shape extensions. The `resolving` world
+/// exports `resolver.resolve(uri) -> result<list<u8>, string>`
+/// on top of the minimal metadata + scalar-function bootstrap.
+/// Used by Host::resolve_uri after a `.load <uri>` lookup picks
+/// the matching scheme's resolver.
+pub mod loaded_resolving {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "resolving",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+        },
     });
 }
 
@@ -643,6 +666,16 @@ fn make_loaded_authorizing_linker(engine: &Engine) -> Result<Linker<LoadedState>
     Ok(linker)
 }
 
+/// Build a Linker pre-wired for a `resolving`-world loaded extension.
+fn make_loaded_resolving_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+    let mut linker: Linker<LoadedState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
+    loaded_resolving::Resolving::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
+        .map_err(|e| anyhow!("loaded-ext resolving: {e}"))?;
+    Ok(linker)
+}
+
 /// Build a Linker pre-wired for a `hooked`-world loaded extension.
 /// Used when dispatching update / commit / rollback hook callbacks.
 fn make_loaded_hooked_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
@@ -708,6 +741,13 @@ pub struct Host {
     /// Empty string means `:memory:`, and SPI returns an error then
     /// (in-memory dbs can't be shared between connections).
     db_path: Arc<RwLock<String>>,
+    /// scheme → registered resolver extension. `.load <uri>` looks
+    /// up the URI's scheme and instantiates the matching resolver
+    /// as a `resolving`-world component. `file` and `blake3` schemes
+    /// are handled in-host and never appear in this map.
+    resolvers: Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>>,
+    /// CAS cache for resolved bytes.
+    cache: Arc<RwLock<Option<cache::Cache>>>,
 }
 
 impl Host {
@@ -728,7 +768,151 @@ impl Host {
             engine,
             components: Arc::new(RwLock::new(HashMap::new())),
             db_path: Arc::new(RwLock::new(String::new())),
+            resolvers: Arc::new(RwLock::new(HashMap::new())),
+            cache: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Provide the CAS cache for resolver-fetched bytes. Optional;
+    /// without it `.load <uri>` returns an error for any scheme
+    /// other than `file:` / `blake3:`.
+    pub fn set_cache(&self, cache: cache::Cache) {
+        *self.cache.write() = Some(cache);
+    }
+
+    /// Register `path` as the resolver for `scheme`. Same load
+    /// semantics as a regular extension — instantiated, manifest
+    /// checked, policy enforced — but stored in the resolvers
+    /// map keyed by scheme instead of by extension name.
+    pub async fn register_resolver(
+        &self,
+        scheme: &str,
+        path: PathBuf,
+        policy: Policy,
+    ) -> Result<String> {
+        let name = self.load_extension(path, policy).await?;
+        let ext = self
+            .components
+            .read()
+            .get(&name)
+            .cloned()
+            .ok_or_else(|| anyhow!("internal: just-loaded ext {name} missing"))?;
+        self.resolvers.write().insert(scheme.to_string(), ext);
+        Ok(name)
+    }
+
+    /// Drop the resolver registered for `scheme`.
+    pub fn unregister_resolver(&self, scheme: &str) -> Result<()> {
+        if self.resolvers.write().remove(scheme).is_some() {
+            Ok(())
+        } else {
+            Err(anyhow!("no resolver registered for {scheme}"))
+        }
+    }
+
+    /// List (scheme, resolver-extension-name) pairs.
+    pub fn list_resolvers(&self) -> Vec<(String, String)> {
+        self.resolvers
+            .read()
+            .iter()
+            .map(|(s, e)| (s.clone(), e.name.clone()))
+            .collect()
+    }
+
+    /// Resolve `uri` to component bytes. Handles `file:` and
+    /// `blake3:` in-host; routes other schemes to a registered
+    /// resolver component.
+    pub async fn resolve_uri(&self, uri: &str) -> Result<Vec<u8>> {
+        let (scheme, rest) = match uri.split_once(':') {
+            Some(p) => p,
+            None => return Err(anyhow!("not a uri: {uri}")),
+        };
+        match scheme {
+            "file" => {
+                // Strip the // prefix per RFC 3986; accept both
+                // file:///abs and file:relative for convenience.
+                let p = rest.trim_start_matches("//");
+                std::fs::read(p).map_err(|e| anyhow!("read {p}: {e}"))
+            }
+            "blake3" => {
+                let g = self.cache.read();
+                let cache = g
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("blake3: scheme requires --cache-dir or default"))?;
+                let path = cache
+                    .lookup_by_hash(rest)
+                    .ok_or_else(|| anyhow!("blake3:{rest} not in cache"))?;
+                std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))
+            }
+            other => {
+                let resolver = self
+                    .resolvers
+                    .read()
+                    .get(other)
+                    .cloned()
+                    .ok_or_else(|| anyhow!("no resolver registered for scheme {other}:"))?;
+                let linker = make_loaded_resolving_linker(&self.engine)?;
+                let mut store = build_loaded_store(&self.engine, &resolver, self.db_path())?;
+                let instance = loaded_resolving::Resolving::instantiate_async(
+                    &mut store, &resolver.component, &linker,
+                )
+                .await
+                .map_err(|e| anyhow!("instantiate resolver {scheme}: {e}"))?;
+                let result = instance
+                    .sqlite_extension_resolver()
+                    .call_resolve(&mut store, uri)
+                    .await
+                    .map_err(|e| anyhow!("resolver {scheme}.resolve: {e}"))?;
+                result.map_err(|e| anyhow!("resolver {scheme}: {e}"))
+            }
+        }
+    }
+
+    /// `.load <uri>` end-to-end: cache lookup → resolve on miss →
+    /// cache write → standard load_extension on the cached path.
+    pub async fn load_extension_from_uri(
+        &self,
+        uri: &str,
+        policy: Policy,
+    ) -> Result<String> {
+        // file: is local; skip the cache machinery and just
+        // load directly.
+        if uri.starts_with("file:") {
+            let path = uri.strip_prefix("file://").or_else(|| uri.strip_prefix("file:")).unwrap_or(uri);
+            return self.load_extension(PathBuf::from(path), policy).await;
+        }
+        // blake3: pinned hash — refuse if not cached.
+        if let Some(hex) = uri.strip_prefix("blake3:") {
+            let g = self.cache.read();
+            let cache = g
+                .as_ref()
+                .ok_or_else(|| anyhow!("blake3: scheme requires --cache-dir or default"))?;
+            let path = cache
+                .lookup_by_hash(hex)
+                .ok_or_else(|| anyhow!("blake3:{hex} not in cache"))?;
+            return self.load_extension(path, policy).await;
+        }
+        // Regular URI: check cache first.
+        let cached_path = {
+            let g = self.cache.read();
+            g.as_ref().and_then(|c| {
+                c.lookup_by_uri(uri).and_then(|entry| c.lookup_by_hash(&entry.hash))
+            })
+        };
+        if let Some(path) = cached_path {
+            return self.load_extension(path, policy).await;
+        }
+        // Miss: resolve, cache, load.
+        let bytes = self.resolve_uri(uri).await?;
+        let path = {
+            let g = self.cache.read();
+            let cache = g
+                .as_ref()
+                .ok_or_else(|| anyhow!("uri load needs --cache-dir or default"))?;
+            let hash = cache.put(uri, &bytes)?;
+            cache.lookup_by_hash(&hash).ok_or_else(|| anyhow!("internal: just-cached"))?
+        };
+        self.load_extension(path, policy).await
     }
 
     /// Set the database path the cli is using. Called by sqlite-wasm-run
