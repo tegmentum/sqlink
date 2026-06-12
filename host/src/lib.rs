@@ -488,6 +488,42 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         conn.execute_batch(&sql).map_err(spi_err)?;
         Ok(conn.changes() as i64)
     }
+
+    async fn execute_live(
+        &mut self,
+        _sql: String,
+        _params: Vec<loaded::sqlite::extension::types::SqlValue>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::types::QueryResult,
+        loaded::sqlite::extension::types::SqliteError,
+    > { Err(spi_live_not_impl()) }
+
+    async fn execute_scalar_live(
+        &mut self,
+        _sql: String,
+        _params: Vec<loaded::sqlite::extension::types::SqlValue>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::types::SqlValue,
+        loaded::sqlite::extension::types::SqliteError,
+    > { Err(spi_live_not_impl()) }
+
+    async fn execute_batch_live(
+        &mut self,
+        _sql: String,
+    ) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
+        Err(spi_live_not_impl())
+    }
+}
+
+fn spi_live_not_impl() -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: 1, extended_code: 1,
+        message: "spi.*-live not yet implemented in this host. The reactor + \
+                  async-stackful machinery exists; threading the cli store handle \
+                  into LoadedState's spi impls is a separate piece of work. \
+                  Use spi.execute (committed-state snapshot) in the meantime, or \
+                  see PLAN-outstanding.md Track B1 for the design path.".to_string(),
+    }
 }
 
 impl loaded::sqlite::extension::logging::Host for LoadedState {
