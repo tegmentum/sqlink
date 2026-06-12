@@ -361,6 +361,71 @@ extensible: bindings-ext $(EXTENSIBLE_WASM)
 .PHONY: extensible
 
 # =============================================================================
+# Unified build (sqlite-cli-unified world from task #12)
+# =============================================================================
+# Reactor build matching the sqlite-extensible target but using the
+# unified sqlite:extension contract. The new C glue
+# (src/exports/extension-unified.c) is the unified-WIT successor to
+# extension.c; spi/logging/config exports are present, scalar dispatch
+# from composed extension slots is the next iteration.
+UNIFIED_WASM := $(BUILD_DIR)/sqlite-unified.wasm
+
+CFLAGS_UNIFIED := \
+    --target=$(TARGET) \
+    --sysroot=$(WASI_SYSROOT) \
+    -O2 \
+    -g \
+    -Wall \
+    -Wextra \
+    -Wno-unused-parameter \
+    -I$(DEPS_DIR)/sqlite \
+    -I$(SRC_DIR) \
+    -I$(BINDINGS_UNIFIED_DIR) \
+    $(WASM_FEATURES) \
+    $(SQLITE_CFLAGS)
+
+OBJS_UNIFIED := \
+    $(BUILD_DIR)/sqlite3.o \
+    $(BUILD_DIR)/vfs_memory.o \
+    $(BUILD_DIR)/vfs_wasi.o \
+    $(BUILD_DIR)/low_level_unified.o \
+    $(BUILD_DIR)/high_level_unified.o \
+    $(BUILD_DIR)/extension_unified.o \
+    $(BUILD_DIR)/sqlite_wasm_unified.o \
+    $(BUILD_DIR)/sqlite_cli_unified.o \
+    $(BINDINGS_UNIFIED_DIR)/sqlite_cli_unified_component_type.o
+
+$(BUILD_DIR)/low_level_unified.o: $(SRC_DIR)/exports/low_level.c $(BINDINGS_UNIFIED_DIR)/sqlite_cli_unified.h | $(BUILD_DIR)
+	@echo "Compiling low-level exports (unified)..."
+	$(CC) $(CFLAGS_UNIFIED) -c $< -o $@
+
+$(BUILD_DIR)/high_level_unified.o: $(SRC_DIR)/exports/high_level.c $(BINDINGS_UNIFIED_DIR)/sqlite_cli_unified.h | $(BUILD_DIR)
+	@echo "Compiling high-level exports (unified)..."
+	$(CC) $(CFLAGS_UNIFIED) -c $< -o $@
+
+$(BUILD_DIR)/extension_unified.o: $(SRC_DIR)/exports/extension-unified.c $(BINDINGS_UNIFIED_DIR)/sqlite_cli_unified.h | $(BUILD_DIR)
+	@echo "Compiling extension exports (unified)..."
+	$(CC) $(CFLAGS_UNIFIED) -c $< -o $@
+
+$(BUILD_DIR)/sqlite_wasm_unified.o: $(MAIN_SRC) $(BINDINGS_UNIFIED_DIR)/sqlite_cli_unified.h | $(BUILD_DIR)
+	@echo "Compiling main wrapper (unified)..."
+	$(CC) $(CFLAGS_UNIFIED) -c $< -o $@
+
+$(BUILD_DIR)/sqlite_cli_unified.o: $(BINDINGS_UNIFIED_DIR)/sqlite_cli_unified.c $(BINDINGS_UNIFIED_DIR)/sqlite_cli_unified.h | $(BUILD_DIR)
+	@echo "Compiling generated unified bindings..."
+	$(CC) $(CFLAGS_UNIFIED) -c $< -o $@
+
+$(UNIFIED_WASM): $(OBJS_UNIFIED)
+	@echo "Linking unified WASM module..."
+	$(CC) $(LDFLAGS) $(OBJS_UNIFIED) -o $@
+	@echo "Built: $@"
+	@ls -lh $@
+
+unified: bindings-unified $(UNIFIED_WASM)
+
+.PHONY: unified
+
+# =============================================================================
 # Extension builds
 # =============================================================================
 
