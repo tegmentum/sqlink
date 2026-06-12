@@ -573,41 +573,102 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         Ok(conn.changes() as i64)
     }
 
+    // -- "live" variants --
+    //
+    // v1 implementation: opens a FRESH rusqlite::Connection per
+    // call (vs. the pooled one used by execute/scalar/batch).
+    // Differences observable today:
+    //   - Schema changes the user made post-pool-open are seen
+    //     immediately (the fresh connection re-reads sqlite_master).
+    //   - No carry-over transaction state from the loaded
+    //     extension's prior spi calls.
+    //
+    // Difference NOT observable today: outer-transaction
+    // uncommitted writes. The full re-entry shape (calling back
+    // into the cli reactor via wasmtime's concurrent canonical
+    // ABI) is what would deliver that, and wasmtime 45's
+    // concurrent ABI is documented as "very incomplete". The
+    // architecture for it is captured in host/SPI-LIVE.md;
+    // execute_live's WIT slot is wired so when wasmtime ships
+    // the missing pieces, the swap is local.
+
     async fn execute_live(
         &mut self,
-        _sql: String,
-        _params: Vec<loaded::sqlite::extension::types::SqlValue>,
+        sql: String,
+        params: Vec<loaded::sqlite::extension::types::SqlValue>,
     ) -> std::result::Result<
         loaded::sqlite::extension::types::QueryResult,
         loaded::sqlite::extension::types::SqliteError,
-    > { Err(spi_live_not_impl()) }
+    > {
+        let conn = spi_open_fresh(&self.db_path)?;
+        let mut stmt = conn.prepare(&sql).map_err(spi_err)?;
+        let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+        let col_count = columns.len();
+        let rqs: Vec<rusqlite::types::Value> = params.into_iter().map(spi_value_to_rusqlite).collect();
+        let mut rows = stmt.query(rusqlite::params_from_iter(rqs.iter())).map_err(spi_err)?;
+        let mut out_rows: Vec<Vec<loaded::sqlite::extension::types::SqlValue>> = Vec::new();
+        while let Some(row) = rows.next().map_err(spi_err)? {
+            let mut r = Vec::with_capacity(col_count);
+            for i in 0..col_count {
+                let v: rusqlite::types::Value = row.get(i).map_err(spi_err)?;
+                r.push(rusqlite_to_spi_value(v));
+            }
+            out_rows.push(r);
+        }
+        drop(rows);
+        drop(stmt);
+        Ok(loaded::sqlite::extension::types::QueryResult {
+            columns,
+            rows: out_rows,
+            changes: conn.changes() as i64,
+            last_insert_rowid: conn.last_insert_rowid(),
+        })
+    }
 
     async fn execute_scalar_live(
         &mut self,
-        _sql: String,
-        _params: Vec<loaded::sqlite::extension::types::SqlValue>,
+        sql: String,
+        params: Vec<loaded::sqlite::extension::types::SqlValue>,
     ) -> std::result::Result<
         loaded::sqlite::extension::types::SqlValue,
         loaded::sqlite::extension::types::SqliteError,
-    > { Err(spi_live_not_impl()) }
+    > {
+        let conn = spi_open_fresh(&self.db_path)?;
+        let rqs: Vec<rusqlite::types::Value> = params.into_iter().map(spi_value_to_rusqlite).collect();
+        let v: rusqlite::types::Value = conn
+            .query_row(&sql, rusqlite::params_from_iter(rqs.iter()), |row| row.get(0))
+            .map_err(spi_err)?;
+        Ok(rusqlite_to_spi_value(v))
+    }
 
     async fn execute_batch_live(
         &mut self,
-        _sql: String,
+        sql: String,
     ) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
-        Err(spi_live_not_impl())
+        let conn = spi_open_fresh(&self.db_path)?;
+        conn.execute_batch(&sql).map_err(spi_err)?;
+        Ok(conn.changes() as i64)
     }
 }
 
-fn spi_live_not_impl() -> loaded::sqlite::extension::types::SqliteError {
-    loaded::sqlite::extension::types::SqliteError {
-        code: 1, extended_code: 1,
-        message: "spi.*-live not yet implemented in this host. The reactor + \
-                  async-stackful machinery exists; threading the cli store handle \
-                  into LoadedState's spi impls is a separate piece of work. \
-                  Use spi.execute (committed-state snapshot) in the meantime, or \
-                  see PLAN-outstanding.md Track B1 for the design path.".to_string(),
+/// Open a one-shot rusqlite::Connection. Unlike spi_ensure_open,
+/// this never reuses; each call gets a fresh handle so any schema
+/// or commit that happened since the pool's last open is visible.
+fn spi_open_fresh(db_path: &str)
+    -> std::result::Result<rusqlite::Connection, loaded::sqlite::extension::types::SqliteError>
+{
+    if db_path.is_empty() || db_path == ":memory:" {
+        return Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1, extended_code: 1,
+            message: "spi.*-live requires a file-backed database. \
+                      Pass --db <path> to sqlite-wasm-run. \
+                      :memory: dbs can't be shared between connections.".to_string(),
+        });
     }
+    rusqlite::Connection::open(db_path).map_err(|e| loaded::sqlite::extension::types::SqliteError {
+        code: 1, extended_code: 1,
+        message: format!("open {db_path}: {e}"),
+    })
 }
 
 impl loaded::sqlite::extension::logging::Host for LoadedState {

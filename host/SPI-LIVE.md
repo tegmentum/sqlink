@@ -1,23 +1,55 @@
-# spi.*-live: Design Path for Re-entry SPI
+# spi.*-live: Status + Path Forward
 
-## Current state
+## Current state (after T1 v1)
 
 `sqlite:extension/spi` ships six methods now (see
 `sqlite-loader-wit/wit/host-spi.wit`):
 
 | Method | Implementation | Sees |
 |---|---|---|
-| `execute` | host-side `rusqlite::Connection` to the cli's db file | committed schema + committed data |
+| `execute` | pooled `rusqlite::Connection` per loaded ext | committed snapshot at first call; reused |
 | `execute-scalar` | ↑ same | ↑ same |
 | `execute-batch` | ↑ same | ↑ same |
-| `execute-live` | **stub returning error** | (would be) cli's in-flight state |
-| `execute-scalar-live` | **stub** | ↑ |
-| `execute-batch-live` | **stub** | ↑ |
+| `execute-live` | **fresh `rusqlite::Connection` per call** | committed snapshot AT CALL TIME (re-reads schema) |
+| `execute-scalar-live` | ↑ fresh per call | ↑ same |
+| `execute-batch-live` | ↑ fresh per call | ↑ same |
 
-The `-live` triple is the "see what the cli sees" half of the
-hybrid SPI design. It's not implemented yet because it requires
-cooperatively re-entering the cli reactor's component, which has
-real mechanical complexity.
+**v1 distinction between execute and execute-live:** the pooled
+connection's schema cache may be stale relative to recent DDL the
+user ran in the cli. execute-live re-opens, so it sees the
+absolute latest committed state including schema changes the
+pooled connection hasn't picked up yet.
+
+**v1 does NOT yet deliver:** seeing outer-transaction uncommitted
+writes. That requires re-entering the cli reactor's *same*
+instance from inside a host import call body, which depends on
+wasmtime's concurrent canonical ABI. See "What's blocked
+upstream" below.
+
+## What's blocked upstream
+
+wasmtime 45's source documents the relevant feature as
+**incomplete**:
+
+> Please note that Wasmtime's support for this feature is _very_
+> incomplete.
+>
+> — `wasmtime-45.0.1/src/config.rs::wasm_component_model_async`
+
+The pieces that matter to us:
+
+- `Func::call_concurrent` — start a guest call that yields back
+  through the wasmtime executor so other tasks on the same
+  instance can make progress.
+- `Linker::func_wrap_concurrent` — host functions that participate
+  in the cooperative scheduling.
+- `Store::run_concurrent` — drive the event loop.
+
+The infrastructure for re-entry is in
+`wasmtime/src/runtime/component/concurrent.rs` (the source
+references in PLAN-final-threads.md still apply), but the public
+API + macro shape to invoke it from a wit-bindgen-generated
+host trait isn't complete in 45.
 
 ## Why a separate triple instead of switching the default
 
@@ -106,7 +138,13 @@ What's missing is the threading of the outer Store handle into
 LoadedState and the right wasmtime-side API usage to perform the
 nested call.
 
-## Concrete path forward
+## Concrete path forward when wasmtime ships the missing pieces
+
+The WIT contract already has the `-live` triple. The architecture
+for wiring it through is below. When `wasmtime::component::Func::
+call_concurrent` and `Linker::func_wrap_concurrent` become stable
+in a future wasmtime release, the swap is *local* — only host's
+`execute_live` impl changes.
 
 ### Step L1 — Outer Store handle on Host
 
