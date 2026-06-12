@@ -731,6 +731,33 @@ impl Host {
             .await
             .map_err(|e| anyhow!("call describe: {e}"))?;
 
+        // Enforce declared-capabilities ⊆ grant per the policy
+        // contract. Loads with missing grants fail BEFORE we
+        // register anything with SQLite.
+        let declared: Vec<Capability> = manifest
+            .declared_capabilities
+            .iter()
+            .map(|c| {
+                use loaded::sqlite::extension::policy::Capability as L;
+                match c {
+                    L::Spi => Capability::Spi,
+                    L::Prepared => Capability::Prepared,
+                    L::Transaction => Capability::Transaction,
+                    L::Schema => Capability::Schema,
+                    L::State => Capability::State,
+                    L::Cache => Capability::Cache,
+                    L::Random => Capability::Random,
+                    L::Text => Capability::Text,
+                    L::Hashing => Capability::Hashing,
+                    L::Encoding => Capability::Encoding,
+                    L::Http => Capability::Http,
+                }
+            })
+            .collect();
+        if let Err(e) = policy.check_manifest(&declared) {
+            return Err(anyhow!("policy refused load: {e:?}"));
+        }
+
         let name = if !manifest.name.is_empty() {
             manifest.name.clone()
         } else {

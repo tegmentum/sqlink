@@ -631,27 +631,106 @@ fn format_value(v: &rusqlite::types::Value) -> String {
     }
 }
 
-// .load <path> — call extension-loader, register every scalar from
-// the returned manifest with rusqlite. Each registration's body
-// converts args into wit SqlValue, calls dispatch.scalar_call, and
-// converts the result back. Aggregates / collations / hooks aren't
-// wired here yet — Step 4' / minimal path for now.
-fn do_load(path: &str) -> String {
-    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
+// Parse `cap1,cap2,...` into Vec<Capability>. Unknown names error.
+fn parse_grants(s: &str) -> Result<Vec<bindings::sqlite::extension::policy::Capability>, String> {
+    use bindings::sqlite::extension::policy::Capability;
+    let mut out = Vec::new();
+    for token in s.split(',').map(|t| t.trim()).filter(|t| !t.is_empty()) {
+        let c = match token.to_lowercase().as_str() {
+            "spi" => Capability::Spi,
+            "prepared" => Capability::Prepared,
+            "transaction" => Capability::Transaction,
+            "schema" => Capability::Schema,
+            "state" => Capability::State,
+            "cache" => Capability::Cache,
+            "random" => Capability::Random,
+            "text" => Capability::Text,
+            "hashing" => Capability::Hashing,
+            "encoding" => Capability::Encoding,
+            "http" => Capability::Http,
+            _ => return Err(format!("unknown capability: {token}")),
+        };
+        out.push(c);
+    }
+    Ok(out)
+}
+
+// .load <path> [--grant=cap,cap,...] [--allowed-hosts=h1,h2,...]
+//              [--fuel=N] [--epoch=ms] [--mem=bytes]
+//
+// Default is empty grant (deny-all) — the user must opt extensions
+// in. Matches the security-first defaults of the native loader.
+// Calls extension-loader, registers every scalar from the returned
+// manifest with rusqlite. Aggregates / collations / hooks remain a
+// follow-up.
+fn do_load(input: &str) -> String {
+    use bindings::sqlite::extension::policy::{HttpPolicy, LoadOptions, Method};
     use bindings::sqlite::extension::types::SqlValue as WitSqlValue;
     use bindings::sqlite::wasm::dispatch;
     use bindings::sqlite::wasm::extension_loader;
 
-    let opts = LoadOptions {
-        // Grant a permissive default so demos work. Real interactive
-        // usage would route through a separate .load-with-policy.
-        grant: vec![Capability::Spi, Capability::State, Capability::Cache],
-        http_policy: None,
-        fs_policy: None,
-        fuel_per_call: None,
-        memory_limit_bytes: None,
-        epoch_deadline_ms: None,
+    let mut parts = input.split_whitespace();
+    let path = match parts.next() {
+        Some(p) => p.to_string(),
+        None => return "Usage: .load FILE [--grant=...] [--allowed-hosts=...] [--fuel=N] [--epoch=ms]\n".to_string(),
     };
+
+    let mut grant = Vec::new();
+    let mut allowed_hosts: Option<Vec<String>> = None;
+    let mut fuel: Option<u64> = None;
+    let mut epoch: Option<u64> = None;
+    let mut mem: Option<u64> = None;
+
+    for arg in parts {
+        let (k, v) = match arg.split_once('=') {
+            Some(p) => p,
+            None => return format!("Bad flag: {arg} (expected --key=value)\n"),
+        };
+        match k {
+            "--grant" => match parse_grants(v) {
+                Ok(g) => grant = g,
+                Err(e) => return format!("Error: {e}\n"),
+            },
+            "--allowed-hosts" => {
+                allowed_hosts = Some(v.split(',').map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty()).collect());
+            }
+            "--fuel" => match v.parse::<u64>() {
+                Ok(n) => fuel = Some(n),
+                Err(_) => return format!("Error: --fuel expects a number, got {v}\n"),
+            },
+            "--epoch" => match v.parse::<u64>() {
+                Ok(n) => epoch = Some(n),
+                Err(_) => return format!("Error: --epoch expects ms, got {v}\n"),
+            },
+            "--mem" => match v.parse::<u64>() {
+                Ok(n) => mem = Some(n),
+                Err(_) => return format!("Error: --mem expects bytes, got {v}\n"),
+            },
+            _ => return format!("Unknown flag: {k}\n"),
+        }
+    }
+
+    let http_policy = if grant.iter().any(|c| matches!(c, bindings::sqlite::extension::policy::Capability::Http)) {
+        Some(HttpPolicy {
+            allowed_hosts: allowed_hosts.unwrap_or_default(),
+            allowed_methods: Some(vec![Method::Get, Method::Head]),
+            max_body_bytes: None,
+            timeout_ms: None,
+        })
+    } else {
+        None
+    };
+
+    let opts = LoadOptions {
+        grant,
+        http_policy,
+        fs_policy: None,
+        fuel_per_call: fuel,
+        memory_limit_bytes: mem,
+        epoch_deadline_ms: epoch,
+    };
+    let path = &path;
     let manifest = match extension_loader::load_extension(path, &opts) {
         Ok(m) => m,
         Err(e) => return format!("Error loading {path}: {} (code {})\n", e.message, e.code),
