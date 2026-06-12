@@ -42,8 +42,8 @@ fn canonical_ext_path() -> Option<PathBuf> {
     None
 }
 
-#[test]
-fn loads_and_unloads_an_extension() {
+#[tokio::test]
+async fn loads_and_unloads_an_extension() {
     let Some(path) = canonical_ext_path() else {
         eprintln!("skipping: test_extension.wasm not found (build sqlite-wasm-loader's test-extension)");
         return;
@@ -53,7 +53,7 @@ fn loads_and_unloads_an_extension() {
     assert!(host.list().is_empty(), "registry starts empty");
 
     let policy = Policy::deny_all().with_grants([Capability::Text]);
-    let name = host.load_extension(path, policy).expect("load");
+    let name = host.load_extension(path, policy).await.expect("load");
 
     // Manifest's `name` field becomes the registry key. test_extension
     // declares "test-extension".
@@ -66,8 +66,8 @@ fn loads_and_unloads_an_extension() {
     assert!(host.list().is_empty());
 }
 
-#[test]
-fn double_unload_errors() {
+#[tokio::test]
+async fn double_unload_errors() {
     let host = Host::new().expect("engine");
     let err = host.unload("never-loaded").err().expect("must error");
     assert!(err.to_string().contains("never-loaded"));
