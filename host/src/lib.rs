@@ -308,6 +308,13 @@ pub struct LoadedExtension {
     /// In-memory cache backing the `cache` interface. TTLs from the
     /// guest are accepted but not enforced for v1.
     pub cache: SharedKv,
+    /// Pooled rusqlite::Connection for this extension's spi calls.
+    /// Opened lazily on first spi.execute against the cli's db file;
+    /// reused across subsequent calls until the extension is
+    /// unloaded. Dropped when the LoadedExtension's Arc count hits
+    /// zero. rusqlite::Connection is Send (not Sync); Mutex
+    /// serializes per-extension concurrent SPI calls.
+    pub spi_conn: Arc<Mutex<Option<rusqlite::Connection>>>,
 }
 
 /// State carried by the per-call Store when dispatching into a
@@ -326,6 +333,10 @@ pub struct LoadedState {
     /// Empty string => `:memory:` (SPI returns an error in that case
     /// since in-memory dbs aren't sharable across connections).
     db_path: String,
+    /// Pooled connection borrowed from the owning LoadedExtension.
+    /// Cloned Arc<Mutex<…>> so it survives across the per-call
+    /// Stores each dispatch builds (mirror of state/cache).
+    spi_conn: Arc<Mutex<Option<rusqlite::Connection>>>,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -357,21 +368,32 @@ impl loaded::sqlite::extension::http::Host for LoadedState {
 /// Stubs for the SPI imports the minimal world declares. None of
 /// today's loadable extensions exercise these; real impls land when
 /// the first extension that needs to run SQL inside the host arrives.
-/// Open a fresh rusqlite::Connection against the cli's db file.
-/// Used by every spi method. Each call opens + drops a connection;
-/// good enough for v1 (extensions don't typically call SPI in tight
-/// loops). A follow-up could pool connections per loaded extension.
-fn spi_open(db_path: &str) -> std::result::Result<rusqlite::Connection, loaded::sqlite::extension::types::SqliteError> {
-    if db_path.is_empty() || db_path == ":memory:" {
+/// Ensure the per-extension pooled rusqlite::Connection is open
+/// against the cli's db file. First call opens; subsequent calls
+/// reuse. Returns a clone of the Arc so the caller holds it for
+/// the duration of one SPI call.
+fn spi_ensure_open(state: &LoadedState) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+    if state.db_path.is_empty() || state.db_path == ":memory:" {
         return Err(loaded::sqlite::extension::types::SqliteError {
             code: 1, extended_code: 1,
-            message: "spi requires a file-backed database; pass --db <path> to sqlite-wasm-run".to_string(),
+            message:
+                "spi requires a file-backed database. Pass --db <path> to sqlite-wasm-run; \
+                 :memory: dbs aren't shareable between the cli's wasm-internal sqlite3 \
+                 library and the host's bundled rusqlite (they are separate libraries \
+                 with separate page caches even though they run in one process)."
+                    .to_string(),
         });
     }
-    rusqlite::Connection::open(db_path).map_err(|e| loaded::sqlite::extension::types::SqliteError {
-        code: 1, extended_code: 1,
-        message: format!("open {db_path}: {e}"),
-    })
+    let mut g = state.spi_conn.lock();
+    if g.is_none() {
+        let conn = rusqlite::Connection::open(&state.db_path)
+            .map_err(|e| loaded::sqlite::extension::types::SqliteError {
+                code: 1, extended_code: 1,
+                message: format!("open {}: {e}", state.db_path),
+            })?;
+        *g = Some(conn);
+    }
+    Ok(())
 }
 
 fn spi_err<E: std::fmt::Display>(e: E) -> loaded::sqlite::extension::types::SqliteError {
@@ -411,7 +433,9 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         loaded::sqlite::extension::types::QueryResult,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        let conn = spi_open(&self.db_path)?;
+        spi_ensure_open(self)?;
+        let g = self.spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
         let mut stmt = conn.prepare(&sql).map_err(spi_err)?;
         let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
         let col_count = columns.len();
@@ -426,10 +450,6 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
             }
             out_rows.push(r);
         }
-        // Need to drop stmt before we can call other things on conn;
-        // however we still want changes / last_insert_rowid below.
-        // Re-establish via a fresh prepare path is overkill — just
-        // ensure_drop the stmt iterator/query borrow ends here.
         drop(rows);
         drop(stmt);
         Ok(loaded::sqlite::extension::types::QueryResult {
@@ -448,7 +468,9 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         loaded::sqlite::extension::types::SqlValue,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        let conn = spi_open(&self.db_path)?;
+        spi_ensure_open(self)?;
+        let g = self.spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
         let rqs: Vec<rusqlite::types::Value> = params.into_iter().map(spi_value_to_rusqlite).collect();
         let v: rusqlite::types::Value = conn
             .query_row(&sql, rusqlite::params_from_iter(rqs.iter()), |row| row.get(0))
@@ -460,7 +482,9 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         &mut self,
         sql: String,
     ) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
-        let conn = spi_open(&self.db_path)?;
+        spi_ensure_open(self)?;
+        let g = self.spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
         conn.execute_batch(&sql).map_err(spi_err)?;
         Ok(conn.changes() as i64)
     }
@@ -606,6 +630,7 @@ fn build_loaded_store(engine: &Engine, ext: &LoadedExtension, db_path: String) -
         state: ext.state.clone(),
         cache: ext.cache.clone(),
         db_path,
+        spi_conn: ext.spi_conn.clone(),
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
@@ -722,6 +747,7 @@ impl Host {
             has_commit_hook: false,
             state: Arc::new(Mutex::new(HashMap::new())),
             cache: Arc::new(Mutex::new(HashMap::new())),
+            spi_conn: Arc::new(Mutex::new(None)),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker).await.map_err(|e| anyhow!("instantiate loaded ext: {e}"))?;
@@ -820,6 +846,7 @@ impl Host {
                 has_commit_hook: manifest.has_commit_hook,
                 state: Arc::new(Mutex::new(HashMap::new())),
                 cache: Arc::new(Mutex::new(HashMap::new())),
+            spi_conn: Arc::new(Mutex::new(None)),
             }),
         );
 
