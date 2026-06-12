@@ -274,7 +274,8 @@ CLI_CFLAGS := \
 CLI_LDFLAGS := \
     --target=$(TARGET) \
     --sysroot=$(WASI_SYSROOT) \
-    -lwasi-emulated-process-clocks
+    -lwasi-emulated-process-clocks \
+    -Wl,-z,stack-size=131072
 
 # CLI object files
 CLI_OBJS := \
@@ -563,7 +564,8 @@ CLI_UNIFIED_CFLAGS := \
 CLI_UNIFIED_LDFLAGS := \
     --target=$(TARGET) \
     --sysroot=$(WASI_SYSROOT) \
-    -lwasi-emulated-process-clocks
+    -lwasi-emulated-process-clocks \
+    -Wl,-z,stack-size=131072
 
 CLI_UNIFIED_OBJS := \
     $(BUILD_DIR)/sqlite3.o \
