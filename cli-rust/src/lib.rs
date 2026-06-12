@@ -475,6 +475,12 @@ impl CliGuest for CliReactor {
         if let Some(rest) = trimmed.strip_prefix(".load ") {
             return do_load(rest.trim());
         }
+        if let Some(rest) = trimmed.strip_prefix(".unload ") {
+            return do_unload(rest.trim());
+        }
+        if let Some(rest) = trimmed.strip_prefix(".open") {
+            return do_open(rest.trim());
+        }
         ensure_cli_conn();
         // Dispatch other dot-commands first; only fall through to
         // SQL on a None result.
@@ -699,6 +705,45 @@ fn do_load(path: &str) -> String {
         "Loaded extension: {} {} from {} ({} functions)\n",
         manifest.name, manifest.version, path, registered
     )
+}
+
+// .unload <name> — drop the host's registry entry. The scalar
+// functions registered with rusqlite remain registered (rusqlite
+// doesn't expose remove_function in our feature set); calling them
+// after unload returns "extension not loaded" via dispatch error
+// path. Documented limitation; v2 could drop+recreate the
+// connection.
+fn do_unload(name: &str) -> String {
+    use bindings::sqlite::wasm::extension_loader;
+    match extension_loader::unload_extension(name) {
+        Ok(()) => format!("Unloaded extension: {name}\n"),
+        Err(e) => format!("Error unloading {name}: {} (code {})\n", e.message, e.code),
+    }
+}
+
+// .open ?FILE? — switch the cli connection to a different database.
+// Empty arg resets to :memory:. Resets registered scalar functions
+// (they were attached to the old connection); the user must re-.load
+// extensions they want against the new db.
+fn do_open(arg: &str) -> String {
+    let path = arg.trim();
+    let new_conn = if path.is_empty() || path == ":memory:" {
+        rusqlite::Connection::open_in_memory()
+    } else {
+        rusqlite::Connection::open(path)
+    };
+    match new_conn {
+        Ok(c) => {
+            DB_PATH.with(|p| *p.borrow_mut() = if path.is_empty() { String::new() } else { path.to_string() });
+            CLI_CONN.with(|cc| *cc.borrow_mut() = Some(c));
+            if path.is_empty() {
+                "Opened :memory: (extensions reset)\n".to_string()
+            } else {
+                format!("Opened {path} (extensions reset)\n")
+            }
+        }
+        Err(e) => format!("Error opening {path}: {e}\n"),
+    }
 }
 
 bindings::export!(CliReactor with_types_in bindings);
