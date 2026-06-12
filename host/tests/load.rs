@@ -45,7 +45,9 @@ fn canonical_ext_path() -> Option<PathBuf> {
 #[tokio::test]
 async fn loads_and_unloads_an_extension() {
     let Some(path) = canonical_ext_path() else {
-        eprintln!("skipping: test_extension.wasm not found (build sqlite-wasm-loader's test-extension)");
+        eprintln!(
+            "skipping: test_extension.wasm not found (build sqlite-wasm-loader's test-extension)"
+        );
         return;
     };
 
@@ -69,15 +71,15 @@ async fn loads_and_unloads_an_extension() {
 #[tokio::test]
 async fn double_unload_errors() {
     let host = Host::new().expect("engine");
-    let err = host.unload("never-loaded").err().expect("must error");
+    let err = host.unload("never-loaded").expect_err("must error");
     assert!(err.to_string().contains("never-loaded"));
 }
 
 #[tokio::test]
 async fn fiji_function_resolves_sqlite_runtime() {
+    use parking_lot::Mutex;
     use sqlite_wasm_host::compose_provider::ProviderHandle;
     use std::sync::Arc;
-    use parking_lot::Mutex;
 
     let mut fiji_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     fiji_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/fiji_hello.wasm");
@@ -92,9 +94,8 @@ async fn fiji_function_resolves_sqlite_runtime() {
     let db_path = dir.path().join("t.db");
     {
         let c = rusqlite::Connection::open(&db_path).unwrap();
-        c.execute_batch(
-            "CREATE TABLE a(x); CREATE TABLE b(y); CREATE TABLE c(z);"
-        ).unwrap();
+        c.execute_batch("CREATE TABLE a(x); CREATE TABLE b(y); CREATE TABLE c(z);")
+            .unwrap();
     }
 
     let host = Host::new().unwrap();

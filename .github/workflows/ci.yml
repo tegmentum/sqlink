@@ -1,0 +1,122 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  # The repo's .cargo/config.toml pins `build.target = "wasm32-wasip2"`
+  # because the legacy C build expects it. CI runs on Linux and needs
+  # native binaries (host crate, cache tests). Override to the runner's
+  # native triple. `act` runs in a Linux container, so x86_64 is right
+  # for amd64 runs and aarch64 for arm64 (act-by-default on Apple
+  # Silicon).
+  CARGO_BUILD_TARGET: ""
+  # Drop debug info from the dev + test profiles. Linking the host
+  # binary against wasmtime + rusqlite + reqwest pulls in a lot of
+  # symbols; debuginfo dominates the final size and slows the linker
+  # enough to OOM smaller runners.
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+
+jobs:
+  host-checks:
+    name: Host crate — fmt + clippy + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # GitHub's hosted runners ship rustup; bootstrap it if absent
+      # (running under act with a minimal image). The pinned channel
+      # from rust-toolchain.toml gets materialized by `rustup show`.
+      - name: Install pinned Rust toolchain
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --default-toolchain none --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup show
+
+      - name: cargo fmt --check
+        working-directory: host
+        run: cargo fmt --all -- --check
+
+      - name: cargo clippy
+        working-directory: host
+        # All-features so the auth/SPI/compose paths build. -D warnings
+        # turns lint warnings into failures.
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: cargo test (host crate)
+        working-directory: host
+        # All tests run on the native target. The fiji_function smoke
+        # test gracefully skips when the fiji_hello.wasm artifact is
+        # absent (CI doesn't build the wasm side yet — see "Future"
+        # below).
+        run: cargo test --all-features
+
+  cache-tests:
+    name: CAS cache unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install pinned Rust toolchain
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --default-toolchain none --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup show
+      - name: Cache unit tests
+        # Six cases: put_then_lookup_roundtrips, list_uris_sorted,
+        # missing_bytes_treated_as_miss, default_root_honors_overrides,
+        # put_writes_both_blake3_and_sha256, purge_removes_everything.
+        working-directory: host
+        run: cargo test --lib cache --all-features
+
+  compose-tests:
+    name: Compose protocol unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install pinned Rust toolchain
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --default-toolchain none --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup show
+      - name: Compose-provider unit tests
+        # manifest_lists_methods, query_scalar_returns_count,
+        # query_returns_rows, prepare_step_finalize_cycle.
+        working-directory: host
+        run: cargo test --lib compose_provider --all-features
+
+# Future jobs (held until the wasm-side build is moved into CI):
+#
+#   wasm-builds:
+#     Build cli-rust, fiji-hello, sqlite-wasm-loader extensions.
+#     Needs wasi-sdk in the container (~150 MB download) and
+#     cargo-component (cargo install). The wasi-sdk + rusqlite-bundled
+#     combination is the load-bearing thing — proves the C-toolchain
+#     env vars (CC_wasm32_wasip1 / AR_wasm32_wasip1 /
+#     CFLAGS_wasm32_wasip1) are right.
+#
+#     Until that lands, host smoke tests skip the fiji path when
+#     fiji_hello.wasm isn't present (test does the existence check
+#     up front and prints a "skipping" line). Develop with
+#     `cargo component build --release` locally; CI verifies the
+#     native side stays healthy.

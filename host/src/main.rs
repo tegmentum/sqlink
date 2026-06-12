@@ -16,9 +16,9 @@ use std::path::PathBuf;
 use anyhow::{anyhow, Result};
 use wasmtime::component::{Component, Linker};
 use wasmtime::Store;
-use wasmtime_wasi::{WasiCtxBuilder, ResourceTable};
+use wasmtime_wasi::{ResourceTable, WasiCtxBuilder};
 
-use sqlite_wasm_host::{bindings, HostWrap, LoaderData, Host};
+use sqlite_wasm_host::{bindings, Host, HostWrap, LoaderData};
 
 struct State {
     wasi: wasmtime_wasi::WasiCtx,
@@ -103,8 +103,8 @@ async fn main() -> Result<()> {
     // db path as --db; same separate-connection semantics as
     // spi.execute. None if no --db: Fiji functions then get an error.
     if !db_path.is_empty() && db_path != ":memory:" {
-        let conn = rusqlite::Connection::open(&db_path)
-            .map_err(|e| anyhow!("open {db_path}: {e}"))?;
+        let conn =
+            rusqlite::Connection::open(&db_path).map_err(|e| anyhow!("open {db_path}: {e}"))?;
         let conn_arc = std::sync::Arc::new(parking_lot::Mutex::new(Some(conn)));
         host.register_compose_provider(
             "sqlite-runtime",
@@ -120,18 +120,23 @@ async fn main() -> Result<()> {
         .map_err(|e| anyhow!("compile component: {e}"))?;
 
     let mut linker: Linker<State> = Linker::new(&engine);
-    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("wire WASI: {e}"))?;
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(|e| anyhow!("wire WASI: {e}"))?;
 
     bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
         &mut linker,
-        |state: &mut State| HostWrap { host: &mut state.host, resources: Some(&mut state.resources) },
+        |state: &mut State| HostWrap {
+            host: &mut state.host,
+            resources: Some(&mut state.resources),
+        },
     )
     .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
 
     bindings::sqlite::wasm::dispatch::add_to_linker::<_, LoaderData>(
         &mut linker,
-        |state: &mut State| HostWrap { host: &mut state.host, resources: Some(&mut state.resources) },
+        |state: &mut State| HostWrap {
+            host: &mut state.host,
+            resources: Some(&mut state.resources),
+        },
     )
     .map_err(|e| anyhow!("wire dispatch: {e}"))?;
 
@@ -150,7 +155,12 @@ async fn main() -> Result<()> {
             parent
         };
         let parent_str = parent.to_string_lossy().to_string();
-        if let Err(e) = wasi_builder.preopened_dir(parent, &parent_str, wasmtime_wasi::DirPerms::all(), wasmtime_wasi::FilePerms::all()) {
+        if let Err(e) = wasi_builder.preopened_dir(
+            parent,
+            &parent_str,
+            wasmtime_wasi::DirPerms::all(),
+            wasmtime_wasi::FilePerms::all(),
+        ) {
             return Err(anyhow!("preopen {}: {e}", parent.display()));
         }
     }
@@ -207,7 +217,9 @@ async fn run_reactor(
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
     let reactor = sqlite_wasm_host::reactor::SqliteCliReactor::instantiate_async(
-        &mut *store, component, linker,
+        &mut *store,
+        component,
+        linker,
     )
     .await
     .map_err(|e| anyhow!("instantiate reactor: {e}"))?;

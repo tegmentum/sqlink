@@ -64,10 +64,14 @@ impl Cache {
     /// 4. `$HOME/.cache/sqlite-wasm/extensions`
     pub fn default_root(cli_arg: Option<&str>) -> Result<PathBuf> {
         if let Some(p) = cli_arg {
-            if !p.is_empty() { return Ok(PathBuf::from(p)); }
+            if !p.is_empty() {
+                return Ok(PathBuf::from(p));
+            }
         }
         if let Ok(env) = std::env::var("SQLITE_WASM_CACHE_DIR") {
-            if !env.is_empty() { return Ok(PathBuf::from(env)); }
+            if !env.is_empty() {
+                return Ok(PathBuf::from(env));
+            }
         }
         if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
             if !xdg.is_empty() {
@@ -75,17 +79,26 @@ impl Cache {
             }
         }
         let home = std::env::var("HOME").map_err(|_| anyhow!("HOME not set"))?;
-        Ok(PathBuf::from(home).join(".cache").join("sqlite-wasm").join("extensions"))
+        Ok(PathBuf::from(home)
+            .join(".cache")
+            .join("sqlite-wasm")
+            .join("extensions"))
     }
 
-    pub fn root(&self) -> &Path { &self.root }
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
 
     /// Path where `hash` (full 64-char hex) would live under
     /// blake3/aa/bb/.
     fn blake3_path(&self, hash: &str) -> PathBuf {
         let aa = &hash[..2];
         let bb = &hash[2..4];
-        self.root.join("blake3").join(aa).join(bb).join(format!("{hash}.wasm"))
+        self.root
+            .join("blake3")
+            .join(aa)
+            .join(bb)
+            .join(format!("{hash}.wasm"))
     }
 
     /// Path under sha256/aa/bb/ — written alongside blake3 for
@@ -93,7 +106,11 @@ impl Cache {
     fn sha256_path(&self, hash: &str) -> PathBuf {
         let aa = &hash[..2];
         let bb = &hash[2..4];
-        self.root.join("sha256").join(aa).join(bb).join(format!("{hash}.wasm"))
+        self.root
+            .join("sha256")
+            .join(aa)
+            .join(bb)
+            .join(format!("{hash}.wasm"))
     }
 
     /// Path of the uri_index entry for `uri`.
@@ -121,9 +138,13 @@ impl Cache {
     /// from the digest alone which it is, so try both.
     pub fn lookup_by_hash(&self, hash: &str) -> Option<PathBuf> {
         let b = self.blake3_path(hash);
-        if b.exists() { return Some(b); }
+        if b.exists() {
+            return Some(b);
+        }
         let s = self.sha256_path(hash);
-        if s.exists() { return Some(s); }
+        if s.exists() {
+            return Some(s);
+        }
         None
     }
 
@@ -140,8 +161,14 @@ impl Cache {
 
         // Write to both content-addressed paths.
         for (target_fn, hash) in [
-            (Self::blake3_path as fn(&Self, &str) -> PathBuf, &blake3_hash),
-            (Self::sha256_path as fn(&Self, &str) -> PathBuf, &sha256_hash),
+            (
+                Self::blake3_path as fn(&Self, &str) -> PathBuf,
+                &blake3_hash,
+            ),
+            (
+                Self::sha256_path as fn(&Self, &str) -> PathBuf,
+                &sha256_hash,
+            ),
         ] {
             let target = target_fn(self, hash);
             if let Some(parent) = target.parent() {
@@ -265,11 +292,14 @@ mod tests {
         cache.put("https://a.example/x", b"a").unwrap();
         cache.put("https://b.example/x", b"b").unwrap();
         let uris: Vec<String> = cache.list_uris().into_iter().map(|e| e.uri).collect();
-        assert_eq!(uris, vec![
-            "https://a.example/x".to_string(),
-            "https://b.example/x".to_string(),
-            "https://c.example/x".to_string(),
-        ]);
+        assert_eq!(
+            uris,
+            vec![
+                "https://a.example/x".to_string(),
+                "https://b.example/x".to_string(),
+                "https://c.example/x".to_string(),
+            ]
+        );
     }
 
     #[test]

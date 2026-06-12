@@ -1,0 +1,18 @@
+# Default config for nektos/act (local GitHub Actions runner).
+# Used to run CI locally while the repo is private; flip removable
+# once the repo goes public and GitHub-hosted runners are available.
+#
+# The medium "catthehacker" image ships rustup, node, and the
+# common runner tooling — large enough to be useful, smaller than
+# the full GitHub-runner replica.
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# Host is Apple Silicon; run the container natively so wasm builds
+# don't hit qemu-arm translation overhead. Drop this (or set
+# linux/amd64) if you need exact parity with GitHub's amd64 runners.
+--container-architecture linux/arm64
+
+# Don't mount the host docker socket into the job container. The
+# workflow has no docker-in-docker steps, and mounting fails on
+# colima sockets.
+--container-daemon-socket -

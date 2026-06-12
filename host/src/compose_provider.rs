@@ -74,7 +74,9 @@ fn cbor_to_rusqlite(v: &CborValue) -> Result<RusqliteValue, String> {
         CborValue::Null => Ok(RusqliteValue::Null),
         CborValue::Bool(b) => Ok(RusqliteValue::Integer(if *b { 1 } else { 0 })),
         CborValue::Integer(i) => {
-            let n: i64 = (*i).try_into().map_err(|e: std::num::TryFromIntError| e.to_string())?;
+            let n: i64 = (*i)
+                .try_into()
+                .map_err(|e: std::num::TryFromIntError| e.to_string())?;
             Ok(RusqliteValue::Integer(n))
         }
         CborValue::Float(f) => Ok(RusqliteValue::Real(*f)),
@@ -145,7 +147,9 @@ fn cbor_params(v: &CborValue) -> Result<Vec<RusqliteValue>, String> {
     arr.iter().map(cbor_to_rusqlite).collect()
 }
 
-fn err(msg: impl Into<String>) -> String { msg.into() }
+fn err(msg: impl Into<String>) -> String {
+    msg.into()
+}
 
 async fn sqlite_runtime_invoke(
     method: &str,
@@ -157,12 +161,32 @@ async fn sqlite_runtime_invoke(
     match method {
         "manifest" => {
             let m = CborValue::Map(vec![
-                (CborValue::Text("name".into()), CborValue::Text("sqlite-runtime".into())),
-                (CborValue::Text("version".into()), CborValue::Text(env!("CARGO_PKG_VERSION").into())),
-                (CborValue::Text("methods".into()), CborValue::Array(
-                    ["manifest", "query", "query-scalar", "execute", "execute-batch", "prepare", "step", "finalize"]
-                        .iter().map(|s| CborValue::Text((*s).into())).collect()
-                )),
+                (
+                    CborValue::Text("name".into()),
+                    CborValue::Text("sqlite-runtime".into()),
+                ),
+                (
+                    CborValue::Text("version".into()),
+                    CborValue::Text(env!("CARGO_PKG_VERSION").into()),
+                ),
+                (
+                    CborValue::Text("methods".into()),
+                    CborValue::Array(
+                        [
+                            "manifest",
+                            "query",
+                            "query-scalar",
+                            "execute",
+                            "execute-batch",
+                            "prepare",
+                            "step",
+                            "finalize",
+                        ]
+                        .iter()
+                        .map(|s| CborValue::Text((*s).into()))
+                        .collect(),
+                    ),
+                ),
             ]);
             encode_response(&m)
         }
@@ -171,7 +195,9 @@ async fn sqlite_runtime_invoke(
             let sql = cbor_str(get_field(&req, "sql")?)?;
             let params = cbor_params(get_field(&req, "params").unwrap_or(&CborValue::Null))?;
             let g = conn.lock();
-            let conn = g.as_ref().ok_or_else(|| err("no db open (run .open first)"))?;
+            let conn = g
+                .as_ref()
+                .ok_or_else(|| err("no db open (run .open first)"))?;
             let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
             let cols: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
             let col_count = cols.len();
@@ -191,14 +217,26 @@ async fn sqlite_runtime_invoke(
             let changes = conn.changes() as i64;
             let last_rowid = conn.last_insert_rowid();
             let resp = CborValue::Map(vec![
-                (CborValue::Text("cols".into()), CborValue::Array(
-                    cols.into_iter().map(CborValue::Text).collect()
-                )),
-                (CborValue::Text("rows".into()), CborValue::Array(
-                    rows.iter().map(|r| CborValue::Array(r.iter().map(rusqlite_to_cbor).collect())).collect()
-                )),
-                (CborValue::Text("changes".into()), CborValue::Integer(changes.into())),
-                (CborValue::Text("last-rowid".into()), CborValue::Integer(last_rowid.into())),
+                (
+                    CborValue::Text("cols".into()),
+                    CborValue::Array(cols.into_iter().map(CborValue::Text).collect()),
+                ),
+                (
+                    CborValue::Text("rows".into()),
+                    CborValue::Array(
+                        rows.iter()
+                            .map(|r| CborValue::Array(r.iter().map(rusqlite_to_cbor).collect()))
+                            .collect(),
+                    ),
+                ),
+                (
+                    CborValue::Text("changes".into()),
+                    CborValue::Integer(changes.into()),
+                ),
+                (
+                    CborValue::Text("last-rowid".into()),
+                    CborValue::Integer(last_rowid.into()),
+                ),
             ]);
             encode_response(&resp)
         }
@@ -209,7 +247,9 @@ async fn sqlite_runtime_invoke(
             let g = conn.lock();
             let conn = g.as_ref().ok_or_else(|| err("no db open"))?;
             let v: RusqliteValue = conn
-                .query_row(&sql, rusqlite::params_from_iter(params.iter()), |r| r.get(0))
+                .query_row(&sql, rusqlite::params_from_iter(params.iter()), |r| {
+                    r.get(0)
+                })
                 .map_err(|e| e.to_string())?;
             encode_response(&rusqlite_to_cbor(&v))
         }
@@ -219,11 +259,18 @@ async fn sqlite_runtime_invoke(
             let params = cbor_params(get_field(&req, "params").unwrap_or(&CborValue::Null))?;
             let g = conn.lock();
             let conn = g.as_ref().ok_or_else(|| err("no db open"))?;
-            let changes = conn.execute(&sql, rusqlite::params_from_iter(params.iter()))
+            let changes = conn
+                .execute(&sql, rusqlite::params_from_iter(params.iter()))
                 .map_err(|e| e.to_string())?;
             let resp = CborValue::Map(vec![
-                (CborValue::Text("changes".into()), CborValue::Integer((changes as i64).into())),
-                (CborValue::Text("last-rowid".into()), CborValue::Integer(conn.last_insert_rowid().into())),
+                (
+                    CborValue::Text("changes".into()),
+                    CborValue::Integer((changes as i64).into()),
+                ),
+                (
+                    CborValue::Text("last-rowid".into()),
+                    CborValue::Integer(conn.last_insert_rowid().into()),
+                ),
             ]);
             encode_response(&resp)
         }
@@ -233,9 +280,10 @@ async fn sqlite_runtime_invoke(
             let g = conn.lock();
             let conn = g.as_ref().ok_or_else(|| err("no db open"))?;
             conn.execute_batch(&sql).map_err(|e| e.to_string())?;
-            let resp = CborValue::Map(vec![
-                (CborValue::Text("changes".into()), CborValue::Integer((conn.changes() as i64).into())),
-            ]);
+            let resp = CborValue::Map(vec![(
+                CborValue::Text("changes".into()),
+                CborValue::Integer((conn.changes() as i64).into()),
+            )]);
             encode_response(&resp)
         }
         "prepare" => {
@@ -253,14 +301,18 @@ async fn sqlite_runtime_invoke(
                 *g = g.wrapping_add(1).max(1);
                 id
             };
-            stmts.lock().insert(id, PreparedStmt {
-                sql,
-                bindings: Vec::new(),
-                cursor: None,
-            });
-            let resp = CborValue::Map(vec![
-                (CborValue::Text("stmt-id".into()), CborValue::Integer(id.into())),
-            ]);
+            stmts.lock().insert(
+                id,
+                PreparedStmt {
+                    sql,
+                    bindings: Vec::new(),
+                    cursor: None,
+                },
+            );
+            let resp = CborValue::Map(vec![(
+                CborValue::Text("stmt-id".into()),
+                CborValue::Integer(id.into()),
+            )]);
             encode_response(&resp)
         }
         "step" => {
@@ -287,14 +339,19 @@ async fn sqlite_runtime_invoke(
                     entry.cursor = Some(buf);
                 }
                 let buf = entry.cursor.as_mut().unwrap();
-                if buf.is_empty() { None } else { Some(buf.remove(0)) }
+                if buf.is_empty() {
+                    None
+                } else {
+                    Some(buf.remove(0))
+                }
             };
             let resp = match row_opt {
                 Some(r) => CborValue::Map(vec![
                     (CborValue::Text("done".into()), CborValue::Bool(false)),
-                    (CborValue::Text("row".into()), CborValue::Array(
-                        r.iter().map(rusqlite_to_cbor).collect()
-                    )),
+                    (
+                        CborValue::Text("row".into()),
+                        CborValue::Array(r.iter().map(rusqlite_to_cbor).collect()),
+                    ),
                 ]),
                 None => CborValue::Map(vec![
                     (CborValue::Text("done".into()), CborValue::Bool(true)),
@@ -319,7 +376,8 @@ mod tests {
 
     fn open_test_provider() -> ProviderHandle {
         let c = rusqlite::Connection::open_in_memory().unwrap();
-        c.execute_batch("CREATE TABLE t(x); INSERT INTO t VALUES(1),(2),(3);").unwrap();
+        c.execute_batch("CREATE TABLE t(x); INSERT INTO t VALUES(1),(2),(3);")
+            .unwrap();
         ProviderHandle::new_sqlite_runtime(Arc::new(Mutex::new(Some(c))))
     }
 
@@ -342,14 +400,19 @@ mod tests {
             CborValue::Array(a) => a.clone(),
             _ => panic!(),
         };
-        assert!(methods.iter().any(|m| matches!(m, CborValue::Text(s) if s == "query")));
+        assert!(methods
+            .iter()
+            .any(|m| matches!(m, CborValue::Text(s) if s == "query")));
     }
 
     #[tokio::test]
     async fn query_scalar_returns_count() {
         let p = open_test_provider();
         let req = cbor_payload(|m| {
-            m.push((CborValue::Text("sql".into()), CborValue::Text("SELECT COUNT(*) FROM t".into())));
+            m.push((
+                CborValue::Text("sql".into()),
+                CborValue::Text("SELECT COUNT(*) FROM t".into()),
+            ));
             m.push((CborValue::Text("params".into()), CborValue::Array(vec![])));
         });
         let resp = p.invoke("query-scalar", &req).await.unwrap();
@@ -367,7 +430,10 @@ mod tests {
     async fn query_returns_rows() {
         let p = open_test_provider();
         let req = cbor_payload(|m| {
-            m.push((CborValue::Text("sql".into()), CborValue::Text("SELECT x FROM t ORDER BY x".into())));
+            m.push((
+                CborValue::Text("sql".into()),
+                CborValue::Text("SELECT x FROM t ORDER BY x".into()),
+            ));
         });
         let resp = p.invoke("query", &req).await.unwrap();
         let v: CborValue = ciborium::de::from_reader(&*resp).unwrap();
@@ -382,20 +448,25 @@ mod tests {
     async fn prepare_step_finalize_cycle() {
         let p = open_test_provider();
         let prep_req = cbor_payload(|m| {
-            m.push((CborValue::Text("sql".into()), CborValue::Text("SELECT x FROM t ORDER BY x".into())));
+            m.push((
+                CborValue::Text("sql".into()),
+                CborValue::Text("SELECT x FROM t ORDER BY x".into()),
+            ));
         });
-        let prep_resp: CborValue = ciborium::de::from_reader(
-            &*p.invoke("prepare", &prep_req).await.unwrap()
-        ).unwrap();
+        let prep_resp: CborValue =
+            ciborium::de::from_reader(&*p.invoke("prepare", &prep_req).await.unwrap()).unwrap();
         let id = cbor_u64(get_field(&prep_resp, "stmt-id").unwrap()).unwrap();
         let step_req = cbor_payload(|m| {
-            m.push((CborValue::Text("stmt-id".into()), CborValue::Integer(id.into())));
+            m.push((
+                CborValue::Text("stmt-id".into()),
+                CborValue::Integer(id.into()),
+            ));
         });
         let mut got = Vec::new();
-        for _ in 0..4 {  // 3 rows then done
-            let r: CborValue = ciborium::de::from_reader(
-                &*p.invoke("step", &step_req).await.unwrap()
-            ).unwrap();
+        for _ in 0..4 {
+            // 3 rows then done
+            let r: CborValue =
+                ciborium::de::from_reader(&*p.invoke("step", &step_req).await.unwrap()).unwrap();
             match get_field(&r, "done").unwrap() {
                 CborValue::Bool(true) => break,
                 _ => {
