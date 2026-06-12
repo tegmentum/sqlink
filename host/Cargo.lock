@@ -1914,6 +1914,7 @@ dependencies = [
  "rusqlite",
  "serde",
  "serde_json",
+ "sha2",
  "sqlite-extension-policy",
  "tempfile",
  "tokio",

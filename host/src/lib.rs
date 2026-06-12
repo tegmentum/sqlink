@@ -200,13 +200,31 @@ fn compose_err(message: impl Into<String>) -> compose::sys::compose::types::Erro
 impl<'a> compose::compose::dynlink::linker::Host for HostWrap<'a> {
     async fn resolve_by_digest(
         &mut self,
-        _digest: Vec<u8>,
+        digest: Vec<u8>,
     ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
-        Err(compose::sys::compose::types::Error {
-            code: compose::sys::compose::types::ErrorCode::NotImplemented,
-            message: "resolve-by-digest needs CP7's CAS bridge".to_string(),
-            context: None,
-        })
+        // v1: the digest is opaque bytes; lookup_by_hash tries both
+        // blake3 and sha-256 paths under the cache. If the bytes
+        // resolve to a registered provider, hand out an Instance.
+        // Otherwise NotFound.
+        let hex = digest.iter().map(|b| format!("{b:02x}")).collect::<String>();
+        let cached_path = {
+            let g = self.host.cache.read();
+            g.as_ref().and_then(|c| c.lookup_by_hash(&hex))
+        };
+        let Some(_path) = cached_path else {
+            return Err(compose_err(format!(
+                "digest {hex} not in cache (CP8 will add real provider instantiation here)"
+            )));
+        };
+        // CP8 will instantiate the cached bytes as a dynlink-provider
+        // component. For CP7 the path is reachable and we surface a
+        // structured error so callers know the cache hit but the
+        // wasm-component provider path isn't wired yet.
+        Err(compose_err(format!(
+            "digest {hex} found in cache but wasm-component providers \
+             aren't instantiated in v1 (only registered host shims like sqlite-runtime). \
+             See PLAN-compose-integration.md."
+        )))
     }
 
     async fn resolve_by_id(
@@ -901,11 +919,16 @@ impl<'a> compose::compose::dynlink::linker::Host for FijiHostWrap<'a> {
         &mut self,
         _digest: Vec<u8>,
     ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
-        Err(compose::sys::compose::types::Error {
-            code: compose::sys::compose::types::ErrorCode::NotImplemented,
-            message: "resolve-by-digest needs CP7's CAS bridge".to_string(),
-            context: None,
-        })
+        // Fiji functions resolve by id (sqlite-runtime, std-text,
+        // ...); resolve-by-digest belongs on the extension-loader
+        // HostWrap that has access to the CAS cache. Surface a
+        // clear error so callers know to use resolve-by-id.
+        Err(compose_err(
+            "Fiji functions should use linker.resolve-by-id instead of \
+             resolve-by-digest (the digest path runs through the \
+             extension-loader's CAS cache, not the Fiji function's \
+             provider table)".to_string()
+        ))
     }
 
     async fn resolve_by_id(

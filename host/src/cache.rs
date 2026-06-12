@@ -26,12 +26,20 @@ use std::path::{Path, PathBuf};
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 
-/// One uri → hash binding, persisted as JSON in uri_index/.
+/// One uri → hash binding, persisted as JSON in uri_index/. The
+/// blake3 hash is primary; the sha256 mirror is recorded so
+/// compose-orchestration (SHA-256 native) can resolve the same
+/// artifact by either digest format.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UriEntry {
     pub uri: String,
     pub hash: String,
     pub fetched_at: u64,
+    /// SHA-256 mirror (CP7). `None` for entries written before CP7
+    /// landed; reads tolerate this by falling back to blake3-only
+    /// resolution.
+    #[serde(default)]
+    pub sha256: Option<String>,
 }
 
 pub struct Cache {
@@ -42,10 +50,10 @@ impl Cache {
     /// Open or create the cache at `root`. Creates the
     /// `blake3/` and `uri_index/` subdirectories.
     pub fn open(root: PathBuf) -> Result<Self> {
-        std::fs::create_dir_all(root.join("blake3"))
-            .with_context(|| format!("create {}", root.join("blake3").display()))?;
-        std::fs::create_dir_all(root.join("uri_index"))
-            .with_context(|| format!("create {}", root.join("uri_index").display()))?;
+        for sub in ["blake3", "sha256", "uri_index"] {
+            std::fs::create_dir_all(root.join(sub))
+                .with_context(|| format!("create {}", root.join(sub).display()))?;
+        }
         Ok(Self { root })
     }
 
@@ -72,11 +80,20 @@ impl Cache {
 
     pub fn root(&self) -> &Path { &self.root }
 
-    /// Path where `hash` (full 64-char hex) would live.
+    /// Path where `hash` (full 64-char hex) would live under
+    /// blake3/aa/bb/.
     fn blake3_path(&self, hash: &str) -> PathBuf {
         let aa = &hash[..2];
         let bb = &hash[2..4];
         self.root.join("blake3").join(aa).join(bb).join(format!("{hash}.wasm"))
+    }
+
+    /// Path under sha256/aa/bb/ — written alongside blake3 for
+    /// compose-orchestration interop (CP7).
+    fn sha256_path(&self, hash: &str) -> PathBuf {
+        let aa = &hash[..2];
+        let bb = &hash[2..4];
+        self.root.join("sha256").join(aa).join(bb).join(format!("{hash}.wasm"))
     }
 
     /// Path of the uri_index entry for `uri`.
@@ -99,39 +116,56 @@ impl Cache {
     }
 
     /// Path of the cached bytes for `hash`, or None if absent.
+    /// Tries blake3 first (native), then sha256 (compose interop).
+    /// Both formats are 32 bytes / 64 hex chars; we can't tell
+    /// from the digest alone which it is, so try both.
     pub fn lookup_by_hash(&self, hash: &str) -> Option<PathBuf> {
-        let p = self.blake3_path(hash);
-        if p.exists() { Some(p) } else { None }
+        let b = self.blake3_path(hash);
+        if b.exists() { return Some(b); }
+        let s = self.sha256_path(hash);
+        if s.exists() { return Some(s); }
+        None
     }
 
-    /// Cache `bytes` for `uri`. Writes the content under
-    /// blake3/<hash>.wasm atomically, then the uri_index entry.
-    /// Returns the hash.
+    /// Cache `bytes` for `uri`. Writes the content under BOTH
+    /// blake3/<hash>.wasm AND sha256/<hash>.wasm atomically so the
+    /// compose-orchestration linker (SHA-256 native) can resolve
+    /// the same artifact by either digest format. Records both
+    /// hashes in the uri_index entry. Returns the blake3 hash
+    /// (still the primary native format).
     pub fn put(&self, uri: &str, bytes: &[u8]) -> Result<String> {
-        let hash = blake3::hash(bytes).to_hex().to_string();
-        let target = self.blake3_path(&hash);
-        if let Some(parent) = target.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("create {}", parent.display()))?;
-        }
-        if !target.exists() {
-            let parent = target.parent().unwrap();
-            let mut tmp = tempfile::NamedTempFile::new_in(parent)
-                .with_context(|| format!("tempfile in {}", parent.display()))?;
-            use std::io::Write;
-            tmp.write_all(bytes).context("write bytes")?;
-            tmp.flush().context("flush")?;
-            tmp.persist(&target)
-                .map_err(|e| anyhow!("persist to {}: {}", target.display(), e.error))?;
+        use sha2::Digest;
+        let blake3_hash = blake3::hash(bytes).to_hex().to_string();
+        let sha256_hash = format!("{:x}", sha2::Sha256::digest(bytes));
+
+        // Write to both content-addressed paths.
+        for (target_fn, hash) in [
+            (Self::blake3_path as fn(&Self, &str) -> PathBuf, &blake3_hash),
+            (Self::sha256_path as fn(&Self, &str) -> PathBuf, &sha256_hash),
+        ] {
+            let target = target_fn(self, hash);
+            if let Some(parent) = target.parent() {
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("create {}", parent.display()))?;
+            }
+            if !target.exists() {
+                let parent = target.parent().unwrap();
+                let mut tmp = tempfile::NamedTempFile::new_in(parent)
+                    .with_context(|| format!("tempfile in {}", parent.display()))?;
+                use std::io::Write;
+                tmp.write_all(bytes).context("write bytes")?;
+                tmp.flush().context("flush")?;
+                tmp.persist(&target)
+                    .map_err(|e| anyhow!("persist to {}: {}", target.display(), e.error))?;
+            }
         }
         let entry = UriEntry {
             uri: uri.to_string(),
-            hash: hash.clone(),
-            // 0 because Date::now() isn't deterministic; callers can
-            // set after the cache.put if they want the timestamp.
-            // Real time stamping happens in Track C's CLI .cache list.
+            hash: blake3_hash.clone(),
             fetched_at: 0,
+            sha256: Some(sha256_hash),
         };
+        let hash = blake3_hash;
         let json = serde_json::to_string_pretty(&entry).context("serialize")?;
         let index_path = self.uri_index_path(uri);
         let parent = index_path.parent().unwrap();
@@ -169,7 +203,7 @@ impl Cache {
     /// number of files removed.
     pub fn purge(&self) -> Result<usize> {
         let mut count = 0;
-        for sub in ["blake3", "uri_index"] {
+        for sub in ["blake3", "sha256", "uri_index"] {
             let dir = self.root.join(sub);
             if let Ok(rd) = std::fs::read_dir(&dir) {
                 for entry in rd.flatten() {
@@ -255,6 +289,26 @@ mod tests {
         // CLI arg wins
         let root = Cache::default_root(Some("/tmp/explicit")).unwrap();
         assert_eq!(root, PathBuf::from("/tmp/explicit"));
+    }
+
+    #[test]
+    fn put_writes_both_blake3_and_sha256() {
+        use sha2::Digest;
+        let dir = tempfile::tempdir().unwrap();
+        let cache = Cache::open(dir.path().to_path_buf()).unwrap();
+        let bytes = b"hello world";
+        let blake_hash = cache.put("https://example.com/x", bytes).unwrap();
+        let sha_hash = format!("{:x}", sha2::Sha256::digest(bytes));
+
+        // lookup_by_hash should find via blake3
+        assert!(cache.lookup_by_hash(&blake_hash).is_some());
+        // and via sha256
+        assert!(cache.lookup_by_hash(&sha_hash).is_some());
+
+        // UriEntry records both
+        let entry = cache.lookup_by_uri("https://example.com/x").unwrap();
+        assert_eq!(entry.hash, blake_hash);
+        assert_eq!(entry.sha256, Some(sha_hash));
     }
 
     #[test]

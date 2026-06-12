@@ -49,3 +49,7 @@ serde_json = "1.0"
 # CBOR codec for the sqlite-runtime compose provider — see
 # host/COMPOSE-PROTOCOL.md for the wire shape.
 ciborium = "0.2"
+# SHA-256 for compose-orchestration CAS interop (their blob store
+# is SHA-256). Cache.put writes under both blake3 and sha256 paths
+# so resolve-by-digest works either way.
+sha2 = "0.10"
