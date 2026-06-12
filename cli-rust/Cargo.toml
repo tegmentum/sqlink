@@ -27,3 +27,5 @@ world = "sqlite-cli-reactor"
 
 [package.metadata.component.target.dependencies]
 "sqlite:extension" = { path = "../wit/deps/sqlite-extension" }
+"compose:dynlink" = { path = "../wit/deps/compose-dynlink" }
+"sys:compose" = { path = "../wit/deps/sys-compose" }

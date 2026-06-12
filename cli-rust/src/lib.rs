@@ -632,6 +632,9 @@ impl CliGuest for CliReactor {
         if let Some(rest) = trimmed.strip_prefix(".open") {
             return do_open(rest.trim());
         }
+        if let Some(rest) = trimmed.strip_prefix(".fiji ") {
+            return do_fiji(rest.trim());
+        }
         if let Some(rest) = trimmed.strip_prefix(".register-resolver ") {
             return do_register_resolver(rest.trim());
         }
@@ -1201,6 +1204,37 @@ fn looks_like_uri(s: &str) -> bool {
 }
 
 // --- New dot-commands for resolvers + cache ---
+
+/// .fiji <path> — run a Fiji function once. The function is a
+/// compose-shaped wasm component targeting our `fiji-function`
+/// world. The host instantiates, calls `fiji.run()`, prints the
+/// returned string. Each .fiji creates a fresh Store; no state
+/// carries between invocations.
+fn do_fiji(arg: &str) -> String {
+    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
+    use bindings::sqlite::wasm::extension_loader;
+    if arg.is_empty() {
+        return "Usage: .fiji PATH\n".to_string();
+    }
+    let opts = LoadOptions {
+        // Fiji functions resolve compose providers; the host's
+        // policy gate on register_compose_provider is what controls
+        // which providers are available. The grant list here is
+        // unused for the Fiji path today; passed for symmetry.
+        grant: vec![Capability::Spi],
+        http_policy: None,
+        fs_policy: None,
+        fuel_per_call: None,
+        memory_limit_bytes: None,
+        epoch_deadline_ms: None,
+    };
+    match extension_loader::run_fiji_function(arg, &opts) {
+        Ok(out) => {
+            if out.ends_with('\n') { out } else { format!("{out}\n") }
+        }
+        Err(e) => format!("Error running fiji function {arg}: {} (code {})\n", e.message, e.code),
+    }
+}
 
 fn do_register_resolver(arg: &str) -> String {
     use bindings::sqlite::extension::policy::{Capability, LoadOptions};

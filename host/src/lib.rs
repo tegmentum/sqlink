@@ -158,6 +158,22 @@ pub mod compose {
     });
 }
 
+/// Bindgen for Fiji functions — wasm components targeting our
+/// `fiji-function` world. The host uses this to instantiate +
+/// invoke run() when .fiji is called.
+pub mod fiji {
+    wasmtime::component::bindgen!({
+        path: "../wit",
+        world: "fiji-function",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "compose:dynlink/linker": super::compose::compose::dynlink::linker,
+            "sys:compose/types": super::compose::sys::compose::types,
+        },
+    });
+}
+
 /// Host-side resource backing the guest-visible `linker.instance`.
 /// Stored in the wasmtime ResourceTable; the guest sees an opaque
 /// handle and can only call `invoke` on it. CP2 wires this into the
@@ -850,6 +866,129 @@ impl wasmtime::component::HasData for LoadedHostData {
 /// Build a Linker pre-wired for a `minimal`-world loaded extension:
 /// WASI + the SPI imports stubbed above. Returns the linker so
 /// instantiation can happen on demand.
+/// State carried by a Fiji function's per-run Store. WASI plumbing
+/// + the host-side compose machinery (providers + resource table)
+/// so its `linker.resolve_by_id` / `instance.invoke` calls reach the
+/// host's `sqlite-runtime` shim.
+pub struct FijiState {
+    pub wasi: wasmtime_wasi::WasiCtx,
+    pub resources: wasmtime_wasi::ResourceTable,
+    /// Cheap clone of the parent Host's compose-providers map.
+    /// Cloned, not borrowed, so the FijiState fully owns it for the
+    /// Store lifetime.
+    pub compose_providers: Arc<RwLock<HashMap<String, compose_provider::ProviderHandle>>>,
+}
+
+impl wasmtime_wasi::WasiView for FijiState {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.resources,
+        }
+    }
+}
+
+/// Snapshot of just what compose dispatch needs from the Host —
+/// avoids threading &mut Host into FijiState when the Host's other
+/// fields aren't relevant for Fiji.
+pub struct FijiHostWrap<'a> {
+    pub compose_providers: &'a HashMap<String, compose_provider::ProviderHandle>,
+    pub resources: &'a mut wasmtime_wasi::ResourceTable,
+}
+
+impl<'a> compose::compose::dynlink::linker::Host for FijiHostWrap<'a> {
+    async fn resolve_by_digest(
+        &mut self,
+        _digest: Vec<u8>,
+    ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
+        Err(compose::sys::compose::types::Error {
+            code: compose::sys::compose::types::ErrorCode::NotImplemented,
+            message: "resolve-by-digest needs CP7's CAS bridge".to_string(),
+            context: None,
+        })
+    }
+
+    async fn resolve_by_id(
+        &mut self,
+        id: String,
+    ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
+        let Some(provider) = self.compose_providers.get(&id) else {
+            return Err(compose_err(format!(
+                "no compose provider registered for id {id:?}"
+            )));
+        };
+        let provider_arc = Arc::new(compose_provider::ProviderHandle {
+            kind: provider.kind.clone(),
+        });
+        self.resources
+            .push(ComposeInstance { provider: provider_arc })
+            .map_err(|e| compose_err(format!("resource table push: {e}")))
+    }
+}
+
+impl<'a> compose::compose::dynlink::linker::HostInstance for FijiHostWrap<'a> {
+    async fn invoke(
+        &mut self,
+        handle: Resource<ComposeInstance>,
+        method: String,
+        payload: Vec<u8>,
+    ) -> std::result::Result<Vec<u8>, compose::sys::compose::types::Error> {
+        let inst = self
+            .resources
+            .get(&handle)
+            .map_err(|e| compose_err(format!("invalid handle: {e}")))?;
+        let provider = Arc::clone(&inst.provider);
+        provider
+            .invoke(&method, &payload)
+            .await
+            .map_err(|e| compose_err(e))
+    }
+
+    async fn drop(
+        &mut self,
+        handle: Resource<ComposeInstance>,
+    ) -> wasmtime::Result<()> {
+        if let Err(e) = self.resources.delete(handle) {
+            return Err(wasmtime::Error::msg(format!("{e}")));
+        }
+        Ok(())
+    }
+}
+
+/// HasData tag for the Fiji-function linker setup.
+pub struct FijiHostData;
+impl wasmtime::component::HasData for FijiHostData {
+    type Data<'a> = FijiHostWrap<'a>;
+}
+
+fn make_fiji_linker(engine: &Engine) -> Result<Linker<FijiState>> {
+    let mut linker: Linker<FijiState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+        .map_err(|e| anyhow!("fiji WASI: {e}"))?;
+    compose::compose::dynlink::linker::add_to_linker::<_, FijiHostData>(
+        &mut linker,
+        |state: &mut FijiState| FijiHostWrap {
+            compose_providers: unsafe {
+                // SAFETY: the closure runs on the same thread that
+                // owns the Store; we know it doesn't race because
+                // wasmtime serializes host-call execution per Store.
+                // The compose_providers map is behind RwLock — we
+                // could lock here, but holding the guard across an
+                // await boundary makes the future non-Send. Snapshot
+                // ref instead, valid for the host-call duration.
+                let _ = state.compose_providers.read();
+                std::mem::transmute::<
+                    &HashMap<String, compose_provider::ProviderHandle>,
+                    &'static HashMap<String, compose_provider::ProviderHandle>,
+                >(&*state.compose_providers.data_ptr())
+            },
+            resources: &mut state.resources,
+        },
+    )
+    .map_err(|e| anyhow!("fiji compose linker: {e}"))?;
+    Ok(linker)
+}
+
 fn make_loaded_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
@@ -1603,6 +1742,43 @@ impl Host {
             .map_err(|e| anyhow!("call_on_rollback: {e}"))
     }
 
+    /// Load + run a Fiji function. Instantiates the component
+    /// against the host's compose-linker wiring, calls fiji.run(),
+    /// returns the output string. Each call gets a fresh Store —
+    /// no state carries between Fiji invocations.
+    pub async fn run_fiji_function(
+        &self,
+        path: PathBuf,
+        _policy: Policy,
+    ) -> Result<String> {
+        let bytes = std::fs::read(&path)
+            .map_err(|e| anyhow!("read {}: {e}", path.display()))?;
+        let component = Component::from_binary(&self.engine, &bytes)
+            .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
+        let linker = make_fiji_linker(&self.engine)?;
+        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
+        builder.inherit_stdio();
+        let state = FijiState {
+            wasi: builder.build(),
+            resources: wasmtime_wasi::ResourceTable::new(),
+            compose_providers: self.compose_providers.clone(),
+        };
+        let mut store = wasmtime::Store::new(&self.engine, state);
+        store
+            .set_fuel(u64::MAX / 2)
+            .map_err(|e| anyhow!("set_fuel: {e}"))?;
+        store.set_epoch_deadline(1_000_000_000_000);
+        let instance = fiji::FijiFunction::instantiate_async(&mut store, &component, &linker)
+            .await
+            .map_err(|e| anyhow!("instantiate fiji function: {e}"))?;
+        let r = instance
+            .sqlite_wasm_fiji()
+            .call_run(&mut store)
+            .await
+            .map_err(|e| anyhow!("fiji.run trap: {e}"))?;
+        r.map_err(|e| anyhow!("fiji.run returned error: {e}"))
+    }
+
     pub fn unload(&self, name: &str) -> Result<()> {
         if self.components.write().remove(name).is_some() {
             Ok(())
@@ -1992,6 +2168,18 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         let g = self.host.cache.read();
         let Some(cache) = g.as_ref() else { return 0; };
         cache.purge().unwrap_or(0) as u64
+    }
+
+    async fn run_fiji_function(
+        &mut self,
+        path: String,
+        options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<String, LoaderError> {
+        let policy = policy_from_load_options(&options);
+        match self.host.run_fiji_function(PathBuf::from(&path), policy).await {
+            Ok(output) => Ok(output),
+            Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
+        }
     }
 }
 

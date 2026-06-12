@@ -82,4 +82,14 @@ interface extension-loader {
     /// Drop every cached byte + every uri_index entry. Returns the
     /// number of files removed.
     purge-cache: func() -> u64;
+
+    /// Run a Fiji function: a compose-dynlink-shaped wasm component
+    /// that resolves shared providers via the `linker` and exports
+    /// `sqlite:wasm/fiji.run() -> result<string, string>`. Returns
+    /// the function's output string for the cli to print.
+    /// See PLAN-compose-integration.md.
+    run-fiji-function: func(
+        path: string,
+        options: load-options,
+    ) -> result<string, loader-error>;
 }
