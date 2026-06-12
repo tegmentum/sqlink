@@ -1,0 +1,22 @@
+[package]
+name = "sqlite-cli-rust"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Reactor-shape Rust port of the SQLite CLI. Targets the sqlite-cli-reactor world; async-stackful lifts (needed for spi.execute re-entry) are this crate's reason for existing."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+
+[package.metadata.component]
+package = "sqlite:cli-rust"
+
+[package.metadata.component.target]
+path = "../wit"
+world = "sqlite-cli-reactor"
+
+[package.metadata.component.target.dependencies]
+"sqlite:extension" = { path = "../wit/deps/sqlite-extension" }
