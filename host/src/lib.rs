@@ -80,6 +80,25 @@ pub mod loaded_stateful {
     });
 }
 
+/// Used when a loaded extension declares custom collations. The
+/// `collating` world is minimal + `collation` export — same import
+/// surface as `loaded`, plus the `compare` callback. Shares types
+/// with `loaded` via `with:` to keep one copy of every record.
+pub mod loaded_collating {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "collating",
+        with: {
+            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+        },
+    });
+}
+
 use bindings::sqlite::extension::policy::Capability as WitCapability;
 use bindings::sqlite::wasm::extension_loader::{LoaderError, Manifest};
 
@@ -136,7 +155,9 @@ fn policy_from_load_options(
 /// Now that load_extension calls describe() at load time and stores
 /// the scalar_functions, this returns the real names/ids/arities.
 fn stub_manifest(ext: &LoadedExtension) -> Manifest {
-    use bindings::sqlite::extension::metadata::{AggregateFunctionSpec, ScalarFunctionSpec};
+    use bindings::sqlite::extension::metadata::{
+        AggregateFunctionSpec, CollationSpec, ScalarFunctionSpec,
+    };
     use bindings::sqlite::extension::types::FunctionFlags;
     Manifest {
         name: ext.name.clone(),
@@ -170,7 +191,14 @@ fn stub_manifest(ext: &LoadedExtension) -> Manifest {
                 is_window: f.is_window,
             })
             .collect(),
-        collations: vec![],
+        collations: ext
+            .collations
+            .iter()
+            .map(|c| CollationSpec {
+                id: c.id,
+                name: c.name.clone(),
+            })
+            .collect(),
         has_authorizer: false,
         has_update_hook: false,
         has_commit_hook: false,
@@ -202,6 +230,8 @@ pub struct LoadedExtension {
     pub scalar_functions: Vec<ScalarFunctionEntry>,
     /// Aggregate function specs, mirror of `scalar_functions` shape.
     pub aggregate_functions: Vec<AggregateFunctionEntry>,
+    /// Collation specs declared in the manifest.
+    pub collations: Vec<CollationEntry>,
     /// Persistent per-extension state backing the `state` interface.
     pub state: SharedKv,
     /// In-memory cache backing the `cache` interface. TTLs from the
@@ -386,6 +416,18 @@ fn make_loaded_stateful_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
     Ok(linker)
 }
 
+/// Build a Linker pre-wired for a `collating`-world loaded
+/// extension: same imports as minimal. Used when dispatching
+/// collation comparisons.
+fn make_loaded_collating_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+    let mut linker: Linker<LoadedState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
+    loaded_collating::Collating::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
+        .map_err(|e| anyhow!("loaded-ext collating: {e}"))?;
+    Ok(linker)
+}
+
 /// Construct a fresh Store + LoadedState for one dispatch into a
 /// loaded extension. Each dispatch gets its own Store so per-call
 /// fuel is re-supplied and shared global state doesn't leak.
@@ -420,6 +462,12 @@ pub struct AggregateFunctionEntry {
     pub num_args: i32,
     pub deterministic: bool,
     pub is_window: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct CollationEntry {
+    pub id: u64,
+    pub name: String,
 }
 
 /// The wasmtime engine + the registry of loaded extensions.
@@ -482,6 +530,7 @@ impl Host {
             policy: policy.clone(),
             scalar_functions: Vec::new(),
             aggregate_functions: Vec::new(),
+            collations: Vec::new(),
             state: Arc::new(Mutex::new(HashMap::new())),
             cache: Arc::new(Mutex::new(HashMap::new())),
         };
@@ -531,6 +580,14 @@ impl Host {
                 is_window: a.is_window,
             })
             .collect();
+        let collations: Vec<_> = manifest
+            .collations
+            .iter()
+            .map(|c| CollationEntry {
+                id: c.id,
+                name: c.name.clone(),
+            })
+            .collect();
 
         self.components.write().insert(
             name.clone(),
@@ -541,6 +598,7 @@ impl Host {
                 policy,
                 scalar_functions,
                 aggregate_functions,
+                collations,
                 state: Arc::new(Mutex::new(HashMap::new())),
                 cache: Arc::new(Mutex::new(HashMap::new())),
             },
@@ -655,12 +713,19 @@ impl Host {
         a: &str,
         b: &str,
     ) -> Result<i32> {
-        let _ = (ext_name, collation_id, a, b);
-        // Structural placeholder until the bindgen against the
-        // collation-exporting world lands.
-        Err(anyhow!(
-            "collation dispatch not implemented yet for {ext_name}/{collation_id}"
-        ))
+        let components = self.components.read();
+        let ext = components
+            .get(ext_name)
+            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let linker = make_loaded_collating_linker(&self.engine)?;
+        let mut store = build_loaded_store(&self.engine, ext)?;
+        let instance = loaded_collating::Collating::instantiate(&mut store, &ext.component, &linker)
+            .map_err(|e| anyhow!("instantiate {ext_name} as collating: {e}"))?;
+        let result = instance
+            .sqlite_extension_collation()
+            .call_compare(&mut store, collation_id, a, b)
+            .map_err(|e| anyhow!("call_compare: {e}"))?;
+        Ok(result)
     }
 
     pub fn unload(&self, name: &str) -> Result<()> {
