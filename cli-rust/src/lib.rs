@@ -469,6 +469,9 @@ impl CliGuest for CliReactor {
             DONE.with(|d| *d.borrow_mut() = true);
             return String::new();
         }
+        if let Some(rest) = trimmed.strip_prefix(".load ") {
+            return do_load(rest.trim());
+        }
         ensure_cli_conn();
         // MVP: just dispatch to execute_batch. Real impl handles
         // dot-commands, output formatting, mode switching, etc.
@@ -587,6 +590,82 @@ fn format_value(v: &rusqlite::types::Value) -> String {
         rusqlite::types::Value::Text(s) => s.clone(),
         rusqlite::types::Value::Blob(b) => format!("[blob:{} bytes]", b.len()),
     }
+}
+
+// .load <path> — call extension-loader, register every scalar from
+// the returned manifest with rusqlite. Each registration's body
+// converts args into wit SqlValue, calls dispatch.scalar_call, and
+// converts the result back. Aggregates / collations / hooks aren't
+// wired here yet — Step 4' / minimal path for now.
+fn do_load(path: &str) -> String {
+    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
+    use bindings::sqlite::extension::types::SqlValue as WitSqlValue;
+    use bindings::sqlite::wasm::dispatch;
+    use bindings::sqlite::wasm::extension_loader;
+
+    let opts = LoadOptions {
+        // Grant a permissive default so demos work. Real interactive
+        // usage would route through a separate .load-with-policy.
+        grant: vec![Capability::Spi, Capability::State, Capability::Cache],
+        http_policy: None,
+        fs_policy: None,
+        fuel_per_call: None,
+        memory_limit_bytes: None,
+        epoch_deadline_ms: None,
+    };
+    let manifest = match extension_loader::load_extension(path, &opts) {
+        Ok(m) => m,
+        Err(e) => return format!("Error loading {path}: {} (code {})\n", e.message, e.code),
+    };
+    let ext_name = manifest.name.clone();
+    ensure_cli_conn();
+    let registered = CLI_CONN.with(|c| {
+        let g = c.borrow();
+        let conn = g.as_ref().expect("init opened connection");
+        let mut count = 0;
+        for spec in &manifest.scalar_functions {
+            let ext_n = ext_name.clone();
+            let func_id = spec.id;
+            let name = spec.name.clone();
+            let num_args: i32 = spec.num_args;
+            let r = conn.create_scalar_function(
+                &name,
+                num_args,
+                rusqlite::functions::FunctionFlags::SQLITE_UTF8
+                    | rusqlite::functions::FunctionFlags::SQLITE_DIRECTONLY,
+                move |ctx| {
+                    let n = ctx.len();
+                    let mut wit_args: Vec<WitSqlValue> = Vec::with_capacity(n);
+                    for i in 0..n {
+                        let v: rusqlite::types::Value = ctx.get(i).unwrap_or(rusqlite::types::Value::Null);
+                        wit_args.push(match v {
+                            rusqlite::types::Value::Null => WitSqlValue::Null,
+                            rusqlite::types::Value::Integer(i) => WitSqlValue::Integer(i),
+                            rusqlite::types::Value::Real(r) => WitSqlValue::Real(r),
+                            rusqlite::types::Value::Text(s) => WitSqlValue::Text(s),
+                            rusqlite::types::Value::Blob(b) => WitSqlValue::Blob(b),
+                        });
+                    }
+                    match dispatch::scalar_call(&ext_n, func_id, &wit_args) {
+                        Ok(WitSqlValue::Null) => Ok(rusqlite::types::Value::Null),
+                        Ok(WitSqlValue::Integer(i)) => Ok(rusqlite::types::Value::Integer(i)),
+                        Ok(WitSqlValue::Real(r)) => Ok(rusqlite::types::Value::Real(r)),
+                        Ok(WitSqlValue::Text(s)) => Ok(rusqlite::types::Value::Text(s)),
+                        Ok(WitSqlValue::Blob(b)) => Ok(rusqlite::types::Value::Blob(b)),
+                        Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
+                    }
+                },
+            );
+            if r.is_ok() {
+                count += 1;
+            }
+        }
+        count
+    });
+    format!(
+        "Loaded extension: {} {} from {} ({} functions)\n",
+        manifest.name, manifest.version, path, registered
+    )
 }
 
 bindings::export!(CliReactor with_types_in bindings);

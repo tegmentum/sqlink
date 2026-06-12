@@ -724,8 +724,7 @@ impl Host {
             cache: Arc::new(Mutex::new(HashMap::new())),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
-        let instance = loaded::Minimal::instantiate(&mut store, &component, &linker)
-            .map_err(|e| anyhow!("instantiate loaded ext: {e}"))?;
+        let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker).await.map_err(|e| anyhow!("instantiate loaded ext: {e}"))?;
         let manifest = instance
             .sqlite_extension_metadata()
             .call_describe(&mut store)
@@ -819,8 +818,7 @@ impl Host {
         };
         let linker = make_loaded_linker(&self.engine)?;
         let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance = loaded::Minimal::instantiate(&mut store, &ext.component, &linker)
-            .map_err(|e| anyhow!("instantiate {ext_name}: {e}"))?;
+        let instance = loaded::Minimal::instantiate_async(&mut store, &ext.component, &linker).await.map_err(|e| anyhow!("instantiate {ext_name}: {e}"))?;
 
         // The two bindgens (extension-loader-host's and loaded's)
         // produce structurally-identical but distinctly-typed
@@ -861,8 +859,7 @@ impl Host {
         };
         let linker = make_loaded_stateful_linker(&self.engine)?;
         let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance = loaded_stateful::Stateful::instantiate(&mut store, &ext.component, &linker)
-            .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
+        let instance = loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker).await.map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
 
         let loaded_args: Vec<_> = args
             .into_iter()
@@ -894,8 +891,7 @@ impl Host {
         };
         let linker = make_loaded_stateful_linker(&self.engine)?;
         let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance = loaded_stateful::Stateful::instantiate(&mut store, &ext.component, &linker)
-            .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
+        let instance = loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker).await.map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
 
         let result = instance
             .sqlite_extension_aggregate_function()
@@ -927,8 +923,7 @@ impl Host {
         };
         let linker = make_loaded_collating_linker(&self.engine)?;
         let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance = loaded_collating::Collating::instantiate(&mut store, &ext.component, &linker)
-            .map_err(|e| anyhow!("instantiate {ext_name} as collating: {e}"))?;
+        let instance = loaded_collating::Collating::instantiate_async(&mut store, &ext.component, &linker).await.map_err(|e| anyhow!("instantiate {ext_name} as collating: {e}"))?;
         let result = instance
             .sqlite_extension_collation()
             .call_compare(&mut store, collation_id, a, b)
@@ -960,8 +955,7 @@ impl Host {
         let linker = make_loaded_authorizing_linker(&self.engine)?;
         let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
-            loaded_authorizing::Authorizing::instantiate(&mut store, &ext.component, &linker)
-                .map_err(|e| anyhow!("instantiate {ext_name} as authorizing: {e}"))?;
+            loaded_authorizing::Authorizing::instantiate_async(&mut store, &ext.component, &linker).await.map_err(|e| anyhow!("instantiate {ext_name} as authorizing: {e}"))?;
 
         let action_w = convert_auth_action_to_loaded(action);
         let result = instance
@@ -998,8 +992,7 @@ impl Host {
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
         let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
-            .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
+        let instance = loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker).await.map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
         instance
             .sqlite_extension_update_hook()
             .call_on_update(
@@ -1025,8 +1018,7 @@ impl Host {
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
         let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
-            .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
+        let instance = loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker).await.map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
         instance
             .sqlite_extension_commit_hook()
             .call_on_commit(&mut store)
@@ -1045,8 +1037,7 @@ impl Host {
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
         let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
-            .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
+        let instance = loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker).await.map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
         instance
             .sqlite_extension_commit_hook()
             .call_on_rollback(&mut store)
