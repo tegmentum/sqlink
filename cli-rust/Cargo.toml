@@ -14,6 +14,9 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 # target (wasm32-wasip2 under cargo-component). The unblocker for
 # the whole port — if this fails we need a different integration.
 rusqlite = { version = "0.32", features = ["bundled", "functions"] }
+# Exposes sqlite3_complete for is_statement_complete. Same major
+# version as rusqlite's transitive dep so no double-link.
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 
 [package.metadata.component]
 package = "sqlite:cli-rust"

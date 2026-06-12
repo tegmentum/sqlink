@@ -24,6 +24,9 @@
 #[allow(warnings)]
 mod bindings;
 
+mod dot;
+mod format;
+mod settings;
 mod state;
 
 use std::cell::RefCell;
@@ -473,14 +476,24 @@ impl CliGuest for CliReactor {
             return do_load(rest.trim());
         }
         ensure_cli_conn();
+        // Dispatch other dot-commands first; only fall through to
+        // SQL on a None result.
+        if trimmed.starts_with('.') {
+            let dot_out = CLI_CONN.with(|c| {
+                let g = c.borrow();
+                let conn = g.as_ref().expect("init opened connection");
+                dot::dispatch(trimmed, conn)
+            });
+            if let Some(out) = dot_out {
+                return out;
+            }
+            return format!("Unknown command: {trimmed}\n");
+        }
         // MVP: just dispatch to execute_batch. Real impl handles
         // dot-commands, output formatting, mode switching, etc.
         CLI_CONN.with(|c| {
             let g = c.borrow();
             let conn = g.as_ref().expect("init opened connection");
-            // Try SELECT-shaped queries first via prepare/step so we
-            // get rows back. Fall back to execute_batch on prepare
-            // failure (e.g. multi-statement input).
             let mut stmt = match conn.prepare(trimmed) {
                 Ok(s) => s,
                 Err(_) => {
@@ -490,30 +503,29 @@ impl CliGuest for CliReactor {
                     };
                 }
             };
-            let col_count = stmt.column_count();
+            let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+            let col_count = columns.len();
             let mut rows = match stmt.query([]) {
                 Ok(r) => r,
                 Err(e) => return format!("Error: {e}\n"),
             };
-            let mut out = String::new();
+            let mut out_rows: Vec<Vec<rusqlite::types::Value>> = Vec::new();
             loop {
                 match rows.next() {
                     Ok(Some(row)) => {
-                        let parts: Vec<String> = (0..col_count)
-                            .map(|i| {
-                                let v: rusqlite::types::Value =
-                                    row.get(i).unwrap_or(rusqlite::types::Value::Null);
-                                format_value(&v)
-                            })
-                            .collect();
-                        out.push_str(&parts.join("|"));
-                        out.push('\n');
+                        let mut r = Vec::with_capacity(col_count);
+                        for i in 0..col_count {
+                            let v: rusqlite::types::Value = row.get(i).unwrap_or(rusqlite::types::Value::Null);
+                            r.push(v);
+                        }
+                        out_rows.push(r);
                     }
                     Ok(None) => break,
                     Err(e) => return format!("Error: {e}\n"),
                 }
             }
-            out
+            let settings = settings::SETTINGS.with(|s| s.borrow().clone());
+            format::format(&columns, &out_rows, &settings)
         })
     }
 
@@ -556,7 +568,29 @@ impl CliGuest for CliReactor {
 
     fn is_statement_complete(buffered: String) -> bool {
         let trimmed = buffered.trim();
-        trimmed.starts_with('.') || trimmed.ends_with(';') || trimmed.is_empty()
+        if trimmed.is_empty() {
+            return true;
+        }
+        // Dot-commands are complete as soon as their line ends. They
+        // never span lines (no continuation syntax). Detect by
+        // looking at the FIRST non-whitespace char.
+        if trimmed.starts_with('.') {
+            return true;
+        }
+        // SQL: call sqlite3_complete which handles unterminated
+        // string literals, block comments, line comments, BEGIN/END
+        // trigger bodies. Returns non-zero if the input is one or
+        // more complete statements.
+        let cstring = match std::ffi::CString::new(trimmed) {
+            Ok(s) => s,
+            // Interior NUL → treat as not yet complete to avoid
+            // false-positive on malformed input.
+            Err(_) => return false,
+        };
+        // SAFETY: sqlite3_complete is a pure parser; reads the
+        // null-terminated string and returns. The CString lives for
+        // the duration of the call.
+        unsafe { libsqlite3_sys::sqlite3_complete(cstring.as_ptr()) != 0 }
     }
 
     fn is_done() -> bool {
@@ -564,11 +598,10 @@ impl CliGuest for CliReactor {
     }
 
     fn current_prompt(buffered: String) -> String {
-        if buffered.is_empty() {
-            "sqlite> ".to_string()
-        } else {
-            "   ...> ".to_string()
-        }
+        settings::SETTINGS.with(|s| {
+            let g = s.borrow();
+            if buffered.is_empty() { g.prompt_main.clone() } else { g.prompt_cont.clone() }
+        })
     }
 }
 
