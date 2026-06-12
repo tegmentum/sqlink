@@ -641,6 +641,58 @@ static int do_meta_command(CliState *state, const char *line) {
         if (!arg1) {
             fprintf(stderr, "Usage: .unload NAME\n");
         } else {
+#ifdef SQLITE_WASM_UNIFIED
+            /* Look up the manifest first via list-extensions so we
+             * can tear down the trampolines (sqlite3_create_function
+             * for scalars / aggregates, sqlite3_create_collation for
+             * collations, sqlite3_{set_authorizer,update,commit,
+             * rollback}_hook for hook-class). Without this the
+             * trampolines would outlive the loaded component and
+             * trap into freed memory on the next SQL call. */
+            extern void wasm_unregister_dynamic_manifest(
+                sqlite3 *db,
+                const sqlite_extension_metadata_manifest_t *manifest);
+
+            sqlite_wasm_extension_loader_list_manifest_t mfs;
+            sqlite_wasm_extension_loader_list_extensions(&mfs);
+            bool unregistered = false;
+            for (size_t i = 0; i < mfs.len; i++) {
+                sqlite_extension_metadata_manifest_t *m = &mfs.ptr[i];
+                if (m->name.len == strlen(arg1) &&
+                    memcmp(m->name.ptr, arg1, m->name.len) == 0) {
+                    wasm_unregister_dynamic_manifest(state->db, m);
+                    unregistered = true;
+                    break;
+                }
+            }
+            sqlite_wasm_extension_loader_list_manifest_free(&mfs);
+
+            sqlite_cli_unified_string_t name_wit = {
+                (uint8_t *)arg1, strlen(arg1)};
+            sqlite_wasm_extension_loader_loader_error_t err;
+            bool ok = sqlite_wasm_extension_loader_unload_extension(&name_wit, &err);
+            if (ok) {
+                for (int i = 0; i < g_extension_count; i++) {
+                    if (g_extensions[i].loaded &&
+                        strcasecmp(g_extensions[i].name, arg1) == 0) {
+                        g_extensions[i].loaded = false;
+                        break;
+                    }
+                }
+                if (unregistered) {
+                    printf("Unloaded extension: %s\n", arg1);
+                } else {
+                    /* Host removed it but we never saw its manifest
+                     * (race? bug? extension loaded under a different
+                     * name?). Surface as a soft warning. */
+                    printf("Unloaded extension: %s (no cleanup done — manifest not found)\n", arg1);
+                }
+            } else {
+                fprintf(stderr, "Error unloading '%s': %.*s\n", arg1,
+                        (int)err.message.len, (char *)err.message.ptr);
+                sqlite_wasm_extension_loader_loader_error_free(&err);
+            }
+#else
             bool found = false;
             for (int i = 0; i < g_extension_count; i++) {
                 if (g_extensions[i].loaded && strcasecmp(g_extensions[i].name, arg1) == 0) {
@@ -653,6 +705,7 @@ static int do_meta_command(CliState *state, const char *line) {
             if (!found) {
                 fprintf(stderr, "Error: extension '%s' not found\n", arg1);
             }
+#endif
         }
     }
     else if (strcasecmp(cmd_name, "extensions") == 0) {
