@@ -588,6 +588,15 @@ static int do_meta_command(CliState *state, const char *line) {
                 ext->loaded = true;
                 g_extension_count++;
 
+                /* Register the manifest's scalar functions with the
+                 * current connection so SQL can invoke them. Each
+                 * function dispatches through the host via
+                 * sqlite:wasm/dispatch.scalar-call. */
+                extern void wasm_register_dynamic_manifest(
+                    sqlite3 *db, const char *ext_name,
+                    const sqlite_extension_metadata_manifest_t *manifest);
+                wasm_register_dynamic_manifest(state->db, ext->name, &manifest);
+
                 printf("Loaded extension: %s %s from %s (%d functions)\n",
                        ext->name, ext->version, ext->path, ext->num_functions);
                 sqlite_wasm_extension_loader_manifest_free(&manifest);

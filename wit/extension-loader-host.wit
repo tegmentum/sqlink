@@ -14,4 +14,5 @@ package sqlite:wasm@0.1.0;
 /// comes from `wasmtime_wasi::p2::add_to_linker_sync`.
 world extension-loader-host {
     import extension-loader;
+    import dispatch;
 }

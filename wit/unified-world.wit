@@ -47,5 +47,6 @@ world sqlite-cli-unified {
     import demo-slot;
 
     import extension-loader;
+    import dispatch;
     import zip-operations;
 }

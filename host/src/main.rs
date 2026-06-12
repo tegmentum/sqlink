@@ -72,15 +72,22 @@ fn main() -> Result<()> {
         .map_err(|e| anyhow!("wire WASI: {e}"))?;
 
     // Wire the sqlite:wasm/extension-loader interface so the in-WASM
-    // CLI's `.load /path/ext.wasm` command can route through here
-    // when wired on the wasm side (currently the in-WASM CLI calls
-    // sqlite3_load_extension directly; routing it through the WIT
-    // interface is the matching change on the sqlite-wasm side).
+    // CLI's `.load /path/ext.wasm` command can route through here.
     bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
         &mut linker,
         |state: &mut State| HostWrap { host: &mut state.host },
     )
     .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
+
+    // Wire the cross-component dispatch interface so the in-WASM
+    // xFunc trampoline registered for loaded extensions' functions
+    // can reach back into the host and dispatch into the loaded
+    // component.
+    bindings::sqlite::wasm::dispatch::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |state: &mut State| HostWrap { host: &mut state.host },
+    )
+    .map_err(|e| anyhow!("wire dispatch: {e}"))?;
 
     // Build the WASI context: pass guest args through, inherit stdio,
     // inherit env vars so DEBUG flags and the like flow through.

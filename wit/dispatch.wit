@@ -1,0 +1,34 @@
+package sqlite:wasm@0.1.0;
+
+/// Cross-component dispatch for dynamically-loaded extensions.
+///
+/// When SQL invokes a scalar function the in-WASM SQLite registered
+/// after a `.load`, the matching xFunc trampoline can't reach the
+/// loaded extension directly — the extension is its own wasm
+/// component, instantiated by the host inside its own Store. This
+/// interface is the bridge: the in-WASM CLI imports it; the host
+/// implements it; the implementation looks up the loaded extension by
+/// name (the same name returned from extension-loader.load-extension),
+/// builds a Store with the recorded policy, instantiates the loaded
+/// extension as a `sqlite:extension/minimal`-world component, calls
+/// `sqlite:extension/scalar-function.call` with the given func-id and
+/// args, and returns the result variant.
+///
+/// The static-composition path (the four legacy slots fts5/json1/
+/// rtree/geopoly + the demo slot) doesn't use this — those go through
+/// the per-slot direct calls in extension-unified.c. This interface
+/// only fires for slots registered via the dynamic `.load` path.
+interface dispatch {
+    use sqlite:extension/types@0.1.0.{sql-value};
+
+    /// Invoke `func-id` on the extension previously loaded under
+    /// `ext-name`, with the given arguments. Errors out if no such
+    /// extension is loaded, if the extension's `scalar-function.call`
+    /// returns an error, or if the loaded component doesn't actually
+    /// export `sqlite:extension/scalar-function`.
+    scalar-call: func(
+        ext-name: string,
+        func-id: u64,
+        args: list<sql-value>,
+    ) -> result<sql-value, string>;
+}

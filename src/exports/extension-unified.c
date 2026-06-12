@@ -488,6 +488,84 @@ static int register_all_slots(sqlite3 *db, char **pzErrMsg,
     return SQLITE_OK;
 }
 
+/* ------------------------------------------------------------------ */
+/* Dynamic dispatch — for extensions loaded via .load at runtime      */
+/* ------------------------------------------------------------------ */
+
+typedef struct {
+    char *ext_name;
+    uint64_t func_id;
+} dynamic_dispatch_t;
+
+static void wasm_dyn_xfunc(sqlite3_context *ctx, int argc, sqlite3_value **argv) {
+    dynamic_dispatch_t *d = (dynamic_dispatch_t *)sqlite3_user_data(ctx);
+
+    sqlite_extension_types_sql_value_t *args =
+        (sqlite_extension_types_sql_value_t *)malloc(
+            sizeof(*args) * (argc > 0 ? argc : 1));
+    if (!args) {
+        sqlite3_result_error_nomem(ctx);
+        return;
+    }
+    for (int i = 0; i < argc; i++) {
+        sqlite_to_wit(argv[i], &args[i]);
+    }
+
+    sqlite_cli_unified_string_t ext_name_wit = {
+        (uint8_t *)d->ext_name, strlen(d->ext_name)};
+    sqlite_wasm_dispatch_list_sql_value_t slot_args = {
+        (sqlite_wasm_dispatch_sql_value_t *)args, (size_t)argc};
+    sqlite_extension_types_sql_value_t ret;
+    sqlite_cli_unified_string_t err = {NULL, 0};
+
+    bool ok = sqlite_wasm_dispatch_scalar_call(
+        &ext_name_wit, d->func_id, &slot_args,
+        (sqlite_wasm_dispatch_sql_value_t *)&ret, &err);
+    free(args);
+
+    if (!ok) {
+        char *emsg = to_cstring(&err);
+        sqlite3_result_error(ctx, emsg ? emsg : "dispatch error", -1);
+        free(emsg);
+        sqlite_cli_unified_string_free(&err);
+        return;
+    }
+    wit_to_sqlite_result(ctx, &ret);
+    sqlite_extension_types_sql_value_free(&ret);
+}
+
+void wasm_register_dynamic_manifest(
+    sqlite3 *db,
+    const char *ext_name,
+    const sqlite_extension_metadata_manifest_t *manifest
+) {
+    for (size_t i = 0; i < manifest->scalar_functions.len; i++) {
+        sqlite_extension_metadata_scalar_function_spec_t *spec =
+            &manifest->scalar_functions.ptr[i];
+
+        dynamic_dispatch_t *entry =
+            (dynamic_dispatch_t *)malloc(sizeof(*entry));
+        if (!entry) continue;
+        entry->ext_name = strdup(ext_name);
+        if (!entry->ext_name) { free(entry); continue; }
+        entry->func_id = spec->id;
+
+        char *name = malloc(spec->name.len + 1);
+        if (!name) { free(entry->ext_name); free(entry); continue; }
+        memcpy(name, spec->name.ptr, spec->name.len);
+        name[spec->name.len] = '\0';
+
+        int flags = SQLITE_UTF8;
+        if (spec->func_flags & 1) flags |= SQLITE_DETERMINISTIC;
+        if (spec->func_flags & 2) flags |= SQLITE_DIRECTONLY;
+        if (spec->func_flags & 4) flags |= SQLITE_INNOCUOUS;
+
+        sqlite3_create_function_v2(db, name, spec->num_args, flags,
+                                   entry, wasm_dyn_xfunc, NULL, NULL, NULL);
+        free(name);
+    }
+}
+
 /* Wire register_all_slots into SQLite's auto-extension chain at
  * component init time. Runs once per process; SQLite invokes the
  * registered fn for every sqlite3_open. */

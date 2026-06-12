@@ -610,6 +610,21 @@ typedef struct {
   size_t len;
 } sqlite_wasm_extension_loader_list_manifest_t;
 
+typedef sqlite_extension_types_sql_value_t sqlite_wasm_dispatch_sql_value_t;
+
+typedef struct {
+  sqlite_wasm_dispatch_sql_value_t *ptr;
+  size_t len;
+} sqlite_wasm_dispatch_list_sql_value_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_wasm_dispatch_sql_value_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlite_wasm_dispatch_result_sql_value_string_t;
+
 // Archive information
 typedef struct sqlite_wasm_zip_operations_archive_info_t {
   sqlite_cli_unified_string_t   name;
@@ -1079,6 +1094,14 @@ extern void sqlite_wasm_extension_loader_list_extensions(sqlite_wasm_extension_l
 // True iff an extension with the given name is currently loaded.
 extern bool sqlite_wasm_extension_loader_is_extension_loaded(sqlite_cli_unified_string_t *name);
 
+// Imported Functions from `sqlite:wasm/dispatch@0.1.0`
+// Invoke `func-id` on the extension previously loaded under
+// `ext-name`, with the given arguments. Errors out if no such
+// extension is loaded, if the extension's `scalar-function.call`
+// returns an error, or if the loaded component doesn't actually
+// export `sqlite:extension/scalar-function`.
+extern bool sqlite_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, sqlite_wasm_dispatch_list_sql_value_t *args, sqlite_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+
 // Imported Functions from `sqlite:wasm/zip-operations@0.1.0`
 // Create a new ZIP archive from files
 extern bool sqlite_wasm_zip_operations_create_archive(sqlite_cli_unified_string_t *path, sqlite_wasm_zip_operations_error_code_t *err);
@@ -1310,6 +1333,12 @@ void sqlite_wasm_extension_loader_result_manifest_loader_error_free(sqlite_wasm_
 void sqlite_wasm_extension_loader_result_void_loader_error_free(sqlite_wasm_extension_loader_result_void_loader_error_t *ptr);
 
 void sqlite_wasm_extension_loader_list_manifest_free(sqlite_wasm_extension_loader_list_manifest_t *ptr);
+
+void sqlite_wasm_dispatch_sql_value_free(sqlite_wasm_dispatch_sql_value_t *ptr);
+
+void sqlite_wasm_dispatch_list_sql_value_free(sqlite_wasm_dispatch_list_sql_value_t *ptr);
+
+void sqlite_wasm_dispatch_result_sql_value_string_free(sqlite_wasm_dispatch_result_sql_value_string_t *ptr);
 
 void sqlite_wasm_zip_operations_archive_info_free(sqlite_wasm_zip_operations_archive_info_t *ptr);
 

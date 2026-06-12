@@ -69,6 +69,11 @@ extern void __wasm_import_sqlite_wasm_extension_loader_list_extensions(uint8_t *
 __attribute__((__import_module__("sqlite:wasm/extension-loader@0.1.0"), __import_name__("is-extension-loaded")))
 extern int32_t __wasm_import_sqlite_wasm_extension_loader_is_extension_loaded(uint8_t *, size_t);
 
+// Imported Functions from `sqlite:wasm/dispatch@0.1.0`
+
+__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("scalar-call")))
+extern void __wasm_import_sqlite_wasm_dispatch_scalar_call(uint8_t *, size_t, int64_t, uint8_t *, size_t, uint8_t *);
+
 // Imported Functions from `sqlite:wasm/zip-operations@0.1.0`
 
 __attribute__((__import_module__("sqlite:wasm/zip-operations@0.1.0"), __import_name__("create-archive")))
@@ -1425,6 +1430,29 @@ void sqlite_wasm_extension_loader_list_manifest_free(sqlite_wasm_extension_loade
   }
 }
 
+void sqlite_wasm_dispatch_sql_value_free(sqlite_wasm_dispatch_sql_value_t *ptr) {
+  sqlite_extension_types_sql_value_free(ptr);
+}
+
+void sqlite_wasm_dispatch_list_sql_value_free(sqlite_wasm_dispatch_list_sql_value_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_wasm_dispatch_sql_value_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_wasm_dispatch_sql_value_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlite_wasm_dispatch_result_sql_value_string_free(sqlite_wasm_dispatch_result_sql_value_string_t *ptr) {
+  if (!ptr->is_err) {
+    sqlite_wasm_dispatch_sql_value_free(&ptr->val.ok);
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
 void sqlite_wasm_zip_operations_archive_info_free(sqlite_wasm_zip_operations_archive_info_t *ptr) {
   sqlite_cli_unified_string_free(&ptr->name);
   sqlite_cli_unified_string_free(&ptr->version);
@@ -2428,6 +2456,57 @@ void sqlite_wasm_extension_loader_list_extensions(sqlite_wasm_extension_loader_l
 bool sqlite_wasm_extension_loader_is_extension_loaded(sqlite_cli_unified_string_t *name) {
   int32_t ret = __wasm_import_sqlite_wasm_extension_loader_is_extension_loaded((uint8_t *) (*name).ptr, (*name).len);
   return ret;
+}
+
+bool sqlite_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, sqlite_wasm_dispatch_list_sql_value_t *args, sqlite_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_wasm_dispatch_scalar_call((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlite_wasm_dispatch_result_sql_value_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_extension_types_sql_value_t variant;
+      variant.tag = (int32_t) *((uint8_t*) (ptr + 8));
+      switch ((int32_t) variant.tag) {
+        case 0: {
+          break;
+        }
+        case 1: {
+          variant.val.integer = *((int64_t*) (ptr + 16));
+          break;
+        }
+        case 2: {
+          variant.val.real = *((double*) (ptr + 16));
+          break;
+        }
+        case 3: {
+          variant.val.text = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 4: {
+          variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+      }
+
+      result.val.ok = variant;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
 }
 
 bool sqlite_wasm_zip_operations_create_archive(sqlite_cli_unified_string_t *path, sqlite_wasm_zip_operations_error_code_t *err) {
