@@ -321,6 +321,11 @@ pub struct LoadedState {
     table: wasmtime_wasi::ResourceTable,
     state: SharedKv,
     cache: SharedKv,
+    /// Path to the cli's database, propagated from Host so spi.execute
+    /// can open its own rusqlite::Connection against the same file.
+    /// Empty string => `:memory:` (SPI returns an error in that case
+    /// since in-memory dbs aren't sharable across connections).
+    db_path: String,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -352,44 +357,112 @@ impl loaded::sqlite::extension::http::Host for LoadedState {
 /// Stubs for the SPI imports the minimal world declares. None of
 /// today's loadable extensions exercise these; real impls land when
 /// the first extension that needs to run SQL inside the host arrives.
+/// Open a fresh rusqlite::Connection against the cli's db file.
+/// Used by every spi method. Each call opens + drops a connection;
+/// good enough for v1 (extensions don't typically call SPI in tight
+/// loops). A follow-up could pool connections per loaded extension.
+fn spi_open(db_path: &str) -> std::result::Result<rusqlite::Connection, loaded::sqlite::extension::types::SqliteError> {
+    if db_path.is_empty() || db_path == ":memory:" {
+        return Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1, extended_code: 1,
+            message: "spi requires a file-backed database; pass --db <path> to sqlite-wasm-run".to_string(),
+        });
+    }
+    rusqlite::Connection::open(db_path).map_err(|e| loaded::sqlite::extension::types::SqliteError {
+        code: 1, extended_code: 1,
+        message: format!("open {db_path}: {e}"),
+    })
+}
+
+fn spi_err<E: std::fmt::Display>(e: E) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: 1, extended_code: 1, message: e.to_string(),
+    }
+}
+
+fn spi_value_to_rusqlite(v: loaded::sqlite::extension::types::SqlValue) -> rusqlite::types::Value {
+    use loaded::sqlite::extension::types::SqlValue as V;
+    match v {
+        V::Null => rusqlite::types::Value::Null,
+        V::Integer(i) => rusqlite::types::Value::Integer(i),
+        V::Real(r) => rusqlite::types::Value::Real(r),
+        V::Text(s) => rusqlite::types::Value::Text(s),
+        V::Blob(b) => rusqlite::types::Value::Blob(b),
+    }
+}
+
+fn rusqlite_to_spi_value(v: rusqlite::types::Value) -> loaded::sqlite::extension::types::SqlValue {
+    use loaded::sqlite::extension::types::SqlValue as V;
+    match v {
+        rusqlite::types::Value::Null => V::Null,
+        rusqlite::types::Value::Integer(i) => V::Integer(i),
+        rusqlite::types::Value::Real(r) => V::Real(r),
+        rusqlite::types::Value::Text(s) => V::Text(s),
+        rusqlite::types::Value::Blob(b) => V::Blob(b),
+    }
+}
+
 impl loaded::sqlite::extension::spi::Host for LoadedState {
     async fn execute(
         &mut self,
-        _sql: String,
-        _params: Vec<loaded::sqlite::extension::types::SqlValue>,
+        sql: String,
+        params: Vec<loaded::sqlite::extension::types::SqlValue>,
     ) -> std::result::Result<
         loaded::sqlite::extension::types::QueryResult,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.execute not implemented in dispatch host".to_string(),
+        let conn = spi_open(&self.db_path)?;
+        let mut stmt = conn.prepare(&sql).map_err(spi_err)?;
+        let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+        let col_count = columns.len();
+        let rqs: Vec<rusqlite::types::Value> = params.into_iter().map(spi_value_to_rusqlite).collect();
+        let mut rows = stmt.query(rusqlite::params_from_iter(rqs.iter())).map_err(spi_err)?;
+        let mut out_rows: Vec<Vec<loaded::sqlite::extension::types::SqlValue>> = Vec::new();
+        while let Some(row) = rows.next().map_err(spi_err)? {
+            let mut r = Vec::with_capacity(col_count);
+            for i in 0..col_count {
+                let v: rusqlite::types::Value = row.get(i).map_err(spi_err)?;
+                r.push(rusqlite_to_spi_value(v));
+            }
+            out_rows.push(r);
+        }
+        // Need to drop stmt before we can call other things on conn;
+        // however we still want changes / last_insert_rowid below.
+        // Re-establish via a fresh prepare path is overkill — just
+        // ensure_drop the stmt iterator/query borrow ends here.
+        drop(rows);
+        drop(stmt);
+        Ok(loaded::sqlite::extension::types::QueryResult {
+            columns,
+            rows: out_rows,
+            changes: conn.changes() as i64,
+            last_insert_rowid: conn.last_insert_rowid(),
         })
     }
+
     async fn execute_scalar(
         &mut self,
-        _sql: String,
-        _params: Vec<loaded::sqlite::extension::types::SqlValue>,
+        sql: String,
+        params: Vec<loaded::sqlite::extension::types::SqlValue>,
     ) -> std::result::Result<
         loaded::sqlite::extension::types::SqlValue,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.execute-scalar not implemented in dispatch host".to_string(),
-        })
+        let conn = spi_open(&self.db_path)?;
+        let rqs: Vec<rusqlite::types::Value> = params.into_iter().map(spi_value_to_rusqlite).collect();
+        let v: rusqlite::types::Value = conn
+            .query_row(&sql, rusqlite::params_from_iter(rqs.iter()), |row| row.get(0))
+            .map_err(spi_err)?;
+        Ok(rusqlite_to_spi_value(v))
     }
+
     async fn execute_batch(
         &mut self,
-        _sql: String,
+        sql: String,
     ) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.execute-batch not implemented in dispatch host".to_string(),
-        })
+        let conn = spi_open(&self.db_path)?;
+        conn.execute_batch(&sql).map_err(spi_err)?;
+        Ok(conn.changes() as i64)
     }
 }
 
@@ -524,7 +597,7 @@ fn make_loaded_hooked_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
 /// Construct a fresh Store + LoadedState for one dispatch into a
 /// loaded extension. Each dispatch gets its own Store so per-call
 /// fuel is re-supplied and shared global state doesn't leak.
-fn build_loaded_store(engine: &Engine, ext: &LoadedExtension) -> Result<wasmtime::Store<LoadedState>> {
+fn build_loaded_store(engine: &Engine, ext: &LoadedExtension, db_path: String) -> Result<wasmtime::Store<LoadedState>> {
     let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
     builder.inherit_stdio();
     let state = LoadedState {
@@ -532,6 +605,7 @@ fn build_loaded_store(engine: &Engine, ext: &LoadedExtension) -> Result<wasmtime
         table: wasmtime_wasi::ResourceTable::new(),
         state: ext.state.clone(),
         cache: ext.cache.clone(),
+        db_path,
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
@@ -568,6 +642,11 @@ pub struct CollationEntry {
 pub struct Host {
     engine: Engine,
     components: Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>>,
+    /// Database path the cli reactor is using. Loaded extensions'
+    /// spi.execute opens its own rusqlite::Connection to this path.
+    /// Empty string means `:memory:`, and SPI returns an error then
+    /// (in-memory dbs can't be shared between connections).
+    db_path: Arc<RwLock<String>>,
 }
 
 impl Host {
@@ -587,7 +666,20 @@ impl Host {
         Ok(Self {
             engine,
             components: Arc::new(RwLock::new(HashMap::new())),
+            db_path: Arc::new(RwLock::new(String::new())),
         })
+    }
+
+    /// Set the database path the cli is using. Called by sqlite-wasm-run
+    /// before instantiating the reactor; loaded extensions' spi.execute
+    /// reads this when opening their own rusqlite connection.
+    pub fn set_db_path(&self, path: &str) {
+        *self.db_path.write() = path.to_string();
+    }
+
+    /// Current db path (empty if `:memory:`).
+    pub fn db_path(&self) -> String {
+        self.db_path.read().clone()
     }
 
     pub fn engine(&self) -> &Engine {
@@ -631,7 +723,7 @@ impl Host {
             state: Arc::new(Mutex::new(HashMap::new())),
             cache: Arc::new(Mutex::new(HashMap::new())),
         };
-        let mut store = build_loaded_store(&self.engine, &tmp_ext)?;
+        let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate(&mut store, &component, &linker)
             .map_err(|e| anyhow!("instantiate loaded ext: {e}"))?;
         let manifest = instance
@@ -726,7 +818,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name}: {e}"))?;
 
@@ -768,7 +860,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance = loaded_stateful::Stateful::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
 
@@ -801,7 +893,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance = loaded_stateful::Stateful::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
 
@@ -834,7 +926,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_collating_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance = loaded_collating::Collating::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as collating: {e}"))?;
         let result = instance
@@ -866,7 +958,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_authorizing_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
             loaded_authorizing::Authorizing::instantiate(&mut store, &ext.component, &linker)
                 .map_err(|e| anyhow!("instantiate {ext_name} as authorizing: {e}"))?;
@@ -905,7 +997,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
         instance
@@ -932,7 +1024,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
         instance
@@ -952,7 +1044,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext)?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance = loaded_hooked::Hooked::instantiate(&mut store, &ext.component, &linker)
             .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
         instance

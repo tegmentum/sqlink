@@ -436,19 +436,26 @@ impl GuestStatement for HlStatement {
 thread_local! {
     static CLI_CONN: RefCell<Option<rusqlite::Connection>> = const { RefCell::new(None) };
     static DONE: RefCell<bool> = const { RefCell::new(false) };
+    static DB_PATH: RefCell<String> = const { RefCell::new(String::new()) };
 }
 
 fn ensure_cli_conn() {
     CLI_CONN.with(|c| {
         let mut g = c.borrow_mut();
         if g.is_none() {
-            *g = rusqlite::Connection::open_in_memory().ok();
+            let path = DB_PATH.with(|p| p.borrow().clone());
+            *g = if path.is_empty() || path == ":memory:" {
+                rusqlite::Connection::open_in_memory().ok()
+            } else {
+                rusqlite::Connection::open(&path).ok()
+            };
         }
     });
 }
 
 impl CliGuest for CliReactor {
-    fn init() -> Result<(), String> {
+    fn init(db_path: String) -> Result<(), String> {
+        DB_PATH.with(|p| *p.borrow_mut() = db_path);
         ensure_cli_conn();
         Ok(())
     }

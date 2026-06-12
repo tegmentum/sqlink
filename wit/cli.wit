@@ -13,11 +13,11 @@ package sqlite:wasm@0.1.0;
 /// expected to drive them on an async runtime. See
 /// PLAN-reactor-cli-async-host.md for the architectural rationale.
 interface cli {
-    /// One-time setup: open the transient database, install
-    /// signal handlers (no-op under wasm), populate prompt
-    /// strings. Idempotent — calling twice is harmless but
-    /// only the first call does work.
-    init: func() -> result<_, string>;
+    /// One-time setup: open the database at `db-path` (empty
+    /// string means `:memory:`), populate prompt strings.
+    /// Idempotent — calling twice is harmless but only the
+    /// first call does work.
+    init: func(db-path: string) -> result<_, string>;
 
     /// Process one statement or dot-command. The argument may
     /// contain trailing newlines; the CLI trims them. Returns

@@ -30,3 +30,8 @@ parking_lot = "0.12"
 tracing = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util"] }
 async-trait = "0.1"
+# Host-side SQLite for the hybrid SPI path. Loaded extensions'
+# spi.execute opens a fresh Connection here against the same file
+# the cli is using, so they see committed schema + data without
+# needing to re-enter the cli reactor.
+rusqlite = { version = "0.32", features = ["bundled"] }

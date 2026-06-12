@@ -48,18 +48,30 @@ async fn main() -> Result<()> {
     }
 
     let mut reactor_mode = false;
+    let mut db_path = String::new();
     let mut positional: Vec<String> = Vec::new();
     let mut after_dashes = false;
-    for a in args.iter().skip(1) {
+    let mut i = 1;
+    while i < args.len() {
+        let a = &args[i];
         if after_dashes {
             positional.push(a.clone());
         } else if a == "--" {
             after_dashes = true;
         } else if a == "--reactor" {
             reactor_mode = true;
+        } else if a == "--db" {
+            i += 1;
+            if i < args.len() {
+                db_path = args[i].clone();
+            } else {
+                eprintln!("--db expects a path");
+                usage();
+            }
         } else {
             positional.push(a.clone());
         }
+        i += 1;
     }
     if positional.is_empty() {
         usage();
@@ -68,6 +80,7 @@ async fn main() -> Result<()> {
     let guest_args: Vec<String> = positional.iter().skip(1).cloned().collect();
 
     let host = Host::new()?;
+    host.set_db_path(&db_path);
     let engine = host.engine().clone();
 
     let component_bytes = std::fs::read(&component_path)
@@ -94,6 +107,22 @@ async fn main() -> Result<()> {
     let mut wasi_builder = WasiCtxBuilder::new();
     wasi_builder.inherit_stdio();
     wasi_builder.inherit_env();
+    // Grant the wasm component access to the db file's parent dir.
+    // Required for reactor-mode where cli-rust opens its own sqlite3
+    // connection against the same file the host opens for spi.
+    if !db_path.is_empty() && db_path != ":memory:" {
+        let p = std::path::Path::new(&db_path);
+        let parent = p.parent().unwrap_or_else(|| std::path::Path::new("."));
+        let parent = if parent.as_os_str().is_empty() {
+            std::path::Path::new(".")
+        } else {
+            parent
+        };
+        let parent_str = parent.to_string_lossy().to_string();
+        if let Err(e) = wasi_builder.preopened_dir(parent, &parent_str, wasmtime_wasi::DirPerms::all(), wasmtime_wasi::FilePerms::all()) {
+            return Err(anyhow!("preopen {}: {e}", parent.display()));
+        }
+    }
     let argv0 = component_path
         .file_name()
         .and_then(|s| s.to_str())
@@ -114,7 +143,7 @@ async fn main() -> Result<()> {
     store.set_epoch_deadline(1_000_000_000_000);
 
     if reactor_mode {
-        run_reactor(&mut store, &component, &linker).await
+        run_reactor(&mut store, &component, &linker, &db_path).await
     } else {
         let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(
             &mut store, &component, &linker,
@@ -142,6 +171,7 @@ async fn run_reactor(
     store: &mut Store<State>,
     component: &Component,
     linker: &Linker<State>,
+    db_path: &str,
 ) -> Result<()> {
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
@@ -152,7 +182,7 @@ async fn run_reactor(
     .map_err(|e| anyhow!("instantiate reactor: {e}"))?;
 
     let cli = reactor.sqlite_wasm_cli();
-    cli.call_init(&mut *store)
+    cli.call_init(&mut *store, db_path)
         .await
         .map_err(|e| anyhow!("cli.init trap: {e}"))?
         .map_err(|e| anyhow!("cli.init returned: {e}"))?;
