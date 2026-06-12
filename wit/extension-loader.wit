@@ -92,4 +92,13 @@ interface extension-loader {
         path: string,
         options: load-options,
     ) -> result<string, loader-error>;
+
+    /// Register a wasm-component provider under `id`. The component
+    /// targets `compose:dynlink/dynlink-provider` (exports
+    /// `endpoint`). Subsequent `linker.resolve-by-id(id)` calls from
+    /// Fiji functions return an Instance backed by this component.
+    register-wasm-provider: func(
+        id: string,
+        path: string,
+    ) -> result<_, loader-error>;
 }

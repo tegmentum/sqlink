@@ -63,6 +63,18 @@ binary:
    for `sqlite:extension`-shape. See `AUTHORING-FIJI-FUNCTIONS.md`
    and `host/COMPOSE-PROTOCOL.md` for the writeup.
 
+   Providers a Fiji function can resolve come in two flavors:
+   - **Host shims** — implemented in the host (e.g. `sqlite-runtime`
+     dispatches CBOR-encoded SQL to the cli's rusqlite::Connection).
+     Wired at startup, no registration needed.
+   - **Wasm-component providers** — real wasm components targeting
+     `compose:dynlink/dynlink-provider` (exports
+     `endpoint.handle(method, payload)`). Registered at runtime via
+     `.register-provider <id> <path>`; compiled once, instantiated
+     in a fresh Store on every invoke. Reference example:
+     `sqlite-wasm-loader/runtimes/wasmtime/std-text` (upper/lower/
+     reverse/len on a UTF-8 string, ~162 KB).
+
 ## Two CLIs, on purpose
 
 | | sqlite-cli-demo.wasm (C) | sqlite_cli_rust.wasm (Rust) |

@@ -162,6 +162,21 @@ pub mod compose {
     });
 }
 
+/// Bindgen for wasm-component providers — components that export
+/// `compose:dynlink/endpoint`. ProviderKind::WasmComponent uses
+/// this to call endpoint.handle on the instantiated provider.
+pub mod dynlink_provider {
+    wasmtime::component::bindgen!({
+        path: "../wit",
+        world: "compose:dynlink/dynlink-provider@0.1.0",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "sys:compose/types": super::compose::sys::compose::types,
+        },
+    });
+}
+
 /// Bindgen for Fiji functions — wasm components targeting our
 /// `fiji-function` world. The host uses this to instantiate +
 /// invoke run() when .fiji is called.
@@ -1234,6 +1249,18 @@ impl Host {
             .insert(id.to_string(), provider);
     }
 
+    /// Register a wasm-component compose provider under `id`. Reads
+    /// `path`, compiles it with the shared engine, and inserts a
+    /// `ProviderKind::WasmComponent` handle so subsequent Fiji-function
+    /// resolves return an Instance backed by that component.
+    pub fn register_wasm_provider(&self, id: &str, path: PathBuf) -> Result<()> {
+        let provider =
+            compose_provider::ProviderHandle::new_wasm_component(self.engine.clone(), path)
+                .map_err(|e| anyhow!("register {id}: {e}"))?;
+        self.register_compose_provider(id, provider);
+        Ok(())
+    }
+
     /// (id, kind) pairs for every registered compose provider.
     pub fn list_compose_providers(&self) -> Vec<(String, &'static str)> {
         self.compose_providers
@@ -1242,6 +1269,7 @@ impl Host {
             .map(|(id, p)| {
                 let kind = match p.kind {
                     compose_provider::ProviderKind::SqliteRuntime { .. } => "sqlite-runtime",
+                    compose_provider::ProviderKind::WasmComponent { .. } => "wasm-component",
                 };
                 (id.clone(), kind)
             })
@@ -2300,6 +2328,20 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             .await
         {
             Ok(output) => Ok(output),
+            Err(e) => Err(LoaderError {
+                code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+
+    async fn register_wasm_provider(
+        &mut self,
+        id: String,
+        path: String,
+    ) -> std::result::Result<(), LoaderError> {
+        match self.host.register_wasm_provider(&id, PathBuf::from(&path)) {
+            Ok(()) => Ok(()),
             Err(e) => Err(LoaderError {
                 code: 1,
                 message: e.to_string(),

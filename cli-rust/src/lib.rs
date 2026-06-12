@@ -644,6 +644,9 @@ impl CliGuest for CliReactor {
         if trimmed == ".resolvers" {
             return do_list_resolvers();
         }
+        if let Some(rest) = trimmed.strip_prefix(".register-provider ") {
+            return do_register_provider(rest.trim());
+        }
         if trimmed.starts_with(".cache") {
             return do_cache(trimmed.strip_prefix(".cache").unwrap_or("").trim());
         }
@@ -1257,6 +1260,25 @@ fn do_register_resolver(arg: &str) -> String {
     match extension_loader::register_resolver(scheme, path, &opts) {
         Ok(name) => format!("Registered resolver: {scheme} -> {name}\n"),
         Err(e) => format!("Error registering {scheme}: {} (code {})\n", e.message, e.code),
+    }
+}
+
+/// .register-provider ID PATH — register a wasm-component compose
+/// provider. PATH must be a component targeting the
+/// compose:dynlink/dynlink-provider world (exports endpoint). After
+/// registration, Fiji functions can `linker.resolve-by-id(ID)` and
+/// invoke methods on the returned instance.
+fn do_register_provider(arg: &str) -> String {
+    use bindings::sqlite::wasm::extension_loader;
+    let mut parts = arg.splitn(2, char::is_whitespace);
+    let id = parts.next().unwrap_or("").trim();
+    let path = parts.next().unwrap_or("").trim();
+    if id.is_empty() || path.is_empty() {
+        return "Usage: .register-provider ID PATH\n".to_string();
+    }
+    match extension_loader::register_wasm_provider(id, path) {
+        Ok(()) => format!("Registered provider: {id} -> {path}\n"),
+        Err(e) => format!("Error registering {id}: {} (code {})\n", e.message, e.code),
     }
 }
 

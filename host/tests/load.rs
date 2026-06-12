@@ -115,3 +115,91 @@ async fn fiji_function_resolves_sqlite_runtime() {
 
     assert!(output.contains("3 table(s)"), "got: {output:?}");
 }
+
+#[tokio::test]
+async fn wasm_component_provider_handles_invoke() {
+    use ciborium::value::Value as CborValue;
+    use sqlite_wasm_host::compose_provider::ProviderHandle;
+
+    let mut std_text = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    std_text.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_text.wasm");
+    if !std_text.exists() {
+        eprintln!("skipping: std_text.wasm not built");
+        return;
+    }
+
+    let host = Host::new().unwrap();
+    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), std_text)
+        .expect("compile std-text");
+
+    // upper("hello") -> "HELLO"
+    let req = {
+        let mut buf = Vec::new();
+        let map = CborValue::Map(vec![(
+            CborValue::Text("text".into()),
+            CborValue::Text("hello".into()),
+        )]);
+        ciborium::ser::into_writer(&map, &mut buf).unwrap();
+        buf
+    };
+    let resp = provider.invoke("upper", &req).await.expect("invoke");
+    let v: CborValue = ciborium::de::from_reader(&*resp).unwrap();
+    match v {
+        CborValue::Text(s) => assert_eq!(s, "HELLO"),
+        other => panic!("expected text, got {other:?}"),
+    }
+
+    // len("hello") -> 5
+    let resp = provider.invoke("len", &req).await.expect("invoke len");
+    let v: CborValue = ciborium::de::from_reader(&*resp).unwrap();
+    match v {
+        CborValue::Integer(i) => {
+            let n: i128 = i.into();
+            assert_eq!(n, 5);
+        }
+        other => panic!("expected int, got {other:?}"),
+    }
+
+    // unknown method -> Err
+    let err = provider.invoke("bogus", &req).await.expect_err("unknown");
+    assert!(err.contains("unknown method"), "got: {err}");
+}
+
+#[tokio::test]
+async fn fiji_composes_sqlite_runtime_and_std_text() {
+    use parking_lot::Mutex;
+    use sqlite_wasm_host::compose_provider::ProviderHandle;
+    use std::sync::Arc;
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut fiji = manifest_dir.clone();
+    fiji.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/fiji_text_demo.wasm");
+    let mut std_text = manifest_dir.clone();
+    std_text.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_text.wasm");
+    if !fiji.exists() || !std_text.exists() {
+        eprintln!("skipping: fiji_text_demo.wasm or std_text.wasm not built");
+        return;
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("t.db");
+    {
+        let c = rusqlite::Connection::open(&db_path).unwrap();
+        c.execute_batch("CREATE TABLE widgets(x);").unwrap();
+    }
+
+    let host = Host::new().unwrap();
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    host.register_compose_provider(
+        "sqlite-runtime",
+        ProviderHandle::new_sqlite_runtime(Arc::new(Mutex::new(Some(conn)))),
+    );
+    host.register_wasm_provider("std-text", std_text)
+        .expect("register std-text");
+
+    let output = host
+        .run_fiji_function(fiji, Policy::deny_all())
+        .await
+        .expect("fiji run");
+    assert!(output.contains("WIDGETS"), "got: {output:?}");
+}

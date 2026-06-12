@@ -13,7 +13,7 @@ loaded into the same `sqlite-wasm-run` session.
 |---|---|---|
 | Need to register SQL functions / aggregates / collations / hooks | yes | no |
 | Need to run an ad-hoc procedure that uses SQL once | overkill | yes |
-| Want to use compose's shared providers (std-text, std-hashing, …) | not yet | yes |
+| Want to use compose's shared providers (std-text, std-hashing, …) | not yet | yes — register with `.register-provider` |
 | Cross-language authoring (any language with cargo-component equivalent) | Rust-leaning today | any |
 | Binary size | 12 KB shape + 2 MB bundled SQLite at runtime | ~150 KB; SQLite shared |
 
@@ -146,13 +146,23 @@ The answer is 42
 
 ## Available providers
 
-| id | what | docs |
-|---|---|---|
-| `sqlite-runtime` | SQL execution against the cli's db | `host/COMPOSE-PROTOCOL.md` |
+| id | what | how it's wired | docs |
+|---|---|---|---|
+| `sqlite-runtime` | SQL execution against the cli's db | host shim (built-in) | `host/COMPOSE-PROTOCOL.md` |
+| `std-text` | upper/lower/reverse/len on a UTF-8 string | wasm-component; register with `.register-provider std-text PATH` | source: `sqlite-wasm-loader/runtimes/wasmtime/std-text` |
 
-Future providers (`std-text`, `std-hashing`, `std-encoding`) will
-appear here as they ship. The pattern stays the same: declare in
-your function's body, resolve by id, invoke with CBOR.
+`std-text` is the reference real-component provider. It targets
+`compose:dynlink/dynlink-provider` (exports `endpoint`) and is
+registered via `.register-provider <id> <path>` — the host compiles
+the component once at registration time and instantiates it in a
+fresh Store on every invoke. Same calling convention as
+`sqlite-runtime` (CBOR payload, opaque-bytes return).
+
+Add more providers by writing a wasm component that exports
+`compose:dynlink/endpoint.handle(method, payload)` and registering
+it under any id you choose. Existing example: see `fiji-text-demo`
+in the loader for a Fiji function that uses both `sqlite-runtime`
+and `std-text` in one `run()`.
 
 ## Limits
 

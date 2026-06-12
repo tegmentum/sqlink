@@ -57,6 +57,12 @@ fn cmd_help() -> String {
     o.push_str(".separator STR          Column separator (list/csv modes)\n");
     o.push_str(".show                   Show current settings\n");
     o.push_str(".tables ?PATTERN?       List tables matching pattern\n");
+    o.push_str(".fiji FILE              Run a Fiji function (compose-shaped wasm)\n");
+    o.push_str(".register-provider ID FILE  Register a wasm-component compose provider\n");
+    o.push_str(".register-resolver SCHEME FILE  Register a URI resolver\n");
+    o.push_str(".unregister-resolver SCHEME  Drop a registered resolver\n");
+    o.push_str(".resolvers              List registered resolvers\n");
+    o.push_str(".cache [purge|list]     CAS cache control\n");
     o
 }
 

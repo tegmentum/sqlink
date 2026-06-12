@@ -1,17 +1,25 @@
 //! Host-side compose:dynlink provider state.
 //!
 //! Each `Instance` resource the linker hands a guest is backed by a
-//! `ProviderHandle`. The only provider built in today is
-//! `sqlite-runtime`, a host shim that dispatches CBOR-encoded
-//! methods (per host/COMPOSE-PROTOCOL.md) to the cli's shared
-//! rusqlite::Connection.
+//! `ProviderHandle`. Two flavors today:
+//!
+//!   - `SqliteRuntime` — host shim that dispatches CBOR-encoded
+//!     methods to the cli's shared rusqlite::Connection. Built-in;
+//!     wired by sqlite-wasm-run automatically.
+//!   - `WasmComponent` — bytes of a `dynlink-provider`-world wasm
+//!     component. Each invoke instantiates the component in a
+//!     fresh Store and calls `endpoint.handle`. Registered via the
+//!     cli's `.register-provider <id> <path>` command.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use ciborium::value::Value as CborValue;
 use parking_lot::Mutex;
 use rusqlite::types::Value as RusqliteValue;
+use wasmtime::component::{Component, Linker};
+use wasmtime::Engine;
 
 /// What a resolved provider handle remembers.
 pub struct ProviderHandle {
@@ -29,6 +37,16 @@ pub enum ProviderKind {
         /// Prepared statements by id; finalize drops them.
         stmts: Arc<Mutex<HashMap<u64, PreparedStmt>>>,
         next_stmt_id: Arc<Mutex<u64>>,
+    },
+    /// A real `dynlink-provider`-world wasm component. Each
+    /// invoke instantiates in a fresh Store (no state carries
+    /// between calls). Slower than the SqliteRuntime shim but
+    /// architecturally pure — providers can be authored in any
+    /// language that targets the dynlink-provider world.
+    WasmComponent {
+        engine: Engine,
+        component: Component,
+        path: PathBuf,
     },
 }
 
@@ -56,6 +74,22 @@ impl ProviderHandle {
         }
     }
 
+    /// Build a wasm-component provider from a path on disk. Compiles
+    /// the component once at registration time; subsequent invoke
+    /// calls just instantiate it.
+    pub fn new_wasm_component(engine: Engine, path: PathBuf) -> Result<Self, String> {
+        let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+        let component = Component::from_binary(&engine, &bytes)
+            .map_err(|e| format!("compile {}: {e}", path.display()))?;
+        Ok(Self {
+            kind: ProviderKind::WasmComponent {
+                engine,
+                component,
+                path,
+            },
+        })
+    }
+
     pub async fn invoke(&self, method: &str, payload: &[u8]) -> Result<Vec<u8>, String> {
         match &self.kind {
             ProviderKind::SqliteRuntime {
@@ -63,8 +97,58 @@ impl ProviderHandle {
                 stmts,
                 next_stmt_id,
             } => sqlite_runtime_invoke(method, payload, conn, stmts, next_stmt_id).await,
+            ProviderKind::WasmComponent {
+                engine, component, ..
+            } => wasm_component_invoke(method, payload, engine, component).await,
         }
     }
+}
+
+// --- wasm-component provider dispatcher ---
+
+struct ProviderState {
+    wasi: wasmtime_wasi::WasiCtx,
+    resources: wasmtime_wasi::ResourceTable,
+}
+
+impl wasmtime_wasi::WasiView for ProviderState {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.resources,
+        }
+    }
+}
+
+async fn wasm_component_invoke(
+    method: &str,
+    payload: &[u8],
+    engine: &Engine,
+    component: &Component,
+) -> Result<Vec<u8>, String> {
+    let mut linker: Linker<ProviderState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| format!("wasi linker: {e}"))?;
+    let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
+    wasi.inherit_stdio();
+    let state = ProviderState {
+        wasi: wasi.build(),
+        resources: wasmtime_wasi::ResourceTable::new(),
+    };
+    let mut store = wasmtime::Store::new(engine, state);
+    store
+        .set_fuel(u64::MAX / 2)
+        .map_err(|e| format!("set_fuel: {e}"))?;
+    store.set_epoch_deadline(1_000_000_000_000);
+    let instance =
+        crate::dynlink_provider::DynlinkProvider::instantiate_async(&mut store, component, &linker)
+            .await
+            .map_err(|e| format!("instantiate provider: {e}"))?;
+    let result = instance
+        .compose_dynlink_endpoint()
+        .call_handle(&mut store, method, payload)
+        .await
+        .map_err(|e| format!("call_handle: {e}"))?;
+    result.map_err(|e| format!("provider {method}: {}", e.message))
 }
 
 // --- sqlite-runtime dispatcher --- per host/COMPOSE-PROTOCOL.md ---
