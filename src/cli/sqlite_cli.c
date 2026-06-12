@@ -584,14 +584,17 @@ static int do_meta_command(CliState *state, const char *line) {
                 memcpy(ext->version, manifest.version.ptr, n);
                 ext->version[n] = '\0';
 
-                ext->num_functions = (int)manifest.scalar_functions.len;
+                ext->num_functions = (int)(manifest.scalar_functions.len
+                                          + manifest.aggregate_functions.len
+                                          + manifest.collations.len);
                 ext->loaded = true;
                 g_extension_count++;
 
-                /* Register the manifest's scalar functions with the
-                 * current connection so SQL can invoke them. Each
-                 * function dispatches through the host via
-                 * sqlite:wasm/dispatch.scalar-call. */
+                /* Register the manifest's scalar/aggregate/collation
+                 * entries with the current connection so SQL can
+                 * invoke them. Each dispatches through the host via
+                 * sqlite:wasm/dispatch.{scalar-call,aggregate-step,
+                 * aggregate-finalize,collation-compare}. */
                 extern void wasm_register_dynamic_manifest(
                     sqlite3 *db, const char *ext_name,
                     const sqlite_extension_metadata_manifest_t *manifest);

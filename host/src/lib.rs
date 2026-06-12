@@ -29,7 +29,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine};
 
@@ -57,6 +57,26 @@ pub mod loaded {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
         world: "minimal",
+    });
+}
+
+/// Used when a loaded extension declares aggregate functions in its
+/// manifest. The `stateful` world adds `state` + `cache` imports and
+/// the `aggregate-function` export on top of `minimal`. The `with:`
+/// clause shares the already-generated type and trait modules from
+/// `loaded` so we don't pay the duplicate-bindings cost.
+pub mod loaded_stateful {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "stateful",
+        with: {
+            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+        },
     });
 }
 
@@ -116,7 +136,7 @@ fn policy_from_load_options(
 /// Now that load_extension calls describe() at load time and stores
 /// the scalar_functions, this returns the real names/ids/arities.
 fn stub_manifest(ext: &LoadedExtension) -> Manifest {
-    use bindings::sqlite::extension::metadata::ScalarFunctionSpec;
+    use bindings::sqlite::extension::metadata::{AggregateFunctionSpec, ScalarFunctionSpec};
     use bindings::sqlite::extension::types::FunctionFlags;
     Manifest {
         name: ext.name.clone(),
@@ -135,7 +155,21 @@ fn stub_manifest(ext: &LoadedExtension) -> Manifest {
                 },
             })
             .collect(),
-        aggregate_functions: vec![],
+        aggregate_functions: ext
+            .aggregate_functions
+            .iter()
+            .map(|f| AggregateFunctionSpec {
+                id: f.id,
+                name: f.name.clone(),
+                num_args: f.num_args,
+                func_flags: if f.deterministic {
+                    FunctionFlags::DETERMINISTIC
+                } else {
+                    FunctionFlags::empty()
+                },
+                is_window: f.is_window,
+            })
+            .collect(),
         collations: vec![],
         has_authorizer: false,
         has_update_hook: false,
@@ -148,6 +182,13 @@ fn stub_manifest(ext: &LoadedExtension) -> Manifest {
 /// `sqlite-wasm-loader` setting so policy values port directly.
 const EPOCH_TICK: Duration = Duration::from_millis(1);
 
+/// Per-extension key/value backing for the `state` + `cache`
+/// imports. Both are stored as `Arc<Mutex<HashMap<…>>>` on the
+/// `LoadedExtension` so they survive across the per-call Stores
+/// that each dispatch builds; `LoadedState` clones the `Arc` into
+/// its store-local state.
+type SharedKv = Arc<Mutex<HashMap<String, loaded::sqlite::extension::types::SqlValue>>>;
+
 /// A loaded extension component, retained for subsequent dispatch.
 pub struct LoadedExtension {
     pub name: String,
@@ -159,15 +200,26 @@ pub struct LoadedExtension {
     /// when the host routes a SQL function call back into the
     /// component's `scalar-function.call`.
     pub scalar_functions: Vec<ScalarFunctionEntry>,
+    /// Aggregate function specs, mirror of `scalar_functions` shape.
+    pub aggregate_functions: Vec<AggregateFunctionEntry>,
+    /// Persistent per-extension state backing the `state` interface.
+    pub state: SharedKv,
+    /// In-memory cache backing the `cache` interface. TTLs from the
+    /// guest are accepted but not enforced for v1.
+    pub cache: SharedKv,
 }
 
 /// State carried by the per-call Store when dispatching into a
 /// loaded extension. The minimal world imports types/spi/logging/
 /// config; LoadedState satisfies them with stubs (real impls can
-/// follow when the dispatched extensions need real SPI).
+/// follow when the dispatched extensions need real SPI). The
+/// stateful world additionally imports `state` + `cache`, backed by
+/// the `Arc<Mutex<…>>` handles cloned in from the owning extension.
 pub struct LoadedState {
     wasi: wasmtime_wasi::WasiCtx,
     table: wasmtime_wasi::ResourceTable,
+    state: SharedKv,
+    cache: SharedKv,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -250,6 +302,53 @@ impl loaded::sqlite::extension::logging::Host for LoadedState {
     fn debug(&mut self, msg: String) { eprintln!("[loaded-ext DEBUG] {msg}"); }
 }
 
+/// Persistent key/value state. Backed by the per-extension
+/// `Arc<Mutex<HashMap<…>>>` cloned in from `LoadedExtension`, so
+/// writes survive across the per-call Stores each dispatch builds.
+impl loaded_stateful::sqlite::extension::state::Host for LoadedState {
+    fn get(&mut self, key: String) -> Option<loaded::sqlite::extension::types::SqlValue> {
+        self.state.lock().get(&key).cloned()
+    }
+    fn set(&mut self, key: String, value: loaded::sqlite::extension::types::SqlValue) {
+        self.state.lock().insert(key, value);
+    }
+    fn delete(&mut self, key: String) -> bool {
+        self.state.lock().remove(&key).is_some()
+    }
+    fn keys(&mut self) -> Vec<String> {
+        self.state.lock().keys().cloned().collect()
+    }
+    fn clear(&mut self) {
+        self.state.lock().clear();
+    }
+}
+
+/// Bounded in-memory cache. v1 accepts TTLs but does not enforce
+/// expiry; loaded extensions are typically short-lived enough that
+/// this is acceptable as a starting point.
+impl loaded_stateful::sqlite::extension::cache::Host for LoadedState {
+    fn get(&mut self, key: String) -> Option<loaded::sqlite::extension::types::SqlValue> {
+        self.cache.lock().get(&key).cloned()
+    }
+    fn set(
+        &mut self,
+        key: String,
+        value: loaded::sqlite::extension::types::SqlValue,
+        _ttl_seconds: Option<u32>,
+    ) {
+        self.cache.lock().insert(key, value);
+    }
+    fn delete(&mut self, key: String) -> bool {
+        self.cache.lock().remove(&key).is_some()
+    }
+    fn exists(&mut self, key: String) -> bool {
+        self.cache.lock().contains_key(&key)
+    }
+    fn clear(&mut self) {
+        self.cache.lock().clear();
+    }
+}
+
 impl loaded::sqlite::extension::config::Host for LoadedState {
     fn get(&mut self, _key: String) -> Option<String> { None }
     fn set(&mut self, _key: String, _value: String) -> bool { false }
@@ -275,6 +374,18 @@ fn make_loaded_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
     Ok(linker)
 }
 
+/// Build a Linker pre-wired for a `stateful`-world loaded extension:
+/// WASI + the minimal imports + state + cache. Used when dispatching
+/// aggregate calls.
+fn make_loaded_stateful_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+    let mut linker: Linker<LoadedState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
+    loaded_stateful::Stateful::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
+        .map_err(|e| anyhow!("loaded-ext stateful: {e}"))?;
+    Ok(linker)
+}
+
 /// Construct a fresh Store + LoadedState for one dispatch into a
 /// loaded extension. Each dispatch gets its own Store so per-call
 /// fuel is re-supplied and shared global state doesn't leak.
@@ -284,6 +395,8 @@ fn build_loaded_store(engine: &Engine, ext: &LoadedExtension) -> Result<wasmtime
     let state = LoadedState {
         wasi: builder.build(),
         table: wasmtime_wasi::ResourceTable::new(),
+        state: ext.state.clone(),
+        cache: ext.cache.clone(),
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
@@ -298,6 +411,15 @@ pub struct ScalarFunctionEntry {
     pub name: String,
     pub num_args: i32,
     pub deterministic: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct AggregateFunctionEntry {
+    pub id: u64,
+    pub name: String,
+    pub num_args: i32,
+    pub deterministic: bool,
+    pub is_window: bool,
 }
 
 /// The wasmtime engine + the registry of loaded extensions.
@@ -346,18 +468,22 @@ impl Host {
         let component = Component::from_binary(&self.engine, &bytes)
             .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
 
-        // Instantiate the loaded component against the canonical
-        // `minimal` world to read its manifest. Extensions built
-        // against narrower or wider worlds whose minimal-shape
-        // subset includes `metadata` still work because the bindgen
-        // wrapper only requires the exports it names.
-        let linker = make_loaded_linker(&self.engine)?;
+        // Use the stateful linker (superset of minimal) so extensions
+        // that import `state` or `cache` can still resolve their
+        // imports during the describe() call. We still `Minimal::
+        // instantiate`, so any component exporting at least
+        // `metadata` + `scalar-function` loads — minimal AND stateful
+        // and wider worlds.
+        let linker = make_loaded_stateful_linker(&self.engine)?;
         let tmp_ext = LoadedExtension {
             name: String::new(),
             version: String::new(),
             component: component.clone(),
             policy: policy.clone(),
             scalar_functions: Vec::new(),
+            aggregate_functions: Vec::new(),
+            state: Arc::new(Mutex::new(HashMap::new())),
+            cache: Arc::new(Mutex::new(HashMap::new())),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext)?;
         let instance = loaded::Minimal::instantiate(&mut store, &component, &linker)
@@ -392,6 +518,19 @@ impl Host {
                 ),
             })
             .collect();
+        let aggregate_functions: Vec<_> = manifest
+            .aggregate_functions
+            .iter()
+            .map(|a| AggregateFunctionEntry {
+                id: a.id,
+                name: a.name.clone(),
+                num_args: a.num_args,
+                deterministic: a.func_flags.contains(
+                    loaded::sqlite::extension::types::FunctionFlags::DETERMINISTIC,
+                ),
+                is_window: a.is_window,
+            })
+            .collect();
 
         self.components.write().insert(
             name.clone(),
@@ -401,6 +540,9 @@ impl Host {
                 component,
                 policy,
                 scalar_functions,
+                aggregate_functions,
+                state: Arc::new(Mutex::new(HashMap::new())),
+                cache: Arc::new(Mutex::new(HashMap::new())),
             },
         );
 
@@ -444,15 +586,10 @@ impl Host {
         }
     }
 
-    /// Forward one row's contribution to an aggregate.
-    ///
-    /// Note: today's `minimal` world doesn't export `aggregate-function`,
-    /// so loaded extensions that declare aggregates must be built
-    /// against a wider world. The call site below would target a
-    /// future `loaded::Aggregateful::instantiate` bindgen alongside
-    /// the existing `Minimal`. Until that lands, this routes through
-    /// the same dispatch path the scalar one uses and the loaded
-    /// component is responsible for exposing the right interface.
+    /// Forward one row's contribution to an aggregate. Instantiates
+    /// the loaded component as `Stateful` (requires aggregate-function
+    /// export); fails cleanly if the extension was built against the
+    /// minimal world.
     pub fn dispatch_aggregate_step(
         &self,
         ext_name: &str,
@@ -460,14 +597,25 @@ impl Host {
         context_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
-        let _ = (ext_name, func_id, context_id, args);
-        // Structural placeholder: returns Ok(Err(...)) so the C
-        // trampoline surfaces a clean SQL error rather than a host
-        // trap. Replace with real instantiate + call once the
-        // wider-world bindgen is added.
-        Ok(Err(format!(
-            "aggregate-step dispatch not implemented yet for {ext_name}/{func_id}"
-        )))
+        let components = self.components.read();
+        let ext = components
+            .get(ext_name)
+            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let linker = make_loaded_stateful_linker(&self.engine)?;
+        let mut store = build_loaded_store(&self.engine, ext)?;
+        let instance = loaded_stateful::Stateful::instantiate(&mut store, &ext.component, &linker)
+            .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
+
+        let loaded_args: Vec<_> = args
+            .into_iter()
+            .map(convert_sql_value_to_loaded)
+            .collect();
+
+        let result = instance
+            .sqlite_extension_aggregate_function()
+            .call_step(&mut store, func_id, context_id, &loaded_args)
+            .map_err(|e| anyhow!("call_step: {e}"))?;
+        Ok(result)
     }
 
     /// Finalize an aggregate; produces its final value and releases
@@ -478,10 +626,23 @@ impl Host {
         func_id: u64,
         context_id: u64,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
-        let _ = (ext_name, func_id, context_id);
-        Ok(Err(format!(
-            "aggregate-finalize dispatch not implemented yet for {ext_name}/{func_id}"
-        )))
+        let components = self.components.read();
+        let ext = components
+            .get(ext_name)
+            .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+        let linker = make_loaded_stateful_linker(&self.engine)?;
+        let mut store = build_loaded_store(&self.engine, ext)?;
+        let instance = loaded_stateful::Stateful::instantiate(&mut store, &ext.component, &linker)
+            .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
+
+        let result = instance
+            .sqlite_extension_aggregate_function()
+            .call_finalize(&mut store, func_id, context_id)
+            .map_err(|e| anyhow!("call_finalize: {e}"))?;
+        match result {
+            Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
+            Err(s) => Ok(Err(s)),
+        }
     }
 
     /// Forward a collation compare to a loaded extension's
