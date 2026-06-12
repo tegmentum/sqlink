@@ -50,3 +50,33 @@ world sqlite-cli-unified {
     import dispatch;
     import zip-operations;
 }
+
+/// Reactor-shape successor to `sqlite-cli-unified`. Same imports
+/// (extension-loader / dispatch / zip-operations / slot-driven
+/// composition) and same SQLite + extension SPI exports — the
+/// only structural change is that this world ALSO exports the
+/// reactor `cli` interface so the host can drive the REPL.
+/// Command-mode `main()` is gone; `_start` panics with a
+/// helpful message if anyone tries to `wasmtime run` the binary
+/// directly.
+world sqlite-cli-reactor {
+    export low-level;
+    export high-level;
+
+    export sqlite:extension/types@0.1.0;
+    export sqlite:extension/spi@0.1.0;
+    export sqlite:extension/logging@0.1.0;
+    export sqlite:extension/config@0.1.0;
+
+    export cli;
+
+    import fts5-slot;
+    import json1-slot;
+    import rtree-slot;
+    import geopoly-slot;
+    import demo-slot;
+
+    import extension-loader;
+    import dispatch;
+    import zip-operations;
+}
