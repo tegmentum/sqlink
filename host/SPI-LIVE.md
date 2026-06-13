@@ -45,11 +45,29 @@ The pieces that matter to us:
   in the cooperative scheduling.
 - `Store::run_concurrent` — drive the event loop.
 
-The infrastructure for re-entry is in
-`wasmtime/src/runtime/component/concurrent.rs` (the source
-references in PLAN-final-threads.md still apply), but the public
-API + macro shape to invoke it from a wit-bindgen-generated
-host trait isn't complete in 45.
+**Status update (2026-06):** wasmtime 45.0.1 actually ships these
+publicly now — `pub async fn call_concurrent` on `Func` /
+`TypedFunc` at `runtime/component/func.rs:404`,
+`pub fn func_wrap_concurrent` on `Linker` at
+`runtime/component/linker.rs:573`, `StoreContextMut::run_concurrent`
+in `concurrent.rs`. The component-macro `bindgen!` supports
+`imports: { default: async | store }` and
+`exports: { default: async | store }` modes, which produces host
+traits taking `&Accessor<T>` and call methods taking
+`&Accessor<_T, _D>`. See
+`wasmtime-internal-component-macro-45.0.1/tests/expanded/resources-import_concurrent.rs`
+for the shape.
+
+**The remaining blocker is project-side, not upstream.** Adopting
+the concurrent shape means switching every SPI/dispatch/loader
+host trait from `(&mut self, ...)` to `(&Accessor<T>, ...)`,
+rewriting the `add_to_linker` plumbing in the runner to drive
+`Store::run_concurrent`, and flipping `Engine::config()` to
+`concurrency_support = true`. That's a substantial refactor of
+the bindings layer in `host/src/lib.rs` (the file currently
+hand-implements seven separate `Host` traits for the loaded-world
+bindgen) — appropriate for its own dedicated work block, not a
+follow-up turn.
 
 ## Why a separate triple instead of switching the default
 
@@ -227,17 +245,25 @@ committed-snapshot path.
 
 ## What to do BEFORE L1-L4 are tackled
 
-Three smaller pieces that benefit:
+Three smaller pieces. Status as of this writing:
 
-- Move the SqliteError "not implemented" message in the current
-  stubs to a shared constant so the WIT-side message stays
-  consistent if we refactor.
+- ~~Move the SqliteError "not implemented" message in the current
+  stubs to a shared constant.~~ Moot: the v1 stubs return data via
+  the fresh-connection path, not a structured "not implemented"
+  error. The shared constant would matter only on deployments that
+  genuinely lack live semantics.
 - Add a `host.supports_live_spi() -> bool` to make the deployment
-  shape introspectable; loaded extensions can branch on it
-  instead of issuing the call and parsing the error message.
-- Sketch a `live_spi_extension` test crate even before L1 lands
-  — its build proves the WIT contract is consumable by
-  cargo-component's wit-bindgen.
+  shape introspectable. **Deferred** until L3 — extensions that
+  call live can't distinguish v1-approximation from true re-entry
+  by the return value alone; an introspection method would let
+  them branch. Skipped today because the v1 approximation is
+  sufficient for every extension currently authored.
+- ~~Sketch a `live_spi_extension` test crate even before L1 lands.~~
+  **Done.** `sqlite-wasm-loader/runtimes/wasmtime/live-spi-extension`
+  exports `wasm_live_count` and `wasm_committed_count`. Covered by
+  `host/tests/load.rs::live_spi_extension_invokes_both_scalars` —
+  validates that both scalars route through the host's SPI imports
+  end-to-end.
 
 ## Reference reading
 

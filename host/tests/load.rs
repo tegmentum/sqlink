@@ -165,6 +165,70 @@ async fn wasm_component_provider_handles_invoke() {
     assert!(err.contains("unknown method"), "got: {err}");
 }
 
+/// live-spi-extension exports two scalars: wasm_committed_count and
+/// wasm_live_count. Both end-to-end through the host's
+/// `spi.execute_scalar` / `spi.execute_scalar_live` imports.
+///
+/// In v1 the live path opens a fresh rusqlite::Connection per call
+/// while the committed path uses a pooled connection — both see the
+/// committed snapshot, so the scalar results agree. The day true
+/// re-entry (cli.eval-structured) lands, only the live path will
+/// surface outer-transaction uncommitted writes. The test wires
+/// both today so the contract is exercised end-to-end and any
+/// regression in the SPI imports is caught.
+///
+/// See host/SPI-LIVE.md for the upstream status of true live
+/// semantics under wasmtime's concurrent canonical ABI.
+#[tokio::test]
+async fn live_spi_extension_invokes_both_scalars() {
+    use sqlite_wasm_host::bindings::sqlite::extension::types::SqlValue;
+
+    let mut ext_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    ext_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/live_spi_extension.wasm");
+    if !ext_path.exists() {
+        eprintln!("skipping: live_spi_extension.wasm not built");
+        return;
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("t.db");
+    {
+        let c = rusqlite::Connection::open(&db_path).unwrap();
+        c.execute_batch("CREATE TABLE widgets(id); INSERT INTO widgets VALUES(1),(2),(3),(4);")
+            .unwrap();
+    }
+
+    let host = Host::new().unwrap();
+    host.set_db_path(db_path.to_string_lossy().as_ref());
+
+    let policy = Policy::deny_all().with_grants([Capability::Spi]);
+    let name = host.load_extension(ext_path, policy).await.expect("load");
+    assert_eq!(name, "live-spi-extension");
+
+    // Both function ids per live-spi-extension/src/lib.rs:
+    //   1 = wasm_live_count, 2 = wasm_committed_count
+    let args = vec![SqlValue::Text("widgets".to_string())];
+
+    let live = host
+        .dispatch_scalar(&name, 1, args.clone())
+        .await
+        .expect("dispatch live")
+        .expect("scalar ok");
+    let committed = host
+        .dispatch_scalar(&name, 2, args)
+        .await
+        .expect("dispatch committed")
+        .expect("scalar ok");
+
+    match (live, committed) {
+        (SqlValue::Integer(l), SqlValue::Integer(c)) => {
+            assert_eq!(l, 4, "live count");
+            assert_eq!(c, 4, "committed count");
+        }
+        other => panic!("expected (Integer, Integer), got {other:?}"),
+    }
+}
+
 #[tokio::test]
 async fn fiji_composes_sqlite_runtime_and_std_text() {
     use parking_lot::Mutex;
