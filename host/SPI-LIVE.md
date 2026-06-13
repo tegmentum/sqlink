@@ -171,8 +171,51 @@ SETTINGS), but those don't yield across awaits so should be
 fine. The wit-bindgen-rt 0.44 `async` feature is the runtime
 pieces needed (verified the feature gate exists).
 
-Conclusion: **option 2 is viable.** Awaiting user direction on
-whether to commit to the conversion.
+Conclusion: **option 2 is viable** but takes more focused time
+than the half-session estimate. See "Conversion attempt" below.
+
+### Conversion attempt (2026-06)
+
+Tried executing the full option 2 conversion. Got partway and
+hit cascading complexity that pushed it past one chat turn.
+Snapshot of where it lands:
+
+- ✅ `wit_bindgen::generate!({ async: true, generate_all })`
+  macro works; replaces cargo-component's bindings generator.
+- ✅ Asyncifying all 84 Guest impl `fn`s to `async fn` via a
+  ~10-line Python script (`/tmp/asyncify.py`-style) takes
+  ~30 seconds.
+- ❌ wit-bindgen 0.44 emits bindings with **owned** arg types
+  (`String`, `LoadOptions`) where cargo-component used
+  **references** (`&str`, `&LoadOptions`). Every helper call
+  site that passes `&opts`, `&path`, `&scheme` etc. breaks.
+  ~10-15 sites total but each needs an `.clone()` /
+  `.to_string()` decision (was the value used again? consume vs
+  clone?).
+- ❌ Async propagates: helpers like `do_load`, `do_register_*`,
+  `do_fiji` that call now-async bindings need to be `async fn`
+  too. They're called from `eval` which is now async, so that
+  chains. ~10 helper fns.
+- ❌ ❌ **Cannot bulk-asyncify helpers.** A naive
+  "make every `^fn` async" transformation breaks helpers like
+  `hl_err`, `looks_like_uri`, `parse_grants` that do pure
+  synchronous work — code that does `result.map_err(|e| hl_err(&e))?`
+  breaks because `hl_err` now returns a Future and `?` can't
+  apply. Each helper needs per-fn judgment.
+
+After applying bulk-asyncify (81 Guest fns → async fn) plus
+adding `.await` to 11 bindings call sites, ~76 errors remain —
+40 mismatched-types, 16 `?`-on-future-Result, 10 args-incorrect.
+Each resolvable but ~5 minutes each = 6 hours of focused per-error
+fixing. Plus build wrapper, CI updates, dispatch test
+verification.
+
+**Revised estimate: 1-1.5 focused work sessions, not half.**
+
+cli-rust + Cargo.lock reverted to main. Stage 2a host changes
+re-stashed (`git stash@{0}: stage2a-host-side-accessor-rewrite`)
+so main stays green. To resume, pop the stash and continue from
+the 76-error compile state in cli-rust.
 
 Stage 2a (host-side conversion of `bindings::dispatch` +
 `bindings::extension_loader` to Accessor pattern) is mechanically
