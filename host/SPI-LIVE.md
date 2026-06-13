@@ -89,21 +89,48 @@ instance "entered" — even with `func_wrap_concurrent` on the host
 side, the dispatcher's `call_concurrent(cli.eval-structured)`
 queues but never makes progress.
 
-cli-rust needs its `wit-bindgen-rust` configured for async
-imports. The exact knob is under
-`[package.metadata.component.bindings]` or equivalent — the dep
-needs investigation; relevant doc:
-https://docs.rs/wit-bindgen/latest/wit_bindgen/. After the config
-change, cli-rust must be rebuilt with the wasi-sdk env.
+**Upstream constraint (2026-06):** cargo-component 0.21.1 does
+not expose async-imports configuration through
+`[package.metadata.component]`. wit-bindgen-rust 0.39+ has the
+`AsyncConfig` field internally (`async_: AsyncConfig {None, Some
+{imports, exports}, All}`) but cargo-component's bindings
+generator doesn't surface it as a config option in this version.
+Verified by `cargo component --help` (no `--async` flag) and
+absent from the package metadata schema.
+
+Three real options for 2b:
+1. **Wait for cargo-component to expose async.** Newer
+   cargo-component versions may add the knob. Track upstream.
+2. **Switch cli-rust off cargo-component to direct
+   `wit_bindgen::generate!()`.** Add `wit-bindgen` as a build
+   dep, replace `[package.metadata.component]` with a macro
+   invocation in `src/lib.rs` (with `async_: AsyncConfig::All`),
+   and add a `wasm-tools component new` post-build step to
+   package the core wasm as a component. Substantial refactor of
+   cli-rust's build setup; loses cargo-component's nice WIT dep
+   handling.
+3. **Patch cargo-component to expose the option.** Send a PR
+   upstream; not realistic for a feature release timeline we can
+   commit to.
+
+Stage 2a (host-side conversion of `bindings::dispatch` +
+`bindings::extension_loader` to Accessor pattern) is mechanically
+complete in the working tree; preserved in
+`git stash@{0}: stage2a-host-side-accessor-rewrite`. It compiles
+clean but breaks all reactor tests (cli-rust binary mismatches
+the new concurrent host) until 2b lands. Apply via
+`git stash pop` once 2b is unblocked.
 
 ### Cost estimate
 
-- 2a is mechanical: ~20 host methods, repetitive Accessor
-  conversion. Bounded but tedious; estimate one focused session.
-- 2b requires upstream investigation (which wit-bindgen knob),
-  bindgen regeneration, possibly cli-rust API churn (async fn vs
-  sync fn at call sites). Estimate half a session once the right
-  knob is identified.
+- 2a is **done** (stashed; see above). ~20 host methods
+  converted, compiles clean against the bindgen's `HostWithStore`
+  trait. Each method body extracts an owned `Host` clone via
+  `accessor.with(|mut access| access.get().host.clone())` and
+  awaits existing helpers.
+- 2b is upstream-blocked on cargo-component exposing async-imports
+  config. Until then, the host stash can't be applied without
+  breaking tests.
 - Validation: re-enable
   `dispatch_chain_routes_execute_live_through_bridge`. Should
   pass once both halves land.
