@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+
+# In-repo crates. `sqlite-loader-wit` lives in a git submodule
+# (https://github.com/tegmentum/sqlite-loader-wit); host consumes
+# it via path dep but it's not a workspace member — we don't own
+# that tree.
+members = ["core", "cli", "sqlite-lib", "host"]
+
+# `cargo build` / `cargo test` at the workspace root operate on
+# the native crates only. The wasm crates (cli, sqlite-lib) are
+# workspace members so they share the lockfile and dependency
+# resolution, but they need `--target wasm32-wasip2` and the
+# wasi-sdk env, so building them by default from the root would
+# trip on the C compiler. To build them explicitly:
+#
+#   cd cli && cargo build --release           # uses per-crate .cargo/config.toml
+#   cargo build -p sqlite-cli --target wasm32-wasip2  # from root
+default-members = ["core", "host"]

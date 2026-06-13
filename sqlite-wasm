@@ -19,8 +19,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-COMPONENT="$SCRIPT_DIR/cli/target/wasm32-wasip2/release/sqlite_cli.component.wasm"
-RUNNER="$SCRIPT_DIR/host/target/debug/sqlite-wasm-run"
+# Component lives in the workspace target dir (per-crate target/ is
+# fallback for non-workspace builds).
+COMPONENT="$SCRIPT_DIR/target/wasm32-wasip2/release/sqlite_cli.component.wasm"
+[[ ! -f "$COMPONENT" ]] && COMPONENT="$SCRIPT_DIR/cli/target/wasm32-wasip2/release/sqlite_cli.component.wasm"
+RUNNER="$SCRIPT_DIR/target/debug/sqlite-wasm-run"
+[[ ! -x "$RUNNER" ]] && RUNNER="$SCRIPT_DIR/host/target/debug/sqlite-wasm-run"
 
 if [[ ! -x "$RUNNER" ]]; then
     echo "sqlite-wasm: $RUNNER not built; run: cargo build --manifest-path host/Cargo.toml" >&2

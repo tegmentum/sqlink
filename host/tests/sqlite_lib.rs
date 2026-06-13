@@ -36,7 +36,12 @@ impl wasmtime_wasi::WasiView for State {
 }
 
 fn sqlite_lib_path() -> Option<PathBuf> {
+    // Workspace `target/` is checked first (the normal cargo workspace
+    // layout that now ships); per-crate `sqlite-lib/target/` is kept
+    // as a fallback for environments where someone built outside the
+    // workspace cache.
     let candidates = [
+        "../target/wasm32-wasip2/release/sqlite_lib.component.wasm",
         "../sqlite-lib/target/wasm32-wasip2/release/sqlite_lib.component.wasm",
     ];
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

@@ -1,0 +1,20 @@
+# Workspace-level cargo config. Deliberately NO `[build] target`
+# setting — that would force the native host crate to target wasm
+# from the root invocation. The per-crate `.cargo/config.toml` in
+# `cli/` and `sqlite-lib/` override this and set
+# `target = "wasm32-wasip2"` so `cd cli && cargo build` Just Works.
+#
+# The env vars + linker config below are needed by the wasm-targeted
+# crates. They sit at workspace root so explicit `cargo build -p
+# sqlite-cli --target wasm32-wasip2` from this directory also works
+# without each crate duplicating the values. Per-crate configs
+# layer additively over this.
+
+[env]
+CC_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/clang"
+AR_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/ar"
+CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysroot -target wasm32-wasip2"
+
+[target.wasm32-wasip2]
+linker = "rust-lld"
+rustflags = ["-C", "link-arg=--no-entry"]
