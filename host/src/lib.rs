@@ -518,15 +518,6 @@ pub struct LoadedState {
     /// Cloned Arc<Mutex<…>> so it survives across the per-call
     /// Stores each dispatch builds (mirror of state/cache).
     spi_conn: Arc<Mutex<Option<rusqlite::Connection>>>,
-    /// Sender side of the live-SPI channel bridge, cloned from
-    /// `Host::live_spi_bridge` at dispatch time. When Some,
-    /// `execute_live` posts a SQL request that the cli-side
-    /// dispatcher routes back through `cli.eval-structured` via
-    /// the wasmtime concurrent ABI — giving the extension the
-    /// outer transaction's uncommitted writes. When None
-    /// (command-mode, or no reactor up), falls back to the v1
-    /// fresh-connection path.
-    live_spi_bridge: Option<LiveSpiBridge>,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -1162,7 +1153,6 @@ fn build_loaded_store(
     engine: &Engine,
     ext: &LoadedExtension,
     db_path: String,
-    live_spi_bridge: Option<LiveSpiBridge>,
 ) -> Result<wasmtime::Store<LoadedState>> {
     let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
     builder.inherit_stdio();
@@ -1173,7 +1163,6 @@ fn build_loaded_store(
         cache: ext.cache.clone(),
         db_path,
         spi_conn: ext.spi_conn.clone(),
-        live_spi_bridge,
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
@@ -1471,12 +1460,7 @@ impl Host {
                         .ok_or_else(|| anyhow!("no resolver registered for scheme {other}:"))?
                 };
                 let linker = make_loaded_resolving_linker(&self.engine)?;
-                let mut store = build_loaded_store(
-                    &self.engine,
-                    &resolver,
-                    self.db_path(),
-                    self.live_spi_bridge(),
-                )?;
+                let mut store = build_loaded_store(&self.engine, &resolver, self.db_path())?;
                 let instance = loaded_resolving::Resolving::instantiate_async(
                     &mut store,
                     &resolver.component,
@@ -1608,12 +1592,7 @@ impl Host {
             cache: Arc::new(Mutex::new(HashMap::new())),
             spi_conn: Arc::new(Mutex::new(None)),
         };
-        let mut store = build_loaded_store(
-            &self.engine,
-            &tmp_ext,
-            self.db_path(),
-            self.live_spi_bridge(),
-        )?;
+        let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
             .await
             .map_err(|e| anyhow!("instantiate loaded ext: {e}"))?;
@@ -1738,7 +1717,7 @@ impl Host {
         };
         let linker = make_loaded_linker(&self.engine)?;
         let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &ext.component, &linker)
             .await
             .map_err(|e| anyhow!("instantiate {ext_name}: {e}"))?;
@@ -1779,7 +1758,7 @@ impl Host {
         };
         let linker = make_loaded_stateful_linker(&self.engine)?;
         let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
             loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1812,7 +1791,7 @@ impl Host {
         };
         let linker = make_loaded_stateful_linker(&self.engine)?;
         let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
             loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1848,7 +1827,7 @@ impl Host {
         };
         let linker = make_loaded_collating_linker(&self.engine)?;
         let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
             loaded_collating::Collating::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1883,7 +1862,7 @@ impl Host {
         };
         let linker = make_loaded_authorizing_linker(&self.engine)?;
         let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
             loaded_authorizing::Authorizing::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1924,7 +1903,7 @@ impl Host {
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
         let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
             loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1954,7 +1933,7 @@ impl Host {
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
         let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
             loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1977,7 +1956,7 @@ impl Host {
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
         let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
             loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -2107,46 +2086,6 @@ fn convert_sql_value_from_loaded(
         From::Real(r) => To::Real(r),
         From::Text(s) => To::Text(s),
         From::Blob(b) => To::Blob(b),
-    }
-}
-
-/// Translate the reactor-bindgen's QueryResult into the loaded-
-/// bindgen's equivalent so `execute_live` can return what the SPI
-/// import contract requires after the channel bridge round trip.
-fn convert_reactor_qr_to_loaded(
-    qr: reactor::exports::sqlite::extension::types::QueryResult,
-) -> loaded::sqlite::extension::types::QueryResult {
-    use loaded::sqlite::extension::types::QueryResult as Out;
-    use loaded::sqlite::extension::types::SqlValue as To;
-    use reactor::exports::sqlite::extension::types::SqlValue as From;
-    fn conv(v: From) -> To {
-        match v {
-            From::Null => To::Null,
-            From::Integer(i) => To::Integer(i),
-            From::Real(r) => To::Real(r),
-            From::Text(s) => To::Text(s),
-            From::Blob(b) => To::Blob(b),
-        }
-    }
-    Out {
-        columns: qr.columns,
-        rows: qr
-            .rows
-            .into_iter()
-            .map(|r| r.into_iter().map(conv).collect())
-            .collect(),
-        changes: qr.changes,
-        last_insert_rowid: qr.last_insert_rowid,
-    }
-}
-
-fn convert_reactor_err_to_loaded(
-    e: reactor::exports::sqlite::extension::types::SqliteError,
-) -> loaded::sqlite::extension::types::SqliteError {
-    loaded::sqlite::extension::types::SqliteError {
-        code: e.code,
-        extended_code: e.extended_code,
-        message: e.message,
     }
 }
 
