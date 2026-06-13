@@ -9,23 +9,24 @@ description = "Reactor-shape Rust port of the SQLite CLI. Targets the sqlite-cli
 crate-type = ["cdylib"]
 
 [dependencies]
-wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# wit-bindgen-rt provides the runtime support functions the
+# generate! macro emits calls to. The `async` feature is
+# required for async-lowered host imports.
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags", "async"] }
+# Stage 2b: replaces cargo-component's auto-generated bindings
+# so we can pass `async: true` (cargo-component 0.21 doesn't
+# expose this knob). Bindings are produced inline in src/lib.rs.
+wit-bindgen = { version = "0.44", features = ["macros"] }
 # bundled compiles sqlite3.c via the cc crate against the active
-# target (wasm32-wasip2 under cargo-component). The unblocker for
-# the whole port — if this fails we need a different integration.
+# target (wasm32-wasip1; needs CC_wasm32_wasip1 = wasi-sdk clang).
 rusqlite = { version = "0.32", features = ["bundled", "functions", "hooks", "collation"] }
 # Exposes sqlite3_complete for is_statement_complete. Same major
 # version as rusqlite's transitive dep so no double-link.
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 
-[package.metadata.component]
-package = "sqlite:cli-rust"
-
-[package.metadata.component.target]
-path = "../wit"
-world = "sqlite-cli-reactor"
-
-[package.metadata.component.target.dependencies]
-"sqlite:extension" = { path = "../wit/deps/sqlite-extension" }
-"compose:dynlink" = { path = "../wit/deps/compose-dynlink" }
-"sys:compose" = { path = "../wit/deps/sys-compose" }
+# Component packaging: after `cargo build --release --target
+# wasm32-wasip1`, run
+#   wasm-tools component new \
+#     target/wasm32-wasip1/release/sqlite_cli_rust.wasm \
+#     --adapt wasi_snapshot_preview1.reactor.wasm \
+#     -o target/wasm32-wasip1/release/sqlite_cli_rust.component.wasm

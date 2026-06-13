@@ -21,8 +21,22 @@
 
 #![allow(clippy::needless_lifetimes)]
 
-#[allow(warnings)]
-mod bindings;
+// Stage 2b: replace cargo-component's generated bindings with an
+// inline `wit_bindgen::generate!` invocation so we can pass
+// `async: true`. cargo-component 0.21 doesn't expose this knob;
+// async-lowered host imports are what lets the cli reactor's wasm
+// task yield while a host import is in flight — the prerequisite
+// for the dispatch chain's live-SPI re-entry to actually work
+// instead of trapping on may_enter. See host/SPI-LIVE.md.
+mod bindings {
+    wit_bindgen::generate!({
+        path: "../wit",
+        world: "sqlite-cli-reactor",
+        async: true,
+        runtime_path: "::wit_bindgen_rt",
+        generate_all,
+    });
+}
 
 mod dot;
 mod format;
@@ -65,7 +79,7 @@ struct CliReactor;
 // =========================================================================
 
 impl LoggingGuest for CliReactor {
-    fn log(level: LogLevel, message: String) {
+    async fn log(level: LogLevel, message: String) {
         let l = match level {
             LogLevel::Error => "ERROR",
             LogLevel::Warn => "WARN",
@@ -75,10 +89,10 @@ impl LoggingGuest for CliReactor {
         };
         eprintln!("[cli-rust {l}] {message}");
     }
-    fn error(message: String) { eprintln!("[cli-rust ERROR] {message}"); }
-    fn warn(message: String)  { eprintln!("[cli-rust WARN] {message}"); }
-    fn info(message: String)  { eprintln!("[cli-rust INFO] {message}"); }
-    fn debug(message: String) { eprintln!("[cli-rust DEBUG] {message}"); }
+    async fn error(message: String) { eprintln!("[cli-rust ERROR] {message}"); }
+    async fn warn(message: String)  { eprintln!("[cli-rust WARN] {message}"); }
+    async fn info(message: String)  { eprintln!("[cli-rust INFO] {message}"); }
+    async fn debug(message: String) { eprintln!("[cli-rust DEBUG] {message}"); }
 }
 
 // =========================================================================
@@ -86,10 +100,10 @@ impl LoggingGuest for CliReactor {
 // =========================================================================
 
 impl ConfigGuest for CliReactor {
-    fn get(_key: String) -> Option<String> { None }
-    fn set(_key: String, _value: String) -> bool { false }
-    fn sqlite_version() -> String { rusqlite::version().to_string() }
-    fn extension_version() -> String { env!("CARGO_PKG_VERSION").to_string() }
+    async fn get(_key: String) -> Option<String> { None }
+    async fn set(_key: String, _value: String) -> bool { false }
+    async fn sqlite_version() -> String { rusqlite::version().to_string() }
+    async fn extension_version() -> String { env!("CARGO_PKG_VERSION").to_string() }
 }
 
 // =========================================================================
@@ -106,22 +120,22 @@ fn spi_not_impl(what: &str) -> SpiSqliteError {
 }
 
 impl SpiGuest for CliReactor {
-    fn execute(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiQueryResult, SpiSqliteError> {
+    async fn execute(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiQueryResult, SpiSqliteError> {
         Err(spi_not_impl("execute"))
     }
-    fn execute_scalar(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiSqlValue, SpiSqliteError> {
+    async fn execute_scalar(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiSqlValue, SpiSqliteError> {
         Err(spi_not_impl("execute-scalar"))
     }
-    fn execute_batch(_sql: String) -> Result<i64, SpiSqliteError> {
+    async fn execute_batch(_sql: String) -> Result<i64, SpiSqliteError> {
         Err(spi_not_impl("execute-batch"))
     }
-    fn execute_live(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiQueryResult, SpiSqliteError> {
+    async fn execute_live(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiQueryResult, SpiSqliteError> {
         Err(spi_not_impl("execute-live"))
     }
-    fn execute_scalar_live(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiSqlValue, SpiSqliteError> {
+    async fn execute_scalar_live(_sql: String, _params: Vec<SpiSqlValue>) -> Result<SpiSqlValue, SpiSqliteError> {
         Err(spi_not_impl("execute-scalar-live"))
     }
-    fn execute_batch_live(_sql: String) -> Result<i64, SpiSqliteError> {
+    async fn execute_batch_live(_sql: String) -> Result<i64, SpiSqliteError> {
         Err(spi_not_impl("execute-batch-live"))
     }
 }
@@ -169,7 +183,7 @@ fn ll_map_err(e: &rusqlite::Error) -> ResultCode {
 }
 
 impl LowLevelGuest for CliReactor {
-    fn open(filename: String, flags: OpenFlags) -> Result<DbHandle, ResultCode> {
+    async fn open(filename: String, flags: OpenFlags) -> Result<DbHandle, ResultCode> {
         let path = if filename.is_empty() || filename == ":memory:" {
             ":memory:".to_string()
         } else {
@@ -186,12 +200,12 @@ impl LowLevelGuest for CliReactor {
         }
     }
 
-    fn close(db: DbHandle) -> ResultCode {
+    async fn close(db: DbHandle) -> ResultCode {
         STATE.with(|s| s.borrow_mut().remove_db(db));
         ResultCode::Ok
     }
 
-    fn exec(db: DbHandle, sql: String) -> Result<String, ResultCode> {
+    async fn exec(db: DbHandle, sql: String) -> Result<String, ResultCode> {
         STATE.with(|s| {
             let st = s.borrow();
             let conn = st.db(db).ok_or(ResultCode::Misuse)?;
@@ -199,91 +213,91 @@ impl LowLevelGuest for CliReactor {
         })
     }
 
-    fn prepare(db: DbHandle, sql: String) -> Result<StmtHandle, ResultCode> {
+    async fn prepare(db: DbHandle, sql: String) -> Result<StmtHandle, ResultCode> {
         STATE.with(|s| {
             let mut st = s.borrow_mut();
             st.prepare(db, &sql)
         })
     }
 
-    fn step(stmt: StmtHandle) -> ResultCode {
+    async fn step(stmt: StmtHandle) -> ResultCode {
         STATE.with(|s| s.borrow_mut().step(stmt))
     }
-    fn reset(stmt: StmtHandle) -> ResultCode {
+    async fn reset(stmt: StmtHandle) -> ResultCode {
         STATE.with(|s| s.borrow_mut().reset(stmt))
     }
-    fn finalize(stmt: StmtHandle) -> ResultCode {
+    async fn finalize(stmt: StmtHandle) -> ResultCode {
         STATE.with(|s| s.borrow_mut().finalize(stmt))
     }
 
-    fn bind_null(stmt: StmtHandle, index: i32) -> ResultCode {
+    async fn bind_null(stmt: StmtHandle, index: i32) -> ResultCode {
         STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Null))
     }
-    fn bind_int(stmt: StmtHandle, index: i32, value: i32) -> ResultCode {
+    async fn bind_int(stmt: StmtHandle, index: i32, value: i32) -> ResultCode {
         STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Integer(value as i64)))
     }
-    fn bind_int64(stmt: StmtHandle, index: i32, value: i64) -> ResultCode {
+    async fn bind_int64(stmt: StmtHandle, index: i32, value: i64) -> ResultCode {
         STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Integer(value)))
     }
-    fn bind_double(stmt: StmtHandle, index: i32, value: f64) -> ResultCode {
+    async fn bind_double(stmt: StmtHandle, index: i32, value: f64) -> ResultCode {
         STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Real(value)))
     }
-    fn bind_text(stmt: StmtHandle, index: i32, value: String) -> ResultCode {
+    async fn bind_text(stmt: StmtHandle, index: i32, value: String) -> ResultCode {
         STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Text(value)))
     }
-    fn bind_blob(stmt: StmtHandle, index: i32, value: Vec<u8>) -> ResultCode {
+    async fn bind_blob(stmt: StmtHandle, index: i32, value: Vec<u8>) -> ResultCode {
         STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Blob(value)))
     }
-    fn bind_parameter_count(_stmt: StmtHandle) -> i32 { 0 }
-    fn bind_parameter_index(_stmt: StmtHandle, _name: String) -> i32 { 0 }
-    fn clear_bindings(_stmt: StmtHandle) -> ResultCode { ResultCode::Ok }
+    async fn bind_parameter_count(_stmt: StmtHandle) -> i32 { 0 }
+    async fn bind_parameter_index(_stmt: StmtHandle, _name: String) -> i32 { 0 }
+    async fn clear_bindings(_stmt: StmtHandle) -> ResultCode { ResultCode::Ok }
 
-    fn column_count(stmt: StmtHandle) -> i32 {
+    async fn column_count(stmt: StmtHandle) -> i32 {
         STATE.with(|s| s.borrow().column_count(stmt))
     }
-    fn column_name(stmt: StmtHandle, index: i32) -> String {
+    async fn column_name(stmt: StmtHandle, index: i32) -> String {
         STATE.with(|s| s.borrow().column_name(stmt, index))
     }
-    fn get_column_type(stmt: StmtHandle, index: i32) -> ColumnType {
+    async fn get_column_type(stmt: StmtHandle, index: i32) -> ColumnType {
         STATE.with(|s| s.borrow().column_type(stmt, index))
     }
-    fn column_int(stmt: StmtHandle, index: i32) -> i32 {
+    async fn column_int(stmt: StmtHandle, index: i32) -> i32 {
         STATE.with(|s| s.borrow().column_int(stmt, index)) as i32
     }
-    fn column_int64(stmt: StmtHandle, index: i32) -> i64 {
+    async fn column_int64(stmt: StmtHandle, index: i32) -> i64 {
         STATE.with(|s| s.borrow().column_int(stmt, index))
     }
-    fn column_double(stmt: StmtHandle, index: i32) -> f64 {
+    async fn column_double(stmt: StmtHandle, index: i32) -> f64 {
         STATE.with(|s| s.borrow().column_double(stmt, index))
     }
-    fn column_text(stmt: StmtHandle, index: i32) -> String {
+    async fn column_text(stmt: StmtHandle, index: i32) -> String {
         STATE.with(|s| s.borrow().column_text(stmt, index))
     }
-    fn column_blob(stmt: StmtHandle, index: i32) -> Vec<u8> {
+    async fn column_blob(stmt: StmtHandle, index: i32) -> Vec<u8> {
         STATE.with(|s| s.borrow().column_blob(stmt, index))
     }
-    fn column_bytes(stmt: StmtHandle, index: i32) -> i32 {
+    async fn column_bytes(stmt: StmtHandle, index: i32) -> i32 {
         STATE.with(|s| s.borrow().column_blob(stmt, index).len() as i32)
     }
 
-    fn errmsg(_db: DbHandle) -> String { String::new() }
-    fn errcode(_db: DbHandle) -> ResultCode { ResultCode::Ok }
-    fn extended_errcode(_db: DbHandle) -> i32 { 0 }
+    async fn errmsg(_db: DbHandle) -> String { String::new() }
+    async fn errcode(_db: DbHandle) -> ResultCode { ResultCode::Ok }
+    async fn extended_errcode(_db: DbHandle) -> i32 { 0 }
 
-    fn get_autocommit(_db: DbHandle) -> bool { true }
-    fn changes(db: DbHandle) -> i32 {
+    async fn get_autocommit(_db: DbHandle) -> bool { true }
+    async fn changes(db: DbHandle) -> i32 {
         STATE.with(|s| s.borrow().db_changes(db) as i32)
     }
-    fn total_changes(db: DbHandle) -> i32 {
+    async fn total_changes(db: DbHandle) -> i32 {
         STATE.with(|s| s.borrow().db_total_changes(db) as i32)
     }
-    fn last_insert_rowid(db: DbHandle) -> i64 {
+    async fn last_insert_rowid(db: DbHandle) -> i64 {
         STATE.with(|s| s.borrow().db_last_insert_rowid(db))
     }
 
-    fn libversion() -> String { rusqlite::version().to_string() }
-    fn libversion_number() -> i32 { rusqlite::version_number() }
-    fn sourceid() -> String { String::new() }
+    async fn libversion() -> String { rusqlite::version().to_string() }
+    async fn libversion_number() -> i32 { rusqlite::version_number() }
+    async fn sourceid() -> String { String::new() }
 }
 
 // =========================================================================
@@ -340,15 +354,15 @@ impl HighLevelGuest for CliReactor {
     type Connection = HlConnection;
     type Statement = HlStatement;
 
-    fn version() -> String { rusqlite::version().to_string() }
-    fn version_number() -> i32 { rusqlite::version_number() }
-    fn open_memory() -> Result<Connection, HlDatabaseError> {
+    async fn version() -> String { rusqlite::version().to_string() }
+    async fn version_number() -> i32 { rusqlite::version_number() }
+    async fn open_memory() -> Result<Connection, HlDatabaseError> {
         match rusqlite::Connection::open_in_memory() {
             Ok(c) => Ok(Connection::new(HlConnection { conn: std::rc::Rc::new(RefCell::new(c)) })),
             Err(e) => Err(hl_err(&e)),
         }
     }
-    fn open_file(path: String) -> Result<Connection, HlDatabaseError> {
+    async fn open_file(path: String) -> Result<Connection, HlDatabaseError> {
         match rusqlite::Connection::open(&path) {
             Ok(c) => Ok(Connection::new(HlConnection { conn: std::rc::Rc::new(RefCell::new(c)) })),
             Err(e) => Err(hl_err(&e)),
@@ -357,7 +371,7 @@ impl HighLevelGuest for CliReactor {
 }
 
 impl GuestConnection for HlConnection {
-    fn new(path: String, mode: OpenMode) -> Self {
+    async fn new(path: String, mode: OpenMode) -> Self {
         let conn = match mode {
             OpenMode::Memory => rusqlite::Connection::open_in_memory(),
             OpenMode::ReadOnly => rusqlite::Connection::open_with_flags(
@@ -369,7 +383,7 @@ impl GuestConnection for HlConnection {
         }
     }
 
-    fn execute(&self, sql: String) -> Result<ExecResult, HlDatabaseError> {
+    async fn execute(&self, sql: String) -> Result<ExecResult, HlDatabaseError> {
         let conn = self.conn.borrow();
         let changes = conn.execute(&sql, []).map_err(|e| hl_err(&e))?;
         Ok(ExecResult {
@@ -378,7 +392,7 @@ impl GuestConnection for HlConnection {
         })
     }
 
-    fn execute_with_params(&self, sql: String, params: Vec<HlValue>) -> Result<ExecResult, HlDatabaseError> {
+    async fn execute_with_params(&self, sql: String, params: Vec<HlValue>) -> Result<ExecResult, HlDatabaseError> {
         let conn = self.conn.borrow();
         let rqs: Vec<rusqlite::types::Value> = params.into_iter().map(hl_value_to_rusqlite).collect();
         let changes = conn.execute(&sql, rusqlite::params_from_iter(rqs.iter()))
@@ -389,11 +403,11 @@ impl GuestConnection for HlConnection {
         })
     }
 
-    fn query(&self, sql: String) -> Result<HlQueryResult, HlDatabaseError> {
-        self.query_with_params(sql, vec![])
+    async fn query(&self, sql: String) -> Result<HlQueryResult, HlDatabaseError> {
+        self.query_with_params(sql, vec![]).await
     }
 
-    fn query_with_params(&self, sql: String, params: Vec<HlValue>) -> Result<HlQueryResult, HlDatabaseError> {
+    async fn query_with_params(&self, sql: String, params: Vec<HlValue>) -> Result<HlQueryResult, HlDatabaseError> {
         let conn = self.conn.borrow();
         let mut stmt = conn.prepare(&sql).map_err(|e| hl_err(&e))?;
         let col_count = stmt.column_count();
@@ -412,7 +426,7 @@ impl GuestConnection for HlConnection {
         Ok(HlQueryResult { column_names, rows: out_rows })
     }
 
-    fn prepare(&self, sql: String) -> Result<Statement, HlDatabaseError> {
+    async fn prepare(&self, sql: String) -> Result<Statement, HlDatabaseError> {
         // Validate the SQL parses; rusqlite::prepare borrows from the
         // connection so we can't store the Statement, but we can use
         // the prepare call to catch syntax errors early.
@@ -429,17 +443,17 @@ impl GuestConnection for HlConnection {
         }))
     }
 
-    fn begin_transaction(&self) -> Result<(), HlDatabaseError> {
+    async fn begin_transaction(&self) -> Result<(), HlDatabaseError> {
         self.conn.borrow().execute_batch("BEGIN").map_err(|e| hl_err(&e))
     }
-    fn commit(&self) -> Result<(), HlDatabaseError> {
+    async fn commit(&self) -> Result<(), HlDatabaseError> {
         self.conn.borrow().execute_batch("COMMIT").map_err(|e| hl_err(&e))
     }
-    fn rollback(&self) -> Result<(), HlDatabaseError> {
+    async fn rollback(&self) -> Result<(), HlDatabaseError> {
         self.conn.borrow().execute_batch("ROLLBACK").map_err(|e| hl_err(&e))
     }
-    fn in_autocommit(&self) -> bool { true }
-    fn last_error(&self) -> Option<HlDatabaseError> { None }
+    async fn in_autocommit(&self) -> bool { true }
+    async fn last_error(&self) -> Option<HlDatabaseError> { None }
 }
 
 impl HlStatement {
@@ -449,7 +463,7 @@ impl HlStatement {
 }
 
 impl GuestStatement for HlStatement {
-    fn bind(&self, index: i32, value: HlValue) -> Result<(), HlDatabaseError> {
+    async fn bind(&self, index: i32, value: HlValue) -> Result<(), HlDatabaseError> {
         let idx = (index as usize).saturating_sub(1);
         let mut b = self.bindings.borrow_mut();
         if b.len() <= idx { b.resize(idx + 1, rusqlite::types::Value::Null); }
@@ -457,14 +471,14 @@ impl GuestStatement for HlStatement {
         Ok(())
     }
 
-    fn bind_all(&self, params: Vec<HlValue>) -> Result<(), HlDatabaseError> {
+    async fn bind_all(&self, params: Vec<HlValue>) -> Result<(), HlDatabaseError> {
         let mut b = self.bindings.borrow_mut();
         b.clear();
         for v in params { b.push(hl_value_to_rusqlite(v)); }
         Ok(())
     }
 
-    fn execute(&self) -> Result<ExecResult, HlDatabaseError> {
+    async fn execute(&self) -> Result<ExecResult, HlDatabaseError> {
         let conn = self.conn.borrow();
         let params = self.bound_params();
         let changes = conn
@@ -476,7 +490,7 @@ impl GuestStatement for HlStatement {
         })
     }
 
-    fn query(&self) -> Result<HlQueryResult, HlDatabaseError> {
+    async fn query(&self) -> Result<HlQueryResult, HlDatabaseError> {
         let conn = self.conn.borrow();
         let mut stmt = conn.prepare(&self.sql).map_err(|e| hl_err(&e))?;
         let col_count = stmt.column_count();
@@ -496,7 +510,7 @@ impl GuestStatement for HlStatement {
         Ok(HlQueryResult { column_names, rows: out_rows })
     }
 
-    fn step(&self) -> Result<Option<bindings::exports::sqlite::wasm::high_level::Row>, HlDatabaseError> {
+    async fn step(&self) -> Result<Option<bindings::exports::sqlite::wasm::high_level::Row>, HlDatabaseError> {
         // First step materializes the full result into cursor_buf;
         // subsequent steps pop. Trades streaming for borrow-checker
         // simplicity (rusqlite::Rows borrows from the Statement
@@ -530,19 +544,19 @@ impl GuestStatement for HlStatement {
         }))
     }
 
-    fn reset(&self) -> Result<(), HlDatabaseError> {
+    async fn reset(&self) -> Result<(), HlDatabaseError> {
         // Reset clears the iteration cursor so step() re-runs the
         // query. Bindings are preserved (per sqlite3_reset semantics).
         *self.cursor_buf.borrow_mut() = None;
         Ok(())
     }
 
-    fn clear_bindings(&self) -> Result<(), HlDatabaseError> {
+    async fn clear_bindings(&self) -> Result<(), HlDatabaseError> {
         self.bindings.borrow_mut().clear();
         Ok(())
     }
 
-    fn column_count(&self) -> i32 {
+    async fn column_count(&self) -> i32 {
         let cached = self.column_names.borrow();
         if !cached.is_empty() { return cached.len() as i32; }
         drop(cached);
@@ -556,7 +570,7 @@ impl GuestStatement for HlStatement {
         n
     }
 
-    fn column_names(&self) -> Vec<String> {
+    async fn column_names(&self) -> Vec<String> {
         let cached = self.column_names.borrow();
         if !cached.is_empty() { return cached.clone(); }
         drop(cached);
@@ -570,7 +584,7 @@ impl GuestStatement for HlStatement {
         names
     }
 
-    fn parameter_count(&self) -> i32 {
+    async fn parameter_count(&self) -> i32 {
         let conn = self.conn.borrow();
         let stmt = match conn.prepare(&self.sql) {
             Ok(s) => s,
@@ -608,13 +622,13 @@ fn ensure_cli_conn() {
 }
 
 impl CliGuest for CliReactor {
-    fn init(db_path: String) -> Result<(), String> {
+    async fn init(db_path: String) -> Result<(), String> {
         DB_PATH.with(|p| *p.borrow_mut() = db_path);
         ensure_cli_conn();
         Ok(())
     }
 
-    fn eval(input: String) -> String {
+    async fn eval(input: String) -> String {
         let trimmed = input.trim();
         if trimmed.is_empty() {
             return String::new();
@@ -624,31 +638,31 @@ impl CliGuest for CliReactor {
             return String::new();
         }
         if let Some(rest) = trimmed.strip_prefix(".load ") {
-            return do_load(rest.trim());
+            return do_load(rest.trim()).await;
         }
         if let Some(rest) = trimmed.strip_prefix(".unload ") {
-            return do_unload(rest.trim());
+            return do_unload(rest.trim()).await;
         }
         if let Some(rest) = trimmed.strip_prefix(".open") {
             return do_open(rest.trim());
         }
         if let Some(rest) = trimmed.strip_prefix(".fiji ") {
-            return do_fiji(rest.trim());
+            return do_fiji(rest.trim()).await;
         }
         if let Some(rest) = trimmed.strip_prefix(".register-resolver ") {
-            return do_register_resolver(rest.trim());
+            return do_register_resolver(rest.trim()).await;
         }
         if let Some(rest) = trimmed.strip_prefix(".unregister-resolver ") {
-            return do_unregister_resolver(rest.trim());
+            return do_unregister_resolver(rest.trim()).await;
         }
         if trimmed == ".resolvers" {
-            return do_list_resolvers();
+            return do_list_resolvers().await;
         }
         if let Some(rest) = trimmed.strip_prefix(".register-provider ") {
-            return do_register_provider(rest.trim());
+            return do_register_provider(rest.trim()).await;
         }
         if trimmed.starts_with(".cache") {
-            return do_cache(trimmed.strip_prefix(".cache").unwrap_or("").trim());
+            return do_cache(trimmed.strip_prefix(".cache").unwrap_or("").trim()).await;
         }
         ensure_cli_conn();
         // Dispatch other dot-commands first; only fall through to
@@ -704,7 +718,7 @@ impl CliGuest for CliReactor {
         })
     }
 
-    fn eval_structured(input: String) -> Result<CliQueryResult, CliSqliteError> {
+    async fn eval_structured(input: String) -> Result<CliQueryResult, CliSqliteError> {
         ensure_cli_conn();
         CLI_CONN.with(|c| {
             let conn = c.borrow();
@@ -741,7 +755,7 @@ impl CliGuest for CliReactor {
         })
     }
 
-    fn is_statement_complete(buffered: String) -> bool {
+    async fn is_statement_complete(buffered: String) -> bool {
         let trimmed = buffered.trim();
         if trimmed.is_empty() {
             return true;
@@ -768,11 +782,11 @@ impl CliGuest for CliReactor {
         unsafe { libsqlite3_sys::sqlite3_complete(cstring.as_ptr()) != 0 }
     }
 
-    fn is_done() -> bool {
+    async fn is_done() -> bool {
         DONE.with(|d| *d.borrow())
     }
 
-    fn current_prompt(buffered: String) -> String {
+    async fn current_prompt(buffered: String) -> String {
         settings::SETTINGS.with(|s| {
             let g = s.borrow();
             if buffered.is_empty() { g.prompt_main.clone() } else { g.prompt_cont.clone() }
@@ -832,7 +846,7 @@ fn parse_grants(s: &str) -> Result<Vec<bindings::sqlite::extension::policy::Capa
 // Calls extension-loader, registers every scalar from the returned
 // manifest with rusqlite. Aggregates / collations / hooks remain a
 // follow-up.
-fn do_load(input: &str) -> String {
+async fn do_load(input: &str) -> String {
     use bindings::sqlite::extension::policy::{HttpPolicy, LoadOptions, Method};
     use bindings::sqlite::extension::types::SqlValue as WitSqlValue;
     use bindings::sqlite::wasm::dispatch;
@@ -905,12 +919,12 @@ fn do_load(input: &str) -> String {
     // "<scheme>:[//]rest" with scheme != C-drive-letter shape.
     let is_uri = looks_like_uri(path);
     let manifest = if is_uri {
-        match extension_loader::load_extension_from_uri(path, &opts) {
+        match extension_loader::load_extension_from_uri(path.to_string(), opts.clone()).await {
             Ok(m) => m,
             Err(e) => return format!("Error loading {path}: {} (code {})\n", e.message, e.code),
         }
     } else {
-        match extension_loader::load_extension(path, &opts) {
+        match extension_loader::load_extension(path.to_string(), opts.clone()).await {
             Ok(m) => m,
             Err(e) => return format!("Error loading {path}: {} (code {})\n", e.message, e.code),
         }
@@ -943,7 +957,7 @@ fn do_load(input: &str) -> String {
                         let v: rusqlite::types::Value = ctx.get(i).unwrap_or(rusqlite::types::Value::Null);
                         wit_args.push(rusqlite_to_wit(v));
                     }
-                    match dispatch::scalar_call(&ext_n, func_id, &wit_args) {
+                    match wit_bindgen_rt::async_support::block_on(dispatch::scalar_call(ext_n.clone(), func_id, wit_args.clone())) {
                         Ok(v) => Ok(wit_to_rusqlite(v)),
                         Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
                     }
@@ -969,14 +983,14 @@ fn do_load(input: &str) -> String {
                     let v: rusqlite::types::Value = ctx.get(i).unwrap_or(rusqlite::types::Value::Null);
                     wit_args.push(rusqlite_to_wit(v));
                 }
-                match dispatch::aggregate_step(&self.ext_name, self.func_id, *acc, &wit_args) {
+                match wit_bindgen_rt::async_support::block_on(dispatch::aggregate_step(self.ext_name.clone(), self.func_id, *acc, wit_args.clone())) {
                     Ok(()) => Ok(()),
                     Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
                 }
             }
             fn finalize(&self, _ctx: &mut rusqlite::functions::Context<'_>, acc: Option<u64>) -> rusqlite::Result<rusqlite::types::Value> {
                 let ctx_id = acc.unwrap_or(0);
-                match dispatch::aggregate_finalize(&self.ext_name, self.func_id, ctx_id) {
+                match wit_bindgen_rt::async_support::block_on(dispatch::aggregate_finalize(self.ext_name.clone(), self.func_id, ctx_id)) {
                     Ok(v) => Ok(wit_to_rusqlite(v)),
                     Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
                 }
@@ -998,7 +1012,7 @@ fn do_load(input: &str) -> String {
             let ext_n = ext_name.clone();
             let coll_id = spec.id;
             let r = conn.create_collation(&spec.name, move |a: &str, b: &str| {
-                let n = dispatch::collation_compare(&ext_n, coll_id, a, b);
+                let n = wit_bindgen_rt::async_support::block_on(dispatch::collation_compare(ext_n.clone(), coll_id, a.to_string(), b.to_string()));
                 if n < 0 { std::cmp::Ordering::Less }
                 else if n > 0 { std::cmp::Ordering::Greater }
                 else { std::cmp::Ordering::Equal }
@@ -1043,7 +1057,7 @@ fn do_load(input: &str) -> String {
                     rusqlite::hooks::Action::SQLITE_DELETE => Op::Delete,
                     _ => return,
                 };
-                dispatch::on_update(&ext_n, op, db, table, rowid);
+                wit_bindgen_rt::async_support::block_on(dispatch::on_update(ext_n.clone(), op, db.to_string(), table.to_string(), rowid));
             }));
             h_count += 1;
         }
@@ -1052,11 +1066,11 @@ fn do_load(input: &str) -> String {
             conn.commit_hook(Some(move || {
                 // rusqlite's hook expects bool where TRUE = abort.
                 // WIT on_commit returns TRUE = proceed. Invert.
-                !dispatch::on_commit(&ext_n)
+                !wit_bindgen_rt::async_support::block_on(dispatch::on_commit(ext_n.clone()))
             }));
             let ext_n2 = ext_name.clone();
             conn.rollback_hook(Some(move || {
-                dispatch::on_rollback(&ext_n2);
+                wit_bindgen_rt::async_support::block_on(dispatch::on_rollback(ext_n2.clone()));
             }));
             h_count += 1;
         }
@@ -1184,14 +1198,14 @@ unsafe extern "C" fn xauth_trampoline(
     }
     let d = &*(user_data as *const AuthDispatch);
     let action = sqlite_code_to_auth_action(op);
-    let r = bindings::sqlite::wasm::dispatch::authorize(
-        &d.ext_name,
+    let r = wit_bindgen_rt::async_support::block_on(bindings::sqlite::wasm::dispatch::authorize(
+        d.ext_name.clone(),
         action,
-        c_to_opt(arg1).as_deref(),
-        c_to_opt(arg2).as_deref(),
-        c_to_opt(arg3).as_deref(),
-        c_to_opt(arg4).as_deref(),
-    );
+        c_to_opt(arg1),
+        c_to_opt(arg2),
+        c_to_opt(arg3),
+        c_to_opt(arg4),
+    ));
     auth_result_to_sqlite_code(r)
 }
 
@@ -1213,7 +1227,7 @@ fn looks_like_uri(s: &str) -> bool {
 /// world. The host instantiates, calls `fiji.run()`, prints the
 /// returned string. Each .fiji creates a fresh Store; no state
 /// carries between invocations.
-fn do_fiji(arg: &str) -> String {
+async fn do_fiji(arg: &str) -> String {
     use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     use bindings::sqlite::wasm::extension_loader;
     if arg.is_empty() {
@@ -1231,7 +1245,7 @@ fn do_fiji(arg: &str) -> String {
         memory_limit_bytes: None,
         epoch_deadline_ms: None,
     };
-    match extension_loader::run_fiji_function(arg, &opts) {
+    match extension_loader::run_fiji_function(arg.to_string(), opts.clone()).await {
         Ok(out) => {
             if out.ends_with('\n') { out } else { format!("{out}\n") }
         }
@@ -1239,7 +1253,7 @@ fn do_fiji(arg: &str) -> String {
     }
 }
 
-fn do_register_resolver(arg: &str) -> String {
+async fn do_register_resolver(arg: &str) -> String {
     use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     use bindings::sqlite::wasm::extension_loader;
 
@@ -1257,7 +1271,7 @@ fn do_register_resolver(arg: &str) -> String {
         memory_limit_bytes: None,
         epoch_deadline_ms: None,
     };
-    match extension_loader::register_resolver(scheme, path, &opts) {
+    match extension_loader::register_resolver(scheme.to_string(), path.to_string(), opts.clone()).await {
         Ok(name) => format!("Registered resolver: {scheme} -> {name}\n"),
         Err(e) => format!("Error registering {scheme}: {} (code {})\n", e.message, e.code),
     }
@@ -1268,7 +1282,7 @@ fn do_register_resolver(arg: &str) -> String {
 /// compose:dynlink/dynlink-provider world (exports endpoint). After
 /// registration, Fiji functions can `linker.resolve-by-id(ID)` and
 /// invoke methods on the returned instance.
-fn do_register_provider(arg: &str) -> String {
+async fn do_register_provider(arg: &str) -> String {
     use bindings::sqlite::wasm::extension_loader;
     let mut parts = arg.splitn(2, char::is_whitespace);
     let id = parts.next().unwrap_or("").trim();
@@ -1276,23 +1290,23 @@ fn do_register_provider(arg: &str) -> String {
     if id.is_empty() || path.is_empty() {
         return "Usage: .register-provider ID PATH\n".to_string();
     }
-    match extension_loader::register_wasm_provider(id, path) {
+    match extension_loader::register_wasm_provider(id.to_string(), path.to_string()).await {
         Ok(()) => format!("Registered provider: {id} -> {path}\n"),
         Err(e) => format!("Error registering {id}: {} (code {})\n", e.message, e.code),
     }
 }
 
-fn do_unregister_resolver(arg: &str) -> String {
+async fn do_unregister_resolver(arg: &str) -> String {
     use bindings::sqlite::wasm::extension_loader;
-    match extension_loader::unregister_resolver(arg) {
+    match extension_loader::unregister_resolver(arg.to_string()).await {
         Ok(()) => format!("Unregistered resolver: {arg}\n"),
         Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
     }
 }
 
-fn do_list_resolvers() -> String {
+async fn do_list_resolvers() -> String {
     use bindings::sqlite::wasm::extension_loader;
-    let resolvers = extension_loader::list_resolvers();
+    let resolvers = extension_loader::list_resolvers().await;
     if resolvers.is_empty() {
         return "(no resolvers registered)\n".to_string();
     }
@@ -1303,11 +1317,11 @@ fn do_list_resolvers() -> String {
     out
 }
 
-fn do_cache(arg: &str) -> String {
+async fn do_cache(arg: &str) -> String {
     use bindings::sqlite::wasm::extension_loader;
     match arg {
         "list" | "" => {
-            let entries = extension_loader::list_cache_uris();
+            let entries = extension_loader::list_cache_uris().await;
             if entries.is_empty() {
                 return "(cache empty)\n".to_string();
             }
@@ -1321,7 +1335,7 @@ fn do_cache(arg: &str) -> String {
             out
         }
         "clear" | "purge" => {
-            let n = extension_loader::purge_cache();
+            let n = extension_loader::purge_cache().await;
             format!("Purged {n} cache files\n")
         }
         _ => format!("Usage: .cache [list|clear]\n"),
@@ -1342,9 +1356,9 @@ fn next_agg_context_id() -> u64 {
 // after unload returns "extension not loaded" via dispatch error
 // path. Documented limitation; v2 could drop+recreate the
 // connection.
-fn do_unload(name: &str) -> String {
+async fn do_unload(name: &str) -> String {
     use bindings::sqlite::wasm::extension_loader;
-    match extension_loader::unload_extension(name) {
+    match extension_loader::unload_extension(name.to_string()).await {
         Ok(()) => format!("Unloaded extension: {name}\n"),
         Err(e) => format!("Error unloading {name}: {} (code {})\n", e.message, e.code),
     }

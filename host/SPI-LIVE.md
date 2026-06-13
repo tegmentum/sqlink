@@ -174,7 +174,71 @@ pieces needed (verified the feature gate exists).
 Conclusion: **option 2 is viable** but takes more focused time
 than the half-session estimate. See "Conversion attempt" below.
 
-### Conversion attempt (2026-06)
+### Conversion completed (2026-06-13)
+
+cli-rust now uses `wit_bindgen::generate!({ async: true,
+generate_all })` directly instead of cargo-component's auto-
+generated bindings. The component is built in two steps:
+
+```sh
+cargo build --release --target wasm32-wasip1
+wasm-tools component new \
+  target/wasm32-wasip1/release/sqlite_cli_rust.wasm \
+  --adapt $ADAPTER/wasi_snapshot_preview1.reactor.wasm \
+  -o target/wasm32-wasip1/release/sqlite_cli_rust.component.wasm
+```
+
+Component verified: `wasm-tools print` shows `[async-lower]load-
+extension` etc. (imports async-lowered) and `[async-lift]...`
+(exports async-lifted). Standard tests pass; basic SQL eval +
+dot-commands work end-to-end via the new component.
+
+**Important deviation from earlier plan:** Stage 2a's host-side
+HostWithStore Accessor rewrite was NOT applied. The reason: our
+WIT functions are not declared `async` at the type level, so the
+host bindgen with `imports: { default: async | store }` (which
+expects async function types) fails type-check ("type mismatch
+with async"). The right combination is:
+
+- Host: `imports: { default: async }` (plain async, the existing
+  setup before Stage 2a).
+- Guest: `wit_bindgen::generate!({ async: true })` (canonical-ABI
+  async lowering — wasm task yields on host imports).
+
+This was confirmed empirically: the bridge re-entry test
+(`live_spi_bridge_reenters_eval_structured`) passes against the
+new async-lowered component without any host changes.
+
+**dispatch_chain_routes_execute_live_through_bridge still hangs**
+despite the async-lowered guest. Root cause appears to be that
+`wit_bindgen_rt::async_support::block_on()` (which we use inside
+rusqlite's sync scalar-function callback to call the now-async
+`dispatch::scalar_call`) keeps the cli wasm task in a state
+wasmtime's `may_enter` considers "entered" — even though
+`block_on` internally uses `waitable-set.wait`. So when the
+bridge dispatcher tries `call_concurrent(cli.eval-structured)`,
+wasmtime still refuses re-entry.
+
+What would actually unblock dispatch-chain re-entry:
+- Replace rusqlite's scalar-function registration with raw
+  `sqlite3_create_function_v2` and a thunk that yields properly
+  through wasmtime's canonical ABI rather than block_on. Bounded
+  but non-trivial work — needs careful threading of async
+  context through the C callback boundary.
+- Or: refactor cli-rust to NOT use rusqlite for scalar dispatch.
+  Use the raw SQLite C API directly so the scalar callback is a
+  fully sync C function that doesn't try to call wit-bindgen
+  imports from within.
+- Or: change the WIT to declare cli/spi/dispatch as `async`
+  functions at the WIT level (the new component-model-async
+  syntax). Then host can use `imports: { default: async | store }`
+  and Stage 2a's HostWithStore rewrite WOULD apply correctly.
+
+The Stage 2b mechanical conversion landed. The architectural
+question of how to make rusqlite-callback → async-import work
+through may_enter is the actual hard problem and remains open.
+
+### Original conversion attempt (2026-06)
 
 Tried executing the full option 2 conversion. Got partway and
 hit cascading complexity that pushed it past one chat turn.
