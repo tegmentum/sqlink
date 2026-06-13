@@ -1,5 +1,14 @@
 # Plan: Outstanding Work
 
+> **Status: superseded.** This document is a snapshot from when the
+> Rust CLI was still a reactor-shape component with a live-SPI
+> bridge. That entire architecture has since been torn out (see
+> `host/SPI-LIVE-ARCHITECTURE.md` for the post-mortem) and the
+> reactor world replaced with command-mode `wasi:cli/run`. The
+> "missing" items listed here are either done or no longer
+> applicable; current cleanup work lives in `PLAN-cleanup.md`.
+> Kept for historical reference; do not act on its contents.
+
 ## State of the world
 
 What's working today end-to-end:

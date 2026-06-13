@@ -139,7 +139,7 @@ $ cargo component build --release
 $ ls -lh target/wasm32-wasip1/release/fiji_my_tool.wasm
 -rw-r--r--  151K  ...
 
-$ sqlite-wasm-run --reactor --db /tmp/data.db sqlite-cli-rust.wasm
+$ sqlite-wasm-run --reactor --db /tmp/data.db sqlite-cli.wasm
 sqlite> .fiji /path/to/fiji_my_tool.wasm
 The answer is 42
 ```

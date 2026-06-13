@@ -1,12 +1,20 @@
-# Live-SPI re-entry: architectural conclusions
+# Live-SPI re-entry: lessons learned
+
+**Status: post-mortem.** The live-SPI bridge and the entire
+`-live` SPI triple have been torn out (committed `bf97205`,
+`6341c00`; the reactor-shape Rust CLI that depended on the bridge
+was collapsed to command-mode in `c8f5643`). This document is kept
+because the architectural conclusion is load-bearing — if anyone
+proposes a similar dispatch-chain re-entry pattern again, the
+analysis below is the reason it won't work and the bounded paths
+that would.
 
 After implementing Stages 1 + 2 of the live-SPI re-entry work
 (channel bridge, async-lowered guest imports, host concurrent
 bindgen, rusqlite removal, wasip2 pivot, raw sqlite3 wrapping)
 the dispatch-chain bridge re-entry path could not be made to
 work. This document captures *why* and what would actually
-deliver it. The eventual landing: drop the `-live` triple
-entirely (see "Recommendation" below).
+deliver it.
 
 ## The exact failure
 

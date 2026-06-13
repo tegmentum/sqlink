@@ -26,7 +26,7 @@ READMEs and PLAN-*.md files have the detail.
 ┌─────────────────────────────────────────────────────────────────┐
 │ cli + extensions  — the components                              │
 │   sqlite-cli-demo.wasm  (legacy C, command-mode, wasi:cli/run)  │
-│   sqlite_cli_rust.wasm  (Rust, reactor, async-stackful lifts)   │
+│   sqlite_cli.wasm  (Rust, reactor, async-stackful lifts)   │
 │   test/agg/coll/hook/spi-extension.wasm  (canonical world)      │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -77,14 +77,14 @@ binary:
 
 ## Two CLIs, on purpose
 
-| | sqlite-cli-demo.wasm (C) | sqlite_cli_rust.wasm (Rust) |
+| | sqlite-cli-demo.wasm (C) | sqlite_cli.wasm (Rust) |
 |---|---|---|
 | World | `sqlite-cli-unified` | `sqlite-cli-reactor` |
 | Run mode | wasi:cli/run command-mode | reactor; host drives REPL |
 | SQLite | sqlite3.c statically linked | rusqlite bundled |
 | Lifts | sync (wit-bindgen-c) | async-stackful (wit-bindgen-rust) |
 | Why it exists | First implementation, broad dot-command coverage, ships today | Required for in-WASM `spi.execute` — re-entry-capable per wasmtime 45 |
-| `wasmtime run` | works | doesn't (see cli-rust/README.md) |
+| `wasmtime run` | works | doesn't (see cli/README.md) |
 | Status | Stable; deprecation deferred | Tier-1 dot-commands + full dispatch surface + SPI helper |
 
 Both CLIs route loaded-extension calls through the same
@@ -199,8 +199,8 @@ sqlite-wasm/
 │   ├── sqlite-cli-demo.wasm      ← wasi:cli command-mode CLI
 │   └── extensions/
 │       └── wasm-demo.wasm
-├── cli-rust/target/wasm32-wasip1/release/
-│   └── sqlite_cli_rust.wasm      ← reactor CLI
+├── cli/target/wasm32-wasip1/release/
+│   └── sqlite_cli.wasm      ← reactor CLI
 └── host/target/aarch64-apple-darwin/release/
     └── sqlite-wasm-run           ← the runner
 
@@ -222,4 +222,4 @@ sqlite-wasm-loader/target/wasm32-wasip1/release/
 - `host/SPI.md` — original architectural analysis (some now
   superseded; the per-call helper instance discussion is the
   current implementation).
-- `cli-rust/README.md` — building + why `wasmtime run` doesn't work.
+- `cli/README.md` — building + why `wasmtime run` doesn't work.

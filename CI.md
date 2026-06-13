@@ -46,7 +46,7 @@ docker pull catthehacker/ubuntu:act-latest
 
 ## What's NOT in CI yet (deliberate)
 
-- **WASM-side builds.** Building `cli-rust`, `fiji-hello`, and
+- **WASM-side builds.** Building `cli`, `fiji-hello`, and
   the extensions in `sqlite-wasm-loader` requires wasi-sdk
   (~150 MB) plus `cargo-component`. The `.github/workflows/ci.yml`
   has a commented-out `wasm-builds` job placeholder where this

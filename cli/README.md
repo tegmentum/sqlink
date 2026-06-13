@@ -1,4 +1,4 @@
-# sqlite-cli-rust
+# sqlite-cli
 
 Reactor-shape Rust port of the SQLite CLI. Targets the
 `sqlite-cli-reactor` world; SQLite is bundled via rusqlite.
@@ -15,7 +15,7 @@ architectural detail).
 ## Why `wasmtime run` doesn't work
 
 ```
-$ wasmtime run sqlite_cli_rust.wasm
+$ wasmtime run sqlite_cli.wasm
 Error: component imports instance `sqlite:wasm/extension-loader@0.1.0`,
        but a matching implementation was not found in the linker
 ```
@@ -26,10 +26,10 @@ interfaces that only `sqlite-wasm-run` knows how to satisfy. Run it
 through that binary instead:
 
 ```
-$ sqlite-wasm-run --reactor sqlite_cli_rust.wasm
+$ sqlite-wasm-run --reactor sqlite_cli.wasm
 
 # Or with a file-backed db (needed for in-WASM spi.execute):
-$ sqlite-wasm-run --reactor --db /tmp/my.db sqlite_cli_rust.wasm
+$ sqlite-wasm-run --reactor --db /tmp/my.db sqlite_cli.wasm
 ```
 
 ## Building
@@ -45,7 +45,7 @@ CFLAGS_wasm32_wasip1="--sysroot=$WASI_SDK/share/wasi-sysroot --target=wasm32-was
   cargo component build --release
 ```
 
-The result is `target/wasm32-wasip1/release/sqlite_cli_rust.wasm`.
+The result is `target/wasm32-wasip1/release/sqlite_cli.wasm`.
 
 ## Source layout
 
