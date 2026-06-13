@@ -38,6 +38,7 @@ mod bindings {
     });
 }
 
+mod db;
 mod dot;
 mod format;
 mod settings;
