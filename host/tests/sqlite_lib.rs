@@ -170,6 +170,53 @@ async fn high_level_open_memory_runs_a_query() {
 }
 
 #[tokio::test]
+async fn spi_sees_high_level_writes_through_default_connection() {
+    // Regression for the SPI/high-level state split. Before Phase 2,
+    // spi.execute opened its own thread-local in-memory connection
+    // that nothing else could see — a consumer running CREATE TABLE
+    // through high-level then SPI-querying it would get "no such
+    // table". The fix: SPI shares a single Rc<RefCell<Connection>>
+    // with high-level's new default-connection getter.
+    let Some((mut store, lib)) = instantiate().await.expect("instantiate") else {
+        eprintln!("skipping: sqlite-lib not built");
+        return;
+    };
+    let high = lib.sqlite_wasm_high_level();
+    let spi = lib.sqlite_extension_spi();
+
+    let conn = high
+        .call_default_connection(&mut store)
+        .await
+        .expect("trap")
+        .expect("default_connection");
+
+    high.connection()
+        .call_execute(&mut store, conn, "CREATE TABLE shared(x INTEGER);")
+        .await
+        .expect("trap")
+        .expect("CREATE TABLE through high-level default connection");
+    high.connection()
+        .call_execute(&mut store, conn, "INSERT INTO shared VALUES (1), (2), (3);")
+        .await
+        .expect("trap")
+        .expect("INSERT");
+
+    let result = spi
+        .call_execute(&mut store, "SELECT count(*) FROM shared;", &[])
+        .await
+        .expect("trap")
+        .expect("SPI sees the high-level writes");
+    assert_eq!(result.rows.len(), 1);
+    let count_row = &result.rows[0];
+    assert_eq!(count_row.len(), 1);
+    use exports::sqlite::extension::types::SqlValue;
+    match count_row[0] {
+        SqlValue::Integer(n) => assert_eq!(n, 3, "SPI sees all three high-level inserts"),
+        ref other => panic!("expected integer count, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn library_load_extension_round_trip() {
     let Some((mut store, lib)) = instantiate().await.expect("instantiate") else {
         eprintln!("skipping: sqlite-lib not built");

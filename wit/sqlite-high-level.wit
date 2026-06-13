@@ -119,4 +119,16 @@ interface high-level {
 
     // Open a file database with default settings (convenience function)
     open-file: func(path: string) -> result<connection, database-error>;
+
+    /// Hand out a connection resource backed by the same sqlite3
+    /// connection that the component's `sqlite:extension/spi`
+    /// surface reads from and writes to. Use this when the SPI
+    /// surface and the high-level surface need to see each other's
+    /// writes — e.g. a consumer that uses high-level for schema
+    /// setup and an embedded extension for queries. Connections
+    /// obtained via `open-memory` / `open-file` / `connection.new`
+    /// are isolated from SPI; only this default connection is
+    /// shared. The default connection is created on first call and
+    /// lives for the lifetime of the component instance.
+    default-connection: func() -> result<connection, database-error>;
 }

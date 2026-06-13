@@ -129,19 +129,39 @@ fn spi_value_to_db(v: SpiSqlValue) -> db::Value {
     }
 }
 
+// The "default connection" shared between sqlite:extension/spi and
+// sqlite:wasm/high-level.default-connection. SPI calls used to open
+// their own in-memory connection that nothing else could see — that
+// was a footgun (consumer runs CREATE TABLE through high-level, then
+// SPI queries see an empty database). Now SPI and high-level's
+// default-connection getter both go through this single
+// Rc<RefCell<Connection>>; the high-level resource wraps the same Rc
+// the SPI thread-local holds.
+//
+// Connections opened via open-memory, open-file, or connection.new
+// stay isolated — only this default connection is shared. Consumers
+// that want isolation just don't call default-connection.
 thread_local! {
-    static SPI_CONN: RefCell<Option<db::Connection>> = const { RefCell::new(None) };
+    static SHARED_CONN: RefCell<Option<std::rc::Rc<RefCell<db::Connection>>>>
+        = const { RefCell::new(None) };
+}
+
+fn shared_conn() -> std::rc::Rc<RefCell<db::Connection>> {
+    SHARED_CONN.with(|c| {
+        let mut g = c.borrow_mut();
+        if g.is_none() {
+            let conn = db::Connection::open_in_memory()
+                .expect("open in-memory connection for shared SPI/high-level default");
+            *g = Some(std::rc::Rc::new(RefCell::new(conn)));
+        }
+        g.as_ref().unwrap().clone()
+    })
 }
 
 fn spi_with<R>(f: impl FnOnce(&db::Connection) -> R) -> R {
-    SPI_CONN.with(|c| {
-        let mut g = c.borrow_mut();
-        if g.is_none() {
-            *g = db::Connection::open_in_memory().ok();
-        }
-        let conn = g.as_ref().expect("spi connection opened");
-        f(conn)
-    })
+    let rc = shared_conn();
+    let conn = rc.borrow();
+    f(&conn)
 }
 
 impl SpiGuest for SqliteLib {
@@ -403,6 +423,12 @@ impl HighLevelGuest for SqliteLib {
             Ok(c) => Ok(Connection::new(HlConnection { conn: std::rc::Rc::new(RefCell::new(c)) })),
             Err(e) => Err(hl_err(&e)),
         }
+    }
+    fn default_connection() -> Result<Connection, HlDatabaseError> {
+        // Hand out an HlConnection wrapping the same Rc the SPI
+        // thread-local holds. Writes via this connection are visible
+        // to spi.execute() and vice versa.
+        Ok(Connection::new(HlConnection { conn: shared_conn() }))
     }
 }
 
