@@ -3,7 +3,7 @@ name = "sqlite-wasm-core"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Shared SQLite wrapper for sqlite-wasm crates (cli-rust + lib-rust)."
+description = "Shared SQLite wrapper for sqlite-wasm crates (cli + sqlite-lib)."
 
 [lib]
 crate-type = ["rlib"]

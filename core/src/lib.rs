@@ -1,5 +1,5 @@
 //! Shared SQLite wrapper. A thin sync layer over `libsqlite3-sys`
-//! that the cli-rust and lib-rust crates both build on. Owns the
+//! that the cli and sqlite-lib crates both build on. Owns the
 //! Connection, Statement, Value, Error types and the scalar /
 //! aggregate / collation / hook / authorizer registration paths.
 //!

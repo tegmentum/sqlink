@@ -2,7 +2,7 @@
 //! components.
 //!
 //! Instantiates a `wasi:cli/run`-style component (sqlite-cli-demo.wasm,
-//! cli-rust, anything targeting the `sqlite-cli-command` world) and
+//! cli, anything targeting the `sqlite-cli-command` world) and
 //! calls `wasi:cli/run.run` once. Resolves the host imports the
 //! component needs (extension-loader, dispatch) ahead of the call.
 
@@ -137,7 +137,7 @@ async fn main() -> Result<()> {
     wasi_builder.inherit_stdio();
     wasi_builder.inherit_env();
     // Grant the wasm component access to the db file's parent dir,
-    // so cli-rust can open its own sqlite3 connection against the
+    // so cli can open its own sqlite3 connection against the
     // same file the host opens for spi.
     if !db_path.is_empty() && db_path != ":memory:" {
         let p = std::path::Path::new(&db_path);

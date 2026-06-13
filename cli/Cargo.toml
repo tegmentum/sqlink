@@ -1,5 +1,5 @@
 [package]
-name = "sqlite-cli-rust"
+name = "sqlite-cli"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -24,8 +24,8 @@ libsqlite3-sys = { version = "0.30" }
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run
 #   wasm-tools component new \
-#     target/wasm32-wasip2/release/sqlite_cli_rust.wasm \
-#     -o target/wasm32-wasip2/release/sqlite_cli_rust.component.wasm
+#     target/wasm32-wasip2/release/sqlite_cli.wasm \
+#     -o target/wasm32-wasip2/release/sqlite_cli.component.wasm
 # No adapter needed — wasm32-wasip2 IS the component-model target.
 # The wasm-tools wrap is purely to add the component-section header
 # (the rustc output is a core module that uses wasip2 imports).

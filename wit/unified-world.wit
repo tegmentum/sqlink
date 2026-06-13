@@ -78,7 +78,7 @@ world sqlite-cli-command {
 
 /// Programmatic SQLite library world.
 ///
-/// Targeted by the lib-rust crate. Use this when you want SQLite
+/// Targeted by the sqlite-lib crate. Use this when you want SQLite
 /// functionality as a callable WIT surface from another component
 /// (a Fiji function, a web frontend, an SPI consumer) rather than
 /// as a CLI you drive over stdin. Exports both:

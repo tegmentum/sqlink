@@ -23,7 +23,7 @@ interface library {
     /// or show a continuation prompt.
     is-statement-complete: func(buffered: string) -> bool;
 
-    /// The lib-rust crate version (CARGO_PKG_VERSION at build time).
+    /// The sqlite-lib crate version (CARGO_PKG_VERSION at build time).
     library-version: func() -> string;
 
     /// The bundled SQLite version string (`3.53.1`).

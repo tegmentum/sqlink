@@ -1,5 +1,5 @@
 [package]
-name = "sqlite-cli-library"
+name = "sqlite-lib"
 version = "0.1.0"
 edition = "2021"
 publish = false
@@ -19,8 +19,8 @@ sqlite-wasm-core = { path = "../core" }
 # action codes used by the in-WASM authorizer dispatch.
 libsqlite3-sys = { version = "0.30" }
 
-# Component packaging mirrors cli-rust:
+# Component packaging mirrors the cli crate:
 #   cargo build --release --target wasm32-wasip2
 #   wasm-tools component new \
-#     target/wasm32-wasip2/release/sqlite_cli_library.wasm \
-#     -o target/wasm32-wasip2/release/sqlite_cli_library.component.wasm
+#     target/wasm32-wasip2/release/sqlite_lib.wasm \
+#     -o target/wasm32-wasip2/release/sqlite_lib.component.wasm

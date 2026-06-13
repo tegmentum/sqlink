@@ -2,7 +2,7 @@
 # local dev and CI. Stable is fine for the host crate — no nightly
 # features needed. Bump when there's a concrete reason.
 #
-# wasm32-wasip1 is the target the cli-rust component compiles to;
+# wasm32-wasip1 is the target the cli component compiles to;
 # wasm32-wasip2 is what cargo-component composes to. Both are listed
 # so a tokenless rustup setup brings both for the CI wasm jobs to
 # pick from.

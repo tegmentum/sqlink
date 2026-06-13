@@ -3,7 +3,7 @@
 
 set -e
 
-CLI="./cli/sqlite-wasm-ext"
+CLI="./tools/sqlite-wasm-ext"
 TEST_DIR="/tmp/sqlite-wasm-cli-test"
 REGISTRY_FILE="$(pwd)/registry/index.json"
 

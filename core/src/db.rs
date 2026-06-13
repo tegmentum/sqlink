@@ -1,7 +1,7 @@
 //! Thin Rust wrapper over `libsqlite3-sys` (raw FFI to sqlite3.c).
 //!
 //! Replaces rusqlite at the layers where rusqlite's sync-callback
-//! design fights cli-rust's async wit-bindgen import surface.
+//! design fights cli's async wit-bindgen import surface.
 //! Specifically:
 //!
 //! - `Connection`, `Statement`, value/error types: thin sync
@@ -28,7 +28,7 @@ use std::ptr;
 use libsqlite3_sys as ffi;
 
 /// SQL value — mirrors rusqlite's `types::Value`. Owned variants
-/// only (no borrowed columns); cli-rust copies row data out before
+/// only (no borrowed columns); cli copies row data out before
 /// the next `step()` invalidates the column pointers.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
@@ -270,7 +270,7 @@ impl Drop for Connection {
 }
 
 // Single-threaded wasm: Connection is !Send !Sync by default
-// (raw pointer). That matches our use — cli-rust runs on one
+// (raw pointer). That matches our use — cli runs on one
 // thread, connections live in thread_local!.
 
 /// Prepared statement, borrows from Connection so it can't outlive
@@ -484,7 +484,7 @@ pub fn version_number() -> i32 {
 // Function / aggregate / collation / hook / authorizer registration.
 //
 // This is the slice that the rusqlite split was about. The sqlite3
-// C callback ABI is sync; the cli-rust scalar/aggregate/hook bodies
+// C callback ABI is sync; the cli scalar/aggregate/hook bodies
 // need to invoke our async wit-bindgen imports (`dispatch::*`).
 //
 // What we own here vs rusqlite: the exact C-callback shape that
@@ -828,7 +828,7 @@ impl Connection {
 //
 // sqlite3_*_hook returns the PREVIOUS user_data pointer; we have
 // no destructor parameter, so we deallocate the previous boxed
-// closure here (assuming we registered it earlier). For cli-rust
+// closure here (assuming we registered it earlier). For cli
 // the hooks are registered once per .load and never replaced —
 // "leak previous" would technically be safe but Box::from_raw is
 // cleaner.
@@ -836,7 +836,7 @@ impl Connection {
 // SAFETY: this assumes that whoever called the hook setters
 // previously did so through this same API (so the user_data is a
 // `Box<F>` we made). Mixing with raw sqlite3_*_hook calls would
-// be unsound. cli-rust uses only this API, so the invariant holds.
+// be unsound. cli uses only this API, so the invariant holds.
 // ---------------------------------------------------------------
 
 /// Row-modification operation reported by `update_hook`.
@@ -1071,7 +1071,7 @@ impl Connection {
         // Note: sqlite3 doesn't return the previous user_data, so
         // we can't free the prior box automatically. Callers that
         // re-install authorizers will leak the previous closure.
-        // cli-rust installs exactly once per .load, so this is
+        // cli installs exactly once per .load, so this is
         // acceptable. Document and move on.
         if rc != ffi::SQLITE_OK {
             return Err(unsafe { last_error(self.raw) });

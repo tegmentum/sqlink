@@ -1,4 +1,4 @@
-//! lib-rust: programmatic SQLite-in-WASM library.
+//! sqlite-lib: programmatic SQLite-in-WASM library.
 //!
 //! Targets the `sqlite-cli-library` world — exports the full
 //! `sqlite:extension/*` SPI surface (so a compose-time consumer can
@@ -15,8 +15,8 @@
 //! CFLAGS_wasm32_wasip2="--sysroot=$WASI_SDK/share/wasi-sysroot --target=wasm32-wasip2" \
 //!   cargo build --release --target wasm32-wasip2
 //! wasm-tools component new \
-//!   target/wasm32-wasip2/release/sqlite_cli_library.wasm \
-//!   -o target/wasm32-wasip2/release/sqlite_cli_library.component.wasm
+//!   target/wasm32-wasip2/release/sqlite_lib.wasm \
+//!   -o target/wasm32-wasip2/release/sqlite_lib.component.wasm
 //! ```
 
 #![allow(clippy::needless_lifetimes)]
@@ -72,12 +72,12 @@ impl LoggingGuest for CliLibrary {
             LogLevel::Debug => "DEBUG",
             LogLevel::Trace => "TRACE",
         };
-        eprintln!("[lib-rust {l}] {message}");
+        eprintln!("[sqlite-lib {l}] {message}");
     }
-    fn error(message: String) { eprintln!("[lib-rust ERROR] {message}"); }
-    fn warn(message: String)  { eprintln!("[lib-rust WARN] {message}"); }
-    fn info(message: String)  { eprintln!("[lib-rust INFO] {message}"); }
-    fn debug(message: String) { eprintln!("[lib-rust DEBUG] {message}"); }
+    fn error(message: String) { eprintln!("[sqlite-lib ERROR] {message}"); }
+    fn warn(message: String)  { eprintln!("[sqlite-lib WARN] {message}"); }
+    fn info(message: String)  { eprintln!("[sqlite-lib INFO] {message}"); }
+    fn debug(message: String) { eprintln!("[sqlite-lib DEBUG] {message}"); }
 }
 
 // =========================================================================

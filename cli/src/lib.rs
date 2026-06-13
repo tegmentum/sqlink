@@ -1,4 +1,4 @@
-//! cli-rust: command-mode SQLite CLI for wasm32-wasip2.
+//! cli: command-mode SQLite CLI for wasm32-wasip2.
 //!
 //! Targets the `sqlite-cli-command` world: exports `wasi:cli/run`,
 //! imports the host-side extension-loader + dispatch surfaces. Any
@@ -18,8 +18,8 @@
 //! CFLAGS_wasm32_wasip2="--sysroot=$WASI_SDK/share/wasi-sysroot --target=wasm32-wasip2" \
 //!   cargo build --release --target wasm32-wasip2
 //! wasm-tools component new \
-//!   target/wasm32-wasip2/release/sqlite_cli_rust.wasm \
-//!   -o target/wasm32-wasip2/release/sqlite_cli_rust.component.wasm
+//!   target/wasm32-wasip2/release/sqlite_cli.wasm \
+//!   -o target/wasm32-wasip2/release/sqlite_cli.component.wasm
 //! ```
 
 #![allow(clippy::needless_lifetimes)]

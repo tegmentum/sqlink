@@ -1,10 +1,10 @@
-//! Smoke test for lib-rust (sqlite-cli-library world).
+//! Smoke test for sqlite-lib (sqlite-cli-library world).
 //!
 //! Confirms the component instantiates against wasmtime's
 //! canonical bindgen of the `sqlite-cli-library` world and that the
 //! exported `library` interface answers correctly.
 //!
-//! Silently skips if `lib-rust` isn't built so the suite stays green
+//! Silently skips if `sqlite-lib` isn't built so the suite stays green
 //! in environments without the wasm toolchain.
 
 use std::path::PathBuf;
@@ -32,9 +32,9 @@ impl wasmtime_wasi::WasiView for State {
     }
 }
 
-fn lib_rust_path() -> Option<PathBuf> {
+fn sqlite_lib_path() -> Option<PathBuf> {
     let candidates = [
-        "../lib-rust/target/wasm32-wasip2/release/sqlite_cli_library.component.wasm",
+        "../sqlite-lib/target/wasm32-wasip2/release/sqlite_lib.component.wasm",
     ];
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for c in candidates {
@@ -47,7 +47,7 @@ fn lib_rust_path() -> Option<PathBuf> {
 }
 
 async fn instantiate() -> Result<Option<(Store<State>, SqliteCliLibrary)>> {
-    let Some(path) = lib_rust_path() else { return Ok(None); };
+    let Some(path) = sqlite_lib_path() else { return Ok(None); };
     let mut config = Config::new();
     config.wasm_component_model(true);
     let engine = Engine::new(&config)?;
@@ -67,7 +67,7 @@ async fn instantiate() -> Result<Option<(Store<State>, SqliteCliLibrary)>> {
 #[tokio::test]
 async fn library_version_and_sqlite_version() {
     let Some((mut store, lib)) = instantiate().await.expect("instantiate") else {
-        eprintln!("skipping: lib-rust not built");
+        eprintln!("skipping: sqlite-lib not built");
         return;
     };
     let library = lib.sqlite_wasm_library();
@@ -82,7 +82,7 @@ async fn library_version_and_sqlite_version() {
 #[tokio::test]
 async fn library_is_statement_complete() {
     let Some((mut store, lib)) = instantiate().await.expect("instantiate") else {
-        eprintln!("skipping: lib-rust not built");
+        eprintln!("skipping: sqlite-lib not built");
         return;
     };
     let library = lib.sqlite_wasm_library();
@@ -97,7 +97,7 @@ async fn library_is_statement_complete() {
 #[tokio::test]
 async fn high_level_open_memory_runs_a_query() {
     let Some((mut store, lib)) = instantiate().await.expect("instantiate") else {
-        eprintln!("skipping: lib-rust not built");
+        eprintln!("skipping: sqlite-lib not built");
         return;
     };
     let high = lib.sqlite_wasm_high_level();
