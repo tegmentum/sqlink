@@ -225,6 +225,12 @@ impl Connection {
         unsafe { ffi::sqlite3_last_insert_rowid(self.raw) }
     }
 
+    /// Total number of rows changed by this connection since open.
+    /// Cumulative across statements; not reset by anything.
+    pub fn total_changes(&self) -> i64 {
+        unsafe { ffi::sqlite3_total_changes64(self.raw) }
+    }
+
     /// Close the connection explicitly; surfaces SQLITE_BUSY etc.
     /// that the Drop impl swallows. Consumes the Connection.
     pub fn close(self) -> Result<(), (Connection, Error)> {
@@ -427,6 +433,20 @@ impl Statement<'_> {
     /// All column values for the current row, in order.
     pub fn row_values(&self) -> Vec<Value> {
         (0..self.column_count()).map(|i| self.column_value(i)).collect()
+    }
+
+    /// Collect every row from `step()` calls until `Done`. Caller
+    /// has typically just `bind`'d params; column accessors use the
+    /// statement's current column shape.
+    pub fn collect_rows(&mut self) -> Result<Vec<Vec<Value>>, Error> {
+        let mut out = Vec::new();
+        loop {
+            match self.step()? {
+                StepResult::Row => out.push(self.row_values()),
+                StepResult::Done => break,
+            }
+        }
+        Ok(out)
     }
 
     /// Number of bound parameters declared in the SQL.

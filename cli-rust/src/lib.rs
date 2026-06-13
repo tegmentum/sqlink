@@ -103,7 +103,7 @@ impl LoggingGuest for CliReactor {
 impl ConfigGuest for CliReactor {
     async fn get(_key: String) -> Option<String> { None }
     async fn set(_key: String, _value: String) -> bool { false }
-    async fn sqlite_version() -> String { rusqlite::version().to_string() }
+    async fn sqlite_version() -> String { db::version() }
     async fn extension_version() -> String { env!("CARGO_PKG_VERSION").to_string() }
 }
 
@@ -147,38 +147,37 @@ impl SpiGuest for CliReactor {
 // the thread-local State map.
 // =========================================================================
 
-fn ll_open_flags(_f: OpenFlags) -> rusqlite::OpenFlags {
-    // OpenFlags WIT is a `flags` set; for the MVP we use rusqlite's
+fn ll_open_flags(_f: OpenFlags) -> db::OpenFlags {
+    // OpenFlags WIT is a `flags` set; for the MVP we use the
     // defaults (read+write+create). Refinement is a follow-up.
-    rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE | rusqlite::OpenFlags::SQLITE_OPEN_CREATE
+    db::OpenFlags::DEFAULT
 }
 
-fn ll_map_err(e: &rusqlite::Error) -> ResultCode {
-    use rusqlite::ErrorCode::*;
-    match e {
-        rusqlite::Error::SqliteFailure(ext, _) => match ext.code {
-            DatabaseBusy => ResultCode::Busy,
-            DatabaseLocked => ResultCode::Locked,
-            OutOfMemory => ResultCode::Nomem,
-            ReadOnly => ResultCode::Readonly,
-            OperationInterrupted => ResultCode::Interrupt,
-            SystemIoFailure => ResultCode::Ioerr,
-            DatabaseCorrupt => ResultCode::Corrupt,
-            NotFound => ResultCode::Notfound,
-            DiskFull => ResultCode::Full,
-            CannotOpen => ResultCode::Cantopen,
-            FileLockingProtocolFailed => ResultCode::Protocol,
-            SchemaChanged => ResultCode::Schema,
-            TooBig => ResultCode::Toobig,
-            ConstraintViolation => ResultCode::Constraint,
-            TypeMismatch => ResultCode::Mismatch,
-            ApiMisuse => ResultCode::Misuse,
-            NoLargeFileSupport => ResultCode::Nolfs,
-            AuthorizationForStatementDenied => ResultCode::Auth,
-            ParameterOutOfRange => ResultCode::Range,
-            NotADatabase => ResultCode::Notadb,
-            _ => ResultCode::Error,
-        },
+/// Translate raw sqlite3 result codes (db::Error::code) into the
+/// WIT-level ResultCode enum the low-level interface exports.
+fn ll_map_err(e: &db::Error) -> ResultCode {
+    use libsqlite3_sys::*;
+    match e.code {
+        SQLITE_BUSY => ResultCode::Busy,
+        SQLITE_LOCKED => ResultCode::Locked,
+        SQLITE_NOMEM => ResultCode::Nomem,
+        SQLITE_READONLY => ResultCode::Readonly,
+        SQLITE_INTERRUPT => ResultCode::Interrupt,
+        SQLITE_IOERR => ResultCode::Ioerr,
+        SQLITE_CORRUPT => ResultCode::Corrupt,
+        SQLITE_NOTFOUND => ResultCode::Notfound,
+        SQLITE_FULL => ResultCode::Full,
+        SQLITE_CANTOPEN => ResultCode::Cantopen,
+        SQLITE_PROTOCOL => ResultCode::Protocol,
+        SQLITE_SCHEMA => ResultCode::Schema,
+        SQLITE_TOOBIG => ResultCode::Toobig,
+        SQLITE_CONSTRAINT => ResultCode::Constraint,
+        SQLITE_MISMATCH => ResultCode::Mismatch,
+        SQLITE_MISUSE => ResultCode::Misuse,
+        SQLITE_NOLFS => ResultCode::Nolfs,
+        SQLITE_AUTH => ResultCode::Auth,
+        SQLITE_RANGE => ResultCode::Range,
+        SQLITE_NOTADB => ResultCode::Notadb,
         _ => ResultCode::Error,
     }
 }
@@ -191,9 +190,9 @@ impl LowLevelGuest for CliReactor {
             filename
         };
         let conn = if path == ":memory:" {
-            rusqlite::Connection::open_in_memory()
+            db::Connection::open_in_memory()
         } else {
-            rusqlite::Connection::open_with_flags(&path, ll_open_flags(flags))
+            db::Connection::open(&path, ll_open_flags(flags))
         };
         match conn {
             Ok(c) => Ok(STATE.with(|s| s.borrow_mut().add_db(c))),
@@ -232,22 +231,22 @@ impl LowLevelGuest for CliReactor {
     }
 
     async fn bind_null(stmt: StmtHandle, index: i32) -> ResultCode {
-        STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Null))
+        STATE.with(|s| s.borrow_mut().bind(stmt, index, crate::db::Value::Null))
     }
     async fn bind_int(stmt: StmtHandle, index: i32, value: i32) -> ResultCode {
-        STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Integer(value as i64)))
+        STATE.with(|s| s.borrow_mut().bind(stmt, index, crate::db::Value::Integer(value as i64)))
     }
     async fn bind_int64(stmt: StmtHandle, index: i32, value: i64) -> ResultCode {
-        STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Integer(value)))
+        STATE.with(|s| s.borrow_mut().bind(stmt, index, crate::db::Value::Integer(value)))
     }
     async fn bind_double(stmt: StmtHandle, index: i32, value: f64) -> ResultCode {
-        STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Real(value)))
+        STATE.with(|s| s.borrow_mut().bind(stmt, index, crate::db::Value::Real(value)))
     }
     async fn bind_text(stmt: StmtHandle, index: i32, value: String) -> ResultCode {
-        STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Text(value)))
+        STATE.with(|s| s.borrow_mut().bind(stmt, index, crate::db::Value::Text(value)))
     }
     async fn bind_blob(stmt: StmtHandle, index: i32, value: Vec<u8>) -> ResultCode {
-        STATE.with(|s| s.borrow_mut().bind(stmt, index, rusqlite::types::Value::Blob(value)))
+        STATE.with(|s| s.borrow_mut().bind(stmt, index, crate::db::Value::Blob(value)))
     }
     async fn bind_parameter_count(_stmt: StmtHandle) -> i32 { 0 }
     async fn bind_parameter_index(_stmt: StmtHandle, _name: String) -> i32 { 0 }
@@ -296,8 +295,8 @@ impl LowLevelGuest for CliReactor {
         STATE.with(|s| s.borrow().db_last_insert_rowid(db))
     }
 
-    async fn libversion() -> String { rusqlite::version().to_string() }
-    async fn libversion_number() -> i32 { rusqlite::version_number() }
+    async fn libversion() -> String { db::version() }
+    async fn libversion_number() -> i32 { db::version_number() }
     async fn sourceid() -> String { String::new() }
 }
 
@@ -307,47 +306,47 @@ impl LowLevelGuest for CliReactor {
 // =========================================================================
 
 pub struct HlConnection {
-    conn: std::rc::Rc<RefCell<rusqlite::Connection>>,
+    conn: std::rc::Rc<RefCell<db::Connection>>,
 }
 
 pub struct HlStatement {
-    conn: std::rc::Rc<RefCell<rusqlite::Connection>>,
+    conn: std::rc::Rc<RefCell<db::Connection>>,
     sql: String,
     /// 1-indexed positional bindings, sparse via Vec::resize.
-    bindings: RefCell<Vec<rusqlite::types::Value>>,
+    bindings: RefCell<Vec<db::Value>>,
     /// Cached column names (lazy — populated on first execute/query/step).
     column_names: RefCell<Vec<String>>,
     /// For step()-style iteration: once non-empty, step pops from the
     /// front. Lazily populated on first step() by running query() and
     /// materializing every row.
-    cursor_buf: RefCell<Option<std::collections::VecDeque<Vec<rusqlite::types::Value>>>>,
+    cursor_buf: RefCell<Option<std::collections::VecDeque<Vec<db::Value>>>>,
 }
 
-fn hl_err(e: &rusqlite::Error) -> HlDatabaseError {
+fn hl_err(e: &db::Error) -> HlDatabaseError {
     HlDatabaseError {
-        code: 1,
-        extended_code: 1,
-        message: e.to_string(),
+        code: e.code,
+        extended_code: e.extended_code,
+        message: e.message.clone(),
     }
 }
 
-fn hl_value_to_rusqlite(v: HlValue) -> rusqlite::types::Value {
+fn hl_value_to_db(v: HlValue) -> db::Value {
     match v {
-        HlValue::Null => rusqlite::types::Value::Null,
-        HlValue::Integer(i) => rusqlite::types::Value::Integer(i),
-        HlValue::Real(r) => rusqlite::types::Value::Real(r),
-        HlValue::Text(s) => rusqlite::types::Value::Text(s),
-        HlValue::Blob(b) => rusqlite::types::Value::Blob(b),
+        HlValue::Null => db::Value::Null,
+        HlValue::Integer(i) => db::Value::Integer(i),
+        HlValue::Real(r) => db::Value::Real(r),
+        HlValue::Text(s) => db::Value::Text(s),
+        HlValue::Blob(b) => db::Value::Blob(b),
     }
 }
 
-fn rusqlite_to_hl_value(v: rusqlite::types::Value) -> HlValue {
+fn db_to_hl_value(v: db::Value) -> HlValue {
     match v {
-        rusqlite::types::Value::Null => HlValue::Null,
-        rusqlite::types::Value::Integer(i) => HlValue::Integer(i),
-        rusqlite::types::Value::Real(r) => HlValue::Real(r),
-        rusqlite::types::Value::Text(s) => HlValue::Text(s),
-        rusqlite::types::Value::Blob(b) => HlValue::Blob(b),
+        db::Value::Null => HlValue::Null,
+        db::Value::Integer(i) => HlValue::Integer(i),
+        db::Value::Real(r) => HlValue::Real(r),
+        db::Value::Text(s) => HlValue::Text(s),
+        db::Value::Blob(b) => HlValue::Blob(b),
     }
 }
 
@@ -355,16 +354,16 @@ impl HighLevelGuest for CliReactor {
     type Connection = HlConnection;
     type Statement = HlStatement;
 
-    async fn version() -> String { rusqlite::version().to_string() }
-    async fn version_number() -> i32 { rusqlite::version_number() }
+    async fn version() -> String { db::version() }
+    async fn version_number() -> i32 { db::version_number() }
     async fn open_memory() -> Result<Connection, HlDatabaseError> {
-        match rusqlite::Connection::open_in_memory() {
+        match db::Connection::open_in_memory() {
             Ok(c) => Ok(Connection::new(HlConnection { conn: std::rc::Rc::new(RefCell::new(c)) })),
             Err(e) => Err(hl_err(&e)),
         }
     }
     async fn open_file(path: String) -> Result<Connection, HlDatabaseError> {
-        match rusqlite::Connection::open(&path) {
+        match db::Connection::open(&path, db::OpenFlags::DEFAULT) {
             Ok(c) => Ok(Connection::new(HlConnection { conn: std::rc::Rc::new(RefCell::new(c)) })),
             Err(e) => Err(hl_err(&e)),
         }
@@ -374,32 +373,40 @@ impl HighLevelGuest for CliReactor {
 impl GuestConnection for HlConnection {
     async fn new(path: String, mode: OpenMode) -> Self {
         let conn = match mode {
-            OpenMode::Memory => rusqlite::Connection::open_in_memory(),
-            OpenMode::ReadOnly => rusqlite::Connection::open_with_flags(
-                &path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY),
-            _ => rusqlite::Connection::open(&path),
+            OpenMode::Memory => db::Connection::open_in_memory(),
+            OpenMode::ReadOnly => db::Connection::open(&path, db::OpenFlags::READONLY),
+            _ => db::Connection::open(&path, db::OpenFlags::DEFAULT),
         };
         HlConnection {
-            conn: std::rc::Rc::new(RefCell::new(conn.unwrap_or_else(|_| rusqlite::Connection::open_in_memory().unwrap()))),
+            conn: std::rc::Rc::new(RefCell::new(
+                conn.unwrap_or_else(|_| db::Connection::open_in_memory().unwrap()),
+            )),
         }
     }
 
     async fn execute(&self, sql: String) -> Result<ExecResult, HlDatabaseError> {
         let conn = self.conn.borrow();
-        let changes = conn.execute(&sql, []).map_err(|e| hl_err(&e))?;
+        conn.execute_batch(&sql).map_err(|e| hl_err(&e))?;
         Ok(ExecResult {
-            changes: changes as i32,
+            changes: conn.changes() as i32,
             last_insert_rowid: conn.last_insert_rowid(),
         })
     }
 
     async fn execute_with_params(&self, sql: String, params: Vec<HlValue>) -> Result<ExecResult, HlDatabaseError> {
         let conn = self.conn.borrow();
-        let rqs: Vec<rusqlite::types::Value> = params.into_iter().map(hl_value_to_rusqlite).collect();
-        let changes = conn.execute(&sql, rusqlite::params_from_iter(rqs.iter()))
-            .map_err(|e| hl_err(&e))?;
+        let mut stmt = conn.prepare(&sql).map_err(|e| hl_err(&e))?;
+        let dbs: Vec<db::Value> = params.into_iter().map(hl_value_to_db).collect();
+        stmt.bind_all(&dbs).map_err(|e| hl_err(&e))?;
+        // step until Done; we don't care about row payload here.
+        loop {
+            match stmt.step().map_err(|e| hl_err(&e))? {
+                db::StepResult::Row => continue,
+                db::StepResult::Done => break,
+            }
+        }
         Ok(ExecResult {
-            changes: changes as i32,
+            changes: conn.changes() as i32,
             last_insert_rowid: conn.last_insert_rowid(),
         })
     }
@@ -411,19 +418,16 @@ impl GuestConnection for HlConnection {
     async fn query_with_params(&self, sql: String, params: Vec<HlValue>) -> Result<HlQueryResult, HlDatabaseError> {
         let conn = self.conn.borrow();
         let mut stmt = conn.prepare(&sql).map_err(|e| hl_err(&e))?;
-        let col_count = stmt.column_count();
-        let column_names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
-        let rqs: Vec<rusqlite::types::Value> = params.into_iter().map(hl_value_to_rusqlite).collect();
-        let mut rows = stmt.query(rusqlite::params_from_iter(rqs.iter())).map_err(|e| hl_err(&e))?;
-        let mut out_rows: Vec<bindings::exports::sqlite::wasm::high_level::Row> = Vec::new();
-        while let Some(row) = rows.next().map_err(|e| hl_err(&e))? {
-            let mut columns: Vec<HlValue> = Vec::with_capacity(col_count);
-            for i in 0..col_count {
-                let v: rusqlite::types::Value = row.get(i).map_err(|e| hl_err(&e))?;
-                columns.push(rusqlite_to_hl_value(v));
-            }
-            out_rows.push(bindings::exports::sqlite::wasm::high_level::Row { columns });
-        }
+        let column_names = stmt.column_names();
+        let dbs: Vec<db::Value> = params.into_iter().map(hl_value_to_db).collect();
+        stmt.bind_all(&dbs).map_err(|e| hl_err(&e))?;
+        let rows_vals = stmt.collect_rows().map_err(|e| hl_err(&e))?;
+        let out_rows: Vec<bindings::exports::sqlite::wasm::high_level::Row> = rows_vals
+            .into_iter()
+            .map(|r| bindings::exports::sqlite::wasm::high_level::Row {
+                columns: r.into_iter().map(db_to_hl_value).collect(),
+            })
+            .collect();
         Ok(HlQueryResult { column_names, rows: out_rows })
     }
 
@@ -458,7 +462,7 @@ impl GuestConnection for HlConnection {
 }
 
 impl HlStatement {
-    fn bound_params(&self) -> Vec<rusqlite::types::Value> {
+    fn bound_params(&self) -> Vec<db::Value> {
         self.bindings.borrow().clone()
     }
 }
@@ -467,26 +471,30 @@ impl GuestStatement for HlStatement {
     async fn bind(&self, index: i32, value: HlValue) -> Result<(), HlDatabaseError> {
         let idx = (index as usize).saturating_sub(1);
         let mut b = self.bindings.borrow_mut();
-        if b.len() <= idx { b.resize(idx + 1, rusqlite::types::Value::Null); }
-        b[idx] = hl_value_to_rusqlite(value);
+        if b.len() <= idx { b.resize(idx + 1, db::Value::Null); }
+        b[idx] = hl_value_to_db(value);
         Ok(())
     }
 
     async fn bind_all(&self, params: Vec<HlValue>) -> Result<(), HlDatabaseError> {
         let mut b = self.bindings.borrow_mut();
         b.clear();
-        for v in params { b.push(hl_value_to_rusqlite(v)); }
+        for v in params { b.push(hl_value_to_db(v)); }
         Ok(())
     }
 
     async fn execute(&self) -> Result<ExecResult, HlDatabaseError> {
         let conn = self.conn.borrow();
-        let params = self.bound_params();
-        let changes = conn
-            .execute(&self.sql, rusqlite::params_from_iter(params.iter()))
-            .map_err(|e| hl_err(&e))?;
+        let mut stmt = conn.prepare(&self.sql).map_err(|e| hl_err(&e))?;
+        stmt.bind_all(&self.bound_params()).map_err(|e| hl_err(&e))?;
+        loop {
+            match stmt.step().map_err(|e| hl_err(&e))? {
+                db::StepResult::Row => continue,
+                db::StepResult::Done => break,
+            }
+        }
         Ok(ExecResult {
-            changes: changes as i32,
+            changes: conn.changes() as i32,
             last_insert_rowid: conn.last_insert_rowid(),
         })
     }
@@ -494,54 +502,38 @@ impl GuestStatement for HlStatement {
     async fn query(&self) -> Result<HlQueryResult, HlDatabaseError> {
         let conn = self.conn.borrow();
         let mut stmt = conn.prepare(&self.sql).map_err(|e| hl_err(&e))?;
-        let col_count = stmt.column_count();
-        let column_names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
+        let column_names = stmt.column_names();
         *self.column_names.borrow_mut() = column_names.clone();
-        let params = self.bound_params();
-        let mut rows = stmt.query(rusqlite::params_from_iter(params.iter())).map_err(|e| hl_err(&e))?;
-        let mut out_rows: Vec<bindings::exports::sqlite::wasm::high_level::Row> = Vec::new();
-        while let Some(row) = rows.next().map_err(|e| hl_err(&e))? {
-            let mut columns: Vec<HlValue> = Vec::with_capacity(col_count);
-            for i in 0..col_count {
-                let v: rusqlite::types::Value = row.get(i).map_err(|e| hl_err(&e))?;
-                columns.push(rusqlite_to_hl_value(v));
-            }
-            out_rows.push(bindings::exports::sqlite::wasm::high_level::Row { columns });
-        }
+        stmt.bind_all(&self.bound_params()).map_err(|e| hl_err(&e))?;
+        let rows_vals = stmt.collect_rows().map_err(|e| hl_err(&e))?;
+        let out_rows: Vec<bindings::exports::sqlite::wasm::high_level::Row> = rows_vals
+            .into_iter()
+            .map(|r| bindings::exports::sqlite::wasm::high_level::Row {
+                columns: r.into_iter().map(db_to_hl_value).collect(),
+            })
+            .collect();
         Ok(HlQueryResult { column_names, rows: out_rows })
     }
 
     async fn step(&self) -> Result<Option<bindings::exports::sqlite::wasm::high_level::Row>, HlDatabaseError> {
         // First step materializes the full result into cursor_buf;
         // subsequent steps pop. Trades streaming for borrow-checker
-        // simplicity (rusqlite::Rows borrows from the Statement
-        // which borrows from the Connection — can't store either
-        // here without self-referential storage).
+        // simplicity (Statement borrows from Connection — can't
+        // store either here without self-referential storage).
         let needs_init = self.cursor_buf.borrow().is_none();
         if needs_init {
             let conn = self.conn.borrow();
             let mut stmt = conn.prepare(&self.sql).map_err(|e| hl_err(&e))?;
-            let col_count = stmt.column_count();
-            let names: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
-            *self.column_names.borrow_mut() = names;
-            let params = self.bound_params();
-            let mut rows = stmt.query(rusqlite::params_from_iter(params.iter())).map_err(|e| hl_err(&e))?;
-            let mut buf: std::collections::VecDeque<Vec<rusqlite::types::Value>> =
-                std::collections::VecDeque::new();
-            while let Some(row) = rows.next().map_err(|e| hl_err(&e))? {
-                let mut r = Vec::with_capacity(col_count);
-                for i in 0..col_count {
-                    let v: rusqlite::types::Value = row.get(i).map_err(|e| hl_err(&e))?;
-                    r.push(v);
-                }
-                buf.push_back(r);
-            }
+            *self.column_names.borrow_mut() = stmt.column_names();
+            stmt.bind_all(&self.bound_params()).map_err(|e| hl_err(&e))?;
+            let rows_vals = stmt.collect_rows().map_err(|e| hl_err(&e))?;
+            let buf: std::collections::VecDeque<Vec<db::Value>> = rows_vals.into();
             *self.cursor_buf.borrow_mut() = Some(buf);
         }
         let mut g = self.cursor_buf.borrow_mut();
         let buf = g.as_mut().unwrap();
         Ok(buf.pop_front().map(|raw| bindings::exports::sqlite::wasm::high_level::Row {
-            columns: raw.into_iter().map(rusqlite_to_hl_value).collect(),
+            columns: raw.into_iter().map(db_to_hl_value).collect(),
         }))
     }
 
@@ -603,7 +595,7 @@ impl GuestStatement for HlStatement {
 // =========================================================================
 
 thread_local! {
-    static CLI_CONN: RefCell<Option<rusqlite::Connection>> = const { RefCell::new(None) };
+    static CLI_CONN: RefCell<Option<db::Connection>> = const { RefCell::new(None) };
     static DONE: RefCell<bool> = const { RefCell::new(false) };
     static DB_PATH: RefCell<String> = const { RefCell::new(String::new()) };
 }
@@ -614,9 +606,9 @@ fn ensure_cli_conn() {
         if g.is_none() {
             let path = DB_PATH.with(|p| p.borrow().clone());
             *g = if path.is_empty() || path == ":memory:" {
-                rusqlite::Connection::open_in_memory().ok()
+                db::Connection::open_in_memory().ok()
             } else {
-                rusqlite::Connection::open(&path).ok()
+                db::Connection::open(&path, db::OpenFlags::DEFAULT).ok()
             };
         }
     });
@@ -693,27 +685,11 @@ impl CliGuest for CliReactor {
                     };
                 }
             };
-            let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
-            let col_count = columns.len();
-            let mut rows = match stmt.query([]) {
+            let columns = stmt.column_names();
+            let out_rows = match stmt.collect_rows() {
                 Ok(r) => r,
-                Err(e) => return format!("Error: {e}\n"),
+                Err(e) => return format!("Error: {}\n", e.message),
             };
-            let mut out_rows: Vec<Vec<rusqlite::types::Value>> = Vec::new();
-            loop {
-                match rows.next() {
-                    Ok(Some(row)) => {
-                        let mut r = Vec::with_capacity(col_count);
-                        for i in 0..col_count {
-                            let v: rusqlite::types::Value = row.get(i).unwrap_or(rusqlite::types::Value::Null);
-                            r.push(v);
-                        }
-                        out_rows.push(r);
-                    }
-                    Ok(None) => break,
-                    Err(e) => return format!("Error: {e}\n"),
-                }
-            }
             let settings = settings::SETTINGS.with(|s| s.borrow().clone());
             format::format(&columns, &out_rows, &settings)
         })
@@ -726,31 +702,17 @@ impl CliGuest for CliReactor {
             let conn = conn.as_ref().ok_or(CliSqliteError {
                 code: 1, extended_code: 1, message: "no connection".to_string()
             })?;
-            let mut stmt = conn.prepare(&input).map_err(|e| CliSqliteError {
-                code: 1, extended_code: 1, message: e.to_string()
-            })?;
-            let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
-            let col_count = columns.len();
-            let mut rows = stmt.query([]).map_err(|e| CliSqliteError {
-                code: 1, extended_code: 1, message: e.to_string()
-            })?;
-            let mut out_rows: Vec<Vec<SpiSqlValue>> = Vec::new();
-            while let Some(row) = rows.next().map_err(|e| CliSqliteError {
-                code: 1, extended_code: 1, message: e.to_string()
-            })? {
-                let mut r: Vec<SpiSqlValue> = Vec::with_capacity(col_count);
-                for i in 0..col_count {
-                    let v: rusqlite::types::Value = row.get(i).map_err(|e| CliSqliteError {
-                        code: 1, extended_code: 1, message: e.to_string()
-                    })?;
-                    r.push(rusqlite_to_spi_value(v));
-                }
-                out_rows.push(r);
-            }
+            let mut stmt = conn.prepare(&input).map_err(db_to_cli_err)?;
+            let columns = stmt.column_names();
+            let rows_vals = stmt.collect_rows().map_err(db_to_cli_err)?;
+            let out_rows: Vec<Vec<SpiSqlValue>> = rows_vals
+                .into_iter()
+                .map(|r| r.into_iter().map(db_to_spi_value).collect())
+                .collect();
             Ok(CliQueryResult {
                 columns,
                 rows: out_rows,
-                changes: conn.changes() as i64,
+                changes: conn.changes(),
                 last_insert_rowid: conn.last_insert_rowid(),
             })
         })
@@ -795,23 +757,32 @@ impl CliGuest for CliReactor {
     }
 }
 
-fn rusqlite_to_spi_value(v: rusqlite::types::Value) -> SpiSqlValue {
+fn db_to_spi_value(v: db::Value) -> SpiSqlValue {
     match v {
-        rusqlite::types::Value::Null => SpiSqlValue::Null,
-        rusqlite::types::Value::Integer(i) => SpiSqlValue::Integer(i),
-        rusqlite::types::Value::Real(r) => SpiSqlValue::Real(r),
-        rusqlite::types::Value::Text(s) => SpiSqlValue::Text(s),
-        rusqlite::types::Value::Blob(b) => SpiSqlValue::Blob(b),
+        db::Value::Null => SpiSqlValue::Null,
+        db::Value::Integer(i) => SpiSqlValue::Integer(i),
+        db::Value::Real(r) => SpiSqlValue::Real(r),
+        db::Value::Text(s) => SpiSqlValue::Text(s),
+        db::Value::Blob(b) => SpiSqlValue::Blob(b),
     }
 }
 
-fn format_value(v: &rusqlite::types::Value) -> String {
+fn db_to_cli_err(e: db::Error) -> CliSqliteError {
+    CliSqliteError {
+        code: e.code,
+        extended_code: e.extended_code,
+        message: e.message,
+    }
+}
+
+#[allow(dead_code)]
+fn format_value(v: &db::Value) -> String {
     match v {
-        rusqlite::types::Value::Null => String::new(),
-        rusqlite::types::Value::Integer(i) => i.to_string(),
-        rusqlite::types::Value::Real(r) => r.to_string(),
-        rusqlite::types::Value::Text(s) => s.clone(),
-        rusqlite::types::Value::Blob(b) => format!("[blob:{} bytes]", b.len()),
+        db::Value::Null => String::new(),
+        db::Value::Integer(i) => i.to_string(),
+        db::Value::Real(r) => r.to_string(),
+        db::Value::Text(s) => s.clone(),
+        db::Value::Blob(b) => format!("[blob:{} bytes]", b.len()),
     }
 }
 
@@ -944,23 +915,27 @@ async fn do_load(input: &str) -> String {
         for spec in &manifest.scalar_functions {
             let ext_n = ext_name.clone();
             let func_id = spec.id;
-            let name = spec.name.clone();
-            let num_args: i32 = spec.num_args;
             let r = conn.create_scalar_function(
-                &name,
-                num_args,
-                rusqlite::functions::FunctionFlags::SQLITE_UTF8
-                    | rusqlite::functions::FunctionFlags::SQLITE_DIRECTONLY,
-                move |ctx| {
-                    let n = ctx.len();
-                    let mut wit_args: Vec<WitSqlValue> = Vec::with_capacity(n);
-                    for i in 0..n {
-                        let v: rusqlite::types::Value = ctx.get(i).unwrap_or(rusqlite::types::Value::Null);
-                        wit_args.push(rusqlite_to_wit(v));
-                    }
-                    match wit_bindgen_rt::async_support::block_on(dispatch::scalar_call(ext_n.clone(), func_id, wit_args.clone())) {
-                        Ok(v) => Ok(wit_to_rusqlite(v)),
-                        Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
+                &spec.name,
+                spec.num_args,
+                db::FunctionFlags::UTF8 | db::FunctionFlags::DIRECTONLY,
+                move |args: &[db::Value]| -> Result<db::Value, db::Error> {
+                    let wit_args: Vec<WitSqlValue> = args
+                        .iter()
+                        .cloned()
+                        .map(db_to_wit)
+                        .collect();
+                    match wit_bindgen_rt::async_support::block_on(dispatch::scalar_call(
+                        ext_n.clone(),
+                        func_id,
+                        wit_args,
+                    )) {
+                        Ok(v) => Ok(wit_to_db(v)),
+                        Err(e) => Err(db::Error {
+                            code: 1,
+                            extended_code: 1,
+                            message: e,
+                        }),
                     }
                 },
             );
@@ -968,32 +943,38 @@ async fn do_load(input: &str) -> String {
         }
 
         // -- Aggregates --
-        // rusqlite's Aggregate trait demands an init/step/finalize
-        // struct. We synthesize one per-aggregate via an
-        // AggDispatcher that owns the (ext_name, func_id) pair and
-        // delegates to the host's aggregate_step / aggregate_finalize.
+        // The Aggregate<u64> trait owns the (ext_name, func_id) and
+        // routes init/step/finalize through dispatch::aggregate_*.
+        // State is the host-allocated context_id, propagated to
+        // every step.
         struct AggDispatcher { ext_name: String, func_id: u64 }
-        impl rusqlite::functions::Aggregate<u64, rusqlite::types::Value> for AggDispatcher {
-            fn init(&self, _ctx: &mut rusqlite::functions::Context<'_>) -> rusqlite::Result<u64> {
-                Ok(next_agg_context_id())
-            }
-            fn step(&self, ctx: &mut rusqlite::functions::Context<'_>, acc: &mut u64) -> rusqlite::Result<()> {
-                let n = ctx.len();
-                let mut wit_args: Vec<WitSqlValue> = Vec::with_capacity(n);
-                for i in 0..n {
-                    let v: rusqlite::types::Value = ctx.get(i).unwrap_or(rusqlite::types::Value::Null);
-                    wit_args.push(rusqlite_to_wit(v));
-                }
-                match wit_bindgen_rt::async_support::block_on(dispatch::aggregate_step(self.ext_name.clone(), self.func_id, *acc, wit_args.clone())) {
+        impl db::Aggregate<u64> for AggDispatcher {
+            fn init(&self) -> u64 { next_agg_context_id() }
+            fn step(&self, acc: &mut u64, args: &[db::Value]) -> Result<(), db::Error> {
+                let wit_args: Vec<WitSqlValue> = args
+                    .iter()
+                    .cloned()
+                    .map(db_to_wit)
+                    .collect();
+                match wit_bindgen_rt::async_support::block_on(dispatch::aggregate_step(
+                    self.ext_name.clone(),
+                    self.func_id,
+                    *acc,
+                    wit_args,
+                )) {
                     Ok(()) => Ok(()),
-                    Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
+                    Err(e) => Err(db::Error { code: 1, extended_code: 1, message: e }),
                 }
             }
-            fn finalize(&self, _ctx: &mut rusqlite::functions::Context<'_>, acc: Option<u64>) -> rusqlite::Result<rusqlite::types::Value> {
+            fn finalize(&self, acc: Option<u64>) -> Result<db::Value, db::Error> {
                 let ctx_id = acc.unwrap_or(0);
-                match wit_bindgen_rt::async_support::block_on(dispatch::aggregate_finalize(self.ext_name.clone(), self.func_id, ctx_id)) {
-                    Ok(v) => Ok(wit_to_rusqlite(v)),
-                    Err(e) => Err(rusqlite::Error::ToSqlConversionFailure(e.into())),
+                match wit_bindgen_rt::async_support::block_on(dispatch::aggregate_finalize(
+                    self.ext_name.clone(),
+                    self.func_id,
+                    ctx_id,
+                )) {
+                    Ok(v) => Ok(wit_to_db(v)),
+                    Err(e) => Err(db::Error { code: 1, extended_code: 1, message: e }),
                 }
             }
         }
@@ -1001,8 +982,7 @@ async fn do_load(input: &str) -> String {
             let r = conn.create_aggregate_function(
                 &spec.name,
                 spec.num_args,
-                rusqlite::functions::FunctionFlags::SQLITE_UTF8
-                    | rusqlite::functions::FunctionFlags::SQLITE_DIRECTONLY,
+                db::FunctionFlags::UTF8 | db::FunctionFlags::DIRECTONLY,
                 AggDispatcher { ext_name: ext_name.clone(), func_id: spec.id },
             );
             if r.is_ok() { a_count += 1; }
@@ -1013,7 +993,12 @@ async fn do_load(input: &str) -> String {
             let ext_n = ext_name.clone();
             let coll_id = spec.id;
             let r = conn.create_collation(&spec.name, move |a: &str, b: &str| {
-                let n = wit_bindgen_rt::async_support::block_on(dispatch::collation_compare(ext_n.clone(), coll_id, a.to_string(), b.to_string()));
+                let n = wit_bindgen_rt::async_support::block_on(dispatch::collation_compare(
+                    ext_n.clone(),
+                    coll_id,
+                    a.to_string(),
+                    b.to_string(),
+                ));
                 if n < 0 { std::cmp::Ordering::Less }
                 else if n > 0 { std::cmp::Ordering::Greater }
                 else { std::cmp::Ordering::Equal }
@@ -1022,51 +1007,57 @@ async fn do_load(input: &str) -> String {
         }
 
         // -- Authorizer --
-        // rusqlite's `hooks` feature doesn't expose
-        // sqlite3_set_authorizer, so go through libsqlite3-sys with
-        // the raw sqlite3* handle. AuthDispatch is leaked
-        // intentionally: rusqlite owns the connection lifetime;
-        // the trampoline borrows the leaked data while the
-        // authorizer is active. .unload re-sets the authorizer to
-        // NULL but doesn't reclaim the leak — bounded by
-        // load+unload cycles per process, which is small.
         if manifest.has_authorizer {
-            let dispatch_data: *mut AuthDispatch = Box::into_raw(Box::new(AuthDispatch {
-                ext_name: ext_name.clone(),
-            }));
-            unsafe {
-                let db = conn.handle();
-                libsqlite3_sys::sqlite3_set_authorizer(
-                    db,
-                    Some(xauth_trampoline),
-                    dispatch_data as *mut std::ffi::c_void,
-                );
-            }
-            h_count += 1;
+            let ext_n = ext_name.clone();
+            let r = conn.set_authorizer(Some(
+                move |action: i32, a1: Option<String>, a2: Option<String>, a3: Option<String>, a4: Option<String>| {
+                    let wit_action = sqlite_code_to_auth_action(action);
+                    match wit_bindgen_rt::async_support::block_on(
+                        bindings::sqlite::wasm::dispatch::authorize(
+                            ext_n.clone(),
+                            wit_action,
+                            a1,
+                            a2,
+                            a3,
+                            a4,
+                        ),
+                    ) {
+                        bindings::sqlite::extension::types::AuthResult::Ok => db::AuthResult::Allow,
+                        bindings::sqlite::extension::types::AuthResult::Deny => db::AuthResult::Deny,
+                        bindings::sqlite::extension::types::AuthResult::Ignore => db::AuthResult::Ignore,
+                    }
+                },
+            ));
+            if r.is_ok() { h_count += 1; }
         }
 
         // -- Hooks --
         // update_hook fires AFTER row writes. commit_hook returns
-        // bool (true = abort/rollback).
+        // bool (db: true = abort/rollback; WIT on_commit returns
+        // true = proceed, so we invert).
         if manifest.has_update_hook {
             let ext_n = ext_name.clone();
             use bindings::sqlite::extension::types::UpdateOperation as Op;
-            conn.update_hook(Some(move |action: rusqlite::hooks::Action, db: &str, table: &str, rowid: i64| {
+            conn.update_hook(Some(move |action: db::UpdateAction, db_name: &str, table: &str, rowid: i64| {
                 let op = match action {
-                    rusqlite::hooks::Action::SQLITE_INSERT => Op::Insert,
-                    rusqlite::hooks::Action::SQLITE_UPDATE => Op::Update,
-                    rusqlite::hooks::Action::SQLITE_DELETE => Op::Delete,
-                    _ => return,
+                    db::UpdateAction::Insert => Op::Insert,
+                    db::UpdateAction::Update => Op::Update,
+                    db::UpdateAction::Delete => Op::Delete,
+                    db::UpdateAction::Unknown => return,
                 };
-                wit_bindgen_rt::async_support::block_on(dispatch::on_update(ext_n.clone(), op, db.to_string(), table.to_string(), rowid));
+                wit_bindgen_rt::async_support::block_on(dispatch::on_update(
+                    ext_n.clone(),
+                    op,
+                    db_name.to_string(),
+                    table.to_string(),
+                    rowid,
+                ));
             }));
             h_count += 1;
         }
         if manifest.has_commit_hook {
             let ext_n = ext_name.clone();
             conn.commit_hook(Some(move || {
-                // rusqlite's hook expects bool where TRUE = abort.
-                // WIT on_commit returns TRUE = proceed. Invert.
                 !wit_bindgen_rt::async_support::block_on(dispatch::on_commit(ext_n.clone()))
             }));
             let ext_n2 = ext_name.clone();
@@ -1091,39 +1082,30 @@ async fn do_load(input: &str) -> String {
     )
 }
 
-fn rusqlite_to_wit(v: rusqlite::types::Value) -> bindings::sqlite::extension::types::SqlValue {
+fn db_to_wit(v: db::Value) -> bindings::sqlite::extension::types::SqlValue {
     use bindings::sqlite::extension::types::SqlValue as V;
     match v {
-        rusqlite::types::Value::Null => V::Null,
-        rusqlite::types::Value::Integer(i) => V::Integer(i),
-        rusqlite::types::Value::Real(r) => V::Real(r),
-        rusqlite::types::Value::Text(s) => V::Text(s),
-        rusqlite::types::Value::Blob(b) => V::Blob(b),
+        db::Value::Null => V::Null,
+        db::Value::Integer(i) => V::Integer(i),
+        db::Value::Real(r) => V::Real(r),
+        db::Value::Text(s) => V::Text(s),
+        db::Value::Blob(b) => V::Blob(b),
     }
 }
 
-fn wit_to_rusqlite(v: bindings::sqlite::extension::types::SqlValue) -> rusqlite::types::Value {
+fn wit_to_db(v: bindings::sqlite::extension::types::SqlValue) -> db::Value {
     use bindings::sqlite::extension::types::SqlValue as V;
     match v {
-        V::Null => rusqlite::types::Value::Null,
-        V::Integer(i) => rusqlite::types::Value::Integer(i),
-        V::Real(r) => rusqlite::types::Value::Real(r),
-        V::Text(s) => rusqlite::types::Value::Text(s),
-        V::Blob(b) => rusqlite::types::Value::Blob(b),
+        V::Null => db::Value::Null,
+        V::Integer(i) => db::Value::Integer(i),
+        V::Real(r) => db::Value::Real(r),
+        V::Text(s) => db::Value::Text(s),
+        V::Blob(b) => db::Value::Blob(b),
     }
 }
 
 thread_local! {
     static AGG_CTX_COUNTER: RefCell<u64> = const { RefCell::new(1) };
-}
-
-// -------------------------------------------------------------------
-// Authorizer dispatch — raw FFI because rusqlite's `hooks` feature
-// doesn't expose sqlite3_set_authorizer.
-// -------------------------------------------------------------------
-
-struct AuthDispatch {
-    ext_name: String,
 }
 
 /// Map a SQLite SQLITE_* action code to the WIT auth-action enum.
@@ -1170,45 +1152,9 @@ fn sqlite_code_to_auth_action(op: i32) -> bindings::sqlite::extension::types::Au
     }
 }
 
-fn auth_result_to_sqlite_code(r: bindings::sqlite::extension::types::AuthResult) -> i32 {
-    use bindings::sqlite::extension::types::AuthResult as R;
-    use libsqlite3_sys as ffi;
-    match r {
-        R::Ok => ffi::SQLITE_OK,
-        R::Deny => ffi::SQLITE_DENY,
-        R::Ignore => ffi::SQLITE_IGNORE,
-    }
-}
-
-/// `xAuth` callback signature SQLite expects. Reads the AuthDispatch
-/// out of `user_data` and routes through `dispatch::authorize`.
-/// Errors fall back to SQLITE_DENY so an unauthorized action
-/// doesn't slip through on dispatch failure.
-unsafe extern "C" fn xauth_trampoline(
-    user_data: *mut std::ffi::c_void,
-    op: std::ffi::c_int,
-    arg1: *const std::ffi::c_char,
-    arg2: *const std::ffi::c_char,
-    arg3: *const std::ffi::c_char,
-    arg4: *const std::ffi::c_char,
-) -> std::ffi::c_int {
-    fn c_to_opt(p: *const std::ffi::c_char) -> Option<String> {
-        if p.is_null() { None } else {
-            unsafe { std::ffi::CStr::from_ptr(p) }.to_str().ok().map(|s| s.to_string())
-        }
-    }
-    let d = &*(user_data as *const AuthDispatch);
-    let action = sqlite_code_to_auth_action(op);
-    let r = wit_bindgen_rt::async_support::block_on(bindings::sqlite::wasm::dispatch::authorize(
-        d.ext_name.clone(),
-        action,
-        c_to_opt(arg1),
-        c_to_opt(arg2),
-        c_to_opt(arg3),
-        c_to_opt(arg4),
-    ));
-    auth_result_to_sqlite_code(r)
-}
+// (Previously a raw-FFI xauth_trampoline lived here because rusqlite
+// didn't expose sqlite3_set_authorizer. db.rs::set_authorizer now
+// handles that boxing/dispatch directly; the trampoline is gone.)
 
 /// Heuristic for URI detection: starts with a scheme followed by
 /// `:` and is at least 2 chars before the colon. Avoids matching
@@ -1372,9 +1318,9 @@ async fn do_unload(name: &str) -> String {
 fn do_open(arg: &str) -> String {
     let path = arg.trim();
     let new_conn = if path.is_empty() || path == ":memory:" {
-        rusqlite::Connection::open_in_memory()
+        db::Connection::open_in_memory()
     } else {
-        rusqlite::Connection::open(path)
+        db::Connection::open(path, db::OpenFlags::DEFAULT)
     };
     match new_conn {
         Ok(c) => {

@@ -17,11 +17,12 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags", "async"] }
 # so we can pass `async: true` (cargo-component 0.21 doesn't
 # expose this knob). Bindings are produced inline in src/lib.rs.
 wit-bindgen = { version = "0.44", features = ["macros"] }
-# bundled compiles sqlite3.c via the cc crate against the active
-# target (wasm32-wasip1; needs CC_wasm32_wasip1 = wasi-sdk clang).
-rusqlite = { version = "0.32", features = ["bundled", "functions", "hooks", "collation"] }
-# Exposes sqlite3_complete for is_statement_complete. Same major
-# version as rusqlite's transitive dep so no double-link.
+# libsqlite3-sys provides raw FFI to sqlite3.c (bundled compiles
+# it via the cc crate against wasm32-wasip1; needs
+# CC_wasm32_wasip1 = wasi-sdk clang). We use it directly via the
+# in-tree `db` module instead of going through rusqlite —
+# rusqlite's sync-callback Fn registration API fights cli-rust's
+# async wit-bindgen import surface (see SPI-LIVE.md).
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 
 # Component packaging: after `cargo build --release --target

@@ -6,8 +6,27 @@
 
 use std::cell::RefCell;
 
+use crate::db::{Connection, Value};
 use crate::settings::{self, Mode};
-use rusqlite::Connection;
+
+/// Run a parameterized query whose results are a single text
+/// column; collect column 0 from every row. Returns the cli
+/// "Error: ..." string for prepare/bind/step failures.
+fn query_text_col(conn: &Connection, sql: &str, params: &[Value]) -> Result<Vec<String>, String> {
+    let mut stmt = conn.prepare(sql).map_err(|e| format!("Error: {}\n", e.message))?;
+    stmt.bind_all(params)
+        .map_err(|e| format!("Error: {}\n", e.message))?;
+    let rows = stmt
+        .collect_rows()
+        .map_err(|e| format!("Error: {}\n", e.message))?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|r| match r.into_iter().next() {
+            Some(Value::Text(s)) => Some(s),
+            _ => None,
+        })
+        .collect())
+}
 
 /// Try to interpret `input` (already trimmed) as a dot-command.
 /// Returns Some(output) if it was; None if not (caller falls back
@@ -89,85 +108,96 @@ fn cmd_tables(arg: &str, conn: &Connection) -> String {
     let sql = "SELECT name FROM sqlite_master \
                WHERE type IN ('table','view') AND name NOT LIKE 'sqlite_%' AND name LIKE ?1 \
                ORDER BY name";
-    match conn.prepare(sql) {
-        Ok(mut stmt) => {
-            let rows = stmt.query_map([pattern], |r| r.get::<_, String>(0));
-            match rows {
-                Ok(iter) => {
-                    let names: Vec<String> = iter.filter_map(|r| r.ok()).collect();
-                    if names.is_empty() { String::new() } else { names.join("\n") + "\n" }
-                }
-                Err(e) => format!("Error: {e}\n"),
+    match query_text_col(conn, sql, &[Value::Text(pattern.to_string())]) {
+        Ok(names) => {
+            if names.is_empty() {
+                String::new()
+            } else {
+                names.join("\n") + "\n"
             }
         }
-        Err(e) => format!("Error: {e}\n"),
+        Err(e) => e,
     }
 }
 
 fn cmd_schema(arg: &str, conn: &Connection) -> String {
-    let (sql, params): (&str, Vec<String>) = if arg.is_empty() {
-        ("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name", vec![])
+    let (sql, params): (&str, Vec<Value>) = if arg.is_empty() {
+        (
+            "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type, name",
+            vec![],
+        )
     } else {
-        ("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name = ?1", vec![arg.to_string()])
+        (
+            "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name = ?1",
+            vec![Value::Text(arg.to_string())],
+        )
     };
-    let mut stmt = match conn.prepare(sql) {
-        Ok(s) => s,
-        Err(e) => return format!("Error: {e}\n"),
-    };
-    let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |r| r.get::<_, String>(0));
-    match rows {
-        Ok(iter) => {
+    match query_text_col(conn, sql, &params) {
+        Ok(sqls) => {
             let mut out = String::new();
-            for sql in iter.filter_map(|r| r.ok()) {
+            for sql in sqls {
                 out.push_str(&sql);
-                if !sql.ends_with(';') { out.push(';'); }
+                if !sql.ends_with(';') {
+                    out.push(';');
+                }
                 out.push('\n');
             }
             out
         }
-        Err(e) => format!("Error: {e}\n"),
+        Err(e) => e,
     }
 }
 
 fn cmd_indexes(arg: &str, conn: &Connection) -> String {
-    let (sql, params): (&str, Vec<String>) = if arg.is_empty() {
-        ("SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name", vec![])
+    let (sql, params): (&str, Vec<Value>) = if arg.is_empty() {
+        (
+            "SELECT name FROM sqlite_master WHERE type = 'index' ORDER BY name",
+            vec![],
+        )
     } else {
-        ("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ?1 ORDER BY name", vec![arg.to_string()])
+        (
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = ?1 ORDER BY name",
+            vec![Value::Text(arg.to_string())],
+        )
     };
-    let mut stmt = match conn.prepare(sql) {
-        Ok(s) => s,
-        Err(e) => return format!("Error: {e}\n"),
-    };
-    let rows = stmt.query_map(rusqlite::params_from_iter(params.iter()), |r| r.get::<_, String>(0));
-    match rows {
-        Ok(iter) => {
-            let names: Vec<String> = iter.filter_map(|r| r.ok()).collect();
-            if names.is_empty() { String::new() } else { names.join("\n") + "\n" }
+    match query_text_col(conn, sql, &params) {
+        Ok(names) => {
+            if names.is_empty() {
+                String::new()
+            } else {
+                names.join("\n") + "\n"
+            }
         }
-        Err(e) => format!("Error: {e}\n"),
+        Err(e) => e,
     }
 }
 
 fn cmd_databases(conn: &Connection) -> String {
-    match conn.prepare("PRAGMA database_list") {
-        Ok(mut stmt) => {
-            let rows = stmt.query_map([], |r| {
-                let seq: i64 = r.get(0)?;
-                let name: String = r.get(1)?;
-                let file: String = r.get(2)?;
-                Ok((seq, name, file))
-            });
-            match rows {
-                Ok(iter) => iter.filter_map(|r| r.ok())
-                    .map(|(s, n, f)| format!("{s}: {n} -> {f}"))
-                    .collect::<Vec<_>>()
-                    .join("\n") + "\n",
-                Err(e) => format!("Error: {e}\n"),
-            }
-        }
-        Err(e) => format!("Error: {e}\n"),
+    let mut stmt = match conn.prepare("PRAGMA database_list") {
+        Ok(s) => s,
+        Err(e) => return format!("Error: {}\n", e.message),
+    };
+    let rows = match stmt.collect_rows() {
+        Ok(r) => r,
+        Err(e) => return format!("Error: {}\n", e.message),
+    };
+    let mut out = String::new();
+    for r in rows {
+        let seq = match r.first() {
+            Some(Value::Integer(i)) => *i,
+            _ => 0,
+        };
+        let name = match r.get(1) {
+            Some(Value::Text(s)) => s.clone(),
+            _ => String::new(),
+        };
+        let file = match r.get(2) {
+            Some(Value::Text(s)) => s.clone(),
+            _ => String::new(),
+        };
+        out.push_str(&format!("{seq}: {name} -> {file}\n"));
     }
+    out
 }
 
 fn cmd_headers(arg: &str) -> String {

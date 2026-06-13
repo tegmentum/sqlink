@@ -174,6 +174,50 @@ pieces needed (verified the feature gate exists).
 Conclusion: **option 2 is viable** but takes more focused time
 than the half-session estimate. See "Conversion attempt" below.
 
+### rusqlite dropped (2026-06-13)
+
+Replaced cli-rust's rusqlite dependency with an in-tree `db`
+module (~1250 LOC) wrapping libsqlite3-sys directly. Goal was
+control over the function-registration callback boundary where
+sync C callbacks meet our async wit-bindgen imports.
+
+Surface dropped: rusqlite 0.32 with `bundled`, `functions`,
+`hooks`, `collation` features (~150 call sites).
+
+Surface gained (`cli-rust/src/db.rs`):
+- Connection: open / open_in_memory / execute_batch / prepare /
+  changes / total_changes / last_insert_rowid / close.
+- Statement: step (Row/Done state machine), reset, bind /
+  bind_all, column accessors, collect_rows.
+- Value: owned Null/Integer/Real/Text/Blob.
+- Error: code + extended_code + message via sqlite3_errmsg.
+- FunctionFlags: UTF8 / DETERMINISTIC / DIRECTONLY / INNOCUOUS.
+- create_scalar_function: Fn(&[Value]) -> Result<Value, Error>.
+- create_aggregate_function: Aggregate<S> trait.
+- create_collation: Fn(&str, &str) -> Ordering.
+- update_hook / commit_hook / rollback_hook with our
+  UpdateAction enum.
+- set_authorizer: Fn(c_int, Option<String>×4) -> AuthResult.
+
+9 db unit tests pass on native; cli-rust compiles clean on
+wasm32-wasip1 and packages cleanly via `wasm-tools component
+new`. 7 host tests pass against the new component. Component
+size unchanged at 2.2M.
+
+**dispatch_chain_routes_execute_live_through_bridge still hangs.**
+This was the predicted outcome — dropping rusqlite gave us full
+control of the callback dispatch path but didn't move the
+architectural needle on the wasmtime may_enter check. The sync C
+callback inside sqlite3_step still invokes `block_on()` which
+wasmtime treats as "instance entered." The same wedge that
+existed with rusqlite exists now with raw FFI.
+
+Net of the work: cli-rust is now structurally cleaner, owns the
+dispatch path end-to-end, and is ready to receive the actual
+architectural fix (raw sqlite3_step scheduling, wasip3 native
+async, or WIT-level async declarations). Each of those is its
+own future investigation; rusqlite is no longer the blocker.
+
 ### Conversion completed (2026-06-13)
 
 cli-rust now uses `wit_bindgen::generate!({ async: true,

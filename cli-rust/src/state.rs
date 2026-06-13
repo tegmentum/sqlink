@@ -1,10 +1,9 @@
-//! Handle-keyed registry for the low-level rusqlite wrapper.
+//! Handle-keyed registry for the low-level db wrapper.
 
 use std::collections::HashMap;
 
-use rusqlite::types::Value;
-
 use crate::bindings::exports::sqlite::wasm::low_level::{ColumnType, ResultCode};
+use crate::db::{self, Value};
 
 pub struct StmtState {
     pub sql: String,
@@ -16,7 +15,7 @@ pub struct StmtState {
 
 pub struct State {
     next: u64,
-    pub dbs: HashMap<u64, rusqlite::Connection>,
+    pub dbs: HashMap<u64, db::Connection>,
     pub stmts: HashMap<u64, StmtState>,
 }
 
@@ -32,22 +31,22 @@ impl State {
         id
     }
 
-    pub fn add_db(&mut self, c: rusqlite::Connection) -> u64 {
+    pub fn add_db(&mut self, c: db::Connection) -> u64 {
         let id = self.alloc_id();
         self.dbs.insert(id, c);
         id
     }
-    pub fn db(&self, h: u64) -> Option<&rusqlite::Connection> { self.dbs.get(&h) }
+    pub fn db(&self, h: u64) -> Option<&db::Connection> { self.dbs.get(&h) }
     pub fn remove_db(&mut self, h: u64) {
         self.dbs.remove(&h);
         self.stmts.retain(|_, s| s.db != h);
     }
 
     pub fn db_changes(&self, h: u64) -> u64 {
-        self.dbs.get(&h).map(|c| c.changes()).unwrap_or(0)
+        self.dbs.get(&h).map(|c| c.changes() as u64).unwrap_or(0)
     }
     pub fn db_total_changes(&self, h: u64) -> u64 {
-        self.dbs.get(&h).map(|c| c.total_changes()).unwrap_or(0)
+        self.dbs.get(&h).map(|c| c.total_changes() as u64).unwrap_or(0)
     }
     pub fn db_last_insert_rowid(&self, h: u64) -> i64 {
         self.dbs.get(&h).map(|c| c.last_insert_rowid()).unwrap_or(0)
@@ -79,24 +78,21 @@ impl State {
             Ok(st) => st,
             Err(_) => return ResultCode::Error,
         };
-        let names: Vec<String> = stmt.column_names().iter().map(|n| n.to_string()).collect();
-        let col_count = names.len();
-        s.column_names = names;
-        for (i, v) in s.bindings.iter().enumerate() {
-            if stmt.raw_bind_parameter(i + 1, v).is_err() {
-                return ResultCode::Error;
-            }
+        s.column_names = stmt.column_names();
+        let col_count = s.column_names.len();
+        if stmt.bind_all(&s.bindings).is_err() {
+            return ResultCode::Error;
         }
-        let mut rows = stmt.raw_query();
-        match rows.next() {
-            Ok(Some(row)) => {
-                let vals: Vec<Value> = (0..col_count)
-                    .map(|i| row.get::<_, Value>(i).unwrap_or(Value::Null))
-                    .collect();
+        match stmt.step() {
+            Ok(db::StepResult::Row) => {
+                let vals: Vec<Value> = (0..col_count).map(|i| stmt.column_value(i)).collect();
                 s.current_row = Some(vals);
                 ResultCode::Row
             }
-            Ok(None) => { s.current_row = None; ResultCode::Done }
+            Ok(db::StepResult::Done) => {
+                s.current_row = None;
+                ResultCode::Done
+            }
             Err(_) => ResultCode::Error,
         }
     }
