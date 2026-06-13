@@ -3,9 +3,10 @@
 After implementing Stages 1 + 2 of the live-SPI re-entry work
 (channel bridge, async-lowered guest imports, host concurrent
 bindgen, rusqlite removal, wasip2 pivot, raw sqlite3 wrapping)
-the `dispatch_chain_routes_execute_live_through_bridge` test
-still hangs. This document captures *why* and what would
-actually deliver it.
+the dispatch-chain bridge re-entry path could not be made to
+work. This document captures *why* and what would actually
+deliver it. The eventual landing: drop the `-live` triple
+entirely (see "Recommendation" below).
 
 ## The exact failure
 
@@ -183,53 +184,29 @@ proposal I'm aware of as of 2026-06.
 
 **Verdict:** Don't plan on it.
 
-## Recommendation
+## Recommendation (landed 2026-06-13)
 
-Stop pretending the in-flight bridge re-entry path will work.
+1. The `-live` triple (`execute-live` / `execute-scalar-live` /
+   `execute-batch-live`) was dropped from `host-spi.wit` entirely.
+   Pre-release, no API to preserve. The remaining
+   `execute` / `execute-scalar` / `execute-batch` see the latest
+   committed state of the embedding db — same observable
+   semantics as the dropped methods, no naming lie.
+2. The dispatch-chain bridge mechanism (`LiveSpiBridge`,
+   `LiveSpiRequest`, the `Store::run_concurrent` dispatcher in
+   `sqlite-wasm-run`) was torn out. The reactor's bindgen reverted
+   from concurrent (`async | store`) mode to plain `async`.
+   `LoadedState::execute*` calls go through a pooled
+   `rusqlite::Connection`.
+3. `live-spi-extension`, the wasm extension whose only purpose
+   was to exercise the `-live` triple, was deleted.
+4. If a real extension ever surfaces that genuinely needs
+   visibility into outer-transaction uncommitted writes, the
+   declarative-data-dependency manifest approach (option C above)
+   remains the bounded path. Until then, don't add it.
 
-1. Document `execute-live` family's semantics as
-   **committed-snapshot, fresh connection** (what v1 actually
-   delivers). Drop the "outer tx visibility" goal from the WIT
-   contract docs.
-2. Mark `dispatch_chain_routes_execute_live_through_bridge` as
-   `#[ignore]` permanently with a comment pointing here.
-3. If a real extension surfaces that needs outer-tx visibility,
-   implement option C (declarative data-dependency).
-
-The Stage 1/2 work was not wasted. The bridge architecture works
-for callers OUTSIDE an in-flight eval (which is rare but legal
-— see `live_spi_bridge_reenters_eval_structured`). The wit_bindgen
-+ wasip2 + db.rs sweep modernized the toolchain.
-
-The honest header on the SPI module should be:
-
-> Loaded extensions' live SPI methods return a committed snapshot
-> from a fresh connection. The "live" name historically reflected
-> an unfulfilled ambition (outer-transaction visibility); the
-> name is preserved for API stability. See SPI-LIVE-ARCHITECTURE.md
-> for the design conclusions.
-
-## Files touched if recommendation accepted
-
-- `sqlite-loader-wit/wit/host-spi.wit` — doc comment on
-  `execute-live` triple acknowledging committed-snapshot
-  semantics.
-- `host/SPI-LIVE.md` — **deleted**. This doc is now the single
-  authoritative answer; the historical investigation logs were
-  collapsed into "Files touched" below and the design narrative
-  in §1–§4.
-- `host/tests/load.rs` — `dispatch_chain` test gets a comment
-  pointing at this doc.
-- Optional: rename methods to `execute-fresh` / `-scalar-fresh` /
-  `-batch-fresh` for honesty. Breaking change; defer.
-
-If option C is pursued:
-
-- `sqlite-loader-wit/wit/types.wit` — add `sub-query: option<string>`
-  to `scalar-function-spec` / `aggregate-function-spec`.
-- `cli-rust/src/lib.rs do_load` — when sub-query present, prepare
-  + step against CLI_CONN inside the scalar/agg closure, then pass
-  results to dispatch::scalar_call (new param).
-- `wit/dispatch.wit` — extend `scalar-call` /
-  `aggregate-step` to accept `pre-fetched: option<list<list<sql-value>>>`.
+The Stage 1/2 work that built the bridge wasn't wasted: it forced
+the architectural investigation that yielded this conclusion, and
+the wit_bindgen + wasip2 + db.rs sweep modernized the toolchain.
+Both stand.
 - Bump WIT version; rebuild all extensions.
