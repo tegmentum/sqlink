@@ -165,6 +165,144 @@ async fn wasm_component_provider_handles_invoke() {
     assert!(err.contains("unknown method"), "got: {err}");
 }
 
+/// std-hashing provider: pin one known digest for each method.
+/// Same wasm-component invoke shape as wasm_component_provider_handles_invoke.
+#[tokio::test]
+async fn std_hashing_provider() {
+    use ciborium::value::Value as CborValue;
+    use sqlite_wasm_host::compose_provider::ProviderHandle;
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_hashing.wasm");
+    if !path.exists() {
+        eprintln!("skipping: std_hashing.wasm not built");
+        return;
+    }
+    let host = Host::new().unwrap();
+    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path)
+        .expect("compile std-hashing");
+
+    let req = {
+        let mut buf = Vec::new();
+        let map = CborValue::Map(vec![(
+            CborValue::Text("text".into()),
+            CborValue::Text("abc".into()),
+        )]);
+        ciborium::ser::into_writer(&map, &mut buf).unwrap();
+        buf
+    };
+
+    // Known digests of "abc":
+    //   sha256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+    //   sha512: ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f
+    //   md5:    900150983cd24fb0d6963f7d28e17f72
+    //   blake3: 6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85
+    for (method, expected) in [
+        (
+            "sha256",
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+        ),
+        (
+            "sha512",
+            "ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f",
+        ),
+        ("md5", "900150983cd24fb0d6963f7d28e17f72"),
+        (
+            "blake3",
+            "6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85",
+        ),
+    ] {
+        let resp = provider.invoke(method, &req).await.expect("invoke");
+        let v: CborValue = ciborium::de::from_reader(&*resp).unwrap();
+        match v {
+            CborValue::Text(s) => assert_eq!(s, expected, "{method} digest mismatch"),
+            other => panic!("expected text for {method}, got {other:?}"),
+        }
+    }
+}
+
+/// std-encoding provider: round-trip + decode-error.
+#[tokio::test]
+async fn std_encoding_provider() {
+    use ciborium::value::Value as CborValue;
+    use sqlite_wasm_host::compose_provider::ProviderHandle;
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_encoding.wasm");
+    if !path.exists() {
+        eprintln!("skipping: std_encoding.wasm not built");
+        return;
+    }
+    let host = Host::new().unwrap();
+    let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path)
+        .expect("compile std-encoding");
+
+    let encode_req = |bytes: Vec<u8>| -> Vec<u8> {
+        let mut buf = Vec::new();
+        let map = CborValue::Map(vec![(CborValue::Text("data".into()), CborValue::Bytes(bytes))]);
+        ciborium::ser::into_writer(&map, &mut buf).unwrap();
+        buf
+    };
+    let decode_req = |s: &str| -> Vec<u8> {
+        let mut buf = Vec::new();
+        let map = CborValue::Map(vec![(
+            CborValue::Text("text".into()),
+            CborValue::Text(s.into()),
+        )]);
+        ciborium::ser::into_writer(&map, &mut buf).unwrap();
+        buf
+    };
+
+    // base64
+    let resp = provider
+        .invoke("base64-encode", &encode_req(b"hello".to_vec()))
+        .await
+        .expect("b64 encode");
+    let v: CborValue = ciborium::de::from_reader(&*resp).unwrap();
+    match v {
+        CborValue::Text(s) => assert_eq!(s, "aGVsbG8="),
+        other => panic!("expected text, got {other:?}"),
+    }
+    let resp = provider
+        .invoke("base64-decode", &decode_req("aGVsbG8="))
+        .await
+        .expect("b64 decode");
+    let v: CborValue = ciborium::de::from_reader(&*resp).unwrap();
+    match v {
+        CborValue::Bytes(b) => assert_eq!(b, b"hello"),
+        other => panic!("expected bytes, got {other:?}"),
+    }
+
+    // hex
+    let resp = provider
+        .invoke("hex-encode", &encode_req(vec![0xde, 0xad, 0xbe, 0xef]))
+        .await
+        .expect("hex encode");
+    let v: CborValue = ciborium::de::from_reader(&*resp).unwrap();
+    match v {
+        CborValue::Text(s) => assert_eq!(s, "deadbeef"),
+        other => panic!("expected text, got {other:?}"),
+    }
+
+    // url-encode preserves alphanumeric, percent-encodes the rest
+    let resp = provider
+        .invoke("url-encode", &encode_req(b"hello world!".to_vec()))
+        .await
+        .expect("url encode");
+    let v: CborValue = ciborium::de::from_reader(&*resp).unwrap();
+    match v {
+        CborValue::Text(s) => assert_eq!(s, "hello%20world%21"),
+        other => panic!("expected text, got {other:?}"),
+    }
+
+    // decode-error path: invalid base64 surfaces a structured Err.
+    let err = provider
+        .invoke("base64-decode", &decode_req("not!base64!!"))
+        .await
+        .expect_err("invalid base64");
+    assert!(err.contains("base64"), "got: {err}");
+}
+
 /// Drives the cli reactor under the concurrent canonical ABI and
 /// proves the channel-bridge re-entry actually works: a background
 /// task inside `Store::run_concurrent` receives SQL via the
