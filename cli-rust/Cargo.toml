@@ -22,7 +22,7 @@ wit-bindgen = { version = "0.44", features = ["macros"] }
 # CC_wasm32_wasip2 = wasi-sdk clang). We use it directly via the
 # in-tree `db` module instead of going through rusqlite —
 # rusqlite's sync-callback Fn registration API fights cli-rust's
-# async wit-bindgen import surface (see SPI-LIVE.md).
+# async wit-bindgen import surface (see SPI-LIVE-ARCHITECTURE.md).
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 
 # Component packaging: after `cargo build --release --target

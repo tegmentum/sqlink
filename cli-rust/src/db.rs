@@ -6,7 +6,7 @@
 //!
 //! - `Connection`, `Statement`, value/error types: thin sync
 //!   wrappers, modeled on rusqlite (which is the right shape — the
-//!   sqlite3 C API IS sync). See SPI-LIVE.md "rusqlite vs raw FFI"
+//!   sqlite3 C API IS sync). See SPI-LIVE-ARCHITECTURE.md "rusqlite vs raw FFI"
 //!   for why we own this layer instead of depending on rusqlite.
 //! - Function/aggregate/collation/hook/authorizer registration:
 //!   uses custom callback shapes that participate in wasmtime's

@@ -140,8 +140,8 @@ pub mod reactor {
     wasmtime::component::bindgen!({
         path: "../wit",
         world: "sqlite-cli-reactor",
-        imports: { default: async | store },
-        exports: { default: async | store },
+        imports: { default: async },
+        exports: { default: async },
     });
 }
 
@@ -766,18 +766,14 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     //
     // What it does NOT deliver: visibility into the cli's
     // outer-transaction uncommitted writes. That was the original
-    // ambition; it turns out to be incompatible with the
-    // WebAssembly Component Model task spec — the host can't
-    // recursively enter a top-level instance while a call is in
-    // flight (wasmtime 45 concurrent.rs:1678 `may_enter`).
-    //
-    // The LiveSpiBridge mechanism on Host stays — it works for
-    // callers OUTSIDE an in-flight eval (see the
-    // `live_spi_bridge_reenters_eval_structured` test). But routes
-    // from inside the dispatch chain through LoadedState DO NOT
-    // try the bridge — they would hang forever on may_enter.
-    //
-    // Full design: `host/SPI-LIVE-ARCHITECTURE.md`.
+    // ambition; it's incompatible with the WebAssembly Component
+    // Model task spec — the host can't recursively enter a
+    // top-level instance while a call is in flight (wasmtime 45
+    // concurrent.rs:1678 `may_enter`). The full architectural
+    // investigation and conclusion are in
+    // `host/SPI-LIVE-ARCHITECTURE.md`; the channel-bridge mechanism
+    // that briefly tried to thread that needle was torn out in
+    // favor of committed-snapshot semantics as the final answer.
 
     async fn execute_live(
         &mut self,
@@ -1234,14 +1230,6 @@ pub struct Host {
     /// at startup. Other variants exist for fully-locked
     /// deployments (DenyAll) and explicit auditing pre-prod.
     trust_policy: Arc<RwLock<TrustPolicy>>,
-    /// Sender side of the live-SPI channel bridge. Set by
-    /// `sqlite-wasm-run`'s `run_reactor` once the reactor is up;
-    /// cloned into `LoadedState` per `dispatch.*` call so the
-    /// extension's `spi.execute_live` can post a SQL request that
-    /// the cli-side dispatcher routes back through
-    /// `cli.eval-structured` via the wasmtime concurrent ABI. None
-    /// for command-mode runs or before the reactor has started.
-    live_spi_bridge: Arc<RwLock<Option<LiveSpiBridge>>>,
 }
 
 /// Default tenant id. Single-tenant deployments (the common case)
@@ -1299,64 +1287,6 @@ impl TrustPolicy {
     }
 }
 
-/// Channel sender handed to `LoadedState` so loaded extensions can
-/// drive their `spi.execute_live` calls back into the cli reactor
-/// without holding a direct reference to the reactor's Store.
-///
-/// The receiver lives inside `sqlite-wasm-run`'s
-/// `run_concurrent` scope (where it has access to the Accessor
-/// needed to `call_concurrent` on `cli.eval-structured`).
-#[derive(Clone)]
-pub struct LiveSpiBridge {
-    tx: tokio::sync::mpsc::UnboundedSender<LiveSpiRequest>,
-}
-
-impl LiveSpiBridge {
-    pub fn new(tx: tokio::sync::mpsc::UnboundedSender<LiveSpiRequest>) -> Self {
-        Self { tx }
-    }
-
-    /// Submit one SQL string to the dispatcher. Returns the
-    /// structured result the cli's `eval-structured` produced.
-    /// `Err` indicates the channel collapsed (reactor stopped) —
-    /// callers should fall back to the v1 fresh-connection path.
-    pub async fn execute(
-        &self,
-        sql: String,
-    ) -> std::result::Result<
-        std::result::Result<
-            reactor::exports::sqlite::extension::types::QueryResult,
-            reactor::exports::sqlite::extension::types::SqliteError,
-        >,
-        String,
-    > {
-        let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
-        self.tx
-            .send(LiveSpiRequest { sql, resp_tx })
-            .map_err(|_| "live-spi dispatcher gone".to_string())?;
-        match resp_rx.await {
-            Ok(payload) => payload,
-            Err(_) => Err("live-spi response dropped".to_string()),
-        }
-    }
-}
-
-/// One request on the bridge — opaque to extensions; built by
-/// `LiveSpiBridge::execute`. Carries the SQL and a oneshot back-
-/// channel for the structured result.
-pub struct LiveSpiRequest {
-    pub sql: String,
-    pub resp_tx: tokio::sync::oneshot::Sender<
-        std::result::Result<
-            std::result::Result<
-                reactor::exports::sqlite::extension::types::QueryResult,
-                reactor::exports::sqlite::extension::types::SqliteError,
-            >,
-            String,
-        >,
-    >,
-}
-
 impl Host {
     /// Build a Host with sensible default Engine config (fuel, epoch,
     /// component-model, pooling). Spawns the epoch-bumper thread.
@@ -1366,7 +1296,7 @@ impl Host {
         config.async_support(true);
         // Enables the concurrent canonical ABI used by the reactor's
         // bindgen (`imports/exports: { default: async | store }`) for
-        // live-SPI re-entry. See host/SPI-LIVE.md for the design.
+        // live-SPI re-entry. See host/SPI-LIVE-ARCHITECTURE.md for the design.
         config.wasm_component_model_async(true);
         config.consume_fuel(true);
         config.epoch_interruption(true);
@@ -1383,7 +1313,6 @@ impl Host {
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
             trust_policy: Arc::new(RwLock::new(TrustPolicy::AllowAll)),
-            live_spi_bridge: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -1397,23 +1326,6 @@ impl Host {
     /// Current trust policy. Useful for diagnostics + tests.
     pub fn trust_policy(&self) -> TrustPolicy {
         self.trust_policy.read().clone()
-    }
-
-    /// Install the sender side of the live-SPI channel bridge. The
-    /// receiver runs inside `sqlite-wasm-run`'s `run_concurrent`
-    /// scope; this setter is what publishes the sender to
-    /// `LoadedState` (cloned at dispatch time so the per-call store
-    /// can drive `execute_live` through the bridge).
-    pub fn set_live_spi_bridge(&self, bridge: LiveSpiBridge) {
-        *self.live_spi_bridge.write() = Some(bridge);
-    }
-
-    /// Read the currently-installed bridge, cloned. Returns None
-    /// in command-mode (no reactor) or before the reactor has
-    /// started. `LoadedState::execute_live` falls back to the
-    /// fresh-connection v1 path when this is None.
-    pub fn live_spi_bridge(&self) -> Option<LiveSpiBridge> {
-        self.live_spi_bridge.read().clone()
     }
 
     /// Register a built-in compose:dynlink provider under `id` in

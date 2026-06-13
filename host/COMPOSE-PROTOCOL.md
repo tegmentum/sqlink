@@ -202,7 +202,7 @@ sees what the cli sees — there's no separate committed-snapshot
 view to distinguish from. (Contrast with the `sqlite:extension/spi`
 WIT, which has both `execute` (committed snapshot via separate
 connection) and `execute-live` (would-be re-entry — see
-SPI-LIVE.md).)
+SPI-LIVE-ARCHITECTURE.md).)
 
 ## Future providers
 

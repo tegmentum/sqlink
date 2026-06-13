@@ -214,7 +214,10 @@ The honest header on the SPI module should be:
 - `sqlite-loader-wit/wit/host-spi.wit` — doc comment on
   `execute-live` triple acknowledging committed-snapshot
   semantics.
-- `host/SPI-LIVE.md` — append "Closed by SPI-LIVE-ARCHITECTURE.md".
+- `host/SPI-LIVE.md` — **deleted**. This doc is now the single
+  authoritative answer; the historical investigation logs were
+  collapsed into "Files touched" below and the design narrative
+  in §1–§4.
 - `host/tests/load.rs` — `dispatch_chain` test gets a comment
   pointing at this doc.
 - Optional: rename methods to `execute-fresh` / `-scalar-fresh` /

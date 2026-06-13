@@ -10,7 +10,7 @@
 //! the stat APIs, etc.) return error stubs and will gain real
 //! impls as the CLI work continues.
 //!
-//! Build (cli-rust targets wasm32-wasip2 — see SPI-LIVE.md for
+//! Build (cli-rust targets wasm32-wasip2 — see SPI-LIVE-ARCHITECTURE.md for
 //! the pivot rationale; wasip3 isn't toolchain-ready as of
 //! 2026-06):
 //!
@@ -32,7 +32,7 @@
 // async-lowered host imports are what lets the cli reactor's wasm
 // task yield while a host import is in flight — the prerequisite
 // for the dispatch chain's live-SPI re-entry to actually work
-// instead of trapping on may_enter. See host/SPI-LIVE.md.
+// instead of trapping on may_enter. See host/SPI-LIVE-ARCHITECTURE.md.
 mod bindings {
     wit_bindgen::generate!({
         path: "../wit",
