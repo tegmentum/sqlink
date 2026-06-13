@@ -51,32 +51,27 @@ world sqlite-cli-unified {
     import zip-operations;
 }
 
-/// Reactor-shape successor to `sqlite-cli-unified`. Same imports
-/// (extension-loader / dispatch / zip-operations / slot-driven
-/// composition) and same SQLite + extension SPI exports — the
-/// only structural change is that this world ALSO exports the
-/// reactor `cli` interface so the host can drive the REPL.
-/// Command-mode `main()` is gone; `_start` panics with a
-/// helpful message if anyone tries to `wasmtime run` the binary
-/// directly.
-world sqlite-cli-reactor {
-    export low-level;
-    export high-level;
-
-    export sqlite:extension/types@0.1.0;
-    export sqlite:extension/spi@0.1.0;
-    export sqlite:extension/logging@0.1.0;
-    export sqlite:extension/config@0.1.0;
-
-    export cli;
-
-    import fts5-slot;
-    import json1-slot;
-    import rtree-slot;
-    import geopoly-slot;
-    import demo-slot;
+/// Command-mode CLI. The component owns its own REPL via
+/// `wasi:cli/run`: any wasi:p2 host (wasmtime, jco, our polyfill
+/// in the browser) can run it with no special host plumbing
+/// beyond the extension-loader / dispatch imports we provide for
+/// the dynamic-load story.
+///
+/// Successor to `sqlite-cli-reactor`, which had a six-method
+/// interactive interface the host drove turn-by-turn. The reactor
+/// was originally chosen to enable live-SPI bridge re-entry; that
+/// route was architecturally impossible (see
+/// `host/SPI-LIVE-ARCHITECTURE.md`) and the pattern's costs
+/// (split state, async lifts, six methods coordinating across the
+/// host/guest boundary) bought us nothing. Command-mode is the
+/// honest shape.
+///
+/// Programmatic / library use ("eval this SQL, give me rows")
+/// belongs in a separate `sqlite-cli-library` world targeted by a
+/// distinct crate. This world is just a CLI.
+world sqlite-cli-command {
+    include wasi:cli/command@0.2.6;
 
     import extension-loader;
     import dispatch;
-    import zip-operations;
 }

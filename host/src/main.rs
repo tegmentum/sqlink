@@ -1,14 +1,10 @@
 //! `sqlite-wasm-run` — reference runner for SQLite-in-WebAssembly
 //! components.
 //!
-//! Two modes:
-//!   - Command-mode (default): instantiate as a `wasi:cli/run`-style
-//!     component and call `run` once. Used by sqlite-cli-demo.wasm
-//!     and similar C-based binaries.
-//!   - Reactor mode (`--reactor`): instantiate as a reactor exporting
-//!     `sqlite:wasm/cli`. The host drives the REPL — call init, loop
-//!     calling eval per line, exit when is_done. Required by cli-rust
-//!     to enable async-stackful spi.execute re-entry.
+//! Instantiates a `wasi:cli/run`-style component (sqlite-cli-demo.wasm,
+//! cli-rust, anything targeting the `sqlite-cli-command` world) and
+//! calls `wasi:cli/run.run` once. Resolves the host imports the
+//! component needs (extension-loader, dispatch) ahead of the call.
 
 use std::env;
 use std::path::PathBuf;
@@ -36,7 +32,7 @@ impl wasmtime_wasi::WasiView for State {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: sqlite-wasm-run [--reactor] <component.wasm> [-- guest-args...]");
+    eprintln!("usage: sqlite-wasm-run [--db PATH] [--cache-dir DIR] <component.wasm> [-- guest-args...]");
     std::process::exit(2);
 }
 
@@ -47,7 +43,6 @@ async fn main() -> Result<()> {
         usage();
     }
 
-    let mut reactor_mode = false;
     let mut db_path = String::new();
     let mut cache_dir: Option<String> = None;
     let mut positional: Vec<String> = Vec::new();
@@ -59,8 +54,6 @@ async fn main() -> Result<()> {
             positional.push(a.clone());
         } else if a == "--" {
             after_dashes = true;
-        } else if a == "--reactor" {
-            reactor_mode = true;
         } else if a == "--db" {
             i += 1;
             if i < args.len() {
@@ -143,9 +136,9 @@ async fn main() -> Result<()> {
     let mut wasi_builder = WasiCtxBuilder::new();
     wasi_builder.inherit_stdio();
     wasi_builder.inherit_env();
-    // Grant the wasm component access to the db file's parent dir.
-    // Required for reactor-mode where cli-rust opens its own sqlite3
-    // connection against the same file the host opens for spi.
+    // Grant the wasm component access to the db file's parent dir,
+    // so cli-rust can open its own sqlite3 connection against the
+    // same file the host opens for spi.
     if !db_path.is_empty() && db_path != ":memory:" {
         let p = std::path::Path::new(&db_path);
         let parent = p.parent().unwrap_or_else(|| std::path::Path::new("."));
@@ -183,95 +176,23 @@ async fn main() -> Result<()> {
     store.set_fuel(u64::MAX / 2)?;
     store.set_epoch_deadline(1_000_000_000_000);
 
-    if reactor_mode {
-        run_reactor(&mut store, &component, &linker, &db_path).await
-    } else {
-        let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(
-            &mut store, &component, &linker,
-        )
-        .await
-        .map_err(|e| anyhow!("instantiate: {e}"))?;
-
-        let result = command
-            .wasi_cli_run()
-            .call_run(&mut store)
-            .await
-            .map_err(|e| {
-                eprintln!("trap: {e:?}");
-                anyhow!("wasi:cli/run.run: {e}")
-            })?;
-
-        match result {
-            Ok(()) => Ok(()),
-            Err(()) => Err(anyhow!("component exited with error")),
-        }
-    }
-}
-
-async fn run_reactor(
-    store: &mut Store<State>,
-    component: &Component,
-    linker: &Linker<State>,
-    db_path: &str,
-) -> Result<()> {
-    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-
-    let reactor = sqlite_wasm_host::reactor::SqliteCliReactor::instantiate_async(
-        &mut *store,
-        component,
-        linker,
+    let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(
+        &mut store, &component, &linker,
     )
     .await
-    .map_err(|e| anyhow!("instantiate reactor: {e}"))?;
+    .map_err(|e| anyhow!("instantiate: {e}"))?;
 
-    let cli = reactor.sqlite_wasm_cli();
-    cli.call_init(&mut *store, db_path)
+    let result = command
+        .wasi_cli_run()
+        .call_run(&mut store)
         .await
-        .map_err(|e| anyhow!("cli.init trap: {e}"))?
-        .map_err(|e| anyhow!("cli.init returned: {e}"))?;
+        .map_err(|e| {
+            eprintln!("trap: {e:?}");
+            anyhow!("wasi:cli/run.run: {e}")
+        })?;
 
-    let mut input = BufReader::new(tokio::io::stdin()).lines();
-    let mut stdout = tokio::io::stdout();
-    let mut buffered = String::new();
-    loop {
-        let prompt = cli
-            .call_current_prompt(&mut *store, &buffered)
-            .await
-            .map_err(|e| anyhow!("cli.current_prompt: {e}"))?;
-        let _ = stdout.write_all(prompt.as_bytes()).await;
-        let _ = stdout.flush().await;
-
-        let line = match input.next_line().await {
-            Ok(Some(l)) => l,
-            Ok(None) => break,
-            Err(e) => return Err(anyhow!("stdin: {e}")),
-        };
-        buffered.push_str(&line);
-        buffered.push('\n');
-
-        let complete = cli
-            .call_is_statement_complete(&mut *store, &buffered)
-            .await
-            .map_err(|e| anyhow!("cli.is_statement_complete: {e}"))?;
-        if !complete {
-            continue;
-        }
-
-        let out = cli
-            .call_eval(&mut *store, &buffered)
-            .await
-            .map_err(|e| anyhow!("cli.eval: {e}"))?;
-        let _ = stdout.write_all(out.as_bytes()).await;
-        let _ = stdout.flush().await;
-        buffered.clear();
-
-        if cli
-            .call_is_done(&mut *store)
-            .await
-            .map_err(|e| anyhow!("cli.is_done: {e}"))?
-        {
-            break;
-        }
+    match result {
+        Ok(()) => Ok(()),
+        Err(()) => Err(anyhow!("component exited with error")),
     }
-    Ok(())
 }

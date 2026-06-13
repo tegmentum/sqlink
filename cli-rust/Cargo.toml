@@ -3,26 +3,22 @@ name = "sqlite-cli-rust"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Reactor-shape Rust port of the SQLite CLI. Targets the sqlite-cli-reactor world; async-stackful lifts (needed for spi.execute re-entry) are this crate's reason for existing."
+description = "Command-mode SQLite CLI for wasm32-wasip2. Exports wasi:cli/run; any wasi:p2 host can drive it."
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
 # wit-bindgen-rt provides the runtime support functions the
-# generate! macro emits calls to. The `async` feature is
-# required for async-lowered host imports.
-wit-bindgen-rt = { version = "0.44.0", features = ["bitflags", "async"] }
-# Stage 2b: replaces cargo-component's auto-generated bindings
-# so we can pass `async: true` (cargo-component 0.21 doesn't
-# expose this knob). Bindings are produced inline in src/lib.rs.
+# generate! macro emits calls to. Sync bindings — no `async`
+# feature needed now that the live-SPI bridge is gone.
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Bindings are produced inline in src/lib.rs via wit_bindgen::generate!.
 wit-bindgen = { version = "0.44", features = ["macros"] }
 # libsqlite3-sys provides raw FFI to sqlite3.c (bundled compiles
 # it via the cc crate against wasm32-wasip2; needs
-# CC_wasm32_wasip2 = wasi-sdk clang). We use it directly via the
-# in-tree `db` module instead of going through rusqlite —
-# rusqlite's sync-callback Fn registration API fights cli-rust's
-# async wit-bindgen import surface (see SPI-LIVE-ARCHITECTURE.md).
+# CC_wasm32_wasip2 = wasi-sdk clang). Wrapped by the in-tree `db`
+# module — no rusqlite layer in between.
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 
 # Component packaging: after `cargo build --release --target

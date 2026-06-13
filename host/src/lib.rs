@@ -133,18 +133,6 @@ pub mod loaded_authorizing {
     });
 }
 
-/// Bindgen for the reactor-shape CLI component (cli-rust). The
-/// host uses this to drive the REPL — call init, then loop calling
-/// eval with each line of user input. See PLAN-reactor-cli-async-host.md.
-pub mod reactor {
-    wasmtime::component::bindgen!({
-        path: "../wit",
-        world: "sqlite-cli-reactor",
-        imports: { default: async },
-        exports: { default: async },
-    });
-}
-
 /// Bindgen for compose:dynlink-shape extensions (Fiji functions).
 /// See PLAN-compose-integration.md for the integration plan.
 /// CP1's validation: this bindgen must build for the WIT to be
