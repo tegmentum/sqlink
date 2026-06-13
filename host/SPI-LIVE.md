@@ -102,16 +102,77 @@ Three real options for 2b:
 1. **Wait for cargo-component to expose async.** Newer
    cargo-component versions may add the knob. Track upstream.
 2. **Switch cli-rust off cargo-component to direct
-   `wit_bindgen::generate!()`.** Add `wit-bindgen` as a build
-   dep, replace `[package.metadata.component]` with a macro
-   invocation in `src/lib.rs` (with `async_: AsyncConfig::All`),
-   and add a `wasm-tools component new` post-build step to
-   package the core wasm as a component. Substantial refactor of
-   cli-rust's build setup; loses cargo-component's nice WIT dep
-   handling.
+   `wit_bindgen::generate!()`.** See "Option 2 investigation"
+   below for a feasibility writeup.
 3. **Patch cargo-component to expose the option.** Send a PR
    upstream; not realistic for a feature release timeline we can
    commit to.
+
+### Option 2 investigation (2026-06)
+
+Tried in a spike (reverted): replacing cli-rust's
+`[package.metadata.component]` config with an inline
+`wit_bindgen::generate!({ path, world, async: true,
+generate_all })` macro invocation, plus `wit-bindgen` as a build
+dep. Outcomes:
+
+- **Macro accepts `async: true`** — produces async-lowered host
+  imports (the goal of 2b). Confirmed via wit-bindgen 0.57.1 docs
+  and 0.44 macro acceptance.
+- **`generate_all` is required** when the world spans multiple
+  WIT packages (sqlite:extension, compose:dynlink, sys:compose);
+  the macro otherwise errors with "missing one of: generate_all,
+  with: { ... }".
+- **All bindings become async, exports included.** The macro
+  emits async-fn signatures on the Guest impl trait for every
+  export, not just the imports. cli-rust currently has 84+ sync
+  Guest fn definitions across spi.*, low-level, high-level,
+  cli.*, etc. With `async: true` every single one of them must
+  become `async fn`, with `.await` added at every call site
+  inside that calls another bindgen import. Async-fn bodies that
+  do synchronous work compile fine, so rusqlite calls inside
+  don't need changing — just the signatures and the import
+  call-sites.
+- **The async syntax can't be scoped to imports only.** Per the
+  doc, `async: ["import:foo#bar", ...]` lets you list specific
+  functions, but if an async-lowered import is called from a
+  sync export, you can't `.await` it. So the whole call chain
+  must be async, end to end — which forces the exports too.
+- **Component packaging works without cargo-component.** Build
+  `cargo build --release --target wasm32-wasip1` to produce a
+  core module, then
+  `wasm-tools component new core.wasm --adapt
+  wasi_snapshot_preview1.reactor.wasm -o component.wasm`. The
+  adapter is widely available (cached at
+  `~/.cache/xtran/wasi_snapshot_preview1.reactor.wasm` here;
+  also in jco's npm package and several other repos). A trivial
+  build.rs or shell script wraps this.
+
+**Cost estimate for full option 2:**
+
+- cli-rust: ~84 `fn` → `async fn` (mechanical search-and-add,
+  ~30 min). At call-sites that invoke bindings imports, add
+  `.await` (~20 of them, ~15 min).
+- cli-rust/Cargo.toml: swap `[package.metadata.component]`
+  block for a `wit-bindgen` dep. ~5 min.
+- Build flow: small build.rs or wrapper script driving
+  `cargo build --target wasm32-wasip1` + `wasm-tools component
+  new --adapt`. ~30 min.
+- CI: update `.github/workflows/ci.yml` if it builds cli-rust;
+  same wrapper.
+- Apply stashed Stage 2a host changes (`git stash pop`).
+- Verify `dispatch_chain_routes_execute_live_through_bridge`
+  passes; remove `#[ignore]`.
+
+Net estimate: half a session (3-4 hours of focused work),
+**bounded** and self-contained. Risk: the async lifting may
+trip up cli-rust's thread-local state pattern (CLI_CONN,
+SETTINGS), but those don't yield across awaits so should be
+fine. The wit-bindgen-rt 0.44 `async` feature is the runtime
+pieces needed (verified the feature gate exists).
+
+Conclusion: **option 2 is viable.** Awaiting user direction on
+whether to commit to the conversion.
 
 Stage 2a (host-side conversion of `bindings::dispatch` +
 `bindings::extension_loader` to Accessor pattern) is mechanically
