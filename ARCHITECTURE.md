@@ -52,18 +52,18 @@ binary:
    `.register-resolver <scheme> <path>`; consulted on
    `.load <scheme>://...`. The http-resolver demonstrates.
 
-3. **Fiji functions** — tiny wasm components that resolve
+3. **runnable components** — tiny wasm components that resolve
    shared runtime providers at runtime via
    `compose:dynlink/linker` (the `webassembly-component-orchestration`
    project's "dlopen for components" pattern). Target the
-   `fiji-function` world; export
-   `sqlite:wasm/fiji.run() -> result<string, string>`. Loaded
-   via `.fiji <path>` — instantiates, calls run(), prints output.
+   `runnable` world; export
+   `sqlite:wasm/run.run() -> result<string, string>`. Loaded
+   via `.run <path>` — instantiates, calls run(), prints output.
    ~150 KB per function vs. ~12 KB-each-but-needs-2MB-runtime
-   for `sqlite:extension`-shape. See `AUTHORING-FIJI-FUNCTIONS.md`
+   for `sqlite:extension`-shape. See `AUTHORING-RUN-COMPONENTS.md`
    and `host/COMPOSE-PROTOCOL.md` for the writeup.
 
-   Providers a Fiji function can resolve come in two flavors:
+   Providers a runnable component can resolve come in two flavors:
    - **Host shims** — implemented in the host (e.g. `sqlite-runtime`
      dispatches CBOR-encoded SQL to the cli's rusqlite::Connection).
      Wired at startup, no registration needed.

@@ -79,7 +79,7 @@ world sqlite-cli-command {
 ///
 /// Targeted by the sqlite-lib crate. Use this when you want SQLite
 /// functionality as a callable WIT surface from another component
-/// (a Fiji function, a web frontend, an SPI consumer) rather than
+/// (a runnable component, a web frontend, an SPI consumer) rather than
 /// as a CLI you drive over stdin. Exports both:
 ///
 ///   - the complete SPI surface (so a composed extension can use

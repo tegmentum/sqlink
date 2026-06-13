@@ -1,0 +1,29 @@
+package sqlite:wasm@0.1.0;
+
+/// Minimum interface every runnable wasm component exports — a
+/// single `run() -> result<string, string>` entry point the host
+/// calls once per invocation via `.run /path/to/foo.wasm`. The
+/// component body resolves whatever providers it needs via
+/// `compose:dynlink/linker`, does its work, and returns a UTF-8
+/// string for the host to print (or a string error to surface as
+/// such).
+///
+/// Picking this over `wasi:cli/run` because:
+/// 1. wasi:cli/run brings in 30+ WASI imports the component
+///    probably doesn't use, bloating the artifact (~150 KB just
+///    for stdio plumbing).
+/// 2. The return shape we actually want here is `result<string,
+///    string>`, not `result<_, ()>` plus stdio writes.
+/// 3. The host can pipe the output anywhere — SQL row, stdout,
+///    structured response — without parsing stdout.
+interface run {
+    run: func() -> result<string, string>;
+}
+
+/// World every runnable component targets. Adds the dynlink
+/// import so the body can resolve `sqlite-runtime` and other
+/// shared providers.
+world runnable {
+    import compose:dynlink/linker@0.1.0;
+    export run;
+}

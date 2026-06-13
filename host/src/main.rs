@@ -90,11 +90,11 @@ async fn main() -> Result<()> {
     let cache = sqlite_wasm_host::cache::Cache::open(cache_root)?;
     host.set_cache(cache);
 
-    // Register the sqlite-runtime compose provider so Fiji functions
+    // Register the sqlite-runtime compose provider so runnable components
     // (compose-shaped wasm components) can `linker.resolve_by_id("sqlite-runtime")`.
     // Uses a `core::db::Connection` against the --db path; same
     // separate-connection semantics as spi.execute. None if no --db:
-    // Fiji functions then get an error.
+    // runnable components then get an error.
     if !db_path.is_empty() && db_path != ":memory:" {
         use sqlite_wasm_core::db;
         let conn = db::Connection::open(&db_path, db::OpenFlags::DEFAULT)

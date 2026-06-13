@@ -52,9 +52,12 @@ docker pull catthehacker/ubuntu:act-latest
   has a commented-out `wasm-builds` job placeholder where this
   goes.
 
-  Until that lands, the host's `fiji_function_resolves_sqlite_runtime`
-  smoke test skips gracefully when `fiji_hello.wasm` is missing
-  (prints "skipping: fiji_hello.wasm not built" and exits 0).
+  Until that lands, the host's `run_resolves_sqlite_runtime`
+  smoke test skips gracefully when `fiji_hello.wasm` (out-of-tree
+  submodule artifact) is missing (prints "skipping: fiji_hello.wasm
+  not built" and exits 0). Note: the test is currently
+  `#[ignore]`'d pending the submodule rebuild against the renamed
+  WIT world.
 
 - **The C-side legacy build.** `make cli-demo-test` builds
   `sqlite-cli-demo.wasm` (the legacy C cli). It needs the

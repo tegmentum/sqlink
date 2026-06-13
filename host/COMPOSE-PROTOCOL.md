@@ -192,7 +192,7 @@ etc.).
 ## "live" methods
 
 The non-live triple (`query` / `execute` / `execute-batch`) all
-target the **shared** cli rusqlite::Connection. The Fiji function
+target the **shared** cli rusqlite::Connection. The runnable component
 sees committed-from-its-own-statement-flow consistency, same as a
 loaded extension's `spi.execute` today.
 

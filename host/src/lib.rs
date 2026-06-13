@@ -133,11 +133,11 @@ pub mod loaded_authorizing {
     });
 }
 
-/// Bindgen for compose:dynlink-shape extensions (Fiji functions).
+/// Bindgen for compose:dynlink-shape extensions (runnable components).
 /// See PLAN-compose-integration.md for the integration plan.
 /// CP1's validation: this bindgen must build for the WIT to be
 /// consumable. CP2 fills in the Host trait for the `linker`
-/// interface; CP5 builds a Fiji function against `dynlink-guest`.
+/// interface; CP5 builds a runnable component against `dynlink-guest`.
 pub mod compose {
     wasmtime::component::bindgen!({
         path: "../wit",
@@ -165,13 +165,13 @@ pub mod dynlink_provider {
     });
 }
 
-/// Bindgen for Fiji functions — wasm components targeting our
-/// `fiji-function` world. The host uses this to instantiate +
-/// invoke run() when .fiji is called.
-pub mod fiji {
+/// Bindgen for runnable wasm components — components targeting
+/// our `runnable` world. The host uses this to instantiate and
+/// invoke run() when `.run /path/to/foo.wasm` is called.
+pub mod run {
     wasmtime::component::bindgen!({
         path: "../wit",
-        world: "fiji-function",
+        world: "runnable",
         imports: { default: async },
         exports: { default: async },
         with: {
@@ -828,26 +828,26 @@ impl wasmtime::component::HasData for LoadedHostData {
     type Data<'a> = &'a mut LoadedState;
 }
 
-/// State carried by a Fiji function's per-run Store. Holds WASI
+/// State carried by a runnable component's per-run Store. Holds WASI
 /// plumbing and the host-side compose machinery (providers
 /// snapshot, resource table) so that the guest's
 /// `linker.resolve_by_id` / `instance.invoke` calls reach the
 /// host's `sqlite-runtime` shim.
-pub struct FijiState {
+pub struct RunState {
     pub wasi: wasmtime_wasi::WasiCtx,
     pub resources: wasmtime_wasi::ResourceTable,
     /// Cheap clone of the parent Host's full tenant-scoped
-    /// compose-providers table. Lookups during the Fiji call go
+    /// compose-providers table. Lookups during the component call go
     /// through `active_tenant` first; that's how multi-tenant
     /// dispatch is plumbed.
     pub compose_providers: Arc<RwLock<TenantedProviders>>,
-    /// Which tenant's provider map this Fiji invocation resolves
+    /// Which tenant's provider map this component invocation resolves
     /// against. Defaults to `DEFAULT_TENANT` for callers that
     /// haven't opted into multi-tenancy.
     pub active_tenant: String,
 }
 
-impl wasmtime_wasi::WasiView for FijiState {
+impl wasmtime_wasi::WasiView for RunState {
     fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
         wasmtime_wasi::WasiCtxView {
             ctx: &mut self.wasi,
@@ -857,29 +857,29 @@ impl wasmtime_wasi::WasiView for FijiState {
 }
 
 /// Snapshot of just what compose dispatch needs from the Host —
-/// avoids threading &mut Host into FijiState when the Host's other
-/// fields aren't relevant for Fiji. Holds a borrow of the full
+/// avoids threading &mut Host into RunState when the Host's other
+/// fields aren't relevant for runnable components. Holds a borrow of the full
 /// tenant-scoped map + the tenant id that scopes this call;
 /// `resolve_by_id` locks briefly to look up the provider.
-pub struct FijiHostWrap<'a> {
+pub struct RunHostWrap<'a> {
     pub compose_providers: &'a RwLock<TenantedProviders>,
     pub active_tenant: &'a str,
     pub resources: &'a mut wasmtime_wasi::ResourceTable,
 }
 
-impl<'a> compose::compose::dynlink::linker::Host for FijiHostWrap<'a> {
+impl<'a> compose::compose::dynlink::linker::Host for RunHostWrap<'a> {
     async fn resolve_by_digest(
         &mut self,
         _digest: Vec<u8>,
     ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
-        // Fiji functions resolve by id (sqlite-runtime, std-text,
+        // runnable components resolve by id (sqlite-runtime, std-text,
         // ...); resolve-by-digest belongs on the extension-loader
         // HostWrap that has access to the CAS cache. Surface a
         // clear error so callers know to use resolve-by-id.
         Err(compose_err(
-            "Fiji functions should use linker.resolve-by-id instead of \
+            "runnable components should use linker.resolve-by-id instead of \
              resolve-by-digest (the digest path runs through the \
-             extension-loader's CAS cache, not the Fiji function's \
+             extension-loader's CAS cache, not the runnable component's \
              provider table)"
                 .to_string(),
         ))
@@ -917,7 +917,7 @@ impl<'a> compose::compose::dynlink::linker::Host for FijiHostWrap<'a> {
     }
 }
 
-impl<'a> compose::compose::dynlink::linker::HostInstance for FijiHostWrap<'a> {
+impl<'a> compose::compose::dynlink::linker::HostInstance for RunHostWrap<'a> {
     async fn invoke(
         &mut self,
         handle: Resource<ComposeInstance>,
@@ -943,18 +943,18 @@ impl<'a> compose::compose::dynlink::linker::HostInstance for FijiHostWrap<'a> {
     }
 }
 
-/// HasData tag for the Fiji-function linker setup.
-pub struct FijiHostData;
-impl wasmtime::component::HasData for FijiHostData {
-    type Data<'a> = FijiHostWrap<'a>;
+/// HasData tag for the runnable linker setup.
+pub struct RunHostData;
+impl wasmtime::component::HasData for RunHostData {
+    type Data<'a> = RunHostWrap<'a>;
 }
 
-fn make_fiji_linker(engine: &Engine) -> Result<Linker<FijiState>> {
-    let mut linker: Linker<FijiState> = Linker::new(engine);
+fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
+    let mut linker: Linker<RunState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| anyhow!("fiji WASI: {e}"))?;
-    compose::compose::dynlink::linker::add_to_linker::<_, FijiHostData>(
+    compose::compose::dynlink::linker::add_to_linker::<_, RunHostData>(
         &mut linker,
-        |state: &mut FijiState| FijiHostWrap {
+        |state: &mut RunState| RunHostWrap {
             compose_providers: &state.compose_providers,
             active_tenant: &state.active_tenant,
             resources: &mut state.resources,
@@ -1118,7 +1118,7 @@ pub struct Host {
 pub const DEFAULT_TENANT: &str = "default";
 
 /// Outer map of `tenant → (provider-id → provider)`. Hidden behind
-/// `Host` and `FijiState`; callers go through the tenant-aware
+/// `Host` and `RunState`; callers go through the tenant-aware
 /// methods on `Host` rather than touching this directly.
 pub type TenantedProviders =
     HashMap<String, HashMap<String, compose_provider::ProviderHandle>>;
@@ -1215,7 +1215,7 @@ impl Host {
     }
 
     /// Register a built-in provider under `(tenant, id)`. The tenant
-    /// is created on demand. Subsequent Fiji invocations that
+    /// is created on demand. Subsequent component invocations that
     /// resolve against `tenant` will see this provider.
     pub fn register_compose_provider_in(
         &self,
@@ -1288,7 +1288,7 @@ impl Host {
     }
 
     /// Look up a compose provider by `(tenant, id)`. Multi-tenant
-    /// callers (Fiji functions that opt in) use this. Returns None
+    /// callers (runnable components that opt in) use this. Returns None
     /// if either the tenant is unknown or the id isn't registered
     /// in that tenant — no cross-tenant fallback.
     pub fn get_compose_provider_in(
@@ -1899,20 +1899,20 @@ impl Host {
             .map_err(|e| anyhow!("call_on_rollback: {e}"))
     }
 
-    /// Load + run a Fiji function. Instantiates the component
+    /// Load + run a runnable component. Instantiates the component
     /// against the host's compose-linker wiring, calls fiji.run(),
     /// returns the output string. Each call gets a fresh Store —
-    /// no state carries between Fiji invocations.
-    pub async fn run_fiji_function(&self, path: PathBuf, policy: Policy) -> Result<String> {
-        self.run_fiji_function_as(path, policy, DEFAULT_TENANT).await
+    /// no state carries between component invocations.
+    pub async fn run_wasm(&self, path: PathBuf, policy: Policy) -> Result<String> {
+        self.run_wasm_as(path, policy, DEFAULT_TENANT).await
     }
 
-    /// Run a Fiji function as `tenant`. The function's
+    /// Run a runnable component as `tenant`. The function's
     /// `linker.resolve_by_id(id)` calls go through that tenant's
     /// provider map only — no cross-tenant fallback. Use this for
     /// multi-tenant deployments where different tenants pin
     /// different provider versions under the same id.
-    pub async fn run_fiji_function_as(
+    pub async fn run_wasm_as(
         &self,
         path: PathBuf,
         _policy: Policy,
@@ -1921,10 +1921,10 @@ impl Host {
         let bytes = std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))?;
         let component = Component::from_binary(&self.engine, &bytes)
             .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
-        let linker = make_fiji_linker(&self.engine)?;
+        let linker = make_run_linker(&self.engine)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
-        let state = FijiState {
+        let state = RunState {
             wasi: builder.build(),
             resources: wasmtime_wasi::ResourceTable::new(),
             compose_providers: self.compose_providers.clone(),
@@ -1935,11 +1935,11 @@ impl Host {
             .set_fuel(u64::MAX / 2)
             .map_err(|e| anyhow!("set_fuel: {e}"))?;
         store.set_epoch_deadline(1_000_000_000_000);
-        let instance = fiji::FijiFunction::instantiate_async(&mut store, &component, &linker)
+        let instance = run::Runnable::instantiate_async(&mut store, &component, &linker)
             .await
-            .map_err(|e| anyhow!("instantiate fiji function: {e}"))?;
+            .map_err(|e| anyhow!("instantiate wasm component: {e}"))?;
         let r = instance
-            .sqlite_wasm_fiji()
+            .sqlite_wasm_run()
             .call_run(&mut store)
             .await
             .map_err(|e| anyhow!("fiji.run trap: {e}"))?;
@@ -2363,7 +2363,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         cache.purge().unwrap_or(0) as u64
     }
 
-    async fn run_fiji_function(
+    async fn run_wasm(
         &mut self,
         path: String,
         options: bindings::sqlite::extension::policy::LoadOptions,
@@ -2371,7 +2371,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         let policy = policy_from_load_options(&options);
         match self
             .host
-            .run_fiji_function(PathBuf::from(&path), policy)
+            .run_wasm(PathBuf::from(&path), policy)
             .await
         {
             Ok(output) => Ok(output),

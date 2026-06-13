@@ -85,12 +85,13 @@ interface extension-loader {
     /// number of files removed.
     purge-cache: func() -> u64;
 
-    /// Run a Fiji function: a compose-dynlink-shaped wasm component
-    /// that resolves shared providers via the `linker` and exports
-    /// `sqlite:wasm/fiji.run() -> result<string, string>`. Returns
-    /// the function's output string for the cli to print.
+    /// Run a wasm component targeting the `runnable` world: a
+    /// compose-dynlink-shaped wasm component that resolves shared
+    /// providers via the `linker` and exports
+    /// `sqlite:wasm/run.run() -> result<string, string>`. Returns
+    /// the component's output string for the cli to print.
     /// See PLAN-compose-integration.md.
-    run-fiji-function: func(
+    run-wasm: func(
         path: string,
         options: load-options,
     ) -> result<string, loader-error>;
@@ -98,7 +99,7 @@ interface extension-loader {
     /// Register a wasm-component provider under `id`. The component
     /// targets `compose:dynlink/dynlink-provider` (exports
     /// `endpoint`). Subsequent `linker.resolve-by-id(id)` calls from
-    /// Fiji functions return an Instance backed by this component.
+    /// runnable components return an Instance backed by this component.
     register-wasm-provider: func(
         id: string,
         path: string,

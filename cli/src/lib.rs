@@ -161,8 +161,8 @@ fn eval_input(input: &str) -> String {
     if let Some(rest) = trimmed.strip_prefix(".open") {
         return do_open(rest.trim());
     }
-    if let Some(rest) = trimmed.strip_prefix(".fiji ") {
-        return do_fiji(rest.trim());
+    if let Some(rest) = trimmed.strip_prefix(".run ") {
+        return do_run(rest.trim());
     }
     if let Some(rest) = trimmed.strip_prefix(".register-resolver ") {
         return do_register_resolver(rest.trim());
@@ -537,13 +537,13 @@ fn looks_like_uri(s: &str) -> bool {
     } else { false }
 }
 
-/// `.fiji <path>` — run a Fiji function once. Each invocation
-/// creates a fresh Store; no state carries between calls.
-fn do_fiji(arg: &str) -> String {
+/// `.run <path>` — run a runnable wasm component once. Each
+/// invocation creates a fresh Store; no state carries between calls.
+fn do_run(arg: &str) -> String {
     use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     use bindings::sqlite::wasm::extension_loader;
     if arg.is_empty() {
-        return "Usage: .fiji PATH\n".to_string();
+        return "Usage: .run PATH\n".to_string();
     }
     let opts = LoadOptions {
         grant: vec![Capability::Spi],
@@ -553,9 +553,9 @@ fn do_fiji(arg: &str) -> String {
         memory_limit_bytes: None,
         epoch_deadline_ms: None,
     };
-    match extension_loader::run_fiji_function(arg, &opts) {
+    match extension_loader::run_wasm(arg, &opts) {
         Ok(out) => if out.ends_with('\n') { out } else { format!("{out}\n") },
-        Err(e) => format!("Error running fiji function {arg}: {} (code {})\n", e.message, e.code),
+        Err(e) => format!("Error running wasm component {arg}: {} (code {})\n", e.message, e.code),
     }
 }
 
