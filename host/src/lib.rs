@@ -764,24 +764,29 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         Ok(conn.changes() as i64)
     }
 
-    // -- "live" variants --
+    // -- "live" variants — fresh committed snapshot --
     //
-    // v1 implementation: opens a FRESH rusqlite::Connection per
-    // call (vs. the pooled one used by execute/scalar/batch).
-    // Differences observable today:
+    // Each call opens a FRESH rusqlite::Connection (vs. the pooled
+    // one used by execute/scalar/batch). What this delivers:
     //   - Schema changes the user made post-pool-open are seen
     //     immediately (the fresh connection re-reads sqlite_master).
-    //   - No carry-over transaction state from the loaded
-    //     extension's prior spi calls.
+    //   - No carry-over transaction state from this extension's
+    //     prior spi calls.
     //
-    // Difference NOT observable today: outer-transaction
-    // uncommitted writes. The full re-entry shape (calling back
-    // into the cli reactor via wasmtime's concurrent canonical
-    // ABI) is what would deliver that, and wasmtime 45's
-    // concurrent ABI is documented as "very incomplete". The
-    // architecture for it is captured in host/SPI-LIVE.md;
-    // execute_live's WIT slot is wired so when wasmtime ships
-    // the missing pieces, the swap is local.
+    // What it does NOT deliver: visibility into the cli's
+    // outer-transaction uncommitted writes. That was the original
+    // ambition; it turns out to be incompatible with the
+    // WebAssembly Component Model task spec — the host can't
+    // recursively enter a top-level instance while a call is in
+    // flight (wasmtime 45 concurrent.rs:1678 `may_enter`).
+    //
+    // The LiveSpiBridge mechanism on Host stays — it works for
+    // callers OUTSIDE an in-flight eval (see the
+    // `live_spi_bridge_reenters_eval_structured` test). But routes
+    // from inside the dispatch chain through LoadedState DO NOT
+    // try the bridge — they would hang forever on may_enter.
+    //
+    // Full design: `host/SPI-LIVE-ARCHITECTURE.md`.
 
     async fn execute_live(
         &mut self,
@@ -791,20 +796,6 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         loaded::sqlite::extension::types::QueryResult,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        // Prefer the channel bridge when a reactor is up AND there
-        // are no parameters (eval-structured takes a raw SQL string;
-        // params would need a contract extension on cli.wit, deferred).
-        // On bridge failure, fall back to the fresh-connection v1
-        // path so the host degrades gracefully.
-        if params.is_empty() {
-            if let Some(bridge) = &self.live_spi_bridge {
-                match bridge.execute(sql.clone()).await {
-                    Ok(Ok(qr)) => return Ok(convert_reactor_qr_to_loaded(qr)),
-                    Ok(Err(e)) => return Err(convert_reactor_err_to_loaded(e)),
-                    Err(_) => { /* fall through to v1 */ }
-                }
-            }
-        }
         let conn = spi_open_fresh(&self.db_path)?;
         let mut stmt = conn.prepare(&sql).map_err(spi_err)?;
         let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
@@ -841,25 +832,6 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         loaded::sqlite::extension::types::SqlValue,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        // Bridge path: same shape as execute_live but pluck the first
-        // cell from the round-trip QueryResult.
-        if params.is_empty() {
-            if let Some(bridge) = &self.live_spi_bridge {
-                match bridge.execute(sql.clone()).await {
-                    Ok(Ok(qr)) => {
-                        let lqr = convert_reactor_qr_to_loaded(qr);
-                        return lqr
-                            .rows
-                            .into_iter()
-                            .next()
-                            .and_then(|r| r.into_iter().next())
-                            .ok_or_else(|| spi_err("query returned no rows"));
-                    }
-                    Ok(Err(e)) => return Err(convert_reactor_err_to_loaded(e)),
-                    Err(_) => { /* fall through to v1 */ }
-                }
-            }
-        }
         let conn = spi_open_fresh(&self.db_path)?;
         let rqs: Vec<rusqlite::types::Value> =
             params.into_iter().map(spi_value_to_rusqlite).collect();
@@ -875,13 +847,6 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         &mut self,
         sql: String,
     ) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
-        if let Some(bridge) = &self.live_spi_bridge {
-            match bridge.execute(sql.clone()).await {
-                Ok(Ok(qr)) => return Ok(qr.changes),
-                Ok(Err(e)) => return Err(convert_reactor_err_to_loaded(e)),
-                Err(_) => { /* fall through to v1 */ }
-            }
-        }
         let conn = spi_open_fresh(&self.db_path)?;
         conn.execute_batch(&sql).map_err(spi_err)?;
         Ok(conn.changes() as i64)

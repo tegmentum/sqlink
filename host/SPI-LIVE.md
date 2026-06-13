@@ -1,5 +1,13 @@
 # spi.*-live: Status + Path Forward
 
+> **2026-06-13 — Closed.** Read
+> [`SPI-LIVE-ARCHITECTURE.md`](./SPI-LIVE-ARCHITECTURE.md) first.
+> The "true live re-entry" goal is architecturally incompatible
+> with the WebAssembly Component Model task spec; what shipped is
+> committed-snapshot semantics via fresh per-call connection. The
+> historical investigation below is preserved as context.
+
+
 ## Current state (after L1-L4 Stage 1)
 
 The channel-bridge architecture is in place:
