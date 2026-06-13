@@ -75,3 +75,36 @@ world sqlite-cli-command {
     import extension-loader;
     import dispatch;
 }
+
+/// Programmatic SQLite library world.
+///
+/// Targeted by the lib-rust crate. Use this when you want SQLite
+/// functionality as a callable WIT surface from another component
+/// (a Fiji function, a web frontend, an SPI consumer) rather than
+/// as a CLI you drive over stdin. Exports both:
+///
+///   - the complete SPI surface (so a composed extension can use
+///     this component as its SQL backend at compose time), and
+///   - a sugar interface (`high-level`'s Connection / Statement
+///     resources) for callers that prefer ergonomic Rust-style
+///     calls over raw `execute(sql, params)`.
+///
+/// A small `library` interface ties in REPL utilities, version
+/// queries, and a programmatic `load-extension` path.
+///
+/// Imports the standard `extension-loader` and `dispatch`. Callers
+/// that don't need dynamic loading can satisfy `extension-loader`
+/// with a stub.
+world sqlite-cli-library {
+    export sqlite:extension/types@0.1.0;
+    export sqlite:extension/spi@0.1.0;
+    export sqlite:extension/logging@0.1.0;
+    export sqlite:extension/config@0.1.0;
+
+    export low-level;
+    export high-level;
+    export library;
+
+    import extension-loader;
+    import dispatch;
+}
