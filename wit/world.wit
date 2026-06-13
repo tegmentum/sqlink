@@ -22,25 +22,6 @@ world sqlite-extensible {
     import extension-callbacks;
 }
 
-// CLI world with extension loading support
-// This world is used by the SQLite CLI and includes the ability
-// to dynamically load WASM extension components at runtime.
-world sqlite-cli {
-    // Export all SQLite APIs
-    export low-level;
-    export high-level;
-    export extension;
-
-    // Import callbacks for extension functions
-    import extension-callbacks;
-
-    // Import extension loader for .load command support
-    import extension-loader;
-
-    // Import ZIP operations for .archive command support
-    import zip-operations;
-}
-
 /// CP1 validation stub for the compose-orchestration integration.
 /// A minimum world that imports `compose:dynlink/linker` so our
 /// host-side bindgen can build against the vendored WIT. CP2

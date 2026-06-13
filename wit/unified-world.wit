@@ -2,12 +2,14 @@ package sqlite:wasm@0.1.0;
 
 /// SQLite-in-WASM with the unified sqlite:extension contract.
 ///
-/// Replaces the legacy `sqlite-cli` world's imperative
-/// `register-scalar-function` flow with a declarative one: the host
-/// (sqlite-wasm itself, internally) calls each composed extension's
-/// per-slot `describe()` at startup, registers the manifest entries
-/// with SQLite, and dispatches by calling the slot's `call()` when
-/// SQL invokes a function.
+/// Targeted by the C CLI binary `build/sqlite-cli-unified.wasm`
+/// (built from `src/cli/sqlite_cli.c` via the Makefile's
+/// `bindings-unified` target). The host (sqlite-wasm itself,
+/// internally) calls each composed extension's per-slot
+/// `describe()` at startup, registers the manifest entries with
+/// SQLite, and dispatches by calling the slot's `call()` when SQL
+/// invokes a function — declarative dispatch in contrast to the
+/// imperative `register-scalar-function` flow of older C builds.
 ///
 /// Exports:
 ///   - low-level / high-level — SQLite's own API
@@ -28,9 +30,6 @@ package sqlite:wasm@0.1.0;
 ///   - extension-loader — host-implemented dynamic load (.load)
 ///   - zip-operations — host-implemented .archive support
 ///
-/// The legacy `sqlite-cli` world stays for the imperative-register
-/// build path until that path is retired. New work targets this
-/// world.
 world sqlite-cli-unified {
     export low-level;
     export high-level;

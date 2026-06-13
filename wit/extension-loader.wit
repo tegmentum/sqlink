@@ -1,15 +1,17 @@
 // Extension Loader API
 //
 // Host-implemented dynamic loader for WASM extension components.
-// Imported by the sqlite-cli and sqlite-cli-unified worlds; the host
-// (wasmtime / jco / browser jco) supplies the implementation. When SQL
-// runs `.load /path/to/ext.wasm`, sqlite-cli calls into this interface,
-// the host reads the file, instantiates it, calls
-// `sqlite:extension/metadata.describe()` on the instance to obtain a
-// manifest, validates against any active policy, and registers the
-// manifest's entries with SQLite — then returns the same manifest the
-// describe call produced, so the SQL side sees the canonical shape
-// every other deployment path uses.
+// Imported by every world that wants `.load` to work — today that's
+// `sqlite-cli-command` and `sqlite-library` (Rust) plus
+// `sqlite-cli-unified` (C). The host (wasmtime / jco / browser
+// jco) supplies the implementation. When SQL runs
+// `.load /path/to/ext.wasm`, the consumer calls into this
+// interface, the host reads the file, instantiates it, calls
+// `sqlite:extension/metadata.describe()` on the instance to obtain
+// a manifest, validates against any active policy, and registers
+// the manifest's entries with SQLite — then returns the same
+// manifest the describe call produced, so the SQL side sees the
+// canonical shape every other deployment path uses.
 //
 // Returning `manifest` (and accepting `load-options`) keeps the
 // dynamic-load and static-compose deployments speaking the same
