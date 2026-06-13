@@ -315,8 +315,16 @@ name = "sqlite-cli-rust"
 version = "0.1.0"
 dependencies = [
  "libsqlite3-sys",
+ "sqlite-wasm-core",
  "wit-bindgen",
  "wit-bindgen-rt",
+]
+
+[[package]]
+name = "sqlite-wasm-core"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
 ]
 
 [[package]]

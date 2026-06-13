@@ -1,0 +1,16 @@
+[package]
+name = "sqlite-wasm-core"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Shared SQLite wrapper for sqlite-wasm crates (cli-rust + lib-rust)."
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+# libsqlite3-sys provides raw FFI to sqlite3.c (bundled compiles
+# it via the cc crate against wasm32-wasip2). The downstream crates
+# build for wasm32-wasip2 so the build env needs CC_wasm32_wasip2 to
+# point at the wasi-sdk clang.
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }

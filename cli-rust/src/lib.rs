@@ -32,7 +32,8 @@ mod bindings {
     });
 }
 
-mod db;
+pub use sqlite_wasm_core::db;
+
 mod dot;
 mod format;
 mod settings;

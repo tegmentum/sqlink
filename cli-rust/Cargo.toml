@@ -15,11 +15,11 @@ crate-type = ["cdylib"]
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 # Bindings are produced inline in src/lib.rs via wit_bindgen::generate!.
 wit-bindgen = { version = "0.44", features = ["macros"] }
-# libsqlite3-sys provides raw FFI to sqlite3.c (bundled compiles
-# it via the cc crate against wasm32-wasip2; needs
-# CC_wasm32_wasip2 = wasi-sdk clang). Wrapped by the in-tree `db`
-# module — no rusqlite layer in between.
-libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+# Shared SQLite wrapper — owns the libsqlite3-sys bundled compile.
+sqlite-wasm-core = { path = "../core" }
+# Needed directly for sqlite3_complete + SQLITE_* action codes used
+# by the in-WASM authorizer dispatch.
+libsqlite3-sys = { version = "0.30" }
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run
