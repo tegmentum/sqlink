@@ -961,10 +961,15 @@ impl wasmtime::component::HasData for LoadedHostData {
 pub struct FijiState {
     pub wasi: wasmtime_wasi::WasiCtx,
     pub resources: wasmtime_wasi::ResourceTable,
-    /// Cheap clone of the parent Host's compose-providers map.
-    /// Cloned, not borrowed, so the FijiState fully owns it for the
-    /// Store lifetime.
-    pub compose_providers: Arc<RwLock<HashMap<String, compose_provider::ProviderHandle>>>,
+    /// Cheap clone of the parent Host's full tenant-scoped
+    /// compose-providers table. Lookups during the Fiji call go
+    /// through `active_tenant` first; that's how multi-tenant
+    /// dispatch is plumbed.
+    pub compose_providers: Arc<RwLock<TenantedProviders>>,
+    /// Which tenant's provider map this Fiji invocation resolves
+    /// against. Defaults to `DEFAULT_TENANT` for callers that
+    /// haven't opted into multi-tenancy.
+    pub active_tenant: String,
 }
 
 impl wasmtime_wasi::WasiView for FijiState {
@@ -978,9 +983,12 @@ impl wasmtime_wasi::WasiView for FijiState {
 
 /// Snapshot of just what compose dispatch needs from the Host —
 /// avoids threading &mut Host into FijiState when the Host's other
-/// fields aren't relevant for Fiji.
+/// fields aren't relevant for Fiji. Holds a borrow of the full
+/// tenant-scoped map + the tenant id that scopes this call;
+/// `resolve_by_id` locks briefly to look up the provider.
 pub struct FijiHostWrap<'a> {
-    pub compose_providers: &'a HashMap<String, compose_provider::ProviderHandle>,
+    pub compose_providers: &'a RwLock<TenantedProviders>,
+    pub active_tenant: &'a str,
     pub resources: &'a mut wasmtime_wasi::ResourceTable,
 }
 
@@ -1006,14 +1014,26 @@ impl<'a> compose::compose::dynlink::linker::Host for FijiHostWrap<'a> {
         &mut self,
         id: String,
     ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
-        let Some(provider) = self.compose_providers.get(&id) else {
-            return Err(compose_err(format!(
-                "no compose provider registered for id {id:?}"
-            )));
+        // Lock-scope is bounded; no await held. Look up the active
+        // tenant's inner map, then the id.
+        let provider_arc = {
+            let g = self.compose_providers.read();
+            let Some(inner) = g.get(self.active_tenant) else {
+                return Err(compose_err(format!(
+                    "no providers registered for tenant {:?} (looking up id {id:?})",
+                    self.active_tenant
+                )));
+            };
+            let Some(provider) = inner.get(&id) else {
+                return Err(compose_err(format!(
+                    "no compose provider {id:?} in tenant {:?}",
+                    self.active_tenant
+                )));
+            };
+            Arc::new(compose_provider::ProviderHandle {
+                kind: provider.kind.clone(),
+            })
         };
-        let provider_arc = Arc::new(compose_provider::ProviderHandle {
-            kind: provider.kind.clone(),
-        });
         self.resources
             .push(ComposeInstance {
                 provider: provider_arc,
@@ -1060,20 +1080,8 @@ fn make_fiji_linker(engine: &Engine) -> Result<Linker<FijiState>> {
     compose::compose::dynlink::linker::add_to_linker::<_, FijiHostData>(
         &mut linker,
         |state: &mut FijiState| FijiHostWrap {
-            compose_providers: unsafe {
-                // SAFETY: the closure runs on the same thread that
-                // owns the Store; we know it doesn't race because
-                // wasmtime serializes host-call execution per Store.
-                // The compose_providers map is behind RwLock — we
-                // could lock here, but holding the guard across an
-                // await boundary makes the future non-Send. Snapshot
-                // ref instead, valid for the host-call duration.
-                let _g = state.compose_providers.read();
-                std::mem::transmute::<
-                    &HashMap<String, compose_provider::ProviderHandle>,
-                    &'static HashMap<String, compose_provider::ProviderHandle>,
-                >(&*state.compose_providers.data_ptr())
-            },
+            compose_providers: &state.compose_providers,
+            active_tenant: &state.active_tenant,
             resources: &mut state.resources,
         },
     )
@@ -1217,7 +1225,15 @@ pub struct Host {
     /// `linker.resolve_by_id` looks here first; digest-based
     /// resolution would route through `cache` once CP7 lands the
     /// CAS bridge.
-    compose_providers: Arc<RwLock<HashMap<String, compose_provider::ProviderHandle>>>,
+    compose_providers: Arc<RwLock<TenantedProviders>>,
+    /// Trust policy applied to wasm-component provider registration.
+    /// Default `TrustPolicy::AllowAll` preserves the original
+    /// behavior (any file path can be registered). Operators that
+    /// need to gate which provider binaries are allowed in their
+    /// deployment set this to `TrustPolicy::DigestAllowlist(...)`
+    /// at startup. Other variants exist for fully-locked
+    /// deployments (DenyAll) and explicit auditing pre-prod.
+    trust_policy: Arc<RwLock<TrustPolicy>>,
     /// Sender side of the live-SPI channel bridge. Set by
     /// `sqlite-wasm-run`'s `run_reactor` once the reactor is up;
     /// cloned into `LoadedState` per `dispatch.*` call so the
@@ -1226,6 +1242,61 @@ pub struct Host {
     /// `cli.eval-structured` via the wasmtime concurrent ABI. None
     /// for command-mode runs or before the reactor has started.
     live_spi_bridge: Arc<RwLock<Option<LiveSpiBridge>>>,
+}
+
+/// Default tenant id. Single-tenant deployments (the common case)
+/// never mention a tenant explicitly; all registration + resolution
+/// goes through this constant. Multi-tenant deployments call the
+/// `*_in` variants to scope by tenant.
+pub const DEFAULT_TENANT: &str = "default";
+
+/// Outer map of `tenant → (provider-id → provider)`. Hidden behind
+/// `Host` and `FijiState`; callers go through the tenant-aware
+/// methods on `Host` rather than touching this directly.
+pub type TenantedProviders =
+    HashMap<String, HashMap<String, compose_provider::ProviderHandle>>;
+
+/// Decision the host applies before accepting a wasm-component
+/// provider via `Host::register_wasm_provider`. The blake3 digest
+/// of the provider bytes is the gating signal; signatures and other
+/// trust mechanisms can layer on top later.
+///
+/// Default `AllowAll` matches the original behavior (any file path
+/// can register). Deployments that need to lock down which provider
+/// binaries are acceptable opt into the stricter variants.
+#[derive(Debug, Clone)]
+pub enum TrustPolicy {
+    /// No gating. Any registration succeeds. Default.
+    AllowAll,
+    /// Only provider bytes whose hex blake3 digest is in the set
+    /// may be registered. Anything else returns `LoaderError`.
+    DigestAllowlist(std::collections::HashSet<String>),
+    /// Reject every registration. Useful for hardened deployments
+    /// that only accept built-in providers (sqlite-runtime etc.).
+    DenyAll,
+}
+
+impl TrustPolicy {
+    /// Check `digest` against the policy. The id is included in
+    /// error messages so failures point at the right provider
+    /// registration call.
+    pub fn verify(&self, id: &str, digest: &str) -> std::result::Result<(), String> {
+        match self {
+            Self::AllowAll => Ok(()),
+            Self::DenyAll => Err(format!(
+                "trust policy denies provider registration for {id} (DenyAll)"
+            )),
+            Self::DigestAllowlist(set) => {
+                if set.contains(digest) {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "provider {id} digest {digest} not in trust allowlist"
+                    ))
+                }
+            }
+        }
+    }
 }
 
 /// Channel sender handed to `LoadedState` so loaded extensions can
@@ -1311,8 +1382,21 @@ impl Host {
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
+            trust_policy: Arc::new(RwLock::new(TrustPolicy::AllowAll)),
             live_spi_bridge: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Replace the active trust policy. Affects subsequent
+    /// `register_wasm_provider` calls; already-registered providers
+    /// are not re-checked. Default `AllowAll` keeps prior behavior.
+    pub fn set_trust_policy(&self, policy: TrustPolicy) {
+        *self.trust_policy.write() = policy;
+    }
+
+    /// Current trust policy. Useful for diagnostics + tests.
+    pub fn trust_policy(&self) -> TrustPolicy {
+        self.trust_policy.read().clone()
     }
 
     /// Install the sender side of the live-SPI channel bridge. The
@@ -1332,53 +1416,109 @@ impl Host {
         self.live_spi_bridge.read().clone()
     }
 
-    /// Register a built-in compose:dynlink provider under `id`.
-    /// Called by `sqlite-wasm-run` at startup after wiring the cli's
-    /// shared rusqlite::Connection. Resolves the `linker.resolve_by_id`
-    /// path on the host side without bytes or instantiation.
+    /// Register a built-in compose:dynlink provider under `id` in
+    /// the default tenant. Sugar for `register_compose_provider_in(
+    /// DEFAULT_TENANT, id, provider)`.
     pub fn register_compose_provider(&self, id: &str, provider: compose_provider::ProviderHandle) {
+        self.register_compose_provider_in(DEFAULT_TENANT, id, provider);
+    }
+
+    /// Register a built-in provider under `(tenant, id)`. The tenant
+    /// is created on demand. Subsequent Fiji invocations that
+    /// resolve against `tenant` will see this provider.
+    pub fn register_compose_provider_in(
+        &self,
+        tenant: &str,
+        id: &str,
+        provider: compose_provider::ProviderHandle,
+    ) {
         self.compose_providers
             .write()
+            .entry(tenant.to_string())
+            .or_default()
             .insert(id.to_string(), provider);
     }
 
-    /// Register a wasm-component compose provider under `id`. Reads
-    /// `path`, compiles it with the shared engine, and inserts a
-    /// `ProviderKind::WasmComponent` handle so subsequent Fiji-function
-    /// resolves return an Instance backed by that component.
+    /// Register a wasm-component compose provider under `id` in the
+    /// default tenant. Applies the active `TrustPolicy` to the
+    /// blake3 digest of the bytes before compiling.
     pub fn register_wasm_provider(&self, id: &str, path: PathBuf) -> Result<()> {
-        let provider =
-            compose_provider::ProviderHandle::new_wasm_component(self.engine.clone(), path)
-                .map_err(|e| anyhow!("register {id}: {e}"))?;
-        self.register_compose_provider(id, provider);
+        self.register_wasm_provider_in(DEFAULT_TENANT, id, path)
+    }
+
+    /// Register a wasm-component compose provider under
+    /// `(tenant, id)`. Trust policy is applied identically per
+    /// tenant — a digest in the allowlist is accepted regardless of
+    /// which tenant it's being registered into.
+    pub fn register_wasm_provider_in(
+        &self,
+        tenant: &str,
+        id: &str,
+        path: PathBuf,
+    ) -> Result<()> {
+        let bytes = std::fs::read(&path)
+            .map_err(|e| anyhow!("register {tenant}/{id}: read {}: {e}", path.display()))?;
+        let digest = blake3::hash(&bytes).to_hex().to_string();
+        self.trust_policy
+            .read()
+            .verify(id, &digest)
+            .map_err(|e| anyhow!("register {tenant}/{id}: {e}"))?;
+        let provider = compose_provider::ProviderHandle::new_wasm_component_from_bytes(
+            self.engine.clone(),
+            &bytes,
+            path,
+        )
+        .map_err(|e| anyhow!("register {tenant}/{id}: {e}"))?;
+        self.register_compose_provider_in(tenant, id, provider);
         Ok(())
     }
 
-    /// (id, kind) pairs for every registered compose provider.
-    pub fn list_compose_providers(&self) -> Vec<(String, &'static str)> {
-        self.compose_providers
-            .read()
-            .iter()
-            .map(|(id, p)| {
+    /// (tenant, id, kind) tuples for every registered compose
+    /// provider across every tenant. Order is unspecified.
+    pub fn list_compose_providers(&self) -> Vec<(String, String, &'static str)> {
+        let g = self.compose_providers.read();
+        let mut out = Vec::new();
+        for (tenant, inner) in g.iter() {
+            for (id, p) in inner.iter() {
                 let kind = match p.kind {
                     compose_provider::ProviderKind::SqliteRuntime { .. } => "sqlite-runtime",
                     compose_provider::ProviderKind::WasmComponent { .. } => "wasm-component",
                 };
-                (id.clone(), kind)
-            })
-            .collect()
+                out.push((tenant.clone(), id.clone(), kind));
+            }
+        }
+        out
     }
 
-    /// Internal: look up a compose provider by id, sharing the Arc.
+    /// Look up a compose provider by id in the default tenant.
+    /// Single-tenant callers (extension dispatch path) use this.
     pub fn get_compose_provider(&self, id: &str) -> Option<Arc<compose_provider::ProviderHandle>> {
-        self.compose_providers.read().get(id).map(|p| {
-            // Provider stored as ProviderHandle; we need Arc. Convert
-            // by wrapping. Cheap (Arc::new copies ProviderKind fields
-            // which are themselves Arc-shared).
-            Arc::new(compose_provider::ProviderHandle {
-                kind: p.kind.clone(),
+        self.get_compose_provider_in(DEFAULT_TENANT, id)
+    }
+
+    /// Look up a compose provider by `(tenant, id)`. Multi-tenant
+    /// callers (Fiji functions that opt in) use this. Returns None
+    /// if either the tenant is unknown or the id isn't registered
+    /// in that tenant — no cross-tenant fallback.
+    pub fn get_compose_provider_in(
+        &self,
+        tenant: &str,
+        id: &str,
+    ) -> Option<Arc<compose_provider::ProviderHandle>> {
+        self.compose_providers
+            .read()
+            .get(tenant)
+            .and_then(|inner| inner.get(id))
+            .map(|p| {
+                Arc::new(compose_provider::ProviderHandle {
+                    kind: p.kind.clone(),
+                })
             })
-        })
+    }
+
+    /// Every tenant that has at least one provider registered.
+    pub fn list_tenants(&self) -> Vec<String> {
+        self.compose_providers.read().keys().cloned().collect()
     }
 
     /// Provide the CAS cache for resolver-fetched bytes. Optional;
@@ -1972,7 +2112,21 @@ impl Host {
     /// against the host's compose-linker wiring, calls fiji.run(),
     /// returns the output string. Each call gets a fresh Store —
     /// no state carries between Fiji invocations.
-    pub async fn run_fiji_function(&self, path: PathBuf, _policy: Policy) -> Result<String> {
+    pub async fn run_fiji_function(&self, path: PathBuf, policy: Policy) -> Result<String> {
+        self.run_fiji_function_as(path, policy, DEFAULT_TENANT).await
+    }
+
+    /// Run a Fiji function as `tenant`. The function's
+    /// `linker.resolve_by_id(id)` calls go through that tenant's
+    /// provider map only — no cross-tenant fallback. Use this for
+    /// multi-tenant deployments where different tenants pin
+    /// different provider versions under the same id.
+    pub async fn run_fiji_function_as(
+        &self,
+        path: PathBuf,
+        _policy: Policy,
+        tenant: &str,
+    ) -> Result<String> {
         let bytes = std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))?;
         let component = Component::from_binary(&self.engine, &bytes)
             .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
@@ -1983,6 +2137,7 @@ impl Host {
             wasi: builder.build(),
             resources: wasmtime_wasi::ResourceTable::new(),
             compose_providers: self.compose_providers.clone(),
+            active_tenant: tenant.to_string(),
         };
         let mut store = wasmtime::Store::new(&self.engine, state);
         store

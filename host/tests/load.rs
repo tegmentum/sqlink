@@ -165,6 +165,141 @@ async fn wasm_component_provider_handles_invoke() {
     assert!(err.contains("unknown method"), "got: {err}");
 }
 
+/// Tenant-scoped providers: register two databases with different
+/// contents under the same `sqlite-runtime` id in different
+/// tenants. Run the fiji-hello function in each tenant; the
+/// reported table count differs per tenant, proving the active
+/// tenant scopes resolution.
+#[tokio::test]
+async fn fiji_tenant_scoping_isolates_providers() {
+    use parking_lot::Mutex;
+    use sqlite_wasm_host::compose_provider::ProviderHandle;
+    use std::sync::Arc;
+
+    let mut fiji_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    fiji_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/fiji_hello.wasm");
+    if !fiji_path.exists() {
+        eprintln!("skipping: fiji_hello.wasm not built");
+        return;
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_a = dir.path().join("a.db");
+    let db_b = dir.path().join("b.db");
+    {
+        let c = rusqlite::Connection::open(&db_a).unwrap();
+        c.execute_batch("CREATE TABLE a(x); CREATE TABLE b(y);")
+            .unwrap();
+    }
+    {
+        let c = rusqlite::Connection::open(&db_b).unwrap();
+        c.execute_batch(
+            "CREATE TABLE p(x); CREATE TABLE q(y); CREATE TABLE r(z); CREATE TABLE s(w);",
+        )
+        .unwrap();
+    }
+
+    let host = Host::new().unwrap();
+
+    // Tenant alpha sees the 2-table db.
+    let conn = rusqlite::Connection::open(&db_a).unwrap();
+    host.register_compose_provider_in(
+        "alpha",
+        "sqlite-runtime",
+        ProviderHandle::new_sqlite_runtime(Arc::new(Mutex::new(Some(conn)))),
+    );
+
+    // Tenant beta sees the 4-table db.
+    let conn = rusqlite::Connection::open(&db_b).unwrap();
+    host.register_compose_provider_in(
+        "beta",
+        "sqlite-runtime",
+        ProviderHandle::new_sqlite_runtime(Arc::new(Mutex::new(Some(conn)))),
+    );
+
+    let out_alpha = host
+        .run_fiji_function_as(fiji_path.clone(), Policy::deny_all(), "alpha")
+        .await
+        .expect("alpha");
+    assert!(out_alpha.contains("2 table(s)"), "alpha output: {out_alpha:?}");
+
+    let out_beta = host
+        .run_fiji_function_as(fiji_path.clone(), Policy::deny_all(), "beta")
+        .await
+        .expect("beta");
+    assert!(out_beta.contains("4 table(s)"), "beta output: {out_beta:?}");
+
+    // Default tenant has no sqlite-runtime provider — run_fiji_function
+    // (uses DEFAULT_TENANT) must surface a useful error.
+    let err = host
+        .run_fiji_function(fiji_path, Policy::deny_all())
+        .await
+        .expect_err("default tenant has no provider");
+    assert!(
+        err.to_string().contains("default"),
+        "expected tenant in err, got: {err}"
+    );
+
+    // list_compose_providers exposes per-tenant rows.
+    let listed = host.list_compose_providers();
+    assert!(listed.iter().any(|(t, id, _)| t == "alpha" && id == "sqlite-runtime"));
+    assert!(listed.iter().any(|(t, id, _)| t == "beta" && id == "sqlite-runtime"));
+}
+
+/// Provider trust policy gates wasm-component registration by
+/// blake3 digest. AllowAll (default) accepts anything; DenyAll
+/// rejects everything; DigestAllowlist accepts only whitelisted
+/// digests.
+#[tokio::test]
+async fn trust_policy_gates_provider_registration() {
+    use sqlite_wasm_host::TrustPolicy;
+
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_text.wasm");
+    if !path.exists() {
+        eprintln!("skipping: std_text.wasm not built");
+        return;
+    }
+    let bytes = std::fs::read(&path).unwrap();
+    let digest = blake3::hash(&bytes).to_hex().to_string();
+
+    // Default AllowAll: registration succeeds.
+    let host = Host::new().unwrap();
+    host.register_wasm_provider("std-text", path.clone())
+        .expect("AllowAll allows");
+
+    // DenyAll: registration fails.
+    let host = Host::new().unwrap();
+    host.set_trust_policy(TrustPolicy::DenyAll);
+    let err = host
+        .register_wasm_provider("std-text", path.clone())
+        .expect_err("DenyAll rejects");
+    assert!(err.to_string().contains("DenyAll"), "got: {err}");
+
+    // DigestAllowlist with the right digest: succeeds.
+    let host = Host::new().unwrap();
+    let mut set = std::collections::HashSet::new();
+    set.insert(digest.clone());
+    host.set_trust_policy(TrustPolicy::DigestAllowlist(set));
+    host.register_wasm_provider("std-text", path.clone())
+        .expect("matching digest");
+
+    // DigestAllowlist with the wrong digest: fails with a message
+    // mentioning the actual digest so operators can update their
+    // allowlist.
+    let host = Host::new().unwrap();
+    let mut set = std::collections::HashSet::new();
+    set.insert("0".repeat(64));
+    host.set_trust_policy(TrustPolicy::DigestAllowlist(set));
+    let err = host
+        .register_wasm_provider("std-text", path)
+        .expect_err("wrong digest");
+    assert!(
+        err.to_string().contains(&digest),
+        "expected digest in err, got: {err}"
+    );
+}
+
 /// std-hashing provider: pin one known digest for each method.
 /// Same wasm-component invoke shape as wasm_component_provider_handles_invoke.
 #[tokio::test]
@@ -468,7 +603,7 @@ async fn live_spi_bridge_reenters_eval_structured() {
 /// `host/SPI-LIVE.md`. Disabled with `#[ignore]` until then so CI
 /// stays green; re-enable when the host-trait rewrite lands.
 #[tokio::test]
-#[ignore = "blocked on Stage-2 host-trait Accessor rewrite — see SPI-LIVE.md"]
+#[ignore = "incompatible with WebAssembly Component Model task spec (no recursive instance entry) — see host/SPI-LIVE-ARCHITECTURE.md"]
 async fn dispatch_chain_routes_execute_live_through_bridge() {
     use sqlite_wasm_host::{bindings, LiveSpiBridge, LoaderData};
     use wasmtime::component::{Component, Linker};

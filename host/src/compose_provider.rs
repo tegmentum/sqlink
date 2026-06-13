@@ -79,7 +79,18 @@ impl ProviderHandle {
     /// calls just instantiate it.
     pub fn new_wasm_component(engine: Engine, path: PathBuf) -> Result<Self, String> {
         let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
-        let component = Component::from_binary(&engine, &bytes)
+        Self::new_wasm_component_from_bytes(engine, &bytes, path)
+    }
+
+    /// Same as `new_wasm_component` but takes the bytes pre-loaded.
+    /// `Host::register_wasm_provider` uses this to run a digest /
+    /// trust check on the bytes before paying for compilation.
+    pub fn new_wasm_component_from_bytes(
+        engine: Engine,
+        bytes: &[u8],
+        path: PathBuf,
+    ) -> Result<Self, String> {
+        let component = Component::from_binary(&engine, bytes)
             .map_err(|e| format!("compile {}: {e}", path.display()))?;
         Ok(Self {
             kind: ProviderKind::WasmComponent {
