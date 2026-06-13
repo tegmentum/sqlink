@@ -43,33 +43,76 @@ What's NOT delivered yet:
   "entered" and the dispatcher's `call_concurrent` queues but
   never makes progress. Fix requires Stage-2 below.
 
-## Stage 2 — host-traits-to-Accessor rewrite
+## Stage 2 — host + guest rewrite for in-flight re-entry
 
-To make the in-flight re-entry actually work, every host import
-the cli reactor uses (`dispatch.scalar_call`,
-`extension-loader.load_extension`, `spi.*`, `state.*`, `cache.*`,
-`http.handle`, `logging.*`, `config.*` …) needs to be wired with
-`Linker::func_wrap_concurrent` instead of `func_wrap_async`. That
-means switching the bindgens for `bindings`, `loaded`, and the
-stateful/collating/authorizing/hooked/resolving variants to
-`imports: { default: async | store }`, and rewriting every `Host`
-impl to take `&Accessor<T>` instead of `&mut self`. Today there
-are 11 such impls in `host/src/lib.rs` (search for
-`^impl.*Host for HostWrap|^impl.*Host for LoadedState`).
+In-flight re-entry needs TWO sides to change:
 
-When the host imports are concurrent-mode, wasmtime can yield the
-calling wasm task back to the event loop while the host body runs
-— releasing the may_enter flag — and another `call_concurrent` on
-the same instance can make progress. This is the standard
-"cooperative concurrency" model the concurrent canonical ABI was
-built for.
+### 2a. Host: convert cli-facing host traits to Accessor pattern
 
-Until that lands, `dispatch_chain_routes_execute_live_through_bridge`
-is marked `#[ignore]` (it hangs rather than passing) and the live
-SPI methods route through the v1 fresh-connection fallback
-whenever the dispatch chain is the caller. The bridge still works
-for callers OUTSIDE an in-flight eval (validated by
-`live_spi_bridge_reenters_eval_structured`).
+The bindgens whose host impls the cli reactor calls
+(`dispatch.scalar_call`, `extension-loader.*`) must switch from
+`imports: { default: async }` to
+`imports: { default: async | store }`. When in concurrent mode,
+the bindgen-generated `Host` trait becomes a marker; the
+methods move to a new `HostWithStore` trait whose signatures are
+`fn name<T: Send>(accessor: &Accessor<T, Self>, ...) -> impl
+Future<Output = ...> + Send`. Each method body extracts the
+`Host` field via `accessor.with(|access| access.get().host.clone())`,
+drops the access closure, then drives the existing async helper
+methods.
+
+Methods to convert in `host/src/lib.rs` (counted off
+2026-06-12):
+
+- `impl bindings::sqlite::wasm::dispatch::Host for HostWrap<'a>`
+  — 8 methods (scalar_call, aggregate_step,
+  aggregate_finalize, collation_compare, authorize, on_update,
+  on_commit, on_rollback).
+- `impl bindings::sqlite::wasm::extension_loader::Host for
+  HostWrap<'a>` — ~12 methods (load_extension, unload_extension,
+  list_extensions, is_extension_loaded, load_extension_from_uri,
+  register_resolver, unregister_resolver, list_resolvers,
+  list_cache_uris, purge_cache, run_fiji_function,
+  register_wasm_provider).
+
+The other Host impls (loaded::*, loaded_stateful::*, etc.) are
+used by INNER per-call stores, not the cli reactor — they do not
+need to flip for in-flight re-entry to work, only the cli-facing
+ones.
+
+### 2b. Guest: cli-rust async-lowered imports + rebuild
+
+cli-rust's generated bindings currently lower imports
+synchronously (`unsafe extern "C" fn wit_importN`). While the
+sync-lowered import is blocked, wasmtime's `may_enter` keeps the
+instance "entered" — even with `func_wrap_concurrent` on the host
+side, the dispatcher's `call_concurrent(cli.eval-structured)`
+queues but never makes progress.
+
+cli-rust needs its `wit-bindgen-rust` configured for async
+imports. The exact knob is under
+`[package.metadata.component.bindings]` or equivalent — the dep
+needs investigation; relevant doc:
+https://docs.rs/wit-bindgen/latest/wit_bindgen/. After the config
+change, cli-rust must be rebuilt with the wasi-sdk env.
+
+### Cost estimate
+
+- 2a is mechanical: ~20 host methods, repetitive Accessor
+  conversion. Bounded but tedious; estimate one focused session.
+- 2b requires upstream investigation (which wit-bindgen knob),
+  bindgen regeneration, possibly cli-rust API churn (async fn vs
+  sync fn at call sites). Estimate half a session once the right
+  knob is identified.
+- Validation: re-enable
+  `dispatch_chain_routes_execute_live_through_bridge`. Should
+  pass once both halves land.
+
+Until both 2a AND 2b land, the in-flight bridge hangs and
+`execute_live` callers from inside dispatch fall through to the
+v1 fresh-connection path (which is the safe degradation). The
+bridge still works for callers OUTSIDE an in-flight eval
+(validated by `live_spi_bridge_reenters_eval_structured`).
 
 ## Current state (after T1 v1)
 
