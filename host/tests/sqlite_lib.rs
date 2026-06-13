@@ -1,7 +1,7 @@
-//! Smoke test for sqlite-lib (sqlite-cli-library world).
+//! Smoke test for sqlite-lib (sqlite-library world).
 //!
 //! Confirms the component instantiates against wasmtime's
-//! canonical bindgen of the `sqlite-cli-library` world and that the
+//! canonical bindgen of the `sqlite-library` world and that the
 //! exported `library` interface answers correctly.
 //!
 //! Silently skips if `sqlite-lib` isn't built so the suite stays green
@@ -18,7 +18,7 @@ use sqlite_wasm_host::{bindings as host_bindings, Host, HostWrap, LoaderData};
 
 wasmtime::component::bindgen!({
     path: "../wit",
-    world: "sqlite-cli-library",
+    world: "sqlite-library",
     imports: { default: async },
     exports: { default: async },
 });
@@ -66,7 +66,7 @@ fn canonical_ext_path() -> Option<PathBuf> {
     None
 }
 
-async fn instantiate() -> Result<Option<(Store<State>, SqliteCliLibrary)>> {
+async fn instantiate() -> Result<Option<(Store<State>, SqliteLibrary)>> {
     let Some(path) = sqlite_lib_path() else { return Ok(None); };
     let mut config = Config::new();
     config.wasm_component_model(true);
@@ -98,7 +98,7 @@ async fn instantiate() -> Result<Option<(Store<State>, SqliteCliLibrary)>> {
         host,
     };
     let mut store = Store::new(&engine, state);
-    let lib = SqliteCliLibrary::instantiate_async(&mut store, &component, &linker).await?;
+    let lib = SqliteLibrary::instantiate_async(&mut store, &component, &linker).await?;
     Ok(Some((store, lib)))
 }
 

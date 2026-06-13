@@ -3,7 +3,7 @@ name = "sqlite-lib"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Programmatic SQLite-in-WASM library. Targets the sqlite-cli-library world: SPI + high-level + low-level + library utility surfaces."
+description = "Programmatic SQLite-in-WASM library. Targets the sqlite-library world: SPI + high-level + low-level + library utility surfaces."
 
 [lib]
 crate-type = ["cdylib"]

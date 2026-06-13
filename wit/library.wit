@@ -1,6 +1,6 @@
 package sqlite:wasm@0.1.0;
 
-/// Utilities the `sqlite-cli-library` world exposes alongside the
+/// Utilities the `sqlite-library` world exposes alongside the
 /// SPI and high-level surfaces. Captures helpers that don't fit
 /// cleanly into low-level / high-level / spi:
 ///

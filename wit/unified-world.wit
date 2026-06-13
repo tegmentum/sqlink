@@ -67,7 +67,7 @@ world sqlite-cli-unified {
 /// honest shape.
 ///
 /// Programmatic / library use ("eval this SQL, give me rows")
-/// belongs in a separate `sqlite-cli-library` world targeted by a
+/// belongs in a separate `sqlite-library` world targeted by a
 /// distinct crate. This world is just a CLI.
 world sqlite-cli-command {
     include wasi:cli/command@0.2.6;
@@ -95,7 +95,7 @@ world sqlite-cli-command {
 /// Imports the standard `extension-loader` and `dispatch`. Callers
 /// that don't need dynamic loading can satisfy `extension-loader`
 /// with a stub.
-world sqlite-cli-library {
+world sqlite-library {
     export sqlite:extension/types@0.1.0;
     export sqlite:extension/spi@0.1.0;
     export sqlite:extension/logging@0.1.0;

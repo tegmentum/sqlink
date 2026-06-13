@@ -1,6 +1,6 @@
 //! sqlite-lib: programmatic SQLite-in-WASM library.
 //!
-//! Targets the `sqlite-cli-library` world — exports the full
+//! Targets the `sqlite-library` world — exports the full
 //! `sqlite:extension/*` SPI surface (so a compose-time consumer can
 //! satisfy an extension's spi imports with this component) plus the
 //! `sqlite:wasm/low-level`, `sqlite:wasm/high-level`, and
@@ -24,7 +24,7 @@
 mod bindings {
     wit_bindgen::generate!({
         path: "../wit",
-        world: "sqlite-cli-library",
+        world: "sqlite-library",
         generate_all,
     });
 }
@@ -57,13 +57,13 @@ thread_local! {
     static STATE: RefCell<State> = RefCell::new(State::new());
 }
 
-struct CliLibrary;
+struct SqliteLib;
 
 // =========================================================================
 // sqlite:extension/logging
 // =========================================================================
 
-impl LoggingGuest for CliLibrary {
+impl LoggingGuest for SqliteLib {
     fn log(level: LogLevel, message: String) {
         let l = match level {
             LogLevel::Error => "ERROR",
@@ -84,7 +84,7 @@ impl LoggingGuest for CliLibrary {
 // sqlite:extension/config
 // =========================================================================
 
-impl ConfigGuest for CliLibrary {
+impl ConfigGuest for SqliteLib {
     fn get(_key: String) -> Option<String> { None }
     fn set(_key: String, _value: String) -> bool { false }
     fn sqlite_version() -> String { db::version() }
@@ -144,7 +144,7 @@ fn spi_with<R>(f: impl FnOnce(&db::Connection) -> R) -> R {
     })
 }
 
-impl SpiGuest for CliLibrary {
+impl SpiGuest for SqliteLib {
     fn execute(sql: String, params: Vec<SpiSqlValue>) -> Result<SpiQueryResult, SpiSqliteError> {
         spi_with(|conn| {
             let mut stmt = conn.prepare(&sql).map_err(|e| spi_db_err(e.clone()))?;
@@ -223,7 +223,7 @@ fn ll_map_err(e: &db::Error) -> ResultCode {
     }
 }
 
-impl LowLevelGuest for CliLibrary {
+impl LowLevelGuest for SqliteLib {
     fn open(filename: String, flags: OpenFlags) -> Result<DbHandle, ResultCode> {
         let path = if filename.is_empty() || filename == ":memory:" {
             ":memory:".to_string()
@@ -386,7 +386,7 @@ fn db_to_hl_value(v: db::Value) -> HlValue {
     }
 }
 
-impl HighLevelGuest for CliLibrary {
+impl HighLevelGuest for SqliteLib {
     type Connection = HlConnection;
     type Statement = HlStatement;
 
@@ -757,7 +757,7 @@ mod lib_load {
     #[allow(dead_code)] pub fn _touch() { let _ = flags_to_ty as fn(LibFlags) -> ty::FunctionFlags; }
 }
 
-impl LibraryGuest for CliLibrary {
+impl LibraryGuest for SqliteLib {
     fn is_statement_complete(buffered: String) -> bool {
         let trimmed = buffered.trim();
         if trimmed.is_empty() { return true; }
@@ -805,4 +805,4 @@ impl LibraryGuest for CliLibrary {
     }
 }
 
-bindings::export!(CliLibrary with_types_in bindings);
+bindings::export!(SqliteLib with_types_in bindings);
