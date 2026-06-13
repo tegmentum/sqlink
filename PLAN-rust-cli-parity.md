@@ -167,32 +167,77 @@ before Phase 1. Order doesn't matter — they touch different files.
 ## Multi-language `.run hello.py` (follow-on, not part of this plan)
 
 After `.run` exists for wasm files, the next layer is dispatching
-non-wasm files to a language runtime by file extension. Concrete
-shape:
+non-wasm source files to a language runtime by file extension.
 
-- `.run hello.py` → look up the registered Python runtime
-  (e.g. `python-wasm` / `python.composed.wasm` from the
-  `tegmentum-webassembly-sdk`), instantiate it, pass the `.py`
-  source via stdin or a host import, invoke `run()`.
-- `.run hello.java` → look up the registered JVM runtime
-  (`fijivm`), same path.
-- Same for `.r` (jollyroger), `.go` (compiled .wasm via the
-  Go toolchain or invocation of `tg run`), etc.
+The split is clean:
 
-The Tegmentum SDK's `tg run` already does this dispatch
-externally. Two ways to integrate:
+- **Compiled-to-wasm languages** (Rust, Go, C, C++, Zig) — the
+  user's build output IS a wasm component. `.run foo.wasm`
+  already covers this. No plugin needed.
+- **Runtime-based languages** (Python, Java, R, COBOL, …) — need
+  a wasm plugin that **embeds the runtime** itself. `.run foo.py`
+  hands `foo.py`'s source to the Python plugin; the plugin
+  executes it; the CLI prints the result.
 
-1. **Shell out to `tg run`** — easy, but requires `tg` on PATH
-   and uses an external process. Loses the wasm sandbox guarantee.
-2. **Register language runtimes as compose providers** —
-   `.register-provider python python-wasm.component.wasm` (or
-   automatic discovery via a manifest). `.run hello.py` then
-   resolves the `python` provider and invokes it. Pure in-process,
-   keeps the sandbox.
+### Plugin shape
 
-Option 2 is the architecturally honest path and reuses the existing
-`compose:dynlink/linker` plumbing. Real plan when we get there;
-out of scope for this document.
+A runtime plugin is a wasm component that exports something like:
+
+```wit
+interface runtime {
+    /// Execute `source` (a chunk of source code in this runtime's
+    /// language). Returns whatever the runtime considers stdout
+    /// or program output. `source-name` is the original filename
+    /// for error reporting / `__name__` / etc.
+    execute: func(source-name: string, source: string) -> result<string, string>;
+}
+```
+
+That's the whole contract. No registry, no manifests, no
+compose-graph wiring. The plugin is a single self-contained wasm
+component that ships with whatever interpreter is bundled inside
+(`python-wasm` for `.py`, the JVM-to-wasm port for `.java`, R for
+`.r`, and so on).
+
+### Registration + dispatch
+
+Two new dot-commands, modeled on the existing `.register-provider`:
+
+- `.register-runtime EXT PATH` — register the wasm at PATH as the
+  runtime for files ending in `.EXT`. Stored in a host-side
+  `HashMap<String, ComponentPath>`.
+- `.runtimes` — list registered (ext, path) pairs.
+
+Then `.run FILE`'s dispatch:
+
+```
+1. Read FILE.
+2. If FILE ends in `.wasm`, invoke it directly (current path —
+   the in-tree Fiji-shape behavior, renamed).
+3. Otherwise: look up the runtime for FILE's extension. If none
+   registered, error out with a hint to `.register-runtime`.
+4. Read FILE as bytes/string. Instantiate the runtime plugin
+   in a fresh Store. Call runtime.execute(file_name, source).
+5. Print the returned Ok(String) or surface the Err(String).
+```
+
+Same sandbox guarantees as `.run foo.wasm` get — fresh Store,
+fuel cap, memory cap, epoch deadline applied per call.
+
+### Where the runtime wasms come from
+
+Out of scope for sqlite-wasm. The plugins are upstream:
+`python-wasm`, `jollyroger`, `fijivm`, etc., maintained in their
+own repos. sqlite-wasm just needs the wasm artifact on disk and a
+registration. Users wire whichever runtime plugins they care
+about; they can also point at a custom plugin for a language not
+on anyone's roadmap.
+
+No dependency on `tegmentum-webassembly-sdk`. The SDK is one way
+to build / publish / discover these plugins, but `.run` only
+needs the wasm file. The SDK's registry, signing, manifests, and
+dependency resolution are layered on top and aren't required for
+the CLI dispatch to work.
 
 ## Test plan
 
