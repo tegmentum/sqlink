@@ -35,10 +35,41 @@ What's NOT delivered yet:
   path. Fix by extending `cli.eval-structured` to
   `(sql: string, params: list<sql-value>)` and bumping cli-rust's
   impl — bounded follow-up.
-- **Dispatch-chain integration test.** The bridge re-entry test
-  exercises the channel directly. The full path (cli dispatch →
-  extension call → `spi.execute_live` → bridge) needs its own
-  E2E test driving `SELECT wasm_live_count('widgets')`.
+- **Dispatch-chain re-entry while eval is in flight.** Stage-1
+  validates re-entry from outside an in-flight eval. The full
+  in-flight chain (cli.eval → ext_fn → spi.execute_live → bridge
+  → cli.eval-structured) hangs under wasmtime 45: while the outer
+  eval awaits a host import, `may_enter` keeps the instance
+  "entered" and the dispatcher's `call_concurrent` queues but
+  never makes progress. Fix requires Stage-2 below.
+
+## Stage 2 — host-traits-to-Accessor rewrite
+
+To make the in-flight re-entry actually work, every host import
+the cli reactor uses (`dispatch.scalar_call`,
+`extension-loader.load_extension`, `spi.*`, `state.*`, `cache.*`,
+`http.handle`, `logging.*`, `config.*` …) needs to be wired with
+`Linker::func_wrap_concurrent` instead of `func_wrap_async`. That
+means switching the bindgens for `bindings`, `loaded`, and the
+stateful/collating/authorizing/hooked/resolving variants to
+`imports: { default: async | store }`, and rewriting every `Host`
+impl to take `&Accessor<T>` instead of `&mut self`. Today there
+are 11 such impls in `host/src/lib.rs` (search for
+`^impl.*Host for HostWrap|^impl.*Host for LoadedState`).
+
+When the host imports are concurrent-mode, wasmtime can yield the
+calling wasm task back to the event loop while the host body runs
+— releasing the may_enter flag — and another `call_concurrent` on
+the same instance can make progress. This is the standard
+"cooperative concurrency" model the concurrent canonical ABI was
+built for.
+
+Until that lands, `dispatch_chain_routes_execute_live_through_bridge`
+is marked `#[ignore]` (it hangs rather than passing) and the live
+SPI methods route through the v1 fresh-connection fallback
+whenever the dispatch chain is the caller. The bridge still works
+for callers OUTSIDE an in-flight eval (validated by
+`live_spi_bridge_reenters_eval_structured`).
 
 ## Current state (after T1 v1)
 

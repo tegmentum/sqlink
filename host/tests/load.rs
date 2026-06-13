@@ -313,6 +313,189 @@ async fn live_spi_bridge_reenters_eval_structured() {
     assert_eq!(result.expect("driver result"), 5);
 }
 
+/// Full dispatch-chain validation: load live-spi-extension into the
+/// cli's rusqlite, then `SELECT wasm_live_count('widgets')` through
+/// `cli.eval`. The extension's `spi.execute_scalar_live` must route
+/// through the channel bridge → re-enter `cli.eval-structured` on
+/// the SAME instance while the outer eval is still on the stack.
+///
+/// **Currently hangs** under wasmtime 45 because our host imports
+/// (`dispatch.scalar_call`, `extension-loader.load_extension`, etc.)
+/// are wired with standard async `add_to_linker` rather than
+/// `func_wrap_concurrent`. While the outer eval is awaiting on a
+/// host import, wasmtime's `may_enter` keeps the cli instance
+/// "entered" — the dispatcher's `call_concurrent` on
+/// `cli.eval-structured` queues but never makes progress. The fix
+/// is the Stage-2 host-traits-to-Accessor rewrite documented in
+/// `host/SPI-LIVE.md`. Disabled with `#[ignore]` until then so CI
+/// stays green; re-enable when the host-trait rewrite lands.
+#[tokio::test]
+#[ignore = "blocked on Stage-2 host-trait Accessor rewrite — see SPI-LIVE.md"]
+async fn dispatch_chain_routes_execute_live_through_bridge() {
+    use sqlite_wasm_host::{bindings, LiveSpiBridge, LoaderData};
+    use wasmtime::component::{Component, Linker};
+    use wasmtime::{AsContextMut, Store};
+
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut cli_rust_path = manifest_dir.clone();
+    cli_rust_path.push("../cli-rust/target/wasm32-wasip1/release/sqlite_cli_rust.wasm");
+    let mut ext_path = manifest_dir.clone();
+    ext_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/live_spi_extension.wasm");
+    if !cli_rust_path.exists() || !ext_path.exists() {
+        eprintln!("skipping: prerequisite wasm not built");
+        return;
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("t.db");
+    {
+        let c = rusqlite::Connection::open(&db_path).unwrap();
+        c.execute_batch("CREATE TABLE widgets(id); INSERT INTO widgets VALUES(1),(2),(3),(4),(5);")
+            .unwrap();
+    }
+
+    let host = Host::new().unwrap();
+    host.set_db_path(db_path.to_string_lossy().as_ref());
+    let engine = host.engine().clone();
+
+    // Load the extension so the cli's `.load` command can find it.
+    // Actually — the cli component issues `.load PATH` which routes
+    // through extension_loader.load_extension, instantiating the ext
+    // and registering its scalars in the cli's rusqlite. So we don't
+    // pre-load via host.load_extension; we drive `.load` through cli.
+    struct State {
+        wasi: wasmtime_wasi::WasiCtx,
+        resources: wasmtime_wasi::ResourceTable,
+        host: Host,
+    }
+    impl wasmtime_wasi::WasiView for State {
+        fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+            wasmtime_wasi::WasiCtxView {
+                ctx: &mut self.wasi,
+                table: &mut self.resources,
+            }
+        }
+    }
+
+    let bytes = std::fs::read(&cli_rust_path).unwrap();
+    let component = Component::from_binary(&engine, &bytes).unwrap();
+    let mut linker: Linker<State> = Linker::new(&engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker).unwrap();
+    bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |s: &mut State| sqlite_wasm_host::HostWrap {
+            host: &mut s.host,
+            resources: Some(&mut s.resources),
+        },
+    )
+    .unwrap();
+    bindings::sqlite::wasm::dispatch::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |s: &mut State| sqlite_wasm_host::HostWrap {
+            host: &mut s.host,
+            resources: Some(&mut s.resources),
+        },
+    )
+    .unwrap();
+
+    let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
+    let parent = db_path.parent().unwrap().to_string_lossy().to_string();
+    wasi.preopened_dir(
+        db_path.parent().unwrap(),
+        &parent,
+        wasmtime_wasi::DirPerms::all(),
+        wasmtime_wasi::FilePerms::all(),
+    )
+    .unwrap();
+    wasi.arg("cli");
+
+    let state = State {
+        wasi: wasi.build(),
+        resources: wasmtime_wasi::ResourceTable::new(),
+        host: host.clone(),
+    };
+    let mut store = Store::new(&engine, state);
+    store.set_fuel(u64::MAX / 2).unwrap();
+    store.set_epoch_deadline(1_000_000_000_000);
+
+    let reactor = sqlite_wasm_host::reactor::SqliteCliReactor::instantiate_async(
+        &mut store, &component, &linker,
+    )
+    .await
+    .expect("instantiate reactor");
+
+    let (req_tx, mut req_rx) = tokio::sync::mpsc::unbounded_channel();
+    host.set_live_spi_bridge(LiveSpiBridge::new(req_tx));
+
+    let db_path_owned = db_path.to_string_lossy().to_string();
+    let ext_path_str = ext_path.to_string_lossy().to_string();
+
+    let outcome: Result<String, String> = store
+        .as_context_mut()
+        .run_concurrent(async move |accessor| -> Result<String, String> {
+            let cli = reactor.sqlite_wasm_cli();
+            cli.call_init(accessor, db_path_owned)
+                .await
+                .map_err(|e| format!("init trap: {e}"))?
+                .map_err(|e| format!("init: {e}"))?;
+
+            let dispatcher = async {
+                while let Some(req) = req_rx.recv().await {
+                    let r = cli.call_eval_structured(accessor, req.sql).await;
+                    let _ = req.resp_tx.send(r.map_err(|e| e.to_string()));
+                }
+            };
+
+            let driver = async {
+                // .load registers the extension's scalars in the cli's
+                // rusqlite via dispatch.scalar_call.
+                let load_cmd = format!(".load {ext_path_str} --grant=spi\n");
+                let load_out = cli
+                    .call_eval(accessor, load_cmd)
+                    .await
+                    .map_err(|e| format!("eval .load: {e}"))?;
+                if load_out.to_lowercase().contains("error")
+                    || load_out.to_lowercase().contains("bad flag")
+                {
+                    return Err(format!(".load output: {load_out}"));
+                }
+
+                // The SELECT triggers ext_fn → spi.execute_scalar_live
+                // → bridge → cli.eval-structured. If wasmtime's
+                // may_enter blocks the re-entry, this returns
+                // "CannotEnterComponent" embedded in the eval output.
+                let q_out = cli
+                    .call_eval(
+                        accessor,
+                        "SELECT wasm_live_count('widgets');\n".to_string(),
+                    )
+                    .await
+                    .map_err(|e| format!("eval SELECT: {e}"))?;
+                Ok(q_out)
+            };
+
+            tokio::select! {
+                r = driver => r,
+                _ = dispatcher => Err("dispatcher exited first".into()),
+            }
+        })
+        .await
+        .expect("run_concurrent");
+
+    let q_out = outcome.expect("driver");
+    // The cli prints results as "5" (live-spi-extension's count)
+    // formatted by the output formatter. Assert non-error + contains
+    // the expected count.
+    assert!(
+        !q_out.to_lowercase().contains("error"),
+        "cli reported error: {q_out}"
+    );
+    assert!(
+        q_out.contains('5'),
+        "expected count of 5 in output, got: {q_out:?}"
+    );
+}
+
 /// live-spi-extension exports two scalars: wasm_committed_count and
 /// wasm_live_count. Both end-to-end through the host's
 /// `spi.execute_scalar` / `spi.execute_scalar_live` imports.
