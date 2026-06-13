@@ -139,14 +139,12 @@ dep. Outcomes:
   sync export, you can't `.await` it. So the whole call chain
   must be async, end to end — which forces the exports too.
 - **Component packaging works without cargo-component.** Build
-  `cargo build --release --target wasm32-wasip1` to produce a
-  core module, then
-  `wasm-tools component new core.wasm --adapt
-  wasi_snapshot_preview1.reactor.wasm -o component.wasm`. The
-  adapter is widely available (cached at
-  `~/.cache/xtran/wasi_snapshot_preview1.reactor.wasm` here;
-  also in jco's npm package and several other repos). A trivial
-  build.rs or shell script wraps this.
+  `cargo build --release --target wasm32-wasip2` and then
+  `wasm-tools component new core.wasm -o component.wasm` —
+  no adapter needed. (When this section was originally written
+  cli-rust targeted wasip1 which required the
+  wasi_snapshot_preview1.reactor.wasm adapter. The wasip2 pivot
+  in 2026-06-13 dropped the adapter step entirely.)
 
 **Cost estimate for full option 2:**
 
@@ -218,19 +216,40 @@ architectural fix (raw sqlite3_step scheduling, wasip3 native
 async, or WIT-level async declarations). Each of those is its
 own future investigation; rusqlite is no longer the blocker.
 
-### Conversion completed (2026-06-13)
+### Pivot to wasm32-wasip2 (2026-06-13)
 
-cli-rust now uses `wit_bindgen::generate!({ async: true,
-generate_all })` directly instead of cargo-component's auto-
-generated bindings. The component is built in two steps:
+cli-rust now targets **wasm32-wasip2** instead of wasm32-wasip1.
+wasi-sdk 33 has the wasip2 sysroot; rustc/rustup ship the target
+prebuilt. The wasi_snapshot_preview1.reactor.wasm adapter is
+gone — wasip2 IS the component-model target.
 
 ```sh
-cargo build --release --target wasm32-wasip1
+cargo build --release --target wasm32-wasip2
 wasm-tools component new \
-  target/wasm32-wasip1/release/sqlite_cli_rust.wasm \
-  --adapt $ADAPTER/wasi_snapshot_preview1.reactor.wasm \
-  -o target/wasm32-wasip1/release/sqlite_cli_rust.component.wasm
+  target/wasm32-wasip2/release/sqlite_cli_rust.wasm \
+  -o target/wasm32-wasip2/release/sqlite_cli_rust.component.wasm
 ```
+
+**Why not wasip3 (the actual async-WASI version)?** Toolchain
+isn't ready: rustup has no wasm32-wasip3 prebuilt artifacts
+(low-tier, build-from-source), wasi-sdk 33 has no wasip3 sysroot,
+and wasmtime-wasi 45's `p3` module is gated behind a feature
+flag with "experimental, unstable, incomplete. Not compliant with
+semver. Not ready for production." Bringing wasip3 up ourselves
+means nightly Rust + `-Zbuild-std` + custom wasi-libc build —
+months of toolchain work before any cli-rust progress.
+
+The wasip2 pivot is the polish win: aligned with where the
+ecosystem is settling, drops the adapter awkwardness, sets us up
+to pick up wasip3 later when the toolchain matures. It does
+**not** fix dispatch_chain (that still needs native async
+import lowering, which is the wasip3 piece).
+
+### Conversion completed (2026-06-13)
+
+cli-rust uses `wit_bindgen::generate!({ async: true,
+generate_all })` directly instead of cargo-component's auto-
+generated bindings.
 
 Component verified: `wasm-tools print` shows `[async-lower]load-
 extension` etc. (imports async-lowered) and `[async-lift]...`

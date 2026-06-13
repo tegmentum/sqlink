@@ -18,16 +18,18 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags", "async"] }
 # expose this knob). Bindings are produced inline in src/lib.rs.
 wit-bindgen = { version = "0.44", features = ["macros"] }
 # libsqlite3-sys provides raw FFI to sqlite3.c (bundled compiles
-# it via the cc crate against wasm32-wasip1; needs
-# CC_wasm32_wasip1 = wasi-sdk clang). We use it directly via the
+# it via the cc crate against wasm32-wasip2; needs
+# CC_wasm32_wasip2 = wasi-sdk clang). We use it directly via the
 # in-tree `db` module instead of going through rusqlite —
 # rusqlite's sync-callback Fn registration API fights cli-rust's
 # async wit-bindgen import surface (see SPI-LIVE.md).
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 
 # Component packaging: after `cargo build --release --target
-# wasm32-wasip1`, run
+# wasm32-wasip2`, run
 #   wasm-tools component new \
-#     target/wasm32-wasip1/release/sqlite_cli_rust.wasm \
-#     --adapt wasi_snapshot_preview1.reactor.wasm \
-#     -o target/wasm32-wasip1/release/sqlite_cli_rust.component.wasm
+#     target/wasm32-wasip2/release/sqlite_cli_rust.wasm \
+#     -o target/wasm32-wasip2/release/sqlite_cli_rust.component.wasm
+# No adapter needed — wasm32-wasip2 IS the component-model target.
+# The wasm-tools wrap is purely to add the component-section header
+# (the rustc output is a core module that uses wasip2 imports).

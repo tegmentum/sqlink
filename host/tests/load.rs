@@ -182,7 +182,7 @@ async fn live_spi_bridge_reenters_eval_structured() {
     use wasmtime::{AsContextMut, Store};
 
     let mut cli_rust_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    cli_rust_path.push("../cli-rust/target/wasm32-wasip1/release/sqlite_cli_rust.component.wasm");
+    cli_rust_path.push("../cli-rust/target/wasm32-wasip2/release/sqlite_cli_rust.component.wasm");
     if !cli_rust_path.exists() {
         eprintln!("skipping: sqlite_cli_rust.component.wasm not built");
         return;
@@ -338,7 +338,7 @@ async fn dispatch_chain_routes_execute_live_through_bridge() {
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut cli_rust_path = manifest_dir.clone();
-    cli_rust_path.push("../cli-rust/target/wasm32-wasip1/release/sqlite_cli_rust.component.wasm");
+    cli_rust_path.push("../cli-rust/target/wasm32-wasip2/release/sqlite_cli_rust.component.wasm");
     let mut ext_path = manifest_dir.clone();
     ext_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/live_spi_extension.wasm");
     if !cli_rust_path.exists() || !ext_path.exists() {

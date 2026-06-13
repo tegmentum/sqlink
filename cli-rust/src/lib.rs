@@ -10,13 +10,18 @@
 //! the stat APIs, etc.) return error stubs and will gain real
 //! impls as the CLI work continues.
 //!
-//! Build:
+//! Build (cli-rust targets wasm32-wasip2 — see SPI-LIVE.md for
+//! the pivot rationale; wasip3 isn't toolchain-ready as of
+//! 2026-06):
 //!
 //! ```sh
-//! CC_wasm32_wasip1=$WASI_SDK/bin/clang \
-//! AR_wasm32_wasip1=$WASI_SDK/bin/ar \
-//! CFLAGS_wasm32_wasip1="--sysroot=$WASI_SDK/share/wasi-sysroot --target=wasm32-wasip1" \
-//!   cargo component build --release
+//! CC_wasm32_wasip2=$WASI_SDK/bin/clang \
+//! AR_wasm32_wasip2=$WASI_SDK/bin/ar \
+//! CFLAGS_wasm32_wasip2="--sysroot=$WASI_SDK/share/wasi-sysroot --target=wasm32-wasip2" \
+//!   cargo build --release --target wasm32-wasip2
+//! wasm-tools component new \
+//!   target/wasm32-wasip2/release/sqlite_cli_rust.wasm \
+//!   -o target/wasm32-wasip2/release/sqlite_cli_rust.component.wasm
 //! ```
 
 #![allow(clippy::needless_lifetimes)]
