@@ -37,11 +37,13 @@ async-trait = "0.1"
 # is OK for v1; future revision uses async reqwest with proper
 # cooperative scheduling.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
-# Host-side SQLite for the hybrid SPI path. Loaded extensions'
-# spi.execute opens a fresh Connection here against the same file
-# the cli is using, so they see committed schema + data without
-# needing to re-enter the cli reactor.
-rusqlite = { version = "0.32", features = ["bundled"] }
+# Host-side SQLite for the hybrid SPI path + sqlite-runtime
+# compose provider. Same sqlite3.c the wasm crates use — we drive
+# it through `core::db` (in-tree libsqlite3-sys wrapper) so the
+# host and the wasm components share one SQLite story end to end.
+# Used to be `rusqlite`; dropped because (a) the host had two
+# SQLite stacks and (b) every type swap was paid twice.
+sqlite-wasm-core = { path = "../core" }
 # Content-addressed cache for resolved extension components.
 blake3 = "1.5"
 tempfile = "3.13"

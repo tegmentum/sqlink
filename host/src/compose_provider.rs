@@ -4,7 +4,7 @@
 //! `ProviderHandle`. Two flavors today:
 //!
 //!   - `SqliteRuntime` — host shim that dispatches CBOR-encoded
-//!     methods to the cli's shared rusqlite::Connection. Built-in;
+//!     methods to the cli's shared `core::db::Connection`. Built-in;
 //!     wired by sqlite-wasm-run automatically.
 //!   - `WasmComponent` — bytes of a `dynlink-provider`-world wasm
 //!     component. Each invoke instantiates the component in a
@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use ciborium::value::Value as CborValue;
 use parking_lot::Mutex;
-use rusqlite::types::Value as RusqliteValue;
+use sqlite_wasm_core::db;
 use wasmtime::component::{Component, Linker};
 use wasmtime::Engine;
 
@@ -33,7 +33,7 @@ pub enum ProviderKind {
     /// is `Some(...)` once the cli has opened a db; `None` is treated
     /// as "no db open yet".
     SqliteRuntime {
-        conn: Arc<Mutex<Option<rusqlite::Connection>>>,
+        conn: Arc<Mutex<Option<db::Connection>>>,
         /// Prepared statements by id; finalize drops them.
         stmts: Arc<Mutex<HashMap<u64, PreparedStmt>>>,
         next_stmt_id: Arc<Mutex<u64>>,
@@ -52,19 +52,19 @@ pub enum ProviderKind {
 
 /// One prepared statement stashed by the sqlite-runtime provider for
 /// the prepare/step/finalize methods. The SQL is re-prepared per
-/// step because rusqlite::Statement borrows from Connection — we
+/// step because `core::db::Statement` borrows from Connection — we
 /// can't store one across host calls without self-referential
 /// storage. v1's model is: prepare() validates, step() re-prepares
 /// each call, finalize() drops the entry. Slower than holding the
 /// real statement; replaceable when we want to.
 pub struct PreparedStmt {
     pub sql: String,
-    pub bindings: Vec<RusqliteValue>,
-    pub cursor: Option<Vec<Vec<RusqliteValue>>>,
+    pub bindings: Vec<db::Value>,
+    pub cursor: Option<Vec<Vec<db::Value>>>,
 }
 
 impl ProviderHandle {
-    pub fn new_sqlite_runtime(conn: Arc<Mutex<Option<rusqlite::Connection>>>) -> Self {
+    pub fn new_sqlite_runtime(conn: Arc<Mutex<Option<db::Connection>>>) -> Self {
         Self {
             kind: ProviderKind::SqliteRuntime {
                 conn,
@@ -164,30 +164,30 @@ async fn wasm_component_invoke(
 
 // --- sqlite-runtime dispatcher --- per host/COMPOSE-PROTOCOL.md ---
 
-fn cbor_to_rusqlite(v: &CborValue) -> Result<RusqliteValue, String> {
+fn cbor_to_db(v: &CborValue) -> Result<db::Value, String> {
     match v {
-        CborValue::Null => Ok(RusqliteValue::Null),
-        CborValue::Bool(b) => Ok(RusqliteValue::Integer(if *b { 1 } else { 0 })),
+        CborValue::Null => Ok(db::Value::Null),
+        CborValue::Bool(b) => Ok(db::Value::Integer(if *b { 1 } else { 0 })),
         CborValue::Integer(i) => {
             let n: i64 = (*i)
                 .try_into()
                 .map_err(|e: std::num::TryFromIntError| e.to_string())?;
-            Ok(RusqliteValue::Integer(n))
+            Ok(db::Value::Integer(n))
         }
-        CborValue::Float(f) => Ok(RusqliteValue::Real(*f)),
-        CborValue::Text(s) => Ok(RusqliteValue::Text(s.clone())),
-        CborValue::Bytes(b) => Ok(RusqliteValue::Blob(b.clone())),
+        CborValue::Float(f) => Ok(db::Value::Real(*f)),
+        CborValue::Text(s) => Ok(db::Value::Text(s.clone())),
+        CborValue::Bytes(b) => Ok(db::Value::Blob(b.clone())),
         _ => Err("unsupported cbor value type".to_string()),
     }
 }
 
-fn rusqlite_to_cbor(v: &RusqliteValue) -> CborValue {
+fn db_to_cbor(v: &db::Value) -> CborValue {
     match v {
-        RusqliteValue::Null => CborValue::Null,
-        RusqliteValue::Integer(i) => CborValue::Integer((*i).into()),
-        RusqliteValue::Real(f) => CborValue::Float(*f),
-        RusqliteValue::Text(s) => CborValue::Text(s.clone()),
-        RusqliteValue::Blob(b) => CborValue::Bytes(b.clone()),
+        db::Value::Null => CborValue::Null,
+        db::Value::Integer(i) => CborValue::Integer((*i).into()),
+        db::Value::Real(f) => CborValue::Float(*f),
+        db::Value::Text(s) => CborValue::Text(s.clone()),
+        db::Value::Blob(b) => CborValue::Bytes(b.clone()),
     }
 }
 
@@ -233,13 +233,13 @@ fn cbor_u64(v: &CborValue) -> Result<u64, String> {
     }
 }
 
-fn cbor_params(v: &CborValue) -> Result<Vec<RusqliteValue>, String> {
+fn cbor_params(v: &CborValue) -> Result<Vec<db::Value>, String> {
     let arr = match v {
         CborValue::Array(a) => a,
         CborValue::Null => return Ok(Vec::new()),
         _ => return Err("expected params array".to_string()),
     };
-    arr.iter().map(cbor_to_rusqlite).collect()
+    arr.iter().map(cbor_to_db).collect()
 }
 
 fn err(msg: impl Into<String>) -> String {
@@ -249,7 +249,7 @@ fn err(msg: impl Into<String>) -> String {
 async fn sqlite_runtime_invoke(
     method: &str,
     payload: &[u8],
-    conn: &Arc<Mutex<Option<rusqlite::Connection>>>,
+    conn: &Arc<Mutex<Option<db::Connection>>>,
     stmts: &Arc<Mutex<HashMap<u64, PreparedStmt>>>,
     next_stmt_id: &Arc<Mutex<u64>>,
 ) -> Result<Vec<u8>, String> {
@@ -293,23 +293,12 @@ async fn sqlite_runtime_invoke(
             let conn = g
                 .as_ref()
                 .ok_or_else(|| err("no db open (run .open first)"))?;
-            let mut stmt = conn.prepare(&sql).map_err(|e| e.to_string())?;
-            let cols: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
-            let col_count = cols.len();
-            let mut rows_iter = stmt
-                .query(rusqlite::params_from_iter(params.iter()))
-                .map_err(|e| e.to_string())?;
-            let mut rows: Vec<Vec<RusqliteValue>> = Vec::new();
-            while let Some(row) = rows_iter.next().map_err(|e| e.to_string())? {
-                let mut r = Vec::with_capacity(col_count);
-                for i in 0..col_count {
-                    r.push(row.get::<_, RusqliteValue>(i).map_err(|e| e.to_string())?);
-                }
-                rows.push(r);
-            }
-            drop(rows_iter);
+            let mut stmt = conn.prepare(&sql).map_err(|e| e.message)?;
+            let cols: Vec<String> = stmt.column_names();
+            stmt.bind_all(&params).map_err(|e| e.message)?;
+            let rows = stmt.collect_rows().map_err(|e| e.message)?;
             drop(stmt);
-            let changes = conn.changes() as i64;
+            let changes = conn.changes();
             let last_rowid = conn.last_insert_rowid();
             let resp = CborValue::Map(vec![
                 (
@@ -320,7 +309,7 @@ async fn sqlite_runtime_invoke(
                     CborValue::Text("rows".into()),
                     CborValue::Array(
                         rows.iter()
-                            .map(|r| CborValue::Array(r.iter().map(rusqlite_to_cbor).collect()))
+                            .map(|r| CborValue::Array(r.iter().map(db_to_cbor).collect()))
                             .collect(),
                     ),
                 ),
@@ -341,26 +330,38 @@ async fn sqlite_runtime_invoke(
             let params = cbor_params(get_field(&req, "params").unwrap_or(&CborValue::Null))?;
             let g = conn.lock();
             let conn = g.as_ref().ok_or_else(|| err("no db open"))?;
-            let v: RusqliteValue = conn
-                .query_row(&sql, rusqlite::params_from_iter(params.iter()), |r| {
-                    r.get(0)
-                })
-                .map_err(|e| e.to_string())?;
-            encode_response(&rusqlite_to_cbor(&v))
+            let mut stmt = conn.prepare(&sql).map_err(|e| e.message)?;
+            stmt.bind_all(&params).map_err(|e| e.message)?;
+            let rows = stmt.collect_rows().map_err(|e| e.message)?;
+            let v = rows
+                .into_iter()
+                .next()
+                .and_then(|r| r.into_iter().next())
+                .ok_or_else(|| err("query-scalar: no rows"))?;
+            encode_response(&db_to_cbor(&v))
         }
         "execute" => {
+            // core::db has no Connection::execute(sql, params) one-shot;
+            // inline prepare + bind + step-to-done. Behavior matches
+            // rusqlite's execute: returns the changes count.
             let req = decode_request(payload)?;
             let sql = cbor_str(get_field(&req, "sql")?)?;
             let params = cbor_params(get_field(&req, "params").unwrap_or(&CborValue::Null))?;
             let g = conn.lock();
             let conn = g.as_ref().ok_or_else(|| err("no db open"))?;
-            let changes = conn
-                .execute(&sql, rusqlite::params_from_iter(params.iter()))
-                .map_err(|e| e.to_string())?;
+            let mut stmt = conn.prepare(&sql).map_err(|e| e.message)?;
+            stmt.bind_all(&params).map_err(|e| e.message)?;
+            loop {
+                match stmt.step().map_err(|e| e.message)? {
+                    db::StepResult::Row => continue,
+                    db::StepResult::Done => break,
+                }
+            }
+            drop(stmt);
             let resp = CborValue::Map(vec![
                 (
                     CborValue::Text("changes".into()),
-                    CborValue::Integer((changes as i64).into()),
+                    CborValue::Integer(conn.changes().into()),
                 ),
                 (
                     CborValue::Text("last-rowid".into()),
@@ -374,10 +375,10 @@ async fn sqlite_runtime_invoke(
             let sql = cbor_str(get_field(&req, "sql")?)?;
             let g = conn.lock();
             let conn = g.as_ref().ok_or_else(|| err("no db open"))?;
-            conn.execute_batch(&sql).map_err(|e| e.to_string())?;
+            conn.execute_batch(&sql).map_err(|e| e.message)?;
             let resp = CborValue::Map(vec![(
                 CborValue::Text("changes".into()),
-                CborValue::Integer((conn.changes() as i64).into()),
+                CborValue::Integer(conn.changes().into()),
             )]);
             encode_response(&resp)
         }
@@ -388,7 +389,7 @@ async fn sqlite_runtime_invoke(
             {
                 let g = conn.lock();
                 let conn = g.as_ref().ok_or_else(|| err("no db open"))?;
-                conn.prepare(&sql).map_err(|e| e.to_string())?;
+                conn.prepare(&sql).map_err(|e| e.message)?;
             }
             let id = {
                 let mut g = next_stmt_id.lock();
@@ -420,18 +421,8 @@ async fn sqlite_runtime_invoke(
                 if entry.cursor.is_none() {
                     let cg = conn.lock();
                     let conn = cg.as_ref().ok_or_else(|| err("no db open"))?;
-                    let mut stmt = conn.prepare(&entry.sql).map_err(|e| e.to_string())?;
-                    let col_count = stmt.column_count();
-                    let mut rows_iter = stmt.query([]).map_err(|e| e.to_string())?;
-                    let mut buf: Vec<Vec<RusqliteValue>> = Vec::new();
-                    while let Some(row) = rows_iter.next().map_err(|e| e.to_string())? {
-                        let mut r = Vec::with_capacity(col_count);
-                        for i in 0..col_count {
-                            r.push(row.get::<_, RusqliteValue>(i).map_err(|e| e.to_string())?);
-                        }
-                        buf.push(r);
-                    }
-                    entry.cursor = Some(buf);
+                    let mut stmt = conn.prepare(&entry.sql).map_err(|e| e.message)?;
+                    entry.cursor = Some(stmt.collect_rows().map_err(|e| e.message)?);
                 }
                 let buf = entry.cursor.as_mut().unwrap();
                 if buf.is_empty() {
@@ -445,7 +436,7 @@ async fn sqlite_runtime_invoke(
                     (CborValue::Text("done".into()), CborValue::Bool(false)),
                     (
                         CborValue::Text("row".into()),
-                        CborValue::Array(r.iter().map(rusqlite_to_cbor).collect()),
+                        CborValue::Array(r.iter().map(db_to_cbor).collect()),
                     ),
                 ]),
                 None => CborValue::Map(vec![
@@ -470,7 +461,7 @@ mod tests {
     use super::*;
 
     fn open_test_provider() -> ProviderHandle {
-        let c = rusqlite::Connection::open_in_memory().unwrap();
+        let c = db::Connection::open_in_memory().unwrap();
         c.execute_batch("CREATE TABLE t(x); INSERT INTO t VALUES(1),(2),(3);")
             .unwrap();
         ProviderHandle::new_sqlite_runtime(Arc::new(Mutex::new(Some(c))))

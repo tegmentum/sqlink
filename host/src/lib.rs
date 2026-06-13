@@ -477,13 +477,14 @@ pub struct LoadedExtension {
     /// In-memory cache backing the `cache` interface. TTLs from the
     /// guest are accepted but not enforced for v1.
     pub cache: SharedKv,
-    /// Pooled rusqlite::Connection for this extension's spi calls.
+    /// Pooled core::db::Connection for this extension's spi calls.
     /// Opened lazily on first spi.execute against the cli's db file;
     /// reused across subsequent calls until the extension is
     /// unloaded. Dropped when the LoadedExtension's Arc count hits
-    /// zero. rusqlite::Connection is Send (not Sync); Mutex
-    /// serializes per-extension concurrent SPI calls.
-    pub spi_conn: Arc<Mutex<Option<rusqlite::Connection>>>,
+    /// zero. core::db::Connection is Send (not Sync) per the
+    /// `unsafe impl Send` on the type; Mutex serializes per-extension
+    /// concurrent SPI calls.
+    pub spi_conn: Arc<Mutex<Option<sqlite_wasm_core::db::Connection>>>,
 }
 
 /// State carried by the per-call Store when dispatching into a
@@ -498,14 +499,14 @@ pub struct LoadedState {
     state: SharedKv,
     cache: SharedKv,
     /// Path to the cli's database, propagated from Host so spi.execute
-    /// can open its own rusqlite::Connection against the same file.
+    /// can open its own core::db::Connection against the same file.
     /// Empty string => `:memory:` (SPI returns an error in that case
     /// since in-memory dbs aren't sharable across connections).
     db_path: String,
     /// Pooled connection borrowed from the owning LoadedExtension.
     /// Cloned Arc<Mutex<…>> so it survives across the per-call
     /// Stores each dispatch builds (mirror of state/cache).
-    spi_conn: Arc<Mutex<Option<rusqlite::Connection>>>,
+    spi_conn: Arc<Mutex<Option<sqlite_wasm_core::db::Connection>>>,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -607,34 +608,32 @@ impl loaded::sqlite::extension::http::Host for LoadedState {
     }
 }
 
-/// Stubs for the SPI imports the minimal world declares. None of
-/// today's loadable extensions exercise these; real impls land when
-/// the first extension that needs to run SQL inside the host arrives.
-/// Ensure the per-extension pooled rusqlite::Connection is open
-/// against the cli's db file. First call opens; subsequent calls
-/// reuse. Returns a clone of the Arc so the caller holds it for
-/// the duration of one SPI call.
+/// SPI surface the host exposes to loaded extensions. Sits on top of
+/// `core::db` (raw libsqlite3-sys wrapper). The per-extension
+/// connection is pooled inside LoadedExtension; spi_ensure_open
+/// opens it lazily against the cli's db file.
 fn spi_ensure_open(
     state: &LoadedState,
 ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+    use sqlite_wasm_core::db;
     if state.db_path.is_empty() || state.db_path == ":memory:" {
         return Err(loaded::sqlite::extension::types::SqliteError {
             code: 1,
             extended_code: 1,
             message: "spi requires a file-backed database. Pass --db <path> to sqlite-wasm-run; \
                  :memory: dbs aren't shareable between the cli's wasm-internal sqlite3 \
-                 library and the host's bundled rusqlite (they are separate libraries \
-                 with separate page caches even though they run in one process)."
+                 instance and the host's sqlite3 instance (separate libraries with \
+                 separate page caches even though they run in one process)."
                 .to_string(),
         });
     }
     let mut g = state.spi_conn.lock();
     if g.is_none() {
-        let conn = rusqlite::Connection::open(&state.db_path).map_err(|e| {
+        let conn = db::Connection::open(&state.db_path, db::OpenFlags::DEFAULT).map_err(|e| {
             loaded::sqlite::extension::types::SqliteError {
                 code: 1,
                 extended_code: 1,
-                message: format!("open {}: {e}", state.db_path),
+                message: format!("open {}: {}", state.db_path, e.message),
             }
         })?;
         *g = Some(conn);
@@ -642,33 +641,35 @@ fn spi_ensure_open(
     Ok(())
 }
 
-fn spi_err<E: std::fmt::Display>(e: E) -> loaded::sqlite::extension::types::SqliteError {
+fn db_err_to_spi(e: sqlite_wasm_core::db::Error) -> loaded::sqlite::extension::types::SqliteError {
     loaded::sqlite::extension::types::SqliteError {
-        code: 1,
-        extended_code: 1,
-        message: e.to_string(),
+        code: e.code,
+        extended_code: e.extended_code,
+        message: e.message,
     }
 }
 
-fn spi_value_to_rusqlite(v: loaded::sqlite::extension::types::SqlValue) -> rusqlite::types::Value {
+fn spi_value_to_db(v: loaded::sqlite::extension::types::SqlValue) -> sqlite_wasm_core::db::Value {
     use loaded::sqlite::extension::types::SqlValue as V;
+    use sqlite_wasm_core::db;
     match v {
-        V::Null => rusqlite::types::Value::Null,
-        V::Integer(i) => rusqlite::types::Value::Integer(i),
-        V::Real(r) => rusqlite::types::Value::Real(r),
-        V::Text(s) => rusqlite::types::Value::Text(s),
-        V::Blob(b) => rusqlite::types::Value::Blob(b),
+        V::Null => db::Value::Null,
+        V::Integer(i) => db::Value::Integer(i),
+        V::Real(r) => db::Value::Real(r),
+        V::Text(s) => db::Value::Text(s),
+        V::Blob(b) => db::Value::Blob(b),
     }
 }
 
-fn rusqlite_to_spi_value(v: rusqlite::types::Value) -> loaded::sqlite::extension::types::SqlValue {
+fn db_value_to_spi(v: sqlite_wasm_core::db::Value) -> loaded::sqlite::extension::types::SqlValue {
     use loaded::sqlite::extension::types::SqlValue as V;
+    use sqlite_wasm_core::db;
     match v {
-        rusqlite::types::Value::Null => V::Null,
-        rusqlite::types::Value::Integer(i) => V::Integer(i),
-        rusqlite::types::Value::Real(r) => V::Real(r),
-        rusqlite::types::Value::Text(s) => V::Text(s),
-        rusqlite::types::Value::Blob(b) => V::Blob(b),
+        db::Value::Null => V::Null,
+        db::Value::Integer(i) => V::Integer(i),
+        db::Value::Real(r) => V::Real(r),
+        db::Value::Text(s) => V::Text(s),
+        db::Value::Blob(b) => V::Blob(b),
     }
 }
 
@@ -684,29 +685,20 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
         let conn = g.as_ref().expect("ensured open");
-        let mut stmt = conn.prepare(&sql).map_err(spi_err)?;
-        let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
-        let col_count = columns.len();
-        let rqs: Vec<rusqlite::types::Value> =
-            params.into_iter().map(spi_value_to_rusqlite).collect();
-        let mut rows = stmt
-            .query(rusqlite::params_from_iter(rqs.iter()))
-            .map_err(spi_err)?;
-        let mut out_rows: Vec<Vec<loaded::sqlite::extension::types::SqlValue>> = Vec::new();
-        while let Some(row) = rows.next().map_err(spi_err)? {
-            let mut r = Vec::with_capacity(col_count);
-            for i in 0..col_count {
-                let v: rusqlite::types::Value = row.get(i).map_err(spi_err)?;
-                r.push(rusqlite_to_spi_value(v));
-            }
-            out_rows.push(r);
-        }
-        drop(rows);
+        let mut stmt = conn.prepare(&sql).map_err(db_err_to_spi)?;
+        let columns: Vec<String> = stmt.column_names();
+        let bound: Vec<_> = params.into_iter().map(spi_value_to_db).collect();
+        stmt.bind_all(&bound).map_err(db_err_to_spi)?;
+        let rows = stmt.collect_rows().map_err(db_err_to_spi)?;
         drop(stmt);
+        let out_rows: Vec<Vec<loaded::sqlite::extension::types::SqlValue>> = rows
+            .into_iter()
+            .map(|r| r.into_iter().map(db_value_to_spi).collect())
+            .collect();
         Ok(loaded::sqlite::extension::types::QueryResult {
             columns,
             rows: out_rows,
-            changes: conn.changes() as i64,
+            changes: conn.changes(),
             last_insert_rowid: conn.last_insert_rowid(),
         })
     }
@@ -722,14 +714,20 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
         let conn = g.as_ref().expect("ensured open");
-        let rqs: Vec<rusqlite::types::Value> =
-            params.into_iter().map(spi_value_to_rusqlite).collect();
-        let v: rusqlite::types::Value = conn
-            .query_row(&sql, rusqlite::params_from_iter(rqs.iter()), |row| {
-                row.get(0)
-            })
-            .map_err(spi_err)?;
-        Ok(rusqlite_to_spi_value(v))
+        let mut stmt = conn.prepare(&sql).map_err(db_err_to_spi)?;
+        let bound: Vec<_> = params.into_iter().map(spi_value_to_db).collect();
+        stmt.bind_all(&bound).map_err(db_err_to_spi)?;
+        let rows = stmt.collect_rows().map_err(db_err_to_spi)?;
+        let v = rows
+            .into_iter()
+            .next()
+            .and_then(|r| r.into_iter().next())
+            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
+                code: 1,
+                extended_code: 1,
+                message: "execute_scalar: no rows".to_string(),
+            })?;
+        Ok(db_value_to_spi(v))
     }
 
     async fn execute_batch(
@@ -739,10 +737,9 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
         let conn = g.as_ref().expect("ensured open");
-        conn.execute_batch(&sql).map_err(spi_err)?;
-        Ok(conn.changes() as i64)
+        conn.execute_batch(&sql).map_err(db_err_to_spi)?;
+        Ok(conn.changes())
     }
-
 }
 
 impl loaded::sqlite::extension::logging::Host for LoadedState {
@@ -1087,10 +1084,10 @@ pub struct CollationEntry {
 pub struct Host {
     engine: Engine,
     components: Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>>,
-    /// Database path the cli reactor is using. Loaded extensions'
-    /// spi.execute opens its own rusqlite::Connection to this path.
-    /// Empty string means `:memory:`, and SPI returns an error then
-    /// (in-memory dbs can't be shared between connections).
+    /// Database path the cli is using. Loaded extensions' spi.execute
+    /// opens its own core::db::Connection to this path. Empty string
+    /// means `:memory:`, and SPI returns an error then (in-memory
+    /// dbs can't be shared between connections).
     db_path: Arc<RwLock<String>>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
@@ -1474,8 +1471,8 @@ impl Host {
     }
 
     /// Set the database path the cli is using. Called by sqlite-wasm-run
-    /// before instantiating the reactor; loaded extensions' spi.execute
-    /// reads this when opening their own rusqlite connection.
+    /// before instantiating the component; loaded extensions' spi.execute
+    /// reads this when opening their own core::db connection.
     pub fn set_db_path(&self, path: &str) {
         *self.db_path.write() = path.to_string();
     }

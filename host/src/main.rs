@@ -92,12 +92,13 @@ async fn main() -> Result<()> {
 
     // Register the sqlite-runtime compose provider so Fiji functions
     // (compose-shaped wasm components) can `linker.resolve_by_id("sqlite-runtime")`.
-    // v1 uses the host's own rusqlite::Connection against the same
-    // db path as --db; same separate-connection semantics as
-    // spi.execute. None if no --db: Fiji functions then get an error.
+    // Uses a `core::db::Connection` against the --db path; same
+    // separate-connection semantics as spi.execute. None if no --db:
+    // Fiji functions then get an error.
     if !db_path.is_empty() && db_path != ":memory:" {
-        let conn =
-            rusqlite::Connection::open(&db_path).map_err(|e| anyhow!("open {db_path}: {e}"))?;
+        use sqlite_wasm_core::db;
+        let conn = db::Connection::open(&db_path, db::OpenFlags::DEFAULT)
+            .map_err(|e| anyhow!("open {db_path}: {}", e.message))?;
         let conn_arc = std::sync::Arc::new(parking_lot::Mutex::new(Some(conn)));
         host.register_compose_provider(
             "sqlite-runtime",

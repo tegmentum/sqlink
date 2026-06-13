@@ -123,6 +123,16 @@ pub struct Connection {
     raw: *mut ffi::sqlite3,
 }
 
+// SAFETY: sqlite3 connections are safe to move between threads
+// when sqlite3 is compiled with SQLITE_THREADSAFE != 0, which
+// libsqlite3-sys's bundled build does by default (serialized
+// mode). Concurrent calls on the same handle still need external
+// synchronization — that's the caller's responsibility (the host
+// crate wraps Connections in Arc<Mutex<...>>). Not Sync because
+// callers should serialize against the Mutex, not get implicit
+// shared access.
+unsafe impl Send for Connection {}
+
 impl Connection {
     /// Open a file-backed database. Empty path or `:memory:` opens
     /// an in-memory db via SQLITE_OPEN_MEMORY.

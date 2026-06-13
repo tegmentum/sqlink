@@ -19,9 +19,18 @@
 //! Tests silently skip if the wasm isn't built so the suite stays
 //! green in environments without the wasm toolchain.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use sqlite_wasm_host::{Capability, Host, Policy};
+use sqlite_wasm_core::db;
+
+fn open_db(path: &Path) -> db::Connection {
+    db::Connection::open(
+        path.to_str().expect("non-UTF8 path"),
+        db::OpenFlags::DEFAULT,
+    )
+    .expect("open db")
+}
 
 /// Path to a canonical-world wasm extension. Uses sqlite-wasm-loader's
 /// test_extension.wasm because it's already built against the
@@ -93,7 +102,7 @@ async fn fiji_function_resolves_sqlite_runtime() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("t.db");
     {
-        let c = rusqlite::Connection::open(&db_path).unwrap();
+        let c = open_db(&db_path);
         c.execute_batch("CREATE TABLE a(x); CREATE TABLE b(y); CREATE TABLE c(z);")
             .unwrap();
     }
@@ -101,7 +110,7 @@ async fn fiji_function_resolves_sqlite_runtime() {
     let host = Host::new().unwrap();
 
     // Register sqlite-runtime against the same file.
-    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let conn = open_db(&db_path);
     let conn_arc = Arc::new(Mutex::new(Some(conn)));
     host.register_compose_provider(
         "sqlite-runtime",
@@ -187,12 +196,12 @@ async fn fiji_tenant_scoping_isolates_providers() {
     let db_a = dir.path().join("a.db");
     let db_b = dir.path().join("b.db");
     {
-        let c = rusqlite::Connection::open(&db_a).unwrap();
+        let c = open_db(&db_a);
         c.execute_batch("CREATE TABLE a(x); CREATE TABLE b(y);")
             .unwrap();
     }
     {
-        let c = rusqlite::Connection::open(&db_b).unwrap();
+        let c = open_db(&db_b);
         c.execute_batch(
             "CREATE TABLE p(x); CREATE TABLE q(y); CREATE TABLE r(z); CREATE TABLE s(w);",
         )
@@ -202,7 +211,7 @@ async fn fiji_tenant_scoping_isolates_providers() {
     let host = Host::new().unwrap();
 
     // Tenant alpha sees the 2-table db.
-    let conn = rusqlite::Connection::open(&db_a).unwrap();
+    let conn = open_db(&db_a);
     host.register_compose_provider_in(
         "alpha",
         "sqlite-runtime",
@@ -210,7 +219,7 @@ async fn fiji_tenant_scoping_isolates_providers() {
     );
 
     // Tenant beta sees the 4-table db.
-    let conn = rusqlite::Connection::open(&db_b).unwrap();
+    let conn = open_db(&db_b);
     host.register_compose_provider_in(
         "beta",
         "sqlite-runtime",
@@ -457,12 +466,12 @@ async fn fiji_composes_sqlite_runtime_and_std_text() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("t.db");
     {
-        let c = rusqlite::Connection::open(&db_path).unwrap();
+        let c = open_db(&db_path);
         c.execute_batch("CREATE TABLE widgets(x);").unwrap();
     }
 
     let host = Host::new().unwrap();
-    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let conn = open_db(&db_path);
     host.register_compose_provider(
         "sqlite-runtime",
         ProviderHandle::new_sqlite_runtime(Arc::new(Mutex::new(Some(conn)))),
