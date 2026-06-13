@@ -1,5 +1,45 @@
 # spi.*-live: Status + Path Forward
 
+## Current state (after L1-L4 Stage 1)
+
+The channel-bridge architecture is in place:
+
+- **Engine**: `Host::new()` enables `wasm_component_model_async`.
+- **Bindgen**: the cli reactor's bindgen uses
+  `imports/exports: { default: async | store }`, producing call
+  methods that take `&Accessor<_, _>` and route through wasmtime's
+  concurrent canonical ABI.
+- **Reactor driver**: `sqlite-wasm-run`'s `run_reactor` wraps the
+  REPL in `Store::run_concurrent` and spawns a dispatcher task
+  that pulls `LiveSpiRequest`s off a `tokio::sync::mpsc` channel
+  and re-enters `cli.eval-structured` via `call_concurrent` on the
+  same instance the REPL is calling `cli.eval` on.
+- **Bridge**: `LiveSpiBridge` is the sender side; `Host` publishes
+  it; `LoadedState` clones it at dispatch time.
+- **execute_live / execute_scalar_live / execute_batch_live** try
+  the bridge first when no params and bridge is set. On bridge
+  failure (channel dropped / reactor stopped) they fall back to
+  the v1 fresh-connection path — graceful degradation.
+
+Validated by:
+- `host/tests/load.rs::live_spi_bridge_reenters_eval_structured`
+  drives a real cli reactor under `run_concurrent`, posts SQL to
+  the bridge, asserts `cli.eval-structured` returned the expected
+  scalar.
+- End-to-end smoke: `sqlite-wasm-run --reactor ... cli_rust.wasm`
+  still runs ordinary SQL through the rewritten reactor driver.
+
+What's NOT delivered yet:
+- **Params on the bridge.** `cli.eval-structured` takes only `sql`;
+  with params, the bridge falls through to the v1 fresh-connection
+  path. Fix by extending `cli.eval-structured` to
+  `(sql: string, params: list<sql-value>)` and bumping cli-rust's
+  impl — bounded follow-up.
+- **Dispatch-chain integration test.** The bridge re-entry test
+  exercises the channel directly. The full path (cli dispatch →
+  extension call → `spi.execute_live` → bridge) needs its own
+  E2E test driving `SELECT wasm_live_count('widgets')`.
+
 ## Current state (after T1 v1)
 
 `sqlite:extension/spi` ships six methods now (see

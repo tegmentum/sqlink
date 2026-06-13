@@ -165,6 +165,154 @@ async fn wasm_component_provider_handles_invoke() {
     assert!(err.contains("unknown method"), "got: {err}");
 }
 
+/// Drives the cli reactor under the concurrent canonical ABI and
+/// proves the channel-bridge re-entry actually works: a background
+/// task inside `Store::run_concurrent` receives SQL via the
+/// `LiveSpiBridge` channel and re-enters `cli.eval-structured` on
+/// the same instance the REPL would call `cli.eval` on. This is
+/// the exact path `LoadedState::execute_live` will use once L1-L4
+/// is wired through dispatch.
+///
+/// The test exercises only the reactor side (no extension dispatch
+/// yet) so the architecture can be validated independently.
+#[tokio::test]
+async fn live_spi_bridge_reenters_eval_structured() {
+    use sqlite_wasm_host::{bindings, LiveSpiBridge, LoaderData};
+    use wasmtime::component::{Component, Linker};
+    use wasmtime::{AsContextMut, Store};
+
+    let mut cli_rust_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    cli_rust_path.push("../cli-rust/target/wasm32-wasip1/release/sqlite_cli_rust.wasm");
+    if !cli_rust_path.exists() {
+        eprintln!("skipping: sqlite_cli_rust.wasm not built");
+        return;
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let db_path = dir.path().join("t.db");
+    {
+        let c = rusqlite::Connection::open(&db_path).unwrap();
+        c.execute_batch("CREATE TABLE widgets(id); INSERT INTO widgets VALUES(1),(2),(3),(4),(5);")
+            .unwrap();
+    }
+
+    let host = Host::new().unwrap();
+    host.set_db_path(db_path.to_string_lossy().as_ref());
+    let engine = host.engine().clone();
+
+    // Same State shape the runner uses; minimal wiring of WASI +
+    // extension-loader/dispatch host imports so the cli component
+    // can instantiate.
+    struct State {
+        wasi: wasmtime_wasi::WasiCtx,
+        resources: wasmtime_wasi::ResourceTable,
+        host: Host,
+    }
+    impl wasmtime_wasi::WasiView for State {
+        fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+            wasmtime_wasi::WasiCtxView {
+                ctx: &mut self.wasi,
+                table: &mut self.resources,
+            }
+        }
+    }
+
+    let bytes = std::fs::read(&cli_rust_path).unwrap();
+    let component = Component::from_binary(&engine, &bytes).unwrap();
+    let mut linker: Linker<State> = Linker::new(&engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker).unwrap();
+    bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |s: &mut State| sqlite_wasm_host::HostWrap {
+            host: &mut s.host,
+            resources: Some(&mut s.resources),
+        },
+    )
+    .unwrap();
+    bindings::sqlite::wasm::dispatch::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |s: &mut State| sqlite_wasm_host::HostWrap {
+            host: &mut s.host,
+            resources: Some(&mut s.resources),
+        },
+    )
+    .unwrap();
+
+    let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
+    let parent = db_path.parent().unwrap().to_string_lossy().to_string();
+    wasi.preopened_dir(
+        db_path.parent().unwrap(),
+        &parent,
+        wasmtime_wasi::DirPerms::all(),
+        wasmtime_wasi::FilePerms::all(),
+    )
+    .unwrap();
+    wasi.arg("cli");
+
+    let state = State {
+        wasi: wasi.build(),
+        resources: wasmtime_wasi::ResourceTable::new(),
+        host: host.clone(),
+    };
+    let mut store = Store::new(&engine, state);
+    store.set_fuel(u64::MAX / 2).unwrap();
+    store.set_epoch_deadline(1_000_000_000_000);
+
+    let reactor = sqlite_wasm_host::reactor::SqliteCliReactor::instantiate_async(
+        &mut store, &component, &linker,
+    )
+    .await
+    .expect("instantiate reactor");
+
+    let (req_tx, mut req_rx) = tokio::sync::mpsc::unbounded_channel();
+    let bridge = LiveSpiBridge::new(req_tx);
+    host.set_live_spi_bridge(bridge.clone());
+
+    let db_path_owned = db_path.to_string_lossy().to_string();
+    let result: Result<i64, String> = store
+        .as_context_mut()
+        .run_concurrent(async move |accessor| -> Result<i64, String> {
+            let cli = reactor.sqlite_wasm_cli();
+            cli.call_init(accessor, db_path_owned)
+                .await
+                .map_err(|e| format!("init trap: {e}"))?
+                .map_err(|e| format!("init: {e}"))?;
+
+            let dispatcher = async {
+                while let Some(req) = req_rx.recv().await {
+                    let r = cli.call_eval_structured(accessor, req.sql).await;
+                    let _ = req.resp_tx.send(r.map_err(|e| e.to_string()));
+                }
+            };
+
+            let driver = async {
+                let r = bridge
+                    .execute("SELECT COUNT(*) FROM widgets".to_string())
+                    .await
+                    .map_err(|e| format!("bridge: {e}"))?
+                    .map_err(|e| format!("eval-structured: {}", e.message))?;
+                assert_eq!(r.columns.len(), 1);
+                assert_eq!(r.rows.len(), 1);
+                let cell = &r.rows[0][0];
+                use sqlite_wasm_host::reactor::exports::sqlite::extension::types::SqlValue;
+                match cell {
+                    SqlValue::Integer(n) => Ok(*n),
+                    other => Err(format!("expected integer, got {other:?}")),
+                }
+            };
+
+            tokio::select! {
+                r = driver => r,
+                _ = dispatcher => Err("dispatcher exited first".into()),
+            }
+        })
+        .await
+        .expect("run_concurrent")
+        .map_err(|e| format!("driver: {e}"));
+
+    assert_eq!(result.expect("driver result"), 5);
+}
+
 /// live-spi-extension exports two scalars: wasm_committed_count and
 /// wasm_live_count. Both end-to-end through the host's
 /// `spi.execute_scalar` / `spi.execute_scalar_live` imports.

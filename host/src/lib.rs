@@ -140,8 +140,8 @@ pub mod reactor {
     wasmtime::component::bindgen!({
         path: "../wit",
         world: "sqlite-cli-reactor",
-        imports: { default: async },
-        exports: { default: async },
+        imports: { default: async | store },
+        exports: { default: async | store },
     });
 }
 
@@ -518,6 +518,15 @@ pub struct LoadedState {
     /// Cloned Arc<Mutex<…>> so it survives across the per-call
     /// Stores each dispatch builds (mirror of state/cache).
     spi_conn: Arc<Mutex<Option<rusqlite::Connection>>>,
+    /// Sender side of the live-SPI channel bridge, cloned from
+    /// `Host::live_spi_bridge` at dispatch time. When Some,
+    /// `execute_live` posts a SQL request that the cli-side
+    /// dispatcher routes back through `cli.eval-structured` via
+    /// the wasmtime concurrent ABI — giving the extension the
+    /// outer transaction's uncommitted writes. When None
+    /// (command-mode, or no reactor up), falls back to the v1
+    /// fresh-connection path.
+    live_spi_bridge: Option<LiveSpiBridge>,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -782,6 +791,20 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         loaded::sqlite::extension::types::QueryResult,
         loaded::sqlite::extension::types::SqliteError,
     > {
+        // Prefer the channel bridge when a reactor is up AND there
+        // are no parameters (eval-structured takes a raw SQL string;
+        // params would need a contract extension on cli.wit, deferred).
+        // On bridge failure, fall back to the fresh-connection v1
+        // path so the host degrades gracefully.
+        if params.is_empty() {
+            if let Some(bridge) = &self.live_spi_bridge {
+                match bridge.execute(sql.clone()).await {
+                    Ok(Ok(qr)) => return Ok(convert_reactor_qr_to_loaded(qr)),
+                    Ok(Err(e)) => return Err(convert_reactor_err_to_loaded(e)),
+                    Err(_) => { /* fall through to v1 */ }
+                }
+            }
+        }
         let conn = spi_open_fresh(&self.db_path)?;
         let mut stmt = conn.prepare(&sql).map_err(spi_err)?;
         let columns: Vec<String> = stmt.column_names().iter().map(|s| s.to_string()).collect();
@@ -818,6 +841,25 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         loaded::sqlite::extension::types::SqlValue,
         loaded::sqlite::extension::types::SqliteError,
     > {
+        // Bridge path: same shape as execute_live but pluck the first
+        // cell from the round-trip QueryResult.
+        if params.is_empty() {
+            if let Some(bridge) = &self.live_spi_bridge {
+                match bridge.execute(sql.clone()).await {
+                    Ok(Ok(qr)) => {
+                        let lqr = convert_reactor_qr_to_loaded(qr);
+                        return lqr
+                            .rows
+                            .into_iter()
+                            .next()
+                            .and_then(|r| r.into_iter().next())
+                            .ok_or_else(|| spi_err("query returned no rows"));
+                    }
+                    Ok(Err(e)) => return Err(convert_reactor_err_to_loaded(e)),
+                    Err(_) => { /* fall through to v1 */ }
+                }
+            }
+        }
         let conn = spi_open_fresh(&self.db_path)?;
         let rqs: Vec<rusqlite::types::Value> =
             params.into_iter().map(spi_value_to_rusqlite).collect();
@@ -833,6 +875,13 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         &mut self,
         sql: String,
     ) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
+        if let Some(bridge) = &self.live_spi_bridge {
+            match bridge.execute(sql.clone()).await {
+                Ok(Ok(qr)) => return Ok(qr.changes),
+                Ok(Err(e)) => return Err(convert_reactor_err_to_loaded(e)),
+                Err(_) => { /* fall through to v1 */ }
+            }
+        }
         let conn = spi_open_fresh(&self.db_path)?;
         conn.execute_batch(&sql).map_err(spi_err)?;
         Ok(conn.changes() as i64)
@@ -1148,6 +1197,7 @@ fn build_loaded_store(
     engine: &Engine,
     ext: &LoadedExtension,
     db_path: String,
+    live_spi_bridge: Option<LiveSpiBridge>,
 ) -> Result<wasmtime::Store<LoadedState>> {
     let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
     builder.inherit_stdio();
@@ -1158,6 +1208,7 @@ fn build_loaded_store(
         cache: ext.cache.clone(),
         db_path,
         spi_conn: ext.spi_conn.clone(),
+        live_spi_bridge,
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
@@ -1213,6 +1264,72 @@ pub struct Host {
     /// resolution would route through `cache` once CP7 lands the
     /// CAS bridge.
     compose_providers: Arc<RwLock<HashMap<String, compose_provider::ProviderHandle>>>,
+    /// Sender side of the live-SPI channel bridge. Set by
+    /// `sqlite-wasm-run`'s `run_reactor` once the reactor is up;
+    /// cloned into `LoadedState` per `dispatch.*` call so the
+    /// extension's `spi.execute_live` can post a SQL request that
+    /// the cli-side dispatcher routes back through
+    /// `cli.eval-structured` via the wasmtime concurrent ABI. None
+    /// for command-mode runs or before the reactor has started.
+    live_spi_bridge: Arc<RwLock<Option<LiveSpiBridge>>>,
+}
+
+/// Channel sender handed to `LoadedState` so loaded extensions can
+/// drive their `spi.execute_live` calls back into the cli reactor
+/// without holding a direct reference to the reactor's Store.
+///
+/// The receiver lives inside `sqlite-wasm-run`'s
+/// `run_concurrent` scope (where it has access to the Accessor
+/// needed to `call_concurrent` on `cli.eval-structured`).
+#[derive(Clone)]
+pub struct LiveSpiBridge {
+    tx: tokio::sync::mpsc::UnboundedSender<LiveSpiRequest>,
+}
+
+impl LiveSpiBridge {
+    pub fn new(tx: tokio::sync::mpsc::UnboundedSender<LiveSpiRequest>) -> Self {
+        Self { tx }
+    }
+
+    /// Submit one SQL string to the dispatcher. Returns the
+    /// structured result the cli's `eval-structured` produced.
+    /// `Err` indicates the channel collapsed (reactor stopped) —
+    /// callers should fall back to the v1 fresh-connection path.
+    pub async fn execute(
+        &self,
+        sql: String,
+    ) -> std::result::Result<
+        std::result::Result<
+            reactor::exports::sqlite::extension::types::QueryResult,
+            reactor::exports::sqlite::extension::types::SqliteError,
+        >,
+        String,
+    > {
+        let (resp_tx, resp_rx) = tokio::sync::oneshot::channel();
+        self.tx
+            .send(LiveSpiRequest { sql, resp_tx })
+            .map_err(|_| "live-spi dispatcher gone".to_string())?;
+        match resp_rx.await {
+            Ok(payload) => payload,
+            Err(_) => Err("live-spi response dropped".to_string()),
+        }
+    }
+}
+
+/// One request on the bridge — opaque to extensions; built by
+/// `LiveSpiBridge::execute`. Carries the SQL and a oneshot back-
+/// channel for the structured result.
+pub struct LiveSpiRequest {
+    pub sql: String,
+    pub resp_tx: tokio::sync::oneshot::Sender<
+        std::result::Result<
+            std::result::Result<
+                reactor::exports::sqlite::extension::types::QueryResult,
+                reactor::exports::sqlite::extension::types::SqliteError,
+            >,
+            String,
+        >,
+    >,
 }
 
 impl Host {
@@ -1222,6 +1339,10 @@ impl Host {
         let mut config = Config::new();
         config.wasm_component_model(true);
         config.async_support(true);
+        // Enables the concurrent canonical ABI used by the reactor's
+        // bindgen (`imports/exports: { default: async | store }`) for
+        // live-SPI re-entry. See host/SPI-LIVE.md for the design.
+        config.wasm_component_model_async(true);
         config.consume_fuel(true);
         config.epoch_interruption(true);
         config.cranelift_opt_level(wasmtime::OptLevel::Speed);
@@ -1236,7 +1357,25 @@ impl Host {
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
+            live_spi_bridge: Arc::new(RwLock::new(None)),
         })
+    }
+
+    /// Install the sender side of the live-SPI channel bridge. The
+    /// receiver runs inside `sqlite-wasm-run`'s `run_concurrent`
+    /// scope; this setter is what publishes the sender to
+    /// `LoadedState` (cloned at dispatch time so the per-call store
+    /// can drive `execute_live` through the bridge).
+    pub fn set_live_spi_bridge(&self, bridge: LiveSpiBridge) {
+        *self.live_spi_bridge.write() = Some(bridge);
+    }
+
+    /// Read the currently-installed bridge, cloned. Returns None
+    /// in command-mode (no reactor) or before the reactor has
+    /// started. `LoadedState::execute_live` falls back to the
+    /// fresh-connection v1 path when this is None.
+    pub fn live_spi_bridge(&self) -> Option<LiveSpiBridge> {
+        self.live_spi_bridge.read().clone()
     }
 
     /// Register a built-in compose:dynlink provider under `id`.
@@ -1367,7 +1506,12 @@ impl Host {
                         .ok_or_else(|| anyhow!("no resolver registered for scheme {other}:"))?
                 };
                 let linker = make_loaded_resolving_linker(&self.engine)?;
-                let mut store = build_loaded_store(&self.engine, &resolver, self.db_path())?;
+                let mut store = build_loaded_store(
+                    &self.engine,
+                    &resolver,
+                    self.db_path(),
+                    self.live_spi_bridge(),
+                )?;
                 let instance = loaded_resolving::Resolving::instantiate_async(
                     &mut store,
                     &resolver.component,
@@ -1499,7 +1643,12 @@ impl Host {
             cache: Arc::new(Mutex::new(HashMap::new())),
             spi_conn: Arc::new(Mutex::new(None)),
         };
-        let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
+        let mut store = build_loaded_store(
+            &self.engine,
+            &tmp_ext,
+            self.db_path(),
+            self.live_spi_bridge(),
+        )?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
             .await
             .map_err(|e| anyhow!("instantiate loaded ext: {e}"))?;
@@ -1623,7 +1772,8 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &ext.component, &linker)
             .await
             .map_err(|e| anyhow!("instantiate {ext_name}: {e}"))?;
@@ -1663,7 +1813,8 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
         let instance =
             loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1695,7 +1846,8 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
         let instance =
             loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1730,7 +1882,8 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_collating_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
         let instance =
             loaded_collating::Collating::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1764,7 +1917,8 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_authorizing_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
         let instance =
             loaded_authorizing::Authorizing::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1804,7 +1958,8 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
         let instance =
             loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1833,7 +1988,8 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
         let instance =
             loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1855,7 +2011,8 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path(), self.live_spi_bridge())?;
         let instance =
             loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -1985,6 +2142,46 @@ fn convert_sql_value_from_loaded(
         From::Real(r) => To::Real(r),
         From::Text(s) => To::Text(s),
         From::Blob(b) => To::Blob(b),
+    }
+}
+
+/// Translate the reactor-bindgen's QueryResult into the loaded-
+/// bindgen's equivalent so `execute_live` can return what the SPI
+/// import contract requires after the channel bridge round trip.
+fn convert_reactor_qr_to_loaded(
+    qr: reactor::exports::sqlite::extension::types::QueryResult,
+) -> loaded::sqlite::extension::types::QueryResult {
+    use loaded::sqlite::extension::types::QueryResult as Out;
+    use loaded::sqlite::extension::types::SqlValue as To;
+    use reactor::exports::sqlite::extension::types::SqlValue as From;
+    fn conv(v: From) -> To {
+        match v {
+            From::Null => To::Null,
+            From::Integer(i) => To::Integer(i),
+            From::Real(r) => To::Real(r),
+            From::Text(s) => To::Text(s),
+            From::Blob(b) => To::Blob(b),
+        }
+    }
+    Out {
+        columns: qr.columns,
+        rows: qr
+            .rows
+            .into_iter()
+            .map(|r| r.into_iter().map(conv).collect())
+            .collect(),
+        changes: qr.changes,
+        last_insert_rowid: qr.last_insert_rowid,
+    }
+}
+
+fn convert_reactor_err_to_loaded(
+    e: reactor::exports::sqlite::extension::types::SqliteError,
+) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: e.code,
+        extended_code: e.extended_code,
+        message: e.message,
     }
 }
 

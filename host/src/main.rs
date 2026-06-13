@@ -214,7 +214,9 @@ async fn run_reactor(
     linker: &Linker<State>,
     db_path: &str,
 ) -> Result<()> {
+    use sqlite_wasm_host::{LiveSpiBridge, LiveSpiRequest};
     use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use wasmtime::AsContextMut;
 
     let reactor = sqlite_wasm_host::reactor::SqliteCliReactor::instantiate_async(
         &mut *store,
@@ -224,55 +226,90 @@ async fn run_reactor(
     .await
     .map_err(|e| anyhow!("instantiate reactor: {e}"))?;
 
-    let cli = reactor.sqlite_wasm_cli();
-    cli.call_init(&mut *store, db_path)
-        .await
-        .map_err(|e| anyhow!("cli.init trap: {e}"))?
-        .map_err(|e| anyhow!("cli.init returned: {e}"))?;
+    // Channel bridge for live-SPI re-entry. The sender is published
+    // on Host so LoadedState (constructed per dispatch.scalar_call)
+    // can clone it; the receiver is processed by a task running
+    // inside the run_concurrent scope so it has access to the
+    // Accessor needed for call_concurrent on cli.eval-structured.
+    // See host/SPI-LIVE.md for the architecture.
+    let (req_tx, mut req_rx) = tokio::sync::mpsc::unbounded_channel::<LiveSpiRequest>();
+    store
+        .data()
+        .host
+        .set_live_spi_bridge(LiveSpiBridge::new(req_tx));
 
-    let mut input = BufReader::new(tokio::io::stdin()).lines();
-    let mut stdout = tokio::io::stdout();
-    let mut buffered = String::new();
+    let db_path_owned = db_path.to_string();
 
-    loop {
-        let prompt = cli
-            .call_current_prompt(&mut *store, &buffered)
-            .await
-            .map_err(|e| anyhow!("cli.current_prompt: {e}"))?;
-        let _ = stdout.write_all(prompt.as_bytes()).await;
-        let _ = stdout.flush().await;
+    store
+        .as_context_mut()
+        .run_concurrent(async move |accessor| -> Result<()> {
+            let cli = reactor.sqlite_wasm_cli();
+            cli.call_init(accessor, db_path_owned)
+                .await
+                .map_err(|e| anyhow!("cli.init trap: {e}"))?
+                .map_err(|e| anyhow!("cli.init returned: {e}"))?;
 
-        let line = match input.next_line().await {
-            Ok(Some(l)) => l,
-            Ok(None) => break,
-            Err(e) => return Err(anyhow!("stdin: {e}")),
-        };
-        buffered.push_str(&line);
-        buffered.push('\n');
+            let dispatcher = async {
+                while let Some(req) = req_rx.recv().await {
+                    let result = cli.call_eval_structured(accessor, req.sql).await;
+                    let _ = req.resp_tx.send(result.map_err(|e| e.to_string()));
+                }
+            };
 
-        let complete = cli
-            .call_is_statement_complete(&mut *store, &buffered)
-            .await
-            .map_err(|e| anyhow!("cli.is_statement_complete: {e}"))?;
-        if !complete {
-            continue;
-        }
+            let repl = async {
+                let mut input = BufReader::new(tokio::io::stdin()).lines();
+                let mut stdout = tokio::io::stdout();
+                let mut buffered = String::new();
+                loop {
+                    let prompt = cli
+                        .call_current_prompt(accessor, buffered.clone())
+                        .await
+                        .map_err(|e| anyhow!("cli.current_prompt: {e}"))?;
+                    let _ = stdout.write_all(prompt.as_bytes()).await;
+                    let _ = stdout.flush().await;
 
-        let out = cli
-            .call_eval(&mut *store, &buffered)
-            .await
-            .map_err(|e| anyhow!("cli.eval: {e}"))?;
-        let _ = stdout.write_all(out.as_bytes()).await;
-        let _ = stdout.flush().await;
-        buffered.clear();
+                    let line = match input.next_line().await {
+                        Ok(Some(l)) => l,
+                        Ok(None) => break,
+                        Err(e) => return Err(anyhow!("stdin: {e}")),
+                    };
+                    buffered.push_str(&line);
+                    buffered.push('\n');
 
-        if cli
-            .call_is_done(&mut *store)
-            .await
-            .map_err(|e| anyhow!("cli.is_done: {e}"))?
-        {
-            break;
-        }
-    }
+                    let complete = cli
+                        .call_is_statement_complete(accessor, buffered.clone())
+                        .await
+                        .map_err(|e| anyhow!("cli.is_statement_complete: {e}"))?;
+                    if !complete {
+                        continue;
+                    }
+
+                    let out = cli
+                        .call_eval(accessor, buffered.clone())
+                        .await
+                        .map_err(|e| anyhow!("cli.eval: {e}"))?;
+                    let _ = stdout.write_all(out.as_bytes()).await;
+                    let _ = stdout.flush().await;
+                    buffered.clear();
+
+                    if cli
+                        .call_is_done(accessor)
+                        .await
+                        .map_err(|e| anyhow!("cli.is_done: {e}"))?
+                    {
+                        break;
+                    }
+                }
+                Ok::<_, anyhow::Error>(())
+            };
+
+            // tokio::select! so the dispatcher exits when the REPL ends.
+            tokio::select! {
+                r = repl => r,
+                _ = dispatcher => Ok(()),
+            }
+        })
+        .await??;
+
     Ok(())
 }
