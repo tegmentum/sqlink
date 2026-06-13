@@ -14,6 +14,8 @@ use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{ResourceTable, WasiCtxBuilder};
 
+use sqlite_wasm_host::{bindings as host_bindings, Host, HostWrap, LoaderData};
+
 wasmtime::component::bindgen!({
     path: "../wit",
     world: "sqlite-cli-library",
@@ -23,18 +25,36 @@ wasmtime::component::bindgen!({
 
 struct State {
     wasi: wasmtime_wasi::WasiCtx,
-    table: ResourceTable,
+    resources: ResourceTable,
+    host: Host,
 }
 
 impl wasmtime_wasi::WasiView for State {
     fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
-        wasmtime_wasi::WasiCtxView { ctx: &mut self.wasi, table: &mut self.table }
+        wasmtime_wasi::WasiCtxView { ctx: &mut self.wasi, table: &mut self.resources }
     }
 }
 
 fn sqlite_lib_path() -> Option<PathBuf> {
     let candidates = [
         "../sqlite-lib/target/wasm32-wasip2/release/sqlite_lib.component.wasm",
+    ];
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for c in candidates {
+        let p = manifest_dir.join(c);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+/// Path to a canonical-world wasm extension (sqlite-wasm-loader's
+/// `test_extension.wasm`). Same artifact load.rs uses.
+fn canonical_ext_path() -> Option<PathBuf> {
+    let candidates = [
+        "../../sqlite-wasm-loader/target/wasm32-wasip1/release/test_extension.wasm",
+        "../sqlite-wasm-loader/target/wasm32-wasip1/release/test_extension.wasm",
     ];
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for c in candidates {
@@ -55,9 +75,27 @@ async fn instantiate() -> Result<Option<(Store<State>, SqliteCliLibrary)>> {
     let component = Component::from_binary(&engine, &bytes)?;
     let mut linker: Linker<State> = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    let host = Host::new()?;
+    host_bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |state: &mut State| HostWrap {
+            host: &mut state.host,
+            resources: Some(&mut state.resources),
+        },
+    )?;
+    host_bindings::sqlite::wasm::dispatch::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |state: &mut State| HostWrap {
+            host: &mut state.host,
+            resources: Some(&mut state.resources),
+        },
+    )?;
+
     let state = State {
         wasi: WasiCtxBuilder::new().inherit_stdio().build(),
-        table: ResourceTable::new(),
+        resources: ResourceTable::new(),
+        host,
     };
     let mut store = Store::new(&engine, state);
     let lib = SqliteCliLibrary::instantiate_async(&mut store, &component, &linker).await?;
@@ -129,4 +167,42 @@ async fn high_level_open_memory_runs_a_query() {
 
     assert_eq!(result.column_names, vec!["id".to_string()]);
     assert_eq!(result.rows.len(), 2);
+}
+
+#[tokio::test]
+async fn library_load_extension_round_trip() {
+    let Some((mut store, lib)) = instantiate().await.expect("instantiate") else {
+        eprintln!("skipping: sqlite-lib not built");
+        return;
+    };
+    let Some(ext_path) = canonical_ext_path() else {
+        eprintln!("skipping: test_extension.wasm not built (sqlite-wasm-loader)");
+        return;
+    };
+    let library = lib.sqlite_wasm_library();
+
+    use exports::sqlite::wasm::library::{Capability, LoadOptions};
+    let opts = LoadOptions {
+        grant: vec![Capability::Text],
+        http_policy: None,
+        fs_policy: None,
+        fuel_per_call: None,
+        memory_limit_bytes: None,
+        epoch_deadline_ms: None,
+    };
+
+    let manifest = library
+        .call_load_extension(&mut store, ext_path.to_str().unwrap(), &opts)
+        .await
+        .expect("trap")
+        .expect("load_extension");
+
+    assert!(!manifest.name.is_empty(), "manifest carries a name");
+    assert!(!manifest.scalar_functions.is_empty(), "manifest declares scalars");
+
+    let unload = library
+        .call_unload_extension(&mut store, &manifest.name)
+        .await
+        .expect("trap");
+    assert!(unload.is_ok(), "unload of just-loaded extension succeeds, got {unload:?}");
 }

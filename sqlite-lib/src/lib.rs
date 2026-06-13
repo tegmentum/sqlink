@@ -617,7 +617,145 @@ impl GuestStatement for HlStatement {
 
 // =========================================================================
 // sqlite:wasm/library
+// Forwards load-extension calls to the host's extension-loader.
+// The library interface's policy/metadata types are structural twins
+// of the canonical sqlite:extension types — see wit/library.wit for
+// why they aren't `use`-imported. Conversion is mechanical.
 // =========================================================================
+
+mod lib_load {
+    use super::bindings;
+    use bindings::exports::sqlite::wasm::library::{
+        AggregateFunctionSpec as LibAggSpec, Capability as LibCap, CollationSpec as LibCollSpec,
+        FsPolicy as LibFsPolicy, FunctionFlags as LibFlags, HttpMethod as LibMethod,
+        HttpPolicy as LibHttpPolicy, LoadOptions as LibOpts, LoaderError as LibLoaderError,
+        Manifest as LibManifest, ScalarFunctionSpec as LibScalarSpec,
+    };
+    use bindings::sqlite::extension::metadata as md;
+    use bindings::sqlite::extension::policy as pol;
+    use bindings::sqlite::extension::types as ty;
+    use bindings::sqlite::wasm::extension_loader as loader;
+
+    fn cap_to_pol(c: LibCap) -> pol::Capability {
+        match c {
+            LibCap::Spi => pol::Capability::Spi,
+            LibCap::Prepared => pol::Capability::Prepared,
+            LibCap::Transaction => pol::Capability::Transaction,
+            LibCap::Schema => pol::Capability::Schema,
+            LibCap::State => pol::Capability::State,
+            LibCap::Cache => pol::Capability::Cache,
+            LibCap::Random => pol::Capability::Random,
+            LibCap::Text => pol::Capability::Text,
+            LibCap::Hashing => pol::Capability::Hashing,
+            LibCap::Encoding => pol::Capability::Encoding,
+            LibCap::Http => pol::Capability::Http,
+        }
+    }
+
+    fn cap_to_lib(c: pol::Capability) -> LibCap {
+        match c {
+            pol::Capability::Spi => LibCap::Spi,
+            pol::Capability::Prepared => LibCap::Prepared,
+            pol::Capability::Transaction => LibCap::Transaction,
+            pol::Capability::Schema => LibCap::Schema,
+            pol::Capability::State => LibCap::State,
+            pol::Capability::Cache => LibCap::Cache,
+            pol::Capability::Random => LibCap::Random,
+            pol::Capability::Text => LibCap::Text,
+            pol::Capability::Hashing => LibCap::Hashing,
+            pol::Capability::Encoding => LibCap::Encoding,
+            pol::Capability::Http => LibCap::Http,
+        }
+    }
+
+    fn method_to_pol(m: LibMethod) -> pol::Method {
+        match m {
+            LibMethod::Get => pol::Method::Get,
+            LibMethod::Head => pol::Method::Head,
+            LibMethod::Post => pol::Method::Post,
+            LibMethod::Put => pol::Method::Put,
+            LibMethod::Delete => pol::Method::Delete,
+            LibMethod::Connect => pol::Method::Connect,
+            LibMethod::Options => pol::Method::Options,
+            LibMethod::Trace => pol::Method::Trace,
+            LibMethod::Patch => pol::Method::Patch,
+        }
+    }
+
+    fn flags_to_ty(f: LibFlags) -> ty::FunctionFlags {
+        let mut out = ty::FunctionFlags::empty();
+        if f.contains(LibFlags::DETERMINISTIC) { out |= ty::FunctionFlags::DETERMINISTIC; }
+        if f.contains(LibFlags::DIRECT_ONLY)   { out |= ty::FunctionFlags::DIRECT_ONLY; }
+        if f.contains(LibFlags::INNOCUOUS)     { out |= ty::FunctionFlags::INNOCUOUS; }
+        out
+    }
+
+    fn flags_to_lib(f: ty::FunctionFlags) -> LibFlags {
+        let mut out = LibFlags::empty();
+        if f.contains(ty::FunctionFlags::DETERMINISTIC) { out |= LibFlags::DETERMINISTIC; }
+        if f.contains(ty::FunctionFlags::DIRECT_ONLY)   { out |= LibFlags::DIRECT_ONLY; }
+        if f.contains(ty::FunctionFlags::INNOCUOUS)     { out |= LibFlags::INNOCUOUS; }
+        out
+    }
+
+    pub fn opts_to_pol(o: LibOpts) -> pol::LoadOptions {
+        pol::LoadOptions {
+            grant: o.grant.into_iter().map(cap_to_pol).collect(),
+            http_policy: o.http_policy.map(|hp: LibHttpPolicy| pol::HttpPolicy {
+                allowed_hosts: hp.allowed_hosts,
+                allowed_methods: hp.allowed_methods.map(|ms| ms.into_iter().map(method_to_pol).collect()),
+                max_body_bytes: hp.max_body_bytes,
+                timeout_ms: hp.timeout_ms,
+            }),
+            fs_policy: o.fs_policy.map(|fp: LibFsPolicy| pol::FsPolicy {
+                readable_prefixes: fp.readable_prefixes,
+                writable_prefixes: fp.writable_prefixes,
+                max_write_bytes_per_call: fp.max_write_bytes_per_call,
+            }),
+            fuel_per_call: o.fuel_per_call,
+            memory_limit_bytes: o.memory_limit_bytes,
+            epoch_deadline_ms: o.epoch_deadline_ms,
+        }
+    }
+
+    pub fn manifest_to_lib(m: md::Manifest) -> LibManifest {
+        LibManifest {
+            name: m.name,
+            version: m.version,
+            scalar_functions: m.scalar_functions.into_iter().map(|s| LibScalarSpec {
+                id: s.id,
+                name: s.name,
+                num_args: s.num_args,
+                func_flags: flags_to_lib(s.func_flags),
+            }).collect(),
+            aggregate_functions: m.aggregate_functions.into_iter().map(|s| LibAggSpec {
+                id: s.id,
+                name: s.name,
+                num_args: s.num_args,
+                func_flags: flags_to_lib(s.func_flags),
+                is_window: s.is_window,
+            }).collect(),
+            collations: m.collations.into_iter().map(|c| LibCollSpec {
+                id: c.id,
+                name: c.name,
+            }).collect(),
+            has_authorizer: m.has_authorizer,
+            has_update_hook: m.has_update_hook,
+            has_commit_hook: m.has_commit_hook,
+            declared_capabilities: m.declared_capabilities.into_iter().map(cap_to_lib).collect(),
+        }
+    }
+
+    pub fn loader_err_to_lib(e: loader::LoaderError) -> LibLoaderError {
+        LibLoaderError { code: e.code, message: e.message }
+    }
+
+    // Silence dead-code warnings: these helpers are part of the
+    // conversion surface but not all of them are reachable from
+    // exported methods alone. flags_to_ty in particular is only
+    // useful for symmetry with the inverse direction.
+    #[allow(dead_code)] pub fn _touch() { let _ = flags_to_ty as fn(LibFlags) -> ty::FunctionFlags; }
+}
 
 impl LibraryGuest for CliLibrary {
     fn is_statement_complete(buffered: String) -> bool {
@@ -632,6 +770,39 @@ impl LibraryGuest for CliLibrary {
 
     fn library_version() -> String { env!("CARGO_PKG_VERSION").to_string() }
     fn sqlite_version() -> String { db::version() }
+
+    fn load_extension(
+        path: String,
+        opts: bindings::exports::sqlite::wasm::library::LoadOptions,
+    ) -> Result<
+        bindings::exports::sqlite::wasm::library::Manifest,
+        bindings::exports::sqlite::wasm::library::LoaderError,
+    > {
+        let pol_opts = lib_load::opts_to_pol(opts);
+        bindings::sqlite::wasm::extension_loader::load_extension(&path, &pol_opts)
+            .map(lib_load::manifest_to_lib)
+            .map_err(lib_load::loader_err_to_lib)
+    }
+
+    fn load_extension_from_uri(
+        uri: String,
+        opts: bindings::exports::sqlite::wasm::library::LoadOptions,
+    ) -> Result<
+        bindings::exports::sqlite::wasm::library::Manifest,
+        bindings::exports::sqlite::wasm::library::LoaderError,
+    > {
+        let pol_opts = lib_load::opts_to_pol(opts);
+        bindings::sqlite::wasm::extension_loader::load_extension_from_uri(&uri, &pol_opts)
+            .map(lib_load::manifest_to_lib)
+            .map_err(lib_load::loader_err_to_lib)
+    }
+
+    fn unload_extension(
+        name: String,
+    ) -> Result<(), bindings::exports::sqlite::wasm::library::LoaderError> {
+        bindings::sqlite::wasm::extension_loader::unload_extension(&name)
+            .map_err(lib_load::loader_err_to_lib)
+    }
 }
 
 bindings::export!(CliLibrary with_types_in bindings);

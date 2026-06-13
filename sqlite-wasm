@@ -1,0 +1,60 @@
+#!/bin/bash
+# sqlite-wasm — drop-in-ish wrapper around the wasm SQLite CLI.
+#
+# Usage matches sqlite3's most common shapes:
+#   sqlite-wasm                    # interactive REPL, :memory: db
+#   sqlite-wasm DB                 # interactive REPL on DB
+#   sqlite-wasm DB SQL             # one-shot: run SQL on DB and exit
+#   sqlite-wasm < script.sql       # pipe SQL in
+#   sqlite-wasm -- ARG ...         # everything after -- goes to the component
+#
+# Under the hood: invokes `sqlite-wasm-run` from the host crate against
+# the prebuilt `sqlite_cli.component.wasm`. Both have to be built first:
+#   cargo build --manifest-path host/Cargo.toml
+#   cargo build --release --target wasm32-wasip2 --manifest-path cli/Cargo.toml
+#   wasm-tools component new \
+#     cli/target/wasm32-wasip2/release/sqlite_cli.wasm \
+#     -o cli/target/wasm32-wasip2/release/sqlite_cli.component.wasm
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMPONENT="$SCRIPT_DIR/cli/target/wasm32-wasip2/release/sqlite_cli.component.wasm"
+RUNNER="$SCRIPT_DIR/host/target/debug/sqlite-wasm-run"
+
+if [[ ! -x "$RUNNER" ]]; then
+    echo "sqlite-wasm: $RUNNER not built; run: cargo build --manifest-path host/Cargo.toml" >&2
+    exit 1
+fi
+if [[ ! -f "$COMPONENT" ]]; then
+    echo "sqlite-wasm: $COMPONENT not built; see header of $0 for the build steps" >&2
+    exit 1
+fi
+
+db_args=()
+extra_args=()
+
+# First non-flag positional argument is the db path; remaining positionals
+# (after the optional `--`) are forwarded as guest args to the cli.
+if [[ $# -gt 0 && "$1" != -* ]]; then
+    db_args=(--db "$1")
+    shift
+    # If there's a second positional and it's not `--`, treat it as SQL
+    # to feed on stdin (sqlite3 .. "SELECT ..." shape).
+    if [[ $# -gt 0 && "$1" != -- && "$1" != --* ]]; then
+        sql="$1"
+        shift
+        printf '%s\n.quit\n' "$sql" | exec "$RUNNER" "${db_args[@]+"${db_args[@]}"}" "$COMPONENT" "$@"
+    fi
+fi
+
+# Pass through any explicit -- ARG... block to the component.
+if [[ $# -gt 0 && "$1" == "--" ]]; then
+    shift
+    extra_args=("$@")
+fi
+
+exec "$RUNNER" \
+    "${db_args[@]+"${db_args[@]}"}" \
+    "$COMPONENT" \
+    "${extra_args[@]+"${extra_args[@]}"}"
