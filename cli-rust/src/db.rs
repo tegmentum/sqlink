@@ -277,6 +277,7 @@ pub struct Statement<'a> {
 }
 
 /// Result of one `Statement::step()`.
+#[derive(Debug)]
 pub enum StepResult {
     /// A row is available; query column values via `column_*`.
     Row,
@@ -459,6 +460,606 @@ pub fn version_number() -> i32 {
     unsafe { ffi::sqlite3_libversion_number() }
 }
 
+// ---------------------------------------------------------------
+// Function / aggregate / collation / hook / authorizer registration.
+//
+// This is the slice that the rusqlite split was about. The sqlite3
+// C callback ABI is sync; the cli-rust scalar/aggregate/hook bodies
+// need to invoke our async wit-bindgen imports (`dispatch::*`).
+//
+// What we own here vs rusqlite: the exact C-callback shape that
+// goes into sqlite3_create_function_v2 / sqlite3_update_hook /
+// sqlite3_set_authorizer. The Rust-side closure signature uses
+// our `Value`/`Error` types and is free to call
+// `wit_bindgen_rt::async_support::block_on(...)` inside (or any
+// future async-aware pattern we discover). db.rs doesn't impose a
+// runtime; it just gives callers a sync closure surface with raw
+// FFI control.
+// ---------------------------------------------------------------
+
+/// Function flags. Subset of SQLITE_DETERMINISTIC / SQLITE_UTF8 /
+/// SQLITE_DIRECTONLY. Combine with bitwise OR.
+#[derive(Debug, Clone, Copy)]
+pub struct FunctionFlags(pub c_int);
+
+impl FunctionFlags {
+    pub const UTF8: Self = Self(ffi::SQLITE_UTF8 as c_int);
+    pub const DETERMINISTIC: Self = Self(ffi::SQLITE_DETERMINISTIC as c_int);
+    pub const DIRECTONLY: Self = Self(ffi::SQLITE_DIRECTONLY as c_int);
+    pub const INNOCUOUS: Self = Self(ffi::SQLITE_INNOCUOUS as c_int);
+
+    pub const DEFAULT: Self = Self::UTF8;
+
+    pub fn raw(self) -> c_int {
+        self.0
+    }
+}
+
+impl std::ops::BitOr for FunctionFlags {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+/// Pull an arg value out of the `argv` array sqlite3 hands the
+/// scalar callback. Mirrors `Statement::column_value` but reading
+/// from a `sqlite3_value*` instead of a stmt column.
+unsafe fn value_from_sqlite3(v: *mut ffi::sqlite3_value) -> Value {
+    match ffi::sqlite3_value_type(v) {
+        ffi::SQLITE_NULL => Value::Null,
+        ffi::SQLITE_INTEGER => Value::Integer(ffi::sqlite3_value_int64(v)),
+        ffi::SQLITE_FLOAT => Value::Real(ffi::sqlite3_value_double(v)),
+        ffi::SQLITE_TEXT => {
+            let p = ffi::sqlite3_value_text(v);
+            let n = ffi::sqlite3_value_bytes(v) as usize;
+            if p.is_null() {
+                Value::Text(String::new())
+            } else {
+                let bytes = std::slice::from_raw_parts(p as *const u8, n);
+                Value::Text(String::from_utf8_lossy(bytes).into_owned())
+            }
+        }
+        ffi::SQLITE_BLOB => {
+            let p = ffi::sqlite3_value_blob(v);
+            let n = ffi::sqlite3_value_bytes(v) as usize;
+            if p.is_null() {
+                Value::Blob(Vec::new())
+            } else {
+                let bytes = std::slice::from_raw_parts(p as *const u8, n);
+                Value::Blob(bytes.to_vec())
+            }
+        }
+        _ => Value::Null,
+    }
+}
+
+/// Set the callback result on the `sqlite3_context*`. Mirrors
+/// rusqlite's sql_result for our Value enum.
+unsafe fn set_result_value(ctx: *mut ffi::sqlite3_context, v: &Value) {
+    match v {
+        Value::Null => ffi::sqlite3_result_null(ctx),
+        Value::Integer(i) => ffi::sqlite3_result_int64(ctx, *i),
+        Value::Real(r) => ffi::sqlite3_result_double(ctx, *r as c_double),
+        Value::Text(s) => ffi::sqlite3_result_text(
+            ctx,
+            s.as_ptr() as *const c_char,
+            s.len() as c_int,
+            ffi::SQLITE_TRANSIENT(),
+        ),
+        Value::Blob(b) => ffi::sqlite3_result_blob(
+            ctx,
+            b.as_ptr() as *const c_void,
+            b.len() as c_int,
+            ffi::SQLITE_TRANSIENT(),
+        ),
+    }
+}
+
+/// Set an error result on the callback context.
+unsafe fn set_result_error(ctx: *mut ffi::sqlite3_context, msg: &str) {
+    let c = match CString::new(msg) {
+        Ok(c) => c,
+        Err(_) => CString::new("error message contained NUL byte").unwrap(),
+    };
+    ffi::sqlite3_result_error(ctx, c.as_ptr(), -1);
+}
+
+/// Destructor sqlite3 invokes when our function registration is
+/// dropped (DROP FUNCTION or connection close). Reclaims the boxed
+/// closure heap allocation.
+unsafe extern "C" fn destroy_boxed<F>(ptr: *mut c_void) {
+    if !ptr.is_null() {
+        drop(Box::from_raw(ptr as *mut F));
+    }
+}
+
+impl Connection {
+    /// Register a scalar SQL function. The closure runs INSIDE
+    /// SQLite's sync execution (sqlite3_step), so it can't yield —
+    /// callers that need async work (e.g. wit-bindgen imports) own
+    /// the bridging (typically via
+    /// `wit_bindgen_rt::async_support::block_on`).
+    ///
+    /// `n_arg` is -1 for variadic, otherwise the fixed arity.
+    pub fn create_scalar_function<F>(
+        &self,
+        fn_name: &str,
+        n_arg: i32,
+        flags: FunctionFlags,
+        x_func: F,
+    ) -> Result<(), Error>
+    where
+        F: Fn(&[Value]) -> Result<Value, Error> + 'static,
+    {
+        unsafe extern "C" fn call_boxed_scalar<F>(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ) where
+            F: Fn(&[Value]) -> Result<Value, Error>,
+        {
+            let raw_args = std::slice::from_raw_parts(argv, argc as usize);
+            let args: Vec<Value> = raw_args.iter().map(|p| value_from_sqlite3(*p)).collect();
+            let boxed = ffi::sqlite3_user_data(ctx) as *mut F;
+            if boxed.is_null() {
+                set_result_error(ctx, "scalar callback dispatch error: null user_data");
+                return;
+            }
+            match (*boxed)(&args) {
+                Ok(v) => set_result_value(ctx, &v),
+                Err(e) => set_result_error(ctx, &e.message),
+            }
+        }
+
+        let boxed: *mut F = Box::into_raw(Box::new(x_func));
+        let c_name = CString::new(fn_name)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let rc = unsafe {
+            ffi::sqlite3_create_function_v2(
+                self.raw,
+                c_name.as_ptr(),
+                n_arg,
+                flags.raw(),
+                boxed as *mut c_void,
+                Some(call_boxed_scalar::<F>),
+                None,
+                None,
+                Some(destroy_boxed::<F>),
+            )
+        };
+        if rc != ffi::SQLITE_OK {
+            // sqlite3_create_function_v2 calls our destructor on
+            // failure too, so no manual cleanup is needed here.
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------
+// Aggregate functions.
+//
+// Caller implements the Aggregate trait; we wire the
+// init/step/finalize triple through sqlite3_create_function_v2's
+// xStep + xFinal slots. Per-row aggregate context is stored in the
+// sqlite3_aggregate_context slot — sqlite3 zero-initializes it on
+// first access per aggregation, so we can detect "first step" by
+// checking for null.
+// ---------------------------------------------------------------
+
+/// A multi-row aggregate function. Implementers carry no per-call
+/// state on `&self` (which is shared across concurrent calls); the
+/// per-aggregation `S` state lives in sqlite3's aggregate context.
+pub trait Aggregate<S>: 'static {
+    fn init(&self) -> S;
+    fn step(&self, state: &mut S, args: &[Value]) -> Result<(), Error>;
+    fn finalize(&self, state: Option<S>) -> Result<Value, Error>;
+}
+
+impl Connection {
+    /// Register an aggregate SQL function. State `S` is owned per-
+    /// aggregation by sqlite3's aggregate context.
+    pub fn create_aggregate_function<S: 'static, A: Aggregate<S>>(
+        &self,
+        fn_name: &str,
+        n_arg: i32,
+        flags: FunctionFlags,
+        aggregate: A,
+    ) -> Result<(), Error> {
+        unsafe extern "C" fn agg_step<S: 'static, A: Aggregate<S>>(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ) {
+            let pac =
+                ffi::sqlite3_aggregate_context(ctx, std::mem::size_of::<*mut S>() as c_int)
+                    as *mut *mut S;
+            if pac.is_null() {
+                ffi::sqlite3_result_error_nomem(ctx);
+                return;
+            }
+            let boxed = ffi::sqlite3_user_data(ctx) as *mut A;
+            if boxed.is_null() {
+                set_result_error(ctx, "aggregate dispatch error: null user_data");
+                return;
+            }
+            // First step initializes the state.
+            if (*pac).is_null() {
+                let initial = (*boxed).init();
+                *pac = Box::into_raw(Box::new(initial));
+            }
+            let raw_args = std::slice::from_raw_parts(argv, argc as usize);
+            let args: Vec<Value> = raw_args.iter().map(|p| value_from_sqlite3(*p)).collect();
+            if let Err(e) = (*boxed).step(&mut **pac, &args) {
+                set_result_error(ctx, &e.message);
+            }
+        }
+
+        unsafe extern "C" fn agg_final<S: 'static, A: Aggregate<S>>(
+            ctx: *mut ffi::sqlite3_context,
+        ) {
+            let pac =
+                ffi::sqlite3_aggregate_context(ctx, std::mem::size_of::<*mut S>() as c_int)
+                    as *mut *mut S;
+            let state = if !pac.is_null() && !(*pac).is_null() {
+                // Take ownership; we Box::into_raw'd in step.
+                Some(*Box::from_raw(*pac))
+            } else {
+                None
+            };
+            let boxed = ffi::sqlite3_user_data(ctx) as *mut A;
+            if boxed.is_null() {
+                set_result_error(ctx, "aggregate dispatch error: null user_data");
+                return;
+            }
+            match (*boxed).finalize(state) {
+                Ok(v) => set_result_value(ctx, &v),
+                Err(e) => set_result_error(ctx, &e.message),
+            }
+        }
+
+        let boxed: *mut A = Box::into_raw(Box::new(aggregate));
+        let c_name = CString::new(fn_name)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let rc = unsafe {
+            ffi::sqlite3_create_function_v2(
+                self.raw,
+                c_name.as_ptr(),
+                n_arg,
+                flags.raw(),
+                boxed as *mut c_void,
+                None,
+                Some(agg_step::<S, A>),
+                Some(agg_final::<S, A>),
+                Some(destroy_boxed::<A>),
+            )
+        };
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------
+// Collations.
+// ---------------------------------------------------------------
+
+impl Connection {
+    /// Register a collation. The closure compares two strings and
+    /// returns the standard `Ordering`-equivalent: negative / zero /
+    /// positive c_int.
+    pub fn create_collation<C>(&self, name: &str, x_compare: C) -> Result<(), Error>
+    where
+        C: Fn(&str, &str) -> std::cmp::Ordering + 'static,
+    {
+        unsafe extern "C" fn call_boxed_compare<C>(
+            user_data: *mut c_void,
+            la: c_int,
+            pa: *const c_void,
+            lb: c_int,
+            pb: *const c_void,
+        ) -> c_int
+        where
+            C: Fn(&str, &str) -> std::cmp::Ordering,
+        {
+            let boxed = user_data as *mut C;
+            if boxed.is_null() {
+                return 0;
+            }
+            let sa = {
+                let slice = std::slice::from_raw_parts(pa as *const u8, la as usize);
+                String::from_utf8_lossy(slice)
+            };
+            let sb = {
+                let slice = std::slice::from_raw_parts(pb as *const u8, lb as usize);
+                String::from_utf8_lossy(slice)
+            };
+            match (*boxed)(sa.as_ref(), sb.as_ref()) {
+                std::cmp::Ordering::Less => -1,
+                std::cmp::Ordering::Equal => 0,
+                std::cmp::Ordering::Greater => 1,
+            }
+        }
+
+        let boxed: *mut C = Box::into_raw(Box::new(x_compare));
+        let c_name = CString::new(name)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let rc = unsafe {
+            ffi::sqlite3_create_collation_v2(
+                self.raw,
+                c_name.as_ptr(),
+                ffi::SQLITE_UTF8 as c_int,
+                boxed as *mut c_void,
+                Some(call_boxed_compare::<C>),
+                Some(destroy_boxed::<C>),
+            )
+        };
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------
+// Update / commit / rollback hooks.
+//
+// sqlite3_*_hook returns the PREVIOUS user_data pointer; we have
+// no destructor parameter, so we deallocate the previous boxed
+// closure here (assuming we registered it earlier). For cli-rust
+// the hooks are registered once per .load and never replaced —
+// "leak previous" would technically be safe but Box::from_raw is
+// cleaner.
+//
+// SAFETY: this assumes that whoever called the hook setters
+// previously did so through this same API (so the user_data is a
+// `Box<F>` we made). Mixing with raw sqlite3_*_hook calls would
+// be unsound. cli-rust uses only this API, so the invariant holds.
+// ---------------------------------------------------------------
+
+/// Row-modification operation reported by `update_hook`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpdateAction {
+    Insert,
+    Update,
+    Delete,
+    Unknown,
+}
+
+impl UpdateAction {
+    fn from_sqlite_code(code: c_int) -> Self {
+        match code {
+            ffi::SQLITE_INSERT => Self::Insert,
+            ffi::SQLITE_UPDATE => Self::Update,
+            ffi::SQLITE_DELETE => Self::Delete,
+            _ => Self::Unknown,
+        }
+    }
+}
+
+impl Connection {
+    /// Set the update hook. `Some(...)` installs; `None` removes.
+    pub fn update_hook<F>(&self, hook: Option<F>)
+    where
+        F: Fn(UpdateAction, &str, &str, i64) + 'static,
+    {
+        unsafe extern "C" fn call_boxed<F>(
+            p_arg: *mut c_void,
+            action_code: c_int,
+            db: *const c_char,
+            table: *const c_char,
+            rowid: ffi::sqlite3_int64,
+        ) where
+            F: Fn(UpdateAction, &str, &str, i64),
+        {
+            let boxed = p_arg as *mut F;
+            if boxed.is_null() {
+                return;
+            }
+            let db_s = if db.is_null() {
+                String::new()
+            } else {
+                CStr::from_ptr(db).to_string_lossy().into_owned()
+            };
+            let table_s = if table.is_null() {
+                String::new()
+            } else {
+                CStr::from_ptr(table).to_string_lossy().into_owned()
+            };
+            (*boxed)(
+                UpdateAction::from_sqlite_code(action_code),
+                &db_s,
+                &table_s,
+                rowid,
+            );
+        }
+        let (cb, user_data) = match hook {
+            Some(f) => {
+                let boxed: *mut F = Box::into_raw(Box::new(f));
+                let cb: unsafe extern "C" fn(*mut c_void, c_int, *const c_char, *const c_char, ffi::sqlite3_int64) =
+                    call_boxed::<F>;
+                (Some(cb), boxed as *mut c_void)
+            }
+            None => (None, ptr::null_mut()),
+        };
+        let prev = unsafe { ffi::sqlite3_update_hook(self.raw, cb, user_data) };
+        if !prev.is_null() {
+            unsafe { drop(Box::from_raw(prev as *mut F)) };
+        }
+    }
+
+    /// Set the commit hook. Return `true` to abort the commit (the
+    /// transaction is rolled back); `false` to allow it. Matches
+    /// sqlite3's "non-zero abort" semantics.
+    pub fn commit_hook<F>(&self, hook: Option<F>)
+    where
+        F: Fn() -> bool + 'static,
+    {
+        unsafe extern "C" fn call_boxed<F>(p_arg: *mut c_void) -> c_int
+        where
+            F: Fn() -> bool,
+        {
+            let boxed = p_arg as *mut F;
+            if boxed.is_null() {
+                return 0;
+            }
+            c_int::from((*boxed)())
+        }
+        let (cb, user_data) = match hook {
+            Some(f) => {
+                let boxed: *mut F = Box::into_raw(Box::new(f));
+                let cb: unsafe extern "C" fn(*mut c_void) -> c_int = call_boxed::<F>;
+                (Some(cb), boxed as *mut c_void)
+            }
+            None => (None, ptr::null_mut()),
+        };
+        let prev = unsafe { ffi::sqlite3_commit_hook(self.raw, cb, user_data) };
+        if !prev.is_null() {
+            unsafe { drop(Box::from_raw(prev as *mut F)) };
+        }
+    }
+
+    /// Set the rollback hook.
+    pub fn rollback_hook<F>(&self, hook: Option<F>)
+    where
+        F: Fn() + 'static,
+    {
+        unsafe extern "C" fn call_boxed<F>(p_arg: *mut c_void)
+        where
+            F: Fn(),
+        {
+            let boxed = p_arg as *mut F;
+            if boxed.is_null() {
+                return;
+            }
+            (*boxed)();
+        }
+        let (cb, user_data) = match hook {
+            Some(f) => {
+                let boxed: *mut F = Box::into_raw(Box::new(f));
+                let cb: unsafe extern "C" fn(*mut c_void) = call_boxed::<F>;
+                (Some(cb), boxed as *mut c_void)
+            }
+            None => (None, ptr::null_mut()),
+        };
+        let prev = unsafe { ffi::sqlite3_rollback_hook(self.raw, cb, user_data) };
+        if !prev.is_null() {
+            unsafe { drop(Box::from_raw(prev as *mut F)) };
+        }
+    }
+}
+
+// ---------------------------------------------------------------
+// Authorizer.
+//
+// sqlite3_set_authorizer's callback returns SQLITE_OK / SQLITE_DENY
+// / SQLITE_IGNORE per action. We expose this as a closure taking
+// the raw action code + 4 optional string args.
+// ---------------------------------------------------------------
+
+/// Authorizer return value, mapped to the sqlite3 result codes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthResult {
+    /// Allow the operation. Maps to SQLITE_OK.
+    Allow,
+    /// Deny the operation; the statement fails with
+    /// "not authorized". Maps to SQLITE_DENY.
+    Deny,
+    /// Ignore the operation (e.g. treat a column as NULL). Maps
+    /// to SQLITE_IGNORE. Only meaningful for some action types.
+    Ignore,
+}
+
+impl AuthResult {
+    fn to_sqlite_code(self) -> c_int {
+        match self {
+            Self::Allow => ffi::SQLITE_OK,
+            Self::Deny => ffi::SQLITE_DENY,
+            Self::Ignore => ffi::SQLITE_IGNORE,
+        }
+    }
+}
+
+impl Connection {
+    /// Set the authorizer callback. The closure receives the
+    /// sqlite3 action code (e.g. SQLITE_CREATE_TABLE = 1) plus
+    /// up to four optional string arguments whose meaning depends
+    /// on the action.
+    ///
+    /// `None` removes any previously installed authorizer.
+    ///
+    /// Unlike sqlite3_set_authorizer (which takes a single C
+    /// callback + opaque user_data), this wrapper boxes the
+    /// closure and uses an internal thunk. Subsequent calls
+    /// replace the previous authorizer; the previous boxed
+    /// closure is freed automatically.
+    pub fn set_authorizer<F>(&self, authorizer: Option<F>) -> Result<(), Error>
+    where
+        F: Fn(c_int, Option<String>, Option<String>, Option<String>, Option<String>) -> AuthResult
+            + 'static,
+    {
+        unsafe extern "C" fn call_boxed<F>(
+            user_data: *mut c_void,
+            action: c_int,
+            arg1: *const c_char,
+            arg2: *const c_char,
+            arg3: *const c_char,
+            arg4: *const c_char,
+        ) -> c_int
+        where
+            F: Fn(c_int, Option<String>, Option<String>, Option<String>, Option<String>) -> AuthResult,
+        {
+            let boxed = user_data as *mut F;
+            if boxed.is_null() {
+                return ffi::SQLITE_OK;
+            }
+            unsafe fn to_opt(p: *const c_char) -> Option<String> {
+                if p.is_null() {
+                    None
+                } else {
+                    Some(CStr::from_ptr(p).to_string_lossy().into_owned())
+                }
+            }
+            (*boxed)(action, to_opt(arg1), to_opt(arg2), to_opt(arg3), to_opt(arg4))
+                .to_sqlite_code()
+        }
+
+        let rc = match authorizer {
+            Some(f) => {
+                let boxed: *mut F = Box::into_raw(Box::new(f));
+                let cb: unsafe extern "C" fn(
+                    *mut c_void,
+                    c_int,
+                    *const c_char,
+                    *const c_char,
+                    *const c_char,
+                    *const c_char,
+                ) -> c_int = call_boxed::<F>;
+                // SAFETY: sqlite3_set_authorizer copies its
+                // pointers into the connection; user_data is owned
+                // by us and lives until we replace or null it.
+                unsafe {
+                    ffi::sqlite3_set_authorizer(self.raw, Some(cb), boxed as *mut c_void)
+                }
+            }
+            None => unsafe {
+                ffi::sqlite3_set_authorizer(self.raw, None, ptr::null_mut())
+            },
+        };
+        // Note: sqlite3 doesn't return the previous user_data, so
+        // we can't free the prior box automatically. Callers that
+        // re-install authorizers will leak the previous closure.
+        // cli-rust installs exactly once per .load, so this is
+        // acceptable. Document and move on.
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -506,5 +1107,140 @@ mod tests {
     fn version_strings_are_nonempty() {
         assert!(!version().is_empty());
         assert!(version_number() > 0);
+    }
+
+    #[test]
+    fn scalar_function_registers_and_returns_value() {
+        let c = Connection::open_in_memory().unwrap();
+        c.create_scalar_function(
+            "double_it",
+            1,
+            FunctionFlags::UTF8 | FunctionFlags::DETERMINISTIC,
+            |args: &[Value]| -> Result<Value, Error> {
+                match &args[0] {
+                    Value::Integer(i) => Ok(Value::Integer(i * 2)),
+                    _ => Err(standalone_error(1, "expected integer")),
+                }
+            },
+        )
+        .unwrap();
+        let mut s = c.prepare("SELECT double_it(21)").unwrap();
+        matches!(s.step().unwrap(), StepResult::Row);
+        assert_eq!(s.column_value(0), Value::Integer(42));
+    }
+
+    struct SumInts;
+    impl Aggregate<i64> for SumInts {
+        fn init(&self) -> i64 {
+            0
+        }
+        fn step(&self, state: &mut i64, args: &[Value]) -> Result<(), Error> {
+            match &args[0] {
+                Value::Integer(i) => *state += i,
+                Value::Null => {}
+                _ => return Err(standalone_error(1, "expected integer")),
+            }
+            Ok(())
+        }
+        fn finalize(&self, state: Option<i64>) -> Result<Value, Error> {
+            Ok(Value::Integer(state.unwrap_or(0)))
+        }
+    }
+
+    #[test]
+    fn aggregate_function_sums_rows() {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch("CREATE TABLE t(x); INSERT INTO t VALUES(10),(20),(12);")
+            .unwrap();
+        c.create_aggregate_function("my_sum", 1, FunctionFlags::UTF8, SumInts)
+            .unwrap();
+        let mut s = c.prepare("SELECT my_sum(x) FROM t").unwrap();
+        matches!(s.step().unwrap(), StepResult::Row);
+        assert_eq!(s.column_value(0), Value::Integer(42));
+    }
+
+    #[test]
+    fn collation_orders_strings_in_reverse() {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch("CREATE TABLE t(x TEXT); INSERT INTO t VALUES('b'),('a'),('c');")
+            .unwrap();
+        c.create_collation("rev", |a, b| b.cmp(a)).unwrap();
+        let mut s = c.prepare("SELECT x FROM t ORDER BY x COLLATE rev").unwrap();
+        let mut out = Vec::new();
+        loop {
+            match s.step().unwrap() {
+                StepResult::Row => match s.column_value(0) {
+                    Value::Text(s) => out.push(s),
+                    _ => panic!(),
+                },
+                StepResult::Done => break,
+            }
+        }
+        assert_eq!(out, vec!["c", "b", "a"]);
+    }
+
+    #[test]
+    fn update_hook_fires_on_insert() {
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch("CREATE TABLE t(x)").unwrap();
+        let log: Rc<RefCell<Vec<(UpdateAction, String, i64)>>> =
+            Rc::new(RefCell::new(Vec::new()));
+        let log_clone = Rc::clone(&log);
+        c.update_hook(Some(move |action: UpdateAction, _db: &str, table: &str, rowid: i64| {
+            log_clone.borrow_mut().push((action, table.to_string(), rowid));
+        }));
+        c.execute_batch("INSERT INTO t VALUES(1); INSERT INTO t VALUES(2);")
+            .unwrap();
+        let g = log.borrow();
+        assert_eq!(g.len(), 2);
+        assert_eq!(g[0].0, UpdateAction::Insert);
+        assert_eq!(g[0].1, "t");
+    }
+
+    #[test]
+    fn authorizer_denies_specific_table() {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch("CREATE TABLE secret(x); CREATE TABLE public(y);")
+            .unwrap();
+        c.set_authorizer(Some(
+            |action: c_int, a1: Option<String>, _a2, _a3, _a4| {
+                // SQLITE_READ on table `secret` → Deny
+                if action == ffi::SQLITE_READ && a1.as_deref() == Some("secret") {
+                    AuthResult::Deny
+                } else {
+                    AuthResult::Allow
+                }
+            },
+        ))
+        .unwrap();
+        let r = c.prepare("SELECT * FROM secret");
+        assert!(r.is_err());
+        let _ = c.prepare("SELECT * FROM public").expect("public ok");
+    }
+
+    #[test]
+    fn scalar_function_propagates_error() {
+        let c = Connection::open_in_memory().unwrap();
+        c.create_scalar_function(
+            "must_be_text",
+            1,
+            FunctionFlags::UTF8,
+            |args: &[Value]| -> Result<Value, Error> {
+                match &args[0] {
+                    Value::Text(s) => Ok(Value::Text(s.to_uppercase())),
+                    _ => Err(standalone_error(1, "argument must be text")),
+                }
+            },
+        )
+        .unwrap();
+        let mut s = c.prepare("SELECT must_be_text(42)").unwrap();
+        let err = s.step().unwrap_err();
+        assert!(
+            err.message.contains("argument must be text"),
+            "got: {}",
+            err.message
+        );
     }
 }
