@@ -306,7 +306,21 @@ unsafe extern "C" fn vfs_open(
     }
     // NULL filename = SQLite wants a temp file. Synthesize a
     // unique name + flag for delete-on-close so we don't
-    // accumulate temps.
+    // accumulate temps. Named opens also get delete-on-close
+    // when the caller passes SQLITE_OPEN_DELETEONCLOSE  used
+    // by core::db::open_in_memory to get an ephemeral tvm-mem
+    // db that cleans itself up when the connection drops.
+    //
+    // Files under the path prefix `/__tvm_mem_anon_` are also
+    // auto-delete  the prefix is reserved for
+    // `core::db::open_in_memory`'s synthetic names, and SQLite's
+    // rollback journal / WAL files attached to such a db end up
+    // at `/__tvm_mem_anon_N-journal` (or `-wal`, `-shm`) which
+    // don't carry SQLITE_OPEN_DELETEONCLOSE on their opens but
+    // should share the main db's lifecycle. Without this, the
+    // auxiliary files leak in FILES across in-mem db opens.
+    let explicit_delete = (flags & ffi::SQLITE_OPEN_DELETEONCLOSE) != 0;
+    const TVM_ANON_PREFIX: &str = "/__tvm_mem_anon_";
     let (name, delete_on_close) = if z_name.is_null() {
         let n = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
         (format!("__tvm_tmp_{n}"), true)
@@ -315,7 +329,8 @@ unsafe extern "C" fn vfs_open(
             Ok(s) => s.to_string(),
             Err(_) => return ffi::SQLITE_IOERR,
         };
-        (s, false)
+        let anon = s.starts_with(TVM_ANON_PREFIX);
+        (s, explicit_delete || anon)
     };
 
     let storage = {

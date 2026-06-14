@@ -16,11 +16,17 @@
 //! wide default-VFS pointer that subsequent sqlite3_open_v2
 //! calls observe.
 
-use std::sync::Once;
+use std::sync::{Mutex, Once};
 
 use sqlite_wasm_core::db::{Connection, OpenFlags, StepResult, Value};
 
 static INSTALL: Once = Once::new();
+
+/// All integration tests in this file touch the process-global
+/// `FILES` table inside sqlite-vfs-tvm; cargo's parallel runner
+/// would race their `file_count()` assertions. Same pattern the
+/// lib tests use.
+static TEST_STATE_MUTEX: Mutex<()> = Mutex::new(());
 
 fn install_once() {
     INSTALL.call_once(|| {
@@ -31,6 +37,7 @@ fn install_once() {
 
 #[test]
 fn vfs_serves_a_basic_workload() {
+    let _g = TEST_STATE_MUTEX.lock();
     install_once();
 
     // Path is arbitrary  it's just a key into the in-memory
@@ -96,6 +103,7 @@ fn vfs_serves_a_basic_workload() {
 
 #[test]
 fn data_persists_across_close_and_reopen() {
+    let _g = TEST_STATE_MUTEX.lock();
     install_once();
 
     // First connection: write some rows.
@@ -121,4 +129,38 @@ fn data_persists_across_close_and_reopen() {
         },
         StepResult::Done => panic!("sum query returned no row"),
     }
+}
+
+#[test]
+fn open_in_memory_routes_through_tvm_mem_when_registered() {
+    let _g = TEST_STATE_MUTEX.lock();
+    install_once();
+
+    // Snapshot the count before  earlier tests in this file
+    // share the process and may have left files behind.
+    let before = sqlite_vfs_tvm::file_count();
+
+    // Drop scope so the connection drops and DELETEONCLOSE
+    // fires, removing the synthetic in-mem path from the FILES
+    // table.
+    {
+        let c = Connection::open_in_memory().expect("open_in_memory routed");
+        // Use it like any other db. If routing went to sqlite's
+        // memdb VFS (the fallback) by mistake, file_count
+        // wouldn't budge above `before`.
+        c.execute_batch("CREATE TABLE t(x); INSERT INTO t VALUES (1),(2),(3);")
+            .expect("seed");
+
+        let during = sqlite_vfs_tvm::file_count();
+        assert!(
+            during > before,
+            "tvm-mem should hold the anonymous in-mem db while open; before={before} during={during}"
+        );
+    }
+    // After drop, DELETEONCLOSE should remove the anonymous file.
+    let after = sqlite_vfs_tvm::file_count();
+    assert_eq!(
+        after, before,
+        "DELETEONCLOSE should clean up the anonymous in-mem db after the connection drops; before={before} after={after}"
+    );
 }

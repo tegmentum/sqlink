@@ -24,8 +24,26 @@
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::os::raw::c_double;
 use std::ptr;
+use std::sync::atomic::{self, AtomicU64};
 
 use libsqlite3_sys as ffi;
+
+/// Counter for synthesising unique paths in
+/// `Connection::open_in_memory` when routing through `tvm-mem`.
+/// Each anonymous in-memory db gets its own path so the FILES
+/// table doesn't collide across connections.
+static MEMORY_DB_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// True iff a VFS with `name` is registered with SQLite. Used by
+/// `open_in_memory` to detect the `tvm-mem` VFS at runtime and
+/// route through it when available.
+fn vfs_is_registered(name: &str) -> bool {
+    let Ok(c) = CString::new(name) else { return false };
+    // SAFETY: `sqlite3_vfs_find` returns NULL if no VFS by that
+    // name has been registered  it touches global SQLite state
+    // protected by SQLite's own mutex.
+    !unsafe { ffi::sqlite3_vfs_find(c.as_ptr()) }.is_null()
+}
 
 /// SQL value — mirrors rusqlite's `types::Value`. Owned variants
 /// only (no borrowed columns); cli copies row data out before
@@ -101,6 +119,12 @@ impl OpenFlags {
     pub const FULL_MUTEX: Self = Self(ffi::SQLITE_OPEN_FULLMUTEX);
     pub const SHARED_CACHE: Self = Self(ffi::SQLITE_OPEN_SHAREDCACHE);
     pub const PRIVATE_CACHE: Self = Self(ffi::SQLITE_OPEN_PRIVATECACHE);
+    /// File should be deleted when closed. Per SQLite contract:
+    /// the VFS implementation must honour this in its xOpen
+    /// (sqlite-vfs-tvm does; sqlite's default VFSes do too).
+    /// Used by `open_in_memory` to get an ephemeral tvm-mem
+    /// db that cleans itself up on connection drop.
+    pub const DELETEONCLOSE: Self = Self(ffi::SQLITE_OPEN_DELETEONCLOSE);
 
     pub const DEFAULT: Self = Self(ffi::SQLITE_OPEN_READWRITE | ffi::SQLITE_OPEN_CREATE);
 
@@ -327,9 +351,33 @@ impl Connection {
         Ok(Connection { raw })
     }
 
-    /// Convenience constructor for `:memory:`.
+    /// Convenience constructor for an ephemeral in-memory db.
+    ///
+    /// If the `tvm-mem` VFS has been registered (via
+    /// `sqlite_vfs_tvm::install()`), routes through it: the
+    /// caller gets a purgeable pcache where the Phase 1 TVM
+    /// offload actually fires, our VFS trampolines do useful
+    /// work, and the > 4 GiB ceiling lifts when the cli is
+    /// built `--features tvm`. The auto-generated path uses
+    /// `SQLITE_OPEN_DELETEONCLOSE` so storage cleans up on
+    /// connection drop.
+    ///
+    /// Falls back to SQLite's `:memory:` (memdb VFS) when
+    /// `tvm-mem` isn't registered  matches the legacy
+    /// behaviour for callers that haven't wired the TVM
+    /// crates.
     pub fn open_in_memory() -> Result<Self, Error> {
-        Self::open(":memory:", OpenFlags::DEFAULT | OpenFlags::MEMORY)
+        if vfs_is_registered("tvm-mem") {
+            let n = MEMORY_DB_COUNTER.fetch_add(1, atomic::Ordering::Relaxed);
+            let path = format!("/__tvm_mem_anon_{n}");
+            Self::open_with_vfs(
+                &path,
+                OpenFlags::DEFAULT | OpenFlags::DELETEONCLOSE,
+                Some("tvm-mem"),
+            )
+        } else {
+            Self::open(":memory:", OpenFlags::DEFAULT | OpenFlags::MEMORY)
+        }
     }
 
     /// Run zero or more semicolon-separated statements. Mirrors
