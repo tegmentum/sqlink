@@ -64,3 +64,9 @@ sha2 = "0.10"
 # verifier uses openssl-wasm, this is just for fixture generation.
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
+# Substrate-validation only. PLAN-tvm-integration Step 1 uses this
+# to confirm a wasm32-wasip2 + component-model guest can plug into
+# tvm-wasmtime's add_to_linker. Path dep against the sibling
+# tvm-wasm checkout  not promoted to a workspace member because
+# this is research-mode wiring, not production yet.
+tvm-wasmtime = { path = "../../tvm-wasm/crates/tvm-wasmtime" }

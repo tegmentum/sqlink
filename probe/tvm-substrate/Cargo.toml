@@ -1,0 +1,38 @@
+[package]
+name = "probe-tvm-substrate"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone — kept out of the workspace so the wasm32-wasip2
+# target doesn't trip up `cargo build` at the workspace root and
+# so this probe can evolve independently of the production crates.
+[workspace]
+description = """
+Substrate-validation probe for PLAN-tvm-integration Step 1. Builds a
+minimal wasm32-wasip2 component that imports tvm:memory/manager +
+bytes + types via wit-bindgen and exports a run-test function. The
+host/tests side instantiates it against tvm-wasmtime's
+add_to_linker to validate that:
+
+  - wasm32-wasip2 + component-model + tvm:memory imports compile cleanly
+  - tvm-wasmtime's component linker integrates with our existing host
+    Linker pattern (WASI + sqlite imports already wired)
+  - end-to-end alloc/write/read round-trip works through the WIT path
+
+If this probe builds and the round-trip test passes, the SQLite track's
+Phase 1 (Path B pcache2) can use this exact wiring shape.
+"""
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Same wit-bindgen our other examples use (runnable-sqlite-demo etc.).
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+wit-bindgen = { version = "0.44", features = ["macros"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

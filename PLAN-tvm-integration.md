@@ -299,11 +299,19 @@ TVM track, B is the on-ramp to C; both are planned.
 
 ### TVM track
 
-1. **Validate the substrate**: build `tvm-guest-mm` against
-   `wasm32-wasip2`, confirm the region API is usable from raw
-   wasm32 with our toolchain (wasi-sdk). Estimate: a few hours.
-   If `tvm-guest-mm` is wasm32-clean, proceed; if it assumes
-   wasm64, raise an issue upstream first.
+1. **Validate the substrate** ✅. The wiring path is the
+   WIT-bound `tvm:memory/{types,manager,bytes}` interfaces
+   (not the raw-`extern "C"` path `tvm-guest-rt` exposes — that
+   path is wasm32-unknown-unknown-only because the component
+   model requires every guest import to be declared in WIT).
+   Validation lives at `probe/tvm-substrate/` (wasm32-wasip2
+   cdylib using wit-bindgen against `tvm:memory@0.1.0`) and
+   `host/tests/tvm_substrate_probe.rs` (instantiates the
+   component against `tvm_wasmtime::add_to_linker` + WASI,
+   asserts the create-region → alloc → write → read → sum
+   round-trip returns 10). Conclusion: the substrate is
+   wasip2-clean via the WIT path; SQLite track Phase 1 can
+   plug into the same wiring.
 2. **Phase 1 — Path B (pcache only)**. Lands first. Validates
    the integration shape, captures the 80% case, leaves
    `sqlite3_malloc` untouched.
