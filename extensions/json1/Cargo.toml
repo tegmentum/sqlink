@@ -1,0 +1,48 @@
+[package]
+name = "json1-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Port of the SQLite json1 extension as a wasm32-wasip2 component.
+
+Tier 1 of PLAN-sqlite-plugins.md: pure scalar functions, no
+state across calls, no virtual tables. Uses serde_json for JSON
+parsing  pure Rust, no_std-friendly with alloc, builds clean
+against wasm32-wasip2.
+
+First-cut surface:
+  - json(text)          validate + canonicalize
+  - json_valid(text)    boolean is-it-JSON
+  - json_type(json[, path])  type at path
+  - json_quote(value)   quote as JSON literal
+  - json_extract(json, path[, path...])  scalar / multi-path extract
+  - json_array(...)     build array from args
+  - json_object(k, v, [k, v...])  build object
+  - json_array_length(json[, path])  length of array
+  - json_patch(target, patch)  RFC 7396 merge patch
+  - json_remove(json, path[, path...])
+  - json_set / json_insert / json_replace (json, path, value, ...)
+
+Table-valued (json_each, json_tree) and aggregate (json_group_array,
+json_group_object) functions are out of scope for this commit: they
+need vtab dispatch and aggregate-function wiring respectively, both
+already scoped in PLAN-sqlite-plugins.md.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+# `cdylib` for the wasm-component artifact; `rlib` so `cargo test`
+# can drive the pure-Rust funcs / path modules natively.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Same wit-bindgen pair the cli + sqlite-pcache-tvm use. The
+# generate! macro lives in src/lib.rs against world="minimal" in
+# ../../sqlite-loader-wit/wit.
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-Rust JSON parser. The default features enable std; we want
+# alloc-only so the wasi-p2 binary stays lean and we don't depend
+# on the std-only `IndexMap` path.
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
