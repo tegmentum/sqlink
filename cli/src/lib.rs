@@ -255,6 +255,9 @@ fn eval_input(input: &str) -> String {
     if trimmed == ".clone" {
         return "Usage: .clone NEWDB\n".to_string();
     }
+    if let Some(rest) = trimmed.strip_prefix(".trace") {
+        return do_trace(rest.trim());
+    }
     ensure_cli_conn();
     if trimmed.starts_with('.') {
         let dot_out = CLI_CONN.with(|c| {
@@ -274,11 +277,62 @@ fn eval_input(input: &str) -> String {
 /// changes wrapping is in one place and `.read` can call it
 /// per-statement without going through the dot-command dispatch.
 fn eval_sql(sql: &str) -> String {
-    let (show_timer, show_changes) = settings::SETTINGS.with(|s| {
-        let g = s.borrow();
-        (g.show_timer, g.show_changes)
-    });
+    use settings::ExplainMode;
+    let (show_timer, show_changes, explain_mode, eqp, show_stats) =
+        settings::SETTINGS.with(|s| {
+            let g = s.borrow();
+            (g.show_timer, g.show_changes, g.explain_mode, g.eqp, g.show_stats)
+        });
+    // Form the effective SQL based on .explain. Off → as-is. On →
+    // prepend EXPLAIN unless the user already typed it. Auto → run
+    // as-is, but if the keyword EXPLAIN already leads the statement
+    // the user gets the explain-style output anyway.
+    let trimmed_starts_with_explain = sql.trim_start().to_ascii_uppercase().starts_with("EXPLAIN");
+    let effective_sql: String = match explain_mode {
+        ExplainMode::Off | ExplainMode::Auto => sql.to_string(),
+        ExplainMode::On => {
+            if trimmed_starts_with_explain {
+                sql.to_string()
+            } else {
+                format!("EXPLAIN {sql}")
+            }
+        }
+    };
     let start = if show_timer { Some(std::time::Instant::now()) } else { None };
+    let mut out = String::new();
+    // EQP: prepend EXPLAIN QUERY PLAN output before running the
+    // user's statement.
+    if eqp && !trimmed_starts_with_explain {
+        let eqp_sql = format!("EXPLAIN QUERY PLAN {sql}");
+        out.push_str(&eval_sql_inner(&eqp_sql));
+    }
+    out.push_str(&eval_sql_inner(&effective_sql));
+    if let Some(t0) = start {
+        let elapsed = t0.elapsed().as_secs_f64();
+        out.push_str(&format!(
+            "Run Time: real {elapsed:.3} user 0.000 sys 0.000\n"
+        ));
+    }
+    if show_changes && !out.contains("Error:") {
+        let (changes, total) = CLI_CONN.with(|c| {
+            let g = c.borrow();
+            let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
+            (conn.changes(), conn.total_changes())
+        });
+        out.push_str(&format!("changes: {changes} total_changes: {total}\n"));
+    }
+    if show_stats {
+        let mem = db::Connection::current_memory_used();
+        out.push_str(&format!("Memory Used: {mem} bytes\n"));
+    }
+    out
+}
+
+/// Inner SQL exec — prepares, binds any named `.parameter`s, runs,
+/// formats. The wrapping helpers (timer/changes/explain/eqp/stats)
+/// live in `eval_sql`. Also drains any trace lines captured during
+/// preparation/execution.
+fn eval_sql_inner(sql: &str) -> String {
     let mut out = CLI_CONN.with(|c| {
         let g = c.borrow();
         let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
@@ -291,6 +345,24 @@ fn eval_sql(sql: &str) -> String {
                 };
             }
         };
+        // Bind named `.parameter set` values for any matching
+        // placeholders. The cli stores names without the sigil; the
+        // FFI returns names WITH the sigil (`:foo`, `$foo`, `@foo`).
+        // Strip the sigil to look up.
+        let nparams = stmt.parameter_count();
+        if nparams > 0 {
+            let params = settings::SETTINGS.with(|s| s.borrow().parameters.clone());
+            for i in 1..=nparams {
+                if let Some(name) = stmt.bind_parameter_name(i) {
+                    let bare = &name[1..]; // strip sigil
+                    if let Some(v) = params.get(bare) {
+                        if let Err(e) = stmt.bind(i, v) {
+                            return format!("Error: {}\n", e.message);
+                        }
+                    }
+                }
+            }
+        }
         let columns = stmt.column_names();
         let out_rows = match stmt.collect_rows() {
             Ok(r) => r,
@@ -299,21 +371,61 @@ fn eval_sql(sql: &str) -> String {
         let settings = settings::SETTINGS.with(|s| s.borrow().clone());
         format::format(&columns, &out_rows, &settings)
     });
-    if let Some(t0) = start {
-        let elapsed = t0.elapsed().as_secs_f64();
-        out.push_str(&format!(
-            "Run Time: real {elapsed:.3} user 0.000 sys 0.000\n"
-        ));
-    }
-    if show_changes && !out.starts_with("Error:") {
-        let (changes, total) = CLI_CONN.with(|c| {
-            let g = c.borrow();
-            let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-            (conn.changes(), conn.total_changes())
-        });
-        out.push_str(&format!("changes: {changes} total_changes: {total}\n"));
+    // Drain any trace lines captured by .trace's callback while
+    // this statement was running.
+    let traced = settings::TRACE_BUF.with(|b| std::mem::take(&mut *b.borrow_mut()));
+    if !traced.is_empty() {
+        let mut t = String::new();
+        for line in traced {
+            t.push_str(&format!("TRACE: {line}\n"));
+        }
+        t.push_str(&out);
+        out = t;
     }
     out
+}
+
+/// `.trace on|off` — install / clear the statement-level trace
+/// callback on the cli's connection. Captured lines are buffered
+/// in `settings::TRACE_BUF` and flushed inline by `eval_sql_inner`.
+fn do_trace(arg: &str) -> String {
+    let arg = arg.trim();
+    let on = if arg.is_empty() {
+        let cur = settings::SETTINGS.with(|s| s.borrow().trace_on);
+        return format!("trace: {}\n", if cur { "on" } else { "off" });
+    } else {
+        match arg {
+            "on" => true,
+            "off" => false,
+            _ => return "Usage: .trace on|off\n".to_string(),
+        }
+    };
+    ensure_cli_conn();
+    CLI_CONN.with(|c| {
+        let g = c.borrow();
+        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
+        if on {
+            conn.set_stmt_trace::<_>(Some(|s: &str| {
+                settings::TRACE_BUF.with(|b| b.borrow_mut().push(s.to_string()));
+            }));
+        } else {
+            conn.set_stmt_trace::<fn(&str)>(None);
+        }
+    });
+    settings::SETTINGS.with(|s| s.borrow_mut().trace_on = on);
+    String::new()
+}
+
+/// Render a `db::Value` for `.parameter list`. Public so dot.rs's
+/// cmd_parameter can use it.
+pub fn db_value_display(v: &db::Value) -> String {
+    match v {
+        db::Value::Null => "NULL".to_string(),
+        db::Value::Integer(i) => i.to_string(),
+        db::Value::Real(r) => r.to_string(),
+        db::Value::Text(s) => format!("'{}'", s.replace('\'', "''")),
+        db::Value::Blob(b) => format!("X'{}'", b.iter().map(|x| format!("{x:02x}")).collect::<String>()),
+    }
 }
 
 /// `.read FILE` — buffer FILE line by line, fire each complete

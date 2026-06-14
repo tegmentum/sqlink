@@ -58,8 +58,164 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".width" => cmd_width(arg),
         ".changes" => cmd_changes(arg),
         ".timer" => cmd_timer(arg),
+        ".timeout" => cmd_timeout(arg, conn),
+        ".explain" => cmd_explain(arg),
+        ".eqp" => cmd_eqp(arg),
+        ".stats" => cmd_stats(arg),
+        ".parameter" => cmd_parameter(arg),
         _ => return None,
     })
+}
+
+fn cmd_timeout(arg: &str, conn: &Connection) -> String {
+    if arg.is_empty() {
+        return "Usage: .timeout MS\n".to_string();
+    }
+    let ms: i32 = match arg.parse() {
+        Ok(n) => n,
+        Err(_) => return format!("Usage: .timeout MS (got {arg:?})\n"),
+    };
+    match conn.busy_timeout(ms) {
+        Ok(()) => String::new(),
+        Err(e) => format!("Error: {}\n", e.message),
+    }
+}
+
+fn cmd_explain(arg: &str) -> String {
+    use crate::settings::ExplainMode;
+    let mode = match arg {
+        "" => {
+            let m = settings::SETTINGS.with(|s| s.borrow().explain_mode);
+            let name = match m {
+                ExplainMode::Off => "off",
+                ExplainMode::On => "on",
+                ExplainMode::Auto => "auto",
+            };
+            return format!("explain: {name}\n");
+        }
+        "on" => ExplainMode::On,
+        "off" => ExplainMode::Off,
+        "auto" => ExplainMode::Auto,
+        _ => return "Usage: .explain on|off|auto\n".to_string(),
+    };
+    settings::SETTINGS.with(|s| s.borrow_mut().explain_mode = mode);
+    String::new()
+}
+
+fn cmd_eqp(arg: &str) -> String {
+    if arg.is_empty() {
+        let on = settings::SETTINGS.with(|s| s.borrow().eqp);
+        return format!("eqp: {}\n", if on { "on" } else { "off" });
+    }
+    let on = parse_on_off(arg);
+    settings::SETTINGS.with(|s| s.borrow_mut().eqp = on);
+    String::new()
+}
+
+fn cmd_stats(arg: &str) -> String {
+    if arg.is_empty() {
+        let on = settings::SETTINGS.with(|s| s.borrow().show_stats);
+        return format!("stats: {}\n", if on { "on" } else { "off" });
+    }
+    let on = parse_on_off(arg);
+    settings::SETTINGS.with(|s| s.borrow_mut().show_stats = on);
+    String::new()
+}
+
+fn cmd_parameter(arg: &str) -> String {
+    let mut parts = arg.splitn(3, char::is_whitespace);
+    let sub = parts.next().unwrap_or("").trim();
+    match sub {
+        "" => "Usage: .parameter init|list|set NAME VALUE|clear|unset NAME\n".to_string(),
+        "init" | "clear" => {
+            settings::SETTINGS.with(|s| s.borrow_mut().parameters.clear());
+            String::new()
+        }
+        "list" => {
+            settings::SETTINGS.with(|s| {
+                let g = s.borrow();
+                if g.parameters.is_empty() {
+                    return "(no parameters)\n".to_string();
+                }
+                let mut names: Vec<&String> = g.parameters.keys().collect();
+                names.sort();
+                let mut out = String::new();
+                for n in names {
+                    let v = g.parameters.get(n).unwrap();
+                    out.push_str(&format!("{n} = {}\n", crate::db_value_display(v)));
+                }
+                out
+            })
+        }
+        "set" => {
+            let name = parts.next().unwrap_or("").trim();
+            let value = parts.next().unwrap_or("").trim();
+            if name.is_empty() || value.is_empty() {
+                return "Usage: .parameter set NAME VALUE\n".to_string();
+            }
+            let bare = strip_param_sigil(name).to_string();
+            let v = parse_parameter_value(value);
+            settings::SETTINGS.with(|s| {
+                s.borrow_mut().parameters.insert(bare, v);
+            });
+            String::new()
+        }
+        "unset" => {
+            let name = parts.next().unwrap_or("").trim();
+            if name.is_empty() {
+                return "Usage: .parameter unset NAME\n".to_string();
+            }
+            let bare = strip_param_sigil(name).to_string();
+            settings::SETTINGS.with(|s| {
+                s.borrow_mut().parameters.remove(&bare);
+            });
+            String::new()
+        }
+        _ => "Usage: .parameter init|list|set NAME VALUE|clear|unset NAME\n".to_string(),
+    }
+}
+
+/// Accept names with or without a leading `:` / `$` / `@`; store
+/// the bare name in Settings.parameters so lookup against
+/// sqlite3_bind_parameter_name's sigil-prefixed form works
+/// regardless of which form the user typed.
+fn strip_param_sigil(name: &str) -> &str {
+    match name.as_bytes().first() {
+        Some(b':') | Some(b'$') | Some(b'@') => &name[1..],
+        _ => name,
+    }
+}
+
+/// Crude scalar parse for `.parameter set`: integer first, then
+/// real, then text (everything else). Numbers in quotes are treated
+/// as text. NULL keyword maps to Value::Null.
+fn parse_parameter_value(raw: &str) -> Value {
+    if raw.eq_ignore_ascii_case("null") {
+        return Value::Null;
+    }
+    // Quoted text — strip outer quotes (single or double); unescape
+    // doubled quotes inside.
+    if raw.len() >= 2 {
+        let bytes = raw.as_bytes();
+        let first = bytes[0];
+        let last = bytes[bytes.len() - 1];
+        if (first == b'\'' || first == b'"') && first == last {
+            let inner = &raw[1..raw.len() - 1];
+            let unesc = if first == b'\'' {
+                inner.replace("''", "'")
+            } else {
+                inner.replace("\"\"", "\"")
+            };
+            return Value::Text(unesc);
+        }
+    }
+    if let Ok(n) = raw.parse::<i64>() {
+        return Value::Integer(n);
+    }
+    if let Ok(f) = raw.parse::<f64>() {
+        return Value::Real(f);
+    }
+    Value::Text(raw.to_string())
 }
 
 fn cmd_version() -> String {

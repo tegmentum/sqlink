@@ -154,6 +154,31 @@ pub fn init_wasivfs() -> Result<(), Error> {
     Ok(())
 }
 
+/// C trampoline invoked by sqlite3_trace_v2 for `set_stmt_trace`.
+/// Decodes the boxed FnMut from `ctx` and the expanded SQL from `p`.
+unsafe extern "C" fn stmt_trace_trampoline(
+    _event_type: u32,
+    ctx: *mut c_void,
+    p: *mut c_void,
+    _x: *mut c_void,
+) -> c_int {
+    if ctx.is_null() || p.is_null() {
+        return 0;
+    }
+    // sqlite3 hands us the prepared statement as `p`; the
+    // expanded SQL comes from sqlite3_expanded_sql.
+    let stmt = p as *mut ffi::sqlite3_stmt;
+    let expanded = ffi::sqlite3_expanded_sql(stmt);
+    if expanded.is_null() {
+        return 0;
+    }
+    let cb = &mut *(ctx as *mut Box<dyn FnMut(&str)>);
+    let s = std::ffi::CStr::from_ptr(expanded).to_string_lossy();
+    cb(&s);
+    ffi::sqlite3_free(expanded as *mut c_void);
+    0
+}
+
 // SAFETY: sqlite3 connections are safe to move between threads
 // when sqlite3 is compiled with SQLITE_THREADSAFE != 0, which
 // libsqlite3-sys's bundled build does by default (serialized
@@ -286,6 +311,61 @@ impl Connection {
     /// Cumulative across statements; not reset by anything.
     pub fn total_changes(&self) -> i64 {
         unsafe { ffi::sqlite3_total_changes64(self.raw) }
+    }
+
+    /// Set the connection's busy timeout. SQLite retries SQLITE_BUSY
+    /// for at most `ms` milliseconds before giving up. Passing 0
+    /// disables the retry loop. Wraps `sqlite3_busy_timeout`.
+    pub fn busy_timeout(&self, ms: i32) -> Result<(), Error> {
+        let rc = unsafe { ffi::sqlite3_busy_timeout(self.raw, ms) };
+        if rc == ffi::SQLITE_OK {
+            Ok(())
+        } else {
+            Err(unsafe { last_error(self.raw) })
+        }
+    }
+
+    /// Install a statement-level trace callback. `callback` receives
+    /// the expanded SQL text of every prepared statement just before
+    /// it executes. Pass `None` to clear the trace.
+    pub fn set_stmt_trace<F: FnMut(&str) + 'static>(&self, callback: Option<F>) {
+        // Clear any prior trace.
+        let _ = unsafe {
+            ffi::sqlite3_trace_v2(self.raw, 0, None, ptr::null_mut())
+        };
+        if let Some(cb) = callback {
+            // Box the closure into a heap-allocated FnMut and hand
+            // the raw pointer to sqlite3 as the context. The trampoline
+            // re-materializes the box on every call. Caller must call
+            // set_stmt_trace(None) before drop to avoid leaking — for
+            // the cli's case the conn outlives the trace anyway.
+            let boxed: Box<dyn FnMut(&str)> = Box::new(cb);
+            let raw_box = Box::into_raw(Box::new(boxed)) as *mut c_void;
+            let _ = unsafe {
+                ffi::sqlite3_trace_v2(
+                    self.raw,
+                    ffi::SQLITE_TRACE_STMT as u32,
+                    Some(stmt_trace_trampoline),
+                    raw_box,
+                )
+            };
+        }
+    }
+
+    /// Read sqlite3's process-wide "current memory used" counter.
+    /// Used by `.stats` to report after each statement.
+    pub fn current_memory_used() -> i64 {
+        let mut cur: i64 = 0;
+        let mut hi: i64 = 0;
+        unsafe {
+            ffi::sqlite3_status64(
+                ffi::SQLITE_STATUS_MEMORY_USED,
+                &mut cur,
+                &mut hi,
+                0,
+            );
+        }
+        cur
     }
 
     /// Close the connection explicitly; surfaces SQLITE_BUSY etc.
@@ -542,6 +622,18 @@ impl Statement<'_> {
     }
 
     /// Number of bound parameters declared in the SQL.
+    /// Lookup the bind-parameter name for the 1-based index `idx`.
+    /// Returns the full sigil-prefixed name (e.g. `:foo`, `$bar`,
+    /// `@baz`). Anonymous `?` parameters return None.
+    pub fn bind_parameter_name(&self, idx: i32) -> Option<String> {
+        let raw = unsafe { ffi::sqlite3_bind_parameter_name(self.raw, idx) };
+        if raw.is_null() {
+            None
+        } else {
+            Some(unsafe { std::ffi::CStr::from_ptr(raw).to_string_lossy().into_owned() })
+        }
+    }
+
     pub fn parameter_count(&self) -> i32 {
         unsafe { ffi::sqlite3_bind_parameter_count(self.raw) }
     }

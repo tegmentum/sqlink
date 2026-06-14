@@ -2,6 +2,16 @@
 //! eval to format output.
 
 use std::cell::RefCell;
+use std::collections::HashMap;
+
+use sqlite_wasm_core::db;
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ExplainMode {
+    Off,
+    On,
+    Auto,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -59,6 +69,25 @@ pub struct Settings {
     /// goes to this file (truncate-write), then this field is
     /// cleared. Takes precedence over output_path for one statement.
     pub once_output_path: Option<String>,
+    /// `.explain on|off|auto` — when On, eval_sql prefixes the
+    /// user's SQL with `EXPLAIN`. Auto turns it on for queries
+    /// whose first keyword is `EXPLAIN`.
+    pub explain_mode: ExplainMode,
+    /// `.eqp on|off` — when on, eval_sql prepends
+    /// `EXPLAIN QUERY PLAN <sql>` output before the statement.
+    pub eqp: bool,
+    /// `.stats on|off` — when on, append a `Memory Used: N bytes`
+    /// line after each statement.
+    pub show_stats: bool,
+    /// `.trace on|off` — when on, the connection's
+    /// sqlite3_trace_v2 callback appends expanded SQL to
+    /// TRACE_BUF before each statement runs.
+    pub trace_on: bool,
+    /// `.parameter set NAME VALUE` — named parameter bindings
+    /// the cli applies to prepared statements whose
+    /// `bind_parameter_name(i)` matches `:NAME` / `$NAME` /
+    /// `@NAME`. Cleared by `.parameter init` / `.parameter clear`.
+    pub parameters: HashMap<String, db::Value>,
 }
 
 impl Settings {
@@ -77,8 +106,20 @@ impl Settings {
             show_timer: false,
             output_path: None,
             once_output_path: None,
+            explain_mode: ExplainMode::Off,
+            eqp: false,
+            show_stats: false,
+            trace_on: false,
+            parameters: HashMap::new(),
         }
     }
+}
+
+/// Buffer the trace callback appends to. Drained by `eval_sql`
+/// after each statement so the captured lines render inline with
+/// the result.
+thread_local! {
+    pub static TRACE_BUF: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }
 
 thread_local! {
