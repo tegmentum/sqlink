@@ -133,6 +133,14 @@ enum LookupEntry {
 pub struct ShadowCache<R: Region> {
     sz_page: c_int,
     sz_extra: c_int,
+    /// SQLite's `bPurgeable` flag from `xCreate`. Means "the
+    /// cache is allowed to evict pages under memory pressure"
+    /// not "discard on every unpin." Our shadow pool enforces
+    /// a strict cap regardless (the LRU evicts during `xFetch`
+    /// when full), so the flag carries no extra information for
+    /// v1. Kept on the struct so a future tier-shrinking policy
+    /// can opt to demote-on-unpin when purgeable=true.
+    #[allow(dead_code)]
     purgeable: bool,
     /// Shadow-pool cap in slots. `xCachesize` rewrites this; on
     /// shrink we evict from the LRU tail until we're within the

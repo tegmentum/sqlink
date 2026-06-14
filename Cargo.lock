@@ -2089,6 +2089,8 @@ version = "0.1.0"
 dependencies = [
  "libsqlite3-sys",
  "sqlite-wasm-core",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]

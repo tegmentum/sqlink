@@ -129,13 +129,26 @@ allocations.
 > and cold-tier promotion. Six unit tests cover the
 > shadow-pool + LRU + region invariants directly.
 >
-> **Phase 1.1 (TVM region backend) is now a contained swap.** The
-> `Region` trait in `sqlite-pcache-tvm/src/region.rs` is the
-> integration point — a wit-bindgen-backed `WitTvmRegion` plugs
-> in behind the `tvm` cargo feature with no changes to the
-> trampolines or the `ShadowCache` body. Wiring + a wasm32-wasip2
-> probe test combining bundled SQLite + the TVM region is the
-> follow-up.
+> **Phase 1.1 (TVM region backend) swap shipped.**
+> `sqlite-pcache-tvm/src/wit_tvm_region.rs` implements
+> `WitTvmRegion: Region` against the wit-bindgen-generated
+> `tvm:memory/manager + bytes` interfaces. Gated on
+> `target_arch = "wasm32"` + `feature = "tvm"` — the host build
+> ignores the feature, so native unit tests stay on
+> `InProcRegion`. The wasm32-wasip2 build with `--features tvm`
+> verifies cleanly: `tvm:memory/manager`,
+> `tvm:memory/bytes`, and `tvm:memory/diagnostics` imports show
+> up in the rlib metadata, and the bundled SQLite compile via
+> wasi-sdk in the same build links cleanly against the trampolines.
+>
+> **What remains (Phase 1.2):** a wasm32-wasip2 probe that
+> bundles `sqlite-pcache-tvm --features tvm` + libsqlite3-sys
+> bundled + a runnable component into a single artifact;
+> host-side test wires WASI + tvm-wasmtime and exercises the
+> full pcache-through-TVM round-trip from real SQL. And then
+> the capacity test: open a `:memory:` db with a > 4 GiB hot
+> working set, observe wasm linear memory stays bounded while
+> TVM page-store region grows beyond 4 GiB.
 
 > **Note on implementation language:** the plan called for "~500
 > LOC C." Pure Rust shipped instead — `libsqlite3-sys` already

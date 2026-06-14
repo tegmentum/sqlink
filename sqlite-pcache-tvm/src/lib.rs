@@ -38,11 +38,18 @@ use libsqlite3_sys::{sqlite3_pcache, sqlite3_pcache_methods2, sqlite3_pcache_pag
 pub mod cache;
 pub mod region;
 
-#[cfg(not(feature = "tvm"))]
+// The TVM-backed region is wasm32-only: the wit-bindgen guest
+// imports it generates only make sense in a wasm binary. On host
+// targets the `tvm` feature is a no-op so the rest of the crate
+// (the trampolines, the ShadowCache machinery, the unit tests
+// against InProcRegion) keeps compiling and running.
+#[cfg(all(target_arch = "wasm32", feature = "tvm"))]
+pub mod wit_tvm_region;
+
+#[cfg(all(target_arch = "wasm32", feature = "tvm"))]
+type ActiveRegion = wit_tvm_region::WitTvmRegion;
+#[cfg(not(all(target_arch = "wasm32", feature = "tvm")))]
 type ActiveRegion = region::InProcRegion;
-// When the `tvm` feature lands its backend, the type alias swaps
-// to `region::WitTvmRegion` here. The trampolines and Cache
-// machinery don't change — only this one line.
 
 type ActiveCache = cache::ShadowCache<ActiveRegion>;
 
