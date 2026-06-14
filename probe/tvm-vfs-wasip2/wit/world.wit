@@ -1,0 +1,25 @@
+// Probe world for PLAN-tvm-integration Phase 4.2. Combines
+// `tvm:memory` (imported, satisfied by the host's
+// `tvm-wasmtime::add_to_linker`) with the SQLite-driven probes
+// the host calls to validate the full TVM-VFS stack.
+
+package sqlite:probe-tvm-vfs@0.0.0;
+
+world probe {
+    import tvm:memory/types@0.1.0;
+    import tvm:memory/manager@0.1.0;
+    import tvm:memory/bytes@0.1.0;
+    import tvm:memory/diagnostics@0.1.0;
+
+    /// Phase 4.2 functional round-trip. Installs the VFS as
+    /// default, opens a file-backed db at an in-VFS path,
+    /// inserts N rows, returns count(*). The host asserts on
+    /// the count + observes TvmHost.directory to confirm bytes
+    /// actually landed in TVM regions (not just default memory).
+    export run-test: func(rows: u32) -> u32;
+
+    /// Number of distinct VFS-managed "files" the guest has
+    /// allocated regions for. Host uses this to confirm SQLite
+    /// drove the VFS (main db, journal, etc. all show up).
+    export file-count: func() -> u32;
+}

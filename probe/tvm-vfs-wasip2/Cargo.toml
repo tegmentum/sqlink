@@ -1,0 +1,46 @@
+[package]
+name = "probe-tvm-vfs-wasip2"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = """
+Phase 4.2 probe for PLAN-tvm-integration. Builds a wasm32-wasip2
+component that:
+
+  - links sqlite-vfs-tvm with the `tvm` feature on (file storage
+    is wit-bindgen-backed against tvm:memory@0.1.0; each "file"
+    gets its own 256 MiB TVM region with 4 KB chunked allocs)
+  - links sqlite-wasm-core (bundled libsqlite3-sys), which drags
+    in the bundled SQLite compile against wasi-sdk
+  - exports run-test  installs the VFS as default, opens a
+    file-backed db at an in-VFS path, runs INSERT/SELECT,
+    returns count(*)
+
+The host-side companion test wires WASI + tvm-wasmtime's
+add_to_linker against this component, calls run-test, asserts
+the expected count. If the chunked-allocation file storage
+mishandles partial chunk writes or cross-chunk reads, SQLite
+will return zeros or stale bytes; this catches it end-to-end.
+
+Standalone workspace member intentionally  the wasm32-wasip2
+target shouldn't trip up `cargo build` at the workspace root.
+"""
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+sqlite-vfs-tvm = { path = "../../sqlite-vfs-tvm", features = ["tvm"] }
+sqlite-wasm-core = { path = "../../core" }
+# Same wit-bindgen the pcache probe pins. Both this crate and
+# sqlite-vfs-tvm declare extern blocks for the same tvm:memory
+# imports  rust-lld dedupes them at link time.
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+wit-bindgen = { version = "0.44", features = ["macros"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

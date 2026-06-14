@@ -281,6 +281,52 @@ impl Connection {
         Ok(Connection { raw })
     }
 
+    /// Open a database with an explicitly-named VFS. `vfs_name`
+    /// is the same string SQLite's `sqlite3_open_v2`'s 4th
+    /// argument accepts: `Some("wasivfs")` to force-route through
+    /// the in-tree wasivfs, `Some("tvm-mem")` for the
+    /// sqlite-vfs-tvm Phase 4 VFS, `None` to use SQLite's
+    /// process-wide default. Use this when you've registered a
+    /// custom VFS (via `sqlite3_vfs_register` or one of the
+    /// `install*` helpers in the sqlite-vfs-* crates) and want
+    /// to open against it directly, bypassing the
+    /// platform-default routing `open()` does.
+    pub fn open_with_vfs(
+        path: &str,
+        flags: OpenFlags,
+        vfs_name: Option<&str>,
+    ) -> Result<Self, Error> {
+        let path_c = CString::new(path)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let vfs_c = match vfs_name {
+            Some(n) => Some(
+                CString::new(n).map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?,
+            ),
+            None => None,
+        };
+        let vfs_ptr = vfs_c.as_ref().map(|c| c.as_ptr()).unwrap_or(ptr::null());
+        let mut raw: *mut ffi::sqlite3 = ptr::null_mut();
+        let rc = unsafe {
+            ffi::sqlite3_open_v2(
+                path_c.as_ptr(),
+                &mut raw,
+                flags.raw() | ffi::SQLITE_OPEN_EXRESCODE,
+                vfs_ptr,
+            )
+        };
+        if rc != ffi::SQLITE_OK {
+            let err = if raw.is_null() {
+                standalone_error(rc, "open failed (null handle)")
+            } else {
+                let e = unsafe { last_error(raw) };
+                unsafe { ffi::sqlite3_close(raw) };
+                e
+            };
+            return Err(err);
+        }
+        Ok(Connection { raw })
+    }
+
     /// Convenience constructor for `:memory:`.
     pub fn open_in_memory() -> Result<Self, Error> {
         Self::open(":memory:", OpenFlags::DEFAULT | OpenFlags::MEMORY)

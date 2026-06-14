@@ -563,6 +563,24 @@ don't gate it.
 
 ## Phase 4 — Path E: TVM-backed custom VFS
 
+> **Phase 4.0 + 4.1 + 4.2 shipped.** The `sqlite-vfs-tvm` crate
+> ships the full sqlite3_vfs trampolines (4.0), feature-gated
+> `WitTvmStorage` backend using 4 KB chunked allocs in
+> `tvm:memory` regions (4.1), and the wasm32-wasip2 probe at
+> `probe/tvm-vfs-wasip2/` with a host integration test that
+> drives 100 INSERTs through real SQLite + the chunked TVM
+> backend (4.2). The host test passes: TvmHost.directory
+> reports 1 region holding 8 KB after the workload  bytes
+> actually flowed through `tvm:memory/manager.create-region` +
+> `bytes.write`, not through default memory.
+>
+> One small core::db change was needed to make the probe
+> possible: `Connection::open_with_vfs(path, flags, vfs_name)`
+> joined `Connection::open` so callers can name the VFS
+> explicitly. The bare `Connection::open` hardcodes "wasivfs"
+> for non-`:memory:` paths on wasm32, which would route past
+> our just-installed VFS.
+
 The path that picks up where Phase 2 dropped. With Phase 2.1
 abandoned (allocator-layer TVM can't satisfy SQLite's
 raw-pointer contract without forking), Phase 4 lifts the > 4 GiB
@@ -695,7 +713,7 @@ conn.execute_batch("PRAGMA cache_size = -8000;")?; // 8 MB shadow + rest in pcac
 |---|---|
 | `sqlite-pcache-tvm` | Path B pcache2 impl (Phase 1, shipped). Rust trampolines + `ShadowCache<R: Region>` + in-proc and wit-bindgen-backed `Region` impls. |
 | `sqlite-mem-tvm` | Path C mem methods impl (Phase 2.0, shipped). Size-header allocator over the Rust global allocator. No TVM-backed variant — see Phase 2 finding for why. |
-| `sqlite-vfs-tvm` | Path E TVM-backed VFS (Phase 4, planned). The actual destination for the > 4 GiB story now that Phase 2.1 is closed. |
+| `sqlite-vfs-tvm` | Path E TVM-backed VFS. Phase 4.0 + 4.1 + 4.2 shipped: trampolines + InProcStorage + WitTvmStorage backend + wasm32-wasip2 probe with end-to-end SQLite round-trip through `tvm:memory` regions. |
 | (external) `tvm-core` / `tvm-guest-mm` / `tvm-wasmtime` | Untouched; consumed via path deps. |
 
 All three new crates live in this repo's workspace and share the
