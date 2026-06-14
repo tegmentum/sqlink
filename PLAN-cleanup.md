@@ -1,6 +1,6 @@
 # Plan: Outstanding cleanup after the reactor → command + lib split
 
-> **Status: phases 0-5 shipped; 6-7 remain.**
+> **Status: phases 0-5 + 7 shipped; only 6 remains.**
 >
 > | Phase | Commit |
 > |---|---|
@@ -11,7 +11,7 @@
 > | 4 — Workspace Cargo.toml | e7b6298 |
 > | 5 — Legacy world status | f11edf1 |
 > | 6 — Runnable-uses-sqlite-lib demo | (open) |
-> | 7 — Shell wrapper integration test | (open) |
+> | 7 — Shell wrapper integration test | b4b5472 (also surfaced + fixed a real multi-statement bug in eval_sql_inner) |
 >
 > Phase 2's persistence bug, which I originally framed as "the
 > shared default connection across SPI + high-level," turned out to
