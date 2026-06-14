@@ -192,18 +192,47 @@ allocations.
 >
 > Phase 1.1 implements Path D against the WIT-bound
 > `tvm:memory/manager + bytes` interfaces (the path validated by
-> `probe/tvm-substrate/`). Architectural decisions still open
-> before implementation:
+> `probe/tvm-substrate/`).
 >
-> - **Shadow-pool sizing.** N slots * page-size = default-memory
->   budget the pcache reserves. Static-configured at `xCachesize`
->   or growable?
-> - **Eviction policy.** LRU on the shadow pool; TVM handles
->   tier-level eviction (Hot → Warm → Cold) within the region.
-> - **Dirty tracking.** Flush only dirty pages on `xUnpin`, or
->   always flush? SQLite already tracks dirty via the
->   `sqlite3_pcache_page.pExtra` bytes — pcache impls can read
->   the dirty bit through a documented offset.
+> **Locked-in design decisions** (2026-06-14):
+>
+> - **Shadow-pool sizing: equal to `xCachesize`.** Matches the
+>   existing `cache_size` PRAGMA semantics so operators reason
+>   about the wasm-memory budget the same way they always have.
+>   The TVM region grows beyond — pages above `xCachesize` live
+>   cold in TVM and get faulted in on demand. Anyone who wants
+>   more hot pages bumps `cache_size`, exactly as they would with
+>   default pcache1. Rejected: "shadow = fraction of `xCachesize`"
+>   adds a tuning knob no operator knows how to set and doesn't
+>   compose with the existing PRAGMA expectations.
+>
+> - **Eviction policy: two-list LRU (pinned set + unpinned LRU).**
+>   Pinned pages cannot be evicted (SQLite still holds the raw
+>   `pBuf` pointer); `xUnpin` is the explicit "evictable now"
+>   signal. Implementation: `HashMap<key, Entry>` for O(1)
+>   lookup + intrusive linked-list pointers on `Entry` for O(1)
+>   LRU promote / evict. Rejected: clock / approximate-LRU 
+>   same hit rate on SQLite's typical temporal locality, more
+>   code, no measurable win. Revisit only if profiling shows
+>   pure LRU is the bottleneck.
+>
+> - **Dirty tracking: always flush on `xUnpin` unless
+>   `discard=1`.** Phase 1.1 ships the conservative "doubles I/O
+>   on read-only workloads" form. We have no in-band write
+>   signal — SQLite writes through `pBuf` directly and the
+>   pcache impl never sees the writes — so the alternatives are
+>   either always-flush (Option A, locked in) or peek SQLite's
+>   `PgHdr` dirty bit through `pExtra` (Option B, deferred).
+>   Option B is brittle across SQLite versions (depends on the
+>   PgHdr struct layout staying stable) and the win may be
+>   smaller than expected: the flush cost is dominated by the
+>   `tvm:memory.bytes.write` host call (wasm-host boundary
+>   crossing), not the memcpy, so killing only-dirty flushes
+>   reduces calls but not per-call latency. Promote to Option B
+>   only after Phase 1.1 profiling shows the always-flush
+>   overhead is the bottleneck on a representative workload
+>   (TPC-H Q1 with shadow-pool sized to force eviction; target:
+>   TVM-backed + always-flush within 20% of default pcache1).
 
 ### What to build
 
