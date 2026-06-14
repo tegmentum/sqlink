@@ -118,17 +118,24 @@ allocations.
 
 ## Phase 1 — Path B: TVM-backed `pcache2`
 
-> **Phase 1.0 (plumbing) shipped.** The `sqlite-pcache-tvm` crate
-> implements the eleven `sqlite3_pcache_methods2` trampolines and
-> exposes an `install()` that registers via
-> `sqlite3_config(SQLITE_CONFIG_PCACHE2, …)` before
-> `sqlite3_initialize`. Backend is a pure-Rust HashMap; the
-> integration test opens a real in-memory db and runs a real
-> CREATE/INSERT/SELECT/COUNT workload through it. Phase 1.1 swaps
-> the HashMap for `tvm:memory/manager.create-region` +
-> `manager.alloc` (the WIT path validated by
-> `probe/tvm-substrate/`) without touching the SQLite-facing
-> trampolines.
+> **Phase 1.0 + 1.1 (in-process backend) shipped.** The
+> `sqlite-pcache-tvm` crate implements the eleven
+> `sqlite3_pcache_methods2` trampolines + Path D's shadow-pool +
+> pinned-aware LRU + always-flush eviction against an in-process
+> `Region` cold tier (`HashMap<u32, Vec<u8>>` keyed by
+> `key * sz_page`). Two real-SQLite integration tests cover it:
+> a baseline schema/select round-trip and a 1000-row workload
+> with `PRAGMA cache_size = 4` that forces continuous eviction
+> and cold-tier promotion. Six unit tests cover the
+> shadow-pool + LRU + region invariants directly.
+>
+> **Phase 1.1 (TVM region backend) is now a contained swap.** The
+> `Region` trait in `sqlite-pcache-tvm/src/region.rs` is the
+> integration point — a wit-bindgen-backed `WitTvmRegion` plugs
+> in behind the `tvm` cargo feature with no changes to the
+> trampolines or the `ShadowCache` body. Wiring + a wasm32-wasip2
+> probe test combining bundled SQLite + the TVM region is the
+> follow-up.
 
 > **Note on implementation language:** the plan called for "~500
 > LOC C." Pure Rust shipped instead — `libsqlite3-sys` already

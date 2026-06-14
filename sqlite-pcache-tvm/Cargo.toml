@@ -16,6 +16,18 @@ already correct from this commit, so backend swap is contained.
 """
 license = "MIT"
 
+[features]
+default = []
+# Swap the Path D cold-tier from the default in-process
+# `HashMap<u32, Vec<u8>>` to a `tvm:memory`-backed region. Wasm32-
+# only (the wit-bindgen guest code only compiles for wasm32). See
+# PLAN-tvm-integration Phase 1.1 for the design and
+# `probe/tvm-substrate/` for the host-side wiring story.
+#
+# Not yet wired in this commit  the trait-shaped boundary lives
+# in `region.rs` so plugging in a `WitTvmRegion` is a follow-up.
+tvm = []
+
 [dependencies]
 # Same libsqlite3-sys version core/cli use. NOT bundled  the
 # bundled compile lives in core, and cargo's `links =`
