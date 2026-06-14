@@ -163,6 +163,14 @@ async fn main() -> Result<()> {
         .and_then(|s| s.to_str())
         .unwrap_or("component");
     wasi_builder.arg(argv0);
+    // Pass --db's value to the wasm component as its first guest
+    // argv (after argv0). Components targeting wasi:cli/run read
+    // env::args() to find their database path; without this, every
+    // file-backed run silently degrades to :memory: because the
+    // host's --db parsing strips it from the component's view.
+    if !db_path.is_empty() {
+        wasi_builder.arg(&db_path);
+    }
     for a in &guest_args {
         wasi_builder.arg(a);
     }

@@ -139,14 +139,9 @@ pub fn init_wasivfs() -> Result<(), Error> {
         fn sqlite3_wasivfs_register(make_default: c_int) -> c_int;
     }
     // makeDefault = 1: subsequent sqlite3_open_v2 calls that pass
-    // NULL for the vfs name pick up wasivfs. Idempotent — the C
-    // side guards against double-registration.
-    //
-    // CAVEAT: wasivfs is registered and findable, but as of this
-    // writing sqlite3 isn't routing through wasivfs_open for new
-    // file-backed connections on wasm32-wasip2. Writes still
-    // happen in memory and the file stays 0 bytes. The persistence
-    // fix is tracked in PLAN-cli-persistence.md.
+    // NULL for the vfs name pick up wasivfs. We also pass "wasivfs"
+    // explicitly in Connection::open for safety, but the default
+    // path matters for any internal sqlite3 opens (journals etc.).
     let rc = unsafe { sqlite3_wasivfs_register(1) };
     if rc != ffi::SQLITE_OK {
         return Err(standalone_error(rc, "sqlite3_wasivfs_register"));

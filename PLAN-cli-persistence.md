@@ -1,5 +1,34 @@
 # Plan: file-backed databases don't persist on wasm32-wasip2
 
+> **RESOLVED in commit TBD.** The bug was not in the VFS layer at
+> all. `host/src/main.rs` parsed `--db PATH` but never passed
+> `PATH` to the wasm component as an argv argument, so
+> `cli/src/lib.rs::run()` saw `argv.len() == 1`, fell through to
+> the empty-path branch, and called `Connection::open_in_memory()`.
+> Every "file-backed" session was an in-memory session that the
+> host happened to know a path for.
+>
+> The wasivfs was correctly registered the whole time; it just
+> never got called for the main db because `:memory:` opens go
+> to memdb instead.
+>
+> Fix: one line in `host/src/main.rs` —
+> `if !db_path.is_empty() { wasi_builder.arg(&db_path); }` so the
+> wasm component sees its db path as `argv[1]`. After that, all
+> Phase 2 commands (.backup / .restore / .save / .clone / .dump /
+> .import) work end-to-end on disk, host sqlite3 reads the
+> resulting files cleanly, and writes survive across sessions.
+>
+> The original suspicions about libsqlite3-sys's wasm32-wasi-vfs
+> feature, sqlite3.c's compile flags, etc. were red herrings.
+> The diagnostic that broke the case was eprintln-ing the actual
+> path passed to `sqlite3_open_v2`: it was `:memory:`, not
+> `/tmp/foo.db`. From there the bug was obvious.
+
+---
+
+## Original report (kept for historical context)
+
 ## The bug
 
 Running `./sqlite-wasm /tmp/foo.db` against a non-`:memory:` path
