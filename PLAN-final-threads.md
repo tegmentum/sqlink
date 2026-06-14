@@ -5,7 +5,7 @@
 > | Thread | Resolution |
 > |---|---|
 > | T1 — `spi.execute_live` | **Closed by abandonment.** The dispatch-chain re-entry approach can't work — wasmtime's `may_enter` enforces a Component Model spec rule (no recursive entry into a top-level instance), so the WIT triple, the `LiveSpiBridge`, and the `live-spi-extension` were torn out. Full post-mortem in `host/SPI-LIVE-ARCHITECTURE.md` (landed `85f9115` + tear-down commits `bf97205`, `6341c00`, `0f6816e`, `c8f5643`). |
-> | T2 — Authorizer dispatch | **T2.1-T2.5 shipped.** Authorizer is wired in `cli/src/lib.rs` via `Connection::set_authorizer` (core/src/db.rs:1353 wraps `sqlite3_set_authorizer` directly — rusqlite was dropped, so T2.2's "is `handle()` public?" question is moot). Both the `.auth on|off` REPL command and the `has_authorizer`-driven dispatch in `do_load` are live. Only **T2.6** (the dedicated `auth-extension` acceptance test extension) hasn't shipped; the dispatch path is exercised indirectly by `Host::dispatch_authorize`. |
+> | T2 — Authorizer dispatch | **All steps shipped.** Authorizer is wired in `cli/src/lib.rs` via `Connection::set_authorizer` (core/src/db.rs:1353 wraps `sqlite3_set_authorizer` directly — rusqlite was dropped, so T2.2's "is `handle()` public?" question is moot). Both the `.auth on|off` REPL command and the `has_authorizer`-driven dispatch in `do_load` are live, and the T2.6 acceptance test against the sibling `auth-extension` lives at `host/tests/auth_extension.rs`. |
 >
 > The "out of scope" bullets at the bottom of this plan still
 > stand as named follow-ups (HTTP `allowed_hosts` runtime
