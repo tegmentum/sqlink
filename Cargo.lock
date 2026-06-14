@@ -1686,6 +1686,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "runnable-sqlite-demo"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "rustc-demangle"
 version = "0.1.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"

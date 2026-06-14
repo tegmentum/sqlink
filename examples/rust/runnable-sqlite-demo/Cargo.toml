@@ -1,0 +1,25 @@
+[package]
+name = "runnable-sqlite-demo"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Demo runnable component that uses sqlite-lib via static composition. Imports sqlite:extension/spi; at compose time the import gets wired to sqlite-lib's export of the same interface."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+wit-bindgen = { version = "0.44", features = ["macros"] }
+
+# Component packaging:
+#   cargo build --release --target wasm32-wasip2
+#   wasm-tools component new \
+#     target/wasm32-wasip2/release/runnable_sqlite_demo.wasm \
+#     -o target/wasm32-wasip2/release/runnable_sqlite_demo.component.wasm
+# Then compose with sqlite-lib:
+#   wasm-tools compose \
+#     -d sqlite:extension/spi@0.1.0=path/to/sqlite_lib.component.wasm \
+#     -d sqlite:extension/types@0.1.0=path/to/sqlite_lib.component.wasm \
+#     runnable_sqlite_demo.component.wasm \
+#     -o runnable_sqlite_demo.composed.wasm

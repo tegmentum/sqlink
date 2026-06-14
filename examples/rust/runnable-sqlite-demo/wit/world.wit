@@ -1,0 +1,19 @@
+package sqlite:runnable-sqlite-demo@0.1.0;
+
+/// Demo runnable that uses sqlite-lib via static composition.
+///
+/// Imports `sqlite:extension/spi` (and the `types` interface it
+/// depends on); at compose time those imports get satisfied by
+/// sqlite-lib's exports of the same interfaces. The resulting
+/// composed wasm is self-contained — exports `sqlite:wasm/run` and
+/// has SQLite bundled inside via the linked sqlite-lib component.
+///
+/// Validates that sqlite-lib's SPI surface actually works as a
+/// compose target: a guest doesn't need to know it's talking to
+/// "the host's sqlite-runtime" vs "a composed wasm component" —
+/// the SQL just runs.
+world impl {
+    import sqlite:extension/types@0.1.0;
+    import sqlite:extension/spi@0.1.0;
+    export sqlite:wasm/run@0.1.0;
+}

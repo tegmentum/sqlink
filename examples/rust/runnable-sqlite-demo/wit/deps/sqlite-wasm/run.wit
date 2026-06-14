@@ -1,0 +1,5 @@
+package sqlite:wasm@0.1.0;
+
+interface run {
+    run: func() -> result<string, string>;
+}

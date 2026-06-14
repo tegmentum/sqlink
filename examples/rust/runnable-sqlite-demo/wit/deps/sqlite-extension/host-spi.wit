@@ -1,0 +1,223 @@
+package sqlite:extension@0.1.0;
+
+/// Top-level SQL execution. Host imports for extensions that need to
+/// run SQL against the embedding database.
+interface spi {
+    use types.{sql-value, query-result, sqlite-error};
+
+    /// Execute a statement; return columns, rows, and change counters.
+    execute: func(sql: string, params: list<sql-value>) -> result<query-result, sqlite-error>;
+
+    /// Execute a statement expected to return one scalar value.
+    execute-scalar: func(sql: string, params: list<sql-value>) -> result<sql-value, sqlite-error>;
+
+    /// Execute one or more statements as a batch; return total rows changed.
+    execute-batch: func(sql: string) -> result<s64, sqlite-error>;
+}
+
+/// Prepared statement lifecycle. For extensions that bind once and
+/// step many times.
+interface prepared {
+    use types.{sql-value, sqlite-error, column-info};
+
+    type stmt-handle = u64;
+
+    prepare: func(sql: string) -> result<stmt-handle, sqlite-error>;
+    bind: func(stmt: stmt-handle, params: list<sql-value>) -> result<_, sqlite-error>;
+    step: func(stmt: stmt-handle) -> result<option<list<sql-value>>, sqlite-error>;
+    reset: func(stmt: stmt-handle) -> result<_, sqlite-error>;
+    finalize: func(stmt: stmt-handle) -> result<_, sqlite-error>;
+    column-count: func(stmt: stmt-handle) -> u32;
+    get-column-info: func(stmt: stmt-handle, index: u32) -> result<column-info, sqlite-error>;
+}
+
+/// Transactions and savepoints.
+interface transaction {
+    use types.{sqlite-error};
+
+    begin: func() -> result<_, sqlite-error>;
+    begin-immediate: func() -> result<_, sqlite-error>;
+    begin-exclusive: func() -> result<_, sqlite-error>;
+    commit: func() -> result<_, sqlite-error>;
+    rollback: func() -> result<_, sqlite-error>;
+    savepoint: func(name: string) -> result<_, sqlite-error>;
+    release: func(name: string) -> result<_, sqlite-error>;
+    rollback-to: func(name: string) -> result<_, sqlite-error>;
+    in-transaction: func() -> bool;
+}
+
+/// Schema introspection.
+interface schema {
+    use types.{table-info, sqlite-error};
+
+    list-tables: func(database: option<string>) -> result<list<string>, sqlite-error>;
+    get-table-info: func(table: string, database: option<string>) -> result<table-info, sqlite-error>;
+    table-exists: func(table: string, database: option<string>) -> bool;
+    list-indexes: func(table: string, database: option<string>) -> result<list<string>, sqlite-error>;
+}
+
+/// Structured logging from extensions back to the host.
+interface logging {
+    use types.{log-level};
+
+    log: func(level: log-level, message: string);
+    error: func(message: string);
+    warn: func(message: string);
+    info: func(message: string);
+    debug: func(message: string);
+}
+
+/// Configuration lookups and version reporting.
+interface config {
+    get: func(key: string) -> option<string>;
+    set: func(key: string, value: string) -> bool;
+    sqlite-version: func() -> string;
+    extension-version: func() -> string;
+}
+
+/// Persistent key/value state managed by the host. Survives across
+/// connections; scoped per extension by the host.
+interface state {
+    use types.{sql-value};
+
+    get: func(key: string) -> option<sql-value>;
+    set: func(key: string, value: sql-value);
+    delete: func(key: string) -> bool;
+    keys: func() -> list<string>;
+    clear: func();
+}
+
+/// Bounded in-memory cache with optional TTL.
+interface cache {
+    use types.{sql-value};
+
+    get: func(key: string) -> option<sql-value>;
+    set: func(key: string, value: sql-value, ttl-seconds: option<u32>);
+    delete: func(key: string) -> bool;
+    exists: func(key: string) -> bool;
+    clear: func();
+}
+
+/// Random number generation. Implementations should use a CSPRNG.
+interface random {
+    random-bytes: func(count: u32) -> list<u8>;
+    random-u64: func() -> u64;
+    /// Uniform in [0.0, 1.0).
+    random-f64: func() -> f64;
+    /// RFC 4122 v4 UUID.
+    random-uuid: func() -> string;
+}
+
+/// Unicode-aware text utilities.
+interface text {
+    upper: func(s: string) -> string;
+    lower: func(s: string) -> string;
+    trim: func(s: string) -> string;
+    ltrim: func(s: string, chars: option<string>) -> string;
+    rtrim: func(s: string, chars: option<string>) -> string;
+    substr: func(s: string, start: s32, length: option<s32>) -> string;
+    replace: func(s: string, pattern: string, replacement: string) -> string;
+    split: func(s: string, delimiter: string) -> list<string>;
+    join: func(parts: list<string>, delimiter: string) -> string;
+    contains: func(s: string, substr: string) -> bool;
+    starts-with: func(s: string, prefix: string) -> bool;
+    ends-with: func(s: string, suffix: string) -> bool;
+    repeat: func(s: string, count: u32) -> string;
+    reverse: func(s: string) -> string;
+    /// Length in Unicode scalar values.
+    char-length: func(s: string) -> u32;
+    /// Length in UTF-8 bytes.
+    byte-length: func(s: string) -> u32;
+}
+
+/// Cryptographic hashing. Outputs are hex-encoded strings except for
+/// HMAC which returns the raw bytes.
+interface hashing {
+    md5: func(data: list<u8>) -> string;
+    sha1: func(data: list<u8>) -> string;
+    sha256: func(data: list<u8>) -> string;
+    sha512: func(data: list<u8>) -> string;
+    hmac-sha256: func(key: list<u8>, data: list<u8>) -> list<u8>;
+}
+
+/// Synchronous HTTP client, shaped after `wasi:http` but flattened
+/// to avoid wasi-http's resource/pollable/stream machinery. A host
+/// may implement this by delegating to `wasi:http/outgoing-handler`
+/// or by hitting the network directly.
+interface http {
+    /// HTTP method. Mirrors `wasi:http/types.method`.
+    variant method {
+        get,
+        head,
+        post,
+        put,
+        delete,
+        connect,
+        options,
+        trace,
+        patch,
+        /// Non-standard / extension method.
+        other(string),
+    }
+
+    /// URL scheme. Mirrors `wasi:http/types.scheme`.
+    variant scheme {
+        http,
+        https,
+        /// Non-standard scheme.
+        other(string),
+    }
+
+    /// Header field — name + raw bytes value (per wasi-http).
+    type field = tuple<string, list<u8>>;
+
+    /// Outgoing request. Mirrors `wasi:http/types.outgoing-request`
+    /// but flattened from the resource-based wasi-http form into a
+    /// single value-typed record.
+    record request {
+        method: method,
+        scheme: option<scheme>,
+        /// Host (with optional port), e.g. "example.com:8443".
+        authority: option<string>,
+        /// Path + query, e.g. "/api/v1/things?id=42".
+        path-with-query: option<string>,
+        headers: list<field>,
+        body: option<list<u8>>,
+        timeout-ms: option<u32>,
+    }
+
+    /// Incoming response. Mirrors `wasi:http/types.incoming-response`
+    /// in flattened form.
+    record response {
+        status: u16,
+        headers: list<field>,
+        body: list<u8>,
+    }
+
+    /// HTTP error variants. Mirrors the shape of
+    /// `wasi:http/types.error-code` at a higher level.
+    variant http-error {
+        invalid-url(string),
+        timed-out,
+        connection-error(string),
+        protocol-error(string),
+        other(string),
+    }
+
+    /// Send the request and wait for the full response.
+    handle: func(req: request) -> result<response, http-error>;
+}
+
+/// Encoding/decoding helpers.
+interface encoding {
+    base64-encode: func(data: list<u8>) -> string;
+    base64-decode: func(s: string) -> result<list<u8>, string>;
+    hex-encode: func(data: list<u8>) -> string;
+    hex-decode: func(s: string) -> result<list<u8>, string>;
+    url-encode: func(s: string) -> string;
+    url-decode: func(s: string) -> result<string, string>;
+    /// JSON-escape a string (does NOT wrap in quotes).
+    json-encode: func(value: string) -> string;
+    /// Validate JSON and return the canonicalized form.
+    json-decode: func(s: string) -> result<string, string>;
+}

@@ -1,0 +1,16 @@
+// Compose runnable-sqlite-demo with sqlite-lib so the demo's
+// `sqlite:extension/*` imports get satisfied by sqlite-lib's
+// exports of the same interfaces. The output is a single wasm
+// component that exports `sqlite:wasm/run` and has SQLite bundled
+// inside.
+
+package sqlite:runnable-sqlite-demo-composed@0.1.0;
+
+let lib = new sqlite:wasm { ... };
+let demo = new sqlite:runnable-sqlite-demo {
+    "sqlite:extension/types@0.1.0": lib["sqlite:extension/types@0.1.0"],
+    "sqlite:extension/spi@0.1.0":   lib["sqlite:extension/spi@0.1.0"],
+    ...
+};
+
+export demo["sqlite:wasm/run@0.1.0"];
