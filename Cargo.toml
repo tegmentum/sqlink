@@ -11,6 +11,7 @@ members = [
     "sqlite-lib",
     "host",
     "sqlite-pcache-tvm",
+    "sqlite-mem-tvm",
     "examples/rust/runnable-sqlite-demo",
 ]
 

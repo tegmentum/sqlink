@@ -369,8 +369,46 @@ configured from `xCachesize`.
 
 ## Phase 2 — Path C: TVM-backed `sqlite3_malloc`
 
-After Phase 1 lands and measurements show the residual 4 GB
-pressure (or to fully solve the `:memory:` database case).
+> **Phase 2.0 (plumbing) shipped.** `sqlite-mem-tvm` crate
+> ships the seven `sqlite3_mem_methods` trampolines + an
+> `install()` registering via
+> `sqlite3_config(SQLITE_CONFIG_MALLOC, …)` before
+> `sqlite3_initialize`. Backend is a size-header allocator over
+> the Rust global allocator: each allocation gets a 16-byte
+> prefix holding the original requested size so `xSize` and
+> `xFree` can recover it. Five unit tests cover the trampoline
+> math (round-trip, realloc preserve, realloc-null = malloc,
+> realloc-zero = free, xRoundup alignment). Two real-SQLite
+> integration tests drive workloads through the trampolines and
+> assert allocator counters climb (460 mallocs / 23 reallocs /
+> 202 frees on a basic CREATE-INSERT-SELECT; group_concat over
+> 1000 rows triggers reallocs as the accumulator grows).
+>
+> **Phase 2.1 (TVM swap) is structurally blocked, not just
+> deferred.** The Phase 1.1 shadow-pool workaround for the
+> pointer-vs-handle mismatch doesn't apply here. SQLite's
+> `sqlite3_mem_methods` returns a `*mut c_void` that the
+> caller dereferences directly  every byte read/write of an
+> allocated region is a raw deref, with no boundary where we
+> could route through `tvm:memory/bytes.read/write`. The
+> pcache had clear `xFetch`/`xUnpin` moments to shadow-fault on;
+> mem methods have no such boundary. Unblocking this requires
+> either:
+>
+>   - A `tvm:memory` variant that allocates *into* default
+>     wasm memory and exposes the base pointer (giving sqlite a
+>     real C pointer it can dereference). Defeats the > 4 GiB
+>     story for the bytes in question, but keeps TVM's
+>     allocator policy + diagnostics.
+>   - Recompiling SQLite to use a TVM-aware allocator API
+>     (`sqlite3_mem_methods` with handle/offset semantics
+>     instead of pointer semantics). Out of scope  forks the
+>     upstream SQLite source.
+>
+> Phase 2.0 keeps the `sqlite-mem-tvm` crate name forward-
+> compatible: when the TVM API change lands, the trampolines
+> already in place stay, only the backend swap (analogous to
+> Phase 1.1's `WitTvmRegion`) is needed.
 
 ### What to build
 

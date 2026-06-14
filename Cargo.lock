@@ -2084,6 +2084,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlite-mem-tvm"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-wasm-core",
+]
+
+[[package]]
 name = "sqlite-pcache-tvm"
 version = "0.1.0"
 dependencies = [
