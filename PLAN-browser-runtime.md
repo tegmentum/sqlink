@@ -111,14 +111,21 @@ file lives in OPFS instead of `~/.cache/sqlite-wasm/`.
 
 ## Open questions
 
-- **Multi-memory in component model**  confirm wasm32-wasip2
-  components allow multiple memories on the produced binary
-  shape. This is the load-bearing assumption for switching to
-  `tvm-guest-mm`; if components disallow multi-memory, the
-  switch doesn't work and we're back to Option A.
+- ~~**Multi-memory in component model**  confirm wasm32-wasip2
+  components allow multiple memories.~~ **Resolved 2026-06-14**:
+  probe at `probe/multimem-component/` validates that
+  multi-memory IS valid in component cores; wasm-tools wraps
+  cleanly and wasmtime instantiates + executes a function
+  using both memories (returns 42). The structural blocker is
+  cleared.
 - **Wasmtime multi-memory flag**  `Config::wasm_multi_memory()`
   is already a thing; needs to be on for the host to accept
-  the new wasm shape.
+  the new wasm shape. One-line addition to `Host::new`
+  alongside the existing `wasm_memory64(true)`.
+- **Rust source  tvm-guest-mm pipeline**  the probe used
+  hand-written WAT; full pipeline validation through Rust
+  source + tvm-guest-mm templates is the substrate-switch work
+  itself, deferred to that phase.
 
 ## Order of operations
 
