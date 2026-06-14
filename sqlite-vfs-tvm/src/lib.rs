@@ -56,7 +56,32 @@ use parking_lot::Mutex;
 
 pub mod storage;
 
-use storage::{FileStorage, InProcStorage};
+// The TVM-backed storage is wasm32-only: the wit-bindgen guest
+// imports it generates only make sense in a wasm binary. On
+// host targets the `tvm` feature is a no-op so native unit tests
+// keep working against `InProcStorage`. Same gating pattern
+// `sqlite-pcache-tvm` uses for its `WitTvmRegion`.
+#[cfg(all(target_arch = "wasm32", feature = "tvm"))]
+pub mod wit_tvm_storage;
+
+use storage::FileStorage;
+
+/// Construct a fresh backend at xOpen time. Returns Err if the
+/// TVM-backed variant fails to create its region; the InProc
+/// variant is infallible. Trampoline maps the error to
+/// SQLITE_IOERR.
+#[cfg(not(all(target_arch = "wasm32", feature = "tvm")))]
+fn make_storage() -> Result<Box<dyn FileStorage>, c_int> {
+    Ok(Box::new(storage::InProcStorage::new()))
+}
+
+#[cfg(all(target_arch = "wasm32", feature = "tvm"))]
+fn make_storage() -> Result<Box<dyn FileStorage>, c_int> {
+    match wit_tvm_storage::WitTvmStorage::new() {
+        Ok(s) => Ok(Box::new(s)),
+        Err(_) => Err(ffi::SQLITE_IOERR),
+    }
+}
 
 /// VFS name. The bytes must be NUL-terminated because we hand a
 /// `*const c_char` to SQLite and SQLite uses it verbatim.
@@ -71,8 +96,12 @@ const MAX_PATHNAME: c_int = 256;
 
 /// Process-global file table. Multiple `xOpen` calls against
 /// the same path return handles to the same storage  that's
-/// how SQLite's journal + main db coordinate.
-type FileTable = HashMap<String, Arc<Mutex<dyn FileStorage>>>;
+/// how SQLite's journal + main db coordinate. The inner
+/// `Box<dyn FileStorage>` is there because the trait object
+/// itself is unsized; the surrounding `Mutex<Box<...>>` serialises
+/// access (SQLite's threading mode for an in-memory file is
+/// single-connection per access anyway).
+type FileTable = HashMap<String, Arc<Mutex<Box<dyn FileStorage>>>>;
 static FILES: Lazy<Mutex<FileTable>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 /// Monotonic counter for synthesizing temp-file names when
@@ -82,7 +111,7 @@ static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// Per-file state we own. The outer `sqlite3_file` SQLite
 /// allocates is just the `pMethods` pointer + our inner ptr.
 struct TvmFileInner {
-    storage: Arc<Mutex<dyn FileStorage>>,
+    storage: Arc<Mutex<Box<dyn FileStorage>>>,
     name: String,
     delete_on_close: bool,
 }
@@ -294,8 +323,11 @@ unsafe extern "C" fn vfs_open(
         if let Some(existing) = files.get(&name) {
             existing.clone()
         } else if (flags & ffi::SQLITE_OPEN_CREATE) != 0 {
-            let fresh: Arc<Mutex<dyn FileStorage>> =
-                Arc::new(Mutex::new(InProcStorage::new()));
+            let s = match make_storage() {
+                Ok(s) => s,
+                Err(code) => return code,
+            };
+            let fresh: Arc<Mutex<Box<dyn FileStorage>>> = Arc::new(Mutex::new(s));
             files.insert(name.clone(), fresh.clone());
             fresh
         } else {
@@ -610,6 +642,13 @@ mod tests {
     use super::*;
     use std::ffi::CString;
 
+    /// State-mutating tests share the process-global `FILES`
+    /// table; without this mutex cargo's parallel test runner
+    /// races them and `file_count` assertions flap. The
+    /// trampoline + storage tests below take this lock before
+    /// touching the table.
+    static TEST_STATE_MUTEX: Mutex<()> = Mutex::new(());
+
     #[test]
     fn vfs_constants_are_sane() {
         // szOsFile must match what we cast to.
@@ -622,6 +661,7 @@ mod tests {
 
     #[test]
     fn diagnostics_start_empty() {
+        let _g = TEST_STATE_MUTEX.lock();
         clear_for_tests();
         assert_eq!(file_count(), 0);
         assert_eq!(bytes_in_use(), 0);
@@ -640,6 +680,7 @@ mod tests {
     /// before they manifest as a SQLite assertion.
     #[test]
     fn open_write_read_close_round_trip() {
+        let _g = TEST_STATE_MUTEX.lock();
         clear_for_tests();
         // Allocate a slab the size SQLite would.
         let mut slab: Vec<u8> = vec![0; std::mem::size_of::<TvmFile>()];
@@ -690,6 +731,7 @@ mod tests {
 
     #[test]
     fn temp_file_is_deleted_on_close() {
+        let _g = TEST_STATE_MUTEX.lock();
         clear_for_tests();
         let mut slab: Vec<u8> = vec![0; std::mem::size_of::<TvmFile>()];
         let rc = unsafe {

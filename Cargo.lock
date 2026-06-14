@@ -2109,6 +2109,8 @@ dependencies = [
  "once_cell",
  "parking_lot",
  "sqlite-wasm-core",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]

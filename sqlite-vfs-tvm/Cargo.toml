@@ -21,6 +21,16 @@ That's the > 4 GiB story for non-page bytes.
 """
 license = "MIT"
 
+[features]
+default = []
+# Swap the per-file backend from the default in-process `Vec<u8>`
+# to a `tvm:memory`-backed chunked-allocation storage. The
+# guest-side wit-bindgen extern blocks only make sense on
+# wasm32; on host targets `--features tvm` is a no-op so native
+# unit tests of the rest of the crate keep working. Same shape
+# as sqlite-pcache-tvm's `tvm` feature gate.
+tvm = ["dep:wit-bindgen", "dep:wit-bindgen-rt"]
+
 [dependencies]
 # Same libsqlite3-sys version core/cli use. NOT bundled  the
 # bundled compile lives in core; cargo's `links =` uniqueness
@@ -34,3 +44,7 @@ sqlite-wasm-core = { path = "../core" }
 # parking_lot's Mutex is what core/host already pull in.
 parking_lot = "0.12"
 once_cell = "1"
+# Generates the guest-side tvm:memory imports. Same version
+# sqlite-pcache-tvm pins so the bindgen surfaces match.
+wit-bindgen = { version = "0.44", features = ["macros"], optional = true }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"], optional = true }
