@@ -50,6 +50,45 @@ thread_local! {
     static DONE: RefCell<bool> = const { RefCell::new(false) };
     static DB_PATH: RefCell<String> = const { RefCell::new(String::new()) };
     static AGG_CTX_COUNTER: RefCell<u64> = const { RefCell::new(1) };
+    // Per-extension record of what got registered against the cli's
+    // connection at .load time. .unload uses this to drop the
+    // matching sqlite3_create_function_v2 / sqlite3_create_collation_v2
+    // registrations so the function names stop resolving in SQL.
+    // Without this, the host's registry forgot the extension but
+    // the sqlite3 connection still held the trampolines, and SQL
+    // calls into the dispatched names fell through to a generic
+    // "extension not loaded" error rather than a clean "no such
+    // function" — confusing for anyone who reloads a different
+    // extension under the same name.
+    //
+    // HashMap::new isn't const-fn, so this can't use the `const { ... }`
+    // initializer block the other thread-locals use; it's a lazy
+    // init on first .with() call instead.
+    static EXT_REGS: RefCell<std::collections::HashMap<String, ExtRegistrations>> =
+        RefCell::new(std::collections::HashMap::new());
+}
+
+/// What an extension registered against the cli's sqlite3
+/// connection. .unload drains the entry and asks the connection to
+/// remove each registration.
+#[derive(Default)]
+struct ExtRegistrations {
+    /// (function name, num args) — covers both scalar and aggregate
+    /// since sqlite3_create_function_v2 removes either shape.
+    functions: Vec<(String, i32)>,
+    collations: Vec<String>,
+    /// True if .load installed an authorizer on behalf of this
+    /// extension. .unload clears the connection's authorizer in
+    /// that case so it doesn't keep dispatching into a dropped
+    /// extension. (sqlite3 has one authorizer slot per connection,
+    /// so this also clears any user-installed `.auth on` callback —
+    /// the user can re-enable it.)
+    has_authorizer: bool,
+    /// Same for the (update / commit / rollback) hook trio. We track
+    /// commit + rollback together because the cli installs them as
+    /// a pair when `manifest.has_commit_hook` is true.
+    has_update_hook: bool,
+    has_commit_hook: bool,
 }
 
 fn ensure_cli_conn() {
@@ -758,6 +797,7 @@ fn do_load(input: &str) -> String {
         let mut a_count = 0;
         let mut c_count = 0;
         let mut h_count = 0;
+        let mut regs = ExtRegistrations::default();
 
         for spec in &manifest.scalar_functions {
             let ext_n = ext_name.clone();
@@ -774,7 +814,10 @@ fn do_load(input: &str) -> String {
                     }
                 },
             );
-            if r.is_ok() { s_count += 1; }
+            if r.is_ok() {
+                s_count += 1;
+                regs.functions.push((spec.name.clone(), spec.num_args));
+            }
         }
 
         // Aggregates: each invocation owns a context_id; init allocates
@@ -804,7 +847,10 @@ fn do_load(input: &str) -> String {
                 db::FunctionFlags::UTF8 | db::FunctionFlags::DIRECTONLY,
                 AggDispatcher { ext_name: ext_name.clone(), func_id: spec.id },
             );
-            if r.is_ok() { a_count += 1; }
+            if r.is_ok() {
+                a_count += 1;
+                regs.functions.push((spec.name.clone(), spec.num_args));
+            }
         }
 
         for spec in &manifest.collations {
@@ -816,7 +862,10 @@ fn do_load(input: &str) -> String {
                 else if n > 0 { std::cmp::Ordering::Greater }
                 else { std::cmp::Ordering::Equal }
             });
-            if r.is_ok() { c_count += 1; }
+            if r.is_ok() {
+                c_count += 1;
+                regs.collations.push(spec.name.clone());
+            }
         }
 
         if manifest.has_authorizer {
@@ -831,7 +880,10 @@ fn do_load(input: &str) -> String {
                     }
                 },
             ));
-            if r.is_ok() { h_count += 1; }
+            if r.is_ok() {
+                h_count += 1;
+                regs.has_authorizer = true;
+            }
         }
 
         if manifest.has_update_hook {
@@ -847,6 +899,7 @@ fn do_load(input: &str) -> String {
                 dispatch::on_update(&ext_n, op, db_name, table, rowid);
             }));
             h_count += 1;
+            regs.has_update_hook = true;
         }
         // commit_hook: WIT on_commit returns true = proceed; sqlite
         // commit_hook returns true = abort. Invert.
@@ -860,7 +913,10 @@ fn do_load(input: &str) -> String {
                 dispatch::on_rollback(&ext_n2);
             }));
             h_count += 1;
+            regs.has_commit_hook = true;
         }
+
+        EXT_REGS.with(|m| m.borrow_mut().insert(ext_name.clone(), regs));
 
         (s_count, a_count, c_count, h_count)
     });
@@ -1161,15 +1217,50 @@ fn do_cache(arg: &str) -> String {
     }
 }
 
-/// `.unload <name>` — drop the host's registry entry. Functions
-/// already registered on the cli's sqlite3 connection remain
-/// callable (sqlite3 doesn't expose a remove path in our flag set);
-/// invoking them after .unload returns an "extension not loaded"
-/// error via the dispatch path. Documented limitation; a v2 path
-/// could drop and recreate the connection.
+/// `.unload <name>` — drop the host's registry entry AND remove the
+/// extension's scalar/aggregate/collation registrations from the
+/// cli's sqlite3 connection. After this, SQL referring to those
+/// names gets a clean "no such function" / "no such collation"
+/// error from the engine itself (rather than the older shape where
+/// the trampoline survived and surfaced "extension not loaded" via
+/// the dispatch path). Hook slots the extension occupied
+/// (authorizer / update / commit+rollback) are also cleared.
 fn do_unload(name: &str) -> String {
     use bindings::sqlite::wasm::extension_loader;
-    match extension_loader::unload_extension(name) {
+    let host_result = extension_loader::unload_extension(name);
+
+    let regs = EXT_REGS.with(|m| m.borrow_mut().remove(name));
+    if let Some(regs) = regs {
+        ensure_cli_conn();
+        CLI_CONN.with(|c| {
+            let g = c.borrow();
+            let Some(conn) = g.as_ref() else { return };
+            for (fn_name, n_arg) in &regs.functions {
+                let _ = conn.remove_function(fn_name, *n_arg);
+            }
+            for coll in &regs.collations {
+                let _ = conn.remove_collation(coll);
+            }
+            if regs.has_authorizer {
+                let _ = conn.set_authorizer::<fn(
+                    i32,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                    Option<String>,
+                ) -> db::AuthResult>(None);
+            }
+            if regs.has_update_hook {
+                conn.update_hook::<fn(db::UpdateAction, &str, &str, i64)>(None);
+            }
+            if regs.has_commit_hook {
+                conn.commit_hook::<fn() -> bool>(None);
+                conn.rollback_hook::<fn()>(None);
+            }
+        });
+    }
+
+    match host_result {
         Ok(()) => format!("Unloaded extension: {name}\n"),
         Err(e) => format!("Error unloading {name}: {} (code {})\n", e.message, e.code),
     }

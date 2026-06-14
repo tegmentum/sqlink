@@ -990,6 +990,42 @@ impl Connection {
         }
         Ok(())
     }
+
+    /// Detach a scalar or aggregate function previously registered
+    /// via `create_scalar_function` / `create_aggregate_function`.
+    ///
+    /// SQLite's documented removal API is to call
+    /// `sqlite3_create_function_v2` again with the same
+    /// `(name, n_arg, eTextRep)` triple but with every callback
+    /// pointer set to NULL — which is what this does. SQLite invokes
+    /// the previously-installed `xDestroy` to release the boxed
+    /// closure, so the prior registration's heap is freed.
+    ///
+    /// Returns Ok(()) if SQLite reported SQLITE_OK; an Err otherwise.
+    /// Removing a function that was never registered returns the
+    /// SQLITE_ERROR with the "no such function" message — callers
+    /// that consider that benign can simply ignore the result.
+    pub fn remove_function(&self, fn_name: &str, n_arg: i32) -> Result<(), Error> {
+        let c_name = CString::new(fn_name)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let rc = unsafe {
+            ffi::sqlite3_create_function_v2(
+                self.raw,
+                c_name.as_ptr(),
+                n_arg,
+                ffi::SQLITE_UTF8 as c_int,
+                std::ptr::null_mut(),
+                None,
+                None,
+                None,
+                None,
+            )
+        };
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(())
+    }
 }
 
 // ---------------------------------------------------------------
@@ -1149,6 +1185,29 @@ impl Connection {
                 boxed as *mut c_void,
                 Some(call_boxed_compare::<C>),
                 Some(destroy_boxed::<C>),
+            )
+        };
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(())
+    }
+
+    /// Detach a custom collation previously registered via
+    /// `create_collation`. Mirrors `remove_function`: passes NULL
+    /// for `xCompare` / `xDestroy` so SQLite invokes the previously-
+    /// installed destructor and drops the registration.
+    pub fn remove_collation(&self, name: &str) -> Result<(), Error> {
+        let c_name = CString::new(name)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let rc = unsafe {
+            ffi::sqlite3_create_collation_v2(
+                self.raw,
+                c_name.as_ptr(),
+                ffi::SQLITE_UTF8 as c_int,
+                std::ptr::null_mut(),
+                None,
+                None,
             )
         };
         if rc != ffi::SQLITE_OK {
@@ -1512,6 +1571,65 @@ mod tests {
         let mut s = c.prepare("SELECT my_sum(x) FROM t").unwrap();
         matches!(s.step().unwrap(), StepResult::Row);
         assert_eq!(s.column_value(0), Value::Integer(42));
+    }
+
+    #[test]
+    fn remove_function_drops_a_registered_scalar() {
+        let c = Connection::open_in_memory().unwrap();
+        c.create_scalar_function(
+            "noop",
+            1,
+            FunctionFlags::UTF8,
+            |_: &[Value]| -> Result<Value, Error> { Ok(Value::Null) },
+        )
+        .unwrap();
+        // Confirm it's callable.
+        c.prepare("SELECT noop(1)").unwrap().step().unwrap();
+        // Remove and confirm SQL can no longer resolve it.
+        c.remove_function("noop", 1).unwrap();
+        let err = c
+            .prepare("SELECT noop(1)")
+            .err()
+            .expect("noop should be gone");
+        assert!(
+            err.message.to_lowercase().contains("no such function"),
+            "expected 'no such function' after remove, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn remove_function_drops_a_registered_aggregate() {
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch("CREATE TABLE t(x); INSERT INTO t VALUES(10);")
+            .unwrap();
+        c.create_aggregate_function("my_sum2", 1, FunctionFlags::UTF8, SumInts)
+            .unwrap();
+        // sqlite3_create_function_v2 removal works for aggregates too —
+        // a single (name, n_arg) registration covers either shape.
+        c.remove_function("my_sum2", 1).unwrap();
+        let err = c
+            .prepare("SELECT my_sum2(x) FROM t")
+            .err()
+            .expect("my_sum2 should be gone");
+        assert!(
+            err.message.to_lowercase().contains("no such function"),
+            "expected 'no such function' after remove, got: {err:?}"
+        );
+    }
+
+    #[test]
+    fn remove_collation_drops_a_registered_collation() {
+        let c = Connection::open_in_memory().unwrap();
+        c.create_collation("rev2", |a, b| b.cmp(a)).unwrap();
+        c.remove_collation("rev2").unwrap();
+        let err = c
+            .prepare("SELECT 'a' < 'b' COLLATE rev2")
+            .err()
+            .expect("rev2 collation should be gone");
+        assert!(
+            err.message.to_lowercase().contains("no such collation"),
+            "expected 'no such collation' after remove, got: {err:?}"
+        );
     }
 
     #[test]
