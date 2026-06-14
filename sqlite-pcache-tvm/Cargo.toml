@@ -16,16 +16,6 @@ already correct from this commit, so backend swap is contained.
 """
 license = "MIT"
 
-[features]
-default = []
-# Swap the Path D cold-tier from the default in-process
-# `HashMap<u32, Vec<u8>>` to a `tvm:memory`-backed region. The
-# active guest-side wiring is gated on target_arch=wasm32 too
-# the wit-bindgen extern imports only make sense in a wasm
-# binary; on host targets `--features tvm` is a no-op so
-# native tests of the rest of the crate keep working.
-tvm = ["dep:wit-bindgen", "dep:wit-bindgen-rt"]
-
 [dependencies]
 # Same libsqlite3-sys version core/cli use. NOT bundled  the
 # bundled compile lives in core, and cargo's `links =`
@@ -35,7 +25,8 @@ libsqlite3-sys = { version = "0.30", default-features = false }
 # core is what brings in the bundled sqlite3 build; transitively
 # linking it satisfies our extern symbols.
 sqlite-wasm-core = { path = "../core" }
-# Generates the guest-side tvm:memory imports. Same version the
-# other examples + probe pin so the bindgen surfaces match.
-wit-bindgen = { version = "0.44", features = ["macros"], optional = true }
-wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"], optional = true }
+# Generates the guest-side tvm:memory imports. On wasm32 the
+# crate always uses the TVM-backed cold tier; the in-proc
+# fallback is target_arch=native only (for unit tests).
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

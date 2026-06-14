@@ -56,12 +56,11 @@ use parking_lot::Mutex;
 
 pub mod storage;
 
-// The TVM-backed storage is wasm32-only: the wit-bindgen guest
-// imports it generates only make sense in a wasm binary. On
-// host targets the `tvm` feature is a no-op so native unit tests
-// keep working against `InProcStorage`. Same gating pattern
-// `sqlite-pcache-tvm` uses for its `WitTvmRegion`.
-#[cfg(all(target_arch = "wasm32", feature = "tvm"))]
+// On wasm32 the file storage is always the wit-bindgen-backed
+// `tvm:memory` region  there's no reason to pick the in-proc
+// fallback when the target is wasm. The in-proc backend stays
+// available on native for the unit-test path.
+#[cfg(target_arch = "wasm32")]
 pub mod wit_tvm_storage;
 
 use storage::FileStorage;
@@ -70,12 +69,12 @@ use storage::FileStorage;
 /// TVM-backed variant fails to create its region; the InProc
 /// variant is infallible. Trampoline maps the error to
 /// SQLITE_IOERR.
-#[cfg(not(all(target_arch = "wasm32", feature = "tvm")))]
+#[cfg(not(target_arch = "wasm32"))]
 fn make_storage() -> Result<Box<dyn FileStorage>, c_int> {
     Ok(Box::new(storage::InProcStorage::new()))
 }
 
-#[cfg(all(target_arch = "wasm32", feature = "tvm"))]
+#[cfg(target_arch = "wasm32")]
 fn make_storage() -> Result<Box<dyn FileStorage>, c_int> {
     match wit_tvm_storage::WitTvmStorage::new() {
         Ok(s) => Ok(Box::new(s)),

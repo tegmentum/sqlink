@@ -1082,6 +1082,19 @@ pub struct RunState {
     /// against. Defaults to `DEFAULT_TENANT` for callers that
     /// haven't opted into multi-tenancy.
     pub active_tenant: String,
+    /// TVM region directory. The cli (and any runnable composed
+    /// against sqlite-lib) imports `tvm:memory/{manager,bytes}`
+    /// because `sqlite-pcache-tvm` + `sqlite-vfs-tvm` always use
+    /// wit-bindgen-backed cold tiers on wasm32. The component's
+    /// calls into those interfaces route through `TvmHost`'s
+    /// directory.
+    pub tvm: tvm_wasmtime::TvmHost,
+}
+
+impl AsMut<tvm_wasmtime::TvmHost> for RunState {
+    fn as_mut(&mut self) -> &mut tvm_wasmtime::TvmHost {
+        &mut self.tvm
+    }
 }
 
 impl wasmtime_wasi::WasiView for RunState {
@@ -1213,6 +1226,12 @@ fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
         |_state: &mut RunState| RunLoaderStub,
     )
     .map_err(|e| anyhow!("run linker extension-loader stub: {e}"))?;
+    // tvm:memory wiring  cli + sqlite-lib-composed runnables
+    // always import tvm:memory/{types,manager,bytes,diagnostics}
+    // because sqlite-pcache-tvm + sqlite-vfs-tvm use the
+    // wit-bindgen-backed cold tiers on wasm32 unconditionally.
+    tvm_wasmtime::add_to_linker(&mut linker)
+        .map_err(|e| anyhow!("run linker tvm:memory: {e}"))?;
     Ok(linker)
 }
 
@@ -2415,6 +2434,7 @@ impl Host {
             resources: wasmtime_wasi::ResourceTable::new(),
             compose_providers: self.compose_providers.clone(),
             active_tenant: tenant.to_string(),
+            tvm: tvm_wasmtime::TvmHost::new(),
         };
         let mut store = wasmtime::Store::new(&self.engine, state);
         store
@@ -2540,6 +2560,7 @@ impl Host {
             resources: wasmtime_wasi::ResourceTable::new(),
             compose_providers: self.compose_providers.clone(),
             active_tenant: DEFAULT_TENANT.to_string(),
+            tvm: tvm_wasmtime::TvmHost::new(),
         };
         let mut store = wasmtime::Store::new(&self.engine, state);
         store

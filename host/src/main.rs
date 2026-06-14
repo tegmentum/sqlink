@@ -20,6 +20,17 @@ struct State {
     wasi: wasmtime_wasi::WasiCtx,
     resources: ResourceTable,
     host: Host,
+    /// TVM region directory. The cli imports tvm:memory because
+    /// sqlite-pcache-tvm + sqlite-vfs-tvm use wit-bindgen-backed
+    /// cold tiers on wasm32 unconditionally  this field is what
+    /// satisfies those imports through `tvm_wasmtime::add_to_linker`.
+    tvm: tvm_wasmtime::TvmHost,
+}
+
+impl AsMut<tvm_wasmtime::TvmHost> for State {
+    fn as_mut(&mut self) -> &mut tvm_wasmtime::TvmHost {
+        &mut self.tvm
+    }
 }
 
 impl wasmtime_wasi::WasiView for State {
@@ -134,6 +145,12 @@ async fn main() -> Result<()> {
     )
     .map_err(|e| anyhow!("wire dispatch: {e}"))?;
 
+    // tvm:memory wiring  the cli imports it unconditionally
+    // because sqlite-pcache-tvm + sqlite-vfs-tvm use
+    // wit-bindgen-backed cold tiers on wasm32.
+    tvm_wasmtime::add_to_linker(&mut linker)
+        .map_err(|e| anyhow!("wire tvm:memory: {e}"))?;
+
     let mut wasi_builder = WasiCtxBuilder::new();
     wasi_builder.inherit_stdio();
     wasi_builder.inherit_env();
@@ -179,6 +196,7 @@ async fn main() -> Result<()> {
         wasi: wasi_builder.build(),
         resources: ResourceTable::new(),
         host,
+        tvm: tvm_wasmtime::TvmHost::new(),
     };
 
     let mut store = Store::new(&engine, state);

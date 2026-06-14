@@ -175,17 +175,20 @@ heap, registered for the SQLite-facing API only.
 > `sqlite-pcache-tvm/src/wit_tvm_region.rs` implements
 > `WitTvmRegion: Region` against the wit-bindgen-generated
 > `tvm:memory/manager + bytes` interfaces. Gated on
-> `target_arch = "wasm32"` + `feature = "tvm"` — the host build
-> ignores the feature, so native unit tests stay on
-> `InProcRegion`. The wasm32-wasip2 build with `--features tvm`
-> verifies cleanly: `tvm:memory/manager`,
-> `tvm:memory/bytes`, and `tvm:memory/diagnostics` imports show
-> up in the rlib metadata, and the bundled SQLite compile via
-> wasi-sdk in the same build links cleanly against the trampolines.
+> `target_arch = "wasm32"` — wasm builds always use the TVM
+> backend, native builds get `InProcRegion` for the unit-test
+> path (originally there was a separate `tvm` feature flag, but
+> there's no realistic deployment where you'd want the in-proc
+> backend on wasm  the feature was opt-in for no benefit, so
+> it was dropped). The wasm32-wasip2 build verifies cleanly:
+> `tvm:memory/manager`, `tvm:memory/bytes`, and
+> `tvm:memory/diagnostics` imports show up in the rlib metadata,
+> and the bundled SQLite compile via wasi-sdk in the same build
+> links cleanly against the trampolines.
 >
 > **Phase 1.2 (end-to-end probe) shipped.**
 > `probe/tvm-pcache-wasip2/` is a wasm32-wasip2 cdylib that
-> links `sqlite-pcache-tvm --features tvm` + sqlite-wasm-core
+> links `sqlite-pcache-tvm` + sqlite-wasm-core
 > (bundled libsqlite3-sys via wasi-sdk) into one ~1 MB
 > component. The component imports
 > `tvm:memory/{types,manager,bytes}` + WASI and exports
@@ -493,19 +496,22 @@ Allocation size + an `eMemSubsystem` hint (SQLite passes it via
 
 ## Phase 3 — optional wasm64 build target
 
-> **Host-side enabled, guest-side blocked on toolchain.**
-> `Host::new` now sets `wasm_memory64(true)` on the wasmtime
-> Config, so the engine accepts wasm64 components when (and if)
-> one shows up. The guest-side prerequisite is unmet:
+> **No longer a destination state, kept as a future option.**
+> Phase 3 was originally framed as the path that erases the
+> 4 GiB question entirely when the toolchain catches up. With
+> the TVM track now shipping unconditionally on wasm32 (B + E
+> always-on, no feature flag), > 4 GiB working sets work today
+> without waiting for wasm64. wasm64 stays interesting for the
+> operational simplicity of a single 64-bit address space, but
+> it's no longer a blocker for capacity.
 >
->   - **rustc** doesn't ship `wasm64-wasip2` as a target. As of
->     `rustc 1.96.0` it isn't listed in `rustup target list`.
->   - **wasi-sdk 33** ships no wasm64 sysroot — only
->     `wasm32-wasi*` variants under `share/wasi-sysroot/lib/`.
->
-> The build-system plumbing (cargo feature, `.cargo/config.toml`
-> env vars, etc.) lands once both upstreams ship support. Until
-> then the TVM track (Phase 1 + 2) is the practical >4-GiB path.
+> Host-side support stays: `Host::new` sets `wasm_memory64(true)`
+> so the engine accepts wasm64 components when (and if) one
+> shows up. The guest-side prerequisites are still unmet
+> (`rustc` 1.96 doesn't ship `wasm64-wasip2`; wasi-sdk 33 has no
+> wasm64 sysroot). The build-system plumbing lands once both
+> upstreams catch up; until then, no one's blocked  the TVM
+> track is the production > 4 GiB path.
 
 A parallel track to B + C, not a replacement. Some callers want
 the simpler operational story of a single 64-bit linear memory

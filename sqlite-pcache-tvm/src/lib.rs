@@ -60,17 +60,17 @@ pub fn cache_diagnostics() -> (u32, u32, u32, u32) {
 pub mod cache;
 pub mod region;
 
-// The TVM-backed region is wasm32-only: the wit-bindgen guest
-// imports it generates only make sense in a wasm binary. On host
-// targets the `tvm` feature is a no-op so the rest of the crate
-// (the trampolines, the ShadowCache machinery, the unit tests
-// against InProcRegion) keeps compiling and running.
-#[cfg(all(target_arch = "wasm32", feature = "tvm"))]
+// On wasm32 the cold tier is always the wit-bindgen-backed
+// `tvm:memory` region  there's no reason to pick the in-proc
+// fallback when the target is wasm. The in-proc backend stays
+// available on native (where the wit-bindgen extern blocks
+// wouldn't link anyway) for the unit-test path.
+#[cfg(target_arch = "wasm32")]
 pub mod wit_tvm_region;
 
-#[cfg(all(target_arch = "wasm32", feature = "tvm"))]
+#[cfg(target_arch = "wasm32")]
 type ActiveRegion = wit_tvm_region::WitTvmRegion;
-#[cfg(not(all(target_arch = "wasm32", feature = "tvm")))]
+#[cfg(not(target_arch = "wasm32"))]
 type ActiveRegion = region::InProcRegion;
 
 type ActiveCache = cache::ShadowCache<ActiveRegion>;
