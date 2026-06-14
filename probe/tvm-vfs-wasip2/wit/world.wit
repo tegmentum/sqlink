@@ -22,4 +22,12 @@ world probe {
     /// allocated regions for. Host uses this to confirm SQLite
     /// drove the VFS (main db, journal, etc. all show up).
     export file-count: func() -> u32;
+
+    /// Phase 4.3 capacity test. Inserts `rows` rows with
+    /// `payload-bytes` per row through the tvm-mem VFS. The
+    /// host then sums region.used across the TvmHost directory
+    /// to confirm bytes actually landed in TVM regions, not in
+    /// default memory. Returns count(*) so the host can
+    /// confirm SQL integrity end-to-end.
+    export run-capacity-test: func(rows: u32, payload-bytes: u32) -> u32;
 }

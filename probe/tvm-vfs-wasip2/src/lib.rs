@@ -98,6 +98,76 @@ impl bindings::Guest for Probe {
     fn file_count() -> u32 {
         sqlite_vfs_tvm::file_count() as u32
     }
+
+    fn run_capacity_test(rows: u32, payload_bytes: u32) -> u32 {
+        if sqlite_vfs_tvm::install_as_default().is_err() {
+            return 6001;
+        }
+        let conn = match Connection::open_with_vfs(
+            "/capacity.db",
+            OpenFlags::DEFAULT,
+            Some(sqlite_vfs_tvm::name()),
+        ) {
+            Ok(c) => c,
+            Err(_) => return 6002,
+        };
+        if conn
+            .execute_batch("CREATE TABLE big(id INTEGER PRIMARY KEY, payload TEXT);")
+            .is_err()
+        {
+            return 6003;
+        }
+
+        // Single payload string reused across all inserts. The
+        // test just needs bulk byte throughput, not payload
+        // uniqueness.
+        let payload: String = "x".repeat(payload_bytes as usize);
+
+        // 100 inserts per transaction  amortises journal writes
+        // and statement preparation. The VFS still sees plenty
+        // of write traffic (every page sync flushes through
+        // io_write).
+        const BATCH: u32 = 100;
+        let mut inserted: u32 = 0;
+        let mut remaining = rows;
+        while remaining > 0 {
+            let n = remaining.min(BATCH);
+            if conn.execute_batch("BEGIN").is_err() {
+                return 6004;
+            }
+            for _ in 0..n {
+                let sql = format!("INSERT INTO big(payload) VALUES ('{}');", payload);
+                if conn.execute_batch(&sql).is_err() {
+                    return 6005;
+                }
+                inserted += 1;
+            }
+            if conn.execute_batch("COMMIT").is_err() {
+                return 6006;
+            }
+            remaining -= n;
+        }
+
+        let mut stmt = match conn.prepare("SELECT count(*) FROM big") {
+            Ok(s) => s,
+            Err(_) => return 6007,
+        };
+        let count = match stmt.step() {
+            Ok(StepResult::Row) => match stmt.column_value(0) {
+                Value::Integer(n) => n as u32,
+                _ => return 6008,
+            },
+            _ => return 6009,
+        };
+        if count != inserted {
+            return 6010;
+        }
+        // Leak so SQLite's close doesn't destroy the TVM region
+        // before the host's assertion inspects TvmHost.directory.
+        std::mem::forget(stmt);
+        std::mem::forget(conn);
+        count
+    }
 }
 
 bindings::export!(Probe with_types_in bindings);
