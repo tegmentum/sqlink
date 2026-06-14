@@ -526,6 +526,15 @@ pub struct LoadedState {
     /// Cloned Arc<Mutex<…>> so it survives across the per-call
     /// Stores each dispatch builds (mirror of state/cache).
     spi_conn: Arc<Mutex<Option<sqlite_wasm_core::db::Connection>>>,
+    /// Outbound HTTP policy cloned from `ext.policy.http`. The
+    /// `http::Host::handle` impl gates every request on this:
+    /// `allowed_hosts` (with `*.suffix` wildcard support) and the
+    /// optional `allowed_methods` list. `None` here means the
+    /// extension wasn't granted any HTTP policy at load time, so
+    /// `handle` denies every request unconditionally — which is
+    /// the right default: an extension without an `http` capability
+    /// grant has no policy and shouldn't be able to make requests.
+    http_policy: Option<HttpPolicy>,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -535,6 +544,45 @@ impl wasmtime_wasi::WasiView for LoadedState {
             table: &mut self.table,
         }
     }
+}
+
+/// Gate an outbound HTTP request against the loaded extension's
+/// `HttpPolicy`. Pulled out of `http::Host::handle` so it can be
+/// exercised in sync unit tests without spinning up a tokio
+/// runtime (the production path inside `handle` is async because
+/// of `reqwest::blocking::Client::send`).
+///
+/// `authority` is the wasi-http-style `host[:port]`; the port is
+/// stripped before matching `allowed_hosts`, so a policy entry of
+/// `api.example.com` does match a request to `api.example.com:8443`.
+/// `method` is the canonical uppercase string (e.g. `"GET"`) —
+/// `HttpPolicy::check_method` matches case-insensitively.
+///
+/// `None` policy means the loaded extension wasn't granted any HTTP
+/// policy at load time, which we treat as a hard deny: a sensible
+/// default for an extension that wasn't authorized to make network
+/// calls. The error message points the caller at the load step
+/// rather than at a request-shape problem.
+fn check_http_policy(
+    policy: Option<&HttpPolicy>,
+    authority: &str,
+    method: &str,
+) -> std::result::Result<(), loaded::sqlite::extension::http::HttpError> {
+    use loaded::sqlite::extension::http::HttpError;
+    let policy = policy.ok_or_else(|| {
+        HttpError::Other(
+            "http policy denied: extension was not granted any http policy at load time"
+                .to_string(),
+        )
+    })?;
+    let host_only = authority.split(':').next().unwrap_or(authority);
+    policy
+        .check_host(host_only)
+        .map_err(|e| HttpError::Other(format!("http policy denied: {e}")))?;
+    policy
+        .check_method(method)
+        .map_err(|e| HttpError::Other(format!("http policy denied: {e}")))?;
+    Ok(())
 }
 
 /// Empty markers for the type-only imports the minimal world declares.
@@ -575,6 +623,8 @@ impl loaded::sqlite::extension::http::Host for LoadedState {
             Method::Other(s) => reqwest::Method::from_bytes(s.as_bytes())
                 .map_err(|e| HttpError::Other(e.to_string()))?,
         };
+
+        check_http_policy(self.http_policy.as_ref(), &authority, method.as_str())?;
 
         // Build the request. Use the blocking client to avoid an
         // additional executor handoff inside the already-async
@@ -1065,6 +1115,7 @@ fn build_loaded_store(
         cache: ext.cache.clone(),
         db_path,
         spi_conn: ext.spi_conn.clone(),
+        http_policy: ext.policy.http.clone(),
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
@@ -2613,4 +2664,90 @@ fn spawn_epoch_bumper(engine: Engine) {
             }
         })
         .ok();
+}
+
+#[cfg(test)]
+mod http_policy_tests {
+    //! Exercise the policy gate in `check_http_policy`. The
+    //! matching primitives in `HttpPolicy::check_host` /
+    //! `::check_method` already have their own unit tests in
+    //! `sqlite-loader-wit`; what we're checking here is that the
+    //! host's gate consults them with the right inputs and surfaces
+    //! the right error shape.
+
+    use super::*;
+    use loaded::sqlite::extension::http::HttpError;
+
+    fn is_policy_denied(err: &HttpError, must_contain: &[&str]) -> bool {
+        let HttpError::Other(s) = err else { return false };
+        if !s.contains("policy denied") { return false }
+        must_contain.iter().all(|needle| s.contains(needle))
+    }
+
+    #[test]
+    fn no_policy_denies_unconditionally() {
+        let err = check_http_policy(None, "api.example.com", "GET").unwrap_err();
+        assert!(
+            matches!(&err, HttpError::Other(s) if s.contains("not granted any http policy")),
+            "expected hard-deny when no policy is set, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn host_not_in_allowlist_is_denied() {
+        let policy = HttpPolicy {
+            allowed_hosts: vec!["api.example.com".to_string()],
+            ..Default::default()
+        };
+        let err = check_http_policy(Some(&policy), "evil.example.com", "GET").unwrap_err();
+        assert!(
+            is_policy_denied(&err, &["evil.example.com"]),
+            "expected host-denial error, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn host_in_allowlist_passes() {
+        let policy = HttpPolicy {
+            allowed_hosts: vec!["api.example.com".to_string()],
+            ..Default::default()
+        };
+        check_http_policy(Some(&policy), "api.example.com", "GET").unwrap();
+    }
+
+    #[test]
+    fn wildcard_host_entry_matches_subdomain() {
+        let policy = HttpPolicy {
+            allowed_hosts: vec!["*.example.com".to_string()],
+            ..Default::default()
+        };
+        check_http_policy(Some(&policy), "api.example.com", "GET").unwrap();
+    }
+
+    #[test]
+    fn method_not_in_allowlist_is_denied() {
+        let policy = HttpPolicy {
+            allowed_hosts: vec!["api.example.com".to_string()],
+            allowed_methods: Some(vec!["GET".to_string()]),
+            ..Default::default()
+        };
+        let err = check_http_policy(Some(&policy), "api.example.com", "POST").unwrap_err();
+        assert!(
+            is_policy_denied(&err, &["POST"]),
+            "expected method-denial error, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn port_is_stripped_before_host_match() {
+        // authority is "host:port" — without port stripping, an
+        // allowlist entry of "api.example.com" would never match
+        // a request to "api.example.com:8443".
+        let policy = HttpPolicy {
+            allowed_hosts: vec!["api.example.com".to_string()],
+            allowed_methods: Some(vec!["GET".to_string()]),
+            ..Default::default()
+        };
+        check_http_policy(Some(&policy), "api.example.com:8443", "GET").unwrap();
+    }
 }
