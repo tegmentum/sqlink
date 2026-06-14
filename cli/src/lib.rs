@@ -1246,7 +1246,11 @@ fn do_list_resolvers() -> String {
 
 fn do_cache(arg: &str) -> String {
     use bindings::sqlite::wasm::extension_loader;
-    match arg {
+    let (sub, rest) = match arg.split_once(char::is_whitespace) {
+        Some((s, r)) => (s, r.trim()),
+        None => (arg, ""),
+    };
+    match sub {
         "list" | "" => {
             let entries = extension_loader::list_cache_uris();
             if entries.is_empty() {
@@ -1254,18 +1258,119 @@ fn do_cache(arg: &str) -> String {
             }
             let mut out = String::new();
             for e in entries {
-                out.push_str(&format!("{} -> {} ({}s ago)\n",
+                out.push_str(&format!(
+                    "{} -> {} ({}s ago)\n",
                     e.uri,
                     &e.hash[..16],
-                    e.fetched_at));
+                    e.fetched_at
+                ));
             }
             out
         }
         "clear" | "purge" => {
             let n = extension_loader::purge_cache();
-            format!("Purged {n} cache files\n")
+            format!("Purged {n} cache entries\n")
         }
-        _ => "Usage: .cache [list|clear]\n".to_string(),
+        "stats" => match extension_loader::get_cache_stats() {
+            Ok(s) => format!(
+                "mode:        {}\n\
+                 artifacts:   {}\n\
+                 uris:        {}\n\
+                 total bytes: {}\n\
+                 max bytes:   {}\n",
+                s.mode,
+                s.artifact_count,
+                s.uri_count,
+                s.total_bytes,
+                if s.max_bytes == 0 {
+                    "(unbounded)".to_string()
+                } else {
+                    s.max_bytes.to_string()
+                },
+            ),
+            Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+        },
+        "mode" => match extension_loader::get_cache_stats() {
+            Ok(s) => format!("{}\n", s.mode),
+            Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+        },
+        "config" => {
+            let mut parts = rest.split_whitespace();
+            match (parts.next(), parts.next(), parts.next()) {
+                (None, _, _) => match extension_loader::get_cache_stats() {
+                    Ok(s) => format!(
+                        "max_bytes = {}\n",
+                        if s.max_bytes == 0 {
+                            "0 (unbounded)".to_string()
+                        } else {
+                            s.max_bytes.to_string()
+                        }
+                    ),
+                    Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+                },
+                (Some("set"), Some("max-bytes"), Some(val)) => match val.parse::<u64>() {
+                    Ok(n) => match extension_loader::cache_set_max_bytes(n) {
+                        Ok(()) => format!("max_bytes = {n}\n"),
+                        Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+                    },
+                    Err(_) => format!("Bad u64: {val}\n"),
+                },
+                _ => "Usage: .cache config [set max-bytes <n>]\n".to_string(),
+            }
+        }
+        "gc" => match extension_loader::cache_gc() {
+            Ok(freed) => format!("Freed {freed} bytes\n"),
+            Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+        },
+        "evict" => {
+            let target = rest.split_whitespace().next();
+            let Some(target) = target else {
+                return "Usage: .cache evict <target-bytes>\n".to_string();
+            };
+            match target.parse::<u64>() {
+                Ok(n) => match extension_loader::cache_evict(n) {
+                    Ok(freed) => format!("Freed {freed} bytes\n"),
+                    Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+                },
+                Err(_) => format!("Bad u64: {target}\n"),
+            }
+        }
+        "export" => {
+            if rest.is_empty() {
+                return "Usage: .cache export <path>\n".to_string();
+            }
+            match extension_loader::cache_export(rest) {
+                Ok(()) => format!("Exported to {rest}\n"),
+                Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+            }
+        }
+        "import" => {
+            if rest.is_empty() {
+                return "Usage: .cache import <path>\n".to_string();
+            }
+            match extension_loader::do_cache_import(rest) {
+                Ok(s) => format!(
+                    "Imported from {rest}: +{} artifacts, {} URI delta\n",
+                    s.artifacts_added, s.uris_net_change
+                ),
+                Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+            }
+        }
+        "help" => {
+            "Usage:\n  \
+             .cache list                       URI bindings (sorted)\n  \
+             .cache stats                      counts, total bytes, mode, cap\n  \
+             .cache mode                       backing store mode\n  \
+             .cache config                     show current StoreConfig\n  \
+             .cache config set max-bytes <n>   update LRU cap (0 = unbounded)\n  \
+             .cache gc                         drop unreferenced artifacts\n  \
+             .cache evict <target-bytes>       LRU evict down to target\n  \
+             .cache export <path>              copy into a fresh external db\n  \
+             .cache import <path>              merge another db into this one\n  \
+             .cache purge                      drop everything\n"
+                .to_string()
+        }
+        _ => format!("Unknown subcommand: {sub}. Try .cache help\n"),
     }
 }
 

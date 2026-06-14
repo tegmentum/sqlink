@@ -404,11 +404,11 @@ impl<'a> compose::compose::dynlink::linker::Host for HostWrap<'a> {
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect::<String>();
-        let cached_path = {
+        let cached_bytes = {
             let g = self.host.cache.read();
             g.as_ref().and_then(|c| c.lookup_by_hash(&hex))
         };
-        let Some(_path) = cached_path else {
+        let Some(_bytes) = cached_bytes else {
             return Err(compose_err(format!(
                 "digest {hex} not in cache (CP8 will add real provider instantiation here)"
             )));
@@ -1807,10 +1807,9 @@ impl Host {
                 let cache = g
                     .as_ref()
                     .ok_or_else(|| anyhow!("blake3: scheme requires --cache-dir or default"))?;
-                let path = cache
+                cache
                     .lookup_by_hash(rest)
-                    .ok_or_else(|| anyhow!("blake3:{rest} not in cache"))?;
-                std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))
+                    .ok_or_else(|| anyhow!("blake3:{rest} not in cache"))
             }
             other => {
                 let resolver = {
@@ -1853,7 +1852,7 @@ impl Host {
         // blake3: pinned hash — refuse if not cached. Scope the
         // cache read so the guard doesn't span the .await.
         if let Some(hex) = uri.strip_prefix("blake3:") {
-            let path = {
+            let bytes = {
                 let g = self.cache.read();
                 let cache = g
                     .as_ref()
@@ -1862,33 +1861,31 @@ impl Host {
                     .lookup_by_hash(hex)
                     .ok_or_else(|| anyhow!("blake3:{hex} not in cache"))?
             };
-            return self.load_extension(path, policy).await;
+            return self
+                .load_extension_from_bytes(bytes, &format!("blake3:{}", &hex[..8]), policy)
+                .await;
         }
         // Regular URI: check cache first. Scope the read guard so
         // it doesn't span an .await.
-        let cached_path = {
+        let cached = {
             let g = self.cache.read();
-            g.as_ref().and_then(|c| {
-                c.lookup_by_uri(uri)
-                    .and_then(|entry| c.lookup_by_hash(&entry.hash))
-            })
+            g.as_ref().and_then(|c| c.lookup_by_uri(uri))
         };
-        if let Some(path) = cached_path {
-            return self.load_extension(path, policy).await;
+        if let Some((_hash, bytes)) = cached {
+            return self
+                .load_extension_from_bytes(bytes, uri, policy)
+                .await;
         }
         // Miss: resolve, cache, load.
         let bytes = self.resolve_uri(uri).await?;
-        let path = {
+        {
             let g = self.cache.read();
             let cache = g
                 .as_ref()
                 .ok_or_else(|| anyhow!("uri load needs --cache-dir or default"))?;
-            let hash = cache.put(uri, &bytes)?;
-            cache
-                .lookup_by_hash(&hash)
-                .ok_or_else(|| anyhow!("internal: just-cached"))?
-        };
-        self.load_extension(path, policy).await
+            cache.put(uri, &bytes)?;
+        }
+        self.load_extension_from_bytes(bytes, uri, policy).await
     }
 
     /// Snapshot ref to the components map. Internal — kept available
@@ -1927,8 +1924,26 @@ impl Host {
     /// README, planned as the natural next iteration).
     pub async fn load_extension(&self, path: PathBuf, policy: Policy) -> Result<String> {
         let bytes = std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))?;
+        let hint = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("extension")
+            .to_string();
+        self.load_extension_from_bytes(bytes, &hint, policy).await
+    }
+
+    /// As `load_extension` but takes bytes directly. Used by the
+    /// CAS path so cached extensions don't have to round-trip
+    /// through a temp file. `name_hint` provides the fallback
+    /// name when the extension's manifest leaves `name` empty.
+    pub async fn load_extension_from_bytes(
+        &self,
+        bytes: Vec<u8>,
+        name_hint: &str,
+        policy: Policy,
+    ) -> Result<String> {
         let component = Component::from_binary(&self.engine, &bytes)
-            .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
+            .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
 
         // Use the stateful linker (superset of minimal) so extensions
         // that import `state` or `cache` can still resolve their
@@ -1992,10 +2007,7 @@ impl Host {
         let name = if !manifest.name.is_empty() {
             manifest.name.clone()
         } else {
-            path.file_stem()
-                .and_then(|s| s.to_str())
-                .unwrap_or("extension")
-                .to_string()
+            name_hint.to_string()
         };
         let version = if !manifest.version.is_empty() {
             manifest.version.clone()
@@ -2616,6 +2628,13 @@ fn loader_stub_err(method: &str) -> LoaderError {
     }
 }
 
+fn cache_err(msg: impl Into<String>) -> LoaderError {
+    LoaderError {
+        code: 1,
+        message: msg.into(),
+    }
+}
+
 impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
     async fn load_extension(
         &mut self,
@@ -2673,6 +2692,50 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
 
     async fn purge_cache(&mut self) -> u64 {
         0
+    }
+
+    async fn get_cache_stats(
+        &mut self,
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::CacheStats,
+        LoaderError,
+    > {
+        Err(loader_stub_err("get-cache-stats"))
+    }
+
+    async fn cache_set_max_bytes(
+        &mut self,
+        _max: u64,
+    ) -> std::result::Result<(), LoaderError> {
+        Err(loader_stub_err("cache-set-max-bytes"))
+    }
+
+    async fn cache_gc(&mut self) -> std::result::Result<u64, LoaderError> {
+        Err(loader_stub_err("cache-gc"))
+    }
+
+    async fn cache_evict(
+        &mut self,
+        _target_bytes: u64,
+    ) -> std::result::Result<u64, LoaderError> {
+        Err(loader_stub_err("cache-evict"))
+    }
+
+    async fn cache_export(
+        &mut self,
+        _path: String,
+    ) -> std::result::Result<(), LoaderError> {
+        Err(loader_stub_err("cache-export"))
+    }
+
+    async fn do_cache_import(
+        &mut self,
+        _path: String,
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        LoaderError,
+    > {
+        Err(loader_stub_err("do-cache-import"))
     }
 
     async fn run_wasm(
@@ -3153,6 +3216,133 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             return 0;
         };
         cache.purge().unwrap_or(0) as u64
+    }
+
+    async fn get_cache_stats(
+        &mut self,
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::CacheStats,
+        LoaderError,
+    > {
+        let cache = {
+            let g = self.host.cache.read();
+            g.as_ref()
+                .ok_or_else(|| cache_err("no cache configured"))?
+                .clone()
+        };
+        let store_handle = cache.store();
+        let store = store_handle.lock();
+        let artifact_count = store
+            .artifact_count()
+            .map_err(|e| cache_err(format!("artifact_count: {e}")))?;
+        let uri_count = store
+            .uri_count()
+            .map_err(|e| cache_err(format!("uri_count: {e}")))?;
+        let total_bytes = store
+            .total_bytes()
+            .map_err(|e| cache_err(format!("total_bytes: {e}")))?;
+        let mode = match store.mode() {
+            sqlite_cas_cache::StoreMode::External(p) => {
+                format!("external:{}", p.display())
+            }
+            sqlite_cas_cache::StoreMode::Internal => "internal".to_string(),
+        };
+        let max_bytes = store.config().max_bytes;
+        Ok(bindings::sqlite::wasm::extension_loader::CacheStats {
+            artifact_count,
+            uri_count,
+            total_bytes,
+            mode,
+            max_bytes,
+        })
+    }
+
+    async fn cache_set_max_bytes(
+        &mut self,
+        max: u64,
+    ) -> std::result::Result<(), LoaderError> {
+        let cache = {
+            let g = self.host.cache.read();
+            g.as_ref()
+                .ok_or_else(|| cache_err("no cache configured"))?
+                .clone()
+        };
+        let store_handle = cache.store();
+        let mut store = store_handle.lock();
+        let mut cfg = store.config().clone();
+        cfg.max_bytes = max;
+        store.set_config(cfg);
+        Ok(())
+    }
+
+    async fn cache_gc(&mut self) -> std::result::Result<u64, LoaderError> {
+        let cache = {
+            let g = self.host.cache.read();
+            g.as_ref()
+                .ok_or_else(|| cache_err("no cache configured"))?
+                .clone()
+        };
+        let store_handle = cache.store();
+        let mut store = store_handle.lock();
+        store.gc().map_err(|e| cache_err(format!("gc: {e}")))
+    }
+
+    async fn cache_evict(
+        &mut self,
+        target_bytes: u64,
+    ) -> std::result::Result<u64, LoaderError> {
+        let cache = {
+            let g = self.host.cache.read();
+            g.as_ref()
+                .ok_or_else(|| cache_err("no cache configured"))?
+                .clone()
+        };
+        let store_handle = cache.store();
+        let mut store = store_handle.lock();
+        store
+            .evict_lru(target_bytes)
+            .map_err(|e| cache_err(format!("evict_lru: {e}")))
+    }
+
+    async fn cache_export(
+        &mut self,
+        path: String,
+    ) -> std::result::Result<(), LoaderError> {
+        let cache = {
+            let g = self.host.cache.read();
+            g.as_ref()
+                .ok_or_else(|| cache_err("no cache configured"))?
+                .clone()
+        };
+        let store_handle = cache.store();
+        let store = store_handle.lock();
+        store
+            .export_to(PathBuf::from(path))
+            .map_err(|e| cache_err(format!("export: {e}")))
+    }
+
+    async fn do_cache_import(
+        &mut self,
+        path: String,
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        LoaderError,
+    > {
+        let cache = {
+            let g = self.host.cache.read();
+            g.as_ref()
+                .ok_or_else(|| cache_err("no cache configured"))?
+                .clone()
+        };
+        let store_handle = cache.store();
+        let mut store = store_handle.lock();
+        let stats = store
+            .merge_from(PathBuf::from(path))
+            .map_err(|e| cache_err(format!("import: {e}")))?;
+        Ok(bindings::sqlite::wasm::extension_loader::CacheMergeStats {
+            artifacts_added: stats.artifacts_added,
+            uris_net_change: stats.uris_net_change,
+        })
     }
 
     async fn run_wasm(

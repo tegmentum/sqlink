@@ -2149,7 +2149,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "sha2",
+ "sqlite-cas-cache",
  "sqlite-extension-policy",
  "sqlite-wasm-core",
  "tempfile",

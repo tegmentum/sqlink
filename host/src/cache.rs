@@ -1,293 +1,221 @@
 //! Content-addressed cache for resolved extension components.
 //!
-//! Two layers inside the cache root:
-//!
-//! ```text
-//! <root>/
-//! ├── blake3/                immutable, content-addressed
-//! │   └── aa/bb/aabb…ff.wasm  split-by-prefix to keep dirs small
-//! └── uri_index/              mutable, uri → content hash
-//!     └── <blake3(uri)>.json  { uri, hash, fetched_at }
-//! ```
+//! Thin wrapper around `sqlite_cas_cache::SqliteCasStore`. The
+//! store lives in a single SQLite db at `default_path()` (or a
+//! caller-supplied path); blake3 is the content-address hash.
 //!
 //! `.load <uri>` flow:
-//! 1. Hash URI (blake3), look up `uri_index/<urihash>.json`.
-//! 2. If present and the referenced `blake3/<contenthash>.wasm`
-//!    exists, load from there.
-//! 3. On miss: call the resolver, hash returned bytes, write to
-//!    `blake3/<contenthash>.wasm` atomically (tempfile +
-//!    rename), then write the uri_index entry, then load.
+//! 1. `lookup_by_uri(uri)`  bytes if cached.
+//! 2. On miss: resolver returns bytes; `put(uri, bytes)` writes
+//!    them and binds the URI.
+//! 3. Pinned-hash loads (`blake3:<hex>`) call `lookup_by_hash`.
 //!
-//! Pinned-hash loads (`.load blake3:<hex>`) skip the URI layer
-//! and load directly from `blake3/<hex>`.
+//! Concurrency: external readers/writers across cli invocations
+//! are serialized by SQLite's file lock; in-process callers go
+//! through a `parking_lot::Mutex`.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use anyhow::{anyhow, Context, Result};
-use serde::{Deserialize, Serialize};
+use parking_lot::Mutex;
+use sqlite_cas_cache::SqliteCasStore;
 
-/// One uri → hash binding, persisted as JSON in uri_index/. The
-/// blake3 hash is primary; the sha256 mirror is recorded so
-/// compose-orchestration (SHA-256 native) can resolve the same
-/// artifact by either digest format.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// One uri  hash binding as returned by `list_uris`. The
+/// `sha256` field stays in the struct for ABI compatibility
+/// with the prior filesystem-cache implementation (compose
+/// interop) but is always `None` against the SQLite store
+/// the schema only indexes blake3.
+#[derive(Debug, Clone)]
 pub struct UriEntry {
     pub uri: String,
     pub hash: String,
     pub fetched_at: u64,
-    /// SHA-256 mirror (CP7). `None` for entries written before CP7
-    /// landed; reads tolerate this by falling back to blake3-only
-    /// resolution.
-    #[serde(default)]
     pub sha256: Option<String>,
 }
 
+/// Cache handle. Cheap to clone (`Arc<Mutex<_>>` internally).
+#[derive(Clone)]
 pub struct Cache {
-    root: PathBuf,
+    inner: Arc<Mutex<SqliteCasStore>>,
+    path: PathBuf,
 }
 
 impl Cache {
-    /// Open or create the cache at `root`. Creates the
-    /// `blake3/` and `uri_index/` subdirectories.
-    pub fn open(root: PathBuf) -> Result<Self> {
-        for sub in ["blake3", "sha256", "uri_index"] {
-            std::fs::create_dir_all(root.join(sub))
-                .with_context(|| format!("create {}", root.join(sub).display()))?;
-        }
-        Ok(Self { root })
-    }
-
-    /// Resolution order, highest precedence first:
-    /// 1. `--cache-dir <path>` flag (the explicit `cli_arg`)
-    /// 2. `$SQLITE_WASM_CACHE_DIR`
-    /// 3. `$XDG_CACHE_HOME/sqlite-wasm/extensions`
-    /// 4. `$HOME/.cache/sqlite-wasm/extensions`
-    pub fn default_root(cli_arg: Option<&str>) -> Result<PathBuf> {
-        if let Some(p) = cli_arg {
-            if !p.is_empty() {
-                return Ok(PathBuf::from(p));
-            }
-        }
-        if let Ok(env) = std::env::var("SQLITE_WASM_CACHE_DIR") {
-            if !env.is_empty() {
-                return Ok(PathBuf::from(env));
-            }
-        }
-        if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
-            if !xdg.is_empty() {
-                return Ok(PathBuf::from(xdg).join("sqlite-wasm").join("extensions"));
-            }
-        }
-        let home = std::env::var("HOME").map_err(|_| anyhow!("HOME not set"))?;
-        Ok(PathBuf::from(home)
-            .join(".cache")
-            .join("sqlite-wasm")
-            .join("extensions"))
-    }
-
-    pub fn root(&self) -> &Path {
-        &self.root
-    }
-
-    /// Path where `hash` (full 64-char hex) would live under
-    /// blake3/aa/bb/.
-    fn blake3_path(&self, hash: &str) -> PathBuf {
-        let aa = &hash[..2];
-        let bb = &hash[2..4];
-        self.root
-            .join("blake3")
-            .join(aa)
-            .join(bb)
-            .join(format!("{hash}.wasm"))
-    }
-
-    /// Path under sha256/aa/bb/ — written alongside blake3 for
-    /// compose-orchestration interop (CP7).
-    fn sha256_path(&self, hash: &str) -> PathBuf {
-        let aa = &hash[..2];
-        let bb = &hash[2..4];
-        self.root
-            .join("sha256")
-            .join(aa)
-            .join(bb)
-            .join(format!("{hash}.wasm"))
-    }
-
-    /// Path of the uri_index entry for `uri`.
-    fn uri_index_path(&self, uri: &str) -> PathBuf {
-        let key = blake3::hash(uri.as_bytes()).to_hex().to_string();
-        self.root.join("uri_index").join(format!("{key}.json"))
-    }
-
-    /// Look up the URI → hash binding. None if unknown OR if the
-    /// referenced bytes file no longer exists (treat as miss; the
-    /// next put() will repair).
-    pub fn lookup_by_uri(&self, uri: &str) -> Option<UriEntry> {
-        let p = self.uri_index_path(uri);
-        let s = std::fs::read_to_string(&p).ok()?;
-        let entry: UriEntry = serde_json::from_str(&s).ok()?;
-        if !self.blake3_path(&entry.hash).exists() {
-            return None;
-        }
-        Some(entry)
-    }
-
-    /// Path of the cached bytes for `hash`, or None if absent.
-    /// Tries blake3 first (native), then sha256 (compose interop).
-    /// Both formats are 32 bytes / 64 hex chars; we can't tell
-    /// from the digest alone which it is, so try both.
-    pub fn lookup_by_hash(&self, hash: &str) -> Option<PathBuf> {
-        let b = self.blake3_path(hash);
-        if b.exists() {
-            return Some(b);
-        }
-        let s = self.sha256_path(hash);
-        if s.exists() {
-            return Some(s);
-        }
-        None
-    }
-
-    /// Cache `bytes` for `uri`. Writes the content under BOTH
-    /// blake3/<hash>.wasm AND sha256/<hash>.wasm atomically so the
-    /// compose-orchestration linker (SHA-256 native) can resolve
-    /// the same artifact by either digest format. Records both
-    /// hashes in the uri_index entry. Returns the blake3 hash
-    /// (still the primary native format).
-    pub fn put(&self, uri: &str, bytes: &[u8]) -> Result<String> {
-        use sha2::Digest;
-        let blake3_hash = blake3::hash(bytes).to_hex().to_string();
-        let sha256_hash = format!("{:x}", sha2::Sha256::digest(bytes));
-
-        // Write to both content-addressed paths.
-        for (target_fn, hash) in [
-            (
-                Self::blake3_path as fn(&Self, &str) -> PathBuf,
-                &blake3_hash,
-            ),
-            (
-                Self::sha256_path as fn(&Self, &str) -> PathBuf,
-                &sha256_hash,
-            ),
-        ] {
-            let target = target_fn(self, hash);
-            if let Some(parent) = target.parent() {
+    /// Open the SQLite-backed CAS at `path`. Creates the file +
+    /// schema on first use.
+    pub fn open(path: PathBuf) -> Result<Self> {
+        if let Some(parent) = path.parent() {
+            if !parent.as_os_str().is_empty() {
                 std::fs::create_dir_all(parent)
                     .with_context(|| format!("create {}", parent.display()))?;
             }
-            if !target.exists() {
-                let parent = target.parent().unwrap();
-                let mut tmp = tempfile::NamedTempFile::new_in(parent)
-                    .with_context(|| format!("tempfile in {}", parent.display()))?;
-                use std::io::Write;
-                tmp.write_all(bytes).context("write bytes")?;
-                tmp.flush().context("flush")?;
-                tmp.persist(&target)
-                    .map_err(|e| anyhow!("persist to {}: {}", target.display(), e.error))?;
-            }
         }
-        let entry = UriEntry {
-            uri: uri.to_string(),
-            hash: blake3_hash.clone(),
-            fetched_at: 0,
-            sha256: Some(sha256_hash),
-        };
-        let hash = blake3_hash;
-        let json = serde_json::to_string_pretty(&entry).context("serialize")?;
-        let index_path = self.uri_index_path(uri);
-        let parent = index_path.parent().unwrap();
-        let mut tmp = tempfile::NamedTempFile::new_in(parent)
-            .with_context(|| format!("tempfile in {}", parent.display()))?;
-        use std::io::Write;
-        tmp.write_all(json.as_bytes()).context("write index")?;
-        tmp.persist(&index_path)
-            .map_err(|e| anyhow!("persist index: {}", e.error))?;
-        Ok(hash)
+        let store = SqliteCasStore::open_external(&path)
+            .with_context(|| format!("open cas store at {}", path.display()))?;
+        Ok(Self {
+            inner: Arc::new(Mutex::new(store)),
+            path,
+        })
     }
 
-    /// All uri_index entries.
+    /// Resolve the cas db file location, highest precedence first:
+    /// 1. `--cache-dir <path>` flag (the explicit `cli_arg`)
+    /// 2. `$SQLITE_WASM_CACHE_DIR`
+    /// 3. `$XDG_CACHE_HOME/sqlite-wasm/cas.sqlite`
+    /// 4. `$HOME/.cache/sqlite-wasm/cas.sqlite`
+    ///
+    /// The flag is named `--cache-dir` for historical reasons;
+    /// callers may pass either a file path or a directory. A
+    /// directory gets `/cas.sqlite` appended.
+    pub fn default_root(cli_arg: Option<&str>) -> Result<PathBuf> {
+        let raw = if let Some(p) = cli_arg {
+            if !p.is_empty() {
+                Some(PathBuf::from(p))
+            } else {
+                None
+            }
+        } else if let Ok(env) = std::env::var("SQLITE_WASM_CACHE_DIR") {
+            if !env.is_empty() {
+                Some(PathBuf::from(env))
+            } else {
+                None
+            }
+        } else if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
+            if !xdg.is_empty() {
+                Some(PathBuf::from(xdg).join("sqlite-wasm"))
+            } else {
+                None
+            }
+        } else {
+            let home = std::env::var("HOME").map_err(|_| anyhow!("HOME not set"))?;
+            Some(PathBuf::from(home).join(".cache").join("sqlite-wasm"))
+        };
+        let raw = raw.ok_or_else(|| anyhow!("no cache path resolvable"))?;
+        // Accept either "<dir>" (append cas.sqlite) or
+        // "<dir>/cas.sqlite". A path ending in .sqlite is taken
+        // as a file; everything else is treated as a directory.
+        let path = if raw.extension().and_then(|s| s.to_str()) == Some("sqlite") {
+            raw
+        } else {
+            raw.join("cas.sqlite")
+        };
+        Ok(path)
+    }
+
+    /// Path of the underlying sqlite db file.
+    pub fn root(&self) -> &Path {
+        &self.path
+    }
+
+    /// Look up `uri`  bytes. Updates LRU bookkeeping on hit.
+    /// Returns `(blake3_hex, bytes)` so callers that need the
+    /// hash for diagnostics don't need a separate lookup.
+    pub fn lookup_by_uri(&self, uri: &str) -> Option<(String, Vec<u8>)> {
+        let mut store = self.inner.lock();
+        let (hash, bytes) = store.resolve_uri(uri).ok().flatten()?;
+        Some((hash.to_hex().to_string(), bytes))
+    }
+
+    /// Look up bytes by blake3 hex. Currently does *not* fall
+    /// back to a sha256 mirror  the prior filesystem cache did,
+    /// but the SQLite schema only indexes blake3. Compose
+    /// interop that needed the dual lookup will return None
+    /// here; see PLAN-cas-cache.md for the sha256 follow-up.
+    pub fn lookup_by_hash(&self, hex: &str) -> Option<Vec<u8>> {
+        let bytes = decode_hex32(hex)?;
+        let hash = blake3::Hash::from_bytes(bytes);
+        let mut store = self.inner.lock();
+        store.get(&hash).ok().flatten()
+    }
+
+    /// Cache `bytes` for `uri`. Returns the blake3 hex.
+    pub fn put(&self, uri: &str, bytes: &[u8]) -> Result<String> {
+        let mut store = self.inner.lock();
+        let hash = store.put(bytes)?;
+        store.set_uri(uri, &hash)?;
+        Ok(hash.to_hex().to_string())
+    }
+
+    /// All uri bindings, sorted by URI ascending for stable
+    /// `.cache list` output.
     pub fn list_uris(&self) -> Vec<UriEntry> {
-        let mut out = Vec::new();
-        let Ok(rd) = std::fs::read_dir(self.root.join("uri_index")) else {
-            return out;
+        let store = self.inner.lock();
+        let mut entries = match store.list() {
+            Ok(v) => v,
+            Err(_) => return Vec::new(),
         };
-        for entry in rd.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) != Some("json") {
-                continue;
-            }
-            if let Ok(s) = std::fs::read_to_string(&path) {
-                if let Ok(e) = serde_json::from_str::<UriEntry>(&s) {
-                    out.push(e);
-                }
-            }
-        }
-        out.sort_by(|a, b| a.uri.cmp(&b.uri));
-        out
+        entries.sort_by(|a, b| a.uri.cmp(&b.uri));
+        entries
+            .into_iter()
+            .map(|e| UriEntry {
+                uri: e.uri,
+                hash: e.hash.to_hex().to_string(),
+                fetched_at: e.fetched_at,
+                sha256: None,
+            })
+            .collect()
     }
 
-    /// Delete every cached byte and every uri entry. Returns the
-    /// number of files removed.
+    /// Drop everything. Returns the number of artifacts cleared
+    /// (URI rows are dropped first; artifacts follow once
+    /// orphaned).
     pub fn purge(&self) -> Result<usize> {
-        let mut count = 0;
-        for sub in ["blake3", "sha256", "uri_index"] {
-            let dir = self.root.join(sub);
-            if let Ok(rd) = std::fs::read_dir(&dir) {
-                for entry in rd.flatten() {
-                    let p = entry.path();
-                    if p.is_dir() {
-                        count += walk_remove(&p)?;
-                    } else if p.is_file() {
-                        std::fs::remove_file(&p).ok();
-                        count += 1;
-                    }
-                }
-            }
-        }
-        Ok(count)
+        let mut store = self.inner.lock();
+        let n = store.artifact_count()? as usize;
+        store.purge()?;
+        Ok(n)
+    }
+
+    /// Expose the underlying store so `.cache *` dot commands
+    /// can call evict_lru / gc / export_to / merge_from without
+    /// growing the wrapper's surface for each operation.
+    pub fn store(&self) -> Arc<Mutex<SqliteCasStore>> {
+        self.inner.clone()
     }
 }
 
-fn walk_remove(dir: &Path) -> Result<usize> {
-    let mut count = 0;
-    if let Ok(rd) = std::fs::read_dir(dir) {
-        for entry in rd.flatten() {
-            let p = entry.path();
-            if p.is_dir() {
-                count += walk_remove(&p)?;
-                std::fs::remove_dir(&p).ok();
-            } else if p.is_file() {
-                std::fs::remove_file(&p).ok();
-                count += 1;
-            }
-        }
+/// Decode a 64-character hex string to a 32-byte array. Returns
+/// None if the input isn't exactly 32 bytes after hex decoding.
+fn decode_hex32(hex: &str) -> Option<[u8; 32]> {
+    if hex.len() != 64 {
+        return None;
     }
-    Ok(count)
+    let mut out = [0u8; 32];
+    for (i, byte) in out.iter_mut().enumerate() {
+        let h = u8::from_str_radix(hex.get(i * 2..i * 2 + 2)?, 16).ok()?;
+        *byte = h;
+    }
+    Some(out)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    #[test]
-    fn put_then_lookup_roundtrips() {
+    fn fresh() -> (tempfile::TempDir, Cache) {
         let dir = tempfile::tempdir().unwrap();
-        let cache = Cache::open(dir.path().to_path_buf()).unwrap();
-        let uri = "https://example.com/foo.wasm";
-        let bytes = b"hello world";
-        let hash = cache.put(uri, bytes).unwrap();
-        assert_eq!(hash.len(), 64); // blake3 hex
-        let entry = cache.lookup_by_uri(uri).expect("uri exists");
-        assert_eq!(entry.hash, hash);
-        assert_eq!(entry.uri, uri);
-        let bytes_path = cache.lookup_by_hash(&hash).expect("hash exists");
-        assert_eq!(std::fs::read(bytes_path).unwrap(), bytes);
+        let cache = Cache::open(dir.path().join("cas.sqlite")).unwrap();
+        (dir, cache)
     }
 
     #[test]
-    fn list_uris_sorted() {
-        let dir = tempfile::tempdir().unwrap();
-        let cache = Cache::open(dir.path().to_path_buf()).unwrap();
+    fn put_then_lookup_roundtrips() {
+        let (_d, cache) = fresh();
+        let uri = "https://example.com/foo.wasm";
+        let bytes = b"hello world";
+        let hash = cache.put(uri, bytes).unwrap();
+        assert_eq!(hash.len(), 64);
+        let (got_hash, got_bytes) = cache.lookup_by_uri(uri).expect("uri hit");
+        assert_eq!(got_hash, hash);
+        assert_eq!(got_bytes, bytes);
+        let got_by_hash = cache.lookup_by_hash(&hash).expect("hash hit");
+        assert_eq!(got_by_hash, bytes);
+    }
+
+    #[test]
+    fn list_uris_sorted_ascending() {
+        let (_d, cache) = fresh();
         cache.put("https://c.example/x", b"c").unwrap();
         cache.put("https://a.example/x", b"a").unwrap();
         cache.put("https://b.example/x", b"b").unwrap();
@@ -303,52 +231,30 @@ mod tests {
     }
 
     #[test]
-    fn missing_bytes_treated_as_miss() {
-        let dir = tempfile::tempdir().unwrap();
-        let cache = Cache::open(dir.path().to_path_buf()).unwrap();
-        let uri = "https://example.com/x";
-        let hash = cache.put(uri, b"data").unwrap();
-        // Externally delete the bytes file
-        let bytes_path = cache.blake3_path(&hash);
-        std::fs::remove_file(&bytes_path).unwrap();
-        assert!(cache.lookup_by_uri(uri).is_none());
-    }
-
-    #[test]
     fn default_root_honors_overrides() {
-        // CLI arg wins
-        let root = Cache::default_root(Some("/tmp/explicit")).unwrap();
-        assert_eq!(root, PathBuf::from("/tmp/explicit"));
+        let root = Cache::default_root(Some("/tmp/explicit/cas.sqlite")).unwrap();
+        assert_eq!(root, PathBuf::from("/tmp/explicit/cas.sqlite"));
+        let root_dir = Cache::default_root(Some("/tmp/explicit")).unwrap();
+        assert_eq!(root_dir, PathBuf::from("/tmp/explicit/cas.sqlite"));
     }
 
     #[test]
-    fn put_writes_both_blake3_and_sha256() {
-        use sha2::Digest;
-        let dir = tempfile::tempdir().unwrap();
-        let cache = Cache::open(dir.path().to_path_buf()).unwrap();
-        let bytes = b"hello world";
-        let blake_hash = cache.put("https://example.com/x", bytes).unwrap();
-        let sha_hash = format!("{:x}", sha2::Sha256::digest(bytes));
-
-        // lookup_by_hash should find via blake3
-        assert!(cache.lookup_by_hash(&blake_hash).is_some());
-        // and via sha256
-        assert!(cache.lookup_by_hash(&sha_hash).is_some());
-
-        // UriEntry records both
-        let entry = cache.lookup_by_uri("https://example.com/x").unwrap();
-        assert_eq!(entry.hash, blake_hash);
-        assert_eq!(entry.sha256, Some(sha_hash));
+    fn lookup_by_hash_rejects_bad_hex() {
+        let (_d, cache) = fresh();
+        assert!(cache.lookup_by_hash("not-hex").is_none());
+        assert!(cache.lookup_by_hash("aa").is_none());
+        // Right length but never inserted.
+        let unseen = "00".repeat(32);
+        assert!(cache.lookup_by_hash(&unseen).is_none());
     }
 
     #[test]
     fn purge_removes_everything() {
-        let dir = tempfile::tempdir().unwrap();
-        let cache = Cache::open(dir.path().to_path_buf()).unwrap();
+        let (_d, cache) = fresh();
         cache.put("https://a.example/x", b"a").unwrap();
         cache.put("https://b.example/x", b"b").unwrap();
         let removed = cache.purge().unwrap();
-        assert!(removed >= 4); // 2 bytes files + 2 index files
+        assert_eq!(removed, 2);
         assert!(cache.list_uris().is_empty());
     }
 }

@@ -85,6 +85,42 @@ interface extension-loader {
     /// number of files removed.
     purge-cache: func() -> u64;
 
+    /// Aggregate statistics for `.cache stats` / `.cache mode` /
+    /// `.cache config`. `mode` is "external:<path>" or
+    /// "internal"; `max-bytes` is the LRU cap (0 = unbounded).
+    record cache-stats {
+        artifact-count: u64,
+        uri-count: u64,
+        total-bytes: u64,
+        mode: string,
+        max-bytes: u64,
+    }
+    get-cache-stats: func() -> result<cache-stats, loader-error>;
+
+    /// Update the LRU byte cap. 0 disables eviction. Does not
+    /// trigger eviction by itself — call `cache-evict` to apply.
+    cache-set-max-bytes: func(max: u64) -> result<_, loader-error>;
+
+    /// Drop unreferenced artifacts. Returns bytes freed.
+    cache-gc: func() -> result<u64, loader-error>;
+
+    /// Evict in LRU order until total bytes <= target-bytes.
+    /// Returns bytes freed.
+    cache-evict: func(target-bytes: u64) -> result<u64, loader-error>;
+
+    /// Copy the cache contents into a fresh external db at `path`.
+    /// Errors if the target already exists.
+    cache-export: func(path: string) -> result<_, loader-error>;
+
+    /// Merge artifacts + URI bindings from another cache db at
+    /// `path` into this one. INSERT OR IGNORE on artifacts,
+    /// INSERT OR REPLACE on URIs.
+    record cache-merge-stats {
+        artifacts-added: u64,
+        uris-net-change: s64,
+    }
+    do-cache-import: func(path: string) -> result<cache-merge-stats, loader-error>;
+
     /// Run a wasm component targeting the `runnable` world: a
     /// compose-dynlink-shaped wasm component that resolves shared
     /// providers via the `linker` and exports

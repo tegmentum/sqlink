@@ -44,7 +44,11 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # Used to be `rusqlite`; dropped because (a) the host had two
 # SQLite stacks and (b) every type swap was paid twice.
 sqlite-wasm-core = { path = "../core" }
-# Content-addressed cache for resolved extension components.
+# SQLite-backed content-addressed cache for resolved extension
+# components. The host's `cache` module is a thin wrapper.
+sqlite-cas-cache = { path = "../sqlite-cas-cache" }
+# Hash primitive  shared with sqlite-cas-cache so hex decoders
+# in this crate don't need to round-trip through the store.
 blake3 = "1.5"
 tempfile = "3.13"
 serde = { version = "1.0", features = ["derive"] }
@@ -52,10 +56,6 @@ serde_json = "1.0"
 # CBOR codec for the sqlite-runtime compose provider — see
 # host/COMPOSE-PROTOCOL.md for the wire shape.
 ciborium = "0.2"
-# SHA-256 for compose-orchestration CAS interop (their blob store
-# is SHA-256). Cache.put writes under both blake3 and sha256 paths
-# so resolve-by-digest works either way.
-sha2 = "0.10"
 # TVM-track host wiring  every component the host runs (the cli
 # and any runnable composed against sqlite-lib) unconditionally
 # imports tvm:memory now (the sqlite-pcache-tvm + sqlite-vfs-tvm
