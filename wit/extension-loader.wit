@@ -104,4 +104,43 @@ interface extension-loader {
         id: string,
         path: string,
     ) -> result<_, loader-error>;
+
+    /// Register a wasm component as the language runtime for files
+    /// with extension `ext` (no leading dot — e.g. "py", "java",
+    /// "r"). `variant` distinguishes multiple runtimes for the same
+    /// extension — for example "cpython" vs "micropython" for Python.
+    /// Pass an empty string for `variant` to register the DEFAULT
+    /// runtime for `ext`; the cli's `.run foo.<ext>` (no variant)
+    /// uses the default. `.run foo.<ext> variant` picks a specific
+    /// variant. `path` must point to a wasm component targeting the
+    /// `language-runtime` world.
+    register-runtime: func(
+        ext: string,
+        flavor: string,
+        path: string,
+        options: load-options,
+    ) -> result<_, loader-error>;
+
+    /// Drop the runtime registration for `(ext, variant)`. Errors
+    /// if no entry exists for that pair.
+    unregister-runtime: func(
+        ext: string,
+        flavor: string,
+    ) -> result<_, loader-error>;
+
+    /// (extension, variant, path) triples for every registered
+    /// runtime. Default entries have variant = empty string.
+    list-runtimes: func() -> list<tuple<string, string, string>>;
+
+    /// Run a source file through the runtime registered for its
+    /// `(extension, variant)`. The host derives the extension from
+    /// `path`. Pass empty `variant` to use the default variant for
+    /// that extension. The host reads the source contents,
+    /// instantiates the plugin in a fresh Store, calls
+    /// `runtime.execute(file-name, source)`. Returns the plugin's
+    /// output or a loader-error.
+    run-source: func(
+        path: string,
+        flavor: string,
+    ) -> result<string, loader-error>;
 }

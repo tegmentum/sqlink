@@ -181,6 +181,25 @@ pub mod run {
     });
 }
 
+/// Bindgen for language-runtime plugins — wasm components that
+/// embed an interpreter (CPython, MicroPython, JVM, R, etc.) and
+/// export `sqlite:wasm/runtime.execute(source-name, source) ->
+/// result<string, string>`. The host instantiates the plugin in
+/// a fresh Store and calls execute() when `.run foo.<ext>` matches
+/// a registered runtime.
+pub mod language_runtime {
+    wasmtime::component::bindgen!({
+        path: "../wit",
+        world: "language-runtime",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "compose:dynlink/linker": super::compose::compose::dynlink::linker,
+            "sys:compose/types": super::compose::sys::compose::types,
+        },
+    });
+}
+
 /// Host-side resource backing the guest-visible `linker.instance`.
 /// Stored in the wasmtime ResourceTable; the guest sees an opaque
 /// handle and can only call `invoke` on it. CP2 wires this into the
@@ -1109,6 +1128,21 @@ pub struct Host {
     /// at startup. Other variants exist for fully-locked
     /// deployments (DenyAll) and explicit auditing pre-prod.
     trust_policy: Arc<RwLock<TrustPolicy>>,
+    /// (extension, flavor) → registered language-runtime plugin.
+    /// `.run foo.<ext>` looks up (ext, "") for the default flavor;
+    /// `.run foo.<ext> flavor` picks a specific one. Empty-flavor
+    /// entry is the default for that extension.
+    runtimes: Arc<RwLock<HashMap<(String, String), Arc<LanguageRuntime>>>>,
+}
+
+/// Host-side state for a registered language-runtime plugin.
+/// Built once at registration time; reused across every
+/// `run-source` invocation.
+pub struct LanguageRuntime {
+    pub ext: String,
+    pub flavor: String,
+    pub component: Component,
+    pub policy: Policy,
 }
 
 /// Default tenant id. Single-tenant deployments (the common case)
@@ -1192,6 +1226,7 @@ impl Host {
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
             trust_policy: Arc::new(RwLock::new(TrustPolicy::AllowAll)),
+            runtimes: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -1961,6 +1996,121 @@ impl Host {
     pub fn is_loaded(&self, name: &str) -> bool {
         self.components.read().contains_key(name)
     }
+
+    /// Register `path` as a language runtime for files with
+    /// `(ext, flavor)`. Loads + compiles the component now;
+    /// each later `run_source` reuses the cached `Component`.
+    pub fn register_runtime(
+        &self,
+        ext: &str,
+        flavor: &str,
+        path: PathBuf,
+        policy: Policy,
+    ) -> Result<()> {
+        let bytes = std::fs::read(&path)
+            .map_err(|e| anyhow!("register-runtime: read {}: {e}", path.display()))?;
+        let component = Component::from_binary(&self.engine, &bytes)
+            .map_err(|e| anyhow!("register-runtime: compile {}: {e}", path.display()))?;
+        self.runtimes.write().insert(
+            (ext.to_string(), flavor.to_string()),
+            Arc::new(LanguageRuntime {
+                ext: ext.to_string(),
+                flavor: flavor.to_string(),
+                component,
+                policy,
+            }),
+        );
+        Ok(())
+    }
+
+    pub fn unregister_runtime(&self, ext: &str, flavor: &str) -> Result<()> {
+        if self
+            .runtimes
+            .write()
+            .remove(&(ext.to_string(), flavor.to_string()))
+            .is_some()
+        {
+            Ok(())
+        } else {
+            Err(anyhow!(
+                "no runtime registered for ext={ext:?} flavor={flavor:?}"
+            ))
+        }
+    }
+
+    /// (ext, flavor, "<built>") triples for every registered runtime.
+    /// The third field is reserved — we don't keep the original path
+    /// after registration, so it's currently a placeholder.
+    pub fn list_runtimes(&self) -> Vec<(String, String, String)> {
+        let mut out: Vec<(String, String, String)> = self
+            .runtimes
+            .read()
+            .keys()
+            .map(|(e, f)| (e.clone(), f.clone(), String::from("<built>")))
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// Read `path`, look up the runtime for `(extension-of-path,
+    /// flavor)`, instantiate it in a fresh Store, call
+    /// `runtime.execute(file-name, source)`. Empty `flavor` uses
+    /// the registered default (the entry with flavor = "").
+    pub async fn run_source(&self, path: &str, flavor: &str) -> Result<String> {
+        let p = std::path::Path::new(path);
+        let ext = p
+            .extension()
+            .and_then(|s| s.to_str())
+            .ok_or_else(|| anyhow!("run-source: no extension on path {path:?}"))?;
+        let key = (ext.to_string(), flavor.to_string());
+        let runtime = {
+            let g = self.runtimes.read();
+            g.get(&key).cloned().ok_or_else(|| {
+                anyhow!(
+                    "no runtime registered for ext={ext:?} flavor={flavor:?} \
+                     (try `.register-runtime {ext} {flavor} <path>`)"
+                )
+            })?
+        };
+        let source = std::fs::read_to_string(path)
+            .map_err(|e| anyhow!("run-source: read {path}: {e}"))?;
+        let source_name = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or(path)
+            .to_string();
+        // Build a fresh Store mirroring run_wasm_as. Each call gets
+        // its own Store so per-call fuel/epoch caps are re-supplied.
+        let linker = make_run_linker(&self.engine)?;
+        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
+        builder.inherit_stdio();
+        let state = RunState {
+            wasi: builder.build(),
+            resources: wasmtime_wasi::ResourceTable::new(),
+            compose_providers: self.compose_providers.clone(),
+            active_tenant: DEFAULT_TENANT.to_string(),
+        };
+        let mut store = wasmtime::Store::new(&self.engine, state);
+        store
+            .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
+            .map_err(|e| anyhow!("set_fuel: {e}"))?;
+        store.set_epoch_deadline(
+            runtime.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000),
+        );
+        let instance = language_runtime::LanguageRuntime::instantiate_async(
+            &mut store,
+            &runtime.component,
+            &linker,
+        )
+        .await
+        .map_err(|e| anyhow!("instantiate runtime plugin: {e}"))?;
+        let r = instance
+            .sqlite_wasm_runtime()
+            .call_execute(&mut store, &source_name, &source)
+            .await
+            .map_err(|e| anyhow!("runtime.execute trap: {e}"))?;
+        r.map_err(|e| anyhow!("runtime.execute returned error: {e}"))
+    }
 }
 
 /// Lifetime tag for the extension-loader host binding. wasmtime's
@@ -2389,6 +2539,58 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
     ) -> std::result::Result<(), LoaderError> {
         match self.host.register_wasm_provider(&id, PathBuf::from(&path)) {
             Ok(()) => Ok(()),
+            Err(e) => Err(LoaderError {
+                code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+
+    async fn register_runtime(
+        &mut self,
+        ext: String,
+        flavor: String,
+        path: String,
+        options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<(), LoaderError> {
+        let policy = policy_from_load_options(&options);
+        match self
+            .host
+            .register_runtime(&ext, &flavor, PathBuf::from(&path), policy)
+        {
+            Ok(()) => Ok(()),
+            Err(e) => Err(LoaderError {
+                code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+
+    async fn unregister_runtime(
+        &mut self,
+        ext: String,
+        flavor: String,
+    ) -> std::result::Result<(), LoaderError> {
+        match self.host.unregister_runtime(&ext, &flavor) {
+            Ok(()) => Ok(()),
+            Err(e) => Err(LoaderError {
+                code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+
+    async fn list_runtimes(&mut self) -> Vec<(String, String, String)> {
+        self.host.list_runtimes()
+    }
+
+    async fn run_source(
+        &mut self,
+        path: String,
+        flavor: String,
+    ) -> std::result::Result<String, LoaderError> {
+        match self.host.run_source(&path, &flavor).await {
+            Ok(output) => Ok(output),
             Err(e) => Err(LoaderError {
                 code: 1,
                 message: e.to_string(),

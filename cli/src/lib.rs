@@ -215,6 +215,15 @@ fn eval_input(input: &str) -> String {
     if trimmed == ".resolvers" {
         return do_list_resolvers();
     }
+    if let Some(rest) = trimmed.strip_prefix(".register-runtime ") {
+        return do_register_runtime(rest.trim());
+    }
+    if let Some(rest) = trimmed.strip_prefix(".unregister-runtime ") {
+        return do_unregister_runtime(rest.trim());
+    }
+    if trimmed == ".runtimes" {
+        return do_list_runtimes();
+    }
     if let Some(rest) = trimmed.strip_prefix(".register-provider ") {
         return do_register_provider(rest.trim());
     }
@@ -874,20 +883,114 @@ fn do_run(arg: &str) -> String {
     use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     use bindings::sqlite::wasm::extension_loader;
     if arg.is_empty() {
-        return "Usage: .run PATH\n".to_string();
+        return "Usage: .run PATH [FLAVOR]\n".to_string();
+    }
+    // Split optional FLAVOR off the end. `.run foo.py` →
+    // path=foo.py, flavor="". `.run foo.py micropython` →
+    // path=foo.py, flavor="micropython".
+    let mut parts = arg.split_whitespace();
+    let path = parts.next().unwrap_or("").to_string();
+    let flavor = parts.next().unwrap_or("").to_string();
+    // `.wasm` files still go through the runnable-world path
+    // (no source-file dispatch needed). Any other extension
+    // routes to the registered language runtime for that
+    // extension + flavor.
+    let is_wasm = std::path::Path::new(&path)
+        .extension()
+        .map(|e| e.eq_ignore_ascii_case("wasm"))
+        .unwrap_or(false);
+    if is_wasm {
+        let opts = LoadOptions {
+            grant: vec![Capability::Spi],
+            http_policy: None,
+            fs_policy: None,
+            fuel_per_call: None,
+            memory_limit_bytes: None,
+            epoch_deadline_ms: None,
+        };
+        return match extension_loader::run_wasm(&path, &opts) {
+            Ok(out) => if out.ends_with('\n') { out } else { format!("{out}\n") },
+            Err(e) => format!("Error running wasm component {path}: {} (code {})\n", e.message, e.code),
+        };
+    }
+    match extension_loader::run_source(&path, &flavor) {
+        Ok(out) => if out.ends_with('\n') { out } else { format!("{out}\n") },
+        Err(e) => format!("Error running {path}: {} (code {})\n", e.message, e.code),
+    }
+}
+
+/// `.register-runtime EXT [FLAVOR] PATH [--grant=...] [--fuel=N] ...`
+/// Registers PATH as the runtime for files ending in `.EXT`.
+/// FLAVOR distinguishes multiple runtimes for the same EXT.
+fn do_register_runtime(arg: &str) -> String {
+    use bindings::sqlite::extension::policy::LoadOptions;
+    use bindings::sqlite::wasm::extension_loader;
+    let mut parts = arg.split_whitespace();
+    let p1 = parts.next().unwrap_or("");
+    let p2 = parts.next().unwrap_or("");
+    let p3 = parts.next().unwrap_or("");
+    let (ext, flavor, path) = if p3.is_empty() {
+        // 2-arg form: EXT PATH (flavor defaults to "")
+        (p1.to_string(), String::new(), p2.to_string())
+    } else {
+        // 3-arg form: EXT FLAVOR PATH
+        (p1.to_string(), p2.to_string(), p3.to_string())
+    };
+    if ext.is_empty() || path.is_empty() {
+        return "Usage: .register-runtime EXT [FLAVOR] PATH\n".to_string();
     }
     let opts = LoadOptions {
-        grant: vec![Capability::Spi],
+        grant: vec![],
         http_policy: None,
         fs_policy: None,
         fuel_per_call: None,
         memory_limit_bytes: None,
         epoch_deadline_ms: None,
     };
-    match extension_loader::run_wasm(arg, &opts) {
-        Ok(out) => if out.ends_with('\n') { out } else { format!("{out}\n") },
-        Err(e) => format!("Error running wasm component {arg}: {} (code {})\n", e.message, e.code),
+    match extension_loader::register_runtime(&ext, &flavor, &path, &opts) {
+        Ok(()) => {
+            let label = if flavor.is_empty() {
+                format!(".{ext} (default)")
+            } else {
+                format!(".{ext}:{flavor}")
+            };
+            format!("Registered runtime: {label} -> {path}\n")
+        }
+        Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
     }
+}
+
+fn do_unregister_runtime(arg: &str) -> String {
+    use bindings::sqlite::wasm::extension_loader;
+    let mut parts = arg.split_whitespace();
+    let ext = parts.next().unwrap_or("");
+    let flavor = parts.next().unwrap_or("");
+    if ext.is_empty() {
+        return "Usage: .unregister-runtime EXT [FLAVOR]\n".to_string();
+    }
+    match extension_loader::unregister_runtime(ext, flavor) {
+        Ok(()) => format!("Unregistered runtime: .{ext}{}\n",
+            if flavor.is_empty() { "" } else { ":" }) + flavor,
+        Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+    }
+}
+
+fn do_list_runtimes() -> String {
+    use bindings::sqlite::wasm::extension_loader;
+    let runtimes = extension_loader::list_runtimes();
+    if runtimes.is_empty() {
+        return "(no runtimes registered)\n".to_string();
+    }
+    let mut out = String::new();
+    for (ext, flavor, _path) in runtimes {
+        let label = if flavor.is_empty() {
+            format!(".{ext} (default)")
+        } else {
+            format!(".{ext}:{flavor}")
+        };
+        out.push_str(&format!("{label}\n"));
+    }
+    out
 }
 
 fn do_register_resolver(arg: &str) -> String {
