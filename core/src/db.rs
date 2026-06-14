@@ -1134,6 +1134,181 @@ impl Connection {
 }
 
 // ---------------------------------------------------------------
+// Window aggregate functions.
+//
+// SQLite's `sqlite3_create_window_function` extends the aggregate
+// triple (xStep + xFinal) with two more slots:
+//
+//   xValue   — emit the current aggregate value WITHOUT releasing
+//              the per-aggregation state. Called as a row exits or
+//              the window frame is interrogated mid-frame.
+//   xInverse — REMOVE one row's contribution from the running
+//              state. Called as a row leaves the window frame.
+//
+// A regular `Aggregate` impl can't be window-aware because the
+// step direction is one-way; `WindowAggregate` adds the symmetric
+// `inverse` for un-stepping plus `value` for mid-frame readout.
+// ---------------------------------------------------------------
+
+/// Window-aware aggregate. Extends `Aggregate` with the two extra
+/// slots SQLite requires for window-mode dispatch. The state type
+/// `S` is shared between `step` and `inverse` — the same per-
+/// aggregation context SQLite keeps in `sqlite3_aggregate_context`.
+pub trait WindowAggregate<S>: Aggregate<S> {
+    /// Read the current aggregate value without dropping the
+    /// per-aggregation state. SQLite calls this when emitting a
+    /// row inside an OVER() frame.
+    fn value(&self, state: &S) -> Result<Value, Error>;
+
+    /// Undo one row's contribution. SQLite calls this as a row
+    /// leaves the window frame so the running state matches the
+    /// new frame bounds.
+    fn inverse(&self, state: &mut S, args: &[Value]) -> Result<(), Error>;
+}
+
+impl Connection {
+    /// Register an aggregate as a window function. Wires SQLite's
+    /// xStep + xFinal + xValue + xInverse via
+    /// `sqlite3_create_window_function`. The state type `S` lives
+    /// in `sqlite3_aggregate_context` per-aggregation, just like
+    /// `create_aggregate_function`; xValue reads it without
+    /// releasing and xInverse mutates it in the un-step direction.
+    pub fn create_window_function<S: 'static, A: WindowAggregate<S>>(
+        &self,
+        fn_name: &str,
+        n_arg: i32,
+        flags: FunctionFlags,
+        aggregate: A,
+    ) -> Result<(), Error> {
+        // Shared xStep — populates the context on first row, then
+        // forwards to the user closure. Same shape as
+        // `create_aggregate_function::agg_step`.
+        unsafe extern "C" fn win_step<S: 'static, A: WindowAggregate<S>>(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ) {
+            let pac =
+                ffi::sqlite3_aggregate_context(ctx, std::mem::size_of::<*mut S>() as c_int)
+                    as *mut *mut S;
+            if pac.is_null() {
+                ffi::sqlite3_result_error_nomem(ctx);
+                return;
+            }
+            let boxed = ffi::sqlite3_user_data(ctx) as *mut A;
+            if boxed.is_null() {
+                set_result_error(ctx, "window dispatch error: null user_data");
+                return;
+            }
+            if (*pac).is_null() {
+                let initial = (*boxed).init();
+                *pac = Box::into_raw(Box::new(initial));
+            }
+            let raw_args = std::slice::from_raw_parts(argv, argc as usize);
+            let args: Vec<Value> = raw_args.iter().map(|p| value_from_sqlite3(*p)).collect();
+            if let Err(e) = (*boxed).step(&mut **pac, &args) {
+                set_result_error(ctx, &e.message);
+            }
+        }
+
+        // xFinal — release the state and emit the final value.
+        // Same as `create_aggregate_function::agg_final`.
+        unsafe extern "C" fn win_final<S: 'static, A: WindowAggregate<S>>(
+            ctx: *mut ffi::sqlite3_context,
+        ) {
+            let pac =
+                ffi::sqlite3_aggregate_context(ctx, std::mem::size_of::<*mut S>() as c_int)
+                    as *mut *mut S;
+            let state = if !pac.is_null() && !(*pac).is_null() {
+                Some(*Box::from_raw(*pac))
+            } else {
+                None
+            };
+            let boxed = ffi::sqlite3_user_data(ctx) as *mut A;
+            if boxed.is_null() {
+                set_result_error(ctx, "window dispatch error: null user_data");
+                return;
+            }
+            match (*boxed).finalize(state) {
+                Ok(v) => set_result_value(ctx, &v),
+                Err(e) => set_result_error(ctx, &e.message),
+            }
+        }
+
+        // xValue — read state without releasing. The state must
+        // already exist (sqlite calls xValue only after at least
+        // one xStep), but we tolerate a null pointer defensively.
+        unsafe extern "C" fn win_value<S: 'static, A: WindowAggregate<S>>(
+            ctx: *mut ffi::sqlite3_context,
+        ) {
+            let pac =
+                ffi::sqlite3_aggregate_context(ctx, std::mem::size_of::<*mut S>() as c_int)
+                    as *mut *mut S;
+            if pac.is_null() || (*pac).is_null() {
+                set_result_error(ctx, "window dispatch error: value() called before step()");
+                return;
+            }
+            let boxed = ffi::sqlite3_user_data(ctx) as *mut A;
+            if boxed.is_null() {
+                set_result_error(ctx, "window dispatch error: null user_data");
+                return;
+            }
+            match (*boxed).value(&**pac) {
+                Ok(v) => set_result_value(ctx, &v),
+                Err(e) => set_result_error(ctx, &e.message),
+            }
+        }
+
+        // xInverse — undo one row. Same args path as xStep.
+        unsafe extern "C" fn win_inverse<S: 'static, A: WindowAggregate<S>>(
+            ctx: *mut ffi::sqlite3_context,
+            argc: c_int,
+            argv: *mut *mut ffi::sqlite3_value,
+        ) {
+            let pac =
+                ffi::sqlite3_aggregate_context(ctx, std::mem::size_of::<*mut S>() as c_int)
+                    as *mut *mut S;
+            if pac.is_null() || (*pac).is_null() {
+                set_result_error(ctx, "window dispatch error: inverse() called before step()");
+                return;
+            }
+            let boxed = ffi::sqlite3_user_data(ctx) as *mut A;
+            if boxed.is_null() {
+                set_result_error(ctx, "window dispatch error: null user_data");
+                return;
+            }
+            let raw_args = std::slice::from_raw_parts(argv, argc as usize);
+            let args: Vec<Value> = raw_args.iter().map(|p| value_from_sqlite3(*p)).collect();
+            if let Err(e) = (*boxed).inverse(&mut **pac, &args) {
+                set_result_error(ctx, &e.message);
+            }
+        }
+
+        let boxed: *mut A = Box::into_raw(Box::new(aggregate));
+        let c_name = CString::new(fn_name)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let rc = unsafe {
+            ffi::sqlite3_create_window_function(
+                self.raw,
+                c_name.as_ptr(),
+                n_arg,
+                flags.raw(),
+                boxed as *mut c_void,
+                Some(win_step::<S, A>),
+                Some(win_final::<S, A>),
+                Some(win_value::<S, A>),
+                Some(win_inverse::<S, A>),
+                Some(destroy_boxed::<A>),
+            )
+        };
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(())
+    }
+}
+
+// ---------------------------------------------------------------
 // Collations.
 // ---------------------------------------------------------------
 
@@ -1615,6 +1790,76 @@ mod tests {
             err.message.to_lowercase().contains("no such function"),
             "expected 'no such function' after remove, got: {err:?}"
         );
+    }
+
+    /// Running sum that also supports window mode. step() adds,
+    /// inverse() subtracts, value() reads, finalize() returns.
+    struct RunningSum;
+    impl Aggregate<i64> for RunningSum {
+        fn init(&self) -> i64 { 0 }
+        fn step(&self, s: &mut i64, args: &[Value]) -> Result<(), Error> {
+            if let Value::Integer(i) = args[0] { *s += i; }
+            Ok(())
+        }
+        fn finalize(&self, s: Option<i64>) -> Result<Value, Error> {
+            Ok(Value::Integer(s.unwrap_or(0)))
+        }
+    }
+    impl WindowAggregate<i64> for RunningSum {
+        fn value(&self, s: &i64) -> Result<Value, Error> {
+            Ok(Value::Integer(*s))
+        }
+        fn inverse(&self, s: &mut i64, args: &[Value]) -> Result<(), Error> {
+            if let Value::Integer(i) = args[0] { *s -= i; }
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn window_function_runs_value_and_inverse() {
+        // Classic running-sum window query. Without xValue / xInverse
+        // wired correctly, sqlite would either error out or return
+        // the wrong values.
+        let c = Connection::open_in_memory().unwrap();
+        c.execute_batch("CREATE TABLE t(id INTEGER, v INTEGER); \
+                         INSERT INTO t VALUES(1,10),(2,20),(3,30),(4,40);")
+            .unwrap();
+        c.create_window_function("running_sum", 1, FunctionFlags::UTF8, RunningSum)
+            .unwrap();
+
+        // Running sum over the full prefix: 10, 30, 60, 100.
+        let mut s = c
+            .prepare("SELECT running_sum(v) OVER (ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) FROM t ORDER BY id")
+            .unwrap();
+        let mut out = Vec::new();
+        loop {
+            match s.step().unwrap() {
+                StepResult::Row => {
+                    let Value::Integer(n) = s.column_value(0) else { panic!() };
+                    out.push(n);
+                }
+                StepResult::Done => break,
+            }
+        }
+        assert_eq!(out, vec![10, 30, 60, 100]);
+
+        // Sliding 2-row window: forces xInverse to fire as rows
+        // leave the frame. Frames: [10], [10,20], [20,30], [30,40]
+        // → 10, 30, 50, 70.
+        let mut s = c
+            .prepare("SELECT running_sum(v) OVER (ORDER BY id ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) FROM t ORDER BY id")
+            .unwrap();
+        let mut out = Vec::new();
+        loop {
+            match s.step().unwrap() {
+                StepResult::Row => {
+                    let Value::Integer(n) = s.column_value(0) else { panic!() };
+                    out.push(n);
+                }
+                StepResult::Done => break,
+            }
+        }
+        assert_eq!(out, vec![10, 30, 50, 70]);
     }
 
     #[test]

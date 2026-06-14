@@ -56,6 +56,30 @@ interface dispatch {
         context-id: u64,
     ) -> result<sql-value, string>;
 
+    /// Window-mode path: produce the current aggregate value
+    /// WITHOUT releasing the state keyed by `context-id`. SQLite
+    /// invokes this for `xValue` slots — `agg(x) OVER (...)`
+    /// queries emit one row at a time and need a mid-frame readout
+    /// the bare `aggregate-finalize` would clobber. Same
+    /// extension-routing shape as the other aggregate dispatches.
+    aggregate-value: func(
+        ext-name: string,
+        func-id: u64,
+        context-id: u64,
+    ) -> result<sql-value, string>;
+
+    /// Window-mode path: undo one row's contribution to the
+    /// aggregation context. SQLite invokes this for `xInverse`
+    /// slots as a row leaves the window frame so the running
+    /// state matches the new frame bounds. Mirror of
+    /// `aggregate-step` — same args, opposite direction.
+    aggregate-inverse: func(
+        ext-name: string,
+        func-id: u64,
+        context-id: u64,
+        args: list<sql-value>,
+    ) -> result<_, string>;
+
     /// Compare two strings under the collation identified by
     /// `collation-id`. Return < 0 if a < b, 0 if a == b, > 0 if a > b.
     /// The loaded extension's `collation.compare` does the actual

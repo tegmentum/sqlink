@@ -1840,6 +1840,82 @@ impl Host {
         }
     }
 
+    /// Window-function path: produce the current intermediate
+    /// aggregate value WITHOUT releasing the context. Called by
+    /// SQLite for `xValue` slots when the function is invoked as a
+    /// window aggregate (`agg(x) OVER (...)`). Symmetric to
+    /// `dispatch_aggregate_finalize` but the WIT `value` export
+    /// preserves the context — `inverse` then mutates it on the
+    /// way out of the window frame.
+    pub async fn dispatch_aggregate_value(
+        &self,
+        ext_name: &str,
+        func_id: u64,
+        context_id: u64,
+    ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
+        let linker = make_loaded_stateful_linker(&self.engine)?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let instance =
+            loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
+                .await
+                .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
+
+        let result = instance
+            .sqlite_extension_aggregate_function()
+            .call_value(&mut store, func_id, context_id)
+            .await
+            .map_err(|e| anyhow!("call_value: {e}"))?;
+        match result {
+            Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
+            Err(s) => Ok(Err(s)),
+        }
+    }
+
+    /// Window-function path: undo one row's contribution to the
+    /// aggregation context. Called by SQLite for `xInverse` slots
+    /// as a row leaves the window frame. Mirror of
+    /// `dispatch_aggregate_step` — same shape, same context_id
+    /// scoping, opposite direction.
+    pub async fn dispatch_aggregate_inverse(
+        &self,
+        ext_name: &str,
+        func_id: u64,
+        context_id: u64,
+        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+    ) -> Result<std::result::Result<(), String>> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
+        let linker = make_loaded_stateful_linker(&self.engine)?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let instance =
+            loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
+                .await
+                .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
+
+        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
+
+        let result = instance
+            .sqlite_extension_aggregate_function()
+            .call_inverse(&mut store, func_id, context_id, &loaded_args)
+            .await
+            .map_err(|e| anyhow!("call_inverse: {e}"))?;
+        Ok(result)
+    }
+
     /// Forward a collation compare to a loaded extension's
     /// `collation.compare`. Returns < 0 / 0 / > 0 per SQLite's
     /// collation contract.
@@ -2493,6 +2569,39 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         match self
             .host
             .dispatch_aggregate_finalize(&ext_name, func_id, context_id)
+            .await
+        {
+            Ok(inner) => inner,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn aggregate_value(
+        &mut self,
+        ext_name: String,
+        func_id: u64,
+        context_id: u64,
+    ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String> {
+        match self
+            .host
+            .dispatch_aggregate_value(&ext_name, func_id, context_id)
+            .await
+        {
+            Ok(inner) => inner,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn aggregate_inverse(
+        &mut self,
+        ext_name: String,
+        func_id: u64,
+        context_id: u64,
+        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+    ) -> std::result::Result<(), String> {
+        match self
+            .host
+            .dispatch_aggregate_inverse(&ext_name, func_id, context_id, args)
             .await
         {
             Ok(inner) => inner,
