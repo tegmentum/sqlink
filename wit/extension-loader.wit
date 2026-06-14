@@ -121,6 +121,29 @@ interface extension-loader {
     }
     do-cache-import: func(path: string) -> result<cache-merge-stats, loader-error>;
 
+    /// Switch the active cache to an external db at `path`. Opens
+    /// (or creates) the file and replaces the current cache
+    /// handle. In-flight CAS reads against the prior handle
+    /// finish on the prior store; the new store handles
+    /// everything after the swap.
+    cache-use-external: func(path: string) -> result<_, loader-error>;
+
+    /// Switch the active cache to internal mode layered on the
+    /// user db at `db-path`. Installs the `__cas_*` tables there
+    /// (idempotent).
+    cache-use-internal: func(db-path: string) -> result<_, loader-error>;
+
+    /// From internal mode: export to a fresh external db at
+    /// `path`, drop the `__cas_*` tables from the current db,
+    /// and switch the active cache to the new external file.
+    /// Returns counts of what was transferred.
+    cache-migrate-to-external: func(path: string) -> result<cache-merge-stats, loader-error>;
+
+    /// From external mode: open internal mode against
+    /// `db-path`, merge the current external db's rows in, and
+    /// switch the active cache to the internal one.
+    cache-migrate-to-internal: func(db-path: string) -> result<cache-merge-stats, loader-error>;
+
     /// Run a wasm component targeting the `runnable` world: a
     /// compose-dynlink-shaped wasm component that resolves shared
     /// providers via the `linker` and exports

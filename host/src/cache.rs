@@ -20,6 +20,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use parking_lot::Mutex;
 use sqlite_cas_cache::SqliteCasStore;
+use sqlite_wasm_core::db::{Connection, OpenFlags};
 
 /// One uri  hash binding as returned by `list_uris`. The
 /// `sha256` field stays in the struct for ABI compatibility
@@ -42,8 +43,32 @@ pub struct Cache {
 }
 
 impl Cache {
-    /// Open the SQLite-backed CAS at `path`. Creates the file +
-    /// schema on first use.
+    /// Open the external-mode SQLite-backed CAS at `path`.
+    /// Creates the file + schema on first use.
+    pub fn open_external(path: PathBuf) -> Result<Self> {
+        Self::open(path)
+    }
+
+    /// Open the internal-mode CAS layered on `db_path`. Installs
+    /// the `__cas_*` tables in that db (idempotent) and routes
+    /// all CAS ops through a fresh `Connection` against the
+    /// file. Used by `.cache use-internal`.
+    pub fn open_internal(db_path: PathBuf) -> Result<Self> {
+        let path_str = db_path.to_str().ok_or_else(|| {
+            anyhow!("non-UTF8 db path: {}", db_path.display())
+        })?;
+        let conn = Connection::open(path_str, OpenFlags::DEFAULT)
+            .map_err(|e| anyhow!("open internal cas at {path_str}: {}", e.message))?;
+        let store = SqliteCasStore::open_internal(conn)
+            .with_context(|| format!("install internal cas in {}", db_path.display()))?;
+        Ok(Self {
+            inner: Arc::new(Mutex::new(store)),
+            path: db_path,
+        })
+    }
+
+    /// Back-compat alias for `open_external`. New code should
+    /// prefer the explicit constructor.
     pub fn open(path: PathBuf) -> Result<Self> {
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() {
@@ -256,5 +281,38 @@ mod tests {
         let removed = cache.purge().unwrap();
         assert_eq!(removed, 2);
         assert!(cache.list_uris().is_empty());
+    }
+
+    #[test]
+    fn open_internal_layers_on_user_db() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("user.db");
+        {
+            let conn = sqlite_wasm_core::db::Connection::open(
+                db_path.to_str().unwrap(),
+                sqlite_wasm_core::db::OpenFlags::DEFAULT,
+            )
+            .unwrap();
+            conn.execute_batch("CREATE TABLE user_t(x INTEGER); INSERT INTO user_t VALUES (42);")
+                .unwrap();
+        }
+        let cache = Cache::open_internal(db_path.clone()).unwrap();
+        cache.put("u:internal", b"payload").unwrap();
+        let (_hash, bytes) = cache.lookup_by_uri("u:internal").unwrap();
+        assert_eq!(bytes, b"payload");
+        // User table still readable in a fresh connection.
+        let conn = sqlite_wasm_core::db::Connection::open(
+            db_path.to_str().unwrap(),
+            sqlite_wasm_core::db::OpenFlags::DEFAULT,
+        )
+        .unwrap();
+        let mut stmt = conn.prepare("SELECT x FROM user_t").unwrap();
+        match stmt.step().unwrap() {
+            sqlite_wasm_core::db::StepResult::Row => assert!(matches!(
+                stmt.column_value(0),
+                sqlite_wasm_core::db::Value::Integer(42)
+            )),
+            sqlite_wasm_core::db::StepResult::Done => panic!("no row"),
+        }
     }
 }

@@ -208,6 +208,21 @@ pub struct StoreConfig {
 
 None. Ready to implement when sequenced.
 
+## Deferred (re-evaluate when CP8 lands)
+
+- **sha256 mirror for compose `resolve_by_digest`.** The prior
+  filesystem cache wrote artifacts under both `blake3/<hash>.wasm`
+  and `sha256/<hash>.wasm`, and `Cache::lookup_by_hash` tried both
+  prefixes. The SQLite schema indexes blake3 only — sha256 lookups
+  now miss. This is acceptable today because
+  `linker::Host::resolve_by_digest` (host/src/lib.rs:~395) always
+  returns an error after the cache hit ("found in cache but wasm-
+  component providers aren't instantiated in v1") — i.e., the dual
+  lookup never served a working flow. When CP8 wires the actual
+  wasm-component provider instantiation, add a `sha256 BLOB` column
+  to `__cas_artifact` (+ unique index, schema bump) so the digest
+  lookup works either way without changing the upper-layer call.
+
 ## Out of scope (named so they don't get assumed)
 
 - **S3 / OCI / IPFS / iroh resolvers** in the first ship. The

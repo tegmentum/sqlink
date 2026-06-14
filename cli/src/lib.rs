@@ -1356,6 +1356,48 @@ fn do_cache(arg: &str) -> String {
                 Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
             }
         }
+        "use-external" => {
+            if rest.is_empty() {
+                return "Usage: .cache use-external <path>\n".to_string();
+            }
+            match extension_loader::cache_use_external(rest) {
+                Ok(()) => format!("Cache mode -> external:{rest}\n"),
+                Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+            }
+        }
+        "use-internal" => {
+            if rest.is_empty() {
+                return "Usage: .cache use-internal <db-path>\n".to_string();
+            }
+            match extension_loader::cache_use_internal(rest) {
+                Ok(()) => format!("Cache mode -> internal (db {rest})\n"),
+                Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+            }
+        }
+        "migrate-to-external" => {
+            if rest.is_empty() {
+                return "Usage: .cache migrate-to-external <path>\n".to_string();
+            }
+            match extension_loader::cache_migrate_to_external(rest) {
+                Ok(s) => format!(
+                    "Migrated to external:{rest} ({} artifacts, {} URIs)\n",
+                    s.artifacts_added, s.uris_net_change
+                ),
+                Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+            }
+        }
+        "migrate-to-internal" => {
+            if rest.is_empty() {
+                return "Usage: .cache migrate-to-internal <db-path>\n".to_string();
+            }
+            match extension_loader::cache_migrate_to_internal(rest) {
+                Ok(s) => format!(
+                    "Migrated to internal (db {rest}): +{} artifacts, {} URI delta\n",
+                    s.artifacts_added, s.uris_net_change
+                ),
+                Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+            }
+        }
         "help" => {
             "Usage:\n  \
              .cache list                       URI bindings (sorted)\n  \
@@ -1367,6 +1409,10 @@ fn do_cache(arg: &str) -> String {
              .cache evict <target-bytes>       LRU evict down to target\n  \
              .cache export <path>              copy into a fresh external db\n  \
              .cache import <path>              merge another db into this one\n  \
+             .cache use-external <path>        switch active cache to external:<path>\n  \
+             .cache use-internal <db-path>     switch active cache to internal:<db-path>\n  \
+             .cache migrate-to-external <p>    export current internal data, drop schema, swap\n  \
+             .cache migrate-to-internal <db>   open internal in <db>, merge current external, swap\n  \
              .cache purge                      drop everything\n"
                 .to_string()
         }

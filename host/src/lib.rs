@@ -2738,6 +2738,40 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         Err(loader_stub_err("do-cache-import"))
     }
 
+    async fn cache_use_external(
+        &mut self,
+        _path: String,
+    ) -> std::result::Result<(), LoaderError> {
+        Err(loader_stub_err("cache-use-external"))
+    }
+
+    async fn cache_use_internal(
+        &mut self,
+        _db_path: String,
+    ) -> std::result::Result<(), LoaderError> {
+        Err(loader_stub_err("cache-use-internal"))
+    }
+
+    async fn cache_migrate_to_external(
+        &mut self,
+        _path: String,
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        LoaderError,
+    > {
+        Err(loader_stub_err("cache-migrate-to-external"))
+    }
+
+    async fn cache_migrate_to_internal(
+        &mut self,
+        _db_path: String,
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        LoaderError,
+    > {
+        Err(loader_stub_err("cache-migrate-to-internal"))
+    }
+
     async fn run_wasm(
         &mut self,
         _path: String,
@@ -3339,6 +3373,121 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         let stats = store
             .merge_from(PathBuf::from(path))
             .map_err(|e| cache_err(format!("import: {e}")))?;
+        Ok(bindings::sqlite::wasm::extension_loader::CacheMergeStats {
+            artifacts_added: stats.artifacts_added,
+            uris_net_change: stats.uris_net_change,
+        })
+    }
+
+    async fn cache_use_external(
+        &mut self,
+        path: String,
+    ) -> std::result::Result<(), LoaderError> {
+        let new_cache = cache::Cache::open_external(PathBuf::from(path))
+            .map_err(|e| cache_err(format!("open external: {e}")))?;
+        self.host.set_cache(new_cache);
+        Ok(())
+    }
+
+    async fn cache_use_internal(
+        &mut self,
+        db_path: String,
+    ) -> std::result::Result<(), LoaderError> {
+        let new_cache = cache::Cache::open_internal(PathBuf::from(db_path))
+            .map_err(|e| cache_err(format!("open internal: {e}")))?;
+        self.host.set_cache(new_cache);
+        Ok(())
+    }
+
+    async fn cache_migrate_to_external(
+        &mut self,
+        path: String,
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        LoaderError,
+    > {
+        let target = PathBuf::from(&path);
+        if target.exists() {
+            return Err(cache_err(format!(
+                "migrate-to-external: {} already exists",
+                target.display()
+            )));
+        }
+        let cache = {
+            let g = self.host.cache.read();
+            g.as_ref()
+                .ok_or_else(|| cache_err("no cache configured"))?
+                .clone()
+        };
+        let store_handle = cache.store();
+        let (artifacts, uris) = {
+            let store = store_handle.lock();
+            if !matches!(store.mode(), sqlite_cas_cache::StoreMode::Internal) {
+                return Err(cache_err(
+                    "migrate-to-external requires the current cache to be in internal mode",
+                ));
+            }
+            let a = store
+                .artifact_count()
+                .map_err(|e| cache_err(format!("artifact_count: {e}")))?;
+            let u = store
+                .uri_count()
+                .map_err(|e| cache_err(format!("uri_count: {e}")))?;
+            store
+                .export_to(&target)
+                .map_err(|e| cache_err(format!("export: {e}")))?;
+            (a, u)
+        };
+        {
+            let mut store = store_handle.lock();
+            store
+                .drop_schema()
+                .map_err(|e| cache_err(format!("drop_schema: {e}")))?;
+        }
+        let new_cache = cache::Cache::open_external(target)
+            .map_err(|e| cache_err(format!("reopen external: {e}")))?;
+        self.host.set_cache(new_cache);
+        Ok(bindings::sqlite::wasm::extension_loader::CacheMergeStats {
+            artifacts_added: artifacts,
+            uris_net_change: uris as i64,
+        })
+    }
+
+    async fn cache_migrate_to_internal(
+        &mut self,
+        db_path: String,
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        LoaderError,
+    > {
+        let cache = {
+            let g = self.host.cache.read();
+            g.as_ref()
+                .ok_or_else(|| cache_err("no cache configured"))?
+                .clone()
+        };
+        let source_path = {
+            let store = cache.store();
+            let store = store.lock();
+            match store.mode() {
+                sqlite_cas_cache::StoreMode::External(p) => p.clone(),
+                sqlite_cas_cache::StoreMode::Internal => {
+                    return Err(cache_err(
+                        "migrate-to-internal requires the current cache to be in external mode",
+                    ));
+                }
+            }
+        };
+        let new_cache = cache::Cache::open_internal(PathBuf::from(&db_path))
+            .map_err(|e| cache_err(format!("open internal: {e}")))?;
+        let stats = {
+            let store = new_cache.store();
+            let mut store = store.lock();
+            store
+                .merge_from(&source_path)
+                .map_err(|e| cache_err(format!("merge: {e}")))?
+        };
+        self.host.set_cache(new_cache);
         Ok(bindings::sqlite::wasm::extension_loader::CacheMergeStats {
             artifacts_added: stats.artifacts_added,
             uris_net_change: stats.uris_net_change,
