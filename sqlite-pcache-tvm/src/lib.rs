@@ -2,16 +2,24 @@
 //!
 //! ## Layered plan (PLAN-tvm-integration Phase 1)
 //!
-//! 1. **This commit:** the 11 pcache2 trampolines + a HashMap-
-//!    backed in-process `Cache` proving the registration plumbing
-//!    works end-to-end with real sqlite3 (a connection opened
-//!    after `install()` runs SQL against pages this crate served).
-//! 2. **Follow-up:** the `Cache` backend swaps the HashMap +
-//!    `Vec<u8>` pages for `tvm-guest-mm` `page-store` region
-//!    slots, accessed through the WIT-bound `tvm:memory`
-//!    imports validated in `probe/tvm-substrate/`. SQLite-facing
-//!    behaviour is invariant across the swap; only the page
-//!    allocator changes.
+//! 1. **Phase 1.0 (this code):** the 11 pcache2 trampolines + a
+//!    HashMap-backed in-process `Cache` proving the registration
+//!    plumbing works end-to-end with real sqlite3.
+//! 2. **Phase 1.1 (Path D, shadow-pool):** add a bounded
+//!    default-memory shadow pool + TVM-backed cold storage. See
+//!    the Phase 1.1 architectural-finding block in
+//!    PLAN-tvm-integration.md for the design rationale. The
+//!    direct "TVM region returns a raw pointer" backend swap
+//!    (originally implied by Phase 1) is structurally
+//!    impossible: TVM's > 4 GiB story is multi-memory and SQLite
+//!    needs a default-memory C pointer to dereference. Path D
+//!    fetches a page from TVM into a shadow slot, returns the
+//!    shadow ptr, flushes back on unpin.
+//!
+//! The current trampolines + lifetime model carry over to
+//! Phase 1.1 unchanged — what changes is the `Cache` body: it'll
+//! hold a shadow pool + a TVM region handle instead of an
+//! unbounded HashMap of owned `PageEntry`s.
 //!
 //! ## Lifetime model
 //!

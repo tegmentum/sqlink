@@ -135,6 +135,75 @@ allocations.
 > binds the full `sqlite3_pcache_methods2` shape so the impl can
 > be `extern "C" fn` trampolines pointing into Rust callbacks.
 > Same ABI, no C glue to maintain.
+>
+> **Phase 1.1 architectural finding: shadow-pool indirection
+> required.** SQLite's `pcache2.xFetch` returns a raw C pointer
+> (`pBuf`) that SQLite dereferences directly when reading and
+> writing page bytes. TVM's > 4 GiB story is fundamentally built
+> on **non-default wasm memories** — each region is its own wasm
+> memory addressed via the static `memory` immediate on
+> `i32.load/store`. A C pointer into a non-default memory is not
+> a valid pointer from the default memory's perspective, so a
+> direct "the page slot lives in a TVM `page-store` region and
+> we return its pointer" backend swap (what the original Phase 1
+> sketch described) doesn't work.
+>
+> **The realistic shape (Path D — shadow-pool):**
+>
+> ```
+>   sqlite3_pcache.xFetch(key, create) {
+>       if (shadow_slot = lookup(key)) { return shadow_slot.pBuf; }
+>       if (need_eviction()) {
+>           victim = lru_evict();
+>           tvm.bytes.write(victim.region_handle, victim.shadow_buf);  // flush back
+>           free_shadow_slot(victim);
+>       }
+>       shadow = alloc_shadow_slot();        // bounded N-slot pool in default mem
+>       region = lookup_or_alloc_region(key); // backed by TVM page-store, may be > 4 GiB
+>       tvm.bytes.read(region, &shadow.buf); // pull page bytes into default mem
+>       return shadow.pBuf;
+>   }
+>   sqlite3_pcache.xUnpin(page, discard) {
+>       if (!discard) {
+>           tvm.bytes.write(page.region_handle, page.shadow_buf); // flush
+>       }
+>       free_shadow_slot(page);
+>   }
+> ```
+>
+> Tradeoff: per-page-fault memcpy cost on cold fetches. Acceptable
+> for SQLite because frequently-accessed pages stay pinned for the
+> duration of an operation; eviction only fires when the working
+> set genuinely exceeds the shadow pool. The shadow pool sizes
+> the default-memory budget; the TVM region holds the cold tail.
+>
+> **Considered and rejected alternatives:**
+>
+> - **Path E (recompile SQLite for TVM dispatch).** Modify every
+>   `pPage->aData[offset]` access in `sqlite3.c` to go through
+>   TVM load/store helpers. Major surgery on a vendored SQLite —
+>   breaks the "register a pcache2 impl" framing and ties us to a
+>   forked SQLite. Out of scope.
+> - **Path F (default-memory regions).** TVM as a sub-allocator
+>   within the default linear memory. Gives handle abstraction +
+>   eviction semantics but doesn't break 4 GiB. Useful for the
+>   Phase 2 malloc layer (where the goal is allocator policy,
+>   not address-space expansion); pointless for pcache.
+>
+> Phase 1.1 implements Path D against the WIT-bound
+> `tvm:memory/manager + bytes` interfaces (the path validated by
+> `probe/tvm-substrate/`). Architectural decisions still open
+> before implementation:
+>
+> - **Shadow-pool sizing.** N slots * page-size = default-memory
+>   budget the pcache reserves. Static-configured at `xCachesize`
+>   or growable?
+> - **Eviction policy.** LRU on the shadow pool; TVM handles
+>   tier-level eviction (Hot → Warm → Cold) within the region.
+> - **Dirty tracking.** Flush only dirty pages on `xUnpin`, or
+>   always flush? SQLite already tracks dirty via the
+>   `sqlite3_pcache_page.pExtra` bytes — pcache impls can read
+>   the dirty bit through a documented offset.
 
 ### What to build
 
