@@ -75,7 +75,9 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".dbconfig" => cmd_dbconfig(arg, conn),
         ".limit" => cmd_limit(arg, conn),
         ".binary" => cmd_binary(arg),
-        ".log" => "Error: .log is not supported (sqlite3 config-time only)\n".to_string(),
+        // .log handled in lib.rs (the callback lives there, and
+        // it depends on the install-time wiring done before
+        // sqlite3 initialized).
         ".lint" => cmd_lint(arg, conn),
         ".sha3sum" => cmd_sha3sum(arg, conn),
         ".vfslist" => cmd_vfslist(),

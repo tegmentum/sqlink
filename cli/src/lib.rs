@@ -76,6 +76,13 @@ fn ensure_cli_conn() {
 
 impl RunGuest for CliCommand {
     fn run() -> Result<(), ()> {
+        // sqlite3_config(SQLITE_CONFIG_LOG, ...) must run BEFORE
+        // sqlite3_initialize, and init_wasivfs's vfs_register call
+        // triggers initialize. Install the log callback first; it
+        // consults settings.log_target so .log on|off|FILE can
+        // flip routing at runtime without re-registering.
+        let _ = db::install_log_callback(Some(log_event));
+
         // Register the WASI-backed VFS so file-backed opens persist.
         // The `match` ensures the optimizer can't dead-code the call
         // (let _ = wasn't enough — possibly because init_wasivfs is
@@ -275,6 +282,9 @@ fn eval_input(input: &str) -> String {
     if let Some(rest) = trimmed.strip_prefix(".auth") {
         return do_auth(rest.trim());
     }
+    if let Some(rest) = trimmed.strip_prefix(".log") {
+        return do_log(rest.trim());
+    }
     ensure_cli_conn();
     if trimmed.starts_with('.') {
         let dot_out = CLI_CONN.with(|c| {
@@ -470,6 +480,60 @@ fn do_auth(arg: &str) -> String {
             Err(e) => format!("Error: {}\n", e.message),
         }
     })
+}
+
+/// `.log on|off|stdout|FILE` — route sqlite3's process-wide log
+/// callback to stderr (when `on`), to FILE (append mode), or off.
+/// `.log` with no arg prints current state. The callback itself
+/// was installed in `run()` before sqlite3 initialized; here we
+/// just toggle `settings.log_target`, which `log_event` reads.
+fn do_log(arg: &str) -> String {
+    let arg = arg.trim();
+    if arg.is_empty() {
+        let label = settings::SETTINGS.with(|s| {
+            match &s.borrow().log_target {
+                None => "off".to_string(),
+                Some(None) => "on (stderr)".to_string(),
+                Some(Some(path)) => format!("on (file {path})"),
+            }
+        });
+        return format!("log: {label}\n");
+    }
+    let target: Option<Option<String>> = match arg {
+        "on" | "stdout" => Some(None),
+        "off" => None,
+        path => Some(Some(path.to_string())),
+    };
+    settings::SETTINGS.with(|s| s.borrow_mut().log_target = target);
+    String::new()
+}
+
+/// SQLite log callback target. Reads settings.log_target and
+/// writes to stderr or the configured file. Installed once at
+/// startup by `install_log_callback`; safe to invoke many times
+/// from inside sqlite3 calls because we read settings via
+/// thread_local with no panicking path.
+fn log_event(err_code: i32, msg: &str) {
+    let target = settings::SETTINGS.with(|s| s.borrow().log_target.clone());
+    let target = match target {
+        None => return, // logging disabled
+        Some(t) => t,
+    };
+    let line = format!("[sqlite3 {err_code}] {msg}\n");
+    match target {
+        None => {
+            let _ = std::io::Write::write_all(&mut std::io::stderr(), line.as_bytes());
+        }
+        Some(path) => {
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+            {
+                let _ = std::io::Write::write_all(&mut f, line.as_bytes());
+            }
+        }
+    }
 }
 
 /// Render a `db::Value` for `.parameter list`. Public so dot.rs's

@@ -94,6 +94,12 @@ pub struct Settings {
     /// the output channel — that breaks the String-based format
     /// pipeline.
     pub binary_output: bool,
+    /// `.log on|off|FILE` state. None = disabled. Some(None) =
+    /// enabled, stderr destination. Some(Some(path)) = enabled,
+    /// writes append to `path`. The core's process-global
+    /// sqlite3 log callback (installed in run() before
+    /// init_wasivfs) reads this on every log event.
+    pub log_target: Option<Option<String>>,
 }
 
 impl Settings {
@@ -118,6 +124,7 @@ impl Settings {
             trace_on: false,
             parameters: HashMap::new(),
             binary_output: false,
+            log_target: None,
         }
     }
 }

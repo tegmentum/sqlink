@@ -133,6 +133,55 @@ pub struct Connection {
 /// file-backed connection.
 ///
 /// Native targets: no-op. The unix VFS is already SQLite's default.
+/// Install a process-global SQLite log callback BEFORE
+/// `sqlite3_initialize` is invoked. The trampoline forwards every
+/// log event to `cb`. Pass `None` to clear.
+///
+/// SQLite's docs require `sqlite3_config(SQLITE_CONFIG_LOG, …)` be
+/// called before initialization (and any later change needs
+/// `sqlite3_shutdown` first). Our wasm cli call this once at the
+/// very top of `run()`, before `init_wasivfs` triggers the first
+/// sqlite3 API call; the actual on/off state is managed by the
+/// callback itself reading a thread-local toggle.
+pub fn install_log_callback(cb: Option<fn(i32, &str)>) -> Result<(), Error> {
+    LOG_USER_CB.with(|c| *c.borrow_mut() = cb);
+    let trampoline: Option<unsafe extern "C" fn(*mut c_void, c_int, *const c_char)> =
+        if cb.is_some() { Some(log_trampoline) } else { None };
+    let rc = unsafe {
+        ffi::sqlite3_config(
+            ffi::SQLITE_CONFIG_LOG,
+            trampoline,
+            std::ptr::null_mut::<c_void>(),
+        )
+    };
+    if rc != ffi::SQLITE_OK {
+        return Err(standalone_error(rc, "sqlite3_config(SQLITE_CONFIG_LOG)"));
+    }
+    Ok(())
+}
+
+thread_local! {
+    static LOG_USER_CB: std::cell::RefCell<Option<fn(i32, &str)>>
+        = const { std::cell::RefCell::new(None) };
+}
+
+unsafe extern "C" fn log_trampoline(
+    _ctx: *mut c_void,
+    err_code: c_int,
+    msg: *const c_char,
+) {
+    if msg.is_null() {
+        return;
+    }
+    let bytes = std::ffi::CStr::from_ptr(msg).to_bytes();
+    let s = std::str::from_utf8(bytes).unwrap_or("<non-utf8 log message>");
+    LOG_USER_CB.with(|c| {
+        if let Some(cb) = *c.borrow() {
+            cb(err_code as i32, s);
+        }
+    });
+}
+
 #[cfg(target_arch = "wasm32")]
 pub fn init_wasivfs() -> Result<(), Error> {
     extern "C" {
