@@ -85,18 +85,15 @@ async fn double_unload_errors() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the sqlite-wasm-loader submodule rebuilding \
-            fiji_hello.wasm against the renamed sqlite:wasm/run \
-            world. Submodule rename PR re-enables."]
 async fn run_resolves_sqlite_runtime() {
     use parking_lot::Mutex;
     use sqlite_wasm_host::compose_provider::ProviderHandle;
     use std::sync::Arc;
 
     let mut wasm_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    wasm_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/fiji_hello.wasm");
+    wasm_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/runnable_hello.wasm");
     if !wasm_path.exists() {
-        eprintln!("skipping: fiji_hello.wasm not built");
+        eprintln!("skipping: runnable_hello.wasm not built");
         return;
     }
 
@@ -179,22 +176,19 @@ async fn wasm_component_provider_handles_invoke() {
 
 /// Tenant-scoped providers: register two databases with different
 /// contents under the same `sqlite-runtime` id in different
-/// tenants. Run the fiji-hello function in each tenant; the
-/// reported table count differs per tenant, proving the active
-/// tenant scopes resolution.
+/// tenants. Run runnable-hello in each tenant; the reported
+/// table count differs per tenant, proving the active tenant
+/// scopes resolution.
 #[tokio::test]
-#[ignore = "blocked on the sqlite-wasm-loader submodule rebuilding \
-            fiji_hello.wasm against the renamed sqlite:wasm/run \
-            world. Submodule rename PR re-enables."]
 async fn run_tenant_scoping_isolates_providers() {
     use parking_lot::Mutex;
     use sqlite_wasm_host::compose_provider::ProviderHandle;
     use std::sync::Arc;
 
     let mut wasm_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    wasm_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/fiji_hello.wasm");
+    wasm_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/runnable_hello.wasm");
     if !wasm_path.exists() {
-        eprintln!("skipping: fiji_hello.wasm not built");
+        eprintln!("skipping: runnable_hello.wasm not built");
         return;
     }
 
@@ -454,9 +448,6 @@ async fn std_encoding_provider() {
 }
 
 #[tokio::test]
-#[ignore = "blocked on the sqlite-wasm-loader submodule rebuilding \
-            fiji_text_demo.wasm against the renamed sqlite:wasm/run \
-            world. Submodule rename PR re-enables."]
 async fn run_composes_sqlite_runtime_and_std_text() {
     use parking_lot::Mutex;
     use sqlite_wasm_host::compose_provider::ProviderHandle;
@@ -464,11 +455,11 @@ async fn run_composes_sqlite_runtime_and_std_text() {
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut wasm_path = manifest_dir.clone();
-    wasm_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/fiji_text_demo.wasm");
+    wasm_path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/runnable_text_demo.wasm");
     let mut std_text = manifest_dir.clone();
     std_text.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_text.wasm");
     if !wasm_path.exists() || !std_text.exists() {
-        eprintln!("skipping: fiji_text_demo.wasm or std_text.wasm not built");
+        eprintln!("skipping: runnable_text_demo.wasm or std_text.wasm not built");
         return;
     }
 
