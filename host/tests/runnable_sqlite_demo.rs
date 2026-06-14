@@ -8,21 +8,21 @@
 //! only `sqlite:wasm/run@0.1.0` and looks to the host like any
 //! ordinary runnable, with SQLite bundled inside.
 //!
-//! What this test asserts:
-//!   1. The composed artifact exists at the expected path.
-//!   2. `wasm-tools component wit` reports the artifact's export
-//!      surface is exactly `sqlite:wasm/run@0.1.0`.
-//!   3. The artifact's import surface no longer mentions
-//!      `sqlite:extension/spi` (sqlite-lib satisfied it at compose
-//!      time) and no longer mentions `sqlite:extension/types`.
+//! Two test layers:
 //!
-//! The "actually instantiate and assert on widget rows" step is
-//! tracked separately: the composed binary still imports the host's
-//! `sqlite:wasm/extension-loader` and friends because sqlite-lib
-//! forwards programmatic `.load` calls to the host. Wiring those
-//! through `make_run_linker` is the runtime-side follow-up; this
-//! test pins the composition side, which is what Phase 6 set out to
-//! demonstrate.
+//!   * `composed_demo_artifact_has_expected_surface` — structural
+//!     check via `wasm-tools component wit`. Pins the composition
+//!     side: SPI import is satisfied by sqlite-lib's SPI export and
+//!     `sqlite:wasm/run@0.1.0` survives as the only relevant export.
+//!   * `composed_demo_runs_against_sqlite_lib` — instantiates the
+//!     composed binary via `Host::run_wasm` and asserts the demo's
+//!     widget rows + `count = 3` appear in the output. That proves
+//!     `execute_batch`, `execute`, and `execute_scalar` all routed
+//!     through sqlite-lib's bundled SQLite, and validates the
+//!     extension-loader stub `make_run_linker` provides for
+//!     statically-composed runnables (sqlite-lib imports
+//!     `sqlite:wasm/extension-loader`, but a runnable that never
+//!     programmatically `.load`s never invokes it).
 //!
 //! Build prerequisites — the test self-skips if any artifact is
 //! missing rather than failing CI on a fresh checkout:
@@ -46,6 +46,8 @@
 use std::path::PathBuf;
 use std::process::Command;
 
+use sqlite_wasm_host::{Host, Policy};
+
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -53,9 +55,13 @@ fn repo_root() -> PathBuf {
         .to_path_buf()
 }
 
+fn composed_path() -> PathBuf {
+    repo_root().join("target/runnable_sqlite_demo.composed.wasm")
+}
+
 #[test]
 fn composed_demo_artifact_has_expected_surface() {
-    let composed = repo_root().join("target/runnable_sqlite_demo.composed.wasm");
+    let composed = composed_path();
     if !composed.exists() {
         eprintln!(
             "skipping: {} not built — see this file's module doc for the build steps",
@@ -92,5 +98,49 @@ fn composed_demo_artifact_has_expected_surface() {
     assert!(
         wit.contains("export sqlite:wasm/run@0.1.0;"),
         "composed binary should export sqlite:wasm/run@0.1.0; got:\n{wit}"
+    );
+}
+
+#[tokio::test]
+async fn composed_demo_runs_against_sqlite_lib() {
+    let composed = composed_path();
+    if !composed.exists() {
+        eprintln!(
+            "skipping: {} not built — see this file's module doc for the build steps",
+            composed.display()
+        );
+        return;
+    }
+
+    let host = Host::new().expect("engine");
+    let output = host
+        .run_wasm(composed, Policy::deny_all())
+        .await
+        .expect("composed runnable should instantiate and run");
+
+    // The demo's SPI calls (execute_batch + execute + execute_scalar)
+    // all route into sqlite-lib's bundled SQLite via composition.
+    // Asserting on the formatted strings the demo emits proves the
+    // full round-trip: schema + inserts in execute_batch, row
+    // iteration in execute, and the count() scalar.
+    assert!(
+        output.contains("widgets:"),
+        "expected widgets header, got: {output:?}"
+    );
+    assert!(
+        output.contains("hammer (1.5 kg)"),
+        "expected hammer row from execute(), got: {output:?}"
+    );
+    assert!(
+        output.contains("saw (0.8 kg)"),
+        "expected saw row from execute(), got: {output:?}"
+    );
+    assert!(
+        output.contains("drill (2.1 kg)"),
+        "expected drill row from execute(), got: {output:?}"
+    );
+    assert!(
+        output.contains("count = 3"),
+        "expected execute_scalar() count = 3, got: {output:?}"
     );
 }

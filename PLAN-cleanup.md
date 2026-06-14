@@ -10,15 +10,8 @@
 > | 3 — Rename library world | 8c87063 |
 > | 4 — Workspace Cargo.toml | e7b6298 |
 > | 5 — Legacy world status | f11edf1 |
-> | 6 — Runnable-uses-sqlite-lib demo | (this commit) — static-composition demo + structural assertion; full instantiation deferred (see note) |
+> | 6 — Runnable-uses-sqlite-lib demo | d620fee (composition + structural assertion) + runtime follow-up (this commit — `make_run_linker` now wires a stub extension-loader so composed runnables instantiate; the demo runs end-to-end via `Host::run_wasm` and the test asserts the actual widget rows + `count = 3`) |
 > | 7 — Shell wrapper integration test | b4b5472 (also surfaced + fixed a real multi-statement bug in eval_sql_inner) |
->
-> Phase 6 note: the composition pipeline (wac compose → runnable
-> exporting `sqlite:wasm/run` with SQLite bundled) is shipped and
-> structurally verified. Actually instantiating the composed binary
-> via `Host::run_wasm` still requires extending `make_run_linker` to
-> satisfy sqlite-lib's host-side imports (extension-loader, http);
-> that's the runtime-side follow-up — not Phase 6 scope.
 >
 > Phase 2's persistence bug, which I originally framed as "the
 > shared default connection across SPI + high-level," turned out to

@@ -1030,6 +1030,21 @@ fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
         },
     )
     .map_err(|e| anyhow!("fiji compose linker: {e}"))?;
+    // Statically-composed runnables (e.g. examples/rust/runnable-sqlite-demo)
+    // bundle sqlite-lib at compose time. sqlite-lib itself imports
+    // `sqlite:wasm/extension-loader` because its `library` world
+    // exposes a programmatic `load-extension` that forwards to the
+    // host. The composed binary therefore inherits that import on
+    // its outer surface even though the runnable side never touches
+    // it. Wire a stub impl that satisfies the linker without
+    // surfacing the full Host registry: composed runnables that
+    // never call .load just work; ones that do get a structured
+    // LoaderError instead of an instantiate-time linker failure.
+    bindings::sqlite::wasm::extension_loader::add_to_linker::<_, RunLoaderStubData>(
+        &mut linker,
+        |_state: &mut RunState| RunLoaderStub,
+    )
+    .map_err(|e| anyhow!("run linker extension-loader stub: {e}"))?;
     Ok(linker)
 }
 
@@ -2161,6 +2176,143 @@ impl Host {
             .await
             .map_err(|e| anyhow!("runtime.execute trap: {e}"))?;
         r.map_err(|e| anyhow!("runtime.execute returned error: {e}"))
+    }
+}
+
+/// Stub impl of the extension-loader Host trait used by
+/// statically-composed runnables. Composed runnables bundle
+/// sqlite-lib at compose time and inherit sqlite-lib's
+/// `sqlite:wasm/extension-loader` import; runnables that never
+/// invoke `library.load-extension` (the common case for the static-
+/// composition pattern) need that import satisfied at instantiation
+/// time but never actually call into it. Composed runnables that
+/// DO call `.load` get a structured `LoaderError` here instead of
+/// reaching the host's dynamic-loading machinery — by design, the
+/// `make_run_linker` path is for self-contained components.
+///
+/// Use `Host::run_wasm` if your runnable needs real `.load` (it
+/// wires the full `HostWrap` against a parent `Host`); use the
+/// composed-binary path for self-contained workloads.
+pub struct RunLoaderStub;
+
+pub struct RunLoaderStubData;
+impl wasmtime::component::HasData for RunLoaderStubData {
+    type Data<'a> = RunLoaderStub;
+}
+
+fn loader_stub_err(method: &str) -> LoaderError {
+    LoaderError {
+        code: 1,
+        message: format!(
+            "{method}: not available in statically-composed runnables \
+             (use Host::load_extension on the host side instead)"
+        ),
+    }
+}
+
+impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
+    async fn load_extension(
+        &mut self,
+        _path: String,
+        _options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<Manifest, LoaderError> {
+        Err(loader_stub_err("load-extension"))
+    }
+
+    async fn unload_extension(&mut self, _name: String) -> std::result::Result<(), LoaderError> {
+        Err(loader_stub_err("unload-extension"))
+    }
+
+    async fn list_extensions(&mut self) -> Vec<Manifest> {
+        Vec::new()
+    }
+
+    async fn is_extension_loaded(&mut self, _name: String) -> bool {
+        false
+    }
+
+    async fn load_extension_from_uri(
+        &mut self,
+        _uri: String,
+        _options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<Manifest, LoaderError> {
+        Err(loader_stub_err("load-extension-from-uri"))
+    }
+
+    async fn register_resolver(
+        &mut self,
+        _scheme: String,
+        _path: String,
+        _options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<String, LoaderError> {
+        Err(loader_stub_err("register-resolver"))
+    }
+
+    async fn unregister_resolver(
+        &mut self,
+        _scheme: String,
+    ) -> std::result::Result<(), LoaderError> {
+        Err(loader_stub_err("unregister-resolver"))
+    }
+
+    async fn list_resolvers(&mut self) -> Vec<(String, String)> {
+        Vec::new()
+    }
+
+    async fn list_cache_uris(
+        &mut self,
+    ) -> Vec<bindings::sqlite::wasm::extension_loader::UriCacheEntry> {
+        Vec::new()
+    }
+
+    async fn purge_cache(&mut self) -> u64 {
+        0
+    }
+
+    async fn run_wasm(
+        &mut self,
+        _path: String,
+        _options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<String, LoaderError> {
+        Err(loader_stub_err("run-wasm"))
+    }
+
+    async fn register_wasm_provider(
+        &mut self,
+        _id: String,
+        _path: String,
+    ) -> std::result::Result<(), LoaderError> {
+        Err(loader_stub_err("register-wasm-provider"))
+    }
+
+    async fn register_runtime(
+        &mut self,
+        _ext: String,
+        _flavor: String,
+        _path: String,
+        _options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<(), LoaderError> {
+        Err(loader_stub_err("register-runtime"))
+    }
+
+    async fn unregister_runtime(
+        &mut self,
+        _ext: String,
+        _flavor: String,
+    ) -> std::result::Result<(), LoaderError> {
+        Err(loader_stub_err("unregister-runtime"))
+    }
+
+    async fn list_runtimes(&mut self) -> Vec<(String, String, String)> {
+        Vec::new()
+    }
+
+    async fn run_source(
+        &mut self,
+        _path: String,
+        _flavor: String,
+    ) -> std::result::Result<String, LoaderError> {
+        Err(loader_stub_err("run-source"))
     }
 }
 
