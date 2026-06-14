@@ -51,16 +51,10 @@ pub fn lifetime_write_count() -> u32 {
     LIFETIME_WRITE_COUNT.load(Ordering::Relaxed)
 }
 
-// wit-bindgen brings in the `tvm:memory` interfaces under the
-// matching Rust module tree.
-mod bindings {
-    wit_bindgen::generate!({
-        path: "wit",
-        world: "tvm-guest",
-        generate_all,
-    });
-}
-
+// `tvm:memory` bindings come from the shared crate so the
+// `encoded world` custom section appears exactly once in the
+// final wasm (see sqlite-tvm-bindings).
+use sqlite_tvm_bindings as bindings;
 use bindings::tvm::memory::bytes;
 use bindings::tvm::memory::manager;
 use bindings::tvm::memory::types::{Handle, RegionKind, TvmError};

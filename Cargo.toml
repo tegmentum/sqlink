@@ -13,6 +13,7 @@ members = [
     "sqlite-pcache-tvm",
     "sqlite-mem-tvm",
     "sqlite-vfs-tvm",
+    "sqlite-tvm-bindings",
     "sqlite-cas-cache",
     "extensions/json1",
     "examples/rust/runnable-sqlite-demo",

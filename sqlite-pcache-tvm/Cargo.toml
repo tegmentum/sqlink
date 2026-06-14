@@ -25,8 +25,8 @@ libsqlite3-sys = { version = "0.30", default-features = false }
 # core is what brings in the bundled sqlite3 build; transitively
 # linking it satisfies our extern symbols.
 sqlite-wasm-core = { path = "../core" }
-# Generates the guest-side tvm:memory imports. On wasm32 the
-# crate always uses the TVM-backed cold tier; the in-proc
-# fallback is target_arch=native only (for unit tests).
-wit-bindgen = { version = "0.44", features = ["macros"] }
-wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pull the guest-side tvm:memory imports from the shared
+# bindings crate. Inlining the wit_bindgen::generate! here
+# would produce a duplicate `encoded world` custom section in
+# the final wasm  see sqlite-tvm-bindings/src/lib.rs.
+sqlite-tvm-bindings = { path = "../sqlite-tvm-bindings" }

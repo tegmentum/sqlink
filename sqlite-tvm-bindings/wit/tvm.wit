@@ -133,9 +133,3 @@ world tvm-guest {
   import diagnostics;
 }
 
-// Mirror world a host-side component might export (for symmetry / tooling).
-world tvm-host {
-  export manager;
-  export bytes;
-  export diagnostics;
-}

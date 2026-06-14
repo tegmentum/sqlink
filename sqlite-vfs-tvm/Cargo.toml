@@ -34,8 +34,8 @@ sqlite-wasm-core = { path = "../core" }
 # parking_lot's Mutex is what core/host already pull in.
 parking_lot = "0.12"
 once_cell = "1"
-# Generates the guest-side tvm:memory imports. On wasm32 the
-# crate always uses the TVM-backed file storage; the in-proc
-# fallback is target_arch=native only (for unit tests).
-wit-bindgen = { version = "0.44", features = ["macros"] }
-wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pull the guest-side tvm:memory imports from the shared
+# bindings crate. Inlining the wit_bindgen::generate! here
+# would produce a duplicate `encoded world` custom section in
+# the final wasm  see sqlite-tvm-bindings/src/lib.rs.
+sqlite-tvm-bindings = { path = "../sqlite-tvm-bindings" }
