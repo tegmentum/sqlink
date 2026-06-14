@@ -30,10 +30,32 @@
 
 use std::os::raw::{c_int, c_uint, c_void};
 use std::ptr;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use libsqlite3_sys as ffi;
 use libsqlite3_sys::{sqlite3_pcache, sqlite3_pcache_methods2, sqlite3_pcache_page};
+
+// Lightweight runtime counters for the Phase 1.3 capacity test
+// and any future diagnostics. The probe exposes these via WIT
+// exports; the host reads them to confirm SQLite is actually
+// driving the pcache, the shadow pool sized correctly, etc.
+static N_FETCH: AtomicU32 = AtomicU32::new(0);
+static N_UNPIN: AtomicU32 = AtomicU32::new(0);
+static LAST_CACHESIZE: AtomicU32 = AtomicU32::new(0);
+static LAST_SHADOW_COUNT: AtomicU32 = AtomicU32::new(0);
+
+/// (fetch count, unpin count, last xCachesize arg, last observed
+/// shadow_count). Diagnostics for the Phase 1.3 capacity test and
+/// any future correctness probes  the host inspects these to
+/// confirm SQLite drove the pcache as expected.
+pub fn cache_diagnostics() -> (u32, u32, u32, u32) {
+    (
+        N_FETCH.load(Ordering::Relaxed),
+        N_UNPIN.load(Ordering::Relaxed),
+        LAST_CACHESIZE.load(Ordering::Relaxed),
+        LAST_SHADOW_COUNT.load(Ordering::Relaxed),
+    )
+}
 
 pub mod cache;
 pub mod region;
@@ -80,6 +102,7 @@ unsafe extern "C" fn x_create(
 }
 
 unsafe extern "C" fn x_cachesize(p: *mut sqlite3_pcache, n: c_int) {
+    LAST_CACHESIZE.store(n as u32, Ordering::Relaxed);
     let cache = &mut *(p as *mut ActiveCache);
     cache.set_cachesize(n);
 }
@@ -94,7 +117,9 @@ unsafe extern "C" fn x_fetch(
     key: c_uint,
     create_flag: c_int,
 ) -> *mut sqlite3_pcache_page {
+    N_FETCH.fetch_add(1, Ordering::Relaxed);
     let cache = &mut *(p as *mut ActiveCache);
+    LAST_SHADOW_COUNT.store(cache.shadow_count(), Ordering::Relaxed);
     cache.fetch(key, create_flag)
 }
 
@@ -103,6 +128,7 @@ unsafe extern "C" fn x_unpin(
     page: *mut sqlite3_pcache_page,
     discard: c_int,
 ) {
+    N_UNPIN.fetch_add(1, Ordering::Relaxed);
     let cache = &mut *(p as *mut ActiveCache);
     cache.unpin(page, discard != 0)
 }

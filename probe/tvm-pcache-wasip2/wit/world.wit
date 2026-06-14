@@ -1,9 +1,7 @@
-// Probe world for PLAN-tvm-integration Phase 1.2. Combines
+// Probe world for PLAN-tvm-integration Phase 1.2 + 1.3. Combines
 // `tvm:memory` (imported, satisfied by the host's
-// `tvm-wasmtime::add_to_linker`) with a single `run-test`
-// export that boots SQLite against `sqlite-pcache-tvm`'s
-// pcache2 impl with the wit-bindgen TVM backend, runs a small
-// workload, and returns a sum the host asserts on.
+// `tvm-wasmtime::add_to_linker`) with the SQLite-driven probes
+// the host calls to validate the full TVM-pcache stack.
 
 package sqlite:probe-tvm-pcache@0.0.0;
 
@@ -13,5 +11,25 @@ world probe {
     import tvm:memory/bytes@0.1.0;
     import tvm:memory/diagnostics@0.1.0;
 
+    /// Phase 1.2 functional round-trip. Boots SQLite, inserts 7
+    /// rows, returns count(*). Used by `tvm_pcache_probe`.
     export run-test: func() -> u32;
+
+    /// Phase 1.3 capacity test. Sets a tiny SQLite cache (5 pages)
+    /// so the bulk of the inserted data is forced out of the
+    /// shadow pool and into the TVM cold tier; the host then sums
+    /// region.used across the TvmHost directory to prove bytes
+    /// actually landed in TVM. Returns the count(*) so the host
+    /// can confirm SQL integrity end-to-end.
+    export run-capacity-test: func(rows: u32, payload-bytes: u32) -> u32;
+
+    /// Lifetime counter of `WitTvmRegion::write` calls. The host
+    /// asserts this is non-zero to prove the cold-tier write path
+    /// actually fired during the capacity workload.
+    export tvm-write-count: func() -> u32;
+
+    /// (fetch count, unpin count, last xCachesize arg, last
+    /// observed shadow_count). Helps the host diagnose
+    /// regressions in SQLite-pcache interaction.
+    export cache-diagnostics: func() -> tuple<u32, u32, u32, u32>;
 }

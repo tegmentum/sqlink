@@ -33,8 +33,23 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::region::{Region, RegionError};
+
+/// Phase 1.3 capacity-test diagnostic: counts how many times
+/// `Region::write` got called against any WitTvmRegion instance
+/// during this wasm process. Exposed via the public
+/// `lifetime_write_count()` accessor so the probe can return it
+/// to the host and the host can assert non-zero (i.e., the
+/// cold-tier write path actually fired).
+static LIFETIME_WRITE_COUNT: AtomicU32 = AtomicU32::new(0);
+
+/// Reads the lifetime write counter. Crate-public so the probe
+/// (in a sibling cdylib) can expose it through a WIT export.
+pub fn lifetime_write_count() -> u32 {
+    LIFETIME_WRITE_COUNT.load(Ordering::Relaxed)
+}
 
 // wit-bindgen brings in the `tvm:memory` interfaces under the
 // matching Rust module tree.
@@ -76,13 +91,19 @@ impl WitTvmRegion {
     }
 }
 
+/// Default initial capacity of a new `WitTvmRegion` in bytes
+/// (256 MiB). SQLite hasn't yet told us its page size or cache
+/// budget when we hand the cache its region, and tvm-core regions
+/// don't grow past their declared capacity, so we pick a value
+/// large enough to hold a realistic working set without
+/// over-reserving in the common case. Operators who need the
+/// full > 4 GiB story should configure a larger initial capacity
+/// at the host's `TvmHost` level (the engine, not this default).
+const DEFAULT_REGION_BYTES: u32 = 256 * 1024 * 1024;
+
 impl Default for WitTvmRegion {
-    /// Convenience for the `lib.rs` factory  starts with a 1 MiB
-    /// region. SQLite hasn't yet told us its page size or cache
-    /// budget when we hand the cache its region; the region grows
-    /// as TVM-managed allocations land in it.
     fn default() -> Self {
-        Self::new(1 << 20).expect("create initial tvm page-store region")
+        Self::new(DEFAULT_REGION_BYTES).expect("create initial tvm page-store region")
     }
 }
 
@@ -105,6 +126,7 @@ impl Region for WitTvmRegion {
     }
 
     fn write(&mut self, offset: u32, data: &[u8]) -> Result<(), RegionError> {
+        LIFETIME_WRITE_COUNT.fetch_add(1, Ordering::Relaxed);
         let mut map = self.handles.borrow_mut();
         let handle = match map.get(&offset).copied() {
             Some(h) => h,

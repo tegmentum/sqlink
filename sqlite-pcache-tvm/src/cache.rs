@@ -204,6 +204,17 @@ impl<R: Region> ShadowCache<R> {
         self.lookup.len() as c_int
     }
 
+    /// Diagnostic. The configured shadow-pool cap.
+    pub fn shadow_capacity(&self) -> u32 {
+        self.shadow_capacity
+    }
+
+    /// Diagnostic. Pages currently held in default memory (pinned
+    /// + LRU-resident).
+    pub fn shadow_count(&self) -> u32 {
+        self.shadow_count
+    }
+
     /// Fetch the page for `key`, allocating storage if missing
     /// and `create_flag != 0`. Returns the SQLite-visible header
     /// pointer, or null if no page exists and SQLite told us not
