@@ -12,6 +12,7 @@ members = [
     "host",
     "sqlite-pcache-tvm",
     "sqlite-mem-tvm",
+    "sqlite-vfs-tvm",
     "examples/rust/runnable-sqlite-demo",
 ]
 
