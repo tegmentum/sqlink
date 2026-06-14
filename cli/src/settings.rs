@@ -88,6 +88,12 @@ pub struct Settings {
     /// `bind_parameter_name(i)` matches `:NAME` / `$NAME` /
     /// `@NAME`. Cleared by `.parameter init` / `.parameter clear`.
     pub parameters: HashMap<String, db::Value>,
+    /// `.binary on|off` — when on, BLOBs print as `X'…'` hex
+    /// literals (the SQL-quotable form). When off (default),
+    /// `<blob:N bytes>` placeholder. We don't dump raw bytes to
+    /// the output channel — that breaks the String-based format
+    /// pipeline.
+    pub binary_output: bool,
 }
 
 impl Settings {
@@ -111,6 +117,7 @@ impl Settings {
             show_stats: false,
             trace_on: false,
             parameters: HashMap::new(),
+            binary_output: false,
         }
     }
 }

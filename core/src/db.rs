@@ -352,6 +352,38 @@ impl Connection {
         }
     }
 
+    /// Read or change a `sqlite3_limit` setting. `value=-1` returns
+    /// the current value without changing it; non-negative values
+    /// set the new limit (capped by sqlite3's hard maxima) and
+    /// return the prior value. `category` is one of the
+    /// `ffi::SQLITE_LIMIT_*` constants.
+    pub fn limit(&self, category: c_int, value: c_int) -> c_int {
+        unsafe { ffi::sqlite3_limit(self.raw, category, value) }
+    }
+
+    /// Read a boolean dbconfig flag. Returns Ok(true)/Ok(false)
+    /// per the current value, Err on misuse. `op` is one of the
+    /// `ffi::SQLITE_DBCONFIG_*` constants that takes a boolean.
+    pub fn db_config_get_bool(&self, op: c_int) -> Result<bool, Error> {
+        let mut out: c_int = -1;
+        let rc = unsafe { ffi::sqlite3_db_config(self.raw, op, -1, &mut out) };
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(out != 0)
+    }
+
+    /// Set a boolean dbconfig flag; returns the new effective value.
+    pub fn db_config_set_bool(&self, op: c_int, value: bool) -> Result<bool, Error> {
+        let mut out: c_int = -1;
+        let v: c_int = if value { 1 } else { 0 };
+        let rc = unsafe { ffi::sqlite3_db_config(self.raw, op, v, &mut out) };
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(out != 0)
+    }
+
     /// Read sqlite3's process-wide "current memory used" counter.
     /// Used by `.stats` to report after each statement.
     pub fn current_memory_used() -> i64 {

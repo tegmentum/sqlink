@@ -19,13 +19,24 @@ pub fn format(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
     }
 }
 
-fn render(v: &Value, null_value: &str) -> String {
+fn render(v: &Value, s: &Settings) -> String {
     match v {
-        Value::Null => null_value.to_string(),
+        Value::Null => s.null_value.clone(),
         Value::Integer(i) => i.to_string(),
         Value::Real(r) => r.to_string(),
         Value::Text(t) => t.clone(),
-        Value::Blob(b) => format!("<blob:{} bytes>", b.len()),
+        Value::Blob(b) => {
+            if s.binary_output {
+                let mut o = String::from("X'");
+                for byte in b {
+                    o.push_str(&format!("{byte:02x}"));
+                }
+                o.push('\'');
+                o
+            } else {
+                format!("<blob:{} bytes>", b.len())
+            }
+        }
     }
 }
 
@@ -36,7 +47,7 @@ fn fmt_delim(columns: &[String], rows: &[Vec<Value>], sep: &str, s: &Settings) -
         o.push('\n');
     }
     for row in rows {
-        let cells: Vec<String> = row.iter().map(|v| render(v, &s.null_value)).collect();
+        let cells: Vec<String> = row.iter().map(|v| render(v, s)).collect();
         o.push_str(&cells.join(sep));
         o.push('\n');
     }
@@ -60,7 +71,7 @@ fn fmt_csv(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
         o.push('\n');
     }
     for row in rows {
-        let cells: Vec<String> = row.iter().map(|v| esc(&render(v, &s.null_value))).collect();
+        let cells: Vec<String> = row.iter().map(|v| esc(&render(v, s))).collect();
         o.push_str(&cells.join(","));
         o.push('\n');
     }
@@ -73,7 +84,7 @@ fn fmt_line(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
     for row in rows {
         for (i, v) in row.iter().enumerate() {
             let name = columns.get(i).map(|s| s.as_str()).unwrap_or("?");
-            let val = render(v, &s.null_value);
+            let val = render(v, s);
             o.push_str(&format!("{name:>width$} = {val}\n", width = width));
         }
         o.push('\n');
@@ -85,7 +96,7 @@ fn col_widths(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> Vec<usiz
     let mut w: Vec<usize> = columns.iter().map(|c| c.chars().count()).collect();
     for row in rows {
         for (i, v) in row.iter().enumerate() {
-            let cell = render(v, &s.null_value);
+            let cell = render(v, s);
             let cw = cell.chars().count();
             if i < w.len() && cw > w[i] { w[i] = cw; }
         }
@@ -116,7 +127,7 @@ fn fmt_column(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
     }
     for row in rows {
         for (i, v) in row.iter().enumerate() {
-            let cell = render(v, &s.null_value);
+            let cell = render(v, s);
             let w = *widths.get(i).unwrap_or(&cell.len());
             o.push_str(&format!("{cell:<w$}"));
             if i + 1 < row.len() { o.push_str("  "); }
@@ -151,7 +162,7 @@ fn fmt_table(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
     for row in rows {
         o.push('|');
         for (i, v) in row.iter().enumerate() {
-            let cell = render(v, &s.null_value);
+            let cell = render(v, s);
             let w = *widths.get(i).unwrap_or(&cell.len());
             o.push_str(&format!(" {cell:<w$} |"));
         }
@@ -180,7 +191,7 @@ fn fmt_markdown(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String
     for row in rows {
         o.push('|');
         for (i, v) in row.iter().enumerate() {
-            let cell = render(v, &s.null_value).replace('|', "\\|");
+            let cell = render(v, s).replace('|', "\\|");
             let w = *widths.get(i).unwrap_or(&cell.len());
             o.push_str(&format!(" {cell:<w$} |"));
         }

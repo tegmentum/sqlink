@@ -5,13 +5,17 @@
 //! cli's `eval` should emit.
 
 use std::cell::RefCell;
+use std::os::raw::c_int;
+
+use libsqlite3_sys as ffi;
 
 use crate::db::{Connection, Value};
 use crate::settings::{self, Mode};
 
-/// Run a parameterized query whose results are a single text
-/// column; collect column 0 from every row. Returns the cli
-/// "Error: ..." string for prepare/bind/step failures.
+/// Run a parameterized query whose results are a single column;
+/// collect column 0 from every row, stringifying via SQLite's
+/// implicit coercion rules. Returns the cli "Error: ..." string
+/// for prepare/bind/step failures.
 fn query_text_col(conn: &Connection, sql: &str, params: &[Value]) -> Result<Vec<String>, String> {
     let mut stmt = conn.prepare(sql).map_err(|e| format!("Error: {}\n", e.message))?;
     stmt.bind_all(params)
@@ -21,10 +25,13 @@ fn query_text_col(conn: &Connection, sql: &str, params: &[Value]) -> Result<Vec<
         .map_err(|e| format!("Error: {}\n", e.message))?;
     Ok(rows
         .into_iter()
-        .filter_map(|r| match r.into_iter().next() {
-            Some(Value::Text(s)) => Some(s),
-            _ => None,
-        })
+        .filter_map(|r| r.into_iter().next().map(|v| match v {
+            Value::Null => String::new(),
+            Value::Integer(i) => i.to_string(),
+            Value::Real(r) => r.to_string(),
+            Value::Text(s) => s,
+            Value::Blob(b) => format!("<blob:{} bytes>", b.len()),
+        }))
         .collect())
 }
 
@@ -63,8 +70,195 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".eqp" => cmd_eqp(arg),
         ".stats" => cmd_stats(arg),
         ".parameter" => cmd_parameter(arg),
+        ".fullschema" => cmd_fullschema(conn),
+        ".dbinfo" => cmd_dbinfo(arg, conn),
+        ".dbconfig" => cmd_dbconfig(arg, conn),
+        ".limit" => cmd_limit(arg, conn),
+        ".binary" => cmd_binary(arg),
+        ".log" => "Error: .log is not supported (sqlite3 config-time only)\n".to_string(),
         _ => return None,
     })
+}
+
+fn cmd_fullschema(conn: &Connection) -> String {
+    let mut out = String::new();
+    // 1) Schema: every CREATE that the user wrote.
+    match query_text_col(
+        conn,
+        "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY rowid",
+        &[],
+    ) {
+        Ok(rows) => {
+            for sql in rows {
+                out.push_str(&sql);
+                out.push_str(";\n");
+            }
+        }
+        Err(e) => return e,
+    }
+    // 2) sqlite_stat1 if it exists (ANALYZE has run).
+    if let Ok(rows) = query_text_col(
+        conn,
+        "SELECT name FROM sqlite_master WHERE name='sqlite_stat1'",
+        &[],
+    ) {
+        if !rows.is_empty() {
+            out.push_str("ANALYZE sqlite_master;\n");
+            match query_text_col(
+                conn,
+                "SELECT 'INSERT INTO sqlite_stat1 VALUES(' || quote(tbl) || ',' || \
+                     quote(idx) || ',' || quote(stat) || ')' FROM sqlite_stat1",
+                &[],
+            ) {
+                Ok(inserts) => {
+                    for ins in inserts {
+                        out.push_str(&ins);
+                        out.push_str(";\n");
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+    }
+    out
+}
+
+fn cmd_dbinfo(_arg: &str, conn: &Connection) -> String {
+    // sqlite3's .dbinfo is rich (parses the db header directly).
+    // v1 captures the user-relevant subset via PRAGMAs.
+    let probes: &[(&str, &str)] = &[
+        ("page size", "PRAGMA page_size"),
+        ("page count", "PRAGMA page_count"),
+        ("freelist count", "PRAGMA freelist_count"),
+        ("encoding", "PRAGMA encoding"),
+        ("user version", "PRAGMA user_version"),
+        ("application id", "PRAGMA application_id"),
+        ("journal mode", "PRAGMA journal_mode"),
+        ("synchronous", "PRAGMA synchronous"),
+        ("auto vacuum", "PRAGMA auto_vacuum"),
+    ];
+    let mut out = String::new();
+    for (label, sql) in probes {
+        match query_text_col(conn, sql, &[]) {
+            Ok(rows) => {
+                if let Some(v) = rows.into_iter().next() {
+                    out.push_str(&format!("{label:<18}{v}\n"));
+                }
+            }
+            Err(_) => {}
+        }
+    }
+    out
+}
+
+/// Map of recognized SQLITE_DBCONFIG_* boolean options. Each entry
+/// is (cli-facing name, ffi constant). Names match sqlite3's
+/// `.dbconfig` exactly so scripts port across.
+const DBCONFIG_BOOLEANS: &[(&str, c_int)] = &[
+    ("defensive", ffi::SQLITE_DBCONFIG_DEFENSIVE as c_int),
+    ("dqs_dml", ffi::SQLITE_DBCONFIG_DQS_DML as c_int),
+    ("dqs_ddl", ffi::SQLITE_DBCONFIG_DQS_DDL as c_int),
+    ("enable_fkey", ffi::SQLITE_DBCONFIG_ENABLE_FKEY as c_int),
+    ("enable_trigger", ffi::SQLITE_DBCONFIG_ENABLE_TRIGGER as c_int),
+    ("enable_view", ffi::SQLITE_DBCONFIG_ENABLE_VIEW as c_int),
+    ("enable_load_extension", ffi::SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION as c_int),
+    ("enable_qpsg", ffi::SQLITE_DBCONFIG_ENABLE_QPSG as c_int),
+    ("legacy_alter_table", ffi::SQLITE_DBCONFIG_LEGACY_ALTER_TABLE as c_int),
+    ("legacy_file_format", ffi::SQLITE_DBCONFIG_LEGACY_FILE_FORMAT as c_int),
+    ("trigger_eqp", ffi::SQLITE_DBCONFIG_TRIGGER_EQP as c_int),
+    ("trusted_schema", ffi::SQLITE_DBCONFIG_TRUSTED_SCHEMA as c_int),
+    ("writable_schema", ffi::SQLITE_DBCONFIG_WRITABLE_SCHEMA as c_int),
+];
+
+fn cmd_dbconfig(arg: &str, conn: &Connection) -> String {
+    let mut parts = arg.split_whitespace();
+    let op = parts.next().unwrap_or("");
+    let val = parts.next().unwrap_or("");
+    if op.is_empty() {
+        // List every known boolean and its current value.
+        let mut out = String::new();
+        for (name, code) in DBCONFIG_BOOLEANS {
+            match conn.db_config_get_bool(*code) {
+                Ok(b) => out.push_str(&format!("{:>22} {}\n", name, b as i32)),
+                Err(_) => {}
+            }
+        }
+        return out;
+    }
+    let entry = DBCONFIG_BOOLEANS.iter().find(|(n, _)| *n == op);
+    let (_, code) = match entry {
+        Some(e) => e,
+        None => return format!("Error: unknown dbconfig op: {op}\n"),
+    };
+    if val.is_empty() {
+        match conn.db_config_get_bool(*code) {
+            Ok(b) => format!("{op} {}\n", b as i32),
+            Err(e) => format!("Error: {}\n", e.message),
+        }
+    } else {
+        let on = parse_on_off(val);
+        match conn.db_config_set_bool(*code, on) {
+            Ok(b) => format!("{op} {}\n", b as i32),
+            Err(e) => format!("Error: {}\n", e.message),
+        }
+    }
+}
+
+/// Map of recognized SQLITE_LIMIT_* categories.
+const LIMIT_NAMES: &[(&str, c_int)] = &[
+    ("length", ffi::SQLITE_LIMIT_LENGTH),
+    ("sql_length", ffi::SQLITE_LIMIT_SQL_LENGTH),
+    ("column", ffi::SQLITE_LIMIT_COLUMN),
+    ("expr_depth", ffi::SQLITE_LIMIT_EXPR_DEPTH),
+    ("compound_select", ffi::SQLITE_LIMIT_COMPOUND_SELECT),
+    ("vdbe_op", ffi::SQLITE_LIMIT_VDBE_OP),
+    ("function_arg", ffi::SQLITE_LIMIT_FUNCTION_ARG),
+    ("attached", ffi::SQLITE_LIMIT_ATTACHED),
+    ("like_pattern_length", ffi::SQLITE_LIMIT_LIKE_PATTERN_LENGTH),
+    ("variable_number", ffi::SQLITE_LIMIT_VARIABLE_NUMBER),
+    ("trigger_depth", ffi::SQLITE_LIMIT_TRIGGER_DEPTH),
+    ("worker_threads", ffi::SQLITE_LIMIT_WORKER_THREADS),
+];
+
+fn cmd_limit(arg: &str, conn: &Connection) -> String {
+    let mut parts = arg.split_whitespace();
+    let name = parts.next().unwrap_or("");
+    let val = parts.next().unwrap_or("");
+    if name.is_empty() {
+        let mut out = String::new();
+        for (n, code) in LIMIT_NAMES {
+            let v = conn.limit(*code, -1);
+            out.push_str(&format!("{:>22} {v}\n", n));
+        }
+        return out;
+    }
+    let entry = LIMIT_NAMES.iter().find(|(n, _)| *n == name);
+    let (_, code) = match entry {
+        Some(e) => e,
+        None => return format!("Error: unknown limit: {name}\n"),
+    };
+    if val.is_empty() {
+        let v = conn.limit(*code, -1);
+        format!("{name} {v}\n")
+    } else {
+        match val.parse::<i32>() {
+            Ok(n) => {
+                let prev = conn.limit(*code, n);
+                format!("{name} {prev} -> {}\n", conn.limit(*code, -1))
+            }
+            Err(_) => format!("Usage: .limit {name} N\n"),
+        }
+    }
+}
+
+fn cmd_binary(arg: &str) -> String {
+    if arg.is_empty() {
+        let on = settings::SETTINGS.with(|s| s.borrow().binary_output);
+        return format!("binary: {}\n", if on { "on" } else { "off" });
+    }
+    let on = parse_on_off(arg);
+    settings::SETTINGS.with(|s| s.borrow_mut().binary_output = on);
+    String::new()
 }
 
 fn cmd_timeout(arg: &str, conn: &Connection) -> String {

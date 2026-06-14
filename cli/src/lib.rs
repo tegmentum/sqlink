@@ -258,6 +258,9 @@ fn eval_input(input: &str) -> String {
     if let Some(rest) = trimmed.strip_prefix(".trace") {
         return do_trace(rest.trim());
     }
+    if let Some(rest) = trimmed.strip_prefix(".auth") {
+        return do_auth(rest.trim());
+    }
     ensure_cli_conn();
     if trimmed.starts_with('.') {
         let dot_out = CLI_CONN.with(|c| {
@@ -414,6 +417,45 @@ fn do_trace(arg: &str) -> String {
     });
     settings::SETTINGS.with(|s| s.borrow_mut().trace_on = on);
     String::new()
+}
+
+/// `.auth on|off` — install / clear an authorizer that logs every
+/// action SQLite checks (CREATE_TABLE, READ, INSERT, etc.) to
+/// stderr. Mostly a debugging aid. Replaces any extension-side
+/// authorizer that `.load` installed; the user can reload to
+/// restore it.
+fn do_auth(arg: &str) -> String {
+    let arg = arg.trim();
+    if arg.is_empty() {
+        return "Usage: .auth on|off\n".to_string();
+    }
+    let on = match arg {
+        "on" => true,
+        "off" => false,
+        _ => return "Usage: .auth on|off\n".to_string(),
+    };
+    ensure_cli_conn();
+    CLI_CONN.with(|c| {
+        let g = c.borrow();
+        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
+        let result = if on {
+            conn.set_authorizer(Some(
+                |action: i32, a1: Option<String>, a2: Option<String>, a3: Option<String>, a4: Option<String>| {
+                    eprintln!(
+                        "auth: action={action} a1={:?} a2={:?} a3={:?} a4={:?}",
+                        a1.as_deref(), a2.as_deref(), a3.as_deref(), a4.as_deref()
+                    );
+                    db::AuthResult::Allow
+                },
+            ))
+        } else {
+            conn.set_authorizer::<fn(i32, Option<String>, Option<String>, Option<String>, Option<String>) -> db::AuthResult>(None)
+        };
+        match result {
+            Ok(()) => String::new(),
+            Err(e) => format!("Error: {}\n", e.message),
+        }
+    })
 }
 
 /// Render a `db::Value` for `.parameter list`. Public so dot.rs's
