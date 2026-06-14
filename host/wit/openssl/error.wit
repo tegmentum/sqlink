@@ -1,0 +1,37 @@
+package openssl:component@0.1.0;
+
+// Error reporting.
+//
+// Mirrors OpenSSL's ERR_* API. A single error-code value corresponds to an
+// OpenSSL packed error; `describe` expands it to library/reason strings.
+
+interface error {
+    /// A packed OpenSSL error code. Zero means no error.
+    type code = u64;
+
+    record error-info {
+        code: code,
+        /// e.g. "SSL routines", "asn1 encoding routines"
+        library: string,
+        /// e.g. "bad certificate", "no shared cipher"
+        reason: string,
+        /// Source file, if tracked.
+        file: option<string>,
+        line: option<u32>,
+        /// Extra data OpenSSL attached to the error.
+        data: option<string>,
+    }
+
+    /// Pop the oldest error from the thread-local error queue, or
+    /// return `none` if empty.
+    pop-error: func() -> option<error-info>;
+
+    /// Clear the thread-local error queue.
+    clear-errors: func();
+
+    /// Drain all queued errors at once.
+    drain-errors: func() -> list<error-info>;
+
+    /// Render a single error code to a printable string without popping.
+    describe: func(c: code) -> string;
+}

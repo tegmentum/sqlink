@@ -152,6 +152,14 @@ accept everything signed by anyone OR unsigned (development
 default). Production-grade trust is a follow-up; we want the
 plumbing in place but not yet the cryptographic gates.
 
+> **Update:** Ed25519 signature-verification gates landed.
+> `TrustPolicy::Ed25519Signed { anchors }` ships with a sidecar
+> `<provider>.sig` convention, verified via openssl-wasm
+> (`host/wit/openssl/` vendored interface subset; binary loaded
+> lazily from `OPENSSL_WASM_PATH` or `~/git/openssl-wasm/build/
+> openssl-composed.wasm`). RSA-PSS / X.509-chain variants are
+> follow-ups built on the same `OpenSslVerifier` plumbing.
+
 **Acceptance:** a unit test instantiates the linker, resolves
 "sqlite-runtime", invokes `"query"` with a hand-rolled CBOR
 payload `{"SELECT 1+1"}`, decodes the response, asserts `[[2]]`.

@@ -200,6 +200,174 @@ pub mod language_runtime {
     });
 }
 
+/// Bindgen against the vendored `openssl:component` subset
+/// (`host/wit/openssl/`) that the signature-verifier path needs.
+/// Bound against `verify-only` world — narrower than the real
+/// openssl-wasm `openssl` world so we only consume what we call.
+/// The composed binary (`openssl-composed.wasm`) exports the full
+/// surface; wasmtime is fine with the component exporting more
+/// than the world declares.
+pub mod openssl_ext {
+    wasmtime::component::bindgen!({
+        path: "wit/openssl",
+        world: "verify-only",
+        imports: { default: async },
+        exports: { default: async },
+    });
+}
+
+/// Per-Store state for the signature-verifier path. Holds just the
+/// WASI plumbing — openssl-composed needs WASI for things like
+/// clocks and random the way any other wasi-p2 component does.
+pub struct OpenSslState {
+    wasi: wasmtime_wasi::WasiCtx,
+    table: wasmtime_wasi::ResourceTable,
+}
+
+impl wasmtime_wasi::WasiView for OpenSslState {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.table,
+        }
+    }
+}
+
+/// Lazily-instantiated openssl-wasm component used to verify
+/// signatures on registered providers. The component itself is
+/// loaded once and cached; each verification call builds a fresh
+/// per-Store state so resource handles (the `pkey` resource) get
+/// dropped between calls.
+///
+/// Path resolution order:
+///   1. `OPENSSL_WASM_PATH` environment variable, if set.
+///   2. `$HOME/git/openssl-wasm/build/openssl-composed.wasm`
+///      (the local dev path; matches the sibling repo layout).
+///
+/// The path doesn't have to exist at Host::new time — the
+/// component is loaded lazily on the first `verify_ed25519` call.
+/// `TrustPolicy::AllowAll` / `DigestAllowlist` / `DenyAll` never
+/// trigger the verifier, so deployments that don't use
+/// `Ed25519Signed` don't pay the load cost.
+pub struct OpenSslVerifier {
+    engine: Engine,
+    component_path: PathBuf,
+    component: tokio::sync::Mutex<Option<Component>>,
+}
+
+impl OpenSslVerifier {
+    fn new(engine: Engine) -> Self {
+        let path = std::env::var("OPENSSL_WASM_PATH")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| {
+                let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+                PathBuf::from(home).join("git/openssl-wasm/build/openssl-composed.wasm")
+            });
+        Self {
+            engine,
+            component_path: path,
+            component: tokio::sync::Mutex::new(None),
+        }
+    }
+
+    async fn ensure_loaded(&self) -> Result<Component> {
+        let mut g = self.component.lock().await;
+        if let Some(c) = g.as_ref() {
+            return Ok(c.clone());
+        }
+        let bytes = std::fs::read(&self.component_path).map_err(|e| {
+            anyhow!(
+                "load openssl-composed.wasm from {}: {e} \
+                 (set OPENSSL_WASM_PATH or build ~/git/openssl-wasm)",
+                self.component_path.display()
+            )
+        })?;
+        let component = Component::from_binary(&self.engine, &bytes)
+            .map_err(|e| anyhow!("compile openssl-composed.wasm: {e}"))?;
+        *g = Some(component.clone());
+        Ok(component)
+    }
+
+    /// Verify an Ed25519 signature over `message` using `pubkey`
+    /// (32 raw bytes). Returns Ok(true) on a valid signature,
+    /// Ok(false) on an arithmetically-valid-but-wrong signature,
+    /// and Err on a setup / instantiation problem.
+    pub async fn verify_ed25519(
+        &self,
+        pubkey: &[u8; 32],
+        message: &[u8],
+        signature: &[u8],
+    ) -> Result<bool> {
+        use openssl_ext::exports::openssl::component::pkey::{EdwardsCurve, KeyType};
+
+        let component = self.ensure_loaded().await?;
+        let mut linker: Linker<OpenSslState> = Linker::new(&self.engine);
+        wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+            .map_err(|e| anyhow!("verifier WASI: {e}"))?;
+        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
+        builder.inherit_stdio();
+        let state = OpenSslState {
+            wasi: builder.build(),
+            table: wasmtime_wasi::ResourceTable::new(),
+        };
+        let mut store = wasmtime::Store::new(&self.engine, state);
+        store
+            .set_fuel(u64::MAX / 2)
+            .map_err(|e| anyhow!("verifier set_fuel: {e}"))?;
+        store.set_epoch_deadline(1_000_000_000_000);
+        let instance =
+            openssl_ext::VerifyOnly::instantiate_async(&mut store, &component, &linker)
+                .await
+                .map_err(|e| anyhow!("instantiate openssl-composed: {e}"))?;
+        let pkey_resource = instance
+            .openssl_component_pkey()
+            .pkey();
+        let pk = pkey_resource
+            .call_from_raw_public(
+                &mut store,
+                KeyType::Ed(EdwardsCurve::Ed25519),
+                &pubkey[..],
+            )
+            .await
+            .map_err(|e| anyhow!("from-raw-public trap: {e}"))?
+            .map_err(|e| anyhow!("from-raw-public error: {e:?}"))?;
+        let ok = pkey_resource
+            .call_verify_message(&mut store, pk, None, message, signature, None)
+            .await
+            .map_err(|e| anyhow!("verify-message trap: {e}"))?
+            .map_err(|e| anyhow!("verify-message error: {e:?}"))?;
+        Ok(ok)
+    }
+}
+
+/// Sidecar signature path for a provider binary. Mirrors the
+/// `<artifact>.sig` convention used by minisign / signify /
+/// sigstore detached signatures.
+fn sig_sidecar_path(provider_path: &std::path::Path) -> PathBuf {
+    let mut p = provider_path.as_os_str().to_owned();
+    p.push(".sig");
+    PathBuf::from(p)
+}
+
+/// Verify `sig` against each anchor in `anchors`, returning Ok(true)
+/// as soon as any anchor accepts and Ok(false) only if every anchor
+/// rejects without a verifier error. A setup failure (component
+/// missing, instantiation error) returns Err — that's distinct from
+/// "signature didn't match" and the caller surfaces it differently.
+async fn verify_against_anchors(
+    verifier: Arc<OpenSslVerifier>,
+    anchors: Vec<[u8; 32]>,
+    bytes: Vec<u8>,
+    sig: Vec<u8>,
+) -> Result<bool> {
+    for anchor in &anchors {
+        if verifier.verify_ed25519(anchor, &bytes, &sig).await? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
 /// Host-side resource backing the guest-visible `linker.instance`.
 /// Stored in the wasmtime ResourceTable; the guest sees an opaque
 /// handle and can only call `invoke` on it. CP2 wires this into the
@@ -1194,6 +1362,11 @@ pub struct Host {
     /// at startup. Other variants exist for fully-locked
     /// deployments (DenyAll) and explicit auditing pre-prod.
     trust_policy: Arc<RwLock<TrustPolicy>>,
+    /// Lazily-loaded signature verifier. Used when the active
+    /// trust policy is `Ed25519Signed`. Built once (cheap — no
+    /// component load) at Host::new; the component is read from
+    /// disk on first verification.
+    signature_verifier: Arc<OpenSslVerifier>,
     /// (extension, flavor) → registered language-runtime plugin.
     /// `.run foo.<ext>` looks up (ext, "") for the default flavor;
     /// `.run foo.<ext> flavor` picks a specific one. Empty-flavor
@@ -1241,12 +1414,28 @@ pub enum TrustPolicy {
     /// Reject every registration. Useful for hardened deployments
     /// that only accept built-in providers (sqlite-runtime etc.).
     DenyAll,
+    /// Verify an Ed25519 signature on the provider bytes against
+    /// one of the listed anchor public keys. The signature is
+    /// expected at `<provider-path>.sig`. Any signature that
+    /// validates against any anchor is accepted; mismatches are
+    /// rejected.
+    ///
+    /// Each anchor is a 32-byte raw Ed25519 public key (NOT a SPKI
+    /// or PKCS#8 wrapper). The verifier loads each anchor as a raw
+    /// public key into the openssl-wasm component and calls
+    /// `pkey.verify-message` over the provider bytes.
+    Ed25519Signed { anchors: Vec<[u8; 32]> },
 }
 
 impl TrustPolicy {
-    /// Check `digest` against the policy. The id is included in
-    /// error messages so failures point at the right provider
-    /// registration call.
+    /// Check the provider against the policy when only a hex
+    /// blake3 digest of its bytes is at hand. Variants that need
+    /// the full bytes (e.g. signature verification) fall back to
+    /// `verify_bytes` — this fast-path keeps existing callers
+    /// behaving identically.
+    ///
+    /// The id is included in error messages so failures point at
+    /// the right provider registration call.
     pub fn verify(&self, id: &str, digest: &str) -> std::result::Result<(), String> {
         match self {
             Self::AllowAll => Ok(()),
@@ -1262,6 +1451,11 @@ impl TrustPolicy {
                     ))
                 }
             }
+            Self::Ed25519Signed { .. } => Err(format!(
+                "trust policy denies provider {id}: Ed25519Signed requires the full \
+                 bytes + a sidecar signature; call register_wasm_provider (not the \
+                 digest-only fast path)"
+            )),
         }
     }
 }
@@ -1284,6 +1478,7 @@ impl Host {
         let engine = Engine::new(&config).map_err(|e| anyhow!("create wasmtime engine: {e}"))?;
         spawn_epoch_bumper(engine.clone());
 
+        let signature_verifier = Arc::new(OpenSslVerifier::new(engine.clone()));
         Ok(Self {
             engine,
             components: Arc::new(RwLock::new(HashMap::new())),
@@ -1292,8 +1487,16 @@ impl Host {
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
             trust_policy: Arc::new(RwLock::new(TrustPolicy::AllowAll)),
+            signature_verifier,
             runtimes: Arc::new(RwLock::new(HashMap::new())),
         })
+    }
+
+    /// Borrow the signature verifier. Cheap clone (Arc) — useful
+    /// in tests that want to drive the verifier directly without
+    /// going through `register_wasm_provider`.
+    pub fn signature_verifier(&self) -> Arc<OpenSslVerifier> {
+        Arc::clone(&self.signature_verifier)
     }
 
     /// Replace the active trust policy. Affects subsequent
@@ -1340,19 +1543,50 @@ impl Host {
 
     /// Register a wasm-component compose provider under
     /// `(tenant, id)`. Trust policy is applied identically per
-    /// tenant — a digest in the allowlist is accepted regardless of
-    /// which tenant it's being registered into.
+    /// tenant — a digest in the allowlist or a signature matching
+    /// an Ed25519 anchor is accepted regardless of which tenant
+    /// it's being registered into.
+    ///
+    /// For `TrustPolicy::Ed25519Signed`, the verifier looks for a
+    /// `<path>.sig` sidecar file holding the raw 64-byte Ed25519
+    /// signature over the provider bytes. The sig is matched
+    /// against each anchor in turn; the first valid match accepts
+    /// the registration.
+    ///
+    /// The sync entry point is suitable for non-async callers
+    /// (sqlite-wasm-run's main routine, etc.). Async callers
+    /// already inside a tokio runtime should use
+    /// `register_wasm_provider_in_async` to avoid nesting
+    /// runtimes.
     pub fn register_wasm_provider_in(
         &self,
         tenant: &str,
         id: &str,
         path: PathBuf,
     ) -> Result<()> {
+        let policy = self.trust_policy.read().clone();
+        if matches!(policy, TrustPolicy::Ed25519Signed { .. }) {
+            // Need to await the openssl-wasm verifier. If the caller
+            // happens to already be inside a tokio runtime they
+            // should use the async sibling instead — block_on here
+            // would nest and panic.
+            if tokio::runtime::Handle::try_current().is_ok() {
+                return Err(anyhow!(
+                    "register {tenant}/{id}: Ed25519Signed policy requires an async \
+                     caller; use register_wasm_provider_in_async"
+                ));
+            }
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| anyhow!("build verify runtime: {e}"))?;
+            return rt.block_on(self.register_wasm_provider_in_async(tenant, id, path));
+        }
+
         let bytes = std::fs::read(&path)
             .map_err(|e| anyhow!("register {tenant}/{id}: read {}: {e}", path.display()))?;
         let digest = blake3::hash(&bytes).to_hex().to_string();
-        self.trust_policy
-            .read()
+        policy
             .verify(id, &digest)
             .map_err(|e| anyhow!("register {tenant}/{id}: {e}"))?;
         let provider = compose_provider::ProviderHandle::new_wasm_component_from_bytes(
@@ -1363,6 +1597,74 @@ impl Host {
         .map_err(|e| anyhow!("register {tenant}/{id}: {e}"))?;
         self.register_compose_provider_in(tenant, id, provider);
         Ok(())
+    }
+
+    /// Async variant. Required when the active trust policy is
+    /// `Ed25519Signed`, because verification routes through the
+    /// openssl-wasm component and that's natively async. The
+    /// digest-only policies (AllowAll, DigestAllowlist, DenyAll)
+    /// work here too — verification short-circuits on those
+    /// without ever loading openssl-wasm.
+    pub async fn register_wasm_provider_in_async(
+        &self,
+        tenant: &str,
+        id: &str,
+        path: PathBuf,
+    ) -> Result<()> {
+        let bytes = std::fs::read(&path)
+            .map_err(|e| anyhow!("register {tenant}/{id}: read {}: {e}", path.display()))?;
+        let policy = self.trust_policy.read().clone();
+        match &policy {
+            TrustPolicy::Ed25519Signed { anchors } => {
+                let sig_path = sig_sidecar_path(&path);
+                let sig = std::fs::read(&sig_path).map_err(|e| {
+                    anyhow!(
+                        "register {tenant}/{id}: read signature {}: {e}",
+                        sig_path.display()
+                    )
+                })?;
+                if sig.len() != 64 {
+                    return Err(anyhow!(
+                        "register {tenant}/{id}: signature {} is {} bytes, expected 64",
+                        sig_path.display(),
+                        sig.len()
+                    ));
+                }
+                let ok = verify_against_anchors(
+                    self.signature_verifier.clone(),
+                    anchors.clone(),
+                    bytes.clone(),
+                    sig,
+                )
+                .await?;
+                if !ok {
+                    return Err(anyhow!(
+                        "register {id}: Ed25519 signature did not validate against any anchor"
+                    ));
+                }
+            }
+            other => {
+                let digest = blake3::hash(&bytes).to_hex().to_string();
+                other
+                    .verify(id, &digest)
+                    .map_err(|e| anyhow!("register {tenant}/{id}: {e}"))?;
+            }
+        }
+        let provider = compose_provider::ProviderHandle::new_wasm_component_from_bytes(
+            self.engine.clone(),
+            &bytes,
+            path,
+        )
+        .map_err(|e| anyhow!("register {tenant}/{id}: {e}"))?;
+        self.register_compose_provider_in(tenant, id, provider);
+        Ok(())
+    }
+
+    /// Async sugar for the default tenant. Mirrors
+    /// `register_wasm_provider`.
+    pub async fn register_wasm_provider_async(&self, id: &str, path: PathBuf) -> Result<()> {
+        self.register_wasm_provider_in_async(DEFAULT_TENANT, id, path)
+            .await
     }
 
     /// (tenant, id, kind) tuples for every registered compose

@@ -1,0 +1,108 @@
+package openssl:component@0.1.0;
+
+// Slimmed pkey interface — only the resource methods the host's
+// signature verifier actually calls. Vendored from openssl-wasm's
+// full pkey.wit (~240 lines) down to ~50 lines focused on
+// raw-key + verify-message, which is what `OpenSslVerifier`
+// invokes for the Ed25519 trust gate.
+//
+// Omitting the broader surface (keygen, sign, encrypt/decrypt,
+// derive, from-wit-bridge-uri, from-uri, save-private, ...) keeps
+// the bindgen output narrow AND avoids a wasmtime instantiation
+// error when openssl-composed.wasm doesn't export the `from-wit-
+// bridge-uri` / `from-uri` static methods (they require the
+// pkcs11 provider component to be composed in, which standalone
+// openssl-composed.wasm doesn't include).
+
+interface pkey {
+    use error.{code};
+    use digest.{algorithm as hash};
+
+    enum curve {
+        p192,
+        p224,
+        p256,
+        p384,
+        p521,
+        secp256k1,
+        brainpool-p256r1,
+        brainpool-p384r1,
+        brainpool-p512r1,
+        sm2,
+    }
+
+    enum edwards-curve {
+        ed25519,
+        ed448,
+    }
+
+    enum montgomery-curve {
+        x25519,
+        x448,
+    }
+
+    variant key-type {
+        rsa,
+        rsa-pss,
+        ec(curve),
+        ed(edwards-curve),
+        x(montgomery-curve),
+        dh,
+    }
+
+    record oaep-params {
+        hash: hash,
+        mgf1-hash: hash,
+        label: list<u8>,
+    }
+
+    record pss-params {
+        hash: hash,
+        mgf1-hash: hash,
+        salt-len: s32,
+    }
+
+    variant rsa-padding {
+        pkcs1,
+        pkcs1-oaep(oaep-params),
+        pkcs1-pss(pss-params),
+        no-padding,
+    }
+
+    variant pkey-error {
+        unsupported-type,
+        bad-encoding,
+        bad-passphrase,
+        unsupported-curve,
+        invalid-signature,
+        bad-key-size,
+        decrypt-failed,
+        encrypt-failed,
+        sign-failed,
+        verify-failed,
+        derive-failed,
+        keygen-failed,
+        internal(code),
+    }
+
+    resource pkey {
+        /// Load a raw public key (e.g. Ed25519 32-byte point) into
+        /// an `EVP_PKEY` we can call `verify-message` on.
+        from-raw-public: static func(kind: key-type, bytes: list<u8>)
+            -> result<pkey, pkey-error>;
+
+        /// Verify a signature over an arbitrary message. The
+        /// Ed25519/Ed448 path uses `hash = none` (the scheme hashes
+        /// internally) and `padding = none`. RSA-PSS / RSA-PKCS1
+        /// paths set hash + padding as usual; we don't call those
+        /// from the host today, but keeping the parameters matches
+        /// openssl-composed.wasm's actual signature so bindgen
+        /// can resolve the export.
+        verify-message: func(
+            hash: option<hash>,
+            message: list<u8>,
+            signature: list<u8>,
+            padding: option<rsa-padding>,
+        ) -> result<bool, pkey-error>;
+    }
+}

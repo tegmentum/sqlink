@@ -1,0 +1,63 @@
+package openssl:component@0.1.0;
+
+// Message digests (EVP_MD). Covers streaming and one-shot usage.
+
+interface digest {
+    use error.{code};
+
+    /// Algorithm identifiers use single-word kebab-case. The SHA-512/t
+    /// truncations and SHA-3 family use NIST's single-word notation
+    /// (e.g. `sha512t224` = SHA-512/224) because wac rejects enum tags
+    /// whose final segment is all digits (e.g. `sha512-224`).
+    enum algorithm {
+        md5,
+        sha1,
+        sha224,
+        sha256,
+        sha384,
+        sha512,
+        sha512t224,
+        sha512t256,
+        sha3t224,
+        sha3t256,
+        sha3t384,
+        sha3t512,
+        shake128,
+        shake256,
+        blake2s256,
+        blake2b512,
+        ripemd160,
+        sm3,
+    }
+
+    variant digest-error {
+        unsupported-algorithm,
+        xof-required,   // SHAKE* needs an explicit output length
+        internal(code),
+    }
+
+    /// Fixed-length digest.
+    one-shot: func(alg: algorithm, data: list<u8>) -> result<list<u8>, digest-error>;
+
+    /// Extendable-output function (SHAKE128/256). Other algs error.
+    one-shot-xof: func(alg: algorithm, data: list<u8>, out-len: u32)
+        -> result<list<u8>, digest-error>;
+
+    /// Output size in bytes for non-XOF algorithms.
+    output-size: func(alg: algorithm) -> result<u32, digest-error>;
+
+    /// Block size in bytes.
+    block-size: func(alg: algorithm) -> result<u32, digest-error>;
+
+    resource context {
+        constructor(alg: algorithm);
+        update: func(data: list<u8>) -> result<_, digest-error>;
+        /// Finalize and return digest bytes. Consumes the context.
+        finish: static func(ctx: context) -> result<list<u8>, digest-error>;
+        /// Finalize XOF with a caller-chosen output length. Consumes.
+        finish-xof: static func(ctx: context, out-len: u32)
+            -> result<list<u8>, digest-error>;
+        /// Deep-copy for mid-stream fork (e.g. TLS Finished computations).
+        clone: func() -> context;
+    }
+}

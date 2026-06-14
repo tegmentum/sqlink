@@ -56,3 +56,11 @@ ciborium = "0.2"
 # is SHA-256). Cache.put writes under both blake3 and sha256 paths
 # so resolve-by-digest works either way.
 sha2 = "0.10"
+
+[dev-dependencies]
+# Used by tests to generate Ed25519 keypairs and sign artifacts so
+# the host's OpenSslVerifier path can be exercised end-to-end.
+# Not pulled in for the host's production crypto path  the runtime
+# verifier uses openssl-wasm, this is just for fixture generation.
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"

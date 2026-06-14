@@ -1,0 +1,17 @@
+// Minimum world the host's signature-verifier needs from
+// openssl-wasm. The composed `openssl-composed.wasm` binary
+// exports the full openssl:component/* surface (error, random,
+// bignum, digest, mac, cipher, kdf, pkey, x509, tls); wasmtime
+// is fine with the component exporting MORE than the world
+// declares, so we declare only what the host actually calls into
+// here. Keeping the bindgen surface narrow keeps the trust-gate
+// code path obvious and prevents accidental dependence on
+// surfaces we haven't reviewed.
+
+package openssl:component@0.1.0;
+
+world verify-only {
+    export error;
+    export digest;
+    export pkey;
+}
