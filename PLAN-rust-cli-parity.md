@@ -1,5 +1,28 @@
 # Plan: Rust CLI parity with sqlite3
 
+> **Status: phases 1-5 complete (2026-06-13).** All 31 wanted
+> commands shipped. `.log` and `.archive` are documented stubs.
+> Quick reference:
+>
+> | Phase | Commits | Commands |
+> |---|---|---|
+> | Rename `.fiji` → `.run` | 8d879b0, 197f709, b6108b9 | n/a (also renamed sqlite-wasm-loader's runnable-hello / runnable-text-demo) |
+> | Phase 1 — basic parity | 0e8b6ad | .read, .output, .once, .version, .width, .changes, .timer |
+> | Phase 2 — data management | 96bb881, cbb5761 (persistence fix) | .import, .dump, .backup, .restore, .save, .clone |
+> | Phase 3 — query analysis | 3434c82 | .timeout, .explain, .eqp, .stats, .trace, .parameter |
+> | Phase 4 — db introspection | 1fc3edd | .fullschema, .dbinfo, .dbconfig, .limit, .binary, .auth (+ .log stub) |
+> | Phase 5 — niche | 13b874c | .lint, .sha3sum, .vfslist, .vfsname (+ .archive stub) |
+>
+> Total dot-command surface: 55 user-facing commands (24 pre-existing
+> + 31 added across phases 1-5 + 7 project-custom: `.run`, `.load`,
+> `.unload`, `.cache`, `.register-resolver`, `.unregister-resolver`,
+> `.resolvers`, `.register-provider`). Stubs: 2 (`.log`, `.archive`).
+> Wasm-incompatible (skipped): 16 (`.shell`, `.system`, `.cd`, …).
+> Together that's the full sqlite3 + project surface accounted for.
+>
+> Multi-language `.run hello.py` (the runtime-plugin story documented
+> at the bottom of this plan) is a separate follow-on, not blocked.
+
 Goal: bring `cli/` (the Rust SQLite CLI that targets the
 `sqlite-cli-command` world) to feature parity with stock
 `sqlite3`'s dot-command surface, for every command that makes
