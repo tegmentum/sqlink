@@ -1,5 +1,26 @@
 # Plan: Outstanding cleanup after the reactor → command + lib split
 
+> **Status: phases 0-5 shipped; 6-7 remain.**
+>
+> | Phase | Commit |
+> |---|---|
+> | 0 — Investigate | 181efda |
+> | 1 — Doc cleanup | 216bd34 |
+> | 2 — SPI/high-level state alignment | cdbc047 |
+> | 3 — Rename library world | 8c87063 |
+> | 4 — Workspace Cargo.toml | e7b6298 |
+> | 5 — Legacy world status | f11edf1 |
+> | 6 — Runnable-uses-sqlite-lib demo | (open) |
+> | 7 — Shell wrapper integration test | (open) |
+>
+> Phase 2's persistence bug, which I originally framed as "the
+> shared default connection across SPI + high-level," turned out to
+> involve a second latent issue (the wasm component receiving
+> `:memory:` instead of `--db`'s value); the actual fix landed in
+> cbb5761. Phase 6's "Fiji-uses-sqlite-lib" wording is stale — the
+> Fiji concept was renamed to "runnable component" in 8d879b0, so
+> the modern phrasing is "runnable-uses-sqlite-lib."
+
 Scope: the eleven items surfaced after Phase 1 (cli command-mode),
 Phase 2 (sqlite-lib + core split), the rename, and the
 programmatic-load-extension work. Excludes pre-existing plans

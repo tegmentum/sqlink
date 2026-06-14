@@ -355,48 +355,67 @@ fn eval_sql(sql: &str) -> String {
     out
 }
 
-/// Inner SQL exec — prepares, binds any named `.parameter`s, runs,
-/// formats. The wrapping helpers (timer/changes/explain/eqp/stats)
-/// live in `eval_sql`. Also drains any trace lines captured during
-/// preparation/execution.
+/// Inner SQL exec — iterates statement-by-statement through SQL
+/// that may be a single statement, multiple statements separated
+/// by `;`, or a script ending in trailing whitespace. For each
+/// statement: prepare, bind named `.parameter`s, run, format. The
+/// wrapping helpers (timer/changes/explain/eqp/stats) live in
+/// `eval_sql`. Drains any trace lines captured during execution.
 fn eval_sql_inner(sql: &str) -> String {
-    let mut out = CLI_CONN.with(|c| {
+    let mut out = String::new();
+    let mut remaining: &str = sql;
+    CLI_CONN.with(|c| {
         let g = c.borrow();
         let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-        let mut stmt = match conn.prepare(sql) {
-            Ok(s) => s,
-            Err(_) => {
-                return match conn.execute_batch(sql) {
-                    Ok(()) => String::new(),
-                    Err(e) => format!("Error: {}\n", e.message),
-                };
-            }
-        };
-        // Bind named `.parameter set` values for any matching
-        // placeholders. The cli stores names without the sigil; the
-        // FFI returns names WITH the sigil (`:foo`, `$foo`, `@foo`).
-        // Strip the sigil to look up.
-        let nparams = stmt.parameter_count();
-        if nparams > 0 {
-            let params = settings::SETTINGS.with(|s| s.borrow().parameters.clone());
-            for i in 1..=nparams {
-                if let Some(name) = stmt.bind_parameter_name(i) {
-                    let bare = &name[1..]; // strip sigil
-                    if let Some(v) = params.get(bare) {
-                        if let Err(e) = stmt.bind(i, v) {
-                            return format!("Error: {}\n", e.message);
+        while !remaining.trim().is_empty() {
+            let (mut stmt, tail) = match conn.prepare_with_tail(remaining) {
+                Ok(parts) => parts,
+                Err(_) => {
+                    // Prepare failed — fall back to execute_batch
+                    // on the rest, which surfaces errors and may
+                    // handle pragmas/triggers we can't prepare.
+                    match conn.execute_batch(remaining) {
+                        Ok(()) => break,
+                        Err(e) => {
+                            out.push_str(&format!("Error: {}\n", e.message));
+                            break;
+                        }
+                    }
+                }
+            };
+            // Bind named `.parameter set` values. cli stores names
+            // without the sigil; FFI returns sigil-prefixed names.
+            let nparams = stmt.parameter_count();
+            if nparams > 0 {
+                let params = settings::SETTINGS.with(|s| s.borrow().parameters.clone());
+                for i in 1..=nparams {
+                    if let Some(name) = stmt.bind_parameter_name(i) {
+                        let bare = &name[1..];
+                        if let Some(v) = params.get(bare) {
+                            if let Err(e) = stmt.bind(i, v) {
+                                out.push_str(&format!("Error: {}\n", e.message));
+                                return;
+                            }
                         }
                     }
                 }
             }
+            let columns = stmt.column_names();
+            let out_rows = match stmt.collect_rows() {
+                Ok(r) => r,
+                Err(e) => {
+                    out.push_str(&format!("Error: {}\n", e.message));
+                    return;
+                }
+            };
+            let settings = settings::SETTINGS.with(|s| s.borrow().clone());
+            out.push_str(&format::format(&columns, &out_rows, &settings));
+            // Advance past the just-executed statement.
+            if tail >= remaining.len() {
+                break;
+            }
+            remaining = &remaining[tail..];
         }
-        let columns = stmt.column_names();
-        let out_rows = match stmt.collect_rows() {
-            Ok(r) => r,
-            Err(e) => return format!("Error: {}\n", e.message),
-        };
-        let settings = settings::SETTINGS.with(|s| s.borrow().clone());
-        format::format(&columns, &out_rows, &settings)
     });
     // Drain any trace lines captured by .trace's callback while
     // this statement was running.

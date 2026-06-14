@@ -324,25 +324,52 @@ impl Connection {
     /// case is `execute_batch` or repeated prepares with the
     /// `tail` pointer (not exposed here yet).
     pub fn prepare(&self, sql: &str) -> Result<Statement<'_>, Error> {
+        self.prepare_with_tail(sql).map(|(stmt, _tail)| stmt)
+    }
+
+    /// Same as `prepare` but also returns the byte offset within
+    /// `sql` where the consumed statement ends. Callers iterating
+    /// over a multi-statement script use this to advance past the
+    /// just-prepared statement and prepare the next one.
+    ///
+    /// The returned tail offset is measured in bytes from the start
+    /// of `sql`. If `sql` was a single statement (or only had
+    /// trailing whitespace/comments), the tail equals `sql.len()`.
+    pub fn prepare_with_tail<'a>(
+        &'a self,
+        sql: &str,
+    ) -> Result<(Statement<'a>, usize), Error> {
         let c_sql = CString::new(sql).map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
         let mut stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
+        let mut tail_ptr: *const c_char = ptr::null();
         let rc = unsafe {
             ffi::sqlite3_prepare_v2(
                 self.raw,
                 c_sql.as_ptr(),
                 -1,
                 &mut stmt,
-                ptr::null_mut(),
+                &mut tail_ptr,
             )
         };
         if rc != ffi::SQLITE_OK {
             return Err(unsafe { last_error(self.raw) });
         }
-        Ok(Statement {
-            raw: stmt,
-            _conn: self,
-            done: false,
-        })
+        let tail_offset = if tail_ptr.is_null() {
+            sql.len()
+        } else {
+            // Pointer arithmetic — tail_ptr is into c_sql's buffer.
+            let base = c_sql.as_ptr() as usize;
+            let tail = tail_ptr as usize;
+            tail.saturating_sub(base).min(sql.len())
+        };
+        Ok((
+            Statement {
+                raw: stmt,
+                _conn: self,
+                done: false,
+            },
+            tail_offset,
+        ))
     }
 
     /// Number of rows changed by the most recent INSERT/UPDATE/
