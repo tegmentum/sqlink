@@ -105,8 +105,7 @@ impl RunGuest for CliCommand {
 
             let out = eval_input(&buffered);
             if !out.is_empty() {
-                let _ = stdout.write_all(out.as_bytes());
-                let _ = stdout.flush();
+                write_output(&out, &mut stdout);
             }
             buffered.clear();
 
@@ -115,6 +114,40 @@ impl RunGuest for CliCommand {
             }
         }
         Ok(())
+    }
+}
+
+/// Route a chunk of output to the configured sink: a `.once FILE`
+/// target (one-shot, truncating), an active `.output FILE` target
+/// (append after the .output command itself truncated it), or
+/// stdout. Called once per eval result so `.once` consumes
+/// correctly.
+fn write_output(s: &str, stdout: &mut std::io::Stdout) {
+    enum Target { Once(String), Append(String), Stdout }
+    let target = settings::SETTINGS.with(|set| {
+        let mut g = set.borrow_mut();
+        if let Some(p) = g.once_output_path.take() {
+            Target::Once(p)
+        } else if let Some(p) = &g.output_path {
+            Target::Append(p.clone())
+        } else {
+            Target::Stdout
+        }
+    });
+    match target {
+        Target::Once(p) => {
+            let _ = std::fs::write(&p, s);
+        }
+        Target::Append(p) => {
+            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
+                use std::io::Write;
+                let _ = f.write_all(s.as_bytes());
+            }
+        }
+        Target::Stdout => {
+            let _ = stdout.write_all(s.as_bytes());
+            let _ = stdout.flush();
+        }
     }
 }
 
@@ -179,6 +212,18 @@ fn eval_input(input: &str) -> String {
     if trimmed.starts_with(".cache") {
         return do_cache(trimmed.strip_prefix(".cache").unwrap_or("").trim());
     }
+    if let Some(rest) = trimmed.strip_prefix(".read ") {
+        return do_read(rest.trim());
+    }
+    if trimmed == ".read" {
+        return "Usage: .read FILE\n".to_string();
+    }
+    if let Some(rest) = trimmed.strip_prefix(".output") {
+        return do_output(rest.trim());
+    }
+    if let Some(rest) = trimmed.strip_prefix(".once") {
+        return do_once(rest.trim());
+    }
     ensure_cli_conn();
     if trimmed.starts_with('.') {
         let dot_out = CLI_CONN.with(|c| {
@@ -191,13 +236,25 @@ fn eval_input(input: &str) -> String {
         }
         return format!("Unknown command: {trimmed}\n");
     }
-    CLI_CONN.with(|c| {
+    eval_sql(trimmed)
+}
+
+/// SQL execution path — split out from eval_input so the timer +
+/// changes wrapping is in one place and `.read` can call it
+/// per-statement without going through the dot-command dispatch.
+fn eval_sql(sql: &str) -> String {
+    let (show_timer, show_changes) = settings::SETTINGS.with(|s| {
+        let g = s.borrow();
+        (g.show_timer, g.show_changes)
+    });
+    let start = if show_timer { Some(std::time::Instant::now()) } else { None };
+    let mut out = CLI_CONN.with(|c| {
         let g = c.borrow();
         let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-        let mut stmt = match conn.prepare(trimmed) {
+        let mut stmt = match conn.prepare(sql) {
             Ok(s) => s,
             Err(_) => {
-                return match conn.execute_batch(trimmed) {
+                return match conn.execute_batch(sql) {
                     Ok(()) => String::new(),
                     Err(e) => format!("Error: {}\n", e.message),
                 };
@@ -210,7 +267,91 @@ fn eval_input(input: &str) -> String {
         };
         let settings = settings::SETTINGS.with(|s| s.borrow().clone());
         format::format(&columns, &out_rows, &settings)
-    })
+    });
+    if let Some(t0) = start {
+        let elapsed = t0.elapsed().as_secs_f64();
+        out.push_str(&format!(
+            "Run Time: real {elapsed:.3} user 0.000 sys 0.000\n"
+        ));
+    }
+    if show_changes && !out.starts_with("Error:") {
+        let (changes, total) = CLI_CONN.with(|c| {
+            let g = c.borrow();
+            let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
+            (conn.changes(), conn.total_changes())
+        });
+        out.push_str(&format!("changes: {changes} total_changes: {total}\n"));
+    }
+    out
+}
+
+/// `.read FILE` — buffer FILE line by line, fire each complete
+/// statement through eval_input as if the user had typed it. Echoes
+/// when `.echo on`; stops on the first error when `.bail on`.
+/// FILE has to be inside a host-preopened directory; relative
+/// paths resolve against the wasm component's WASI CWD.
+fn do_read(path: &str) -> String {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => return format!("Error: cannot read {path}: {e}\n"),
+    };
+    let (echo, bail) = settings::SETTINGS.with(|s| {
+        let g = s.borrow();
+        (g.echo, g.bail)
+    });
+    let mut buf = String::new();
+    let mut out = String::new();
+    for line in content.lines() {
+        buf.push_str(line);
+        buf.push('\n');
+        if !is_statement_complete(&buf) {
+            continue;
+        }
+        if echo {
+            out.push_str(&buf);
+        }
+        let r = eval_input(&buf);
+        if !r.is_empty() {
+            out.push_str(&r);
+        }
+        if bail && r.contains("Error:") {
+            break;
+        }
+        buf.clear();
+        if DONE.with(|d| *d.borrow()) {
+            break;
+        }
+    }
+    out
+}
+
+/// `.output ?FILE?` — switch eval output to FILE (truncates on this
+/// call; subsequent statements append). `.output` / `.output stdout`
+/// resets to stdout. Idempotent — switching to the same path
+/// re-truncates.
+fn do_output(arg: &str) -> String {
+    if arg.is_empty() || arg == "stdout" {
+        settings::SETTINGS.with(|s| s.borrow_mut().output_path = None);
+        return String::new();
+    }
+    // Truncate the target file so subsequent appends start at byte 0.
+    if let Err(e) = std::fs::write(arg, b"") {
+        return format!("Error: cannot open {arg}: {e}\n");
+    }
+    settings::SETTINGS.with(|s| s.borrow_mut().output_path = Some(arg.to_string()));
+    String::new()
+}
+
+/// `.once ?FILE?` — redirect the NEXT statement's output to FILE
+/// (truncating), then reset to stdout. `.once stdout` / bare
+/// `.once` clears the pending redirect.
+fn do_once(arg: &str) -> String {
+    if arg.is_empty() || arg == "stdout" {
+        settings::SETTINGS.with(|s| s.borrow_mut().once_output_path = None);
+        return String::new();
+    }
+    settings::SETTINGS.with(|s| s.borrow_mut().once_output_path = Some(arg.to_string()));
+    String::new()
 }
 
 // =========================================================================

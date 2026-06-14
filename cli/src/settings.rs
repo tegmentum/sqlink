@@ -40,6 +40,25 @@ pub struct Settings {
     pub separator: String,
     pub prompt_main: String,
     pub prompt_cont: String,
+    /// User-set per-column widths (sqlite3's `.width N N ...`).
+    /// Acts as a MINIMUM in column/box/table modes; the actual
+    /// width is `max(user-width, data-width)`. Empty = no user
+    /// override; everything is data-driven.
+    pub column_widths: Vec<usize>,
+    /// `.changes on|off` — append "changes: N total_changes: M"
+    /// after each statement when on.
+    pub show_changes: bool,
+    /// `.timer on|off` — append "Run Time: real X.XXX" after each
+    /// statement when on.
+    pub show_timer: bool,
+    /// `.output FILE` — when Some(path), eval output goes to this
+    /// file (append after the .output command itself truncates it).
+    /// None means stdout. Cleared by `.output` / `.output stdout`.
+    pub output_path: Option<String>,
+    /// `.once FILE` — when Some(path), the NEXT statement's output
+    /// goes to this file (truncate-write), then this field is
+    /// cleared. Takes precedence over output_path for one statement.
+    pub once_output_path: Option<String>,
 }
 
 impl Settings {
@@ -53,6 +72,11 @@ impl Settings {
             separator: "|".to_string(),
             prompt_main: "sqlite> ".to_string(),
             prompt_cont: "   ...> ".to_string(),
+            column_widths: Vec::new(),
+            show_changes: false,
+            show_timer: false,
+            output_path: None,
+            once_output_path: None,
         }
     }
 }

@@ -81,20 +81,26 @@ fn fmt_line(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
     o
 }
 
-fn col_widths(columns: &[String], rows: &[Vec<Value>], null_value: &str) -> Vec<usize> {
+fn col_widths(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> Vec<usize> {
     let mut w: Vec<usize> = columns.iter().map(|c| c.chars().count()).collect();
     for row in rows {
         for (i, v) in row.iter().enumerate() {
-            let cell = render(v, null_value);
+            let cell = render(v, &s.null_value);
             let cw = cell.chars().count();
             if i < w.len() && cw > w[i] { w[i] = cw; }
+        }
+    }
+    // User-set widths via `.width N N ...` act as a floor.
+    for (i, &user_w) in s.column_widths.iter().enumerate() {
+        if i < w.len() && user_w > w[i] {
+            w[i] = user_w;
         }
     }
     w
 }
 
 fn fmt_column(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
-    let widths = col_widths(columns, rows, &s.null_value);
+    let widths = col_widths(columns, rows, s);
     let mut o = String::new();
     if s.headers {
         for (i, c) in columns.iter().enumerate() {
@@ -121,7 +127,7 @@ fn fmt_column(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
 }
 
 fn fmt_table(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
-    let widths = col_widths(columns, rows, &s.null_value);
+    let widths = col_widths(columns, rows, s);
     let sep = {
         let mut s = String::from("+");
         for w in &widths {
@@ -156,7 +162,7 @@ fn fmt_table(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
 }
 
 fn fmt_markdown(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
-    let widths = col_widths(columns, rows, &s.null_value);
+    let widths = col_widths(columns, rows, s);
     let mut o = String::new();
     // Header always present in markdown
     o.push('|');

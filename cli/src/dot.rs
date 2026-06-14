@@ -54,8 +54,56 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".prompt" => cmd_prompt(arg),
         ".print" => format!("{arg}\n"),
         ".bail" => cmd_bail(arg),
+        ".version" => cmd_version(),
+        ".width" => cmd_width(arg),
+        ".changes" => cmd_changes(arg),
+        ".timer" => cmd_timer(arg),
         _ => return None,
     })
+}
+
+fn cmd_version() -> String {
+    let lib = crate::db::version();
+    let pkg = env!("CARGO_PKG_VERSION");
+    format!(
+        "SQLite {lib}\nsqlite-cli (Rust, wasm32-wasip2) {pkg}\n"
+    )
+}
+
+fn cmd_width(arg: &str) -> String {
+    if arg.is_empty() {
+        settings::SETTINGS.with(|s| s.borrow_mut().column_widths.clear());
+        return String::new();
+    }
+    let mut widths = Vec::new();
+    for tok in arg.split_whitespace() {
+        match tok.parse::<isize>() {
+            Ok(n) => widths.push(n.max(0) as usize),
+            Err(_) => return format!("Usage: .width N N ...\n"),
+        }
+    }
+    settings::SETTINGS.with(|s| s.borrow_mut().column_widths = widths);
+    String::new()
+}
+
+fn cmd_changes(arg: &str) -> String {
+    if arg.is_empty() {
+        let on = settings::SETTINGS.with(|s| s.borrow().show_changes);
+        return format!("changes: {}\n", if on { "on" } else { "off" });
+    }
+    let on = parse_on_off(arg);
+    settings::SETTINGS.with(|s| s.borrow_mut().show_changes = on);
+    String::new()
+}
+
+fn cmd_timer(arg: &str) -> String {
+    if arg.is_empty() {
+        let on = settings::SETTINGS.with(|s| s.borrow().show_timer);
+        return format!("timer: {}\n", if on { "on" } else { "off" });
+    }
+    let on = parse_on_off(arg);
+    settings::SETTINGS.with(|s| s.borrow_mut().show_timer = on);
+    String::new()
 }
 
 fn cmd_help() -> String {
