@@ -8,6 +8,17 @@ description = "Command-mode SQLite CLI for wasm32-wasip2. Exports wasi:cli/run; 
 [lib]
 crate-type = ["cdylib"]
 
+[features]
+default = []
+# Flip the TVM-track crates' backends from their in-proc defaults
+# to wit-bindgen-backed tvm:memory variants. With this feature on
+# the cli component imports tvm:memory at the WIT level; the
+# host running it must wire tvm-wasmtime's add_to_linker.
+tvm = [
+    "sqlite-pcache-tvm/tvm",
+    "sqlite-vfs-tvm/tvm",
+]
+
 [dependencies]
 # wit-bindgen-rt provides the runtime support functions the
 # generate! macro emits calls to. Sync bindings — no `async`
@@ -17,6 +28,15 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 wit-bindgen = { version = "0.44", features = ["macros"] }
 # Shared SQLite wrapper — owns the libsqlite3-sys bundled compile.
 sqlite-wasm-core = { path = "../core" }
+# TVM-track integrations  installed at startup so the trampolines
+# are always active. With default features they all use in-proc
+# backends (rough parity with the SQLite defaults). The `tvm`
+# feature on this crate flips them to wit-bindgen-backed
+# tvm:memory variants  the cli component then imports
+# tvm:memory and the host must wire tvm-wasmtime.
+sqlite-pcache-tvm = { path = "../sqlite-pcache-tvm" }
+sqlite-mem-tvm = { path = "../sqlite-mem-tvm" }
+sqlite-vfs-tvm = { path = "../sqlite-vfs-tvm" }
 # Needed directly for sqlite3_complete + SQLITE_* action codes used
 # by the in-WASM authorizer dispatch.
 libsqlite3-sys = { version = "0.30" }

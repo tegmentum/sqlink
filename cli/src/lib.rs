@@ -115,12 +115,29 @@ fn ensure_cli_conn() {
 
 impl RunGuest for CliCommand {
     fn run() -> Result<(), ()> {
-        // sqlite3_config(SQLITE_CONFIG_LOG, ...) must run BEFORE
-        // sqlite3_initialize, and init_wasivfs's vfs_register call
-        // triggers initialize. Install the log callback first; it
-        // consults settings.log_target so .log on|off|FILE can
-        // flip routing at runtime without re-registering.
+        // Every sqlite3_config(...) call must run BEFORE
+        // sqlite3_initialize. init_wasivfs's vfs_register call
+        // triggers initialize, so the four config installs all
+        // go above it.
+        //
+        // Order:
+        //   1. log callback (CONFIG_LOG)  routes sqlite log
+        //      events to .log on|off|FILE state
+        //   2. mem methods (CONFIG_MALLOC)  size-header
+        //      allocator over the Rust global heap
+        //   3. pcache2 (CONFIG_PCACHE2)  shadow-pool + LRU
+        //      cache with InProcRegion (or WitTvmRegion when
+        //      the `tvm` feature is on)
+        //   4. wasivfs registration  triggers initialize
+        //   5. sqlite-vfs-tvm registration (named "tvm-mem",
+        //      not default)  users opt in with .open VFSNAME
         let _ = db::install_log_callback(Some(log_event));
+        if let Err(e) = sqlite_mem_tvm::install() {
+            eprintln!("sqlite-mem-tvm install failed: {}", e);
+        }
+        if let Err(e) = sqlite_pcache_tvm::install() {
+            eprintln!("sqlite-pcache-tvm install failed: {}", e);
+        }
 
         // Register the WASI-backed VFS so file-backed opens persist.
         // The `match` ensures the optimizer can't dead-code the call
@@ -130,6 +147,14 @@ impl RunGuest for CliCommand {
         match db::init_wasivfs() {
             Ok(()) => {}
             Err(e) => eprintln!("init_wasivfs failed: {} ({})", e.message, e.code),
+        }
+
+        // VFS register can happen after initialize  it's not
+        // boot-order-constrained the way CONFIG_* are. Registered
+        // under the name "tvm-mem", NOT as default, so existing
+        // file-backed opens keep routing through wasivfs.
+        if let Err(e) = sqlite_vfs_tvm::install() {
+            eprintln!("sqlite-vfs-tvm install failed: {}", e);
         }
         let argv: Vec<String> = std::env::args().collect();
         let db_path = if argv.len() > 1 { argv[1].clone() } else { String::new() };
