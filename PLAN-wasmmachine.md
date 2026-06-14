@@ -85,34 +85,91 @@ needed. The cli runs against any multi-memory wasi-p2 engine.
 - **Integration test in `host/tests/`**  builds + runs the
   spec + asserts stdout contains expected SQLite version banner
 
-## Open questions
+## Skim findings (2026-06-14)
 
-The wasmMachine spec format is documented in `~/git/v86/`. The
-following need a read-through of that codebase to answer
-concretely:
+Confirmed from `~/git/v86/`:
 
-1. **Spec format**  is it JSON, TOML, a typed Rust struct? Is
-   it stable or evolving?
-2. **Capability vocabulary**  are `sqlite-vfs-tvm` / 
-   `sqlite-pcache-tvm` valid capability names, or are
-   capabilities fixed to a wasmMachine-curated set? If the
-   latter, we declare what we need via standard names.
-3. **Tools mechanism**  what does `tools: [tvm-guest-mm@<ver>]`
-   resolve to? A blob ref? An external dependency? With the
-   tvm-guest-mm switch (Plan 3), no external TVM tool is
-   needed; we should remove it from the spec entirely.
-4. **Component instantiation**  does wasmMachine instantiate
-   via its own embedded wasmtime, via jco, or via a different
-   runtime? Affects whether the cli wasm we produce composes
-   directly.
-5. **Sealing / seal verification**  what's the step that
-   converts an authored spec into a sealed one with verified
-   refs?
-6. **Build pipeline integration**  is there a wasmMachine
-   build tool that takes wasm + rootfs and produces the sealed
-   spec, or do we author it manually?
-7. **Runtime story**  does `wasmmachine run` block until the
-   machine exits, or fork it and return a handle?
+- **Spec format is JSON**, with two layered shapes:
+  - **Machine-level** (`~/git/v86/README.md` hello-machine example):
+    `schema_version`, `name`, `capability_profile`,
+    `kernel_ref` (with `digest: "blake3:..."`, `size`,
+    `media_type`, `sources`). Used for `wasmmachine run
+    hello.json`.
+  - **Component-composition** (`~/git/v86/plans/python-v86.json`):
+    `version`, `root`, `components` (each with `id` + digest
+    as int array), `bindings` (consumer/import_name/provider/
+    export_name  WIT-level wiring across components),
+    `secrets`, `policy`.
+  - For sqlite-cli we want the composition format: one
+    component (cli) plus a provider component supplying WASI
+    imports, wired via `bindings`.
+- **ArtifactRef shape** (from
+  `~/git/v86/docs/machine-storage-model.md`): standardised
+  digest + size + media_type + transport list (`local`, `s3`,
+  `https`, `iroh`, `ipfs`, `oci`). Our cli component goes here
+  as `media_type: application/wasm` with a `local:` source
+  pointing at our build output.
+- **No `wasmtime` dependency anywhere in v86 crates.** v86 has
+  its own runtime story under `crates/v86-core` and
+  `crates/v86-component`. The hosting-substrate doctrine says
+  "instances are admitted and controlled by a portable
+  WebAssembly web service"  but the actual instantiation
+  runtime (which wasm engine executes the kernel + components)
+  isn't surfaced in the doc skim and needs deeper code reading
+  before commit.
+- **Capabilities** appear to be flexible per-spec: the
+  `capability_profile` block in machine spec is open-ended
+  (trust_mode, filesystem, network, memory_bytes, cpus); the
+  composition `policy` block carries arbitrary `capabilities`
+  fields. We'd declare what we need (filesystem access for db
+  files, etc.) without a curated taxonomy in the way.
+
+## Implications for sqlite-cli's spec
+
+```json
+{
+  "version": "1",
+  "root": "sqlite-cli",
+  "components": [
+    { "id": "sqlite-cli", "digest": "blake3:<hash-of-cli-component-wasm>" },
+    { "id": "wasi-host",  "digest": "blake3:<wasmMachine-provided-wasi-provider>" }
+  ],
+  "bindings": [
+    { "consumer_id": "sqlite-cli", "import_name": "wasi:cli/run@0.2.4",      "provider_id": "wasi-host", "export_name": "wasi:cli/run@0.2.4"      },
+    { "consumer_id": "sqlite-cli", "import_name": "wasi:filesystem/types@0.2.4", "provider_id": "wasi-host", "export_name": "wasi:filesystem/types@0.2.4" }
+    // ... etc for each WASI import
+  ],
+  "secrets": [],
+  "policy": {
+    "determinism": "relaxed",
+    "capabilities": ["filesystem:writable:/db"]
+  }
+}
+```
+
+After the Plan 3 substrate switch (tvm-guest-mm, no host
+imports), the only external imports are WASI  no `tvm-wasmtime`
+binding needed. That's a clean spec.
+
+## Open questions remaining
+
+1. **Component runtime**  which wasm engine does wasmMachine
+   use to instantiate components? Needs reading
+   `crates/v86-component/src/` to confirm. Must support multi-
+   memory components if Plan 3's substrate switch is in flight.
+2. **Sealing pipeline**  `wasmmachine seal machine.json` is
+   mentioned in the README; what does it produce, and is the
+   sealed identity stable across re-builds of the same source?
+3. **Build pipeline integration**  is there a wasmmachine
+   build tool that takes wasm + spec template and emits a
+   sealed spec, or hand-author every time?
+4. **Tools / external dependencies**  the README mentioned
+   `tools: [jq@1.7.1, ...]` but I didn't see this in either
+   spec example. May be an obsolete README pattern or in a
+   different layer.
+
+These don't block architectural commitment but block detailed
+implementation. Answer when we actively start Plan 4.
 
 These are research questions, not design ones  the answers
 come from reading the v86 codebase. They block detailed spec
