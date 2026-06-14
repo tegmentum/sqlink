@@ -2058,6 +2058,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlite-cas-cache"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "blake3",
+ "reqwest",
+ "sqlite-wasm-core",
+ "tempfile",
+]
+
+[[package]]
 name = "sqlite-cli"
 version = "0.1.0"
 dependencies = [

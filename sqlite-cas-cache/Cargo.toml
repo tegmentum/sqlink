@@ -1,0 +1,50 @@
+[package]
+name = "sqlite-cas-cache"
+version = "0.1.0"
+edition = "2021"
+description = """
+Content-addressed cache backed by SQLite. Replaces the
+filesystem-based extension cache (host/src/cache.rs) with a
+two-mode store:
+
+  - External mode: shared SQLite db at a well-known path (default
+    ~/.cache/sqlite-wasm/cas.sqlite). Dedups by blake3 hash
+    across cli invocations on the same machine.
+  - Internal mode: __cas_* tables embedded in the user's working
+    db. Self-contained for shipping; the .db file carries its
+    extensions with it.
+
+Pluggable artifact resolvers (local / blake3 / https built-in,
+others via feature flags or the sqlite-cas-wasm-resolver
+companion crate) supply bytes when the cache misses. See
+PLAN-cas-cache.md.
+"""
+license = "MIT"
+
+[features]
+default = ["https"]
+# Bundled https resolver via reqwest::blocking. Disable for the
+# smallest dependency surface  callers wanting network
+# resolution then either enable this feature, a future
+# `s3`/`oci`/`ipfs` feature, or supply a custom resolver
+# through the registry.
+https = ["dep:reqwest"]
+
+[dependencies]
+# In-tree SQLite wrapper  works for both native and wasm32
+# builds (the latter for the eventual browser-side CAS in
+# PLAN-browser-runtime.md, where the same SqliteCasStore code
+# runs against OPFS-backed SQLite).
+sqlite-wasm-core = { path = "../core" }
+# Hash primitive. The host already pins this version.
+blake3 = "1.5"
+# Atomic-tempfile writes during migration export, file
+# resolution, etc.
+tempfile = "3"
+# Shared error type. The CAS layer doesn't need fine-grained
+# error variants for the first cut.
+anyhow = "1.0"
+# Reqwest for the optional https resolver. blocking::Client to
+# match the sync trait shape; future async variants can layer
+# on top.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"], optional = true }
