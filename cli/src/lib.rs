@@ -76,6 +76,10 @@ fn ensure_cli_conn() {
 
 impl RunGuest for CliCommand {
     fn run() -> Result<(), ()> {
+        // Register the WASI-backed VFS. See db::init_wasivfs for
+        // the persistence caveat (PLAN-cli-persistence.md tracks
+        // the fix).
+        let _ = db::init_wasivfs();
         let argv: Vec<String> = std::env::args().collect();
         let db_path = if argv.len() > 1 { argv[1].clone() } else { String::new() };
         DB_PATH.with(|p| *p.borrow_mut() = db_path);
@@ -223,6 +227,33 @@ fn eval_input(input: &str) -> String {
     }
     if let Some(rest) = trimmed.strip_prefix(".once") {
         return do_once(rest.trim());
+    }
+    if let Some(rest) = trimmed.strip_prefix(".import ") {
+        return do_import(rest.trim());
+    }
+    if trimmed == ".import" {
+        return "Usage: .import FILE TABLE\n".to_string();
+    }
+    if let Some(rest) = trimmed.strip_prefix(".dump") {
+        return do_dump(rest.trim());
+    }
+    if let Some(rest) = trimmed.strip_prefix(".backup") {
+        return do_backup(rest.trim());
+    }
+    if let Some(rest) = trimmed.strip_prefix(".restore") {
+        return do_restore(rest.trim());
+    }
+    if let Some(rest) = trimmed.strip_prefix(".save ") {
+        return do_save(rest.trim());
+    }
+    if trimmed == ".save" {
+        return "Usage: .save FILE\n".to_string();
+    }
+    if let Some(rest) = trimmed.strip_prefix(".clone ") {
+        return do_clone(rest.trim());
+    }
+    if trimmed == ".clone" {
+        return "Usage: .clone NEWDB\n".to_string();
     }
     ensure_cli_conn();
     if trimmed.starts_with('.') {
@@ -821,6 +852,333 @@ fn do_open(arg: &str) -> String {
             }
         }
         Err(e) => format!("Error opening {path}: {e}\n"),
+    }
+}
+
+// =========================================================================
+// Phase 2 data-management commands
+// =========================================================================
+
+/// `.import FILE TABLE` — read FILE in the current `.mode`'s
+/// delimiter (csv or list/tabs separator), build a prepared
+/// `INSERT INTO TABLE VALUES (?, ?, …)` matching the table's
+/// column count, bind and step each row. With `.headers on`,
+/// the first row is treated as column names and skipped.
+fn do_import(arg: &str) -> String {
+    let mut parts = arg.splitn(2, char::is_whitespace);
+    let file = parts.next().unwrap_or("").trim();
+    let table = parts.next().unwrap_or("").trim();
+    if file.is_empty() || table.is_empty() {
+        return "Usage: .import FILE TABLE\n".to_string();
+    }
+    let content = match std::fs::read_to_string(file) {
+        Ok(c) => c,
+        Err(e) => return format!("Error: cannot read {file}: {e}\n"),
+    };
+    let (mode, headers, separator) = settings::SETTINGS.with(|s| {
+        let g = s.borrow();
+        (g.mode, g.headers, g.separator.clone())
+    });
+    let rows = match mode {
+        settings::Mode::Csv => parse_csv(&content),
+        settings::Mode::Tabs => parse_delim(&content, '\t'),
+        _ => {
+            // List mode + everything else: use the separator's first char.
+            // If the separator is multi-char, parse_delim only matches the
+            // first character; documented limitation.
+            let sep_char = separator.chars().next().unwrap_or('|');
+            parse_delim(&content, sep_char)
+        }
+    };
+    if rows.is_empty() {
+        return format!("Error: {file} is empty\n");
+    }
+    let data_rows: &[Vec<String>] = if headers { &rows[1..] } else { &rows[..] };
+    if data_rows.is_empty() {
+        return "Imported 0 rows\n".to_string();
+    }
+    ensure_cli_conn();
+    let col_count = data_rows[0].len();
+    let placeholders = std::iter::repeat("?").take(col_count).collect::<Vec<_>>().join(", ");
+    let sql = format!("INSERT INTO \"{table}\" VALUES ({placeholders})");
+    let mut imported = 0u64;
+    let result = CLI_CONN.with(|c| -> Result<u64, String> {
+        let g = c.borrow();
+        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
+        let mut stmt = conn.prepare(&sql).map_err(|e| format!("Error: {}\n", e.message))?;
+        // Wrap in a transaction for performance + atomicity. Errors abort.
+        conn.execute_batch("BEGIN")
+            .map_err(|e| format!("Error: {}\n", e.message))?;
+        for (i, row) in data_rows.iter().enumerate() {
+            if row.len() != col_count {
+                let _ = conn.execute_batch("ROLLBACK");
+                return Err(format!(
+                    "Error: row {} has {} columns, expected {}\n",
+                    i + 1,
+                    row.len(),
+                    col_count
+                ));
+            }
+            stmt.reset().map_err(|e| format!("Error: {}\n", e.message))?;
+            let vals: Vec<db::Value> = row
+                .iter()
+                .map(|s| db::Value::Text(s.clone()))
+                .collect();
+            stmt.bind_all(&vals)
+                .map_err(|e| format!("Error: {}\n", e.message))?;
+            loop {
+                match stmt.step() {
+                    Ok(db::StepResult::Row) => continue,
+                    Ok(db::StepResult::Done) => break,
+                    Err(e) => {
+                        let _ = conn.execute_batch("ROLLBACK");
+                        return Err(format!("Error: {}\n", e.message));
+                    }
+                }
+            }
+            imported += 1;
+        }
+        conn.execute_batch("COMMIT")
+            .map_err(|e| format!("Error: {}\n", e.message))?;
+        Ok(imported)
+    });
+    match result {
+        Ok(n) => format!("Imported {n} rows\n"),
+        Err(msg) => msg,
+    }
+}
+
+/// Minimal CSV parser: handles `"`-quoted fields, doubled quotes as
+/// escapes, commas as separators, newlines as row delimiters
+/// (newlines inside quoted fields are preserved). Trailing
+/// newline OK.
+fn parse_csv(s: &str) -> Vec<Vec<String>> {
+    let mut rows = Vec::new();
+    let mut row = Vec::new();
+    let mut field = String::new();
+    let mut in_quotes = false;
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if in_quotes {
+            if c == '"' {
+                if chars.peek() == Some(&'"') {
+                    field.push('"');
+                    chars.next();
+                } else {
+                    in_quotes = false;
+                }
+            } else {
+                field.push(c);
+            }
+        } else {
+            match c {
+                '"' => in_quotes = true,
+                ',' => {
+                    row.push(std::mem::take(&mut field));
+                }
+                '\n' => {
+                    row.push(std::mem::take(&mut field));
+                    rows.push(std::mem::take(&mut row));
+                }
+                '\r' => {} // ignored; \r\n collapses to \n
+                _ => field.push(c),
+            }
+        }
+    }
+    if !field.is_empty() || !row.is_empty() {
+        row.push(field);
+        rows.push(row);
+    }
+    rows
+}
+
+/// Simpler delimiter parser for `.mode tabs` / `.mode list`. No
+/// quoting; one character separator; newline-separated rows.
+fn parse_delim(s: &str, sep: char) -> Vec<Vec<String>> {
+    s.lines()
+        .map(|line| line.split(sep).map(|s| s.to_string()).collect())
+        .collect()
+}
+
+/// `.dump ?TABLE?` — emit a SQL script that recreates the schema
+/// and re-inserts every row of every table (or only TABLE / tables
+/// matching the GLOB pattern). Output is replayable via `.read`.
+fn do_dump(arg: &str) -> String {
+    let pattern = arg.trim();
+    ensure_cli_conn();
+    let mut out = String::from("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n");
+    let result = CLI_CONN.with(|c| -> Result<(), String> {
+        let g = c.borrow();
+        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
+
+        // 1) Schema entries (tables + indexes + views + triggers).
+        let schema_sql = if pattern.is_empty() {
+            "SELECT type, name, sql FROM sqlite_master \
+                 WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' \
+                 ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 \
+                                    WHEN 'view' THEN 3 WHEN 'trigger' THEN 4 \
+                                    ELSE 5 END".to_string()
+        } else {
+            format!(
+                "SELECT type, name, sql FROM sqlite_master \
+                 WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' \
+                   AND name GLOB '{}' \
+                 ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 \
+                                    WHEN 'view' THEN 3 WHEN 'trigger' THEN 4 \
+                                    ELSE 5 END",
+                pattern.replace('\'', "''")
+            )
+        };
+        let mut stmt = conn.prepare(&schema_sql).map_err(|e| format!("Error: {}\n", e.message))?;
+        let rows = stmt.collect_rows().map_err(|e| format!("Error: {}\n", e.message))?;
+        drop(stmt);
+        // Collect table names for the data dump below.
+        let mut tables: Vec<String> = Vec::new();
+        for row in &rows {
+            let ty = match &row[0] { db::Value::Text(s) => s.as_str(), _ => "" };
+            let name = match &row[1] { db::Value::Text(s) => s.clone(), _ => String::new() };
+            let create = match &row[2] { db::Value::Text(s) => s.clone(), _ => String::new() };
+            if create.is_empty() { continue; }
+            out.push_str(&create);
+            out.push_str(";\n");
+            if ty == "table" {
+                tables.push(name);
+            }
+        }
+
+        // 2) Per-table INSERTs.
+        for table in &tables {
+            let select = format!("SELECT * FROM \"{}\"", table.replace('"', "\"\""));
+            let mut s = conn.prepare(&select).map_err(|e| format!("Error: {}\n", e.message))?;
+            let cols = s.column_names();
+            let trows = s.collect_rows().map_err(|e| format!("Error: {}\n", e.message))?;
+            drop(s);
+            for trow in trows {
+                let mut parts = Vec::with_capacity(trow.len());
+                for v in trow {
+                    parts.push(sql_literal(&v));
+                }
+                out.push_str(&format!(
+                    "INSERT INTO \"{}\" VALUES({});\n",
+                    table.replace('"', "\"\""),
+                    parts.join(",")
+                ));
+                let _ = &cols; // column names are illustrative; sqlite3 doesn't emit them in .dump
+            }
+        }
+        Ok(())
+    });
+    match result {
+        Ok(()) => {
+            out.push_str("COMMIT;\n");
+            out
+        }
+        Err(msg) => msg,
+    }
+}
+
+/// Render a `db::Value` as a SQL literal suitable for INSERT
+/// statements emitted by `.dump`. Text: single-quote-escape. Blobs:
+/// `X'…'` hex. NULL → `NULL`. Numbers: as-is.
+fn sql_literal(v: &db::Value) -> String {
+    match v {
+        db::Value::Null => "NULL".to_string(),
+        db::Value::Integer(i) => i.to_string(),
+        db::Value::Real(r) => r.to_string(),
+        db::Value::Text(s) => format!("'{}'", s.replace('\'', "''")),
+        db::Value::Blob(b) => {
+            let mut o = String::from("X'");
+            for byte in b {
+                o.push_str(&format!("{byte:02x}"));
+            }
+            o.push('\'');
+            o
+        }
+    }
+}
+
+/// `.backup ?DB? FILE` — copy this connection's DB (default "main")
+/// into a freshly-opened FILE via sqlite3_backup_step.
+fn do_backup(arg: &str) -> String {
+    let (src_db, dst_path) = parse_db_file_pair(arg.trim(), "backup");
+    if dst_path.is_empty() {
+        return "Usage: .backup ?DB? FILE\n".to_string();
+    }
+    do_backup_into(&src_db, &dst_path)
+}
+
+/// `.restore ?DB? FILE` — open FILE and copy its main db into this
+/// connection's DB (default "main"). Effectively a backup with the
+/// direction reversed.
+fn do_restore(arg: &str) -> String {
+    let (dst_db, src_path) = parse_db_file_pair(arg.trim(), "restore");
+    if src_path.is_empty() {
+        return "Usage: .restore ?DB? FILE\n".to_string();
+    }
+    ensure_cli_conn();
+    let src = match db::Connection::open(&src_path, db::OpenFlags::READONLY) {
+        Ok(c) => c,
+        Err(e) => return format!("Error: cannot open {src_path}: {}\n", e.message),
+    };
+    CLI_CONN.with(|c| {
+        let g = c.borrow();
+        let dst = g.as_ref().expect("ensure_cli_conn opened a connection");
+        match src.backup_into("main", dst, &dst_db) {
+            Ok(()) => format!("Restored {src_path} into {dst_db}\n"),
+            Err(e) => format!("Error: {}\n", e.message),
+        }
+    })
+}
+
+/// `.save FILE` — alias for `.backup main FILE`.
+fn do_save(arg: &str) -> String {
+    do_backup_into("main", arg.trim())
+}
+
+/// `.clone NEWDB` — same backup path as `.save`, but refuse if
+/// NEWDB already exists. Useful for cloning to a fresh file.
+fn do_clone(arg: &str) -> String {
+    let path = arg.trim();
+    if path.is_empty() {
+        return "Usage: .clone NEWDB\n".to_string();
+    }
+    if std::path::Path::new(path).exists() {
+        return format!("Error: {path} already exists\n");
+    }
+    do_backup_into("main", path)
+}
+
+/// Shared backup body. Opens `dst_path` as a fresh writable
+/// connection, then asks the cli's connection to copy `src_db`
+/// into the destination's "main".
+fn do_backup_into(src_db: &str, dst_path: &str) -> String {
+    if dst_path.is_empty() {
+        return "Usage: .backup ?DB? FILE\n".to_string();
+    }
+    ensure_cli_conn();
+    let dst = match db::Connection::open(dst_path, db::OpenFlags::DEFAULT) {
+        Ok(c) => c,
+        Err(e) => return format!("Error: cannot open {dst_path}: {}\n", e.message),
+    };
+    CLI_CONN.with(|c| {
+        let g = c.borrow();
+        let src = g.as_ref().expect("ensure_cli_conn opened a connection");
+        match src.backup_into(src_db, &dst, "main") {
+            Ok(()) => format!("Backed up {src_db} to {dst_path}\n"),
+            Err(e) => format!("Error: {}\n", e.message),
+        }
+    })
+}
+
+/// sqlite3 style `.backup ?DB? FILE`: if one token, it's FILE and
+/// DB defaults to "main"; if two, the first is DB and the second
+/// is FILE. The `kind` param is just used for nicer error labels.
+fn parse_db_file_pair(s: &str, _kind: &str) -> (String, String) {
+    let parts: Vec<&str> = s.split_whitespace().collect();
+    match parts.len() {
+        0 => (String::new(), String::new()),
+        1 => ("main".to_string(), parts[0].to_string()),
+        _ => (parts[0].to_string(), parts[1..].join(" ")),
     }
 }
 

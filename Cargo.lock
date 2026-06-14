@@ -1893,6 +1893,7 @@ dependencies = [
 name = "sqlite-wasm-core"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "libsqlite3-sys",
 ]
 

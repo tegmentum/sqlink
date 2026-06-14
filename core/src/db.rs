@@ -123,6 +123,42 @@ pub struct Connection {
     raw: *mut ffi::sqlite3,
 }
 
+/// Register the WASI-backed VFS so SQLite's file opens write to
+/// the host filesystem via WASI syscalls instead of falling back
+/// to libsqlite3-sys's in-memory default. Idempotent: safe to call
+/// many times; the C side guards itself.
+///
+/// Wasm32 targets: this is the difference between databases that
+/// persist and ones that don't. Call it once before opening any
+/// file-backed connection.
+///
+/// Native targets: no-op. The unix VFS is already SQLite's default.
+#[cfg(target_arch = "wasm32")]
+pub fn init_wasivfs() -> Result<(), Error> {
+    extern "C" {
+        fn sqlite3_wasivfs_register(make_default: c_int) -> c_int;
+    }
+    // makeDefault = 1: subsequent sqlite3_open_v2 calls that pass
+    // NULL for the vfs name pick up wasivfs. Idempotent — the C
+    // side guards against double-registration.
+    //
+    // CAVEAT: wasivfs is registered and findable, but as of this
+    // writing sqlite3 isn't routing through wasivfs_open for new
+    // file-backed connections on wasm32-wasip2. Writes still
+    // happen in memory and the file stays 0 bytes. The persistence
+    // fix is tracked in PLAN-cli-persistence.md.
+    let rc = unsafe { sqlite3_wasivfs_register(1) };
+    if rc != ffi::SQLITE_OK {
+        return Err(standalone_error(rc, "sqlite3_wasivfs_register"));
+    }
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn init_wasivfs() -> Result<(), Error> {
+    Ok(())
+}
+
 // SAFETY: sqlite3 connections are safe to move between threads
 // when sqlite3 is compiled with SQLITE_THREADSAFE != 0, which
 // libsqlite3-sys's bundled build does by default (serialized
@@ -139,12 +175,28 @@ impl Connection {
     pub fn open(path: &str, flags: OpenFlags) -> Result<Self, Error> {
         let path_c = CString::new(path).map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
         let mut raw: *mut ffi::sqlite3 = ptr::null_mut();
+        // On wasm32 targets the bundled libsqlite3-sys's default
+        // unix VFS doesn't actually persist to disk under wasi
+        // preview2 (the WASI version sqlite3.c's os_unix.c was
+        // written for is different). Route file-backed opens
+        // through the in-tree wasivfs explicitly; in-memory opens
+        // stay on the default.
+        #[cfg(target_arch = "wasm32")]
+        let vfs_c: Option<CString> = if path != ":memory:" && !path.is_empty() {
+            Some(CString::new("wasivfs").unwrap())
+        } else {
+            None
+        };
+        #[cfg(target_arch = "wasm32")]
+        let vfs_ptr = vfs_c.as_ref().map(|c| c.as_ptr()).unwrap_or(ptr::null());
+        #[cfg(not(target_arch = "wasm32"))]
+        let vfs_ptr: *const c_char = ptr::null();
         let rc = unsafe {
             ffi::sqlite3_open_v2(
                 path_c.as_ptr(),
                 &mut raw,
                 flags.raw() | ffi::SQLITE_OPEN_EXRESCODE,
-                ptr::null(),
+                vfs_ptr,
             )
         };
         if rc != ffi::SQLITE_OK {
@@ -263,6 +315,41 @@ impl Connection {
     /// not close the connection through this pointer.
     pub fn as_raw(&self) -> *mut ffi::sqlite3 {
         self.raw
+    }
+
+    /// Backup the contents of this connection's `src_db` (typically
+    /// "main") into `dst`'s `dst_db`. Wraps sqlite3_backup_init /
+    /// _step / _finish. Used by `.backup`, `.restore`, `.save`,
+    /// `.clone` in the CLI; suitable for any caller that needs to
+    /// copy one open database into another.
+    pub fn backup_into(
+        &self,
+        src_db: &str,
+        dst: &Connection,
+        dst_db: &str,
+    ) -> Result<(), Error> {
+        let src_name = CString::new(src_db)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let dst_name = CString::new(dst_db)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let backup = unsafe {
+            ffi::sqlite3_backup_init(dst.raw, dst_name.as_ptr(), self.raw, src_name.as_ptr())
+        };
+        if backup.is_null() {
+            return Err(unsafe { last_error(dst.raw) });
+        }
+        // Page count = -1 → copy everything in one step. For very
+        // large databases a caller might prefer chunking + progress
+        // reporting; we can add a streaming variant later.
+        let step_rc = unsafe { ffi::sqlite3_backup_step(backup, -1) };
+        let finish_rc = unsafe { ffi::sqlite3_backup_finish(backup) };
+        if step_rc != ffi::SQLITE_DONE {
+            return Err(unsafe { last_error(dst.raw) });
+        }
+        if finish_rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(dst.raw) });
+        }
+        Ok(())
     }
 }
 

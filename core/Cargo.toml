@@ -14,3 +14,9 @@ crate-type = ["rlib"]
 # build for wasm32-wasip2 so the build env needs CC_wasm32_wasip2 to
 # point at the wasi-sdk clang.
 libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+
+[build-dependencies]
+# Used to compile src/vfs/vfs_wasi.c on wasm32 targets so SQLite's
+# file-backed opens hit a WASI VFS that actually writes to disk,
+# instead of falling back to libsqlite3-sys's in-memory default.
+cc = "1"
