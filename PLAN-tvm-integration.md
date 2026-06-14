@@ -141,14 +141,29 @@ allocations.
 > up in the rlib metadata, and the bundled SQLite compile via
 > wasi-sdk in the same build links cleanly against the trampolines.
 >
-> **What remains (Phase 1.2):** a wasm32-wasip2 probe that
-> bundles `sqlite-pcache-tvm --features tvm` + libsqlite3-sys
-> bundled + a runnable component into a single artifact;
-> host-side test wires WASI + tvm-wasmtime and exercises the
-> full pcache-through-TVM round-trip from real SQL. And then
-> the capacity test: open a `:memory:` db with a > 4 GiB hot
-> working set, observe wasm linear memory stays bounded while
-> TVM page-store region grows beyond 4 GiB.
+> **Phase 1.2 (end-to-end probe) shipped.**
+> `probe/tvm-pcache-wasip2/` is a wasm32-wasip2 cdylib that
+> links `sqlite-pcache-tvm --features tvm` + sqlite-wasm-core
+> (bundled libsqlite3-sys via wasi-sdk) into one ~1 MB
+> component. The component imports
+> `tvm:memory/{types,manager,bytes}` + WASI and exports
+> `run-test`. The host-side test
+> `host/tests/tvm_pcache_probe.rs` instantiates it against
+> wasmtime + `tvm_wasmtime::add_to_linker`, calls `run-test`
+> (which installs the pcache, opens an in-memory db, INSERTs
+> 7 rows, SELECTs `count(*)`), and asserts `== 7`. Every page
+> byte that misses the shadow pool round-trips through real
+> `tvm:memory/bytes.read/write` host calls; the test passes,
+> proving the wit-bindgen + TVM region + sqlite-pcache flow
+> works end-to-end.
+>
+> **What remains (Phase 1.3 — capacity test):** open a
+> `:memory:` db with a > 4 GiB hot working set, observe wasm
+> linear memory stays bounded while the TVM page-store region
+> grows beyond 4 GiB. Validates the design claim that motivated
+> the whole TVM track. Requires a large-allocation test
+> harness + an instrumented TvmHost that reports region byte
+> usage; cleanly separable from the functional work above.
 
 > **Note on implementation language:** the plan called for "~500
 > LOC C." Pure Rust shipped instead — `libsqlite3-sys` already

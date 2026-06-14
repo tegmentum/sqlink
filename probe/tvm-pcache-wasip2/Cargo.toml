@@ -1,0 +1,43 @@
+[package]
+name = "probe-tvm-pcache-wasip2"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = """
+Phase 1.2 probe for PLAN-tvm-integration. Builds a wasm32-wasip2
+component that:
+
+  - links sqlite-pcache-tvm with the `tvm` feature on (cold tier
+    is wit-bindgen-backed against tvm:memory@0.1.0)
+  - links sqlite-wasm-core (bundled libsqlite3-sys), which drags
+    in the bundled SQLite compile against wasi-sdk
+  - exports run-test  installs the pcache, opens an in-memory db,
+    runs INSERT/SELECT, returns the row count
+
+The host-side companion test wires WASI + tvm-wasmtime's
+add_to_linker against this component, calls run-test, asserts the
+expected count. If the wit-bindgen-backed cold tier round-trip is
+buggy SQLite will return zeros or stale bytes; this catches it.
+
+Standalone workspace member intentionally  the wasm32-wasip2
+target shouldn't trip up `cargo build` at the workspace root.
+"""
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+sqlite-pcache-tvm = { path = "../../sqlite-pcache-tvm", features = ["tvm"] }
+sqlite-wasm-core = { path = "../../core" }
+# Same wit-bindgen the probe/tvm-substrate uses. The probe and
+# sqlite-pcache-tvm each declare extern blocks for the same
+# tvm:memory imports  rust-lld dedupes them at link time.
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+wit-bindgen = { version = "0.44", features = ["macros"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

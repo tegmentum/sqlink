@@ -1,0 +1,17 @@
+// Probe world for PLAN-tvm-integration Phase 1.2. Combines
+// `tvm:memory` (imported, satisfied by the host's
+// `tvm-wasmtime::add_to_linker`) with a single `run-test`
+// export that boots SQLite against `sqlite-pcache-tvm`'s
+// pcache2 impl with the wit-bindgen TVM backend, runs a small
+// workload, and returns a sum the host asserts on.
+
+package sqlite:probe-tvm-pcache@0.0.0;
+
+world probe {
+    import tvm:memory/types@0.1.0;
+    import tvm:memory/manager@0.1.0;
+    import tvm:memory/bytes@0.1.0;
+    import tvm:memory/diagnostics@0.1.0;
+
+    export run-test: func() -> u32;
+}
