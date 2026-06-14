@@ -1,12 +1,26 @@
 # Plan: Two Remaining Threads
 
+> **Status (updated 2026-06-14): both threads are closed.**
+>
+> | Thread | Resolution |
+> |---|---|
+> | T1 — `spi.execute_live` | **Closed by abandonment.** The dispatch-chain re-entry approach can't work — wasmtime's `may_enter` enforces a Component Model spec rule (no recursive entry into a top-level instance), so the WIT triple, the `LiveSpiBridge`, and the `live-spi-extension` were torn out. Full post-mortem in `host/SPI-LIVE-ARCHITECTURE.md` (landed `85f9115` + tear-down commits `bf97205`, `6341c00`, `0f6816e`, `c8f5643`). |
+> | T2 — Authorizer dispatch | **T2.1-T2.5 shipped.** Authorizer is wired in `cli/src/lib.rs` via `Connection::set_authorizer` (core/src/db.rs:1353 wraps `sqlite3_set_authorizer` directly — rusqlite was dropped, so T2.2's "is `handle()` public?" question is moot). Both the `.auth on|off` REPL command and the `has_authorizer`-driven dispatch in `do_load` are live. Only **T2.6** (the dedicated `auth-extension` acceptance test extension) hasn't shipped; the dispatch path is exercised indirectly by `Host::dispatch_authorize`. |
+>
+> The "out of scope" bullets at the bottom of this plan still
+> stand as named follow-ups (HTTP `allowed_hosts` runtime
+> enforcement is still TODO — `host/src/lib.rs:384` copies the
+> list into `HttpPolicy` but `http::Host::handle` doesn't gate on
+> it). Kept for traceability — don't act on Thread 1 or Thread 2
+> step descriptions as if they're open work.
+
 Everything that landed this session leaves two open implementation
 threads. Both have clear scope; both are gated by specific
 technical unknowns we already know about.
 
 ## Thread 1 — spi.execute_live actual implementation
 
-**Current state:** WIT contract exists (`execute-live`,
+**Current state (original, now stale — see status block above):** WIT contract exists (`execute-live`,
 `execute-scalar-live`, `execute-batch-live`). Host stubs return a
 structured error pointing at this thread. Design baseline:
 `host/SPI-LIVE.md`.
