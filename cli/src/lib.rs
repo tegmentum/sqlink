@@ -76,10 +76,15 @@ fn ensure_cli_conn() {
 
 impl RunGuest for CliCommand {
     fn run() -> Result<(), ()> {
-        // Register the WASI-backed VFS. See db::init_wasivfs for
-        // the persistence caveat (PLAN-cli-persistence.md tracks
-        // the fix).
-        let _ = db::init_wasivfs();
+        // Register the WASI-backed VFS so file-backed opens persist.
+        // The `match` ensures the optimizer can't dead-code the call
+        // (let _ = wasn't enough — possibly because init_wasivfs is
+        // a no-op on non-wasm targets, the optimizer was inferring
+        // it as a no-op overall and removing it).
+        match db::init_wasivfs() {
+            Ok(()) => {}
+            Err(e) => eprintln!("init_wasivfs failed: {} ({})", e.message, e.code),
+        }
         let argv: Vec<String> = std::env::args().collect();
         let db_path = if argv.len() > 1 { argv[1].clone() } else { String::new() };
         DB_PATH.with(|p| *p.borrow_mut() = db_path);

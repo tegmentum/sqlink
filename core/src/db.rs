@@ -384,6 +384,49 @@ impl Connection {
         Ok(out != 0)
     }
 
+    /// Return the VFS name backing this connection's `db_name`
+    /// (default "main"). Wraps sqlite3_file_control with
+    /// SQLITE_FCNTL_VFSNAME, which sqlite mprintfs the name into
+    /// our pointer cell; we copy + free.
+    pub fn vfs_name(&self, db_name: &str) -> Result<String, Error> {
+        let db_c = CString::new(db_name)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let mut out_ptr: *mut c_char = ptr::null_mut();
+        let rc = unsafe {
+            ffi::sqlite3_file_control(
+                self.raw,
+                db_c.as_ptr(),
+                ffi::SQLITE_FCNTL_VFSNAME,
+                &mut out_ptr as *mut _ as *mut c_void,
+            )
+        };
+        if rc != ffi::SQLITE_OK {
+            return Err(unsafe { last_error(self.raw) });
+        }
+        if out_ptr.is_null() {
+            return Ok(String::new());
+        }
+        let s = unsafe { std::ffi::CStr::from_ptr(out_ptr).to_string_lossy().into_owned() };
+        unsafe { ffi::sqlite3_free(out_ptr as *mut c_void) };
+        Ok(s)
+    }
+
+    /// Walk the global VFS list (process-wide registry). Returns
+    /// every registered VFS's name in the order sqlite3 holds them
+    /// (default first).
+    pub fn list_vfses() -> Vec<String> {
+        let mut out = Vec::new();
+        unsafe {
+            let mut p = ffi::sqlite3_vfs_find(ptr::null());
+            while !p.is_null() {
+                let name = std::ffi::CStr::from_ptr((*p).zName).to_string_lossy().into_owned();
+                out.push(name);
+                p = (*p).pNext;
+            }
+        }
+        out
+    }
+
     /// Read sqlite3's process-wide "current memory used" counter.
     /// Used by `.stats` to report after each statement.
     pub fn current_memory_used() -> i64 {

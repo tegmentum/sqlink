@@ -76,8 +76,204 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".limit" => cmd_limit(arg, conn),
         ".binary" => cmd_binary(arg),
         ".log" => "Error: .log is not supported (sqlite3 config-time only)\n".to_string(),
+        ".lint" => cmd_lint(arg, conn),
+        ".sha3sum" => cmd_sha3sum(arg, conn),
+        ".vfslist" => cmd_vfslist(),
+        ".vfsname" => cmd_vfsname(arg, conn),
+        ".archive" => "Error: .archive is not supported (zip ops aren't wired up)\n".to_string(),
         _ => return None,
     })
+}
+
+fn cmd_lint(arg: &str, conn: &Connection) -> String {
+    match arg.trim() {
+        "" | "fkey-indexes" => lint_fkey_indexes(conn),
+        other => format!("Usage: .lint fkey-indexes (got {other:?})\n"),
+    }
+}
+
+/// Reports every foreign key that has no usable index backing it.
+/// Mirrors sqlite3's own `.lint fkey-indexes` output: one
+/// suggested CREATE INDEX per missing index.
+fn lint_fkey_indexes(conn: &Connection) -> String {
+    // Walk every user table and its declared foreign keys. For each
+    // FK, look for any existing index whose first column matches
+    // the FK's `from` column. If none exists, emit a CREATE INDEX
+    // suggestion. Doesn't catch the general "composite index covers
+    // composite FK" case but matches the common pattern.
+    let tables = match query_text_col(
+        conn,
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'",
+        &[],
+    ) {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+    let mut out = String::new();
+    for tbl in tables {
+        let fk_sql = format!(
+            "SELECT \"from\", \"table\", \"to\" FROM pragma_foreign_key_list('{}')",
+            tbl.replace('\'', "''")
+        );
+        let mut stmt = match conn.prepare(&fk_sql) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        let rows = match stmt.collect_rows() {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        drop(stmt);
+        for row in rows {
+            let from_col = match row.first() {
+                Some(Value::Text(s)) => s.clone(),
+                _ => continue,
+            };
+            // Does the table already have an index whose first
+            // column is `from_col`? Inspect every index_list entry
+            // and ask index_info(0).
+            let idx_sql = format!(
+                "SELECT name FROM pragma_index_list('{}')",
+                tbl.replace('\'', "''")
+            );
+            let mut found = false;
+            if let Ok(mut s) = conn.prepare(&idx_sql) {
+                if let Ok(idxs) = s.collect_rows() {
+                    for idx in idxs {
+                        let idx_name = match idx.first() {
+                            Some(Value::Text(s)) => s.clone(),
+                            _ => continue,
+                        };
+                        let info_sql = format!(
+                            "SELECT name FROM pragma_index_info('{}') ORDER BY seqno LIMIT 1",
+                            idx_name.replace('\'', "''")
+                        );
+                        if let Ok(cols) = query_text_col(conn, &info_sql, &[]) {
+                            if cols.first().map(|s| s.as_str()) == Some(from_col.as_str()) {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if !found {
+                out.push_str(&format!(
+                    "CREATE INDEX 'idx_{tbl}_{from_col}' ON \"{tbl}\"(\"{from_col}\"); -- backs FK\n",
+                    tbl = tbl, from_col = from_col
+                ));
+            }
+        }
+    }
+    if out.is_empty() {
+        "(no missing FK indexes)\n".to_string()
+    } else {
+        out
+    }
+}
+
+fn cmd_sha3sum(arg: &str, conn: &Connection) -> String {
+    use sha3::{Digest, Sha3_256};
+    let table_filter = arg.trim();
+    let where_clause = if table_filter.is_empty() || table_filter == "*" {
+        "type='table' AND name NOT LIKE 'sqlite_%'".to_string()
+    } else {
+        let esc = table_filter.replace('\'', "''");
+        format!("type='table' AND name='{esc}'")
+    };
+    let sql = format!(
+        "SELECT name FROM sqlite_master WHERE {where_clause} ORDER BY name"
+    );
+    let tables = match query_text_col(conn, &sql, &[]) {
+        Ok(t) => t,
+        Err(e) => return e,
+    };
+    if tables.is_empty() {
+        return "(no tables matched)\n".to_string();
+    }
+    let mut out = String::new();
+    for tbl in tables {
+        let mut hasher = Sha3_256::new();
+        let select = format!("SELECT * FROM \"{}\"", tbl.replace('"', "\"\""));
+        let mut s = match conn.prepare(&select) {
+            Ok(s) => s,
+            Err(e) => {
+                out.push_str(&format!("Error reading {tbl}: {}\n", e.message));
+                continue;
+            }
+        };
+        let cols = s.column_names();
+        let rows = match s.collect_rows() {
+            Ok(r) => r,
+            Err(e) => {
+                out.push_str(&format!("Error scanning {tbl}: {}\n", e.message));
+                continue;
+            }
+        };
+        drop(s);
+        // Hash a canonical encoding: column name, NUL, value
+        // (typed prefix + bytes), NUL, repeat. Not bit-identical
+        // to sqlite3's sha3sum (which uses its own encoding), but
+        // stable for our build's use.
+        for row in &rows {
+            for (i, v) in row.iter().enumerate() {
+                hasher.update(cols.get(i).map(|s| s.as_bytes()).unwrap_or(b""));
+                hasher.update(b"\0");
+                match v {
+                    Value::Null => hasher.update(b"N"),
+                    Value::Integer(n) => {
+                        hasher.update(b"I");
+                        hasher.update(&n.to_le_bytes());
+                    }
+                    Value::Real(r) => {
+                        hasher.update(b"R");
+                        hasher.update(&r.to_le_bytes());
+                    }
+                    Value::Text(t) => {
+                        hasher.update(b"T");
+                        hasher.update(t.as_bytes());
+                    }
+                    Value::Blob(b) => {
+                        hasher.update(b"B");
+                        hasher.update(b);
+                    }
+                }
+                hasher.update(b"\0");
+            }
+            hasher.update(b"\x01");
+        }
+        let digest = hasher.finalize();
+        let hex: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+        out.push_str(&format!("{hex}  {tbl}\n"));
+    }
+    out
+}
+
+fn cmd_vfslist() -> String {
+    let names = Connection::list_vfses();
+    if names.is_empty() {
+        return "(no VFSes registered)\n".to_string();
+    }
+    let mut out = String::new();
+    for (i, name) in names.iter().enumerate() {
+        let marker = if i == 0 { " (default)" } else { "" };
+        out.push_str(&format!("{name}{marker}\n"));
+    }
+    out
+}
+
+fn cmd_vfsname(arg: &str, conn: &Connection) -> String {
+    let db_name = if arg.is_empty() { "main" } else { arg.trim() };
+    match conn.vfs_name(db_name) {
+        Ok(name) => {
+            if name.is_empty() {
+                format!("(no vfs name for {db_name})\n")
+            } else {
+                format!("{name}\n")
+            }
+        }
+        Err(e) => format!("Error: {}\n", e.message),
+    }
 }
 
 fn cmd_fullschema(conn: &Connection) -> String {

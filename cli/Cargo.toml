@@ -20,6 +20,9 @@ sqlite-wasm-core = { path = "../core" }
 # Needed directly for sqlite3_complete + SQLITE_* action codes used
 # by the in-WASM authorizer dispatch.
 libsqlite3-sys = { version = "0.30" }
+# .sha3sum uses SHA3-256 over a canonical encoding of every row
+# of every table. Pure Rust impl works on wasm32-wasip2 unchanged.
+sha3 = { version = "0.10", default-features = false }
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

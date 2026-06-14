@@ -223,8 +223,14 @@ static int wasifile_checkreservedlock(sqlite3_file *pFile, int *pResOut) {
 
 static int wasifile_filecontrol(sqlite3_file *pFile, int op, void *pArg) {
     (void)pFile;
-    (void)op;
-    (void)pArg;
+    if (op == SQLITE_FCNTL_VFSNAME && pArg != NULL) {
+        // sqlite3_mprintf the vfs name into *pArg per the
+        // SQLITE_FCNTL_VFSNAME contract. The caller is responsible
+        // for sqlite3_free'ing it.
+        char **out = (char**)pArg;
+        *out = sqlite3_mprintf("%s", "wasivfs");
+        return SQLITE_OK;
+    }
     return SQLITE_NOTFOUND;
 }
 
