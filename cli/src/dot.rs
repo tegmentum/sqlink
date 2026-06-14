@@ -82,7 +82,7 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".sha3sum" => cmd_sha3sum(arg, conn),
         ".vfslist" => cmd_vfslist(),
         ".vfsname" => cmd_vfsname(arg, conn),
-        ".archive" => "Error: .archive is not supported (zip ops aren't wired up)\n".to_string(),
+        ".archive" => cmd_archive(arg, conn),
         _ => return None,
     })
 }
@@ -262,6 +262,248 @@ fn cmd_vfslist() -> String {
         out.push_str(&format!("{name}{marker}\n"));
     }
     out
+}
+
+/// `.archive` — SQLAR (SQLite Archive Format) operations. Storage
+/// is a `sqlar(name, mode, mtime, sz, data)` table inside any
+/// SQLite database; we use the current connection by default or
+/// open `--file FILE` instead. Compression: zlib deflate when it
+/// shrinks the file (sz != length(data) → compressed and sz is
+/// the original size; sz == length(data) → stored uncompressed).
+fn cmd_archive(arg: &str, conn: &Connection) -> String {
+    use crate::db;
+    use miniz_oxide::deflate::compress_to_vec_zlib;
+    use miniz_oxide::inflate::decompress_to_vec_zlib;
+
+    #[derive(Debug, Clone, Copy, PartialEq)]
+    enum Op { List, Extract, Create, Update }
+    let mut op = Op::List;
+    let mut file: Option<String> = None;
+    let mut dir: Option<String> = None;
+    let mut positional: Vec<String> = Vec::new();
+    let mut toks = arg.split_whitespace().peekable();
+    while let Some(t) = toks.next() {
+        match t {
+            "--list" | "-t" => op = Op::List,
+            "--extract" | "-x" => op = Op::Extract,
+            "--create" | "-c" => op = Op::Create,
+            "--update" | "-u" => op = Op::Update,
+            "--file" | "-f" => { file = toks.next().map(|s| s.to_string()); }
+            "--directory" | "-C" => { dir = toks.next().map(|s| s.to_string()); }
+            other if other.starts_with("--file=") => file = Some(other[7..].to_string()),
+            other if other.starts_with("--directory=") => dir = Some(other[12..].to_string()),
+            other => positional.push(other.to_string()),
+        }
+    }
+
+    // Where the sqlar table lives. With --file, open a fresh
+    // connection to that path. Without, use the cli's main db
+    // (the `conn` arg).
+    let owned_conn: Option<db::Connection> = match &file {
+        Some(p) => match db::Connection::open(p, db::OpenFlags::DEFAULT) {
+            Ok(c) => Some(c),
+            Err(e) => return format!("Error opening {p}: {}\n", e.message),
+        },
+        None => None,
+    };
+    let target = owned_conn.as_ref().unwrap_or(conn);
+
+    // Ensure the sqlar table exists for ops that need it.
+    let needs_table = matches!(op, Op::Create | Op::Update);
+    if needs_table {
+        if let Err(e) = target.execute_batch(
+            "CREATE TABLE IF NOT EXISTS sqlar(\
+               name TEXT PRIMARY KEY, mode INT, mtime INT, sz INT, data BLOB\
+             ) WITHOUT ROWID"
+        ) {
+            return format!("Error: {}\n", e.message);
+        }
+    }
+
+    match op {
+        Op::List => {
+            // Pattern: SELECT names matching any positional glob;
+            // empty positional means everything.
+            let mut out = String::new();
+            let sql = if positional.is_empty() {
+                "SELECT name, sz FROM sqlar ORDER BY name".to_string()
+            } else {
+                // glob OR chain
+                let preds = positional.iter()
+                    .map(|_| "name GLOB ?")
+                    .collect::<Vec<_>>().join(" OR ");
+                format!("SELECT name, sz FROM sqlar WHERE {preds} ORDER BY name")
+            };
+            let mut stmt = match target.prepare(&sql) {
+                Ok(s) => s,
+                Err(e) => return format!("Error: {}\n", e.message),
+            };
+            let params: Vec<db::Value> = positional.iter()
+                .map(|p| db::Value::Text(p.clone()))
+                .collect();
+            if let Err(e) = stmt.bind_all(&params) {
+                return format!("Error: {}\n", e.message);
+            }
+            let rows = match stmt.collect_rows() {
+                Ok(r) => r,
+                Err(e) => return format!("Error: {}\n", e.message),
+            };
+            for row in rows {
+                if let (Some(db::Value::Text(name)), Some(db::Value::Integer(sz))) =
+                    (row.get(0), row.get(1))
+                {
+                    out.push_str(&format!("{sz:>10}  {name}\n"));
+                }
+            }
+            if out.is_empty() { "(archive empty)\n".to_string() } else { out }
+        }
+        Op::Extract => {
+            // For each row matching positional globs (or all), write
+            // (decompressing first if sz != length(data)) to
+            // `dir/name`. Directory parents are created.
+            let dir = dir.as_deref().unwrap_or(".");
+            let sql = if positional.is_empty() {
+                "SELECT name, sz, data FROM sqlar".to_string()
+            } else {
+                let preds = positional.iter()
+                    .map(|_| "name GLOB ?")
+                    .collect::<Vec<_>>().join(" OR ");
+                format!("SELECT name, sz, data FROM sqlar WHERE {preds}")
+            };
+            let mut stmt = match target.prepare(&sql) {
+                Ok(s) => s,
+                Err(e) => return format!("Error: {}\n", e.message),
+            };
+            let params: Vec<db::Value> = positional.iter()
+                .map(|p| db::Value::Text(p.clone()))
+                .collect();
+            if let Err(e) = stmt.bind_all(&params) {
+                return format!("Error: {}\n", e.message);
+            }
+            let rows = match stmt.collect_rows() {
+                Ok(r) => r,
+                Err(e) => return format!("Error: {}\n", e.message),
+            };
+            let mut out = String::new();
+            let mut count = 0;
+            for row in rows {
+                let name = match row.get(0) {
+                    Some(db::Value::Text(s)) => s.clone(),
+                    _ => continue,
+                };
+                let sz = match row.get(1) {
+                    Some(db::Value::Integer(n)) => *n as usize,
+                    _ => continue,
+                };
+                let data: Vec<u8> = match row.get(2) {
+                    Some(db::Value::Blob(b)) => b.clone(),
+                    _ => continue,
+                };
+                let payload: Vec<u8> = if sz == data.len() {
+                    data
+                } else {
+                    match decompress_to_vec_zlib(&data) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            out.push_str(&format!("Error decompressing {name}: {e:?}\n"));
+                            continue;
+                        }
+                    }
+                };
+                // Names in the archive can be absolute paths the
+                // user typed; Path::join with an absolute right side
+                // REPLACES the left, so /tmp/extract joined with
+                // /tmp/files/foo.txt becomes /tmp/files/foo.txt and
+                // overwrites the original. Strip leading `/` so the
+                // name is always treated as relative to --directory.
+                let rel_name = name.trim_start_matches('/');
+                let target_path = std::path::Path::new(dir).join(rel_name);
+                if let Some(parent) = target_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if let Err(e) = std::fs::write(&target_path, &payload) {
+                    out.push_str(&format!("Error writing {}: {e}\n", target_path.display()));
+                    continue;
+                }
+                count += 1;
+            }
+            out.push_str(&format!("Extracted {count} file(s) to {dir}\n"));
+            out
+        }
+        Op::Create | Op::Update => {
+            if positional.is_empty() {
+                return "Usage: .archive --create FILE [FILES...]\n".to_string();
+            }
+            if op == Op::Create {
+                // wipe the sqlar table — sqlite3's --create rebuilds.
+                if let Err(e) = target.execute_batch("DELETE FROM sqlar") {
+                    return format!("Error: {}\n", e.message);
+                }
+            }
+            let mut stmt = match target.prepare(
+                "INSERT OR REPLACE INTO sqlar(name, mode, mtime, sz, data) \
+                 VALUES (?, ?, ?, ?, ?)"
+            ) {
+                Ok(s) => s,
+                Err(e) => return format!("Error: {}\n", e.message),
+            };
+            let mut count = 0u64;
+            let mut errors = String::new();
+            for fname in &positional {
+                let raw = match std::fs::read(fname) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        errors.push_str(&format!("Error reading {fname}: {e}\n"));
+                        continue;
+                    }
+                };
+                let raw_len = raw.len() as i64;
+                // miniz_oxide level 6 ≈ zlib default. Faster levels
+                // available; this trades a little speed for size.
+                let compressed = compress_to_vec_zlib(&raw, 6);
+                let (data, sz) = if compressed.len() < raw.len() {
+                    (compressed, raw_len)
+                } else {
+                    (raw, raw_len) // when sz == length(data), uncompressed by sqlar convention
+                };
+                let bindings = [
+                    db::Value::Text(fname.clone()),
+                    db::Value::Integer(0o100644), // generic regular-file mode
+                    db::Value::Integer(0),        // mtime — we don't have wall clock yet
+                    db::Value::Integer(sz),
+                    db::Value::Blob(data),
+                ];
+                if let Err(e) = stmt.reset() {
+                    errors.push_str(&format!("Error: {}\n", e.message));
+                    continue;
+                }
+                if let Err(e) = stmt.bind_all(&bindings) {
+                    errors.push_str(&format!("Error: {}\n", e.message));
+                    continue;
+                }
+                loop {
+                    match stmt.step() {
+                        Ok(db::StepResult::Row) => continue,
+                        Ok(db::StepResult::Done) => break,
+                        Err(e) => {
+                            errors.push_str(&format!("Error inserting {fname}: {}\n", e.message));
+                            break;
+                        }
+                    }
+                }
+                count += 1;
+            }
+            let mut out = String::new();
+            if !errors.is_empty() {
+                out.push_str(&errors);
+            }
+            out.push_str(&format!(
+                "{} {count} file(s) into sqlar\n",
+                if op == Op::Create { "Archived" } else { "Updated" }
+            ));
+            out
+        }
+    }
 }
 
 fn cmd_vfsname(arg: &str, conn: &Connection) -> String {
