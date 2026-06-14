@@ -118,7 +118,23 @@ allocations.
 
 ## Phase 1 — Path B: TVM-backed `pcache2`
 
-One commit if measurements come back clean.
+> **Phase 1.0 (plumbing) shipped.** The `sqlite-pcache-tvm` crate
+> implements the eleven `sqlite3_pcache_methods2` trampolines and
+> exposes an `install()` that registers via
+> `sqlite3_config(SQLITE_CONFIG_PCACHE2, …)` before
+> `sqlite3_initialize`. Backend is a pure-Rust HashMap; the
+> integration test opens a real in-memory db and runs a real
+> CREATE/INSERT/SELECT/COUNT workload through it. Phase 1.1 swaps
+> the HashMap for `tvm:memory/manager.create-region` +
+> `manager.alloc` (the WIT path validated by
+> `probe/tvm-substrate/`) without touching the SQLite-facing
+> trampolines.
+
+> **Note on implementation language:** the plan called for "~500
+> LOC C." Pure Rust shipped instead — `libsqlite3-sys` already
+> binds the full `sqlite3_pcache_methods2` shape so the impl can
+> be `extern "C" fn` trampolines pointing into Rust callbacks.
+> Same ABI, no C glue to maintain.
 
 ### What to build
 
@@ -226,6 +242,20 @@ Allocation size + an `eMemSubsystem` hint (SQLite passes it via
 - **PRNG** / **logging** / etc. — not memory issues.
 
 ## Phase 3 — optional wasm64 build target
+
+> **Host-side enabled, guest-side blocked on toolchain.**
+> `Host::new` now sets `wasm_memory64(true)` on the wasmtime
+> Config, so the engine accepts wasm64 components when (and if)
+> one shows up. The guest-side prerequisite is unmet:
+>
+>   - **rustc** doesn't ship `wasm64-wasip2` as a target. As of
+>     `rustc 1.96.0` it isn't listed in `rustup target list`.
+>   - **wasi-sdk 33** ships no wasm64 sysroot — only
+>     `wasm32-wasi*` variants under `share/wasi-sysroot/lib/`.
+>
+> The build-system plumbing (cargo feature, `.cargo/config.toml`
+> env vars, etc.) lands once both upstreams ship support. Until
+> then the TVM track (Phase 1 + 2) is the practical >4-GiB path.
 
 A parallel track to B + C, not a replacement. Some callers want
 the simpler operational story of a single 64-bit linear memory

@@ -5,7 +5,14 @@ resolver = "2"
 # (https://github.com/tegmentum/sqlite-loader-wit); host consumes
 # it via path dep but it's not a workspace member — we don't own
 # that tree.
-members = ["core", "cli", "sqlite-lib", "host", "examples/rust/runnable-sqlite-demo"]
+members = [
+    "core",
+    "cli",
+    "sqlite-lib",
+    "host",
+    "sqlite-pcache-tvm",
+    "examples/rust/runnable-sqlite-demo",
+]
 
 # `cargo build` / `cargo test` at the workspace root operate on
 # the native crates only. The wasm crates (cli, sqlite-lib) are

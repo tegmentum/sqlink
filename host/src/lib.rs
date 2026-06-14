@@ -1471,6 +1471,13 @@ impl Host {
         // bindgen (`imports/exports: { default: async | store }`) for
         // live-SPI re-entry. See host/SPI-LIVE-ARCHITECTURE.md for the design.
         config.wasm_component_model_async(true);
+        // PLAN-tvm-integration Phase 3: accept wasm64-wasip2 guests
+        // when (and if) the rustc / wasi-sdk toolchain ships them.
+        // Enabling this is free for wasm32 modules — the engine
+        // just gains the ability to ALSO instantiate wasm64. Once a
+        // buildable wasm64-wasip2 sqlite-lib exists, the mem64 path
+        // works without further host changes.
+        config.wasm_memory64(true);
         config.consume_fuel(true);
         config.epoch_interruption(true);
         config.cranelift_opt_level(wasmtime::OptLevel::Speed);
