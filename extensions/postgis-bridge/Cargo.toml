@@ -28,3 +28,7 @@ crate-type = ["cdylib"]
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Raster list-return scalars (R1 in PLAN-raster.md) emit JSON;
+# reclass + set_values (R2/R4) parse JSON. Pure-Rust, fine on
+# wasm32-wasip2.
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }

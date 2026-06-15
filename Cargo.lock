@@ -1555,6 +1555,7 @@ dependencies = [
 name = "postgis-bridge-extension"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",
 ]

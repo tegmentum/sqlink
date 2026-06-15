@@ -50,6 +50,7 @@ use bindings::postgis::wasm::postgis_sfcgal as pg_sfcgal;
 use bindings::postgis::wasm::postgis_raster_accessors as pg_rast_acc;
 use bindings::postgis::wasm::postgis_raster_constructors as pg_rast_ctor;
 use bindings::postgis::wasm::postgis_raster_stats as pg_rast_stats;
+use bindings::postgis::wasm::postgis_raster_mapalgebra as pg_rast_ma;
 use bindings::postgis::wasm::postgis_topology_output as pg_topo_out;
 use bindings::postgis::wasm::postgis_topology_types::Topology;
 use bindings::postgis::wasm::postgis_raster_pixels as pg_rast_px;
@@ -496,6 +497,18 @@ const FID_STRTREE_KNN: u64 = 985;
 const FID_STRTREE_WITHIN: u64 = 986;
 const FID_STRTREE_DESTROY: u64 = 987;
 
+// Raster v3 (PLAN-raster.md phases R1-R4): JSON list returns,
+// map-algebra precanned ops, reclass, set-values.
+const FID_RST_HISTOGRAM_JSON: u64 = 1100;
+const FID_RST_VALUECOUNT_JSON: u64 = 1101;
+const FID_RST_SUMMARYSTATS_JSON: u64 = 1102;
+const FID_RST_SETVALUES: u64 = 1103;
+const FID_RST_MA_SCALE: u64 = 1104;
+const FID_RST_MA_THRESHOLD: u64 = 1105;
+const FID_RST_MA_CLIPRANGE: u64 = 1106;
+const FID_RST_MA_LINRESCALE: u64 = 1107;
+const FID_RST_RECLASS_JSON: u64 = 1108;
+
 // Aggregate function ids (separate namespace, but kept distinct
 // from scalar ids for clarity).
 const AGG_ST_UNION: u64 = 1000;
@@ -927,6 +940,16 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_STRTREE_KNN, "st_strtree_knn", 3),
                 s(FID_STRTREE_WITHIN, "st_strtree_within", 3),
                 s(FID_STRTREE_DESTROY, "st_strtree_destroy", 1),
+                // Raster v3 (PLAN-raster.md R1R4)
+                s(FID_RST_HISTOGRAM_JSON, "st_rast_histogram", 3),
+                s(FID_RST_VALUECOUNT_JSON, "st_rast_valuecount", 2),
+                s(FID_RST_SUMMARYSTATS_JSON, "st_rast_summarystatsjson", 2),
+                s(FID_RST_SETVALUES, "st_rast_setvalues", 5),
+                s(FID_RST_MA_SCALE, "st_rast_scale", 3),
+                s(FID_RST_MA_THRESHOLD, "st_rast_threshold", 5),
+                s(FID_RST_MA_CLIPRANGE, "st_rast_cliprange", 4),
+                s(FID_RST_MA_LINRESCALE, "st_rast_linrescale", 6),
+                s(FID_RST_RECLASS_JSON, "st_rast_reclass", 4),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -2968,6 +2991,176 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let h = arg_i64(&args, 0, "st_strtree_destroy")? as u64;
                 pg_strtree::destroy_index(h);
                 Ok(SqlValue::Integer(1))
+            }
+
+            // ── Raster v3: JSON list returns (R1) ──
+            FID_RST_HISTOGRAM_JSON => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_histogram")?, "st_rast_histogram")?;
+                let band = arg_i64(&args, 1, "st_rast_histogram")? as u32;
+                let bins = arg_i64(&args, 2, "st_rast_histogram")? as u32;
+                let v = pg_rast_stats::st_histogram(&r, band, bins)
+                    .map_err(|e| format!("st_rast_histogram: {}", raster_err_string(e)))?;
+                let json: Vec<serde_json::Value> = v
+                    .into_iter()
+                    .map(|b| serde_json::json!({
+                        "min": b.min, "max": b.max, "count": b.count
+                    }))
+                    .collect();
+                Ok(SqlValue::Text(serde_json::Value::Array(json).to_string()))
+            }
+            FID_RST_VALUECOUNT_JSON => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_valuecount")?, "st_rast_valuecount")?;
+                let band = arg_i64(&args, 1, "st_rast_valuecount")? as u32;
+                let v = pg_rast_stats::st_value_count(&r, band)
+                    .map_err(|e| format!("st_rast_valuecount: {}", raster_err_string(e)))?;
+                let json: Vec<serde_json::Value> = v
+                    .into_iter()
+                    .map(|vc| serde_json::json!({
+                        "value": vc.value, "count": vc.count
+                    }))
+                    .collect();
+                Ok(SqlValue::Text(serde_json::Value::Array(json).to_string()))
+            }
+            FID_RST_SUMMARYSTATS_JSON => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_summarystatsjson")?, "st_rast_summarystatsjson")?;
+                let band = arg_i64(&args, 1, "st_rast_summarystatsjson")? as u32;
+                let s = pg_rast_stats::st_summary_stats(&r, band)
+                    .map_err(|e| format!("st_rast_summarystatsjson: {}", raster_err_string(e)))?;
+                let obj = serde_json::json!({
+                    "count": s.count,
+                    "sum": s.sum,
+                    "mean": s.mean,
+                    "stddev": s.stddev,
+                    "min": s.min,
+                    "max": s.max
+                });
+                Ok(SqlValue::Text(obj.to_string()))
+            }
+
+            // ── Raster v3: set_values (R2) ──
+            FID_RST_SETVALUES => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_setvalues")?, "st_rast_setvalues")?;
+                let band = arg_i64(&args, 1, "st_rast_setvalues")? as u32;
+                let x = arg_i64(&args, 2, "st_rast_setvalues")? as u32;
+                let y = arg_i64(&args, 3, "st_rast_setvalues")? as u32;
+                let json_text = arg_text(&args, 4, "st_rast_setvalues")?;
+                let parsed: serde_json::Value = serde_json::from_str(json_text)
+                    .map_err(|e| format!("st_rast_setvalues: parse JSON: {e}"))?;
+                let rows = parsed
+                    .as_array()
+                    .ok_or_else(|| "st_rast_setvalues: expected 2D array".to_string())?;
+                let mut values: Vec<Vec<f64>> = Vec::with_capacity(rows.len());
+                for (i, row) in rows.iter().enumerate() {
+                    let row_arr = row.as_array().ok_or_else(|| {
+                        format!("st_rast_setvalues: row {i} not an array")
+                    })?;
+                    let mut v = Vec::with_capacity(row_arr.len());
+                    for (j, cell) in row_arr.iter().enumerate() {
+                        v.push(cell.as_f64().ok_or_else(|| {
+                            format!("st_rast_setvalues: row {i} col {j} not numeric")
+                        })?);
+                    }
+                    values.push(v);
+                }
+                let out = pg_rast_px::st_set_values(&r, band, x, y, &values)
+                    .map_err(|e| format!("st_rast_setvalues: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+
+            // ── Raster v3: precanned map-algebra ops (R3) ──
+            FID_RST_MA_SCALE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_scale")?, "st_rast_scale")?;
+                let band = arg_i64(&args, 1, "st_rast_scale")? as u32;
+                let factor = arg_f64(&args, 2, "st_rast_scale")?;
+                let expr = format!("val * {factor}");
+                let out = pg_rast_ma::st_map_algebra(
+                    &r, band,
+                    bindings::postgis::wasm::postgis_raster_types::PixelType::Float64,
+                    &expr,
+                )
+                .map_err(|e| format!("st_rast_scale: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_MA_THRESHOLD => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_threshold")?, "st_rast_threshold")?;
+                let band = arg_i64(&args, 1, "st_rast_threshold")? as u32;
+                let t = arg_f64(&args, 2, "st_rast_threshold")?;
+                let lo = arg_f64(&args, 3, "st_rast_threshold")?;
+                let hi = arg_f64(&args, 4, "st_rast_threshold")?;
+                let expr = format!("if val <= {t} {{ {lo} }} else {{ {hi} }}");
+                let out = pg_rast_ma::st_map_algebra(
+                    &r, band,
+                    bindings::postgis::wasm::postgis_raster_types::PixelType::Float64,
+                    &expr,
+                )
+                .map_err(|e| format!("st_rast_threshold: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_MA_CLIPRANGE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_cliprange")?, "st_rast_cliprange")?;
+                let band = arg_i64(&args, 1, "st_rast_cliprange")? as u32;
+                let lo = arg_f64(&args, 2, "st_rast_cliprange")?;
+                let hi = arg_f64(&args, 3, "st_rast_cliprange")?;
+                let expr = format!("math::min(math::max(val, {lo}), {hi})");
+                let out = pg_rast_ma::st_map_algebra(
+                    &r, band,
+                    bindings::postgis::wasm::postgis_raster_types::PixelType::Float64,
+                    &expr,
+                )
+                .map_err(|e| format!("st_rast_cliprange: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_MA_LINRESCALE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_linrescale")?, "st_rast_linrescale")?;
+                let band = arg_i64(&args, 1, "st_rast_linrescale")? as u32;
+                let in_lo = arg_f64(&args, 2, "st_rast_linrescale")?;
+                let in_hi = arg_f64(&args, 3, "st_rast_linrescale")?;
+                let out_lo = arg_f64(&args, 4, "st_rast_linrescale")?;
+                let out_hi = arg_f64(&args, 5, "st_rast_linrescale")?;
+                let expr = format!(
+                    "{out_lo} + (val - {in_lo}) * ({out_hi} - {out_lo}) / ({in_hi} - {in_lo})"
+                );
+                let out = pg_rast_ma::st_map_algebra(
+                    &r, band,
+                    bindings::postgis::wasm::postgis_raster_types::PixelType::Float64,
+                    &expr,
+                )
+                .map_err(|e| format!("st_rast_linrescale: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+
+            // ── Raster v3: reclass via JSON ranges (R4) ──
+            FID_RST_RECLASS_JSON => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_reclass")?, "st_rast_reclass")?;
+                let band = arg_i64(&args, 1, "st_rast_reclass")? as u32;
+                let json_text = arg_text(&args, 2, "st_rast_reclass")?;
+                let parsed: serde_json::Value = serde_json::from_str(json_text)
+                    .map_err(|e| format!("st_rast_reclass: parse JSON: {e}"))?;
+                let ranges = parsed
+                    .as_array()
+                    .ok_or_else(|| "st_rast_reclass: expected array of [lo, hi, newval]".to_string())?;
+                let mut rules = Vec::with_capacity(ranges.len());
+                for (i, range) in ranges.iter().enumerate() {
+                    let arr = range.as_array().ok_or_else(|| {
+                        format!("st_rast_reclass: range {i} not an array")
+                    })?;
+                    if arr.len() != 3 {
+                        return Err(format!(
+                            "st_rast_reclass: range {i} needs [lo, hi, newval]"
+                        ));
+                    }
+                    let lo = arr[0].as_f64().ok_or_else(|| format!("st_rast_reclass: range {i} lo not numeric"))?;
+                    let hi = arr[1].as_f64().ok_or_else(|| format!("st_rast_reclass: range {i} hi not numeric"))?;
+                    let newval = arr[2].as_f64().ok_or_else(|| format!("st_rast_reclass: range {i} newval not numeric"))?;
+                    rules.push(format!("{lo}-{hi}:{newval}"));
+                }
+                let expr = rules.join(", ");
+                let pixel_t_str = arg_text(&args, 3, "st_rast_reclass")?;
+                let pixel_t = parse_pixel_type(pixel_t_str)
+                    .map_err(|e| format!("st_rast_reclass: {e}"))?;
+                let out = pg_rast_ma::st_reclass(&r, band, &expr, pixel_t)
+                    .map_err(|e| format!("st_rast_reclass: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
             }
 
             other => Err(format!("postgis bridge: unknown func id {other}")),
