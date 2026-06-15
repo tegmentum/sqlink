@@ -1,0 +1,111 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS transformation functions for manipulating geometry coordinates
+interface postgis-transformations {
+    use postgis-types.{geometry, postgis-error};
+
+    // ========================================================================
+    // TRANSLATION
+    // ========================================================================
+
+    /// ST_Translate - Translate geometry by offset
+    st-translate: func(geom: borrow<geometry>, dx: f64, dy: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // SCALING
+    // ========================================================================
+
+    /// ST_Scale - Scale geometry by factor
+    st-scale: func(geom: borrow<geometry>, sx: f64, sy: f64) -> result<geometry, postgis-error>;
+
+    /// ST_TransScale - Translate and scale in one operation
+    st-transscale: func(geom: borrow<geometry>, dx: f64, dy: f64, sx: f64, sy: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // ROTATION
+    // ========================================================================
+
+    /// ST_Rotate - Rotate geometry around origin
+    st-rotate: func(geom: borrow<geometry>, angle: f64) -> result<geometry, postgis-error>;
+
+    /// ST_RotateX - Rotate geometry around X axis (3D)
+    st-rotate-x: func(geom: borrow<geometry>, angle: f64) -> result<geometry, postgis-error>;
+
+    /// ST_RotateY - Rotate geometry around Y axis (3D)
+    st-rotate-y: func(geom: borrow<geometry>, angle: f64) -> result<geometry, postgis-error>;
+
+    /// ST_RotateZ - Rotate geometry around Z axis (same as ST_Rotate)
+    st-rotate-z: func(geom: borrow<geometry>, angle: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // AFFINE TRANSFORMS
+    // ========================================================================
+
+    /// ST_Affine - Apply 2D affine transformation
+    st-affine: func(geom: borrow<geometry>, a: f64, b: f64, c: f64, d: f64, e: f64, f: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // COORDINATE SWAPPING
+    // ========================================================================
+
+    /// ST_FlipCoordinates - Swap X and Y coordinates
+    st-flip-coordinates: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_SwapOrdinates - Swap coordinate ordinates
+    st-swap-ordinates: func(geom: borrow<geometry>, ords: string) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // DIMENSION FORCING
+    // ========================================================================
+
+    /// ST_Force2D - Force geometry to 2D (remove Z and M)
+    st-force-twod: func(geom: borrow<geometry>) -> geometry;
+
+    /// ST_Force3D - Force geometry to 3D (add Z=0 if missing)
+    st-force-threed: func(geom: borrow<geometry>) -> geometry;
+
+    /// ST_Force3DZ - Force geometry to XYZ (same as ST_Force3D)
+    st-force-threedz: func(geom: borrow<geometry>) -> geometry;
+
+    /// ST_Force3DM - Force geometry to XYM
+    st-force-threedm: func(geom: borrow<geometry>) -> geometry;
+
+    /// ST_Force4D - Force geometry to XYZM
+    st-force-fourd: func(geom: borrow<geometry>) -> geometry;
+
+    /// ST_ForceCollection - Convert geometry to GeometryCollection
+    st-force-collection: func(geom: borrow<geometry>) -> geometry;
+
+    // ========================================================================
+    // LONGITUDE/LATITUDE ADJUSTMENTS
+    // ========================================================================
+
+    /// ST_ShiftLongitude - Shift longitude values between -180..180 and 0..360
+    st-shift-longitude: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_WrapX - Wrap X coordinates to specified range
+    st-wrap-x: func(geom: borrow<geometry>, wrap: f64, move-val: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // PRECISION
+    // ========================================================================
+
+    /// ST_QuantizeCoordinates - Quantize coordinates to specified precision
+    st-quantize-coordinates: func(geom: borrow<geometry>, prec-x: u32, prec-y: u32) -> result<geometry, postgis-error>;
+
+    /// ST_ForceSFS - Force geometry to be OGC Simple Features compliant (remove curves)
+    st-force-sfs: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // COORDINATE REFERENCE SYSTEM TRANSFORMATIONS (requires PROJ)
+    // ========================================================================
+
+    /// ST_Transform - Transform geometry from one CRS to another using EPSG codes
+    st-transform: func(geom: borrow<geometry>, to-srid: s32) -> result<geometry, postgis-error>;
+
+    /// ST_TransformPipeline - Transform geometry using a PROJ pipeline definition
+    st-transform-pipeline: func(geom: borrow<geometry>, pipeline: string) -> result<geometry, postgis-error>;
+
+    /// ST_InverseTransformPipeline - Transform geometry using inverse of a PROJ pipeline
+    st-inverse-transform-pipeline: func(geom: borrow<geometry>, pipeline: string) -> result<geometry, postgis-error>;
+}

@@ -1,0 +1,322 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS geometry processing functions
+interface postgis-processing {
+    use postgis-types.{geometry, postgis-error};
+
+    // ========================================================================
+    // SET OPERATIONS
+    // ========================================================================
+
+    /// ST_Buffer - Create a buffer around geometry
+    st-buffer: func(geom: borrow<geometry>, distance: f64) -> result<geometry, postgis-error>;
+
+    /// ST_Intersection - Calculate intersection
+    st-intersection: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_Union - Calculate union of two geometries
+    st-union: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_Difference - Calculate difference
+    st-difference: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_SymDifference - Calculate symmetric difference (XOR)
+    st-sym-difference: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_UnaryUnion - Union all parts of a geometry collection
+    st-unary-union: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // SIMPLIFICATION
+    // ========================================================================
+
+    /// ST_Simplify - Simplify using Douglas-Peucker
+    st-simplify: func(geom: borrow<geometry>, tolerance: f64) -> result<geometry, postgis-error>;
+
+    /// ST_SimplifyPreserveTopology - Simplify preserving topology
+    st-simplify-preserve-topology: func(geom: borrow<geometry>, tolerance: f64) -> result<geometry, postgis-error>;
+
+    /// ST_SimplifyVW - Simplify using Visvalingam-Whyatt
+    st-simplify-vw: func(geom: borrow<geometry>, tolerance: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // SMOOTHING
+    // ========================================================================
+
+    /// ST_ChaikinSmoothing - Smooth geometry using Chaikin algorithm
+    st-chaikin-smoothing: func(geom: borrow<geometry>, iterations: u32) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // HULL OPERATIONS
+    // ========================================================================
+
+    /// ST_ConvexHull - Calculate convex hull
+    st-convex-hull: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_ConcaveHull - Get concave hull with target percent
+    st-concave-hull: func(geom: borrow<geometry>, target-percent: f64) -> result<geometry, postgis-error>;
+
+    /// ST_OrientedEnvelope - Get minimum area rotated bounding box
+    st-oriented-envelope: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_MinimumBoundingCircle - Get minimum bounding circle
+    st-minimum-bounding-circle: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // GEOMETRY EXTRACTION
+    // ========================================================================
+
+    /// ST_Centroid - Get centroid point
+    st-centroid: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_Boundary - Get geometry boundary
+    st-boundary: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_PointOnSurface - Get a point guaranteed to be on the surface
+    st-point-on-surface: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // COORDINATE MANIPULATION
+    // ========================================================================
+
+    /// ST_Reverse - Reverse coordinate order
+    st-reverse: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_ForceRHR - Force right-hand rule winding (exterior CW, interior CCW)
+    st-force-rhr: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_Normalize - Normalize geometry to canonical form
+    st-normalize: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_RemoveRepeatedPoints - Remove consecutive duplicate points
+    st-remove-repeated-points: func(geom: borrow<geometry>, tolerance: option<f64>) -> result<geometry, postgis-error>;
+
+    /// ST_SnapToGrid - Snap coordinates to grid
+    st-snap-to-grid: func(geom: borrow<geometry>, size: f64) -> result<geometry, postgis-error>;
+
+    /// ST_Snap - Snap vertices of geom1 to vertices of geom2 within tolerance
+    st-snap: func(geom1: borrow<geometry>, geom2: borrow<geometry>, tolerance: f64) -> result<geometry, postgis-error>;
+
+    /// ST_ReducePrecision - Reduce coordinate precision to grid size
+    st-reduce-precision: func(geom: borrow<geometry>, grid-size: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // LINE OPERATIONS
+    // ========================================================================
+
+    /// ST_LineMerge - Merge connected linestrings
+    st-line-merge: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_LineMergeDirected - Merge connected linestrings respecting direction
+    st-line-merge-directed: func(geom: borrow<geometry>, directed: bool) -> result<geometry, postgis-error>;
+
+    /// ST_OffsetCurve - Create offset curve from a linestring
+    st-offset-curve: func(geom: borrow<geometry>, distance: f64) -> result<geometry, postgis-error>;
+
+    /// ST_SharedPaths - Find paths shared between two linear geometries
+    st-shared-paths: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // TRIANGULATION
+    // ========================================================================
+
+    /// ST_VoronoiPolygons - Generate Voronoi polygons from points
+    st-voronoi-polygons: func(geom: borrow<geometry>, tolerance: f64) -> result<geometry, postgis-error>;
+
+    /// ST_VoronoiLines - Generate Voronoi edges from points
+    st-voronoi-lines: func(geom: borrow<geometry>, tolerance: f64) -> result<geometry, postgis-error>;
+
+    /// ST_DelaunayTriangles - Generate Delaunay triangulation
+    st-delaunay-triangles: func(geom: borrow<geometry>, tolerance: f64) -> result<geometry, postgis-error>;
+
+    /// ST_ConstrainedDelaunayTriangles - Generate constrained Delaunay triangulation (via GEOS)
+    st-constrained-delaunay-triangles: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // POINT GENERATION
+    // ========================================================================
+
+    /// ST_GeneratePoints - Generate random points within a polygon
+    st-generate-points: func(geom: borrow<geometry>, npoints: u32) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // DENSIFICATION
+    // ========================================================================
+
+    /// ST_Segmentize - Add vertices to make segments no longer than given distance
+    st-segmentize: func(geom: borrow<geometry>, max-segment-length: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // VALIDATION AND REPAIR
+    // ========================================================================
+
+    /// ST_MakeValid - Repair invalid geometry
+    st-make-valid: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // POLYGON WINDING
+    // ========================================================================
+
+    /// ST_ForcePolygonCW - Force polygon rings to clockwise winding
+    st-force-polygon-cw: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_ForcePolygonCCW - Force polygon rings to counter-clockwise winding
+    st-force-polygon-ccw: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // TOPOLOGY OPERATIONS
+    // ========================================================================
+
+    /// ST_Split - Split geometry by another geometry
+    st-split: func(geom: borrow<geometry>, blade: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_Subdivide - Subdivide geometry into parts with max vertices
+    st-subdivide: func(geom: borrow<geometry>, max-vertices: u32) -> result<list<geometry>, postgis-error>;
+
+    /// ST_Node - Node a collection of linestrings
+    st-node: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_Polygonize - Create polygons from a set of linework
+    st-polygonize: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_BuildArea - Build polygonal geometry from linework
+    st-build-area: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // CLIPPING
+    // ========================================================================
+
+    /// ST_ClipByBox2D - Clip geometry to a 2D bounding box
+    st-clip-by-box2d: func(geom: borrow<geometry>, xmin: f64, ymin: f64, xmax: f64, ymax: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // MEDIAL OPERATIONS
+    // ========================================================================
+
+    /// ST_GeometricMedian - Calculate geometric median (Weiszfeld algorithm)
+    st-geometric-median: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_ApproximateMedialAxis - Get approximate medial axis of polygon
+    st-approximate-medial-axis: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // RING MANIPULATION
+    // ========================================================================
+
+    /// ST_Scroll - Reorder ring starting point to match given point
+    st-scroll: func(geom: borrow<geometry>, point: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // M VALUE FILTERING
+    // ========================================================================
+
+    /// ST_FilterByM - Remove vertices based on M value range
+    st-filter-by-m: func(geom: borrow<geometry>, min-m: f64, max-m: option<f64>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // ADDITIONAL HULL/BOUNDING OPERATIONS
+    // ========================================================================
+
+    /// ST_MinimumBoundingRadius - Get radius of minimum bounding circle
+    st-minimum-bounding-radius: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    // ========================================================================
+    // SMALL PART REMOVAL
+    // ========================================================================
+
+    /// ST_RemoveSmallParts - Remove small polygon parts below threshold
+    st-remove-small-parts: func(geom: borrow<geometry>, min-area: f64, min-length: option<f64>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // POLYGON TRIANGULATION
+    // ========================================================================
+
+    /// ST_TriangulatePolygon - Create triangles that cover a polygon
+    st-triangulate-polygon: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // MEMORY-EFFICIENT UNION
+    // ========================================================================
+
+    /// ST_MemUnion - Memory-efficient union (aggregates geometries incrementally)
+    st-mem-union: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // INSCRIBED CIRCLE
+    // ========================================================================
+
+    /// ST_MaximumInscribedCircle - Find largest circle that fits within polygon
+    st-maximum-inscribed-circle: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // HULL SIMPLIFICATION
+    // ========================================================================
+
+    /// ST_SimplifyPolygonHull - Simplify polygon keeping valid topology
+    st-simplify-polygon-hull: func(geom: borrow<geometry>, vertex-fraction: f64, is-outer: bool) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // LARGEST EMPTY CIRCLE
+    // ========================================================================
+
+    /// ST_LargestEmptyCircle - Find largest empty circle within geometry bounds
+    st-largest-empty-circle: func(geom: borrow<geometry>, tolerance: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // EFFECTIVE AREA
+    // ========================================================================
+
+    /// ST_SetEffectiveArea - Set M coordinate to Visvalingam-Whyatt effective area
+    st-set-effective-area: func(geom: borrow<geometry>, threshold: option<f64>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // COVERAGE OPERATIONS (GEOS 3.12+)
+    // ========================================================================
+
+    /// ST_CoverageInvalidEdges - Find invalid edges in a polygonal coverage
+    /// Returns a geometry collection of linear invalid edges, or empty if valid
+    st-coverage-invalid-edges: func(geom: borrow<geometry>, gap-width: f64) -> result<geometry, postgis-error>;
+
+    /// ST_CoverageSimplify - Simplify edges of a polygonal coverage
+    /// Uses Visvalingam-Whyatt algorithm while maintaining coverage validity
+    st-coverage-simplify: func(geom: borrow<geometry>, tolerance: f64, simplify-boundary: bool) -> result<geometry, postgis-error>;
+
+    /// ST_CoverageUnion - Union polygons in a coverage (optimized)
+    /// Input must be a valid coverage (no overlaps, edges match exactly)
+    st-coverage-union: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_CoverageClean - Clean a polygonal coverage (GEOS 3.14+)
+    /// Fixes overlaps and gaps to produce a valid coverage
+    /// snapping-distance: distance for vertex snapping (0 = use default small distance)
+    /// gap-max-width: maximum width of gaps to merge (0 = no gap merging)
+    st-coverage-clean: func(geom: borrow<geometry>, snapping-distance: f64, gap-max-width: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // CURVE OPERATIONS (GEOS 3.13+)
+    // ========================================================================
+
+    /// ST_CurveToLine - Convert curved geometries to linear approximation
+    /// tolerance: controls approximation quality
+    /// tolerance-type: 0 = segments per quadrant (default 32)
+    ///                 1 = max deviation from curve in source units
+    ///                 2 = max angle between generating radii in radians
+    /// curve-flags: bit flags (1 = symmetric, 2 = retain angle)
+    st-curve-to-line: func(geom: borrow<geometry>, tolerance: f64, tolerance-type: u32, curve-flags: u32) -> result<geometry, postgis-error>;
+
+    /// ST_LineToCurve - Convert linear geometry to curved approximation
+    /// Attempts to find circular arcs that fit the linear segments
+    st-line-to-curve: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_ForceCurve - Converts a geometry to its curved representation
+    /// For linear geometries, attempts to find circular arcs that fit the segments
+    st-force-curve: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_HasArc - Check if geometry contains curved segments
+    st-has-arc: func(geom: borrow<geometry>) -> bool;
+
+    /// ST_NumCurves - Get number of curves in a CompoundCurve
+    st-num-curves: func(geom: borrow<geometry>) -> u32;
+
+    /// ST_CurveN - Get nth curve (0-indexed) from a CompoundCurve
+    st-curve-n: func(geom: borrow<geometry>, n: u32) -> result<geometry, postgis-error>;
+}
