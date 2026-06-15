@@ -1,5 +1,29 @@
 # Plan: postgis-bridge performance optimization
 
+> **Status (2026-06-15)**: O1 shipped (commit `124116d`).
+> Measured profile after O1 led to **dropping O2 and O3 as
+> not-worth-doing**.
+>
+> Measured per-call cost on a 1000-row scan with the cached
+> Store + Instance:
+>
+> | Test                                                  | Per call |
+> |-------------------------------------------------------|----------|
+> | `SUM(st_x(g))` (trivial)                              | ~75 µs   |
+> | `SUM(st_distance(g, const_polygon_blob))` (102 B blob)| ~89 µs   |
+> | `SUM(st_distance(g, st_makepoint(...)))` (subexpr)    | ~135 µs  |
+>
+> The plan's own gate for O2 was "if `from_wkb` is the new top
+> frame, do O2." It isn't. `from_wkb` on a 102-byte polygon
+> accounts for ~14 µs of an 89 µs call — about 16% of per-call
+> time. The closure refactor of 108 call sites for a 16%
+> best-case improvement on heavy-WKB calls doesn't pay back.
+> Wasm boundary overhead (call setup, args marshaling) is now
+> the floor and isn't addressable by interning.
+>
+> O3 (slim bundle) was conditional on cold-start being a real
+> complaint. No evidence it is. Skip.
+
 ## Goal
 
 Cut per-call cost for the postgis-bridge dispatch path so a
