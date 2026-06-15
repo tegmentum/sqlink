@@ -14,7 +14,7 @@ use anyhow::{anyhow, Context, Result};
 use sqlite_wasm_core::db::{Connection, OpenFlags, StepResult, Value};
 
 use crate::resolver::{ArtifactRef, ResolverRegistry, Source};
-use crate::schema::{INSTALL_SCHEMA, SCHEMA_VERSION};
+use crate::schema::{INSTALL_SCHEMA, MIGRATE_V1_TO_V2, SCHEMA_VERSION};
 
 /// Blake3 hash, 32 bytes. Wrapped so callers can pass it around
 /// without reaching for the `blake3` crate directly.
@@ -154,27 +154,27 @@ impl SqliteCasStore {
         self.conn
             .execute_batch(INSTALL_SCHEMA)
             .map_err(|e| anyhow!("install schema: {}", e.message))?;
-        // Verify schema_version matches what this code expects.
-        // Forward-compat detection in case a future binary writes
-        // a higher version.
-        let mut stmt = self
-            .conn
-            .prepare("SELECT value FROM __cas_meta WHERE key = 'schema_version'")
-            .map_err(|e| anyhow!("prepare schema_version: {}", e.message))?;
-        let observed = match stmt
-            .step()
-            .map_err(|e| anyhow!("step schema_version: {}", e.message))?
-        {
-            StepResult::Row => match stmt.column_value(0) {
-                Value::Text(s) => s,
-                other => return Err(anyhow!("schema_version not text: {other:?}")),
-            },
-            StepResult::Done => return Err(anyhow!("schema_version missing after install")),
-        };
-        if observed != SCHEMA_VERSION {
-            return Err(anyhow!(
-                "incompatible cas schema version: code expects {SCHEMA_VERSION}, db has {observed}"
-            ));
+        // Read the version. A v1 db has the v1 schema (no
+        // sha256 column); the INSTALL_SCHEMA above is a no-op
+        // because the tables already exist with CREATE IF NOT
+        // EXISTS. Run the v1->v2 ALTER to bring it up to date.
+        loop {
+            let observed = read_schema_version(&self.conn)?;
+            if observed == SCHEMA_VERSION {
+                break;
+            }
+            match observed.as_str() {
+                "1" => {
+                    self.conn
+                        .execute_batch(MIGRATE_V1_TO_V2)
+                        .map_err(|e| anyhow!("migrate v1 -> v2: {}", e.message))?;
+                }
+                _ => {
+                    return Err(anyhow!(
+                        "incompatible cas schema version: code expects {SCHEMA_VERSION}, db has {observed} (no upgrade path)"
+                    ));
+                }
+            }
         }
         Ok(())
     }
@@ -183,16 +183,20 @@ impl SqliteCasStore {
     /// hash collision (existing row's `last_used_at` updates).
     pub fn put(&mut self, bytes: &[u8]) -> Result<Hash> {
         let hash = blake3::hash(bytes);
+        let sha = sha256_of(bytes);
         let now = unix_now();
         // INSERT OR IGNORE so re-puts of the same bytes don't
-        // duplicate. Update last_used_at + use_count on hit.
+        // duplicate. Update last_used_at + use_count on hit; also
+        // backfill sha256 on hit so v1-migrated rows pick up
+        // their mirror digest the next time they're seen.
         let mut insert = self
             .conn
             .prepare(
                 "INSERT INTO __cas_artifact \
-                    (hash, bytes, bytes_len, created_at, last_used_at, use_count) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, 0) \
+                    (hash, sha256, bytes, bytes_len, created_at, last_used_at, use_count) \
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0) \
                  ON CONFLICT(hash) DO UPDATE SET \
+                    sha256       = COALESCE(__cas_artifact.sha256, excluded.sha256), \
                     last_used_at = excluded.last_used_at, \
                     use_count    = use_count + 1",
             )
@@ -200,6 +204,7 @@ impl SqliteCasStore {
         insert
             .bind_all(&[
                 Value::Blob(hash.as_bytes().to_vec()),
+                Value::Blob(sha.to_vec()),
                 Value::Blob(bytes.to_vec()),
                 Value::Integer(bytes.len() as i64),
                 Value::Integer(now),
@@ -210,6 +215,54 @@ impl SqliteCasStore {
             StepResult::Done => Ok(hash),
             StepResult::Row => Err(anyhow!("insert returned row")),
         }
+    }
+
+    /// Fetch bytes by sha-256 digest. CP8 mirror: bytes go in
+    /// under (blake3, sha256) so callers that only know the
+    /// sha-256 still hit. Updates last_used_at + use_count
+    /// when found, like `get`.
+    pub fn get_by_sha256(&mut self, sha256: &[u8; 32]) -> Result<Option<Vec<u8>>> {
+        let now = unix_now();
+        let mut sel = self
+            .conn
+            .prepare(
+                "SELECT bytes, hash FROM __cas_artifact WHERE sha256 = ?1",
+            )
+            .map_err(|e| anyhow!("prepare get_by_sha256: {}", e.message))?;
+        sel.bind_all(&[Value::Blob(sha256.to_vec())])
+            .map_err(|e| anyhow!("bind get_by_sha256: {}", e.message))?;
+        let (bytes, blake_hash) = match sel
+            .step()
+            .map_err(|e| anyhow!("step get_by_sha256: {}", e.message))?
+        {
+            StepResult::Row => {
+                let b = match sel.column_value(0) {
+                    Value::Blob(b) => b,
+                    other => return Err(anyhow!("bytes column not blob: {other:?}")),
+                };
+                let h = match sel.column_value(1) {
+                    Value::Blob(b) => b,
+                    other => return Err(anyhow!("hash column not blob: {other:?}")),
+                };
+                (Some(b), Some(h))
+            }
+            StepResult::Done => (None, None),
+        };
+        drop(sel);
+        if let Some(h) = blake_hash {
+            let mut upd = self
+                .conn
+                .prepare(
+                    "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
+                     WHERE hash = ?1",
+                )
+                .map_err(|e| anyhow!("prepare get-update: {}", e.message))?;
+            upd.bind_all(&[Value::Blob(h), Value::Integer(now)])
+                .map_err(|e| anyhow!("bind get-update: {}", e.message))?;
+            upd.step()
+                .map_err(|e| anyhow!("step get-update: {}", e.message))?;
+        }
+        Ok(bytes)
     }
 
     /// Fetch bytes for a hash, if cached. Updates
@@ -765,4 +818,31 @@ fn unix_now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+/// Read the `schema_version` meta-row. Pulled out so both initial
+/// install + migration loop can reuse it.
+fn read_schema_version(conn: &Connection) -> Result<String> {
+    let mut stmt = conn
+        .prepare("SELECT value FROM __cas_meta WHERE key = 'schema_version'")
+        .map_err(|e| anyhow!("prepare schema_version: {}", e.message))?;
+    match stmt
+        .step()
+        .map_err(|e| anyhow!("step schema_version: {}", e.message))?
+    {
+        StepResult::Row => match stmt.column_value(0) {
+            Value::Text(s) => Ok(s),
+            other => Err(anyhow!("schema_version not text: {other:?}")),
+        },
+        StepResult::Done => Err(anyhow!("schema_version missing after install")),
+    }
+}
+
+/// SHA-256 of `bytes` as 32 raw bytes. Sibling to the blake3
+/// hash used as the primary key.
+fn sha256_of(bytes: &[u8]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hasher.finalize().into()
 }

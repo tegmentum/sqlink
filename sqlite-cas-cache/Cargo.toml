@@ -38,6 +38,10 @@ https = ["dep:reqwest"]
 sqlite-wasm-core = { path = "../core" }
 # Hash primitive. The host already pins this version.
 blake3 = "1.5"
+# SHA-256 mirror column (CP8) — compose providers identify
+# bytes by sha-256 hex; the CAS stores both digests on every
+# put so lookup_by_hash works either way.
+sha2 = { version = "0.10", default-features = false }
 # Atomic-tempfile writes during migration export, file
 # resolution, etc.
 tempfile = "3"

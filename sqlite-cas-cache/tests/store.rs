@@ -142,6 +142,28 @@ fn internal_mode_works_alongside_user_schema() {
 }
 
 #[test]
+fn put_populates_sha256_mirror_and_get_by_sha256_roundtrips() {
+    use sha2::{Digest, Sha256};
+    let (_d, mut s) = fresh_external();
+    let bytes = b"sha-256 mirror payload";
+    s.put(bytes).unwrap();
+    let mut sha = Sha256::new();
+    sha.update(bytes);
+    let sha_digest: [u8; 32] = sha.finalize().into();
+    let got = s.get_by_sha256(&sha_digest).unwrap();
+    assert_eq!(got.as_deref(), Some(&bytes[..]));
+}
+
+#[test]
+fn get_by_sha256_returns_none_for_unknown_digest() {
+    let (_d, mut s) = fresh_external();
+    s.put(b"known bytes").unwrap();
+    let mut unknown = [0u8; 32];
+    unknown[0] = 0xff; // not sha256(known bytes)
+    assert!(s.get_by_sha256(&unknown).unwrap().is_none());
+}
+
+#[test]
 fn external_mode_persists_across_reopens() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("cas.sqlite");

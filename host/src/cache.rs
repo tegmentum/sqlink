@@ -142,16 +142,18 @@ impl Cache {
         Some((hash.to_hex().to_string(), bytes))
     }
 
-    /// Look up bytes by blake3 hex. Currently does *not* fall
-    /// back to a sha256 mirror  the prior filesystem cache did,
-    /// but the SQLite schema only indexes blake3. Compose
-    /// interop that needed the dual lookup will return None
-    /// here; see PLAN-cas-cache.md for the sha256 follow-up.
+    /// Look up bytes by digest hex. CP8: tries blake3 first
+    /// (the primary key) then falls back to the sha256 mirror
+    /// column. Either 64-hex-char digest can be passed; the
+    /// algorithm isn't part of the input contract.
     pub fn lookup_by_hash(&self, hex: &str) -> Option<Vec<u8>> {
         let bytes = decode_hex32(hex)?;
-        let hash = blake3::Hash::from_bytes(bytes);
         let mut store = self.inner.lock();
-        store.get(&hash).ok().flatten()
+        let hash = blake3::Hash::from_bytes(bytes);
+        if let Ok(Some(b)) = store.get(&hash) {
+            return Some(b);
+        }
+        store.get_by_sha256(&bytes).ok().flatten()
     }
 
     /// Cache `bytes` for `uri`. Returns the blake3 hex.

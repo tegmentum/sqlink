@@ -417,10 +417,11 @@ impl<'a> compose::compose::dynlink::linker::Host for HostWrap<'a> {
         &mut self,
         digest: Vec<u8>,
     ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
-        // v1: the digest is opaque bytes; lookup_by_hash tries both
-        // blake3 and sha-256 paths under the cache. If the bytes
-        // resolve to a registered provider, hand out an Instance.
-        // Otherwise NotFound.
+        // CP8: the digest is opaque bytes whose hex spelling indexes
+        // into the CAS by either blake3 or sha-256 (the store's
+        // sha256 mirror column makes the lookup symmetric). Cache
+        // hit → compile bytes through the TrustPolicy → instantiate
+        // a dynlink-provider component → hand out the Resource.
         let hex = digest
             .iter()
             .map(|b| format!("{b:02x}"))
@@ -429,20 +430,54 @@ impl<'a> compose::compose::dynlink::linker::Host for HostWrap<'a> {
             let g = self.host.cache.read();
             g.as_ref().and_then(|c| c.lookup_by_hash(&hex))
         };
-        let Some(_bytes) = cached_bytes else {
-            return Err(compose_err(format!(
-                "digest {hex} not in cache (CP8 will add real provider instantiation here)"
-            )));
+        let Some(bytes) = cached_bytes else {
+            return Err(compose_err(format!("digest {hex} not in cache")));
         };
-        // CP8 will instantiate the cached bytes as a dynlink-provider
-        // component. For CP7 the path is reachable and we surface a
-        // structured error so callers know the cache hit but the
-        // wasm-component provider path isn't wired yet.
-        Err(compose_err(format!(
-            "digest {hex} found in cache but wasm-component providers \
-             aren't instantiated in v1 (only registered host shims like sqlite-runtime). \
-             See PLAN-compose-integration.md."
-        )))
+        // Same trust gate as the explicit registration path
+        // (register_wasm_provider_in_async). Digest-resolution
+        // mustn't be a backdoor for unsigned bytes when a stricter
+        // policy is active.
+        let policy = self.host.trust_policy.read().clone();
+        match &policy {
+            TrustPolicy::Ed25519Signed { .. } => {
+                // Signature sidecars live next to filesystem
+                // artifacts (`<path>.sig`). The CAS doesn't carry a
+                // sig column today; refuse rather than silently
+                // weaken the policy.
+                return Err(compose_err(format!(
+                    "digest {hex} cached but TrustPolicy::Ed25519Signed \
+                     requires a signature sidecar; route this provider \
+                     through register_wasm_provider_in_async instead"
+                )));
+            }
+            other => {
+                // verify expects the blake3 hex. The hex we have is
+                // either blake3 or sha-256; the verifier rejects
+                // unknown digests under DigestAllowlist, which is
+                // the correct outcome for unauthorized sha-256
+                // lookups against a blake3-keyed allowlist.
+                if let Err(e) = other.verify("compose-resolve-by-digest", &hex) {
+                    return Err(compose_err(format!(
+                        "trust policy rejected digest {hex}: {e}"
+                    )));
+                }
+            }
+        }
+        let provider = compose_provider::ProviderHandle::new_wasm_component_from_bytes(
+            self.host.engine.clone(),
+            &bytes,
+            PathBuf::from(format!("blake3:{hex}")),
+        )
+        .map_err(|e| compose_err(format!("instantiate digest {hex}: {e}")))?;
+        let resources = self
+            .resources
+            .as_deref_mut()
+            .ok_or_else(|| compose_err("compose linker not wired into this Store"))?;
+        resources
+            .push(ComposeInstance {
+                provider: Arc::new(provider),
+            })
+            .map_err(|e| compose_err(format!("resource table push: {e}")))
     }
 
     async fn resolve_by_id(

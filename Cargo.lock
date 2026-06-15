@@ -2186,6 +2186,7 @@ dependencies = [
  "anyhow",
  "blake3",
  "reqwest",
+ "sha2",
  "sqlite-wasm-core",
  "tempfile",
 ]
