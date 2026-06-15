@@ -1,0 +1,138 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS geodetic functions for spherical calculations
+interface postgis-geodetic {
+    use postgis-types.{geometry, geography, postgis-error};
+
+    // ========================================================================
+    // GEOMETRY GEODETIC FUNCTIONS (Spherical model)
+    // ========================================================================
+
+    /// ST_DistanceSphere - Calculate distance using spherical model (in meters)
+    /// Uses a spherical Earth model with radius 6371008.8 meters
+    st-distance-sphere: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_Project - Project a point along azimuth by distance (in meters)
+    /// Returns a new point projected from start point
+    st-project: func(point: borrow<geometry>, distance: f64, azimuth: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // GEOGRAPHY FUNCTIONS (Geodesic calculations on WGS84 ellipsoid)
+    // ========================================================================
+
+    /// ST_Distance (geography) - Calculate geodesic distance between geographies in meters
+    /// Uses accurate ellipsoidal model via GeographicLib
+    st-geog-distance: func(geog1: borrow<geography>, geog2: borrow<geography>) -> f64;
+
+    /// ST_DWithin (geography) - Check if geographies are within specified distance (meters)
+    /// Uses geodesic distance calculation
+    st-geog-dwithin: func(geog1: borrow<geography>, geog2: borrow<geography>, distance: f64) -> bool;
+
+    /// ST_Length (geography) - Calculate geodesic length of a geography in meters
+    /// For LineStrings and MultiLineStrings
+    st-geog-length: func(geog: borrow<geography>) -> f64;
+
+    /// ST_Area (geography) - Calculate geodesic area of a geography in square meters
+    /// For Polygons and MultiPolygons, uses accurate ellipsoidal calculation
+    st-geog-area: func(geog: borrow<geography>) -> f64;
+
+    /// ST_Perimeter (geography) - Calculate geodesic perimeter of a geography in meters
+    /// For Polygons and MultiPolygons
+    st-geog-perimeter: func(geog: borrow<geography>) -> f64;
+
+    /// ST_Azimuth (geography) - Calculate azimuth (bearing) between two geography points
+    /// Returns azimuth in radians, clockwise from north
+    st-geog-azimuth: func(geog1: borrow<geography>, geog2: borrow<geography>) -> option<f64>;
+
+    /// ST_Project (geography) - Project a geography point along azimuth by distance
+    /// azimuth in radians, distance in meters
+    /// Returns the projected point as geography
+    st-geog-project: func(geog: borrow<geography>, azimuth: f64, distance: f64) -> result<geography, postgis-error>;
+
+    /// ST_Segmentize (geography) - Densify a geography by adding points
+    /// max_segment_length in meters
+    st-geog-segmentize: func(geog: borrow<geography>, max-segment-length: f64) -> result<geography, postgis-error>;
+
+    /// ST_Covers (geography) - Check if first geography covers second
+    /// Uses geodesic calculations
+    st-geog-covers: func(geog1: borrow<geography>, geog2: borrow<geography>) -> bool;
+
+    /// ST_CoveredBy (geography) - Check if first geography is covered by second
+    /// Uses geodesic calculations
+    st-geog-covered-by: func(geog1: borrow<geography>, geog2: borrow<geography>) -> bool;
+
+    /// ST_Intersects (geography) - Check if geographies intersect
+    /// Uses geodesic calculations
+    st-geog-intersects: func(geog1: borrow<geography>, geog2: borrow<geography>) -> bool;
+
+    // ========================================================================
+    // GEOGRAPHY PROCESSING OPERATIONS
+    // ========================================================================
+
+    /// ST_Buffer (geography) - Create a geodesic buffer around a geography
+    /// distance in meters, returns buffered geography
+    /// Uses local azimuthal equidistant projection for accurate results
+    st-geog-buffer: func(geog: borrow<geography>, distance: f64) -> result<geography, postgis-error>;
+
+    /// ST_Buffer (geography) with segments - Create a geodesic buffer with specified segments per quarter
+    st-geog-buffer-with-segs: func(geog: borrow<geography>, distance: f64, quad-segs: u32) -> result<geography, postgis-error>;
+
+    /// ST_Centroid (geography) - Calculate geodesic centroid of a geography
+    /// Returns the geographic center point
+    st-geog-centroid: func(geog: borrow<geography>) -> result<geography, postgis-error>;
+
+    /// ST_Intersection (geography) - Calculate intersection of two geographies
+    /// Returns the overlapping area/line/points
+    st-geog-intersection: func(geog1: borrow<geography>, geog2: borrow<geography>) -> result<geography, postgis-error>;
+
+    /// ST_Union (geography) - Calculate union of two geographies
+    /// Returns the combined geography
+    st-geog-union: func(geog1: borrow<geography>, geog2: borrow<geography>) -> result<geography, postgis-error>;
+
+    /// ST_Difference (geography) - Calculate difference of two geographies (geog1 - geog2)
+    /// Returns the part of geog1 that does not intersect geog2
+    st-geog-difference: func(geog1: borrow<geography>, geog2: borrow<geography>) -> result<geography, postgis-error>;
+
+    /// ST_SymDifference (geography) - Calculate symmetric difference of two geographies
+    /// Returns areas in either geography but not both
+    st-geog-sym-difference: func(geog1: borrow<geography>, geog2: borrow<geography>) -> result<geography, postgis-error>;
+
+    /// ST_Expand (geography) - Expand bounding box of geography by distance in meters
+    st-geog-expand: func(geog: borrow<geography>, distance: f64) -> result<geography, postgis-error>;
+
+    /// ST_ClosestPoint (geography) - Find closest point on geog1 to geog2
+    st-geog-closest-point: func(geog1: borrow<geography>, geog2: borrow<geography>) -> result<geography, postgis-error>;
+
+    // ========================================================================
+    // GEOGRAPHY ACCESSOR FUNCTIONS
+    // ========================================================================
+
+    /// ST_NPoints (geography) - Return number of points in geography
+    st-geog-npoints: func(geog: borrow<geography>) -> u32;
+
+    /// ST_Summary (geography) - Return text summary of geography contents
+    st-geog-summary: func(geog: borrow<geography>) -> string;
+
+    /// ST_GeometryType (geography) - Return geometry type of geography as string
+    st-geog-geometry-type: func(geog: borrow<geography>) -> string;
+
+    /// ST_IsEmpty (geography) - Check if geography is empty
+    st-geog-is-empty: func(geog: borrow<geography>) -> bool;
+
+    /// ST_IsSimple (geography) - Check if geography is simple (no self-intersections)
+    st-geog-is-simple: func(geog: borrow<geography>) -> bool;
+
+    /// ST_IsClosed (geography) - Check if geography is closed (for linestrings)
+    st-geog-is-closed: func(geog: borrow<geography>) -> bool;
+
+    /// ST_ConvexHull (geography) - Convex hull of a geography.
+    st-geog-convex-hull: func(geog: borrow<geography>) -> result<geography, postgis-error>;
+
+    /// ST_LineSubstring (geography) - Sub-line between two fractions in
+    /// [0, 1] of the line's length.
+    st-geog-line-substring: func(
+        geog: borrow<geography>,
+        start-fraction: f64,
+        end-fraction: f64,
+    ) -> result<geography, postgis-error>;
+}

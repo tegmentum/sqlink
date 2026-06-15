@@ -42,7 +42,8 @@ use bindings::postgis::wasm::postgis_processing as pg_proc;
 use bindings::postgis::wasm::postgis_transformations as pg_xform;
 use bindings::postgis::wasm::postgis_linear_ref as pg_lin;
 use bindings::postgis::wasm::postgis_three_d as pg_threed;
-use bindings::postgis::wasm::postgis_types::Geometry;
+use bindings::postgis::wasm::postgis_types::{Geography, Geometry};
+use bindings::postgis::wasm::postgis_geodetic as pg_geog;
 
 use core::cell::RefCell;
 use std::collections::HashMap;
@@ -320,6 +321,45 @@ const FID_ST_GEOM_FROM_KML: u64 = 610;
 const FID_ST_GEOM_FROM_GML: u64 = 611;
 const FID_ST_GEOM_FROM_TWKB: u64 = 612;
 const FID_ST_LINE_FROM_ENCODED_POLY: u64 = 613;
+
+// Geodetic (geometry-typed helpers)
+const FID_ST_DISTANCE_SPHERE: u64 = 640;
+const FID_ST_PROJECT: u64 = 641;
+
+// Geography-typed: input/output as BLOB (geography WKB).
+const FID_ST_GEOGFROMTEXT: u64 = 700;
+const FID_ST_GEOGFROMWKB: u64 = 701;
+const FID_ST_GEOG_POINT: u64 = 702;
+const FID_ST_GEOG_ASTEXT: u64 = 703;
+const FID_ST_GEOG_DISTANCE: u64 = 704;
+const FID_ST_GEOG_LENGTH: u64 = 705;
+const FID_ST_GEOG_AREA: u64 = 706;
+const FID_ST_GEOG_PERIMETER: u64 = 707;
+const FID_ST_GEOG_DWITHIN: u64 = 708;
+const FID_ST_GEOG_AZIMUTH: u64 = 709;
+const FID_ST_GEOG_PROJECT: u64 = 710;
+const FID_ST_GEOG_SEGMENTIZE: u64 = 711;
+const FID_ST_GEOG_COVERS: u64 = 712;
+const FID_ST_GEOG_COVERED_BY: u64 = 713;
+const FID_ST_GEOG_INTERSECTS: u64 = 714;
+const FID_ST_GEOG_BUFFER: u64 = 715;
+const FID_ST_GEOG_BUFFER_SEGS: u64 = 716;
+const FID_ST_GEOG_CENTROID: u64 = 717;
+const FID_ST_GEOG_INTERSECTION: u64 = 718;
+const FID_ST_GEOG_UNION: u64 = 719;
+const FID_ST_GEOG_DIFFERENCE: u64 = 720;
+const FID_ST_GEOG_SYM_DIFFERENCE: u64 = 721;
+const FID_ST_GEOG_EXPAND: u64 = 722;
+const FID_ST_GEOG_CLOSEST_POINT: u64 = 723;
+const FID_ST_GEOG_NPOINTS: u64 = 724;
+const FID_ST_GEOG_SUMMARY: u64 = 725;
+const FID_ST_GEOG_GEOMETRY_TYPE: u64 = 726;
+const FID_ST_GEOG_IS_EMPTY: u64 = 727;
+const FID_ST_GEOG_IS_SIMPLE: u64 = 728;
+const FID_ST_GEOG_IS_CLOSED: u64 = 729;
+const FID_ST_GEOG_CONVEX_HULL: u64 = 730;
+const FID_ST_GEOG_TO_GEOMETRY: u64 = 731;
+const FID_ST_GEOMETRY_TO_GEOG: u64 = 732;
 
 // Aggregate function ids (separate namespace, but kept distinct
 // from scalar ids for clarity).
@@ -599,6 +639,43 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_GEOM_FROM_GML, "st_geomfromgml", 1),
                 s(FID_ST_GEOM_FROM_TWKB, "st_geomfromtwkb", 1),
                 s(FID_ST_LINE_FROM_ENCODED_POLY, "st_linefromencodedpolyline", 1),
+                // Geodetic (geometry-typed)
+                s(FID_ST_DISTANCE_SPHERE, "st_distancesphere", 2),
+                s(FID_ST_PROJECT, "st_project", 3),
+                // Geography
+                s(FID_ST_GEOGFROMTEXT, "st_geogfromtext", 1),
+                s(FID_ST_GEOGFROMWKB, "st_geogfromwkb", 1),
+                s(FID_ST_GEOG_POINT, "st_geogpoint", 2),
+                s(FID_ST_GEOG_ASTEXT, "st_geog_astext", 1),
+                s(FID_ST_GEOG_DISTANCE, "st_geog_distance", 2),
+                s(FID_ST_GEOG_LENGTH, "st_geog_length", 1),
+                s(FID_ST_GEOG_AREA, "st_geog_area", 1),
+                s(FID_ST_GEOG_PERIMETER, "st_geog_perimeter", 1),
+                s(FID_ST_GEOG_DWITHIN, "st_geog_dwithin", 3),
+                s(FID_ST_GEOG_AZIMUTH, "st_geog_azimuth", 2),
+                s(FID_ST_GEOG_PROJECT, "st_geog_project", 3),
+                s(FID_ST_GEOG_SEGMENTIZE, "st_geog_segmentize", 2),
+                s(FID_ST_GEOG_COVERS, "st_geog_covers", 2),
+                s(FID_ST_GEOG_COVERED_BY, "st_geog_coveredby", 2),
+                s(FID_ST_GEOG_INTERSECTS, "st_geog_intersects", 2),
+                s(FID_ST_GEOG_BUFFER, "st_geog_buffer", 2),
+                s(FID_ST_GEOG_BUFFER_SEGS, "st_geog_buffer_segs", 3),
+                s(FID_ST_GEOG_CENTROID, "st_geog_centroid", 1),
+                s(FID_ST_GEOG_INTERSECTION, "st_geog_intersection", 2),
+                s(FID_ST_GEOG_UNION, "st_geog_union", 2),
+                s(FID_ST_GEOG_DIFFERENCE, "st_geog_difference", 2),
+                s(FID_ST_GEOG_SYM_DIFFERENCE, "st_geog_symdifference", 2),
+                s(FID_ST_GEOG_EXPAND, "st_geog_expand", 2),
+                s(FID_ST_GEOG_CLOSEST_POINT, "st_geog_closestpoint", 2),
+                s(FID_ST_GEOG_NPOINTS, "st_geog_npoints", 1),
+                s(FID_ST_GEOG_SUMMARY, "st_geog_summary", 1),
+                s(FID_ST_GEOG_GEOMETRY_TYPE, "st_geog_geometrytype", 1),
+                s(FID_ST_GEOG_IS_EMPTY, "st_geog_isempty", 1),
+                s(FID_ST_GEOG_IS_SIMPLE, "st_geog_issimple", 1),
+                s(FID_ST_GEOG_IS_CLOSED, "st_geog_isclosed", 1),
+                s(FID_ST_GEOG_CONVEX_HULL, "st_geog_convexhull", 1),
+                s(FID_ST_GEOG_TO_GEOMETRY, "st_geog_togeometry", 1),
+                s(FID_ST_GEOMETRY_TO_GEOG, "st_togeography", 1),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -692,6 +769,10 @@ fn arg_blob<'a>(args: &'a [SqlValue], idx: usize, name: &str) -> Result<&'a [u8]
 
 fn from_wkb(bytes: &[u8], name: &str) -> Result<Geometry, String> {
     Geometry::from_wkb(bytes).map_err(|e| format!("{name}: {}", postgis_err_string(e)))
+}
+
+fn geog_from_wkb(bytes: &[u8], name: &str) -> Result<Geography, String> {
+    Geography::from_wkb(bytes).map_err(|e| format!("{name}: {}", postgis_err_string(e)))
 }
 
 fn postgis_err_string(e: bindings::postgis::wasm::postgis_types::PostgisError) -> String {
@@ -1614,6 +1695,206 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let g = pg_ctor::st_line_from_encoded_polyline(s, None)
                     .map_err(|e| format!("st_linefromencodedpolyline: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(g.as_wkb()))
+            }
+
+            // ── Geodetic (geometry-typed) ──
+            FID_ST_DISTANCE_SPHERE => gg_to_f64!(args, "st_distancesphere", pg_geog::st_distance_sphere),
+            FID_ST_PROJECT => {
+                let p = from_wkb(arg_blob(&args, 0, "st_project")?, "st_project")?;
+                let d = arg_f64(&args, 1, "st_project")?;
+                let az = arg_f64(&args, 2, "st_project")?;
+                let r = pg_geog::st_project(&p, d, az)
+                    .map_err(|e| format!("st_project: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+
+            // ── Geography (geog crosses as BLOB of geog WKB) ──
+            FID_ST_GEOGFROMTEXT => {
+                let s = arg_text(&args, 0, "st_geogfromtext")?;
+                let g = Geography::from_wkt(s)
+                    .map_err(|e| format!("st_geogfromtext: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_ST_GEOGFROMWKB => {
+                let b = arg_blob(&args, 0, "st_geogfromwkb")?;
+                let g = geog_from_wkb(b, "st_geogfromwkb")?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_ST_GEOG_POINT => {
+                let lon = arg_f64(&args, 0, "st_geogpoint")?;
+                let lat = arg_f64(&args, 1, "st_geogpoint")?;
+                Ok(SqlValue::Blob(Geography::point(lon, lat).as_wkb()))
+            }
+            FID_ST_GEOG_ASTEXT => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_astext")?, "st_geog_astext")?;
+                Ok(SqlValue::Text(g.as_wkt()))
+            }
+            FID_ST_GEOG_DISTANCE => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_distance")?, "st_geog_distance")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_distance")?, "st_geog_distance")?;
+                Ok(SqlValue::Real(pg_geog::st_geog_distance(&a, &b)))
+            }
+            FID_ST_GEOG_LENGTH => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_length")?, "st_geog_length")?;
+                Ok(SqlValue::Real(pg_geog::st_geog_length(&g)))
+            }
+            FID_ST_GEOG_AREA => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_area")?, "st_geog_area")?;
+                Ok(SqlValue::Real(pg_geog::st_geog_area(&g)))
+            }
+            FID_ST_GEOG_PERIMETER => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_perimeter")?, "st_geog_perimeter")?;
+                Ok(SqlValue::Real(pg_geog::st_geog_perimeter(&g)))
+            }
+            FID_ST_GEOG_DWITHIN => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_dwithin")?, "st_geog_dwithin")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_dwithin")?, "st_geog_dwithin")?;
+                let d = arg_f64(&args, 2, "st_geog_dwithin")?;
+                Ok(SqlValue::Integer(pg_geog::st_geog_dwithin(&a, &b, d) as i64))
+            }
+            FID_ST_GEOG_AZIMUTH => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_azimuth")?, "st_geog_azimuth")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_azimuth")?, "st_geog_azimuth")?;
+                Ok(match pg_geog::st_geog_azimuth(&a, &b) {
+                    Some(v) => SqlValue::Real(v),
+                    None => SqlValue::Null,
+                })
+            }
+            FID_ST_GEOG_PROJECT => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_project")?, "st_geog_project")?;
+                let az = arg_f64(&args, 1, "st_geog_project")?;
+                let d = arg_f64(&args, 2, "st_geog_project")?;
+                let r = pg_geog::st_geog_project(&g, az, d)
+                    .map_err(|e| format!("st_geog_project: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_SEGMENTIZE => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_segmentize")?, "st_geog_segmentize")?;
+                let d = arg_f64(&args, 1, "st_geog_segmentize")?;
+                let r = pg_geog::st_geog_segmentize(&g, d)
+                    .map_err(|e| format!("st_geog_segmentize: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_COVERS => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_covers")?, "st_geog_covers")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_covers")?, "st_geog_covers")?;
+                Ok(SqlValue::Integer(pg_geog::st_geog_covers(&a, &b) as i64))
+            }
+            FID_ST_GEOG_COVERED_BY => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_coveredby")?, "st_geog_coveredby")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_coveredby")?, "st_geog_coveredby")?;
+                Ok(SqlValue::Integer(pg_geog::st_geog_covered_by(&a, &b) as i64))
+            }
+            FID_ST_GEOG_INTERSECTS => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_intersects")?, "st_geog_intersects")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_intersects")?, "st_geog_intersects")?;
+                Ok(SqlValue::Integer(pg_geog::st_geog_intersects(&a, &b) as i64))
+            }
+            FID_ST_GEOG_BUFFER => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_buffer")?, "st_geog_buffer")?;
+                let d = arg_f64(&args, 1, "st_geog_buffer")?;
+                let r = pg_geog::st_geog_buffer(&g, d)
+                    .map_err(|e| format!("st_geog_buffer: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_BUFFER_SEGS => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_buffer_segs")?, "st_geog_buffer_segs")?;
+                let d = arg_f64(&args, 1, "st_geog_buffer_segs")?;
+                let qs = arg_i64(&args, 2, "st_geog_buffer_segs")? as u32;
+                let r = pg_geog::st_geog_buffer_with_segs(&g, d, qs)
+                    .map_err(|e| format!("st_geog_buffer_segs: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_CENTROID => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_centroid")?, "st_geog_centroid")?;
+                let r = pg_geog::st_geog_centroid(&g)
+                    .map_err(|e| format!("st_geog_centroid: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_INTERSECTION => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_intersection")?, "st_geog_intersection")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_intersection")?, "st_geog_intersection")?;
+                let r = pg_geog::st_geog_intersection(&a, &b)
+                    .map_err(|e| format!("st_geog_intersection: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_UNION => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_union")?, "st_geog_union")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_union")?, "st_geog_union")?;
+                let r = pg_geog::st_geog_union(&a, &b)
+                    .map_err(|e| format!("st_geog_union: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_DIFFERENCE => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_difference")?, "st_geog_difference")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_difference")?, "st_geog_difference")?;
+                let r = pg_geog::st_geog_difference(&a, &b)
+                    .map_err(|e| format!("st_geog_difference: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_SYM_DIFFERENCE => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_symdifference")?, "st_geog_symdifference")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_symdifference")?, "st_geog_symdifference")?;
+                let r = pg_geog::st_geog_sym_difference(&a, &b)
+                    .map_err(|e| format!("st_geog_symdifference: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_EXPAND => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_expand")?, "st_geog_expand")?;
+                let d = arg_f64(&args, 1, "st_geog_expand")?;
+                let r = pg_geog::st_geog_expand(&g, d)
+                    .map_err(|e| format!("st_geog_expand: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_CLOSEST_POINT => {
+                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_closestpoint")?, "st_geog_closestpoint")?;
+                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_closestpoint")?, "st_geog_closestpoint")?;
+                let r = pg_geog::st_geog_closest_point(&a, &b)
+                    .map_err(|e| format!("st_geog_closestpoint: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_NPOINTS => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_npoints")?, "st_geog_npoints")?;
+                Ok(SqlValue::Integer(pg_geog::st_geog_npoints(&g) as i64))
+            }
+            FID_ST_GEOG_SUMMARY => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_summary")?, "st_geog_summary")?;
+                Ok(SqlValue::Text(pg_geog::st_geog_summary(&g)))
+            }
+            FID_ST_GEOG_GEOMETRY_TYPE => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_geometrytype")?, "st_geog_geometrytype")?;
+                Ok(SqlValue::Text(pg_geog::st_geog_geometry_type(&g)))
+            }
+            FID_ST_GEOG_IS_EMPTY => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_isempty")?, "st_geog_isempty")?;
+                Ok(SqlValue::Integer(pg_geog::st_geog_is_empty(&g) as i64))
+            }
+            FID_ST_GEOG_IS_SIMPLE => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_issimple")?, "st_geog_issimple")?;
+                Ok(SqlValue::Integer(pg_geog::st_geog_is_simple(&g) as i64))
+            }
+            FID_ST_GEOG_IS_CLOSED => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_isclosed")?, "st_geog_isclosed")?;
+                Ok(SqlValue::Integer(pg_geog::st_geog_is_closed(&g) as i64))
+            }
+            FID_ST_GEOG_CONVEX_HULL => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_convexhull")?, "st_geog_convexhull")?;
+                let r = pg_geog::st_geog_convex_hull(&g)
+                    .map_err(|e| format!("st_geog_convexhull: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOG_TO_GEOMETRY => {
+                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_togeometry")?, "st_geog_togeometry")?;
+                Ok(SqlValue::Blob(g.to_geometry().as_wkb()))
+            }
+            FID_ST_GEOMETRY_TO_GEOG => {
+                let g = from_wkb(arg_blob(&args, 0, "st_togeography")?, "st_togeography")?;
+                // Round-trip through WKT — geometry has no direct
+                // to_geography. WGS84-style assumption.
+                let wkt = g.as_wkt();
+                let geog = Geography::from_wkt(&wkt)
+                    .map_err(|e| format!("st_togeography: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(geog.as_wkb()))
             }
 
             other => Err(format!("postgis bridge: unknown func id {other}")),
