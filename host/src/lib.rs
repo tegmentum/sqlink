@@ -706,6 +706,23 @@ pub struct LoadedExtension {
     /// `unsafe impl Send` on the type; Mutex serializes per-extension
     /// concurrent SPI calls.
     pub spi_conn: Arc<Mutex<Option<sqlite_wasm_core::db::Connection>>>,
+    /// Cached `tabular`-world (Store, Instance) for vtab dispatch.
+    /// Vtab semantics require per-instance / per-cursor state to
+    /// persist across xCreate  xOpen  xColumn — a fresh
+    /// instantiation per dispatch resets that state. We share a
+    /// single instantiation across every `dispatch_vtab_*` call
+    /// on this extension, serialized by `TokioMutex` so concurrent
+    /// SQL paths don't trample each other's wasm linear memory.
+    /// Lazy-init: built on the first vtab dispatch, dropped when
+    /// the `LoadedExtension`'s `Arc` count hits zero.
+    pub cached_tabular: Arc<tokio::sync::Mutex<Option<CachedTabular>>>,
+}
+
+/// Long-lived `Tabular`-world instance backing a vtab module.
+/// See `LoadedExtension.cached_tabular`.
+pub struct CachedTabular {
+    pub store: wasmtime::Store<LoadedState>,
+    pub instance: loaded_tabular::Tabular,
 }
 
 /// State carried by the per-call Store when dispatching into a
@@ -2047,6 +2064,7 @@ impl Host {
             state: Arc::new(Mutex::new(HashMap::new())),
             cache: Arc::new(Mutex::new(HashMap::new())),
             spi_conn: Arc::new(Mutex::new(None)),
+            cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
@@ -2155,6 +2173,7 @@ impl Host {
                 state: Arc::new(Mutex::new(HashMap::new())),
                 cache: Arc::new(Mutex::new(HashMap::new())),
                 spi_conn: Arc::new(Mutex::new(None)),
+                cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
             }),
         );
 
@@ -2395,10 +2414,12 @@ impl Host {
         table_name: String,
         args: Vec<String>,
     ) -> Result<std::result::Result<String, String>> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
-            .call_create(&mut store, vtab_id, instance_id, &db_name, &table_name, &args)
+            .call_create(&mut cached.store, vtab_id, instance_id, &db_name, &table_name, &args)
             .await
             .map_err(|e| anyhow!("vtab.create: {e}"))?;
         Ok(r)
@@ -2413,10 +2434,12 @@ impl Host {
         table_name: String,
         args: Vec<String>,
     ) -> Result<std::result::Result<String, String>> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
-            .call_connect(&mut store, vtab_id, instance_id, &db_name, &table_name, &args)
+            .call_connect(&mut cached.store, vtab_id, instance_id, &db_name, &table_name, &args)
             .await
             .map_err(|e| anyhow!("vtab.connect: {e}"))?;
         Ok(r)
@@ -2428,10 +2451,12 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
-            .call_destroy(&mut store, vtab_id, instance_id)
+            .call_destroy(&mut cached.store, vtab_id, instance_id)
             .await
             .map_err(|e| anyhow!("vtab.destroy: {e}"))?;
         Ok(r)
@@ -2443,10 +2468,12 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
-            .call_disconnect(&mut store, vtab_id, instance_id)
+            .call_disconnect(&mut cached.store, vtab_id, instance_id)
             .await
             .map_err(|e| anyhow!("vtab.disconnect: {e}"))?;
         Ok(r)
@@ -2461,11 +2488,13 @@ impl Host {
     ) -> Result<
         std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>,
     > {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
             .call_best_index(
-                &mut store,
+                &mut cached.store,
                 vtab_id,
                 instance_id,
                 &convert_vtab_index_info_to_loaded(info),
@@ -2482,10 +2511,12 @@ impl Host {
         instance_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<(), String>> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
-            .call_open(&mut store, vtab_id, instance_id, cursor_id)
+            .call_open(&mut cached.store, vtab_id, instance_id, cursor_id)
             .await
             .map_err(|e| anyhow!("vtab.open: {e}"))?;
         Ok(r)
@@ -2497,10 +2528,12 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<(), String>> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
-            .call_close(&mut store, vtab_id, cursor_id)
+            .call_close(&mut cached.store, vtab_id, cursor_id)
             .await
             .map_err(|e| anyhow!("vtab.close: {e}"))?;
         Ok(r)
@@ -2515,12 +2548,14 @@ impl Host {
         idx_str: Option<String>,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let r = instance
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
             .call_filter(
-                &mut store,
+                &mut cached.store,
                 vtab_id,
                 cursor_id,
                 idx_num,
@@ -2538,10 +2573,12 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<(), String>> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
-            .call_next(&mut store, vtab_id, cursor_id)
+            .call_next(&mut cached.store, vtab_id, cursor_id)
             .await
             .map_err(|e| anyhow!("vtab.next: {e}"))?;
         Ok(r)
@@ -2553,10 +2590,12 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<bool> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        cached
+            .instance
             .sqlite_extension_vtab()
-            .call_eof(&mut store, vtab_id, cursor_id)
+            .call_eof(&mut cached.store, vtab_id, cursor_id)
             .await
             .map_err(|e| anyhow!("vtab.eof: {e}"))
     }
@@ -2570,10 +2609,12 @@ impl Host {
     ) -> Result<
         std::result::Result<bindings::sqlite::extension::types::SqlValue, String>,
     > {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
-            .call_column(&mut store, vtab_id, cursor_id, col)
+            .call_column(&mut cached.store, vtab_id, cursor_id, col)
             .await
             .map_err(|e| anyhow!("vtab.column: {e}"))?;
         Ok(r.map(convert_sql_value_from_loaded))
@@ -2585,21 +2626,26 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<i64, String>> {
-        let (mut store, instance) = self.tabular_instance(ext_name).await?;
-        let r = instance
+        let mut guard = self.tabular_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
             .sqlite_extension_vtab()
-            .call_rowid(&mut store, vtab_id, cursor_id)
+            .call_rowid(&mut cached.store, vtab_id, cursor_id)
             .await
             .map_err(|e| anyhow!("vtab.rowid: {e}"))?;
         Ok(r)
     }
 
-    /// Shared helper: look up the extension, build a tabular-world
-    /// linker, instantiate. Used by every dispatch_vtab_* method.
-    async fn tabular_instance(
+    /// Shared helper: look up the extension and return a locked
+    /// guard over its cached `tabular`-world Store + Instance.
+    /// Lazily instantiates on first call; subsequent calls reuse
+    /// the same Store so vtab state (parsed files, cursors,
+    /// thread_local maps) survives across dispatch boundaries.
+    async fn tabular_locked(
         &self,
         ext_name: &str,
-    ) -> Result<(wasmtime::Store<LoadedState>, loaded_tabular::Tabular)> {
+    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedTabular>>> {
         let ext = {
             let components = self.components.read();
             components
@@ -2607,13 +2653,21 @@ impl Host {
                 .cloned()
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
-        let linker = make_loaded_tabular_linker(&self.engine)?;
-        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_tabular::Tabular::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as tabular: {e}"))?;
-        Ok((store, instance))
+        let cached_arc = ext.cached_tabular.clone();
+        let mut guard = cached_arc.lock_owned().await;
+        if guard.is_none() {
+            let linker = make_loaded_tabular_linker(&self.engine)?;
+            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+            let instance = loaded_tabular::Tabular::instantiate_async(
+                &mut store,
+                &ext.component,
+                &linker,
+            )
+            .await
+            .map_err(|e| anyhow!("instantiate {ext_name} as tabular: {e}"))?;
+            *guard = Some(CachedTabular { store, instance });
+        }
+        Ok(guard)
     }
 
     /// Route a SQLite authorizer callback to the loaded extension's
