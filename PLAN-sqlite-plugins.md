@@ -223,17 +223,18 @@ fts5/rtree, just at a different layer.
 | postgis raster                |    60  | extensions/postgis-bridge          |
 | postgis raster aggregate      |     1  | extensions/postgis-bridge (R6)     |
 | postgis topology              |    23  | extensions/postgis-bridge          |
+| postgis topogeometry          |     7  | extensions/postgis-bridge          |
 | postgis STRtree (scalar API)  |     8  | extensions/postgis-bridge          |
 | postgis operators             |     5  | extensions/postgis-bridge          |
 | postgis geocoder (parse-only) |     2  | extensions/postgis-bridge          |
 | raster_polygon_dump vtab      |    +1  | extensions/postgis-bridge          |
-| **postgis-bridge subtotal**   | **412 scalar + 9 agg + 1 vtab** | (composed against postgis-composed.wasm + sfcgal.component.wasm) |
+| **postgis-bridge subtotal**   | **419 scalar + 9 agg + 1 vtab** | (composed against postgis-composed.wasm + sfcgal.component.wasm) |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
 |                               |        | LIBSQLITE3_FLAGS env               |
 
-**Grand SQL surface delivered**: 481 SQL-callable functions
+**Grand SQL surface delivered**: 488 SQL-callable functions
 (scalars + aggregates) plus 5 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump), all reachable through
 `.load` or directly via the bundled SQLite, on top of the

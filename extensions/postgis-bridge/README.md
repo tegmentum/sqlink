@@ -350,9 +350,41 @@ or the process exits. Reads and edits route through the handle;
 `st_topo_serialize` snapshots the current state to a BLOB you can
 persist; `st_topo_close` drops the resource from the registry.
 
-The TopoGeometry resource (`postgis-topology-topogeom`)
-isn't bridged yet — it carries pointers into a specific topology
-across SQL calls and needs its own handle scheme.
+### TopoGeometry via separate handle API
+
+A TopoGeometry is a typed collection of topology primitives
+(nodes / edges / faces) that knows how to assemble itself into
+a MULTIPOINT / MULTILINESTRING / MULTIPOLYGON. Upstream
+snapshots the referenced primitives at create time, so the
+TopoGeometry survives its source Topology being closed.
+
+```sql
+-- Create against a live topology handle
+WITH t AS (SELECT st_topo_open(some_topo_blob) AS h)
+SELECT
+    -- type code: 1=puntal (nodes), 2=lineal (edges), 3=areal (faces)
+    st_topogeom_create(t.h, 2, '[[1,2],[4,2],[7,2]]') AS tg_h
+FROM t;
+
+-- Inspect
+SELECT st_topogeom_type(tg_h);            -- 2
+SELECT st_topogeom_element_count(tg_h);   -- 3
+SELECT st_topogeom_elements(tg_h);        -- '[[1,2],[4,2],[7,2]]'
+SELECT st_astext(st_topogeom_geom(tg_h)); -- 'MULTILINESTRING(...)'
+
+-- Free when done
+SELECT st_topogeom_close(tg_h);           -- 1
+```
+
+Elements cross as JSON `[[id, type], ...]` (pair form — shorter
+than the object form for the same information). `st_topogeom_clear`
+empties the topogeometry in place. No persistence API: rehydrate
+by saving the source topology blob + the elements JSON and
+calling `st_topo_open` + `st_topogeom_create` again.
+
+Indexed lookup ("all topogeoms built from topology X") isn't
+modeled — the registry is a flat HashMap keyed by topogeom id.
+Callers track the parent-child relationship themselves.
 
 ## Batch interface (deferred by design)
 

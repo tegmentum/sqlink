@@ -57,6 +57,8 @@ use bindings::postgis::wasm::postgis_raster_mapalgebra as pg_rast_ma;
 use bindings::postgis::wasm::postgis_topology_output as pg_topo_out;
 use bindings::postgis::wasm::postgis_topology_edit as pg_topo_edit;
 use bindings::postgis::wasm::postgis_topology_query as pg_topo_query;
+use bindings::postgis::wasm::postgis_topology_topogeom as pg_topogeom;
+use bindings::postgis::wasm::postgis_topology_topogeom::TopoGeometry;
 use bindings::postgis::wasm::postgis_topology_types::Topology;
 use bindings::postgis::wasm::postgis_operators as pg_op;
 use bindings::postgis::wasm::postgis_geocoder as pg_geo;
@@ -546,6 +548,18 @@ const FID_TOPO_H_MOD_EDGE_HEAL: u64 = 1247;
 const FID_TOPO_H_ADD_FACE: u64 = 1248;
 const FID_TOPO_H_REMOVE_FACE: u64 = 1249;
 
+// TopoGeometry handle API (PLAN-topogeom.md). Distinct id
+// sequence from TOPO_HANDLES so the two handle spaces don't
+// alias in error messages — a topogeom_h of 5 and a topo_h of
+// 5 mean different registry entries.
+const FID_TOPOGEOM_CREATE: u64 = 1260;
+const FID_TOPOGEOM_CLOSE: u64 = 1261;
+const FID_TOPOGEOM_TYPE: u64 = 1262;
+const FID_TOPOGEOM_ELEMENT_COUNT: u64 = 1263;
+const FID_TOPOGEOM_ELEMENTS: u64 = 1264;
+const FID_TOPOGEOM_GEOM: u64 = 1265;
+const FID_TOPOGEOM_CLEAR: u64 = 1266;
+
 // Raster v3 (PLAN-raster.md phases R1-R4): JSON list returns,
 // map-algebra precanned ops, reclass, set-values.
 const FID_RST_HISTOGRAM_JSON: u64 = 1100;
@@ -595,6 +609,38 @@ thread_local! {
     /// Monotonic id generator for TOPO_HANDLES. Starts at 1 so
     /// callers never confuse a 0 return with "valid handle".
     static TOPO_NEXT_ID: RefCell<u64> = const { RefCell::new(1) };
+
+    /// TopoGeometry handle registry (PLAN-topogeom.md). Separate
+    /// id sequence from TOPO_HANDLES — these IDs aren't
+    /// interchangeable. Upstream snapshots primitive geometries at
+    /// create time, so a TopoGeometry survives its source
+    /// Topology being closed.
+    static TOPOGEOM_HANDLES: RefCell<HashMap<u64, TopoGeometry>> =
+        RefCell::new(HashMap::new());
+    static TOPOGEOM_NEXT_ID: RefCell<u64> = const { RefCell::new(1) };
+}
+
+fn topogeom_handle_next() -> u64 {
+    TOPOGEOM_NEXT_ID.with(|c| {
+        let mut v = c.borrow_mut();
+        let id = *v;
+        *v += 1;
+        id
+    })
+}
+
+fn with_topogeom_handle<R>(
+    h: u64,
+    name: &str,
+    f: impl FnOnce(&TopoGeometry) -> Result<R, String>,
+) -> Result<R, String> {
+    TOPOGEOM_HANDLES.with(|m| {
+        let map = m.borrow();
+        match map.get(&h) {
+            Some(tg) => f(tg),
+            None => Err(format!("{name}: no such topogeometry handle {h}")),
+        }
+    })
 }
 
 fn topo_handle_next() -> u64 {
@@ -1064,6 +1110,14 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_TOPO_H_MOD_EDGE_HEAL, "st_topo_mod_edge_heal", 3),
                 s(FID_TOPO_H_ADD_FACE, "st_topo_add_face", 3),
                 s(FID_TOPO_H_REMOVE_FACE, "st_topo_remove_face", 2),
+                // TopoGeometry handle API
+                s(FID_TOPOGEOM_CREATE, "st_topogeom_create", 3),
+                s(FID_TOPOGEOM_CLOSE, "st_topogeom_close", 1),
+                s(FID_TOPOGEOM_TYPE, "st_topogeom_type", 1),
+                s(FID_TOPOGEOM_ELEMENT_COUNT, "st_topogeom_element_count", 1),
+                s(FID_TOPOGEOM_ELEMENTS, "st_topogeom_elements", 1),
+                s(FID_TOPOGEOM_GEOM, "st_topogeom_geom", 1),
+                s(FID_TOPOGEOM_CLEAR, "st_topogeom_clear", 1),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -3484,6 +3538,92 @@ impl ScalarFunctionGuest for PostgisBridge {
                 with_topo_handle(h, "st_topo_remove_face", |t| {
                     pg_topo_edit::remove_face(t, face)
                         .map_err(|e| format!("st_topo_remove_face: {e:?}"))?;
+                    Ok(SqlValue::Integer(1))
+                })
+            }
+
+            // ── TopoGeometry handle API (PLAN-topogeom.md) ──
+            FID_TOPOGEOM_CREATE => {
+                let topo_h = arg_i64(&args, 0, "st_topogeom_create")? as u64;
+                let topo_type = arg_i64(&args, 1, "st_topogeom_create")? as u32;
+                let json_text = arg_text(&args, 2, "st_topogeom_create")?;
+                let parsed: serde_json::Value = serde_json::from_str(json_text)
+                    .map_err(|e| format!("st_topogeom_create: parse JSON: {e}"))?;
+                let arr = parsed.as_array().ok_or_else(|| {
+                    "st_topogeom_create: expected array of [id, type] pairs".to_string()
+                })?;
+                let mut elements = Vec::with_capacity(arr.len());
+                for (i, item) in arr.iter().enumerate() {
+                    let pair = item.as_array().ok_or_else(|| {
+                        format!("st_topogeom_create: element {i} not an array")
+                    })?;
+                    if pair.len() != 2 {
+                        return Err(format!(
+                            "st_topogeom_create: element {i} needs [id, type]"
+                        ));
+                    }
+                    let id = pair[0]
+                        .as_u64()
+                        .ok_or_else(|| format!("st_topogeom_create: element {i} id not u32"))?
+                        as u32;
+                    let et = pair[1]
+                        .as_u64()
+                        .ok_or_else(|| {
+                            format!("st_topogeom_create: element {i} type not u32")
+                        })? as u32;
+                    elements.push(pg_topogeom::TopoElement { id, element_type: et });
+                }
+                with_topo_handle(topo_h, "st_topogeom_create", |t| {
+                    let tg = pg_topogeom::create_topo_geom(t, topo_type, &elements)
+                        .map_err(|e| format!("st_topogeom_create: {e:?}"))?;
+                    let id = topogeom_handle_next();
+                    TOPOGEOM_HANDLES.with(|m| m.borrow_mut().insert(id, tg));
+                    Ok(SqlValue::Integer(id as i64))
+                })
+            }
+            FID_TOPOGEOM_CLOSE => {
+                let h = arg_i64(&args, 0, "st_topogeom_close")? as u64;
+                let removed = TOPOGEOM_HANDLES.with(|m| m.borrow_mut().remove(&h).is_some());
+                Ok(SqlValue::Integer(removed as i64))
+            }
+            FID_TOPOGEOM_TYPE => {
+                let h = arg_i64(&args, 0, "st_topogeom_type")? as u64;
+                with_topogeom_handle(h, "st_topogeom_type", |tg| {
+                    Ok(SqlValue::Integer(tg.topo_type() as i64))
+                })
+            }
+            FID_TOPOGEOM_ELEMENT_COUNT => {
+                let h = arg_i64(&args, 0, "st_topogeom_element_count")? as u64;
+                with_topogeom_handle(h, "st_topogeom_element_count", |tg| {
+                    Ok(SqlValue::Integer(tg.element_count() as i64))
+                })
+            }
+            FID_TOPOGEOM_ELEMENTS => {
+                let h = arg_i64(&args, 0, "st_topogeom_elements")? as u64;
+                with_topogeom_handle(h, "st_topogeom_elements", |tg| {
+                    let elems = tg.get_elements();
+                    let json: Vec<serde_json::Value> = elems
+                        .iter()
+                        .map(|e| {
+                            serde_json::Value::Array(alloc::vec![
+                                serde_json::Value::Number(e.id.into()),
+                                serde_json::Value::Number(e.element_type.into()),
+                            ])
+                        })
+                        .collect();
+                    Ok(SqlValue::Text(serde_json::Value::Array(json).to_string()))
+                })
+            }
+            FID_TOPOGEOM_GEOM => {
+                let h = arg_i64(&args, 0, "st_topogeom_geom")? as u64;
+                with_topogeom_handle(h, "st_topogeom_geom", |tg| {
+                    Ok(SqlValue::Blob(tg.geometry().as_wkb()))
+                })
+            }
+            FID_TOPOGEOM_CLEAR => {
+                let h = arg_i64(&args, 0, "st_topogeom_clear")? as u64;
+                with_topogeom_handle(h, "st_topogeom_clear", |tg| {
+                    tg.clear();
                     Ok(SqlValue::Integer(1))
                 })
             }

@@ -36,6 +36,7 @@ world bridge {
     import postgis:wasm/postgis-topology-output@0.1.0;
     import postgis:wasm/postgis-topology-edit@0.1.0;
     import postgis:wasm/postgis-topology-query@0.1.0;
+    import postgis:wasm/postgis-topology-topogeom@0.1.0;
 
     // Direct sfcgal-wasm component  richer surface than what
     // postgis-sfcgal wraps. Provides STL/OBJ/VTK output for
