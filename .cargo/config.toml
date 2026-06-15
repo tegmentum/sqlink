@@ -14,6 +14,12 @@
 CC_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/clang"
 AR_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/ar"
 CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysroot -target wasm32-wasip2"
+# Extra defines threaded into libsqlite3-sys's bundled compile.
+# libsqlite3-sys 0.30.1's build.rs honors LIBSQLITE3_FLAGS for
+# extra -D/-U flags. The bundled flag set covers FTS5 + RTREE +
+# JSON1 + a few others, but not GEOPOLY  add it here so
+# `CREATE VIRTUAL TABLE x USING geopoly()` works without a fork.
+LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_GEOPOLY"
 
 [target.wasm32-wasip2]
 linker = "rust-lld"
