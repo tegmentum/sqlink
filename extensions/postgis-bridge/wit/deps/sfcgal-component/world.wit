@@ -1,0 +1,22 @@
+package sfcgal:component@1.0.0;
+
+/// SFCGAL WebAssembly Component
+/// Provides 2D and 3D geometry operations through the CGAL computational geometry library.
+
+world sfcgal-world {
+    /// Geometry creation and manipulation
+    export geometry;
+
+    /// Input/Output operations (WKT, WKB, GeoJSON)
+    export io;
+
+    /// Initialize the SFCGAL library
+    /// Must be called before any other SFCGAL functions
+    export init: func();
+
+    /// Get the SFCGAL library version string
+    export version: func() -> string;
+
+    /// Get the full version information including dependencies
+    export full-version: func() -> string;
+}

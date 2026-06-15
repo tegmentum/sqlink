@@ -1,0 +1,106 @@
+package sfcgal:component@1.0.0;
+
+/// Input/Output operations for geometry serialization
+interface io {
+    use geometry.{geometry-handle, geometry-result, string-result, void-result};
+
+    /// WKB output format options
+    enum wkb-byte-order {
+        /// Big-endian (XDR)
+        big-endian,
+        /// Little-endian (NDR)
+        little-endian,
+    }
+
+    /// GeoJSON precision options
+    record geojson-options {
+        /// Number of decimal places for coordinates
+        precision: s32,
+        /// Include bounding box
+        include-bbox: bool,
+    }
+
+    // ============================================
+    // WKT (Well-Known Text)
+    // ============================================
+
+    /// Read geometry from WKT string
+    read-wkt: func(wkt: string) -> geometry-result;
+
+    /// Write geometry to WKT string
+    write-wkt: func(geom: geometry-handle) -> string-result;
+
+    /// Write geometry to WKT with specified decimal precision
+    write-wkt-precision: func(geom: geometry-handle, precision: s32) -> string-result;
+
+    // ============================================
+    // EWKT (Extended Well-Known Text with SRID)
+    // ============================================
+
+    /// Read geometry from EWKT string (includes SRID)
+    read-ewkt: func(ewkt: string) -> geometry-result;
+
+    /// Write geometry to EWKT string with SRID
+    write-ewkt: func(geom: geometry-handle, srid: s32) -> string-result;
+
+    // ============================================
+    // WKB (Well-Known Binary)
+    // ============================================
+
+    /// Read geometry from WKB binary data
+    read-wkb: func(wkb: list<u8>) -> geometry-result;
+
+    /// Write geometry to WKB binary data
+    write-wkb: func(geom: geometry-handle, byte-order: wkb-byte-order) -> list<u8>;
+
+    /// Read geometry from hex-encoded WKB string
+    read-wkb-hex: func(hex-wkb: string) -> geometry-result;
+
+    /// Write geometry to hex-encoded WKB string
+    write-wkb-hex: func(geom: geometry-handle, byte-order: wkb-byte-order) -> string-result;
+
+    // ============================================
+    // EWKB (Extended WKB with SRID)
+    // ============================================
+
+    /// Read geometry from EWKB binary data
+    read-ewkb: func(ewkb: list<u8>) -> geometry-result;
+
+    /// Write geometry to EWKB binary data
+    write-ewkb: func(geom: geometry-handle, srid: s32, byte-order: wkb-byte-order) -> list<u8>;
+
+    /// Read geometry from hex-encoded EWKB string
+    read-ewkb-hex: func(hex-ewkb: string) -> geometry-result;
+
+    /// Write geometry to hex-encoded EWKB string
+    write-ewkb-hex: func(geom: geometry-handle, srid: s32, byte-order: wkb-byte-order) -> string-result;
+
+    // ============================================
+    // GeoJSON
+    // ============================================
+
+    /// Read geometry from GeoJSON string
+    read-geojson: func(json: string) -> geometry-result;
+
+    /// Write geometry to GeoJSON string
+    write-geojson: func(geom: geometry-handle) -> string-result;
+
+    /// Write geometry to GeoJSON with options
+    write-geojson-options: func(geom: geometry-handle, options: geojson-options) -> string-result;
+
+    // ============================================
+    // 3D Format Exports
+    // ============================================
+
+    /// Write geometry to VTK format string
+    write-vtk: func(geom: geometry-handle) -> string-result;
+
+    /// Write geometry to OBJ format string
+    write-obj: func(geom: geometry-handle) -> string-result;
+
+    /// Write geometry to STL format string (ASCII)
+    write-stl: func(geom: geometry-handle) -> string-result;
+
+    /// Write geometry to STL binary format
+    write-stl-binary: func(geom: geometry-handle) -> list<u8>;
+}

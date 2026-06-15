@@ -1,0 +1,387 @@
+package sfcgal:component@1.0.0;
+
+/// Geometry types and operations
+interface geometry {
+    /// 2D coordinate
+    record coordinate2d {
+        x: f64,
+        y: f64,
+    }
+
+    /// 3D coordinate
+    record coordinate3d {
+        x: f64,
+        y: f64,
+        z: f64,
+    }
+
+    /// 4D coordinate (with measure)
+    record coordinate4d {
+        x: f64,
+        y: f64,
+        z: f64,
+        m: f64,
+    }
+
+    /// Coordinate variant
+    variant coordinate {
+        coord2d(coordinate2d),
+        coord3d(coordinate3d),
+        coord4d(coordinate4d),
+    }
+
+    /// Geometry types enum
+    enum geometry-type {
+        point,
+        linestring,
+        polygon,
+        multipoint,
+        multilinestring,
+        multipolygon,
+        geometrycollection,
+        triangulatedsurface,
+        polyhedralsurface,
+        solid,
+        multisolid,
+    }
+
+    /// SFCGAL error information
+    record sfcgal-error {
+        code: s32,
+        message: string,
+    }
+
+    /// Geometry handle (opaque reference to SFCGAL geometry)
+    type geometry-handle = u64;
+
+    /// Result type for geometry operations
+    variant geometry-result {
+        ok(geometry-handle),
+        err(sfcgal-error),
+    }
+
+    /// Result type for boolean operations
+    variant bool-result {
+        ok(bool),
+        err(sfcgal-error),
+    }
+
+    /// Result type for numeric operations
+    variant f64-result {
+        ok(f64),
+        err(sfcgal-error),
+    }
+
+    /// Result type for integer operations
+    variant s32-result {
+        ok(s32),
+        err(sfcgal-error),
+    }
+
+    /// Result type for string operations
+    variant string-result {
+        ok(string),
+        err(sfcgal-error),
+    }
+
+    /// Result type for void operations
+    variant void-result {
+        ok,
+        err(sfcgal-error),
+    }
+
+    // ============================================
+    // Geometry Handle Operations (formerly resource methods)
+    // ============================================
+
+    /// Create a new empty geometry
+    create-empty: func() -> geometry-result;
+
+    /// Destroy/free a geometry handle
+    destroy: func(geom: geometry-handle);
+
+    /// Clone a geometry
+    clone: func(geom: geometry-handle) -> geometry-result;
+
+    /// Get the geometry type
+    get-geometry-type: func(geom: geometry-handle) -> geometry-type;
+
+    /// Check if geometry is empty
+    is-empty: func(geom: geometry-handle) -> bool;
+
+    /// Check if geometry is valid
+    is-valid: func(geom: geometry-handle) -> bool;
+
+    /// Get detailed validity information
+    is-valid-detail: func(geom: geometry-handle) -> string-result;
+
+    /// Check if geometry is 3D
+    is-threed: func(geom: geometry-handle) -> bool;
+
+    /// Check if geometry has measure (M) coordinate
+    is-measured: func(geom: geometry-handle) -> bool;
+
+    /// Get coordinate dimension (2, 3, or 4)
+    coordinate-dimension: func(geom: geometry-handle) -> s32;
+
+    /// Make geometry valid by fixing issues
+    make-valid: func(geom: geometry-handle) -> geometry-result;
+
+    // ============================================
+    // Geometry Constructors
+    // ============================================
+
+    /// Create a 2D point
+    point2d: func(x: f64, y: f64) -> geometry-result;
+
+    /// Create a 3D point
+    point3d: func(x: f64, y: f64, z: f64) -> geometry-result;
+
+    /// Create a 4D point (with measure)
+    point4d: func(x: f64, y: f64, z: f64, m: f64) -> geometry-result;
+
+    /// Create a linestring from coordinates
+    linestring: func(coords: list<coordinate>) -> geometry-result;
+
+    /// Create a polygon from exterior ring coordinates
+    polygon: func(exterior: list<coordinate>) -> geometry-result;
+
+    /// Create a polygon with holes
+    polygon-with-holes: func(exterior: list<coordinate>, holes: list<list<coordinate>>) -> geometry-result;
+
+    /// Create a triangle from 3 points
+    triangle: func(p1: coordinate, p2: coordinate, p3: coordinate) -> geometry-result;
+
+    /// Create a multipoint from points
+    multipoint: func(points: list<coordinate>) -> geometry-result;
+
+    /// Create a multilinestring
+    multilinestring: func(linestrings: list<geometry-handle>) -> geometry-result;
+
+    /// Create a multipolygon
+    multipolygon: func(polygons: list<geometry-handle>) -> geometry-result;
+
+    /// Create a geometry collection
+    geometry-collection: func(geometries: list<geometry-handle>) -> geometry-result;
+
+    /// Create a triangulated surface
+    triangulated-surface: func(triangles: list<geometry-handle>) -> geometry-result;
+
+    /// Create a polyhedral surface
+    polyhedral-surface: func(polygons: list<geometry-handle>) -> geometry-result;
+
+    /// Create a solid from a polyhedral surface shell
+    solid: func(exterior-shell: geometry-handle) -> geometry-result;
+
+    // ============================================
+    // Spatial Predicates (Boolean Operations)
+    // ============================================
+
+    /// Check if two geometries intersect
+    intersects: func(a: geometry-handle, b: geometry-handle) -> bool-result;
+
+    /// Check if two geometries intersect in 3D
+    intersects-threed: func(a: geometry-handle, b: geometry-handle) -> bool-result;
+
+    /// Check if geometry A covers geometry B
+    covers: func(a: geometry-handle, b: geometry-handle) -> bool-result;
+
+    /// Check if geometry A covers geometry B in 3D
+    covers-threed: func(a: geometry-handle, b: geometry-handle) -> bool-result;
+
+    /// Check if two geometries are equal
+    equals: func(a: geometry-handle, b: geometry-handle) -> bool-result;
+
+    // ============================================
+    // Set Operations
+    // ============================================
+
+    /// Compute intersection of two geometries
+    intersection: func(a: geometry-handle, b: geometry-handle) -> geometry-result;
+
+    /// Compute intersection of two geometries in 3D
+    intersection-threed: func(a: geometry-handle, b: geometry-handle) -> geometry-result;
+
+    /// Compute union of two geometries
+    %union: func(a: geometry-handle, b: geometry-handle) -> geometry-result;
+
+    /// Compute union of two geometries in 3D
+    union-threed: func(a: geometry-handle, b: geometry-handle) -> geometry-result;
+
+    /// Compute difference (A - B)
+    difference: func(a: geometry-handle, b: geometry-handle) -> geometry-result;
+
+    /// Compute difference in 3D
+    difference-threed: func(a: geometry-handle, b: geometry-handle) -> geometry-result;
+
+    /// Compute symmetric difference
+    sym-difference: func(a: geometry-handle, b: geometry-handle) -> geometry-result;
+
+    /// Compute symmetric difference in 3D
+    sym-difference-threed: func(a: geometry-handle, b: geometry-handle) -> geometry-result;
+
+    // ============================================
+    // Measurements
+    // ============================================
+
+    /// Compute 2D area
+    area: func(geom: geometry-handle) -> f64-result;
+
+    /// Compute 3D area (surface area)
+    area-threed: func(geom: geometry-handle) -> f64-result;
+
+    /// Compute volume (for 3D geometries)
+    volume: func(geom: geometry-handle) -> f64-result;
+
+    /// Compute 2D length
+    length: func(geom: geometry-handle) -> f64-result;
+
+    /// Compute 3D length
+    length-threed: func(geom: geometry-handle) -> f64-result;
+
+    /// Compute 2D distance between geometries
+    distance: func(a: geometry-handle, b: geometry-handle) -> f64-result;
+
+    /// Compute 3D distance between geometries
+    distance-threed: func(a: geometry-handle, b: geometry-handle) -> f64-result;
+
+    // ============================================
+    // Transformations
+    // ============================================
+
+    /// Compute buffer around geometry
+    buffer: func(geom: geometry-handle, radius: f64, segments: s32) -> geometry-result;
+
+    /// Compute 3D buffer (sphere-based)
+    buffer-threed: func(geom: geometry-handle, radius: f64, segments: s32) -> geometry-result;
+
+    /// Compute offset polygon
+    offset-polygon: func(geom: geometry-handle, radius: f64) -> geometry-result;
+
+    /// Compute convex hull
+    convex-hull: func(geom: geometry-handle) -> geometry-result;
+
+    /// Compute convex hull in 3D
+    convex-hull-threed: func(geom: geometry-handle) -> geometry-result;
+
+    /// Compute alpha shape (concave hull)
+    alpha-shape: func(geom: geometry-handle, alpha: f64) -> geometry-result;
+
+    /// Compute optimal alpha shape
+    optimal-alpha-shape: func(geom: geometry-handle) -> geometry-result;
+
+    /// Translate geometry
+    translate-twod: func(geom: geometry-handle, dx: f64, dy: f64) -> geometry-result;
+
+    /// Translate geometry in 3D
+    translate-threed: func(geom: geometry-handle, dx: f64, dy: f64, dz: f64) -> geometry-result;
+
+    /// Scale geometry
+    scale: func(geom: geometry-handle, factor: f64) -> geometry-result;
+
+    /// Scale geometry with different factors per axis
+    scale-threed: func(geom: geometry-handle, sx: f64, sy: f64, sz: f64) -> geometry-result;
+
+    /// Rotate geometry around Z axis (2D rotation)
+    rotate-twod: func(geom: geometry-handle, angle: f64) -> geometry-result;
+
+    /// Rotate geometry around arbitrary axis
+    rotate-threed: func(geom: geometry-handle, angle: f64, ax: f64, ay: f64, az: f64) -> geometry-result;
+
+    // ============================================
+    // 3D Operations
+    // ============================================
+
+    /// Extrude 2D geometry to 3D
+    extrude: func(geom: geometry-handle, dx: f64, dy: f64, dz: f64) -> geometry-result;
+
+    /// Extrude geometry straight up
+    extrude-straight: func(geom: geometry-handle, height: f64) -> geometry-result;
+
+    /// Tessellate geometry into triangles
+    tessellate: func(geom: geometry-handle) -> geometry-result;
+
+    /// Triangulate a polygon (Constrained Delaunay)
+    triangulate-twod: func(geom: geometry-handle) -> geometry-result;
+
+    /// Minkowski sum of two geometries
+    minkowski-sum: func(a: geometry-handle, b: geometry-handle) -> geometry-result;
+
+    /// Force geometry to 2D (drop Z)
+    force-twod: func(geom: geometry-handle) -> geometry-result;
+
+    /// Force geometry to 3D (add Z=0 if missing)
+    force-threed: func(geom: geometry-handle) -> geometry-result;
+
+    // ============================================
+    // Mesh Operations
+    // ============================================
+
+    /// Approximate medial axis
+    approximate-medial-axis: func(geom: geometry-handle) -> geometry-result;
+
+    /// Straight skeleton
+    straight-skeleton: func(geom: geometry-handle) -> geometry-result;
+
+    /// Straight skeleton with distance
+    straight-skeleton-distance: func(geom: geometry-handle, distance: f64) -> geometry-result;
+
+    /// Extrude straight skeleton
+    extrude-straight-skeleton: func(geom: geometry-handle, height: f64) -> geometry-result;
+
+    // ============================================
+    // Geometry Access
+    // ============================================
+
+    /// Get number of points in geometry
+    num-points: func(geom: geometry-handle) -> s32-result;
+
+    /// Get number of geometries in collection
+    num-geometries: func(geom: geometry-handle) -> s32-result;
+
+    /// Get geometry at index from collection
+    geometry-n: func(geom: geometry-handle, n: s32) -> geometry-result;
+
+    /// Get point at index
+    point-n: func(geom: geometry-handle, n: s32) -> geometry-result;
+
+    /// Get X coordinate of point
+    point-x: func(geom: geometry-handle) -> f64-result;
+
+    /// Get Y coordinate of point
+    point-y: func(geom: geometry-handle) -> f64-result;
+
+    /// Get Z coordinate of point
+    point-z: func(geom: geometry-handle) -> f64-result;
+
+    /// Get M coordinate of point
+    point-m: func(geom: geometry-handle) -> f64-result;
+
+    /// Get exterior ring of polygon
+    exterior-ring: func(geom: geometry-handle) -> geometry-result;
+
+    /// Get number of interior rings
+    num-interior-rings: func(geom: geometry-handle) -> s32-result;
+
+    /// Get interior ring at index
+    interior-ring-n: func(geom: geometry-handle, n: s32) -> geometry-result;
+
+    /// Get centroid
+    centroid: func(geom: geometry-handle) -> geometry-result;
+
+    /// Get boundary
+    boundary: func(geom: geometry-handle) -> geometry-result;
+
+    /// Get envelope (bounding box)
+    envelope: func(geom: geometry-handle) -> geometry-result;
+
+    // ============================================
+    // Simplification
+    // ============================================
+
+    /// Simplify using Douglas-Peucker algorithm
+    simplify: func(geom: geometry-handle, tolerance: f64) -> geometry-result;
+
+    /// Simplify preserving topology
+    simplify-preserve-topology: func(geom: geometry-handle, tolerance: f64) -> geometry-result;
+}

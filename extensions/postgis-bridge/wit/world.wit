@@ -17,6 +17,15 @@ world bridge {
     import postgis:wasm/postgis-three-d@0.1.0;
     import postgis:wasm/postgis-geodetic@0.1.0;
     import postgis:wasm/postgis-sfcgal@0.1.0;
+
+    // Direct sfcgal-wasm component  richer surface than what
+    // postgis-sfcgal wraps. Provides STL/OBJ/VTK output for
+    // 3D-printing pipelines, alpha-shapes / optimal alpha-shapes
+    // for point-cloud envelopes, plus the full read/write IO
+    // surface (WKT/WKB/GeoJSON/EWKB/HexEWKB). Composed via wac
+    // plug against sfcgal-wasm's sfcgal.component.wasm.
+    import sfcgal:component/geometry@1.0.0;
+    import sfcgal:component/io@1.0.0;
     import sqlite:extension/types@0.1.0;
     import sqlite:extension/spi@0.1.0;
     import sqlite:extension/logging@0.1.0;

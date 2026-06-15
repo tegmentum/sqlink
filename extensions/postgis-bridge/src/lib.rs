@@ -45,6 +45,8 @@ use bindings::postgis::wasm::postgis_three_d as pg_threed;
 use bindings::postgis::wasm::postgis_types::{Geography, Geometry};
 use bindings::postgis::wasm::postgis_geodetic as pg_geog;
 use bindings::postgis::wasm::postgis_sfcgal as pg_sfcgal;
+use bindings::sfcgal::component::geometry as sf_geom;
+use bindings::sfcgal::component::io as sf_io;
 
 use core::cell::RefCell;
 use std::collections::HashMap;
@@ -379,6 +381,31 @@ const FID_ST_TRANSLATE_3D: u64 = 782;
 const FID_ST_SCALE_3D: u64 = 783;
 const FID_ST_ROTATE_3D: u64 = 784;
 
+// Direct sfcgal-wasm (geometry-handle keyed; results materialized
+// through write-wkb on the way back). Prefix `st_sfc_*` so they
+// don't collide with the postgis-sfcgal names.
+const FID_SFC_AS_STL: u64 = 800;
+const FID_SFC_AS_STL_BINARY: u64 = 801;
+const FID_SFC_AS_OBJ: u64 = 802;
+const FID_SFC_AS_VTK: u64 = 803;
+const FID_SFC_ALPHA_SHAPE: u64 = 804;
+const FID_SFC_OPTIMAL_ALPHA_SHAPE: u64 = 805;
+const FID_SFC_EXTRUDE_STRAIGHT: u64 = 806;
+const FID_SFC_EXTRUDE_STRAIGHT_SKELETON: u64 = 807;
+const FID_SFC_MAKE_VALID: u64 = 808;
+const FID_SFC_IS_VALID: u64 = 809;
+const FID_SFC_AREA: u64 = 810;
+const FID_SFC_VOLUME: u64 = 811;
+const FID_SFC_LENGTH: u64 = 812;
+const FID_SFC_DISTANCE: u64 = 813;
+const FID_SFC_VERSION: u64 = 814;
+const FID_SFC_TRIANGLE: u64 = 815;
+const FID_SFC_TESSELLATE: u64 = 816;
+const FID_SFC_CONVEX_HULL: u64 = 817;
+const FID_SFC_DIFFERENCE: u64 = 818;
+const FID_SFC_INTERSECTION: u64 = 819;
+const FID_SFC_UNION: u64 = 820;
+
 // Aggregate function ids (separate namespace, but kept distinct
 // from scalar ids for clarity).
 const AGG_ST_UNION: u64 = 1000;
@@ -710,6 +737,29 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_TRANSLATE_3D, "st_3dtranslate", 4),
                 s(FID_ST_SCALE_3D, "st_3dscale", 4),
                 s(FID_ST_ROTATE_3D, "st_3drotate", 5),
+                // Direct sfcgal-wasm  unique surface (prefix
+                // st_sfc_ to disambiguate from postgis-sfcgal).
+                s(FID_SFC_AS_STL, "st_sfc_asstl", 1),
+                s(FID_SFC_AS_STL_BINARY, "st_sfc_asstlbinary", 1),
+                s(FID_SFC_AS_OBJ, "st_sfc_asobj", 1),
+                s(FID_SFC_AS_VTK, "st_sfc_asvtk", 1),
+                s(FID_SFC_ALPHA_SHAPE, "st_sfc_alphashape", 2),
+                s(FID_SFC_OPTIMAL_ALPHA_SHAPE, "st_sfc_optimalalphashape", 1),
+                s(FID_SFC_EXTRUDE_STRAIGHT, "st_sfc_extrudestraight", 2),
+                s(FID_SFC_EXTRUDE_STRAIGHT_SKELETON, "st_sfc_extrudestraightskeleton", 2),
+                s(FID_SFC_MAKE_VALID, "st_sfc_makevalid", 1),
+                s(FID_SFC_IS_VALID, "st_sfc_isvalid", 1),
+                s(FID_SFC_AREA, "st_sfc_area", 1),
+                s(FID_SFC_VOLUME, "st_sfc_volume", 1),
+                s(FID_SFC_LENGTH, "st_sfc_length", 1),
+                s(FID_SFC_DISTANCE, "st_sfc_distance", 2),
+                s(FID_SFC_VERSION, "st_sfc_version", 0),
+                s(FID_SFC_TRIANGLE, "st_sfc_triangle", 6),
+                s(FID_SFC_TESSELLATE, "st_sfc_tessellate", 1),
+                s(FID_SFC_CONVEX_HULL, "st_sfc_convexhull", 1),
+                s(FID_SFC_DIFFERENCE, "st_sfc_difference", 2),
+                s(FID_SFC_INTERSECTION, "st_sfc_intersection", 2),
+                s(FID_SFC_UNION, "st_sfc_union", 2),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -807,6 +857,56 @@ fn from_wkb(bytes: &[u8], name: &str) -> Result<Geometry, String> {
 
 fn geog_from_wkb(bytes: &[u8], name: &str) -> Result<Geography, String> {
     Geography::from_wkb(bytes).map_err(|e| format!("{name}: {}", postgis_err_string(e)))
+}
+
+// ── sfcgal-wasm helpers ──────────────────────────────────────
+
+thread_local! {
+    static SFC_INITED: RefCell<bool> = const { RefCell::new(false) };
+}
+
+fn sfc_ensure_init() {
+    // sfcgal-wasm auto-initializes on first call into a
+    // geometry / io fn (the world-level `init` export is not
+    // importable through an interface boundary). Kept as a
+    // no-op so the call-site comment still reads well.
+    SFC_INITED.with(|c| { *c.borrow_mut() = true; });
+}
+
+/// Decode a `geometry-result` (handle or sfcgal-error).
+fn sfc_geom(r: sf_geom::GeometryResult, name: &str) -> Result<u64, String> {
+    match r {
+        sf_geom::GeometryResult::Ok(h) => Ok(h),
+        sf_geom::GeometryResult::Err(e) => Err(format!("{name}: sfcgal {}: {}", e.code, e.message)),
+    }
+}
+
+fn sfc_string(r: sf_geom::StringResult, name: &str) -> Result<String, String> {
+    match r {
+        sf_geom::StringResult::Ok(s) => Ok(s),
+        sf_geom::StringResult::Err(e) => Err(format!("{name}: sfcgal {}: {}", e.code, e.message)),
+    }
+}
+
+fn sfc_f64(r: sf_geom::F64Result, name: &str) -> Result<f64, String> {
+    match r {
+        sf_geom::F64Result::Ok(v) => Ok(v),
+        sf_geom::F64Result::Err(e) => Err(format!("{name}: sfcgal {}: {}", e.code, e.message)),
+    }
+}
+
+/// Read a WKB BLOB into an sfcgal geometry handle (RAII-ish
+/// caller MUST call sf_geom::destroy when done).
+fn sfc_read_wkb(bytes: &[u8], name: &str) -> Result<u64, String> {
+    sfc_ensure_init();
+    sfc_geom(sf_io::read_wkb(bytes), name)
+}
+
+/// Serialize a handle to WKB bytes (NDR) and destroy.
+fn sfc_take_wkb(handle: u64) -> Vec<u8> {
+    let bytes = sf_io::write_wkb(handle, sf_io::WkbByteOrder::LittleEndian);
+    sf_geom::destroy(handle);
+    bytes
 }
 
 fn postgis_err_string(e: bindings::postgis::wasm::postgis_types::PostgisError) -> String {
@@ -2034,6 +2134,166 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let r = pg_sfcgal::st_rotate_threed(w, angle, ax, ay, az)
                     .map_err(|e| format!("st_3drotate: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r))
+            }
+
+            // ── Direct sfcgal-wasm (handle-keyed) ──
+            FID_SFC_VERSION => {
+                // world-level fns from sfcgal-world (`version`,
+                // `full-version`) aren't importable through an
+                // interface boundary; report a stub instead.
+                Ok(SqlValue::Text("sfcgal (direct compose)".into()))
+            }
+            FID_SFC_AS_STL => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_asstl")?, "st_sfc_asstl")?;
+                let s = sfc_string(sf_io::write_stl(h), "st_sfc_asstl");
+                sf_geom::destroy(h);
+                Ok(SqlValue::Text(s?))
+            }
+            FID_SFC_AS_STL_BINARY => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_asstlbinary")?, "st_sfc_asstlbinary")?;
+                let bytes = sf_io::write_stl_binary(h);
+                sf_geom::destroy(h);
+                Ok(SqlValue::Blob(bytes))
+            }
+            FID_SFC_AS_OBJ => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_asobj")?, "st_sfc_asobj")?;
+                let s = sfc_string(sf_io::write_obj(h), "st_sfc_asobj");
+                sf_geom::destroy(h);
+                Ok(SqlValue::Text(s?))
+            }
+            FID_SFC_AS_VTK => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_asvtk")?, "st_sfc_asvtk")?;
+                let s = sfc_string(sf_io::write_vtk(h), "st_sfc_asvtk");
+                sf_geom::destroy(h);
+                Ok(SqlValue::Text(s?))
+            }
+            FID_SFC_ALPHA_SHAPE => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_alphashape")?, "st_sfc_alphashape")?;
+                let a = arg_f64(&args, 1, "st_sfc_alphashape")?;
+                match sfc_geom(sf_geom::alpha_shape(h, a), "st_sfc_alphashape") {
+                    Ok(r) => {
+                        sf_geom::destroy(h);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                }
+            }
+            FID_SFC_OPTIMAL_ALPHA_SHAPE => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_optimalalphashape")?, "st_sfc_optimalalphashape")?;
+                match sfc_geom(sf_geom::optimal_alpha_shape(h), "st_sfc_optimalalphashape") {
+                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
+                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                }
+            }
+            FID_SFC_EXTRUDE_STRAIGHT => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_extrudestraight")?, "st_sfc_extrudestraight")?;
+                let height = arg_f64(&args, 1, "st_sfc_extrudestraight")?;
+                match sfc_geom(sf_geom::extrude_straight(h, height), "st_sfc_extrudestraight") {
+                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
+                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                }
+            }
+            FID_SFC_EXTRUDE_STRAIGHT_SKELETON => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_extrudestraightskeleton")?, "st_sfc_extrudestraightskeleton")?;
+                let height = arg_f64(&args, 1, "st_sfc_extrudestraightskeleton")?;
+                match sfc_geom(sf_geom::extrude_straight_skeleton(h, height), "st_sfc_extrudestraightskeleton") {
+                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
+                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                }
+            }
+            FID_SFC_MAKE_VALID => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_makevalid")?, "st_sfc_makevalid")?;
+                match sfc_geom(sf_geom::make_valid(h), "st_sfc_makevalid") {
+                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
+                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                }
+            }
+            FID_SFC_IS_VALID => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_isvalid")?, "st_sfc_isvalid")?;
+                let v = sf_geom::is_valid(h);
+                sf_geom::destroy(h);
+                Ok(SqlValue::Integer(v as i64))
+            }
+            FID_SFC_AREA => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_area")?, "st_sfc_area")?;
+                let v = sfc_f64(sf_geom::area(h), "st_sfc_area");
+                sf_geom::destroy(h);
+                Ok(SqlValue::Real(v?))
+            }
+            FID_SFC_VOLUME => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_volume")?, "st_sfc_volume")?;
+                let v = sfc_f64(sf_geom::volume(h), "st_sfc_volume");
+                sf_geom::destroy(h);
+                Ok(SqlValue::Real(v?))
+            }
+            FID_SFC_LENGTH => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_length")?, "st_sfc_length")?;
+                let v = sfc_f64(sf_geom::length(h), "st_sfc_length");
+                sf_geom::destroy(h);
+                Ok(SqlValue::Real(v?))
+            }
+            FID_SFC_DISTANCE => {
+                let a = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_distance")?, "st_sfc_distance")?;
+                let b = sfc_read_wkb(arg_blob(&args, 1, "st_sfc_distance")?, "st_sfc_distance")?;
+                let v = sfc_f64(sf_geom::distance(a, b), "st_sfc_distance");
+                sf_geom::destroy(a);
+                sf_geom::destroy(b);
+                Ok(SqlValue::Real(v?))
+            }
+            FID_SFC_TRIANGLE => {
+                sfc_ensure_init();
+                let p1 = sf_geom::Coordinate::Coord2d(sf_geom::Coordinate2d {
+                    x: arg_f64(&args, 0, "st_sfc_triangle")?,
+                    y: arg_f64(&args, 1, "st_sfc_triangle")?,
+                });
+                let p2 = sf_geom::Coordinate::Coord2d(sf_geom::Coordinate2d {
+                    x: arg_f64(&args, 2, "st_sfc_triangle")?,
+                    y: arg_f64(&args, 3, "st_sfc_triangle")?,
+                });
+                let p3 = sf_geom::Coordinate::Coord2d(sf_geom::Coordinate2d {
+                    x: arg_f64(&args, 4, "st_sfc_triangle")?,
+                    y: arg_f64(&args, 5, "st_sfc_triangle")?,
+                });
+                let h = sfc_geom(sf_geom::triangle(p1, p2, p3), "st_sfc_triangle")?;
+                Ok(SqlValue::Blob(sfc_take_wkb(h)))
+            }
+            FID_SFC_TESSELLATE => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_tessellate")?, "st_sfc_tessellate")?;
+                match sfc_geom(sf_geom::tessellate(h), "st_sfc_tessellate") {
+                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
+                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                }
+            }
+            FID_SFC_CONVEX_HULL => {
+                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_convexhull")?, "st_sfc_convexhull")?;
+                match sfc_geom(sf_geom::convex_hull(h), "st_sfc_convexhull") {
+                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
+                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                }
+            }
+            FID_SFC_DIFFERENCE => {
+                let a = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_difference")?, "st_sfc_difference")?;
+                let b = sfc_read_wkb(arg_blob(&args, 1, "st_sfc_difference")?, "st_sfc_difference")?;
+                match sfc_geom(sf_geom::difference(a, b), "st_sfc_difference") {
+                    Ok(r) => { sf_geom::destroy(a); sf_geom::destroy(b); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
+                    Err(e) => { sf_geom::destroy(a); sf_geom::destroy(b); Err(e) }
+                }
+            }
+            FID_SFC_INTERSECTION => {
+                let a = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_intersection")?, "st_sfc_intersection")?;
+                let b = sfc_read_wkb(arg_blob(&args, 1, "st_sfc_intersection")?, "st_sfc_intersection")?;
+                match sfc_geom(sf_geom::intersection(a, b), "st_sfc_intersection") {
+                    Ok(r) => { sf_geom::destroy(a); sf_geom::destroy(b); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
+                    Err(e) => { sf_geom::destroy(a); sf_geom::destroy(b); Err(e) }
+                }
+            }
+            FID_SFC_UNION => {
+                let a = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_union")?, "st_sfc_union")?;
+                let b = sfc_read_wkb(arg_blob(&args, 1, "st_sfc_union")?, "st_sfc_union")?;
+                match sfc_geom(sf_geom::union(a, b), "st_sfc_union") {
+                    Ok(r) => { sf_geom::destroy(a); sf_geom::destroy(b); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
+                    Err(e) => { sf_geom::destroy(a); sf_geom::destroy(b); Err(e) }
+                }
             }
 
             other => Err(format!("postgis bridge: unknown func id {other}")),
