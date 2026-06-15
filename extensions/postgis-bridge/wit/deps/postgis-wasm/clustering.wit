@@ -1,0 +1,22 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS clustering functions for grouping geometries
+interface postgis-clustering {
+    use postgis-types.{geometry, postgis-error};
+
+    /// ST_ClusterDBSCAN - DBSCAN clustering algorithm
+    /// Returns cluster IDs for each geometry (None for noise points)
+    st-cluster-dbscan: func(geoms: list<borrow<geometry>>, eps: f64, min-points: u32) -> result<list<option<u32>>, postgis-error>;
+
+    /// ST_ClusterKMeans - K-Means clustering algorithm
+    /// Returns cluster ID (0 to k-1) for each geometry
+    st-cluster-kmeans: func(geoms: list<borrow<geometry>>, k: u32) -> result<list<u32>, postgis-error>;
+
+    /// ST_ClusterIntersecting - Cluster geometries that intersect
+    /// Returns list of GeometryCollections, one per cluster
+    st-cluster-intersecting: func(geoms: list<borrow<geometry>>) -> result<list<geometry>, postgis-error>;
+
+    /// ST_ClusterWithin - Cluster geometries within distance
+    /// Returns list of GeometryCollections, one per cluster
+    st-cluster-within: func(geoms: list<borrow<geometry>>, distance: f64) -> result<list<geometry>, postgis-error>;
+}

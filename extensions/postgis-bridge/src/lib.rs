@@ -34,6 +34,7 @@ use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
 use bindings::postgis::wasm::postgis_accessors as pg_acc;
 use bindings::postgis::wasm::postgis_aggregates as pg_agg;
+use bindings::postgis::wasm::postgis_clustering as pg_cluster;
 use bindings::postgis::wasm::postgis_constructors as pg_ctor;
 use bindings::postgis::wasm::postgis_measurements as pg_meas;
 use bindings::postgis::wasm::postgis_output as pg_out;
@@ -46,6 +47,10 @@ use bindings::postgis::wasm::postgis_types::{Geography, Geometry};
 use bindings::postgis::wasm::postgis_geodetic as pg_geog;
 use bindings::postgis::wasm::postgis_sfcgal as pg_sfcgal;
 use bindings::postgis::wasm::postgis_raster_accessors as pg_rast_acc;
+use bindings::postgis::wasm::postgis_raster_constructors as pg_rast_ctor;
+use bindings::postgis::wasm::postgis_raster_stats as pg_rast_stats;
+use bindings::postgis::wasm::postgis_topology_output as pg_topo_out;
+use bindings::postgis::wasm::postgis_topology_types::Topology;
 use bindings::postgis::wasm::postgis_raster_pixels as pg_rast_px;
 use bindings::postgis::wasm::postgis_raster_output as pg_rast_out;
 use bindings::postgis::wasm::postgis_raster_predicates as pg_rast_pred;
@@ -450,6 +455,34 @@ const FID_RST_ROUGHNESS: u64 = 931;
 const FID_RST_TRI: u64 = 932;
 const FID_RST_TPI: u64 = 933;
 
+// Raster v2 batch
+const FID_RST_MAKE_EMPTY: u64 = 940;
+const FID_RST_ADD_BAND: u64 = 941;
+const FID_RST_SET_VALUE: u64 = 942;
+const FID_RST_SUMMARY_COUNT: u64 = 943;
+const FID_RST_SUMMARY_SUM: u64 = 944;
+const FID_RST_SUMMARY_MEAN: u64 = 945;
+const FID_RST_SUMMARY_STDDEV: u64 = 946;
+const FID_RST_SUMMARY_MIN: u64 = 947;
+const FID_RST_SUMMARY_MAX: u64 = 948;
+const FID_RST_QUANTILE: u64 = 949;
+const FID_RST_WORLD_TO_RAST_X: u64 = 950;
+const FID_RST_WORLD_TO_RAST_Y: u64 = 951;
+const FID_RST_HILL_SHADE: u64 = 952;
+const FID_RST_RESIZE: u64 = 953;
+const FID_RST_RESCALE: u64 = 954;
+const FID_RST_BAND_PIXEL_TYPE: u64 = 955;
+const FID_RST_BAND_NODATA: u64 = 956;
+
+// Topology
+const FID_TOPO_NAME: u64 = 970;
+const FID_TOPO_SRID: u64 = 971;
+const FID_TOPO_PRECISION: u64 = 972;
+const FID_TOPO_NODE_COUNT: u64 = 973;
+const FID_TOPO_EDGE_COUNT: u64 = 974;
+const FID_TOPO_FACE_COUNT: u64 = 975;
+const FID_TOPO_AS_TOPOJSON: u64 = 976;
+
 // Aggregate function ids (separate namespace, but kept distinct
 // from scalar ids for clarity).
 const AGG_ST_UNION: u64 = 1000;
@@ -458,13 +491,20 @@ const AGG_ST_MAKELINE: u64 = 1002;
 const AGG_ST_CLUSTER_INTERSECTING: u64 = 1003;
 const AGG_ST_CLUSTER_WITHIN: u64 = 1004;
 const AGG_ST_EXTENT_3D: u64 = 1005;
+const AGG_ST_CLUSTER_DBSCAN: u64 = 1006;
+const AGG_ST_CLUSTER_KMEANS: u64 = 1007;
 
-/// Per-aggregation state: collected geometries (as WKB) + the
-/// distance parameter that cluster-within picks up at finalize.
+/// Per-aggregation state: collected geometries (as WKB) plus
+/// the trailing scalar args some aggregates latch from the
+/// first row (cluster-within's distance, dbscan's eps +
+/// min-points, kmeans' k).
 #[derive(Default)]
 struct AggState {
     wkbs: Vec<Vec<u8>>,
     distance: Option<f64>,
+    eps: Option<f64>,
+    min_points: Option<u32>,
+    k: Option<u32>,
 }
 
 thread_local! {
@@ -839,6 +879,32 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_RST_ROUGHNESS, "st_rast_roughness", 2),
                 s(FID_RST_TRI, "st_rast_tri", 2),
                 s(FID_RST_TPI, "st_rast_tpi", 2),
+                // Raster v2: constructors, stats, transforms
+                s(FID_RST_MAKE_EMPTY, "st_rast_makeemptyraster", 9),
+                s(FID_RST_ADD_BAND, "st_rast_addband", 4),
+                s(FID_RST_SET_VALUE, "st_rast_setvalue", 5),
+                s(FID_RST_SUMMARY_COUNT, "st_rast_count", 2),
+                s(FID_RST_SUMMARY_SUM, "st_rast_sum", 2),
+                s(FID_RST_SUMMARY_MEAN, "st_rast_mean", 2),
+                s(FID_RST_SUMMARY_STDDEV, "st_rast_stddev", 2),
+                s(FID_RST_SUMMARY_MIN, "st_rast_min", 2),
+                s(FID_RST_SUMMARY_MAX, "st_rast_max", 2),
+                s(FID_RST_QUANTILE, "st_rast_quantile", 3),
+                s(FID_RST_WORLD_TO_RAST_X, "st_rast_worldtorastercoordx", 3),
+                s(FID_RST_WORLD_TO_RAST_Y, "st_rast_worldtorastercoordy", 3),
+                s(FID_RST_HILL_SHADE, "st_rast_hillshade", 4),
+                s(FID_RST_RESIZE, "st_rast_resize", 4),
+                s(FID_RST_RESCALE, "st_rast_rescale", 4),
+                s(FID_RST_BAND_PIXEL_TYPE, "st_rast_bandpixeltype", 2),
+                s(FID_RST_BAND_NODATA, "st_rast_bandnodatavalue", 2),
+                // Topology (read-only accessors + topojson output)
+                s(FID_TOPO_NAME, "st_topo_name", 1),
+                s(FID_TOPO_SRID, "st_topo_srid", 1),
+                s(FID_TOPO_PRECISION, "st_topo_precision", 1),
+                s(FID_TOPO_NODE_COUNT, "st_topo_nodecount", 1),
+                s(FID_TOPO_EDGE_COUNT, "st_topo_edgecount", 1),
+                s(FID_TOPO_FACE_COUNT, "st_topo_facecount", 1),
+                s(FID_TOPO_AS_TOPOJSON, "st_topo_astopojson", 1),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -880,6 +946,20 @@ impl MetadataGuest for PostgisBridge {
                     id: AGG_ST_EXTENT_3D,
                     name: "st_3dextent_agg".into(),
                     num_args: 1,
+                    func_flags: det,
+                    is_window: false,
+                },
+                AggregateFunctionSpec {
+                    id: AGG_ST_CLUSTER_DBSCAN,
+                    name: "st_clusterdbscan_agg".into(),
+                    num_args: 3,
+                    func_flags: det,
+                    is_window: false,
+                },
+                AggregateFunctionSpec {
+                    id: AGG_ST_CLUSTER_KMEANS,
+                    name: "st_clusterkmeans_agg".into(),
+                    num_args: 2,
                     func_flags: det,
                     is_window: false,
                 },
@@ -938,12 +1018,68 @@ fn geog_from_wkb(bytes: &[u8], name: &str) -> Result<Geography, String> {
     Geography::from_wkb(bytes).map_err(|e| format!("{name}: {}", postgis_err_string(e)))
 }
 
+fn arg_to_f64(v: Option<&SqlValue>) -> Option<f64> {
+    match v? {
+        SqlValue::Real(r) => Some(*r),
+        SqlValue::Integer(i) => Some(*i as f64),
+        _ => None,
+    }
+}
+
+fn arg_to_i64(v: Option<&SqlValue>) -> Option<i64> {
+    match v? {
+        SqlValue::Integer(i) => Some(*i),
+        SqlValue::Real(r) => Some(*r as i64),
+        _ => None,
+    }
+}
+
+fn topo_from_bytes(bytes: &[u8], name: &str) -> Result<Topology, String> {
+    use bindings::postgis::wasm::postgis_topology_types as t;
+    t::from_bytes(bytes).map_err(|e| format!("{name}: topology: {e:?}"))
+}
+
 // Raster reads from a BLOB containing serialized raster bytes
 // (postgis-raster's interface-level `from-binary`). Mirrors the
 // geometry helper.
 fn rast_from_blob(bytes: &[u8], name: &str) -> Result<Raster, String> {
     use bindings::postgis::wasm::postgis_raster_types as t;
     t::from_binary(bytes).map_err(|e| format!("{name}: {}", raster_err_string(e)))
+}
+
+fn parse_pixel_type(
+    s: &str,
+) -> Result<bindings::postgis::wasm::postgis_raster_types::PixelType, String> {
+    use bindings::postgis::wasm::postgis_raster_types::PixelType as P;
+    Ok(match s.to_ascii_lowercase().as_str() {
+        "bool1" | "bool" | "1bb" => P::Bool1,
+        "uint8" | "u8" | "8bui" => P::Uint8,
+        "int8" | "i8" | "8bsi" => P::Int8,
+        "uint16" | "u16" | "16bui" => P::Uint16,
+        "int16" | "i16" | "16bsi" => P::Int16,
+        "uint32" | "u32" | "32bui" => P::Uint32,
+        "int32" | "i32" | "32bsi" => P::Int32,
+        "float32" | "f32" | "32bf" => P::Float32,
+        "float64" | "f64" | "64bf" => P::Float64,
+        other => return Err(format!("unknown pixel-type {other:?}")),
+    })
+}
+
+fn pixel_type_str(
+    p: bindings::postgis::wasm::postgis_raster_types::PixelType,
+) -> &'static str {
+    use bindings::postgis::wasm::postgis_raster_types::PixelType as P;
+    match p {
+        P::Bool1 => "1BB",
+        P::Uint8 => "8BUI",
+        P::Int8 => "8BSI",
+        P::Uint16 => "16BUI",
+        P::Int16 => "16BSI",
+        P::Uint32 => "32BUI",
+        P::Int32 => "32BSI",
+        P::Float32 => "32BF",
+        P::Float64 => "64BF",
+    }
 }
 
 fn raster_err_string(
@@ -2592,6 +2728,171 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(out.as_binary()))
             }
 
+            // ── Raster v2 ──
+            FID_RST_MAKE_EMPTY => {
+                let w = arg_i64(&args, 0, "st_rast_makeemptyraster")? as u32;
+                let h = arg_i64(&args, 1, "st_rast_makeemptyraster")? as u32;
+                let ulx = arg_f64(&args, 2, "st_rast_makeemptyraster")?;
+                let uly = arg_f64(&args, 3, "st_rast_makeemptyraster")?;
+                let sx = arg_f64(&args, 4, "st_rast_makeemptyraster")?;
+                let sy = arg_f64(&args, 5, "st_rast_makeemptyraster")?;
+                let skx = arg_f64(&args, 6, "st_rast_makeemptyraster")?;
+                let sky = arg_f64(&args, 7, "st_rast_makeemptyraster")?;
+                let srid = arg_i64(&args, 8, "st_rast_makeemptyraster")? as i32;
+                let r = pg_rast_ctor::st_make_empty_raster(w, h, ulx, uly, sx, sy, skx, sky, srid)
+                    .map_err(|e| format!("st_rast_makeemptyraster: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_binary()))
+            }
+            FID_RST_ADD_BAND => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_addband")?, "st_rast_addband")?;
+                let ptype = parse_pixel_type(arg_text(&args, 1, "st_rast_addband")?)?;
+                let init = arg_f64(&args, 2, "st_rast_addband")?;
+                let nodata = match args.get(3) {
+                    Some(SqlValue::Null) | None => None,
+                    Some(_) => Some(arg_f64(&args, 3, "st_rast_addband")?),
+                };
+                let out = pg_rast_ctor::st_add_band(&r, ptype, init, nodata)
+                    .map_err(|e| format!("st_rast_addband: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_SET_VALUE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_setvalue")?, "st_rast_setvalue")?;
+                let band = arg_i64(&args, 1, "st_rast_setvalue")? as u32;
+                let x = arg_i64(&args, 2, "st_rast_setvalue")? as u32;
+                let y = arg_i64(&args, 3, "st_rast_setvalue")? as u32;
+                let v = arg_f64(&args, 4, "st_rast_setvalue")?;
+                let out = pg_rast_acc::st_set_value(&r, band, x, y, v)
+                    .map_err(|e| format!("st_rast_setvalue: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+
+            // Summary stats decomposed  one scalar per field. Each
+            // call hits summary_stats fresh; SQL users can JOIN them
+            // if they want all fields without paying the cost twice.
+            FID_RST_SUMMARY_COUNT
+            | FID_RST_SUMMARY_SUM
+            | FID_RST_SUMMARY_MEAN
+            | FID_RST_SUMMARY_STDDEV
+            | FID_RST_SUMMARY_MIN
+            | FID_RST_SUMMARY_MAX => {
+                let name = match func_id {
+                    FID_RST_SUMMARY_COUNT => "st_rast_count",
+                    FID_RST_SUMMARY_SUM => "st_rast_sum",
+                    FID_RST_SUMMARY_MEAN => "st_rast_mean",
+                    FID_RST_SUMMARY_STDDEV => "st_rast_stddev",
+                    FID_RST_SUMMARY_MIN => "st_rast_min",
+                    _ => "st_rast_max",
+                };
+                let r = rast_from_blob(arg_blob(&args, 0, name)?, name)?;
+                let band = arg_i64(&args, 1, name)? as u32;
+                let s = pg_rast_stats::st_summary_stats(&r, band)
+                    .map_err(|e| format!("{name}: {}", raster_err_string(e)))?;
+                Ok(match func_id {
+                    FID_RST_SUMMARY_COUNT => SqlValue::Integer(s.count as i64),
+                    FID_RST_SUMMARY_SUM => SqlValue::Real(s.sum),
+                    FID_RST_SUMMARY_MEAN => SqlValue::Real(s.mean),
+                    FID_RST_SUMMARY_STDDEV => SqlValue::Real(s.stddev),
+                    FID_RST_SUMMARY_MIN => SqlValue::Real(s.min),
+                    _ => SqlValue::Real(s.max),
+                })
+            }
+            FID_RST_QUANTILE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_quantile")?, "st_rast_quantile")?;
+                let band = arg_i64(&args, 1, "st_rast_quantile")? as u32;
+                let q = arg_f64(&args, 2, "st_rast_quantile")?;
+                let v = pg_rast_stats::st_quantile(&r, band, q)
+                    .map_err(|e| format!("st_rast_quantile: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Real(v))
+            }
+            FID_RST_WORLD_TO_RAST_X => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_worldtorastercoordx")?, "st_rast_worldtorastercoordx")?;
+                let wx = arg_f64(&args, 1, "st_rast_worldtorastercoordx")?;
+                let wy = arg_f64(&args, 2, "st_rast_worldtorastercoordx")?;
+                let (col, _row) = pg_rast_px::st_world_to_raster_coord(&r, wx, wy);
+                Ok(SqlValue::Integer(col as i64))
+            }
+            FID_RST_WORLD_TO_RAST_Y => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_worldtorastercoordy")?, "st_rast_worldtorastercoordy")?;
+                let wx = arg_f64(&args, 1, "st_rast_worldtorastercoordy")?;
+                let wy = arg_f64(&args, 2, "st_rast_worldtorastercoordy")?;
+                let (_col, row) = pg_rast_px::st_world_to_raster_coord(&r, wx, wy);
+                Ok(SqlValue::Integer(row as i64))
+            }
+            FID_RST_HILL_SHADE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_hillshade")?, "st_rast_hillshade")?;
+                let band = arg_i64(&args, 1, "st_rast_hillshade")? as u32;
+                let az = arg_f64(&args, 2, "st_rast_hillshade")?;
+                let alt = arg_f64(&args, 3, "st_rast_hillshade")?;
+                let out = pg_rast_proc::st_hill_shade(&r, band, az, alt)
+                    .map_err(|e| format!("st_rast_hillshade: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_RESIZE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_resize")?, "st_rast_resize")?;
+                let w = arg_i64(&args, 1, "st_rast_resize")? as u32;
+                let h = arg_i64(&args, 2, "st_rast_resize")? as u32;
+                let alg = arg_text(&args, 3, "st_rast_resize")?;
+                let out = pg_rast_proc::st_resize(&r, w, h, alg)
+                    .map_err(|e| format!("st_rast_resize: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_RESCALE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_rescale")?, "st_rast_rescale")?;
+                let sx = arg_f64(&args, 1, "st_rast_rescale")?;
+                let sy = arg_f64(&args, 2, "st_rast_rescale")?;
+                let alg = arg_text(&args, 3, "st_rast_rescale")?;
+                let out = pg_rast_proc::st_rescale(&r, sx, sy, alg)
+                    .map_err(|e| format!("st_rast_rescale: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_BAND_PIXEL_TYPE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_bandpixeltype")?, "st_rast_bandpixeltype")?;
+                let band = arg_i64(&args, 1, "st_rast_bandpixeltype")? as u32;
+                let p = pg_rast_acc::st_band_pixel_type(&r, band)
+                    .map_err(|e| format!("st_rast_bandpixeltype: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Text(pixel_type_str(p).to_string()))
+            }
+            FID_RST_BAND_NODATA => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_bandnodatavalue")?, "st_rast_bandnodatavalue")?;
+                let band = arg_i64(&args, 1, "st_rast_bandnodatavalue")? as u32;
+                let v = pg_rast_acc::st_band_nodata_value(&r, band)
+                    .map_err(|e| format!("st_rast_bandnodatavalue: {}", raster_err_string(e)))?;
+                Ok(match v {
+                    Some(x) => SqlValue::Real(x),
+                    None => SqlValue::Null,
+                })
+            }
+
+            // ── Topology ──
+            FID_TOPO_NAME => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_name")?, "st_topo_name")?;
+                Ok(SqlValue::Text(t.name()))
+            }
+            FID_TOPO_SRID => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_srid")?, "st_topo_srid")?;
+                Ok(SqlValue::Integer(t.srid() as i64))
+            }
+            FID_TOPO_PRECISION => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_precision")?, "st_topo_precision")?;
+                Ok(SqlValue::Real(t.precision()))
+            }
+            FID_TOPO_NODE_COUNT => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_nodecount")?, "st_topo_nodecount")?;
+                Ok(SqlValue::Integer(t.node_count() as i64))
+            }
+            FID_TOPO_EDGE_COUNT => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_edgecount")?, "st_topo_edgecount")?;
+                Ok(SqlValue::Integer(t.edge_count() as i64))
+            }
+            FID_TOPO_FACE_COUNT => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_facecount")?, "st_topo_facecount")?;
+                Ok(SqlValue::Integer(t.face_count() as i64))
+            }
+            FID_TOPO_AS_TOPOJSON => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_astopojson")?, "st_topo_astopojson")?;
+                Ok(SqlValue::Text(pg_topo_out::as_topojson(&t)))
+            }
+
             other => Err(format!("postgis bridge: unknown func id {other}")),
         }
     }
@@ -2615,21 +2916,38 @@ impl AggregateGuest for PostgisBridge {
             SqlValue::Text(s) => s.as_bytes().to_vec(),
             _ => return Err("postgis agg: arg 0 must be BLOB (WKB)".to_string()),
         };
-        let distance = if func_id == AGG_ST_CLUSTER_WITHIN {
-            match args.get(1) {
-                Some(SqlValue::Real(r)) => Some(*r),
-                Some(SqlValue::Integer(i)) => Some(*i as f64),
-                _ => None,
-            }
-        } else {
-            None
-        };
         AGGS.with(|m| {
             let mut tbl = m.borrow_mut();
             let entry = tbl.entry(context_id).or_default();
             entry.wkbs.push(bytes);
-            if let Some(d) = distance {
-                entry.distance = Some(d);
+            match func_id {
+                AGG_ST_CLUSTER_WITHIN => {
+                    if entry.distance.is_none() {
+                        if let Some(v) = arg_to_f64(args.get(1)) {
+                            entry.distance = Some(v);
+                        }
+                    }
+                }
+                AGG_ST_CLUSTER_DBSCAN => {
+                    if entry.eps.is_none() {
+                        if let Some(v) = arg_to_f64(args.get(1)) {
+                            entry.eps = Some(v);
+                        }
+                    }
+                    if entry.min_points.is_none() {
+                        if let Some(v) = arg_to_i64(args.get(2)) {
+                            entry.min_points = Some(v as u32);
+                        }
+                    }
+                }
+                AGG_ST_CLUSTER_KMEANS => {
+                    if entry.k.is_none() {
+                        if let Some(v) = arg_to_i64(args.get(1)) {
+                            entry.k = Some(v as u32);
+                        }
+                    }
+                }
+                _ => {}
             }
         });
         Ok(())
@@ -2701,6 +3019,31 @@ impl AggregateGuest for PostgisBridge {
                     "BOX3D({} {} {},{} {} {})",
                     bbox.min_x, bbox.min_y, bbox.min_z, bbox.max_x, bbox.max_y, bbox.max_z
                 )))
+            }
+            AGG_ST_CLUSTER_DBSCAN => {
+                // Returns JSON [clusterId or null per input row].
+                let eps = state.eps
+                    .ok_or_else(|| "st_clusterdbscan_agg: eps never seen".to_string())?;
+                let mp = state.min_points
+                    .ok_or_else(|| "st_clusterdbscan_agg: min_points never seen".to_string())?;
+                let ids = pg_cluster::st_cluster_dbscan(&refs, eps, mp)
+                    .map_err(|e| format!("st_clusterdbscan_agg: {}", postgis_err_string(e)))?;
+                let json: Vec<String> = ids
+                    .iter()
+                    .map(|c| match c {
+                        Some(n) => format!("{n}"),
+                        None => "null".to_string(),
+                    })
+                    .collect();
+                Ok(SqlValue::Text(format!("[{}]", json.join(","))))
+            }
+            AGG_ST_CLUSTER_KMEANS => {
+                let k = state.k
+                    .ok_or_else(|| "st_clusterkmeans_agg: k never seen".to_string())?;
+                let ids = pg_cluster::st_cluster_kmeans(&refs, k)
+                    .map_err(|e| format!("st_clusterkmeans_agg: {}", postgis_err_string(e)))?;
+                let json: Vec<String> = ids.iter().map(|n| format!("{n}")).collect();
+                Ok(SqlValue::Text(format!("[{}]", json.join(","))))
             }
             other => Err(format!("postgis agg: unknown id {other}")),
         }

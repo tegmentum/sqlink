@@ -1,0 +1,142 @@
+package postgis:wasm@0.1.0;
+
+/// Topology (Feature 2, phases T1+T2). A topology is a stateful graph of
+/// nodes, edges, and faces held in memory inside a `topology` resource
+/// (externalised-state model: the caller round-trips it via to-bytes /
+/// from-bytes between transactions). Edit operations mutate the topology
+/// in place (via interior mutability) and return the new primitive id.
+interface postgis-topology-types {
+    variant topology-error {
+        invalid-topology(string),
+        node-not-found(u32),
+        edge-not-found(u32),
+        face-not-found(u32),
+        general(string),
+    }
+
+    resource topology {
+        /// CreateTopology(name, srid, precision).
+        constructor(name: string, srid: s32, precision: f64);
+        name: func() -> string;
+        srid: func() -> s32;
+        precision: func() -> f64;
+        node-count: func() -> u32;
+        edge-count: func() -> u32;
+        face-count: func() -> u32;
+        /// Serialise the whole graph for caller-managed persistence.
+        to-bytes: func() -> list<u8>;
+    }
+
+    /// Reconstruct a topology from `to-bytes`.
+    from-bytes: func(b: list<u8>) -> result<topology, topology-error>;
+}
+
+interface postgis-topology-edit {
+    use postgis-topology-types.{topology, topology-error};
+    use postgis-types.{geometry};
+
+    /// AddIsoNode — add an isolated node (POINT), optionally within a face.
+    /// Returns the new node id. Errors if a node already exists there.
+    add-iso-node: func(
+        topo: borrow<topology>, face: option<u32>, point: borrow<geometry>,
+    ) -> result<u32, topology-error>;
+
+    /// AddIsoEdge — add an isolated edge (LINESTRING) between two existing
+    /// nodes. Returns the new edge id.
+    add-iso-edge: func(
+        topo: borrow<topology>, anode: u32, anothernode: u32, line: borrow<geometry>,
+    ) -> result<u32, topology-error>;
+
+    /// ModEdgeSplit (T3) — split `edge` at `point`, adding a new node and a
+    /// new edge (the original edge is shortened to the new node). Returns the
+    /// new node id.
+    mod-edge-split: func(
+        topo: borrow<topology>, edge: u32, point: borrow<geometry>,
+    ) -> result<u32, topology-error>;
+
+    /// NewEdgesSplit (T3) — split `edge` at `point`, removing the original
+    /// edge and adding two new edges. Returns the new node id.
+    new-edges-split: func(
+        topo: borrow<topology>, edge: u32, point: borrow<geometry>,
+    ) -> result<u32, topology-error>;
+
+    /// ModEdgeHeal (T3) — merge two edges sharing a degree-2 node, removing
+    /// that node and the second edge. Returns the removed node id.
+    mod-edge-heal: func(
+        topo: borrow<topology>, anedge: u32, anotheredge: u32,
+    ) -> result<u32, topology-error>;
+
+    /// AddFace (T4) — register a face from a POLYGON. Returns the face id.
+    add-face: func(
+        topo: borrow<topology>, poly: borrow<geometry>, force: bool,
+    ) -> result<u32, topology-error>;
+
+    /// RemoveFace (T4) — remove a face by id (cannot remove the universe 0).
+    remove-face: func(topo: borrow<topology>, face: u32) -> result<_, topology-error>;
+}
+
+/// Topology output / geometry accessors (T4/T6).
+interface postgis-topology-output {
+    use postgis-topology-types.{topology, topology-error};
+    use postgis-types.{geometry};
+
+    /// Geometry (POINT) of a node.
+    get-node-geometry: func(topo: borrow<topology>, node: u32) -> result<geometry, topology-error>;
+    /// Geometry (LINESTRING) of an edge.
+    get-edge-geometry: func(topo: borrow<topology>, edge: u32) -> result<geometry, topology-error>;
+    /// Geometry (POLYGON) of a face (empty for the universe face).
+    get-face-geometry: func(topo: borrow<topology>, face: u32) -> result<geometry, topology-error>;
+    /// AsTopoJSON — a TopoJSON-style JSON document of the whole topology.
+    as-topojson: func(topo: borrow<topology>) -> string;
+}
+
+/// TopoGeometry (T5) — a typed collection of topology primitives that
+/// together represent a geometry.
+interface postgis-topology-topogeom {
+    use postgis-topology-types.{topology, topology-error};
+    use postgis-types.{geometry};
+
+    /// A primitive reference: element-type is 1=node, 2=edge, 3=face.
+    record topo-element {
+        id: u32,
+        element-type: u32,
+    }
+
+    resource topo-geometry {
+        /// 1 = puntal (nodes), 2 = lineal (edges), 3 = areal (faces).
+        topo-type: func() -> u32;
+        element-count: func() -> u32;
+        get-elements: func() -> list<topo-element>;
+        /// Assembled geometry (MULTIPOINT / MULTILINESTRING / MULTIPOLYGON).
+        geometry: func() -> geometry;
+        /// Empty the topogeometry (clearTopoGeom).
+        clear: func();
+    }
+
+    /// CreateTopoGeom — build a topogeometry of `topo-type` from primitive
+    /// elements of `topo`. Each element's type must match `topo-type`
+    /// (1->node, 2->edge, 3->face) and must exist in the topology.
+    create-topo-geom: func(
+        topo: borrow<topology>, topo-type: u32, elements: list<topo-element>,
+    ) -> result<topo-geometry, topology-error>;
+}
+
+interface postgis-topology-query {
+    use postgis-topology-types.{topology, topology-error};
+    use postgis-types.{geometry};
+
+    /// GetNodeByPoint — id of the node at `point` within `tolerance`
+    /// (0 if none; error if ambiguous).
+    get-node-by-point: func(
+        topo: borrow<topology>, point: borrow<geometry>, tolerance: f64,
+    ) -> result<u32, topology-error>;
+
+    /// GetEdgeByPoint — id of an edge passing through `point` within
+    /// `tolerance` (0 if none; error if ambiguous).
+    get-edge-by-point: func(
+        topo: borrow<topology>, point: borrow<geometry>, tolerance: f64,
+    ) -> result<u32, topology-error>;
+
+    /// ValidateTopology — human-readable issues (empty list = valid).
+    validate-topology: func(topo: borrow<topology>) -> list<string>;
+}
