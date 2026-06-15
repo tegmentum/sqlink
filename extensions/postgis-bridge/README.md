@@ -266,6 +266,94 @@ Schema is fixed: `CREATE TABLE x(geom BLOB, value REAL)`. Filesystem
 path (not embedded BLOB) because `CREATE VIRTUAL TABLE` args are
 strings; a BLOB-literal arg would require hex-decode at parse time.
 
+## Operators
+
+Postgres' raw spatial operators surface for compatibility with
+PostGIS query patterns that lean on `&&` / `<#>` semantics
+directly:
+
+| SQL                                       | What it does                                       |
+|-------------------------------------------|----------------------------------------------------|
+| `op_bbox_intersects_2d(a, b)` → INTEGER   | 2D bounding-box overlap (`&&`)                     |
+| `op_bbox_intersects_nd(a, b)` → INTEGER   | N-D bounding-box overlap (`&&&`)                   |
+| `op_knn_distance(a, b)` → REAL            | KNN centroid distance (`<->`)                      |
+| `op_bbox_distance(a, b)` → REAL           | Bbox-to-bbox distance (`<#>`)                      |
+| `op_equals_spatially(a, b)` → INTEGER     | Geometry equality up to representation (`~=`)      |
+
+## Geocoder (US-address parsing)
+
+`postgis-wasm` ships the pure parsing half of the TIGER
+geocoder — no gigabyte TIGER/Line dataset required:
+
+```sql
+SELECT st_parse_address('123 Main St, Springfield, IL 62701');
+-- => {"number":"123","street":"MAIN ST","city":"SPRINGFIELD",
+--     "state":"IL","zip":"62701","zipplus":""}
+
+SELECT st_normalize_address('123 Main St, Springfield, IL 62701');
+-- => [{"label":"AddressNumber","value":"123"},
+--     {"label":"StreetName","value":"MAIN"},
+--     {"label":"StreetNamePostType","value":"ST"}, ...]
+```
+
+Data-backed `geocode` / `reverse_geocode` need TIGER data and
+remain downstream-only.
+
+## Topology
+
+The bridge exposes three layers of topology functionality:
+
+### Read-only metadata (BLOB-based, no handle)
+
+`st_topo_name / _srid / _precision / _nodecount / _edgecount /
+_facecount / _astopojson(topo)` — take a serialized topology
+BLOB and return scalar metadata or TopoJSON. From earlier work.
+
+### Element geometry (BLOB-based, no handle)
+
+```sql
+SELECT st_topo_node_geom(topo_blob, node_id);   -- POINT WKB
+SELECT st_topo_edge_geom(topo_blob, edge_id);   -- LINESTRING WKB
+SELECT st_topo_face_geom(topo_blob, face_id);   -- POLYGON WKB
+SELECT st_topo_node_by_point(topo_blob, point_wkb, tolerance);
+SELECT st_topo_edge_by_point(topo_blob, point_wkb, tolerance);
+SELECT st_topo_validate(topo_blob);              -- JSON list<string> of issues
+```
+
+### Editing via handle API
+
+Mutating ops return a new element id (u32), not a new blob, so
+they don't fit a one-call-per-mutation scalar model. The bridge
+keeps a thread-local `HashMap<u64, Topology>` and hands the
+caller an opaque integer handle:
+
+```sql
+-- open: deserialize bytes -> handle
+WITH h AS (SELECT st_topo_open(topo_blob) AS h FROM topos)
+-- edit in place, returning the new id directly
+SELECT
+    st_topo_add_iso_node(h.h, 0, st_makepoint(5, 5)) AS new_node,
+    st_topo_add_iso_edge(h.h, n1, n2, line_wkb)      AS new_edge,
+    st_topo_mod_edge_split(h.h, edge_id, point_wkb)  AS split_node,
+    st_topo_new_edges_split(h.h, edge_id, point_wkb) AS new_split_node,
+    st_topo_mod_edge_heal(h.h, e1, e2)               AS heal_node,
+    st_topo_add_face(h.h, polygon_wkb, false)        AS new_face,
+    st_topo_remove_face(h.h, face_id)                AS removed,
+    st_topo_serialize(h.h)                           AS mutated_blob,
+    st_topo_close(h.h)                               AS closed
+FROM h;
+```
+
+`st_topo_open` takes a serialized topology and returns a handle
+(positive INTEGER). The handle stays valid until `st_topo_close`
+or the process exits. Reads and edits route through the handle;
+`st_topo_serialize` snapshots the current state to a BLOB you can
+persist; `st_topo_close` drops the resource from the registry.
+
+The TopoGeometry resource (`postgis-topology-topogeom`)
+isn't bridged yet — it carries pointers into a specific topology
+across SQL calls and needs its own handle scheme.
+
 ## Batch interface (deferred by design)
 
 postgis-wasm's `postgis-batch` interface (70 functions —

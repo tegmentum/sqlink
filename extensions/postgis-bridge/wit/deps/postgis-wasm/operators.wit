@@ -1,0 +1,32 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS bounding-box / KNN operators, exposed as plain functions.
+///
+/// These mirror the SQL operators the PostgreSQL planner uses for
+/// index-aware queries (`&&`, `&&&`, `<->`, `<#>`, `~=`). Exposing them
+/// as functions lets a downstream planner map an operator token to a
+/// call. They follow the bare-return convention: a safe default
+/// (`false` / `inf`) is returned for degenerate input (e.g. an empty
+/// geometry with no bounding box).
+interface postgis-operators {
+    use postgis-types.{geometry};
+
+    /// `&&` — the 2D bounding boxes of A and B intersect.
+    /// Identifier uses `-twod` suffix for WIT spec compliance
+    /// (digit-leading segments are rejected by strict guest-side
+    /// wit-bindgen). Parallel to `intersects-nd` further down.
+    op-bbox-intersects-twod: func(a: borrow<geometry>, b: borrow<geometry>) -> bool;
+
+    /// `&&&` — the n-D bounding boxes intersect (Z included when both
+    /// geometries carry Z; otherwise equivalent to `&&`).
+    op-bbox-intersects-nd: func(a: borrow<geometry>, b: borrow<geometry>) -> bool;
+
+    /// `<->` — distance between the geometries (KNN ordering operator).
+    op-knn-distance: func(a: borrow<geometry>, b: borrow<geometry>) -> f64;
+
+    /// `<#>` — distance between the geometries' 2D bounding boxes.
+    op-bbox-distance: func(a: borrow<geometry>, b: borrow<geometry>) -> f64;
+
+    /// `~=` — geometrically equal (ST_Equals topological semantics).
+    op-equals-spatially: func(a: borrow<geometry>, b: borrow<geometry>) -> bool;
+}

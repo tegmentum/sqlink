@@ -222,16 +222,18 @@ fts5/rtree, just at a different layer.
 | direct sfcgal-wasm            |    21  | extensions/postgis-bridge          |
 | postgis raster                |    60  | extensions/postgis-bridge          |
 | postgis raster aggregate      |     1  | extensions/postgis-bridge (R6)     |
-| postgis topology              |     7  | extensions/postgis-bridge          |
+| postgis topology              |    23  | extensions/postgis-bridge          |
 | postgis STRtree (scalar API)  |     8  | extensions/postgis-bridge          |
+| postgis operators             |     5  | extensions/postgis-bridge          |
+| postgis geocoder (parse-only) |     2  | extensions/postgis-bridge          |
 | raster_polygon_dump vtab      |    +1  | extensions/postgis-bridge          |
-| **postgis-bridge subtotal**   | **389 scalar + 9 agg + 1 vtab** | (composed against postgis-composed.wasm + sfcgal.component.wasm) |
+| **postgis-bridge subtotal**   | **412 scalar + 9 agg + 1 vtab** | (composed against postgis-composed.wasm + sfcgal.component.wasm) |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
 |                               |        | LIBSQLITE3_FLAGS env               |
 
-**Grand SQL surface delivered**: 458 SQL-callable functions
+**Grand SQL surface delivered**: 481 SQL-callable functions
 (scalars + aggregates) plus 5 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump), all reachable through
 `.load` or directly via the bundled SQLite, on top of the
@@ -258,11 +260,12 @@ extension catalog itself rides on existing wasm components.
   (`scale`, `threshold`, `cliprange`, `linrescale`); the two-
   band variant needs either expression-language work or a
   ListBand argument shape. Not landed.
-- **postgis topology mutating ops** (`add_iso_node`,
-  `mod_edge_split`, `remove_face`, etc.): operate on the
-  topology resource in place and return an id; need vtab
-  semantics to keep the mutated topology + new id available
-  to the caller.
+- **postgis-topology-topogeom (6 fns)**: TopoGeometry
+  references topology elements across SQL calls. Needs its
+  own bridge-side handle registry like the topology edit API
+  uses; the existing TOPO_HANDLES registry doesn't yet model
+  the TopoGeometry-topology back-reference. Defer until a
+  caller asks.
 
 These are mechanical additions when surfaced; nothing
 architectural blocks them.

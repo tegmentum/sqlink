@@ -30,8 +30,12 @@ world bridge {
     import postgis:wasm/postgis-raster-predicates@0.1.0;
     import postgis:wasm/postgis-raster-processing@0.1.0;
     import postgis:wasm/postgis-raster-aggregates@0.1.0;
+    import postgis:wasm/postgis-operators@0.1.0;
+    import postgis:wasm/postgis-geocoder@0.1.0;
     import postgis:wasm/postgis-topology-types@0.1.0;
     import postgis:wasm/postgis-topology-output@0.1.0;
+    import postgis:wasm/postgis-topology-edit@0.1.0;
+    import postgis:wasm/postgis-topology-query@0.1.0;
 
     // Direct sfcgal-wasm component  richer surface than what
     // postgis-sfcgal wraps. Provides STL/OBJ/VTK output for

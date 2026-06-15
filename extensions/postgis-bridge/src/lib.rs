@@ -55,7 +55,11 @@ use bindings::postgis::wasm::postgis_raster_constructors as pg_rast_ctor;
 use bindings::postgis::wasm::postgis_raster_stats as pg_rast_stats;
 use bindings::postgis::wasm::postgis_raster_mapalgebra as pg_rast_ma;
 use bindings::postgis::wasm::postgis_topology_output as pg_topo_out;
+use bindings::postgis::wasm::postgis_topology_edit as pg_topo_edit;
+use bindings::postgis::wasm::postgis_topology_query as pg_topo_query;
 use bindings::postgis::wasm::postgis_topology_types::Topology;
+use bindings::postgis::wasm::postgis_operators as pg_op;
+use bindings::postgis::wasm::postgis_geocoder as pg_geo;
 use bindings::postgis::wasm::postgis_raster_pixels as pg_rast_px;
 use bindings::postgis::wasm::postgis_raster_output as pg_rast_out;
 use bindings::postgis::wasm::postgis_raster_predicates as pg_rast_pred;
@@ -505,6 +509,43 @@ const FID_STRTREE_DESTROY: u64 = 987;
 // polygon from st_dump_as_polygons or st_pixel_as_polygons.
 const VTAB_RASTER_POLYGON_DUMP: u64 = 1;
 
+// Operators (bbox + KNN + spatial-equality).
+const FID_OP_BBOX_INTERSECTS_2D: u64 = 1200;
+const FID_OP_BBOX_INTERSECTS_ND: u64 = 1201;
+const FID_OP_KNN_DISTANCE: u64 = 1202;
+const FID_OP_BBOX_DISTANCE: u64 = 1203;
+const FID_OP_EQUALS_SPATIALLY: u64 = 1204;
+
+// Geocoder (US-address parsing only — no TIGER data needed).
+const FID_GEO_NORMALIZE_ADDRESS: u64 = 1210;
+const FID_GEO_PARSE_ADDRESS: u64 = 1211;
+
+// Topology read (BLOB-based: take a serialized topology + an id,
+// return geometry).
+const FID_TOPO_NODE_GEOM: u64 = 1220;
+const FID_TOPO_EDGE_GEOM: u64 = 1221;
+const FID_TOPO_FACE_GEOM: u64 = 1222;
+
+// Topology query (BLOB-based).
+const FID_TOPO_NODE_BY_POINT: u64 = 1230;
+const FID_TOPO_EDGE_BY_POINT: u64 = 1231;
+const FID_TOPO_VALIDATE: u64 = 1232;
+
+// Topology edit via handle API (bridge-side thread_local
+// HashMap<u64, Topology>). Topology resources own a RefCell
+// internally — borrows from the HashMap entry are scoped to
+// the call. Lifecycle is open / serialize / close.
+const FID_TOPO_H_OPEN: u64 = 1240;
+const FID_TOPO_H_SERIALIZE: u64 = 1241;
+const FID_TOPO_H_CLOSE: u64 = 1242;
+const FID_TOPO_H_ADD_ISO_NODE: u64 = 1243;
+const FID_TOPO_H_ADD_ISO_EDGE: u64 = 1244;
+const FID_TOPO_H_MOD_EDGE_SPLIT: u64 = 1245;
+const FID_TOPO_H_NEW_EDGES_SPLIT: u64 = 1246;
+const FID_TOPO_H_MOD_EDGE_HEAL: u64 = 1247;
+const FID_TOPO_H_ADD_FACE: u64 = 1248;
+const FID_TOPO_H_REMOVE_FACE: u64 = 1249;
+
 // Raster v3 (PLAN-raster.md phases R1-R4): JSON list returns,
 // map-algebra precanned ops, reclass, set-values.
 const FID_RST_HISTOGRAM_JSON: u64 = 1100;
@@ -547,6 +588,39 @@ struct AggState {
 
 thread_local! {
     static AGGS: RefCell<HashMap<u64, AggState>> = RefCell::new(HashMap::new());
+    /// Topology resource registry for the handle-based edit API.
+    /// Keyed by an opaque u64 the bridge hands back to SQL; the
+    /// caller passes it to subsequent edit / serialize / close calls.
+    static TOPO_HANDLES: RefCell<HashMap<u64, Topology>> = RefCell::new(HashMap::new());
+    /// Monotonic id generator for TOPO_HANDLES. Starts at 1 so
+    /// callers never confuse a 0 return with "valid handle".
+    static TOPO_NEXT_ID: RefCell<u64> = const { RefCell::new(1) };
+}
+
+fn topo_handle_next() -> u64 {
+    TOPO_NEXT_ID.with(|c| {
+        let mut v = c.borrow_mut();
+        let id = *v;
+        *v += 1;
+        id
+    })
+}
+
+/// Run a closure with a borrow of the Topology resource the
+/// handle points at. Returns a clean SQL error if the handle is
+/// unknown.
+fn with_topo_handle<R>(
+    h: u64,
+    name: &str,
+    f: impl FnOnce(&Topology) -> Result<R, String>,
+) -> Result<R, String> {
+    TOPO_HANDLES.with(|m| {
+        let map = m.borrow();
+        match map.get(&h) {
+            Some(t) => f(t),
+            None => Err(format!("{name}: no such topology handle {h}")),
+        }
+    })
 }
 
 struct PostgisBridge;
@@ -962,6 +1036,34 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_RST_MA_CLIPRANGE, "st_rast_cliprange", 4),
                 s(FID_RST_MA_LINRESCALE, "st_rast_linrescale", 6),
                 s(FID_RST_RECLASS_JSON, "st_rast_reclass", 4),
+                // Operators
+                s(FID_OP_BBOX_INTERSECTS_2D, "op_bbox_intersects_2d", 2),
+                s(FID_OP_BBOX_INTERSECTS_ND, "op_bbox_intersects_nd", 2),
+                s(FID_OP_KNN_DISTANCE, "op_knn_distance", 2),
+                s(FID_OP_BBOX_DISTANCE, "op_bbox_distance", 2),
+                s(FID_OP_EQUALS_SPATIALLY, "op_equals_spatially", 2),
+                // Geocoder
+                s(FID_GEO_NORMALIZE_ADDRESS, "st_normalize_address", 1),
+                s(FID_GEO_PARSE_ADDRESS, "st_parse_address", 1),
+                // Topology read (BLOB-based)
+                s(FID_TOPO_NODE_GEOM, "st_topo_node_geom", 2),
+                s(FID_TOPO_EDGE_GEOM, "st_topo_edge_geom", 2),
+                s(FID_TOPO_FACE_GEOM, "st_topo_face_geom", 2),
+                // Topology query (BLOB-based)
+                s(FID_TOPO_NODE_BY_POINT, "st_topo_node_by_point", 3),
+                s(FID_TOPO_EDGE_BY_POINT, "st_topo_edge_by_point", 3),
+                s(FID_TOPO_VALIDATE, "st_topo_validate", 1),
+                // Topology edit via handle API
+                s(FID_TOPO_H_OPEN, "st_topo_open", 1),
+                s(FID_TOPO_H_SERIALIZE, "st_topo_serialize", 1),
+                s(FID_TOPO_H_CLOSE, "st_topo_close", 1),
+                s(FID_TOPO_H_ADD_ISO_NODE, "st_topo_add_iso_node", 3),
+                s(FID_TOPO_H_ADD_ISO_EDGE, "st_topo_add_iso_edge", 4),
+                s(FID_TOPO_H_MOD_EDGE_SPLIT, "st_topo_mod_edge_split", 3),
+                s(FID_TOPO_H_NEW_EDGES_SPLIT, "st_topo_new_edges_split", 3),
+                s(FID_TOPO_H_MOD_EDGE_HEAL, "st_topo_mod_edge_heal", 3),
+                s(FID_TOPO_H_ADD_FACE, "st_topo_add_face", 3),
+                s(FID_TOPO_H_REMOVE_FACE, "st_topo_remove_face", 2),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -3189,6 +3291,201 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let out = pg_rast_ma::st_reclass(&r, band, &expr, pixel_t)
                     .map_err(|e| format!("st_rast_reclass: {}", raster_err_string(e)))?;
                 Ok(SqlValue::Blob(out.as_binary()))
+            }
+
+            // ── Operators ──
+            FID_OP_BBOX_INTERSECTS_2D => {
+                let a = from_wkb(arg_blob(&args, 0, "op_bbox_intersects_2d")?, "op_bbox_intersects_2d")?;
+                let b = from_wkb(arg_blob(&args, 1, "op_bbox_intersects_2d")?, "op_bbox_intersects_2d")?;
+                Ok(SqlValue::Integer(pg_op::op_bbox_intersects_twod(&a, &b) as i64))
+            }
+            FID_OP_BBOX_INTERSECTS_ND => {
+                let a = from_wkb(arg_blob(&args, 0, "op_bbox_intersects_nd")?, "op_bbox_intersects_nd")?;
+                let b = from_wkb(arg_blob(&args, 1, "op_bbox_intersects_nd")?, "op_bbox_intersects_nd")?;
+                Ok(SqlValue::Integer(pg_op::op_bbox_intersects_nd(&a, &b) as i64))
+            }
+            FID_OP_KNN_DISTANCE => {
+                let a = from_wkb(arg_blob(&args, 0, "op_knn_distance")?, "op_knn_distance")?;
+                let b = from_wkb(arg_blob(&args, 1, "op_knn_distance")?, "op_knn_distance")?;
+                Ok(SqlValue::Real(pg_op::op_knn_distance(&a, &b)))
+            }
+            FID_OP_BBOX_DISTANCE => {
+                let a = from_wkb(arg_blob(&args, 0, "op_bbox_distance")?, "op_bbox_distance")?;
+                let b = from_wkb(arg_blob(&args, 1, "op_bbox_distance")?, "op_bbox_distance")?;
+                Ok(SqlValue::Real(pg_op::op_bbox_distance(&a, &b)))
+            }
+            FID_OP_EQUALS_SPATIALLY => {
+                let a = from_wkb(arg_blob(&args, 0, "op_equals_spatially")?, "op_equals_spatially")?;
+                let b = from_wkb(arg_blob(&args, 1, "op_equals_spatially")?, "op_equals_spatially")?;
+                Ok(SqlValue::Integer(pg_op::op_equals_spatially(&a, &b) as i64))
+            }
+
+            // ── Geocoder (US-address parsing, no TIGER data) ──
+            FID_GEO_NORMALIZE_ADDRESS => {
+                let addr = arg_text(&args, 0, "st_normalize_address")?;
+                let parts = pg_geo::normalize_address(addr)
+                    .map_err(|e| format!("st_normalize_address: {}", postgis_err_string(e)))?;
+                let json: Vec<serde_json::Value> = parts
+                    .into_iter()
+                    .map(|c| serde_json::json!({"label": c.label, "value": c.value}))
+                    .collect();
+                Ok(SqlValue::Text(serde_json::Value::Array(json).to_string()))
+            }
+            FID_GEO_PARSE_ADDRESS => {
+                let addr = arg_text(&args, 0, "st_parse_address")?;
+                let p = pg_geo::parse_address(addr)
+                    .map_err(|e| format!("st_parse_address: {}", postgis_err_string(e)))?;
+                let obj = serde_json::json!({
+                    "number": p.number,
+                    "street": p.street,
+                    "city": p.city,
+                    "state": p.state,
+                    "zip": p.zip,
+                    "zipplus": p.zipplus,
+                });
+                Ok(SqlValue::Text(obj.to_string()))
+            }
+
+            // ── Topology read (BLOB + id -> geometry) ──
+            FID_TOPO_NODE_GEOM => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_node_geom")?, "st_topo_node_geom")?;
+                let id = arg_i64(&args, 1, "st_topo_node_geom")? as u32;
+                let g = pg_topo_out::get_node_geometry(&t, id)
+                    .map_err(|e| format!("st_topo_node_geom: {e:?}"))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_TOPO_EDGE_GEOM => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_edge_geom")?, "st_topo_edge_geom")?;
+                let id = arg_i64(&args, 1, "st_topo_edge_geom")? as u32;
+                let g = pg_topo_out::get_edge_geometry(&t, id)
+                    .map_err(|e| format!("st_topo_edge_geom: {e:?}"))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_TOPO_FACE_GEOM => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_face_geom")?, "st_topo_face_geom")?;
+                let id = arg_i64(&args, 1, "st_topo_face_geom")? as u32;
+                let g = pg_topo_out::get_face_geometry(&t, id)
+                    .map_err(|e| format!("st_topo_face_geom: {e:?}"))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+
+            // ── Topology query (BLOB-based) ──
+            FID_TOPO_NODE_BY_POINT => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_node_by_point")?, "st_topo_node_by_point")?;
+                let pt = from_wkb(arg_blob(&args, 1, "st_topo_node_by_point")?, "st_topo_node_by_point")?;
+                let tol = arg_f64(&args, 2, "st_topo_node_by_point")?;
+                let id = pg_topo_query::get_node_by_point(&t, &pt, tol)
+                    .map_err(|e| format!("st_topo_node_by_point: {e:?}"))?;
+                Ok(SqlValue::Integer(id as i64))
+            }
+            FID_TOPO_EDGE_BY_POINT => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_edge_by_point")?, "st_topo_edge_by_point")?;
+                let pt = from_wkb(arg_blob(&args, 1, "st_topo_edge_by_point")?, "st_topo_edge_by_point")?;
+                let tol = arg_f64(&args, 2, "st_topo_edge_by_point")?;
+                let id = pg_topo_query::get_edge_by_point(&t, &pt, tol)
+                    .map_err(|e| format!("st_topo_edge_by_point: {e:?}"))?;
+                Ok(SqlValue::Integer(id as i64))
+            }
+            FID_TOPO_VALIDATE => {
+                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_validate")?, "st_topo_validate")?;
+                let msgs = pg_topo_query::validate_topology(&t);
+                let json: Vec<serde_json::Value> = msgs
+                    .into_iter()
+                    .map(serde_json::Value::String)
+                    .collect();
+                Ok(SqlValue::Text(serde_json::Value::Array(json).to_string()))
+            }
+
+            // ── Topology edit via handle API ──
+            FID_TOPO_H_OPEN => {
+                let bytes = arg_blob(&args, 0, "st_topo_open")?;
+                let t = topo_from_bytes(bytes, "st_topo_open")?;
+                let id = topo_handle_next();
+                TOPO_HANDLES.with(|m| m.borrow_mut().insert(id, t));
+                Ok(SqlValue::Integer(id as i64))
+            }
+            FID_TOPO_H_SERIALIZE => {
+                let h = arg_i64(&args, 0, "st_topo_serialize")? as u64;
+                with_topo_handle(h, "st_topo_serialize", |t| {
+                    Ok(SqlValue::Blob(t.to_bytes()))
+                })
+            }
+            FID_TOPO_H_CLOSE => {
+                let h = arg_i64(&args, 0, "st_topo_close")? as u64;
+                let removed = TOPO_HANDLES.with(|m| m.borrow_mut().remove(&h).is_some());
+                Ok(SqlValue::Integer(removed as i64))
+            }
+            FID_TOPO_H_ADD_ISO_NODE => {
+                let h = arg_i64(&args, 0, "st_topo_add_iso_node")? as u64;
+                // face arg: 0 -> None (no containing face), positive -> Some(face_id)
+                let face_arg = arg_i64(&args, 1, "st_topo_add_iso_node")?;
+                let face = if face_arg <= 0 { None } else { Some(face_arg as u32) };
+                let pt = from_wkb(arg_blob(&args, 2, "st_topo_add_iso_node")?, "st_topo_add_iso_node")?;
+                with_topo_handle(h, "st_topo_add_iso_node", |t| {
+                    let id = pg_topo_edit::add_iso_node(t, face, &pt)
+                        .map_err(|e| format!("st_topo_add_iso_node: {e:?}"))?;
+                    Ok(SqlValue::Integer(id as i64))
+                })
+            }
+            FID_TOPO_H_ADD_ISO_EDGE => {
+                let h = arg_i64(&args, 0, "st_topo_add_iso_edge")? as u64;
+                let anode = arg_i64(&args, 1, "st_topo_add_iso_edge")? as u32;
+                let bnode = arg_i64(&args, 2, "st_topo_add_iso_edge")? as u32;
+                let line = from_wkb(arg_blob(&args, 3, "st_topo_add_iso_edge")?, "st_topo_add_iso_edge")?;
+                with_topo_handle(h, "st_topo_add_iso_edge", |t| {
+                    let id = pg_topo_edit::add_iso_edge(t, anode, bnode, &line)
+                        .map_err(|e| format!("st_topo_add_iso_edge: {e:?}"))?;
+                    Ok(SqlValue::Integer(id as i64))
+                })
+            }
+            FID_TOPO_H_MOD_EDGE_SPLIT => {
+                let h = arg_i64(&args, 0, "st_topo_mod_edge_split")? as u64;
+                let edge = arg_i64(&args, 1, "st_topo_mod_edge_split")? as u32;
+                let pt = from_wkb(arg_blob(&args, 2, "st_topo_mod_edge_split")?, "st_topo_mod_edge_split")?;
+                with_topo_handle(h, "st_topo_mod_edge_split", |t| {
+                    let id = pg_topo_edit::mod_edge_split(t, edge, &pt)
+                        .map_err(|e| format!("st_topo_mod_edge_split: {e:?}"))?;
+                    Ok(SqlValue::Integer(id as i64))
+                })
+            }
+            FID_TOPO_H_NEW_EDGES_SPLIT => {
+                let h = arg_i64(&args, 0, "st_topo_new_edges_split")? as u64;
+                let edge = arg_i64(&args, 1, "st_topo_new_edges_split")? as u32;
+                let pt = from_wkb(arg_blob(&args, 2, "st_topo_new_edges_split")?, "st_topo_new_edges_split")?;
+                with_topo_handle(h, "st_topo_new_edges_split", |t| {
+                    let id = pg_topo_edit::new_edges_split(t, edge, &pt)
+                        .map_err(|e| format!("st_topo_new_edges_split: {e:?}"))?;
+                    Ok(SqlValue::Integer(id as i64))
+                })
+            }
+            FID_TOPO_H_MOD_EDGE_HEAL => {
+                let h = arg_i64(&args, 0, "st_topo_mod_edge_heal")? as u64;
+                let e1 = arg_i64(&args, 1, "st_topo_mod_edge_heal")? as u32;
+                let e2 = arg_i64(&args, 2, "st_topo_mod_edge_heal")? as u32;
+                with_topo_handle(h, "st_topo_mod_edge_heal", |t| {
+                    let id = pg_topo_edit::mod_edge_heal(t, e1, e2)
+                        .map_err(|e| format!("st_topo_mod_edge_heal: {e:?}"))?;
+                    Ok(SqlValue::Integer(id as i64))
+                })
+            }
+            FID_TOPO_H_ADD_FACE => {
+                let h = arg_i64(&args, 0, "st_topo_add_face")? as u64;
+                let poly = from_wkb(arg_blob(&args, 1, "st_topo_add_face")?, "st_topo_add_face")?;
+                let force = arg_i64(&args, 2, "st_topo_add_face")? != 0;
+                with_topo_handle(h, "st_topo_add_face", |t| {
+                    let id = pg_topo_edit::add_face(t, &poly, force)
+                        .map_err(|e| format!("st_topo_add_face: {e:?}"))?;
+                    Ok(SqlValue::Integer(id as i64))
+                })
+            }
+            FID_TOPO_H_REMOVE_FACE => {
+                let h = arg_i64(&args, 0, "st_topo_remove_face")? as u64;
+                let face = arg_i64(&args, 1, "st_topo_remove_face")? as u32;
+                with_topo_handle(h, "st_topo_remove_face", |t| {
+                    pg_topo_edit::remove_face(t, face)
+                        .map_err(|e| format!("st_topo_remove_face: {e:?}"))?;
+                    Ok(SqlValue::Integer(1))
+                })
             }
 
             other => Err(format!("postgis bridge: unknown func id {other}")),

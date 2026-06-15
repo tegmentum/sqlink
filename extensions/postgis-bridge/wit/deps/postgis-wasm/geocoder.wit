@@ -1,0 +1,32 @@
+package postgis:wasm@0.1.0;
+
+/// TIGER geocoder — address-parsing subset (Feature 4). Only the pure,
+/// data-free parsing functions live here; data-backed geocode /
+/// reverse_geocode need the gigabyte TIGER/Line dataset and belong in the
+/// downstream (datafission) layer, per the design doc.
+interface postgis-geocoder {
+    use postgis-types.{postgis-error};
+
+    /// A labelled address component (e.g. label "AddressNumber", value "123").
+    record address-component {
+        label: string,
+        value: string,
+    }
+
+    /// A US address split into standard fields (uppercased, PostGIS-style).
+    record parsed-address {
+        number: string,
+        street: string,
+        city: string,
+        state: string,
+        zip: string,
+        zipplus: string,
+    }
+
+    /// normalize_address / pagc_normalize_address — parse a one-line US
+    /// address into labelled components.
+    normalize-address: func(addr: string) -> result<list<address-component>, postgis-error>;
+
+    /// parse_address — split a one-line US address into standard fields.
+    parse-address: func(addr: string) -> result<parsed-address, postgis-error>;
+}
