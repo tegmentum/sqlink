@@ -1,6 +1,6 @@
 # Plan: Move the CAS cache into SQLite (two-tier with migration)
 
-> **Status: shipped, modulo CP8-gated sha256 mirror.**
+> **Status: fully shipped (2026-06-15).**
 >
 > Implementation lives in `sqlite-cas-cache/` (workspace member);
 > host's `cache.rs` is now a thin wrapper. All locked-in
@@ -9,23 +9,20 @@
 > | Decision | Where |
 > |---|---|
 > | Schema (`__cas_artifact`, `__cas_uri`, `__cas_meta`) | `sqlite-cas-cache/src/schema.rs` |
+> | v2 schema bump: sha256 mirror column + unique partial index + v1→v2 migration | `schema.rs` |
 > | `SqliteCasStore` + External/Internal modes | `sqlite-cas-cache/src/store.rs` |
 > | LRU 1 GiB default + `evict_lru` + `gc` | `store.rs` |
 > | ArtifactResolver trait + LocalFileResolver + HttpsResolver | `sqlite-cas-cache/src/resolver.rs` |
 > | `Host::set_cache` + WIT plumbing for cli | `host/src/lib.rs:1959` |
 > | `.cache` dot-command family (mode/use-*/config/list/stats/export/import/migrate/gc/purge) | `cli/src/lib.rs:1365+` |
+> | CP8: `resolve_by_digest` instantiates dynlink-provider from cached bytes with TrustPolicy gate | `host/src/lib.rs:416` (commit `88653b0`) |
+> | CP8: blake3+sha256 dual lookup via `lookup_by_hash` | `host/src/cache.rs:150` + `sqlite-cas-cache/src/store.rs:get_by_sha256` |
 >
 > Smoke-tested 2026-06-15: `.cache mode` → `external:~/.cache/
 > sqlite-wasm/cas.sqlite`; `.cache stats` reports artifacts=0,
 > uris=0, max_bytes=1073741824 (1 GiB matches plan default);
-> `.cache config` round-trips `max_bytes`.
->
-> **Remaining**: the deferred sha256 mirror at the bottom of
-> this plan. Still correctly gated — `linker::Host::resolve_by_
-> digest` (`host/src/lib.rs:416`) returns the documented
-> "digest not in cache (CP8 will add real provider
-> instantiation here)" error; CP8 hasn't landed, so the dual
-> lookup remains unnecessary.
+> `.cache config` round-trips `max_bytes`. Fresh v2 install +
+> v1→v2 migration both green (14 cas-cache unit tests).
 
 ## Goal
 
