@@ -2194,6 +2194,7 @@ dependencies = [
 name = "sqlite-cli"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "libsqlite3-sys",
  "miniz_oxide",
  "sha3",

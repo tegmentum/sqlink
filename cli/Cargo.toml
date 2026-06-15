@@ -43,6 +43,10 @@ sha3 = { version = "0.10", default-features = false }
 # shrink when compressed. miniz_oxide is pure-Rust, no_std-friendly,
 # no external C dependency — clean wasm32-wasip2 build.
 miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"] }
+# Persistent capability grants (PLAN-grants-db.md G3): integrity-
+# pinning by blake3 digest of the extension bytes. Pure-Rust,
+# wasm32-wasip2 clean.
+blake3 = { version = "1", default-features = false }
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

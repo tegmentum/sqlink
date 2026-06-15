@@ -42,6 +42,14 @@ interface extension-loader {
     /// Unload a previously loaded extension by name.
     unload-extension: func(name: string) -> result<_, loader-error>;
 
+    /// blake3-hex of the provider bytes for a currently-loaded
+    /// extension. Computed by the host at load time (which has
+    /// the bytes; the cli sandbox may not). Returns the empty
+    /// string for an unknown name. Used by the cli's
+    /// `_capability_grants` table to pin trust to specific bytes
+    /// — `PLAN-grants-db.md` G3.
+    extension-digest: func(name: string) -> string;
+
     /// List currently loaded extensions as their manifests.
     list-extensions: func() -> list<manifest>;
 

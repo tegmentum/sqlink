@@ -670,6 +670,11 @@ pub struct LoadedExtension {
     pub version: String,
     pub component: Component,
     pub policy: Policy,
+    /// blake3-hex of provider bytes, computed in
+    /// `load_extension_from_bytes`. Surfaced in the manifest so
+    /// grants persistence in the cli can pin trust to specific
+    /// bytes without round-tripping a wasi-fs read.
+    pub digest: String,
     /// Function specs declared in the manifest, indexed by func-id.
     /// Populated from `metadata.describe()` at load time and used
     /// when the host routes a SQL function call back into the
@@ -2096,6 +2101,10 @@ impl Host {
     ) -> Result<String> {
         let component = Component::from_binary(&self.engine, &bytes)
             .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
+        // Compute blake3 of the provider bytes once. The cli uses
+        // this to pin grants to specific bytes without needing
+        // its own wasi-fs preopen (PLAN-grants-db.md G3).
+        let digest = blake3::hash(&bytes).to_hex().to_string();
 
         // Use the stateful linker (superset of minimal) so extensions
         // that import `state` or `cache` can still resolve their
@@ -2109,6 +2118,7 @@ impl Host {
             version: String::new(),
             component: component.clone(),
             policy: policy.clone(),
+            digest: digest.clone(),
             scalar_functions: Vec::new(),
             aggregate_functions: Vec::new(),
             collations: Vec::new(),
@@ -2220,6 +2230,7 @@ impl Host {
                 version,
                 component,
                 policy,
+                digest,
                 scalar_functions,
                 aggregate_functions,
                 collations,
@@ -3101,6 +3112,10 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         Err(loader_stub_err("unload-extension"))
     }
 
+    async fn extension_digest(&mut self, _name: String) -> String {
+        String::new()
+    }
+
     async fn list_extensions(&mut self) -> Vec<Manifest> {
         Vec::new()
     }
@@ -3872,6 +3887,14 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             code: 1,
             message: e.to_string(),
         })
+    }
+
+    async fn extension_digest(&mut self, name: String) -> String {
+        let components = self.host.components.read();
+        components
+            .get(&name)
+            .map(|e| e.digest.clone())
+            .unwrap_or_default()
     }
 
     async fn list_extensions(&mut self) -> Vec<Manifest> {

@@ -36,6 +36,8 @@ pub use sqlite_wasm_core::db;
 
 mod dot;
 mod format;
+mod grants;
+mod orchestration;
 mod settings;
 mod vtab;
 
@@ -352,6 +354,22 @@ fn eval_input(input: &str) -> String {
     }
     if let Some(rest) = trimmed.strip_prefix(".log") {
         return do_log(rest.trim());
+    }
+    if let Some(rest) = trimmed.strip_prefix(".grants") {
+        ensure_cli_conn();
+        return CLI_CONN.with(|c| {
+            let g = c.borrow();
+            let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
+            do_grants(rest.trim(), conn)
+        });
+    }
+    if let Some(rest) = trimmed.strip_prefix(".compose") {
+        ensure_cli_conn();
+        return CLI_CONN.with(|c| {
+            let g = c.borrow();
+            let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
+            do_compose(rest.trim(), conn)
+        });
     }
     ensure_cli_conn();
     if trimmed.starts_with('.') {
@@ -818,7 +836,31 @@ fn do_load(input: &str) -> String {
         }
     };
     let ext_name = manifest.name.clone();
+    // Digest comes from the host via a sidecar query (the host
+    // computed blake3 during load_extension_from_bytes; the cli
+    // can't fs-read the path itself when running with :memory:
+    // because the host hasn't preopened the path's parent dir).
+    let digest_str = extension_loader::extension_digest(&ext_name);
+    let digest = if digest_str.is_empty() {
+        None
+    } else {
+        Some(digest_str)
+    };
     ensure_cli_conn();
+    // TOFU: record the grant decision in the user's database. v1
+    // is purely advisory — pre-load enforcement is a follow-up
+    // phase that needs a describe-before-load split in the WIT.
+    // If a row exists with a mismatching digest, surface a clear
+    // warning so the user notices the binary changed.
+    let mut grants_msg = String::new();
+    CLI_CONN.with(|c| {
+        let g = c.borrow();
+        if let Some(conn) = g.as_ref() {
+            if let Some(diag) = grants_record_load(conn, &ext_name, digest.as_deref()) {
+                grants_msg.push_str(&diag);
+            }
+        }
+    });
     let counts = CLI_CONN.with(|c| {
         let g = c.borrow();
         let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
@@ -1004,10 +1046,54 @@ fn do_load(input: &str) -> String {
     if hooks > 0 { bits.push(format!("{hooks} hook")); }
     if vtabs > 0 { bits.push(format!("{vtabs} vtab")); }
     let detail = if bits.is_empty() { "0 functions".to_string() } else { bits.join(", ") };
-    format!(
+    let main = format!(
         "Loaded extension: {} {} from {} ({total} registered: {detail})\n",
         manifest.name, manifest.version, path
-    )
+    );
+    if grants_msg.is_empty() { main } else { format!("{grants_msg}{main}") }
+}
+
+/// TOFU recording for `.load`: write a grant row on first sight
+/// of an extension; warn on digest mismatch on subsequent loads.
+/// Returns a diagnostic line to prepend to the load output, or
+/// None if nothing notable happened.
+fn grants_record_load(
+    conn: &db::Connection,
+    ext_name: &str,
+    digest: Option<&str>,
+) -> Option<String> {
+    let existing = grants::get(conn, ext_name).ok().flatten();
+    let now = grants::now_iso8601();
+    match (existing, digest) {
+        (Some(prior), Some(new_digest)) => {
+            if prior.digest_hex.as_deref() == Some(new_digest) {
+                None
+            } else {
+                let prior_d = prior.digest_hex.as_deref().unwrap_or("<none>");
+                Some(format!(
+                    "warning: '{ext_name}' bytes changed since last grant \
+                     (was {}…, now {}…). Run `.grants revoke {ext_name}` \
+                     to re-establish trust.\n",
+                    &prior_d[..prior_d.len().min(16)],
+                    &new_digest[..new_digest.len().min(16)],
+                ))
+            }
+        }
+        (None, _) => {
+            // First sight — record what got loaded.
+            let grant = grants::StoredGrant {
+                extension_name: ext_name.into(),
+                digest_hex: digest.map(|s| s.to_string()),
+                policy_json: "{\"granted_by\":\"manifest\"}".into(),
+                granted_at: now,
+                granted_by: Some("manifest".into()),
+                notes: None,
+            };
+            let _ = grants::put(conn, &grant);
+            None
+        }
+        (Some(_), None) => None,
+    }
 }
 
 fn db_to_wit(v: db::Value) -> bindings::sqlite::extension::types::SqlValue {
@@ -1448,11 +1534,173 @@ fn do_cache(arg: &str) -> String {
 /// `.unload <name>` — drop the host's registry entry AND remove the
 /// extension's scalar/aggregate/collation registrations from the
 /// cli's sqlite3 connection. After this, SQL referring to those
-/// names gets a clean "no such function" / "no such collation"
-/// error from the engine itself (rather than the older shape where
-/// the trampoline survived and surfaced "extension not loaded" via
-/// the dispatch path). Hook slots the extension occupied
-/// (authorizer / update / commit+rollback) are also cleared.
+/// `.grants` dot-command family (PLAN-grants-db.md G2). Front-
+/// end for the persistent capability-grant table in the user's
+/// database:
+///
+///   .grants                  -> list
+///   .grants list             -> list
+///   .grants show NAME        -> pretty-print policy_json + digest
+///   .grants revoke NAME      -> delete the row
+///   .grants approve NAME …   -> not yet wired (needs pre-load
+///                               policy injection; G1 is post-load
+///                               TOFU only)
+fn do_grants(arg: &str, conn: &db::Connection) -> String {
+    let (sub, rest) = match arg.split_once(char::is_whitespace) {
+        Some((s, r)) => (s, r.trim()),
+        None => (arg, ""),
+    };
+    match sub {
+        "" | "list" => {
+            let entries = match grants::list(conn) {
+                Ok(v) => v,
+                Err(e) => return format!("Error: {}\n", e.message),
+            };
+            if entries.is_empty() {
+                return "(no stored grants)\n".to_string();
+            }
+            let mut out = String::new();
+            for g in entries {
+                let d = g.digest_hex.as_deref().unwrap_or("<no digest>");
+                let d = if d.len() > 16 { &d[..16] } else { d };
+                out.push_str(&format!(
+                    "{}  digest={}…  granted_at={}\n",
+                    g.extension_name, d, g.granted_at
+                ));
+            }
+            out
+        }
+        "show" => {
+            if rest.is_empty() {
+                return "Usage: .grants show NAME\n".to_string();
+            }
+            match grants::get(conn, rest) {
+                Ok(Some(g)) => format!(
+                    "name        : {}\ndigest      : {}\ngranted_at  : {}\ngranted_by  : {}\npolicy_json : {}\nnotes       : {}\n",
+                    g.extension_name,
+                    g.digest_hex.unwrap_or_else(|| "<none>".into()),
+                    g.granted_at,
+                    g.granted_by.unwrap_or_else(|| "<none>".into()),
+                    g.policy_json,
+                    g.notes.unwrap_or_else(|| "<none>".into()),
+                ),
+                Ok(None) => format!("No grant on file for '{rest}'.\n"),
+                Err(e) => format!("Error: {}\n", e.message),
+            }
+        }
+        "revoke" => {
+            if rest.is_empty() {
+                return "Usage: .grants revoke NAME\n".to_string();
+            }
+            match grants::delete(conn, rest) {
+                Ok(true) => format!("Revoked grant for '{rest}'.\n"),
+                Ok(false) => format!("No grant on file for '{rest}'.\n"),
+                Err(e) => format!("Error: {}\n", e.message),
+            }
+        }
+        "approve" => {
+            // v1 is TOFU-record on load; pre-load approve needs a
+            // describe-before-load split in the WIT that's a follow-
+            // up phase. Document the limitation and bail.
+            "Pre-load .grants approve isn't wired in this revision.\n\
+             Trust-on-first-use records a grant on the next `.load`.\n"
+                .to_string()
+        }
+        other => format!(
+            "Unknown .grants subcommand: {other:?}. \
+             Try: list / show NAME / revoke NAME\n"
+        ),
+    }
+}
+
+/// `.compose` dot-command family (PLAN-grants-db.md G4). Front-
+/// end for an orchestration-store backed by the user database;
+/// the actual store impl ships in webassembly-component-
+/// orchestration's storage crate. Until that crate is wired in
+/// the cli ships `NullOrchestrationStore`, so every subcommand
+/// reports "not configured" cleanly rather than silently
+/// no-oping.
+///
+///   .compose list                       -> list stored definitions
+///   .compose show NAME                  -> dump body
+///   .compose save NAME FILE [FORMAT]    -> read FILE and persist
+///   .compose delete NAME                -> drop the row
+fn do_compose(arg: &str, conn: &db::Connection) -> String {
+    let (sub, rest) = match arg.split_once(char::is_whitespace) {
+        Some((s, r)) => (s, r.trim()),
+        None => (arg, ""),
+    };
+    let result = orchestration::STORE.with(|s| {
+        let store = s.borrow();
+        match sub {
+            "" | "list" => match store.list(conn) {
+                Ok(names) => {
+                    if names.is_empty() {
+                        "(no stored orchestrations)\n".to_string()
+                    } else {
+                        names.join("\n") + "\n"
+                    }
+                }
+                Err(e) => format!("Error: {e}\n"),
+            },
+            "show" => {
+                if rest.is_empty() {
+                    return "Usage: .compose show NAME\n".to_string();
+                }
+                match store.get(conn, rest) {
+                    Ok(Some(def)) => format!(
+                        "name      : {}\nformat    : {}\nsaved_at  : {}\nbody_bytes: {}\n",
+                        def.name,
+                        def.format,
+                        def.saved_at,
+                        def.body.len()
+                    ),
+                    Ok(None) => format!("No orchestration on file for '{rest}'.\n"),
+                    Err(e) => format!("Error: {e}\n"),
+                }
+            }
+            "delete" => {
+                if rest.is_empty() {
+                    return "Usage: .compose delete NAME\n".to_string();
+                }
+                match store.delete(conn, rest) {
+                    Ok(true) => format!("Deleted '{rest}'.\n"),
+                    Ok(false) => format!("No orchestration on file for '{rest}'.\n"),
+                    Err(e) => format!("Error: {e}\n"),
+                }
+            }
+            "save" => {
+                let mut parts = rest.split_whitespace();
+                let name = parts.next();
+                let file = parts.next();
+                let format = parts.next().unwrap_or("json");
+                let (Some(name), Some(file)) = (name, file) else {
+                    return "Usage: .compose save NAME FILE [FORMAT]\n".into();
+                };
+                let body = match std::fs::read(file) {
+                    Ok(b) => b,
+                    Err(e) => return format!("Error: read {file}: {e}\n"),
+                };
+                let def = orchestration::OrchestrationDef {
+                    name: name.into(),
+                    format: format.into(),
+                    body,
+                    saved_at: grants::now_iso8601(),
+                };
+                match store.put(conn, &def) {
+                    Ok(()) => format!("Saved orchestration '{name}'.\n"),
+                    Err(e) => format!("Error: {e}\n"),
+                }
+            }
+            other => format!(
+                "Unknown .compose subcommand: {other:?}. \
+                 Try: list / show NAME / save NAME FILE [FORMAT] / delete NAME\n"
+            ),
+        }
+    });
+    result
+}
+
 fn do_unload(name: &str) -> String {
     use bindings::sqlite::wasm::extension_loader;
     let host_result = extension_loader::unload_extension(name);
