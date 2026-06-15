@@ -206,29 +206,31 @@ fts5/rtree, just at a different layer.
 
 ## Final state (delivered)
 
-| Catalog                     | Count  | Source                          |
-|-----------------------------|-------:|---------------------------------|
-| json1 scalars               |    13  | extensions/json1                |
-| math scalars                |    32  | extensions/math                 |
-| crypto scalars              |     8  | extensions/crypto               |
-| uuid scalars                |     3  | extensions/uuid                 |
-| regexp scalars              |     4  | extensions/regexp               |
-| stats aggregates            |     7  | extensions/stats                |
-| csv vtab                    |     1  | extensions/csv                  |
-| postgis (geometry+geog)     |   270  | extensions/postgis-bridge       |
-| postgis aggregates          |     6  | extensions/postgis-bridge       |
-| postgis-sfcgal wrapped      |    15  | extensions/postgis-bridge       |
-| direct sfcgal-wasm          |    21  | extensions/postgis-bridge       |
-| postgis raster              |    34  | extensions/postgis-bridge       |
-| **postgis-bridge subtotal** | **346**| (composed against postgis-      |
-|                             |        | composed.wasm + sfcgal.component.wasm) |
-| fts5 vtab                   |   free | libsqlite3-sys bundled flag set |
-| rtree vtab                  |   free | libsqlite3-sys bundled flag set |
-| geopoly vtab                |    +1  | -DSQLITE_ENABLE_GEOPOLY via     |
-|                             |        | LIBSQLITE3_FLAGS env in         |
-|                             |        | .cargo/config.toml              |
+| Catalog                       | Count  | Source                             |
+|-------------------------------|-------:|------------------------------------|
+| json1 scalars                 |    13  | extensions/json1                   |
+| math scalars                  |    32  | extensions/math                    |
+| crypto scalars                |     8  | extensions/crypto                  |
+| uuid scalars                  |     3  | extensions/uuid                    |
+| regexp scalars                |     4  | extensions/regexp                  |
+| stats aggregates              |     7  | extensions/stats                   |
+| csv vtab                      |     1  | extensions/csv                     |
+| postgis geometry              |   235  | extensions/postgis-bridge          |
+| postgis geography             |    32  | extensions/postgis-bridge          |
+| postgis aggregates            |     8  | extensions/postgis-bridge          |
+| postgis-sfcgal (wrapped)      |    15  | extensions/postgis-bridge          |
+| direct sfcgal-wasm            |    21  | extensions/postgis-bridge          |
+| postgis raster                |    51  | extensions/postgis-bridge          |
+| postgis topology              |     7  | extensions/postgis-bridge          |
+| postgis STRtree (scalar API)  |     8  | extensions/postgis-bridge          |
+| **postgis-bridge subtotal**   | **380**| (composed against postgis-         |
+|                               |        | composed.wasm + sfcgal.component.wasm) |
+| fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
+| rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
+| geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
+|                               |        | LIBSQLITE3_FLAGS env               |
 
-**Grand SQL surface delivered**: ~415 SQL-callable functions
+**Grand SQL surface delivered**: 448 SQL-callable functions
 (scalars + aggregates) plus 4 virtual-table modules (csv, fts5,
 rtree, geopoly), all reachable through `.load` or directly via
 the bundled SQLite, on top of the existing scalar/aggregate/
@@ -241,24 +243,28 @@ already built. The vtab dispatch infrastructure (phases 1-4 in
 host + cli) was the unique-to-this-project investment; the
 extension catalog itself rides on existing wasm components.
 
-## Deferred (waiting on user-driven need)
+## Deferred (intentional)
 
-- postgis batch (70 fns) — list-shape, aggregate-like; would
-  need either array support in SQL or per-row pumping.
-- postgis topology — niche.
-- postgis raster: mutating constructors (`st_make_empty_raster`,
-  `add_band`, `set_values`), stats records (`summary_stats`,
-  `histogram`, `value_count`), map-algebra (`map_algebra`,
-  `reclass`), and list-returning ops (`dump_as_polygons`,
-  `pixel_as_polygons`). All require either richer SQL return
-  shapes or callback expression support.
-- postgis-strtree vtab — a dedicated vtab over postgis-wasm's
-  `postgis-spatial-index` interface (STRtree handles + insert-
-  wkb + query-envelope). The existing `rtree+st_envelope` pattern
-  documented in postgis-bridge/README.md covers most production
-  use cases.
-- clustering scalars (`st-cluster-dbscan`, `st-cluster-kmeans`)
-   list args; the aggregate-shaped equivalents are wired.
+- **postgis batch interface** (70 fns): `list<list<u8>> ->
+  list<result>` doesn't map to scalar SQL. The scalar forms
+  applied row-by-row (with optional rtree pre-filter) give the
+  same SQL behavior, and the aggregate forms handle set-shaped
+  reductions. See `extensions/postgis-bridge/README.md` for
+  the rationale.
+- **postgis raster list/record returns**: `summary_stats` is
+  decomposed into per-field scalars (`st_rast_count`, `sum`,
+  `mean`, `stddev`, `min`, `max`). `histogram` (list of bin
+  records), `value_count` (list of (value, count) pairs), and
+  `dump_as_polygons` / `pixel_as_polygons` (list of geom+value)
+  still want a vtab or JSON pivot; not landed.
+- **postgis raster map-algebra** (`map_algebra`, `reclass`):
+  accept callback expressions; would need a guest scripting
+  hook to be useful from SQL.
+- **postgis topology mutating ops** (`add_iso_node`,
+  `mod_edge_split`, `remove_face`, etc.): operate on the
+  topology resource in place and return an id; need vtab
+  semantics to keep the mutated topology + new id available
+  to the caller.
 
 These are mechanical additions when surfaced; nothing
 architectural blocks them.
