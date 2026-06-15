@@ -835,62 +835,53 @@ fn do_load(input: &str) -> String {
     let path = &path;
     let is_uri = looks_like_uri(path);
 
-    // PLAN-grants-db.md pre-load enforcement: describe BEFORE
-    // loading so we can know (ext_name, digest) and consult
-    // _capability_grants before applying any policy. C1's
-    // Component cache means describe+load only pay one parse
-    // total.
-    let preflight = if is_uri {
-        extension_loader::describe_extension_from_uri(path)
-    } else {
-        extension_loader::describe_extension(path)
-    };
-    let (preflight_name, preflight_digest) = match preflight {
-        Ok(r) => (r.name, r.digest_hex),
-        Err(e) => return format!("Error describing {path}: {} (code {})\n", e.message, e.code),
-    };
-
-    // Grants pre-load enforcement (PLAN-grants-db.md G1):
-    // --trust=stored requires a stored row with matching
-    // digest; --trust=manifest (default) accepts new
-    // extensions and TOFU-records them later.
-    ensure_cli_conn();
-    let stored_grant = CLI_CONN.with(|c| {
-        let g = c.borrow();
-        g.as_ref().and_then(|conn| grants::get(conn, &preflight_name).ok().flatten())
-    });
+    // E2: only describe-before-load when the trust mode
+    // requires PRE-load enforcement (trust=stored). The default
+    // --trust=manifest path TOFU-records post-load and accepts
+    // new digests per the plan's "manifest implies 'accept new
+    // digest, update record'" decision — describe would just be
+    // a wasted wasm-host crossing.
     let mut preload_msg = String::new();
-    match (&stored_grant, trust) {
-        (Some(g), _) => {
-            match (&g.digest_hex, &preflight_digest) {
-                (Some(stored), have) if stored != have => {
-                    return format!(
-                        "Error: '{preflight_name}' bytes changed since last \
-                         grant (was {}…, now {}…). Run `.grants revoke \
-                         {preflight_name}` to re-establish trust.\n",
-                        &stored[..stored.len().min(16)],
-                        &have[..have.len().min(16)],
-                    );
-                }
-                _ => {
-                    preload_msg.push_str(&format!(
-                        "Using stored grant for '{preflight_name}' (granted {}).\n",
-                        g.granted_at
-                    ));
-                }
-            }
-        }
-        (None, TrustMode::Stored) => {
+    ensure_cli_conn();
+    if matches!(trust, TrustMode::Stored) {
+        let preflight = if is_uri {
+            extension_loader::describe_extension_from_uri(path)
+        } else {
+            extension_loader::describe_extension(path)
+        };
+        let (preflight_name, preflight_digest) = match preflight {
+            Ok(r) => (r.name, r.digest_hex),
+            Err(e) => return format!("Error describing {path}: {} (code {})\n", e.message, e.code),
+        };
+        let stored_grant = CLI_CONN.with(|c| {
+            let g = c.borrow();
+            g.as_ref()
+                .and_then(|conn| grants::get(conn, &preflight_name).ok().flatten())
+        });
+        let Some(g) = stored_grant else {
             return format!(
                 "Error: --trust=stored but no grant on file for \
                  '{preflight_name}'. Either preload (`.load ...` first \
                  without --trust=stored, then run subsequent loads under \
                  stored mode) or drop the flag.\n"
             );
-        }
-        (None, TrustMode::Manifest) => {
-            // TOFU path: first sight of this extension, will be
-            // recorded post-load.
+        };
+        match (&g.digest_hex, &preflight_digest) {
+            (Some(stored), have) if stored != have => {
+                return format!(
+                    "Error: '{preflight_name}' bytes changed since last \
+                     grant (was {}…, now {}…). Run `.grants revoke \
+                     {preflight_name}` to re-establish trust.\n",
+                    &stored[..stored.len().min(16)],
+                    &have[..have.len().min(16)],
+                );
+            }
+            _ => {
+                preload_msg.push_str(&format!(
+                    "Using stored grant for '{preflight_name}' (granted {}).\n",
+                    g.granted_at
+                ));
+            }
         }
     }
 
@@ -906,14 +897,20 @@ fn do_load(input: &str) -> String {
         }
     };
     let ext_name = manifest.name.clone();
-    let digest = if preflight_digest.is_empty() {
+    // Post-load digest from the host's sidecar query — works
+    // for both fast-path manifest and slow-path stored modes
+    // (no describe call required on the fast path).
+    let digest_str = extension_loader::extension_digest(&ext_name);
+    let digest = if digest_str.is_empty() {
         None
     } else {
-        Some(preflight_digest)
+        Some(digest_str)
     };
-    // TOFU record on first sight (pre-load enforcement already
-    // handled the mismatch case above; this just persists the
-    // grant row so subsequent --trust=stored loads succeed).
+    // TOFU recording. trust=Stored already validated the digest
+    // pre-load; trust=Manifest accepts whatever digest the load
+    // produced and either inserts (TOFU first sight) or updates
+    // (digest changed since last grant — manifest mode's
+    // explicit "accept new digest, update record" semantics).
     let mut grants_msg = String::new();
     CLI_CONN.with(|c| {
         let g = c.borrow();
@@ -1144,11 +1141,24 @@ fn grants_record_load(
             if prior.digest_hex.as_deref() == Some(new_digest) {
                 None
             } else {
+                // E2 / PLAN-grants-db.md: trust=manifest's
+                // explicit "accept new digest, update record"
+                // semantics. We INSERT OR REPLACE the row to the
+                // new digest and surface a notice (not an error)
+                // so the user sees the change happened.
                 let prior_d = prior.digest_hex.as_deref().unwrap_or("<none>");
+                let grant = grants::StoredGrant {
+                    extension_name: ext_name.into(),
+                    digest_hex: Some(new_digest.to_string()),
+                    policy_json: prior.policy_json.clone(),
+                    granted_at: now,
+                    granted_by: Some("manifest".into()),
+                    notes: prior.notes.clone(),
+                };
+                let _ = grants::put(conn, &grant);
                 Some(format!(
-                    "warning: '{ext_name}' bytes changed since last grant \
-                     (was {}…, now {}…). Run `.grants revoke {ext_name}` \
-                     to re-establish trust.\n",
+                    "Updated grant for '{ext_name}': bytes changed since \
+                     last sight (was {}…, now {}…).\n",
                     &prior_d[..prior_d.len().min(16)],
                     &new_digest[..new_digest.len().min(16)],
                 ))
@@ -1460,7 +1470,8 @@ fn do_cache(arg: &str) -> String {
         "stats" => {
             let target = arg.split_whitespace().nth(1).unwrap_or("");
             if target == "components" {
-                // PLAN-component-cache.md C3 observability.
+                // PLAN-component-cache.md C3 observability +
+                // E1 LRU eviction stats.
                 let s = extension_loader::component_cache_stats();
                 let loads = s.c1_hits + s.c2_hits + s.cold_parses + s.bypassed;
                 let hit_rate = if loads == 0 {
@@ -1471,6 +1482,11 @@ fn do_cache(arg: &str) -> String {
                         100.0 * (s.c1_hits + s.c2_hits) as f64 / loads as f64
                     )
                 };
+                let max_bytes = if s.max_bytes == 0 {
+                    "(unbounded)".to_string()
+                } else {
+                    s.max_bytes.to_string()
+                };
                 format!(
                     "C1 hits:        {}\n\
                      C2 hits:        {}\n\
@@ -1479,7 +1495,10 @@ fn do_cache(arg: &str) -> String {
                      hit rate:       {}\n\
                      parse_ms:       {}\n\
                      serialize_ms:   {}\n\
-                     deserialize_ms: {}\n",
+                     deserialize_ms: {}\n\
+                     rows:           {}\n\
+                     total bytes:    {}\n\
+                     max bytes:      {}\n",
                     s.c1_hits,
                     s.c2_hits,
                     s.cold_parses,
@@ -1488,6 +1507,9 @@ fn do_cache(arg: &str) -> String {
                     s.parse_ms,
                     s.serialize_ms,
                     s.deserialize_ms,
+                    s.row_count,
+                    s.total_bytes,
+                    max_bytes,
                 )
             } else {
                 match extension_loader::get_cache_stats() {
@@ -1539,10 +1561,21 @@ fn do_cache(arg: &str) -> String {
                 _ => "Usage: .cache config [set max-bytes <n>]\n".to_string(),
             }
         }
-        "gc" => match extension_loader::cache_gc() {
-            Ok(freed) => format!("Freed {freed} bytes\n"),
-            Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
-        },
+        "gc" => {
+            let target = arg.split_whitespace().nth(1).unwrap_or("");
+            if target == "components" {
+                // E1: drop every row from the precompiled-blob
+                // cache. Distinct from the URI-cache `gc` because
+                // the two caches have unrelated lifecycles.
+                let freed = extension_loader::component_cache_purge();
+                format!("Purged _component_cache: freed {freed} bytes\n")
+            } else {
+                match extension_loader::cache_gc() {
+                    Ok(freed) => format!("Freed {freed} bytes\n"),
+                    Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+                }
+            }
+        }
         "evict" => {
             let target = rest.split_whitespace().next();
             let Some(target) = target else {

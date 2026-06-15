@@ -85,8 +85,17 @@ interface extension-loader {
         /// `SQLITE_WASM_DISABLE_COMPONENT_CACHE` (the
         /// `--no-component-cache` cli flag's plumbing).
         bypassed:       u64,
+        /// Current `_component_cache` row count + byte total in
+        /// the user db (E1 LRU eviction observability).
+        row-count:      u64,
+        total-bytes:    u64,
+        max-bytes:      u64,
     }
     component-cache-stats: func() -> component-cache-stats-snapshot;
+
+    /// E1: drop every row from `_component_cache`. Returns
+    /// bytes freed. Exposed via `.cache gc components`.
+    component-cache-purge: func() -> u64;
 
     /// List currently loaded extensions as their manifests.
     list-extensions: func() -> list<manifest>;

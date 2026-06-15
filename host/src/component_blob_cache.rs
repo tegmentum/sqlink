@@ -133,6 +133,110 @@ pub fn lookup(
     Ok(Some(blob))
 }
 
+/// Total bytes of `precompiled` blobs across all rows.
+pub fn total_bytes(conn: &Connection) -> Result<u64> {
+    let mut stmt = conn
+        .prepare("SELECT COALESCE(SUM(length(precompiled)), 0) FROM _component_cache")
+        .map_err(|e| anyhow!("prep total_bytes: {}", e.message))?;
+    match stmt
+        .step()
+        .map_err(|e| anyhow!("step total_bytes: {}", e.message))?
+    {
+        StepResult::Row => match stmt.column_value(0) {
+            Value::Integer(n) => Ok(n.max(0) as u64),
+            _ => Ok(0),
+        },
+        StepResult::Done => Ok(0),
+    }
+}
+
+/// Number of rows. Cheap. Useful for stats display.
+pub fn row_count(conn: &Connection) -> Result<u64> {
+    let mut stmt = conn
+        .prepare("SELECT COUNT(*) FROM _component_cache")
+        .map_err(|e| anyhow!("prep row_count: {}", e.message))?;
+    match stmt
+        .step()
+        .map_err(|e| anyhow!("step row_count: {}", e.message))?
+    {
+        StepResult::Row => match stmt.column_value(0) {
+            Value::Integer(n) => Ok(n.max(0) as u64),
+            _ => Ok(0),
+        },
+        StepResult::Done => Ok(0),
+    }
+}
+
+/// Drop every row. Returns bytes freed.
+pub fn purge_all(conn: &Connection) -> Result<u64> {
+    let before = total_bytes(conn)?;
+    conn.execute_batch("DELETE FROM _component_cache")
+        .map_err(|e| anyhow!("purge: {}", e.message))?;
+    Ok(before)
+}
+
+/// LRU-evict by `last_used_at ASC` until
+/// `total_bytes <= target_bytes`. Returns bytes freed.
+pub fn evict_to(conn: &Connection, target_bytes: u64) -> Result<u64> {
+    let mut freed = 0u64;
+    loop {
+        let current = total_bytes(conn)?;
+        if current <= target_bytes {
+            break;
+        }
+        let mut sel = conn
+            .prepare(
+                "SELECT digest_hex, engine_version, target_triple, length(precompiled) \
+                 FROM _component_cache \
+                 ORDER BY last_used_at ASC, digest_hex ASC LIMIT 1",
+            )
+            .map_err(|e| anyhow!("prep evict-pick: {}", e.message))?;
+        let victim = match sel
+            .step()
+            .map_err(|e| anyhow!("step evict-pick: {}", e.message))?
+        {
+            StepResult::Row => {
+                let d = match sel.column_value(0) {
+                    Value::Text(s) => s,
+                    _ => break,
+                };
+                let v = match sel.column_value(1) {
+                    Value::Text(s) => s,
+                    _ => break,
+                };
+                let t = match sel.column_value(2) {
+                    Value::Text(s) => s,
+                    _ => break,
+                };
+                let sz = match sel.column_value(3) {
+                    Value::Integer(n) => n.max(0) as u64,
+                    _ => 0,
+                };
+                Some((d, v, t, sz))
+            }
+            StepResult::Done => None,
+        };
+        drop(sel);
+        let Some((d, v, t, sz)) = victim else {
+            break;
+        };
+        let mut del = conn
+            .prepare(
+                "DELETE FROM _component_cache \
+                 WHERE digest_hex = ?1 AND engine_version = ?2 AND target_triple = ?3",
+            )
+            .map_err(|e| anyhow!("prep evict-del: {}", e.message))?;
+        del.bind(1, &Value::Text(d))
+            .and_then(|_| del.bind(2, &Value::Text(v)))
+            .and_then(|_| del.bind(3, &Value::Text(t)))
+            .map_err(|e| anyhow!("bind evict-del: {}", e.message))?;
+        del.step()
+            .map_err(|e| anyhow!("step evict-del: {}", e.message))?;
+        freed += sz;
+    }
+    Ok(freed)
+}
+
 /// Insert (or refresh) a row. Idempotent on
 /// `(digest, engine_version, target)`.
 pub fn store(

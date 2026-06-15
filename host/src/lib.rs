@@ -1700,6 +1700,18 @@ pub struct LanguageRuntime {
     pub policy: Policy,
 }
 
+/// E1: configurable max-bytes cap for the C2 blob cache. Set
+/// via `SQLITE_WASM_COMPONENT_CACHE_MAX_BYTES`. Default 4 GiB
+/// — enough for a handful of postgis-sized bundles; explicit
+/// `0` disables eviction entirely (unbounded growth).
+fn component_cache_max_bytes() -> u64 {
+    const DEFAULT_CAP: u64 = 4 * 1024 * 1024 * 1024;
+    std::env::var("SQLITE_WASM_COMPONENT_CACHE_MAX_BYTES")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(DEFAULT_CAP)
+}
+
 /// Default tenant id. Single-tenant deployments (the common case)
 /// never mention a tenant explicitly; all registration + resolution
 /// goes through this constant. Multi-tenant deployments call the
@@ -1842,6 +1854,43 @@ impl Host {
         std::env::var_os("SQLITE_WASM_DISABLE_COMPONENT_CACHE")
             .map(|v| !v.is_empty())
             .unwrap_or(false)
+    }
+
+    /// E1: drop every `_component_cache` row from the user db.
+    /// Returns bytes freed. Used by `.cache gc components`.
+    pub fn component_cache_purge(&self) -> Result<u64> {
+        let db_path = self.db_path();
+        if db_path.is_empty() {
+            return Ok(0);
+        }
+        let conn = component_blob_cache::open_user_conn(&db_path)?;
+        component_blob_cache::purge_all(&conn)
+    }
+
+    /// E1: total bytes of C2 blobs across all cached rows.
+    pub fn component_cache_total_bytes(&self) -> u64 {
+        let db_path = self.db_path();
+        if db_path.is_empty() {
+            return 0;
+        }
+        let conn = match component_blob_cache::open_user_conn(&db_path) {
+            Ok(c) => c,
+            Err(_) => return 0,
+        };
+        component_blob_cache::total_bytes(&conn).unwrap_or(0)
+    }
+
+    /// E1: row count in `_component_cache`. Stats display only.
+    pub fn component_cache_row_count(&self) -> u64 {
+        let db_path = self.db_path();
+        if db_path.is_empty() {
+            return 0;
+        }
+        let conn = match component_blob_cache::open_user_conn(&db_path) {
+            Ok(c) => c,
+            Err(_) => return 0,
+        };
+        component_blob_cache::row_count(&conn).unwrap_or(0)
     }
 
     /// C2 HMAC key accessor — lazily initializes the cache key
@@ -2482,6 +2531,18 @@ impl Host {
         };
         if let Err(e) = component_blob_cache::store(&conn, digest, &blob, key) {
             tracing::warn!(error = %e, "component_cache: store failed");
+            return;
+        }
+        // E1 LRU eviction: bound the cache so a workload that
+        // touches many distinct bundles doesn't fill disk. Default
+        // cap is 4 GiB (a handful of postgis-sized bundles);
+        // override via SQLITE_WASM_COMPONENT_CACHE_MAX_BYTES (0
+        // disables the cap entirely).
+        let cap = component_cache_max_bytes();
+        if cap > 0 {
+            if let Err(e) = component_blob_cache::evict_to(&conn, cap) {
+                tracing::warn!(error = %e, "component_cache: evict failed");
+            }
         }
     }
 
@@ -3529,7 +3590,14 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
             serialize_ms: 0,
             deserialize_ms: 0,
             bypassed: 0,
+            row_count: 0,
+            total_bytes: 0,
+            max_bytes: 0,
         }
+    }
+
+    async fn component_cache_purge(&mut self) -> u64 {
+        0
     }
 
     async fn list_extensions(&mut self) -> Vec<Manifest> {
@@ -4400,7 +4468,14 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             serialize_ms: s.serialize_ms,
             deserialize_ms: s.deserialize_ms,
             bypassed: s.bypassed,
+            row_count: self.host.component_cache_row_count(),
+            total_bytes: self.host.component_cache_total_bytes(),
+            max_bytes: component_cache_max_bytes(),
         }
+    }
+
+    async fn component_cache_purge(&mut self) -> u64 {
+        self.host.component_cache_purge().unwrap_or(0)
     }
 
     async fn list_extensions(&mut self) -> Vec<Manifest> {
