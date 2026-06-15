@@ -71,6 +71,23 @@ interface extension-loader {
         digest-hex: string,
     }
 
+    /// PLAN-component-cache.md C3: observability snapshot.
+    /// Returned by `component-cache-stats` and rendered by
+    /// `.cache stats components` in the cli.
+    record component-cache-stats-snapshot {
+        c1-hits:        u64,
+        c2-hits:        u64,
+        cold-parses:    u64,
+        parse-ms:       u64,
+        serialize-ms:   u64,
+        deserialize-ms: u64,
+        /// Times the cache layer was bypassed by
+        /// `SQLITE_WASM_DISABLE_COMPONENT_CACHE` (the
+        /// `--no-component-cache` cli flag's plumbing).
+        bypassed:       u64,
+    }
+    component-cache-stats: func() -> component-cache-stats-snapshot;
+
     /// List currently loaded extensions as their manifests.
     list-extensions: func() -> list<manifest>;
 

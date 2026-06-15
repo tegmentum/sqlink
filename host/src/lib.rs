@@ -33,6 +33,7 @@ pub mod policy;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
@@ -1598,6 +1599,58 @@ pub struct Host {
     /// on platforms where it can't be created (the cache then
     /// degrades to a no-op).
     blob_cache_key: Arc<std::sync::OnceLock<Option<Vec<u8>>>>,
+    /// PLAN-component-cache.md C3: cache observability — counters
+    /// and cumulative timings updated on every load path so
+    /// `.cache stats components` can show hit ratios + where the
+    /// time went.
+    component_cache_stats: Arc<ComponentCacheStats>,
+}
+
+/// Atomic counters for the cache tiers + cumulative wall-clock
+/// for the three expensive paths. AtomicU64 keeps reads/writes
+/// off any lock the load path is already holding.
+#[derive(Default)]
+pub struct ComponentCacheStats {
+    pub c1_hits: AtomicU64,
+    pub c2_hits: AtomicU64,
+    pub cold_parses: AtomicU64,
+    /// Cumulative milliseconds spent in `Component::from_binary`
+    /// (cold parses only).
+    pub parse_ms: AtomicU64,
+    /// Cumulative milliseconds spent in `Component::serialize`
+    /// (writes to the C2 blob cache).
+    pub serialize_ms: AtomicU64,
+    /// Cumulative milliseconds spent in `Component::deserialize`
+    /// (C2 hits).
+    pub deserialize_ms: AtomicU64,
+    /// Times `--no-component-cache` (env-flag) skipped all
+    /// tiers. Diagnostics for benchmark runs.
+    pub bypassed: AtomicU64,
+}
+
+impl ComponentCacheStats {
+    pub fn snapshot(&self) -> ComponentCacheStatsSnapshot {
+        ComponentCacheStatsSnapshot {
+            c1_hits: self.c1_hits.load(Ordering::Relaxed),
+            c2_hits: self.c2_hits.load(Ordering::Relaxed),
+            cold_parses: self.cold_parses.load(Ordering::Relaxed),
+            parse_ms: self.parse_ms.load(Ordering::Relaxed),
+            serialize_ms: self.serialize_ms.load(Ordering::Relaxed),
+            deserialize_ms: self.deserialize_ms.load(Ordering::Relaxed),
+            bypassed: self.bypassed.load(Ordering::Relaxed),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ComponentCacheStatsSnapshot {
+    pub c1_hits: u64,
+    pub c2_hits: u64,
+    pub cold_parses: u64,
+    pub parse_ms: u64,
+    pub serialize_ms: u64,
+    pub deserialize_ms: u64,
+    pub bypassed: u64,
 }
 
 /// Tiny insertion-order LRU for parsed Components. Capacity is
@@ -1770,7 +1823,25 @@ impl Host {
             runtimes: Arc::new(RwLock::new(HashMap::new())),
             component_cache: Arc::new(Mutex::new(ComponentCache::new(cap))),
             blob_cache_key: Arc::new(std::sync::OnceLock::new()),
+            component_cache_stats: Arc::new(ComponentCacheStats::default()),
         })
+    }
+
+    /// Snapshot the component-cache observability counters
+    /// (PLAN-component-cache.md C3). Cheap — just atomic reads.
+    pub fn component_cache_stats(&self) -> ComponentCacheStatsSnapshot {
+        self.component_cache_stats.snapshot()
+    }
+
+    /// True when `SQLITE_WASM_DISABLE_COMPONENT_CACHE` is set to
+    /// a non-empty value. Plumbed through env so a single
+    /// recompile (debug or release) supports both modes for
+    /// benchmarking; the cli's `--no-component-cache` flag just
+    /// sets the env var before the cli component instantiates.
+    fn component_cache_disabled(&self) -> bool {
+        std::env::var_os("SQLITE_WASM_DISABLE_COMPONENT_CACHE")
+            .map(|v| !v.is_empty())
+            .unwrap_or(false)
     }
 
     /// C2 HMAC key accessor — lazily initializes the cache key
@@ -2302,22 +2373,51 @@ impl Host {
         digest: &str,
         name_hint: &str,
     ) -> Result<Component> {
+        // PLAN-component-cache.md C3 instrumentation hook:
+        // SQLITE_WASM_DISABLE_COMPONENT_CACHE=1 skips both tiers
+        // so benchmarks measure cold from_binary cost.
+        if self.component_cache_disabled() {
+            self.component_cache_stats.bypassed.fetch_add(1, Ordering::Relaxed);
+            let t0 = std::time::Instant::now();
+            let c = Component::from_binary(&self.engine, bytes)
+                .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
+            self.component_cache_stats
+                .parse_ms
+                .fetch_add(t0.elapsed().as_millis() as u64, Ordering::Relaxed);
+            self.component_cache_stats
+                .cold_parses
+                .fetch_add(1, Ordering::Relaxed);
+            return Ok(c);
+        }
         // C1 — in-process LRU.
         {
             let mut cache = self.component_cache.lock();
             if let Some(c) = cache.get(digest) {
+                self.component_cache_stats
+                    .c1_hits
+                    .fetch_add(1, Ordering::Relaxed);
                 return Ok(c);
             }
         }
         // C2 — precompiled blob in the user db. Only attempted
         // when a db_path is configured and the HMAC secret loads.
         if let Some(c) = self.try_c2_lookup(digest) {
+            self.component_cache_stats
+                .c2_hits
+                .fetch_add(1, Ordering::Relaxed);
             self.component_cache.lock().insert(digest.to_string(), c.clone());
             return Ok(c);
         }
         // Cold path: parse + populate both caches.
+        let t0 = std::time::Instant::now();
         let component = Component::from_binary(&self.engine, bytes)
             .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
+        self.component_cache_stats
+            .parse_ms
+            .fetch_add(t0.elapsed().as_millis() as u64, Ordering::Relaxed);
+        self.component_cache_stats
+            .cold_parses
+            .fetch_add(1, Ordering::Relaxed);
         self.try_c2_store(digest, &component);
         self.component_cache.lock().insert(digest.to_string(), component.clone());
         Ok(component)
@@ -2341,7 +2441,8 @@ impl Host {
         // engine_identity), and the HMAC verified — so the
         // caller-trust contract `Component::deserialize` requires
         // is satisfied.
-        unsafe { Component::deserialize(&self.engine, &blob) }
+        let t0 = std::time::Instant::now();
+        let result = unsafe { Component::deserialize(&self.engine, &blob) }
             .map_err(|e| {
                 tracing::warn!(
                     digest = %&digest[..16],
@@ -2349,7 +2450,11 @@ impl Host {
                     "component_cache: deserialize failed; will reparse"
                 );
             })
-            .ok()
+            .ok();
+        self.component_cache_stats
+            .deserialize_ms
+            .fetch_add(t0.elapsed().as_millis() as u64, Ordering::Relaxed);
+        result
     }
 
     fn try_c2_store(&self, digest: &str, component: &Component) {
@@ -2360,6 +2465,7 @@ impl Host {
         if db_path.is_empty() {
             return;
         }
+        let t0 = std::time::Instant::now();
         let blob = match component.serialize() {
             Ok(b) => b,
             Err(e) => {
@@ -2367,6 +2473,9 @@ impl Host {
                 return;
             }
         };
+        self.component_cache_stats
+            .serialize_ms
+            .fetch_add(t0.elapsed().as_millis() as u64, Ordering::Relaxed);
         let conn = match component_blob_cache::open_user_conn(&db_path) {
             Ok(c) => c,
             Err(_) => return,
@@ -3409,6 +3518,20 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         Err(loader_stub_err("describe-extension-from-uri"))
     }
 
+    async fn component_cache_stats(
+        &mut self,
+    ) -> bindings::sqlite::wasm::extension_loader::ComponentCacheStatsSnapshot {
+        bindings::sqlite::wasm::extension_loader::ComponentCacheStatsSnapshot {
+            c1_hits: 0,
+            c2_hits: 0,
+            cold_parses: 0,
+            parse_ms: 0,
+            serialize_ms: 0,
+            deserialize_ms: 0,
+            bypassed: 0,
+        }
+    }
+
     async fn list_extensions(&mut self) -> Vec<Manifest> {
         Vec::new()
     }
@@ -4263,6 +4386,21 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
                  in v1 (got {uri})"
             ),
         })
+    }
+
+    async fn component_cache_stats(
+        &mut self,
+    ) -> bindings::sqlite::wasm::extension_loader::ComponentCacheStatsSnapshot {
+        let s = self.host.component_cache_stats();
+        bindings::sqlite::wasm::extension_loader::ComponentCacheStatsSnapshot {
+            c1_hits: s.c1_hits,
+            c2_hits: s.c2_hits,
+            cold_parses: s.cold_parses,
+            parse_ms: s.parse_ms,
+            serialize_ms: s.serialize_ms,
+            deserialize_ms: s.deserialize_ms,
+            bypassed: s.bypassed,
+        }
     }
 
     async fn list_extensions(&mut self) -> Vec<Manifest> {

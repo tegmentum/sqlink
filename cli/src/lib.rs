@@ -1457,25 +1457,60 @@ fn do_cache(arg: &str) -> String {
             let n = extension_loader::purge_cache();
             format!("Purged {n} cache entries\n")
         }
-        "stats" => match extension_loader::get_cache_stats() {
-            Ok(s) => format!(
-                "mode:        {}\n\
-                 artifacts:   {}\n\
-                 uris:        {}\n\
-                 total bytes: {}\n\
-                 max bytes:   {}\n",
-                s.mode,
-                s.artifact_count,
-                s.uri_count,
-                s.total_bytes,
-                if s.max_bytes == 0 {
-                    "(unbounded)".to_string()
+        "stats" => {
+            let target = arg.split_whitespace().nth(1).unwrap_or("");
+            if target == "components" {
+                // PLAN-component-cache.md C3 observability.
+                let s = extension_loader::component_cache_stats();
+                let loads = s.c1_hits + s.c2_hits + s.cold_parses + s.bypassed;
+                let hit_rate = if loads == 0 {
+                    "n/a".to_string()
                 } else {
-                    s.max_bytes.to_string()
-                },
-            ),
-            Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
-        },
+                    format!(
+                        "{:.0}%",
+                        100.0 * (s.c1_hits + s.c2_hits) as f64 / loads as f64
+                    )
+                };
+                format!(
+                    "C1 hits:        {}\n\
+                     C2 hits:        {}\n\
+                     cold parses:    {}\n\
+                     bypassed:       {} (SQLITE_WASM_DISABLE_COMPONENT_CACHE)\n\
+                     hit rate:       {}\n\
+                     parse_ms:       {}\n\
+                     serialize_ms:   {}\n\
+                     deserialize_ms: {}\n",
+                    s.c1_hits,
+                    s.c2_hits,
+                    s.cold_parses,
+                    s.bypassed,
+                    hit_rate,
+                    s.parse_ms,
+                    s.serialize_ms,
+                    s.deserialize_ms,
+                )
+            } else {
+                match extension_loader::get_cache_stats() {
+                    Ok(s) => format!(
+                        "mode:        {}\n\
+                         artifacts:   {}\n\
+                         uris:        {}\n\
+                         total bytes: {}\n\
+                         max bytes:   {}\n",
+                        s.mode,
+                        s.artifact_count,
+                        s.uri_count,
+                        s.total_bytes,
+                        if s.max_bytes == 0 {
+                            "(unbounded)".to_string()
+                        } else {
+                            s.max_bytes.to_string()
+                        },
+                    ),
+                    Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
+                }
+            }
+        }
         "mode" => match extension_loader::get_cache_stats() {
             Ok(s) => format!("{}\n", s.mode),
             Err(e) => format!("Error: {} (code {})\n", e.message, e.code),

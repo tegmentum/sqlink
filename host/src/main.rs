@@ -43,7 +43,7 @@ impl wasmtime_wasi::WasiView for State {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: sqlite-wasm-run [--db PATH] [--cache-dir DIR] <component.wasm> [-- guest-args...]");
+    eprintln!("usage: sqlite-wasm-run [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wasm> [-- guest-args...]");
     std::process::exit(2);
 }
 
@@ -81,6 +81,11 @@ async fn main() -> Result<()> {
                 eprintln!("--cache-dir expects a path");
                 usage();
             }
+        } else if a == "--no-component-cache" {
+            // PLAN-component-cache.md C3: cli flag plumbing.
+            // Set the env var the host's component_cache_disabled()
+            // reads — keeps the cache off for the whole process.
+            std::env::set_var("SQLITE_WASM_DISABLE_COMPONENT_CACHE", "1");
         } else {
             positional.push(a.clone());
         }
