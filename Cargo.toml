@@ -16,6 +16,7 @@ members = [
     "sqlite-tvm-bindings",
     "sqlite-cas-cache",
     "extensions/json1",
+    "extensions/csv",
     "examples/rust/runnable-sqlite-demo",
 ]
 

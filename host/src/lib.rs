@@ -1303,10 +1303,14 @@ fn make_loaded_collating_linker(engine: &Engine) -> Result<Linker<LoadedState>> 
 }
 
 /// Build a Linker pre-wired for a `tabular`-world loaded
-/// extension. Used when dispatching vtab callbacks.
+/// extension. Used when dispatching vtab callbacks. Uses
+/// async WASI because vtab extensions like csv touch the
+/// filesystem and the cli already runs under an async runtime —
+/// sync WASI would `block_on` and trip the "runtime within a
+/// runtime" panic.
 fn make_loaded_tabular_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     loaded_tabular::Tabular::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
         .map_err(|e| anyhow!("loaded-ext tabular: {e}"))?;
@@ -1355,6 +1359,27 @@ fn build_loaded_store(
 ) -> Result<wasmtime::Store<LoadedState>> {
     let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
     builder.inherit_stdio();
+    // Vtab extensions (csv etc.) read files via `std::fs::*` from
+    // inside their wasi context. Preopen the cwd at `.` so
+    // relative paths work, and `/` so absolute paths in tests
+    // hit the host filesystem.
+    //
+    // TODO: gate by policy.fs once a filesystem capability lands
+    // in `sqlite:extension/policy`.
+    if let Ok(cwd) = std::env::current_dir() {
+        let _ = builder.preopened_dir(
+            &cwd,
+            ".",
+            wasmtime_wasi::DirPerms::all(),
+            wasmtime_wasi::FilePerms::all(),
+        );
+    }
+    let _ = builder.preopened_dir(
+        "/",
+        "/",
+        wasmtime_wasi::DirPerms::all(),
+        wasmtime_wasi::FilePerms::all(),
+    );
     let state = LoadedState {
         wasi: builder.build(),
         table: wasmtime_wasi::ResourceTable::new(),
