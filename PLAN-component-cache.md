@@ -1,5 +1,21 @@
 # Plan: cache parsed Components across `.load` calls
 
+> **Status: C1 + C2 shipped. C3 deferred per the plan's own
+> "ship, measure, decide" gate.**
+>
+> | Tier | Commit | Measured win on postgis bundle |
+> |---|---|---|
+> | C1 — in-process Component LRU | `b8ff081` | re-load within session: 151s → 12s (~92% saved per hit, ~12s residual = fixture cost) |
+> | C2 — precompiled-blob cache in user db + HMAC | `24fea42` | cold-start: 131s → 22s (~83% wall-clock, ~93% user-time saved; residual = wasi setup + sqlite cli init + function registration) |
+> | C3 — instrumentation + `--no-component-cache` | _deferred_ | no real complaint about lack of observability yet |
+>
+> C2 ended up entirely host-internal: no new WIT methods, no
+> cli-side awareness. `Host::component_for_digest` is the
+> three-tier resolver (C1 → C2 → cold parse via
+> `Component::from_binary`), called from BOTH
+> `load_extension_from_bytes` and `describe_extension_from_bytes`
+> so the pre-load enforcement path seeds the cache on first run.
+
 ## Goal
 
 Eliminate redundant `Component::from_binary` parse + validate
