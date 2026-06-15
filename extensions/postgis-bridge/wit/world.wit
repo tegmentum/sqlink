@@ -17,6 +17,13 @@ world bridge {
     import postgis:wasm/postgis-three-d@0.1.0;
     import postgis:wasm/postgis-geodetic@0.1.0;
     import postgis:wasm/postgis-sfcgal@0.1.0;
+    import postgis:wasm/postgis-raster-types@0.1.0;
+    import postgis:wasm/postgis-raster-accessors@0.1.0;
+    import postgis:wasm/postgis-raster-pixels@0.1.0;
+    import postgis:wasm/postgis-raster-output@0.1.0;
+    import postgis:wasm/postgis-raster-vector@0.1.0;
+    import postgis:wasm/postgis-raster-predicates@0.1.0;
+    import postgis:wasm/postgis-raster-processing@0.1.0;
 
     // Direct sfcgal-wasm component  richer surface than what
     // postgis-sfcgal wraps. Provides STL/OBJ/VTK output for

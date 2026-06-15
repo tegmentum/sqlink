@@ -1,0 +1,287 @@
+package postgis:wasm@0.1.0;
+
+/// Raster types (Feature 1, phase R1). MVP raster engine: an in-memory
+/// grid of bands, each stored as f64 with a declared pixel type and
+/// optional nodata value. The raster crosses the boundary as a resource
+/// handle (like geometry); use `as-binary` / `from-binary` to persist.
+interface postgis-raster-types {
+    variant raster-error {
+        parse-error(string),
+        out-of-bounds(string),
+        type-mismatch(string),
+        general(string),
+    }
+
+    /// PostGIS pixel types.
+    enum pixel-type {
+        bool1,
+        uint8,
+        int8,
+        uint16,
+        int16,
+        uint32,
+        int32,
+        float32,
+        float64,
+    }
+
+    resource raster {
+        /// Empty 0x0 raster, identity georeference, no SRID, no bands.
+        constructor();
+        /// Width in pixels.
+        width: func() -> u32;
+        /// Height in pixels.
+        height: func() -> u32;
+        /// Number of bands.
+        num-bands: func() -> u32;
+        /// (upper-left-x, upper-left-y, scale-x, scale-y, skew-x, skew-y).
+        georeference: func() -> tuple<f64, f64, f64, f64, f64, f64>;
+        /// SRID, or none.
+        srid: func() -> option<s32>;
+        /// Pixel value at 1-based (band, x, y); NaN if out of range.
+        value: func(band: u32, x: u32, y: u32) -> f64;
+        /// Serialise to the component-internal raster format.
+        as-binary: func() -> list<u8>;
+    }
+
+    /// Reconstruct from `as-binary`.
+    from-binary: func(bytes: list<u8>) -> result<raster, raster-error>;
+}
+
+interface postgis-raster-constructors {
+    use postgis-raster-types.{raster, raster-error, pixel-type};
+
+    /// ST_MakeEmptyRaster — a raster with the given dimensions and
+    /// georeference, no bands.
+    st-make-empty-raster: func(
+        width: u32, height: u32,
+        upper-left-x: f64, upper-left-y: f64,
+        scale-x: f64, scale-y: f64,
+        skew-x: f64, skew-y: f64,
+        srid: s32,
+    ) -> result<raster, raster-error>;
+
+    /// ST_AddBand — return a new raster with an extra band initialised to
+    /// `initial-value`, optionally with a nodata value.
+    st-add-band: func(
+        rast: borrow<raster>,
+        pixel-t: pixel-type,
+        initial-value: f64,
+        no-data-value: option<f64>,
+    ) -> result<raster, raster-error>;
+}
+
+interface postgis-raster-accessors {
+    use postgis-raster-types.{raster, raster-error, pixel-type};
+    use postgis-types.{geometry};
+
+    st-width: func(rast: borrow<raster>) -> u32;
+    st-height: func(rast: borrow<raster>) -> u32;
+    st-num-bands: func(rast: borrow<raster>) -> u32;
+    st-upper-left-x: func(rast: borrow<raster>) -> f64;
+    st-upper-left-y: func(rast: borrow<raster>) -> f64;
+    st-scale-x: func(rast: borrow<raster>) -> f64;
+    st-scale-y: func(rast: borrow<raster>) -> f64;
+    st-skew-x: func(rast: borrow<raster>) -> f64;
+    st-skew-y: func(rast: borrow<raster>) -> f64;
+    st-srid: func(rast: borrow<raster>) -> s32;
+    /// Pixel type of a 1-based band.
+    st-band-pixel-type: func(rast: borrow<raster>, band: u32) -> result<pixel-type, raster-error>;
+    /// Nodata value of a 1-based band, if set.
+    st-band-nodata-value: func(rast: borrow<raster>, band: u32) -> result<option<f64>, raster-error>;
+    /// True if the (1-based) band index does not exist.
+    st-has-no-band: func(rast: borrow<raster>, band: u32) -> bool;
+    /// Pixel value at 1-based (band, x, y).
+    st-value: func(rast: borrow<raster>, band: u32, x: u32, y: u32) -> result<f64, raster-error>;
+    /// Return a new raster with the pixel at 1-based (band, x, y) set.
+    st-set-value: func(
+        rast: borrow<raster>, band: u32, x: u32, y: u32, val: f64,
+    ) -> result<raster, raster-error>;
+    /// Upper-left corner of the 1-based pixel (x, y) in world coordinates.
+    st-pixel-as-point: func(rast: borrow<raster>, x: u32, y: u32) -> result<geometry, raster-error>;
+}
+
+/// Pixel access (Feature 1, phase R2).
+interface postgis-raster-pixels {
+    use postgis-raster-types.{raster, raster-error};
+    use postgis-types.{geometry};
+
+    /// Pixel coordinate (1-based column/row).
+    record pixel-coord {
+        x: u32,
+        y: u32,
+    }
+
+    /// Set a rectangular block of values whose top-left is the 1-based
+    /// pixel (x, y); `values` is row-major. Returns a new raster.
+    st-set-values: func(
+        rast: borrow<raster>, band: u32, x: u32, y: u32, values: list<list<f64>>,
+    ) -> result<raster, raster-error>;
+
+    /// The square footprint of the 1-based pixel (x, y) as a POLYGON.
+    st-pixel-as-polygon: func(rast: borrow<raster>, x: u32, y: u32) -> result<geometry, raster-error>;
+
+    /// The centre point of the 1-based pixel (x, y) as a POINT.
+    st-pixel-as-centroid: func(rast: borrow<raster>, x: u32, y: u32) -> result<geometry, raster-error>;
+
+    /// Nearest non-nodata value to the 1-based pixel (x, y) in a band.
+    st-nearest-value: func(rast: borrow<raster>, band: u32, x: u32, y: u32) -> result<f64, raster-error>;
+
+    /// 1-based pixel coordinates whose band value equals `search-value`.
+    st-pixel-of-value: func(rast: borrow<raster>, band: u32, search-value: f64) -> result<list<pixel-coord>, raster-error>;
+
+    /// All band values as a row-major 2D array (rows of width values).
+    st-dump-values: func(rast: borrow<raster>, band: u32) -> result<list<list<f64>>, raster-error>;
+
+    /// World coordinate (x) of the upper-left corner of pixel (col, row).
+    st-raster-to-world-coord-x: func(rast: borrow<raster>, col: u32, row: u32) -> f64;
+    /// World coordinate (y) of the upper-left corner of pixel (col, row).
+    st-raster-to-world-coord-y: func(rast: borrow<raster>, col: u32, row: u32) -> f64;
+    /// 1-based (col, row) of the pixel covering world coordinate (wx, wy).
+    st-world-to-raster-coord: func(rast: borrow<raster>, wx: f64, wy: f64) -> tuple<s32, s32>;
+}
+
+/// Raster output formats (Feature 1, phase R2 — PNG only for now).
+interface postgis-raster-output {
+    use postgis-raster-types.{raster, raster-error};
+
+    /// Encode one band as an 8-bit greyscale PNG, linearly scaling the
+    /// band's non-nodata range to 0..255 (nodata -> 0).
+    st-as-png: func(rast: borrow<raster>, band: u32) -> result<list<u8>, raster-error>;
+
+    /// Encode the whole raster as a GeoTIFF (via the GDAL GTiff driver).
+    st-as-tiff: func(rast: borrow<raster>) -> result<list<u8>, raster-error>;
+}
+
+/// Raster statistics (Feature 1, phase R4).
+interface postgis-raster-stats {
+    use postgis-raster-types.{raster, raster-error};
+
+    record summary-stats {
+        count: u64,
+        sum: f64,
+        mean: f64,
+        stddev: f64,
+        min: f64,
+        max: f64,
+    }
+    record histogram-bin {
+        min: f64,
+        max: f64,
+        count: u64,
+    }
+    record value-count {
+        value: f64,
+        count: u64,
+    }
+
+    /// ST_SummaryStats — count/sum/mean/stddev/min/max over non-nodata pixels.
+    st-summary-stats: func(rast: borrow<raster>, band: u32) -> result<summary-stats, raster-error>;
+    /// ST_Histogram — `bins` equal-width buckets over the value range.
+    st-histogram: func(rast: borrow<raster>, band: u32, bins: u32) -> result<list<histogram-bin>, raster-error>;
+    /// ST_ValueCount — distinct value -> pixel count (non-nodata).
+    st-value-count: func(rast: borrow<raster>, band: u32) -> result<list<value-count>, raster-error>;
+    /// ST_Quantile — value at `quantile` in [0,1] over sorted non-nodata pixels.
+    st-quantile: func(rast: borrow<raster>, band: u32, quantile: f64) -> result<f64, raster-error>;
+}
+
+/// Raster map algebra (Feature 1, phase R3).
+interface postgis-raster-mapalgebra {
+    use postgis-raster-types.{raster, raster-error, pixel-type};
+
+    /// ST_MapAlgebra (1 raster): per-pixel `expression` with the variable
+    /// `val`; produces a new single-band raster of `pixel-t`. nodata passes
+    /// through.
+    st-map-algebra: func(
+        rast: borrow<raster>, band: u32, pixel-t: pixel-type, expression: string,
+    ) -> result<raster, raster-error>;
+
+    /// ST_MapAlgebra (2 rasters): variables `val1`, `val2`. Rasters must
+    /// share dimensions; output aligns to rast1.
+    st-map-algebra2: func(
+        rast1: borrow<raster>, band1: u32,
+        rast2: borrow<raster>, band2: u32,
+        pixel-t: pixel-type, expression: string,
+    ) -> result<raster, raster-error>;
+
+    /// ST_Reclass — remap value ranges, e.g. "0-100:1, 100-200:2". Each rule
+    /// is "lo-hi:newval"; a value in [lo, hi] maps to newval; unmatched ->
+    /// nodata (NaN).
+    st-reclass: func(
+        rast: borrow<raster>, band: u32, reclass-expr: string, pixel-t: pixel-type,
+    ) -> result<raster, raster-error>;
+}
+
+/// Raster <-> vector (Feature 1, phase R5).
+interface postgis-raster-vector {
+    use postgis-raster-types.{raster, raster-error};
+    use postgis-types.{geometry};
+
+    /// ST_DumpAsPolygons — merge contiguous equal-value, non-nodata pixels
+    /// (4-connectivity) into polygons; returns one (geometry, value) per
+    /// region.
+    st-dump-as-polygons: func(
+        rast: borrow<raster>, band: u32,
+    ) -> result<list<tuple<geometry, f64>>, raster-error>;
+
+    /// ST_PixelAsPolygons — every non-nodata pixel as its own square polygon
+    /// with the pixel value.
+    st-pixel-as-polygons: func(
+        rast: borrow<raster>, band: u32,
+    ) -> result<list<tuple<geometry, f64>>, raster-error>;
+
+    /// ST_Polygon — the non-nodata footprint of a band as a (multi)polygon.
+    st-polygon: func(rast: borrow<raster>, band: u32) -> result<geometry, raster-error>;
+}
+
+/// Raster predicates (Feature 1, phase R8). These operate on the raster's
+/// footprint (its extent polygon, which accounts for skew) — the
+/// convex-hull interpretation PostGIS uses for raster predicates.
+interface postgis-raster-predicates {
+    use postgis-raster-types.{raster, raster-error};
+    use postgis-types.{geometry};
+
+    /// ST_ConvexHull(raster) / ST_Envelope basis — the extent polygon.
+    st-raster-convex-hull: func(rast: borrow<raster>) -> result<geometry, raster-error>;
+
+    /// raster–raster footprint predicates.
+    st-raster-intersects: func(rast1: borrow<raster>, rast2: borrow<raster>) -> bool;
+    st-raster-contains: func(rast1: borrow<raster>, rast2: borrow<raster>) -> bool;
+    st-raster-within: func(rast1: borrow<raster>, rast2: borrow<raster>) -> bool;
+    st-raster-covers: func(rast1: borrow<raster>, rast2: borrow<raster>) -> bool;
+    st-raster-overlaps: func(rast1: borrow<raster>, rast2: borrow<raster>) -> bool;
+
+    /// raster–geometry footprint predicates.
+    st-raster-intersects-geom: func(rast: borrow<raster>, geom: borrow<geometry>) -> bool;
+    st-raster-contains-geom: func(rast: borrow<raster>, geom: borrow<geometry>) -> bool;
+}
+
+/// Raster processing (Feature 1, phases R7 DEM + R9 resample), via GDAL.
+interface postgis-raster-processing {
+    use postgis-raster-types.{raster, raster-error};
+
+    /// ST_Slope — slope (degrees) of a DEM band.
+    st-slope: func(rast: borrow<raster>, band: u32) -> result<raster, raster-error>;
+    /// ST_Aspect — aspect (compass direction of steepest slope).
+    st-aspect: func(rast: borrow<raster>, band: u32) -> result<raster, raster-error>;
+    /// ST_HillShade — shaded relief for the given sun azimuth/altitude.
+    st-hill-shade: func(
+        rast: borrow<raster>, band: u32, azimuth: f64, altitude: f64,
+    ) -> result<raster, raster-error>;
+    /// ST_Roughness — largest inter-cell difference of a central pixel.
+    st-roughness: func(rast: borrow<raster>, band: u32) -> result<raster, raster-error>;
+    /// ST_TRI — Terrain Ruggedness Index.
+    st-tri: func(rast: borrow<raster>, band: u32) -> result<raster, raster-error>;
+    /// ST_TPI — Topographic Position Index.
+    st-tpi: func(rast: borrow<raster>, band: u32) -> result<raster, raster-error>;
+
+    /// ST_Resize — resample to new pixel dimensions. `algorithm` is one of
+    /// nearest|bilinear|cubic|cubic-spline|lanczos|average|mode.
+    st-resize: func(
+        rast: borrow<raster>, width: u32, height: u32, algorithm: string,
+    ) -> result<raster, raster-error>;
+    /// ST_Rescale — resample to new pixel size (scale-x, scale-y).
+    st-rescale: func(
+        rast: borrow<raster>, scale-x: f64, scale-y: f64, algorithm: string,
+    ) -> result<raster, raster-error>;
+}

@@ -45,6 +45,13 @@ use bindings::postgis::wasm::postgis_three_d as pg_threed;
 use bindings::postgis::wasm::postgis_types::{Geography, Geometry};
 use bindings::postgis::wasm::postgis_geodetic as pg_geog;
 use bindings::postgis::wasm::postgis_sfcgal as pg_sfcgal;
+use bindings::postgis::wasm::postgis_raster_accessors as pg_rast_acc;
+use bindings::postgis::wasm::postgis_raster_pixels as pg_rast_px;
+use bindings::postgis::wasm::postgis_raster_output as pg_rast_out;
+use bindings::postgis::wasm::postgis_raster_predicates as pg_rast_pred;
+use bindings::postgis::wasm::postgis_raster_processing as pg_rast_proc;
+use bindings::postgis::wasm::postgis_raster_vector as pg_rast_vec;
+use bindings::postgis::wasm::postgis_raster_types::Raster;
 use bindings::sfcgal::component::geometry as sf_geom;
 use bindings::sfcgal::component::io as sf_io;
 
@@ -406,6 +413,43 @@ const FID_SFC_DIFFERENCE: u64 = 818;
 const FID_SFC_INTERSECTION: u64 = 819;
 const FID_SFC_UNION: u64 = 820;
 
+// Raster (postgis-raster-*). Raster crosses as BLOB containing
+// raster bytes — same pattern as geometry.
+const FID_RST_WIDTH: u64 = 900;
+const FID_RST_HEIGHT: u64 = 901;
+const FID_RST_NUM_BANDS: u64 = 902;
+const FID_RST_UPPER_LEFT_X: u64 = 903;
+const FID_RST_UPPER_LEFT_Y: u64 = 904;
+const FID_RST_SCALE_X: u64 = 905;
+const FID_RST_SCALE_Y: u64 = 906;
+const FID_RST_SKEW_X: u64 = 907;
+const FID_RST_SKEW_Y: u64 = 908;
+const FID_RST_SRID: u64 = 909;
+const FID_RST_HAS_NO_BAND: u64 = 910;
+const FID_RST_VALUE: u64 = 911;
+const FID_RST_NEAREST_VALUE: u64 = 912;
+const FID_RST_PIXEL_AS_POINT: u64 = 913;
+const FID_RST_PIXEL_AS_POLYGON: u64 = 914;
+const FID_RST_PIXEL_AS_CENTROID: u64 = 915;
+const FID_RST_RASTER_TO_WORLD_COORD_X: u64 = 916;
+const FID_RST_RASTER_TO_WORLD_COORD_Y: u64 = 917;
+const FID_RST_AS_PNG: u64 = 918;
+const FID_RST_AS_TIFF: u64 = 919;
+const FID_RST_R_INTERSECTS: u64 = 920;
+const FID_RST_R_CONTAINS: u64 = 921;
+const FID_RST_R_WITHIN: u64 = 922;
+const FID_RST_R_COVERS: u64 = 923;
+const FID_RST_R_OVERLAPS: u64 = 924;
+const FID_RST_R_INTERSECTS_GEOM: u64 = 925;
+const FID_RST_R_CONTAINS_GEOM: u64 = 926;
+const FID_RST_POLYGON_FROM_RAST: u64 = 927;
+const FID_RST_CONVEX_HULL: u64 = 928;
+const FID_RST_SLOPE: u64 = 929;
+const FID_RST_ASPECT: u64 = 930;
+const FID_RST_ROUGHNESS: u64 = 931;
+const FID_RST_TRI: u64 = 932;
+const FID_RST_TPI: u64 = 933;
+
 // Aggregate function ids (separate namespace, but kept distinct
 // from scalar ids for clarity).
 const AGG_ST_UNION: u64 = 1000;
@@ -760,6 +804,41 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_SFC_DIFFERENCE, "st_sfc_difference", 2),
                 s(FID_SFC_INTERSECTION, "st_sfc_intersection", 2),
                 s(FID_SFC_UNION, "st_sfc_union", 2),
+                // Raster
+                s(FID_RST_WIDTH, "st_rast_width", 1),
+                s(FID_RST_HEIGHT, "st_rast_height", 1),
+                s(FID_RST_NUM_BANDS, "st_rast_numbands", 1),
+                s(FID_RST_UPPER_LEFT_X, "st_rast_upperleftx", 1),
+                s(FID_RST_UPPER_LEFT_Y, "st_rast_upperlefty", 1),
+                s(FID_RST_SCALE_X, "st_rast_scalex", 1),
+                s(FID_RST_SCALE_Y, "st_rast_scaley", 1),
+                s(FID_RST_SKEW_X, "st_rast_skewx", 1),
+                s(FID_RST_SKEW_Y, "st_rast_skewy", 1),
+                s(FID_RST_SRID, "st_rast_srid", 1),
+                s(FID_RST_HAS_NO_BAND, "st_rast_hasnoband", 2),
+                s(FID_RST_VALUE, "st_rast_value", 4),
+                s(FID_RST_NEAREST_VALUE, "st_rast_nearestvalue", 4),
+                s(FID_RST_PIXEL_AS_POINT, "st_rast_pixelaspoint", 3),
+                s(FID_RST_PIXEL_AS_POLYGON, "st_rast_pixelaspolygon", 3),
+                s(FID_RST_PIXEL_AS_CENTROID, "st_rast_pixelascentroid", 3),
+                s(FID_RST_RASTER_TO_WORLD_COORD_X, "st_rast_rastertoworldcoordx", 3),
+                s(FID_RST_RASTER_TO_WORLD_COORD_Y, "st_rast_rastertoworldcoordy", 3),
+                s(FID_RST_AS_PNG, "st_rast_aspng", 2),
+                s(FID_RST_AS_TIFF, "st_rast_astiff", 1),
+                s(FID_RST_R_INTERSECTS, "st_rast_intersects", 2),
+                s(FID_RST_R_CONTAINS, "st_rast_contains", 2),
+                s(FID_RST_R_WITHIN, "st_rast_within", 2),
+                s(FID_RST_R_COVERS, "st_rast_covers", 2),
+                s(FID_RST_R_OVERLAPS, "st_rast_overlaps", 2),
+                s(FID_RST_R_INTERSECTS_GEOM, "st_rast_intersectsgeom", 2),
+                s(FID_RST_R_CONTAINS_GEOM, "st_rast_containsgeom", 2),
+                s(FID_RST_POLYGON_FROM_RAST, "st_rast_polygon", 2),
+                s(FID_RST_CONVEX_HULL, "st_rast_convexhull", 1),
+                s(FID_RST_SLOPE, "st_rast_slope", 2),
+                s(FID_RST_ASPECT, "st_rast_aspect", 2),
+                s(FID_RST_ROUGHNESS, "st_rast_roughness", 2),
+                s(FID_RST_TRI, "st_rast_tri", 2),
+                s(FID_RST_TPI, "st_rast_tpi", 2),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -857,6 +936,26 @@ fn from_wkb(bytes: &[u8], name: &str) -> Result<Geometry, String> {
 
 fn geog_from_wkb(bytes: &[u8], name: &str) -> Result<Geography, String> {
     Geography::from_wkb(bytes).map_err(|e| format!("{name}: {}", postgis_err_string(e)))
+}
+
+// Raster reads from a BLOB containing serialized raster bytes
+// (postgis-raster's interface-level `from-binary`). Mirrors the
+// geometry helper.
+fn rast_from_blob(bytes: &[u8], name: &str) -> Result<Raster, String> {
+    use bindings::postgis::wasm::postgis_raster_types as t;
+    t::from_binary(bytes).map_err(|e| format!("{name}: {}", raster_err_string(e)))
+}
+
+fn raster_err_string(
+    e: bindings::postgis::wasm::postgis_raster_types::RasterError,
+) -> String {
+    use bindings::postgis::wasm::postgis_raster_types::RasterError as E;
+    match e {
+        E::ParseError(s) => format!("parse error: {s}"),
+        E::OutOfBounds(s) => format!("out of bounds: {s}"),
+        E::TypeMismatch(s) => format!("type mismatch: {s}"),
+        E::General(s) => s,
+    }
 }
 
 // ── sfcgal-wasm helpers ──────────────────────────────────────
@@ -2294,6 +2393,203 @@ impl ScalarFunctionGuest for PostgisBridge {
                     Ok(r) => { sf_geom::destroy(a); sf_geom::destroy(b); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
                     Err(e) => { sf_geom::destroy(a); sf_geom::destroy(b); Err(e) }
                 }
+            }
+
+            // ── Raster ──
+            FID_RST_WIDTH => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_width")?, "st_rast_width")?;
+                Ok(SqlValue::Integer(pg_rast_acc::st_width(&r) as i64))
+            }
+            FID_RST_HEIGHT => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_height")?, "st_rast_height")?;
+                Ok(SqlValue::Integer(pg_rast_acc::st_height(&r) as i64))
+            }
+            FID_RST_NUM_BANDS => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_numbands")?, "st_rast_numbands")?;
+                Ok(SqlValue::Integer(pg_rast_acc::st_num_bands(&r) as i64))
+            }
+            FID_RST_UPPER_LEFT_X => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_upperleftx")?, "st_rast_upperleftx")?;
+                Ok(SqlValue::Real(pg_rast_acc::st_upper_left_x(&r)))
+            }
+            FID_RST_UPPER_LEFT_Y => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_upperlefty")?, "st_rast_upperlefty")?;
+                Ok(SqlValue::Real(pg_rast_acc::st_upper_left_y(&r)))
+            }
+            FID_RST_SCALE_X => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_scalex")?, "st_rast_scalex")?;
+                Ok(SqlValue::Real(pg_rast_acc::st_scale_x(&r)))
+            }
+            FID_RST_SCALE_Y => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_scaley")?, "st_rast_scaley")?;
+                Ok(SqlValue::Real(pg_rast_acc::st_scale_y(&r)))
+            }
+            FID_RST_SKEW_X => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_skewx")?, "st_rast_skewx")?;
+                Ok(SqlValue::Real(pg_rast_acc::st_skew_x(&r)))
+            }
+            FID_RST_SKEW_Y => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_skewy")?, "st_rast_skewy")?;
+                Ok(SqlValue::Real(pg_rast_acc::st_skew_y(&r)))
+            }
+            FID_RST_SRID => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_srid")?, "st_rast_srid")?;
+                Ok(SqlValue::Integer(pg_rast_acc::st_srid(&r) as i64))
+            }
+            FID_RST_HAS_NO_BAND => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_hasnoband")?, "st_rast_hasnoband")?;
+                let b = arg_i64(&args, 1, "st_rast_hasnoband")? as u32;
+                Ok(SqlValue::Integer(pg_rast_acc::st_has_no_band(&r, b) as i64))
+            }
+            FID_RST_VALUE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_value")?, "st_rast_value")?;
+                let band = arg_i64(&args, 1, "st_rast_value")? as u32;
+                let x = arg_i64(&args, 2, "st_rast_value")? as u32;
+                let y = arg_i64(&args, 3, "st_rast_value")? as u32;
+                let v = pg_rast_acc::st_value(&r, band, x, y)
+                    .map_err(|e| format!("st_rast_value: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Real(v))
+            }
+            FID_RST_NEAREST_VALUE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_nearestvalue")?, "st_rast_nearestvalue")?;
+                let band = arg_i64(&args, 1, "st_rast_nearestvalue")? as u32;
+                let x = arg_i64(&args, 2, "st_rast_nearestvalue")? as u32;
+                let y = arg_i64(&args, 3, "st_rast_nearestvalue")? as u32;
+                let v = pg_rast_px::st_nearest_value(&r, band, x, y)
+                    .map_err(|e| format!("st_rast_nearestvalue: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Real(v))
+            }
+            FID_RST_PIXEL_AS_POINT => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_pixelaspoint")?, "st_rast_pixelaspoint")?;
+                let x = arg_i64(&args, 1, "st_rast_pixelaspoint")? as u32;
+                let y = arg_i64(&args, 2, "st_rast_pixelaspoint")? as u32;
+                let g = pg_rast_acc::st_pixel_as_point(&r, x, y)
+                    .map_err(|e| format!("st_rast_pixelaspoint: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_RST_PIXEL_AS_POLYGON => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_pixelaspolygon")?, "st_rast_pixelaspolygon")?;
+                let x = arg_i64(&args, 1, "st_rast_pixelaspolygon")? as u32;
+                let y = arg_i64(&args, 2, "st_rast_pixelaspolygon")? as u32;
+                let g = pg_rast_px::st_pixel_as_polygon(&r, x, y)
+                    .map_err(|e| format!("st_rast_pixelaspolygon: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_RST_PIXEL_AS_CENTROID => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_pixelascentroid")?, "st_rast_pixelascentroid")?;
+                let x = arg_i64(&args, 1, "st_rast_pixelascentroid")? as u32;
+                let y = arg_i64(&args, 2, "st_rast_pixelascentroid")? as u32;
+                let g = pg_rast_px::st_pixel_as_centroid(&r, x, y)
+                    .map_err(|e| format!("st_rast_pixelascentroid: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_RST_RASTER_TO_WORLD_COORD_X => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_rastertoworldcoordx")?, "st_rast_rastertoworldcoordx")?;
+                let col = arg_i64(&args, 1, "st_rast_rastertoworldcoordx")? as u32;
+                let row = arg_i64(&args, 2, "st_rast_rastertoworldcoordx")? as u32;
+                Ok(SqlValue::Real(pg_rast_px::st_raster_to_world_coord_x(&r, col, row)))
+            }
+            FID_RST_RASTER_TO_WORLD_COORD_Y => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_rastertoworldcoordy")?, "st_rast_rastertoworldcoordy")?;
+                let col = arg_i64(&args, 1, "st_rast_rastertoworldcoordy")? as u32;
+                let row = arg_i64(&args, 2, "st_rast_rastertoworldcoordy")? as u32;
+                Ok(SqlValue::Real(pg_rast_px::st_raster_to_world_coord_y(&r, col, row)))
+            }
+            FID_RST_AS_PNG => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_aspng")?, "st_rast_aspng")?;
+                let band = arg_i64(&args, 1, "st_rast_aspng")? as u32;
+                let bytes = pg_rast_out::st_as_png(&r, band)
+                    .map_err(|e| format!("st_rast_aspng: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(bytes))
+            }
+            FID_RST_AS_TIFF => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_astiff")?, "st_rast_astiff")?;
+                let bytes = pg_rast_out::st_as_tiff(&r)
+                    .map_err(|e| format!("st_rast_astiff: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(bytes))
+            }
+            FID_RST_R_INTERSECTS => {
+                let a = rast_from_blob(arg_blob(&args, 0, "st_rast_intersects")?, "st_rast_intersects")?;
+                let b = rast_from_blob(arg_blob(&args, 1, "st_rast_intersects")?, "st_rast_intersects")?;
+                Ok(SqlValue::Integer(pg_rast_pred::st_raster_intersects(&a, &b) as i64))
+            }
+            FID_RST_R_CONTAINS => {
+                let a = rast_from_blob(arg_blob(&args, 0, "st_rast_contains")?, "st_rast_contains")?;
+                let b = rast_from_blob(arg_blob(&args, 1, "st_rast_contains")?, "st_rast_contains")?;
+                Ok(SqlValue::Integer(pg_rast_pred::st_raster_contains(&a, &b) as i64))
+            }
+            FID_RST_R_WITHIN => {
+                let a = rast_from_blob(arg_blob(&args, 0, "st_rast_within")?, "st_rast_within")?;
+                let b = rast_from_blob(arg_blob(&args, 1, "st_rast_within")?, "st_rast_within")?;
+                Ok(SqlValue::Integer(pg_rast_pred::st_raster_within(&a, &b) as i64))
+            }
+            FID_RST_R_COVERS => {
+                let a = rast_from_blob(arg_blob(&args, 0, "st_rast_covers")?, "st_rast_covers")?;
+                let b = rast_from_blob(arg_blob(&args, 1, "st_rast_covers")?, "st_rast_covers")?;
+                Ok(SqlValue::Integer(pg_rast_pred::st_raster_covers(&a, &b) as i64))
+            }
+            FID_RST_R_OVERLAPS => {
+                let a = rast_from_blob(arg_blob(&args, 0, "st_rast_overlaps")?, "st_rast_overlaps")?;
+                let b = rast_from_blob(arg_blob(&args, 1, "st_rast_overlaps")?, "st_rast_overlaps")?;
+                Ok(SqlValue::Integer(pg_rast_pred::st_raster_overlaps(&a, &b) as i64))
+            }
+            FID_RST_R_INTERSECTS_GEOM => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_intersectsgeom")?, "st_rast_intersectsgeom")?;
+                let g = from_wkb(arg_blob(&args, 1, "st_rast_intersectsgeom")?, "st_rast_intersectsgeom")?;
+                Ok(SqlValue::Integer(pg_rast_pred::st_raster_intersects_geom(&r, &g) as i64))
+            }
+            FID_RST_R_CONTAINS_GEOM => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_containsgeom")?, "st_rast_containsgeom")?;
+                let g = from_wkb(arg_blob(&args, 1, "st_rast_containsgeom")?, "st_rast_containsgeom")?;
+                Ok(SqlValue::Integer(pg_rast_pred::st_raster_contains_geom(&r, &g) as i64))
+            }
+            FID_RST_POLYGON_FROM_RAST => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_polygon")?, "st_rast_polygon")?;
+                let band = arg_i64(&args, 1, "st_rast_polygon")? as u32;
+                let g = pg_rast_vec::st_polygon(&r, band)
+                    .map_err(|e| format!("st_rast_polygon: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_RST_CONVEX_HULL => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_convexhull")?, "st_rast_convexhull")?;
+                let g = pg_rast_pred::st_raster_convex_hull(&r)
+                    .map_err(|e| format!("st_rast_convexhull: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_RST_SLOPE => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_slope")?, "st_rast_slope")?;
+                let band = arg_i64(&args, 1, "st_rast_slope")? as u32;
+                let out = pg_rast_proc::st_slope(&r, band)
+                    .map_err(|e| format!("st_rast_slope: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_ASPECT => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_aspect")?, "st_rast_aspect")?;
+                let band = arg_i64(&args, 1, "st_rast_aspect")? as u32;
+                let out = pg_rast_proc::st_aspect(&r, band)
+                    .map_err(|e| format!("st_rast_aspect: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_ROUGHNESS => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_roughness")?, "st_rast_roughness")?;
+                let band = arg_i64(&args, 1, "st_rast_roughness")? as u32;
+                let out = pg_rast_proc::st_roughness(&r, band)
+                    .map_err(|e| format!("st_rast_roughness: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_TRI => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_tri")?, "st_rast_tri")?;
+                let band = arg_i64(&args, 1, "st_rast_tri")? as u32;
+                let out = pg_rast_proc::st_tri(&r, band)
+                    .map_err(|e| format!("st_rast_tri: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
+            }
+            FID_RST_TPI => {
+                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_tpi")?, "st_rast_tpi")?;
+                let band = arg_i64(&args, 1, "st_rast_tpi")? as u32;
+                let out = pg_rast_proc::st_tpi(&r, band)
+                    .map_err(|e| format!("st_rast_tpi: {}", raster_err_string(e)))?;
+                Ok(SqlValue::Blob(out.as_binary()))
             }
 
             other => Err(format!("postgis bridge: unknown func id {other}")),
