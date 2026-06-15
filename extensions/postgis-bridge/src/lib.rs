@@ -44,6 +44,7 @@ use bindings::postgis::wasm::postgis_linear_ref as pg_lin;
 use bindings::postgis::wasm::postgis_three_d as pg_threed;
 use bindings::postgis::wasm::postgis_types::{Geography, Geometry};
 use bindings::postgis::wasm::postgis_geodetic as pg_geog;
+use bindings::postgis::wasm::postgis_sfcgal as pg_sfcgal;
 
 use core::cell::RefCell;
 use std::collections::HashMap;
@@ -361,6 +362,23 @@ const FID_ST_GEOG_CONVEX_HULL: u64 = 730;
 const FID_ST_GEOG_TO_GEOMETRY: u64 = 731;
 const FID_ST_GEOMETRY_TO_GEOG: u64 = 732;
 
+// SFCGAL (postgis-sfcgal — WKB-in / WKB-out, no resource handles).
+const FID_ST_CONVEX_HULL_3D: u64 = 770;
+const FID_ST_UNION_3D: u64 = 771;
+const FID_ST_INTERSECTION_3D: u64 = 772;
+const FID_ST_DIFFERENCE_3D: u64 = 773;
+const FID_ST_TESSELATE: u64 = 774;
+const FID_ST_STRAIGHT_SKELETON: u64 = 775;
+const FID_ST_APPROX_MEDIAL_AXIS: u64 = 776;
+const FID_ST_EXTRUDE: u64 = 777;
+const FID_ST_MINKOWSKI_SUM: u64 = 778;
+const FID_ST_VOLUME: u64 = 779;
+const FID_ST_AREA_3D: u64 = 780;
+const FID_ST_DISTANCE_3D_SFCGAL: u64 = 781;
+const FID_ST_TRANSLATE_3D: u64 = 782;
+const FID_ST_SCALE_3D: u64 = 783;
+const FID_ST_ROTATE_3D: u64 = 784;
+
 // Aggregate function ids (separate namespace, but kept distinct
 // from scalar ids for clarity).
 const AGG_ST_UNION: u64 = 1000;
@@ -676,6 +694,22 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_GEOG_CONVEX_HULL, "st_geog_convexhull", 1),
                 s(FID_ST_GEOG_TO_GEOMETRY, "st_geog_togeometry", 1),
                 s(FID_ST_GEOMETRY_TO_GEOG, "st_togeography", 1),
+                // SFCGAL (3D)
+                s(FID_ST_CONVEX_HULL_3D, "st_3dconvexhull", 1),
+                s(FID_ST_UNION_3D, "st_3dunion", 2),
+                s(FID_ST_INTERSECTION_3D, "st_3dintersection", 2),
+                s(FID_ST_DIFFERENCE_3D, "st_3ddifference", 2),
+                s(FID_ST_TESSELATE, "st_tesselate", 1),
+                s(FID_ST_STRAIGHT_SKELETON, "st_straightskeleton", 1),
+                s(FID_ST_APPROX_MEDIAL_AXIS, "st_sfcgalapproximatemedialaxis", 1),
+                s(FID_ST_EXTRUDE, "st_extrude", 4),
+                s(FID_ST_MINKOWSKI_SUM, "st_minkowskisum", 2),
+                s(FID_ST_VOLUME, "st_volume", 1),
+                s(FID_ST_AREA_3D, "st_3darea", 1),
+                s(FID_ST_DISTANCE_3D_SFCGAL, "st_sfcgaldistance3d", 2),
+                s(FID_ST_TRANSLATE_3D, "st_3dtranslate", 4),
+                s(FID_ST_SCALE_3D, "st_3dscale", 4),
+                s(FID_ST_ROTATE_3D, "st_3drotate", 5),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -1895,6 +1929,111 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let geog = Geography::from_wkt(&wkt)
                     .map_err(|e| format!("st_togeography: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(geog.as_wkb()))
+            }
+
+            // ── SFCGAL (postgis-sfcgal — raw WKB pass-through, no
+            // Geometry resource roundtrip) ──
+            FID_ST_CONVEX_HULL_3D => {
+                let w = arg_blob(&args, 0, "st_3dconvexhull")?;
+                let r = pg_sfcgal::st_convex_hull_threed(w)
+                    .map_err(|e| format!("st_3dconvexhull: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_UNION_3D => {
+                let a = arg_blob(&args, 0, "st_3dunion")?;
+                let b = arg_blob(&args, 1, "st_3dunion")?;
+                let r = pg_sfcgal::st_union_threed(a, b)
+                    .map_err(|e| format!("st_3dunion: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_INTERSECTION_3D => {
+                let a = arg_blob(&args, 0, "st_3dintersection")?;
+                let b = arg_blob(&args, 1, "st_3dintersection")?;
+                let r = pg_sfcgal::st_intersection_threed(a, b)
+                    .map_err(|e| format!("st_3dintersection: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_DIFFERENCE_3D => {
+                let a = arg_blob(&args, 0, "st_3ddifference")?;
+                let b = arg_blob(&args, 1, "st_3ddifference")?;
+                let r = pg_sfcgal::st_difference_threed(a, b)
+                    .map_err(|e| format!("st_3ddifference: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_TESSELATE => {
+                let w = arg_blob(&args, 0, "st_tesselate")?;
+                let r = pg_sfcgal::st_tesselate(w)
+                    .map_err(|e| format!("st_tesselate: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_STRAIGHT_SKELETON => {
+                let w = arg_blob(&args, 0, "st_straightskeleton")?;
+                let r = pg_sfcgal::st_straight_skeleton(w)
+                    .map_err(|e| format!("st_straightskeleton: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_APPROX_MEDIAL_AXIS => {
+                let w = arg_blob(&args, 0, "st_sfcgalapproximatemedialaxis")?;
+                let r = pg_sfcgal::st_approximate_medial_axis(w)
+                    .map_err(|e| format!("st_sfcgalapproximatemedialaxis: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_EXTRUDE => {
+                let w = arg_blob(&args, 0, "st_extrude")?;
+                let dx = arg_f64(&args, 1, "st_extrude")?;
+                let dy = arg_f64(&args, 2, "st_extrude")?;
+                let dz = arg_f64(&args, 3, "st_extrude")?;
+                let r = pg_sfcgal::st_extrude(w, dx, dy, dz)
+                    .map_err(|e| format!("st_extrude: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_MINKOWSKI_SUM => {
+                let a = arg_blob(&args, 0, "st_minkowskisum")?;
+                let b = arg_blob(&args, 1, "st_minkowskisum")?;
+                let r = pg_sfcgal::st_minkowski_sum(a, b)
+                    .map_err(|e| format!("st_minkowskisum: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_VOLUME => {
+                let w = arg_blob(&args, 0, "st_volume")?;
+                Ok(SqlValue::Real(pg_sfcgal::st_volume(w)))
+            }
+            FID_ST_AREA_3D => {
+                let w = arg_blob(&args, 0, "st_3darea")?;
+                Ok(SqlValue::Real(pg_sfcgal::st_area_threed(w)))
+            }
+            FID_ST_DISTANCE_3D_SFCGAL => {
+                let a = arg_blob(&args, 0, "st_sfcgaldistance3d")?;
+                let b = arg_blob(&args, 1, "st_sfcgaldistance3d")?;
+                Ok(SqlValue::Real(pg_sfcgal::st_distance_threed(a, b)))
+            }
+            FID_ST_TRANSLATE_3D => {
+                let w = arg_blob(&args, 0, "st_3dtranslate")?;
+                let dx = arg_f64(&args, 1, "st_3dtranslate")?;
+                let dy = arg_f64(&args, 2, "st_3dtranslate")?;
+                let dz = arg_f64(&args, 3, "st_3dtranslate")?;
+                let r = pg_sfcgal::st_translate_threed(w, dx, dy, dz)
+                    .map_err(|e| format!("st_3dtranslate: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_SCALE_3D => {
+                let w = arg_blob(&args, 0, "st_3dscale")?;
+                let sx = arg_f64(&args, 1, "st_3dscale")?;
+                let sy = arg_f64(&args, 2, "st_3dscale")?;
+                let sz = arg_f64(&args, 3, "st_3dscale")?;
+                let r = pg_sfcgal::st_scale_threed(w, sx, sy, sz)
+                    .map_err(|e| format!("st_3dscale: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_ROTATE_3D => {
+                let w = arg_blob(&args, 0, "st_3drotate")?;
+                let angle = arg_f64(&args, 1, "st_3drotate")?;
+                let ax = arg_f64(&args, 2, "st_3drotate")?;
+                let ay = arg_f64(&args, 3, "st_3drotate")?;
+                let az = arg_f64(&args, 4, "st_3drotate")?;
+                let r = pg_sfcgal::st_rotate_threed(w, angle, ax, ay, az)
+                    .map_err(|e| format!("st_3drotate: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
             }
 
             other => Err(format!("postgis bridge: unknown func id {other}")),

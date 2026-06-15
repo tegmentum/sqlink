@@ -1,0 +1,51 @@
+package postgis:wasm@0.1.0;
+
+/// SFCGAL 3D operations (Feature 3), bridged to the sfcgal-wasm component
+/// (CGAL-backed). These operate on **WKB bytes**, not the `geometry`
+/// resource: postgis-wasm's in-component geometry uses the 2D `geo` crate,
+/// which cannot represent POLYHEDRALSURFACE / TIN / SOLID. Passing 3D WKB
+/// through preserves the Z dimension end to end.
+///
+/// NOTE: SFCGAL's `init()` (error-handler setup) is a world-level export of
+/// sfcgal-wasm and is not callable through an interface import; if an op
+/// traps for lack of init, sfcgal-wasm needs a lazy-init guard or an
+/// init function exposed on an interface.
+interface postgis-sfcgal {
+    use postgis-types.{postgis-error};
+
+    /// ST_3DConvexHull — 3D convex hull (POLYHEDRALSURFACE).
+    /// Identifier uses `-threed` suffix for WIT spec compliance
+    /// (digit-leading segments are rejected by strict guest-side
+    /// wit-bindgen).
+    st-convex-hull-threed: func(wkb: list<u8>) -> result<list<u8>, postgis-error>;
+    /// ST_3DUnion of two solids/surfaces.
+    st-union-threed: func(a: list<u8>, b: list<u8>) -> result<list<u8>, postgis-error>;
+    /// ST_3DIntersection.
+    st-intersection-threed: func(a: list<u8>, b: list<u8>) -> result<list<u8>, postgis-error>;
+    /// ST_3DDifference.
+    st-difference-threed: func(a: list<u8>, b: list<u8>) -> result<list<u8>, postgis-error>;
+    /// ST_Tesselate — tessellate a polygonal surface into triangles.
+    st-tesselate: func(wkb: list<u8>) -> result<list<u8>, postgis-error>;
+    /// ST_StraightSkeleton.
+    st-straight-skeleton: func(wkb: list<u8>) -> result<list<u8>, postgis-error>;
+    /// ST_ApproximateMedialAxis (3D-exact).
+    st-approximate-medial-axis: func(wkb: list<u8>) -> result<list<u8>, postgis-error>;
+    /// ST_Extrude — sweep a geometry by (dx, dy, dz) into a solid.
+    st-extrude: func(wkb: list<u8>, dx: f64, dy: f64, dz: f64) -> result<list<u8>, postgis-error>;
+    /// ST_MinkowskiSum.
+    st-minkowski-sum: func(a: list<u8>, b: list<u8>) -> result<list<u8>, postgis-error>;
+
+    /// ST_Volume — 3D volume of a solid.
+    st-volume: func(wkb: list<u8>) -> f64;
+    /// ST_3DArea — surface area in 3D.
+    st-area-threed: func(wkb: list<u8>) -> f64;
+    /// ST_3DDistance (exact).
+    st-distance-threed: func(a: list<u8>, b: list<u8>) -> f64;
+
+    /// ST_3DTranslate.
+    st-translate-threed: func(wkb: list<u8>, dx: f64, dy: f64, dz: f64) -> result<list<u8>, postgis-error>;
+    /// ST_3DScale.
+    st-scale-threed: func(wkb: list<u8>, sx: f64, sy: f64, sz: f64) -> result<list<u8>, postgis-error>;
+    /// ST_3DRotate — rotate `angle` radians about axis (ax, ay, az).
+    st-rotate-threed: func(wkb: list<u8>, angle: f64, ax: f64, ay: f64, az: f64) -> result<list<u8>, postgis-error>;
+}

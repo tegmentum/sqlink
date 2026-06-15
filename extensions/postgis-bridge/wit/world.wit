@@ -16,6 +16,7 @@ world bridge {
     import postgis:wasm/postgis-linear-ref@0.1.0;
     import postgis:wasm/postgis-three-d@0.1.0;
     import postgis:wasm/postgis-geodetic@0.1.0;
+    import postgis:wasm/postgis-sfcgal@0.1.0;
     import sqlite:extension/types@0.1.0;
     import sqlite:extension/spi@0.1.0;
     import sqlite:extension/logging@0.1.0;
