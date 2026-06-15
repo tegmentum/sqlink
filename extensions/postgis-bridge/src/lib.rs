@@ -25,13 +25,15 @@ mod bindings {
     });
 }
 
+use bindings::exports::sqlite::extension::aggregate_function::Guest as AggregateGuest;
 use bindings::exports::sqlite::extension::metadata::{
-    Guest as MetadataGuest, Manifest, ScalarFunctionSpec,
+    AggregateFunctionSpec, Guest as MetadataGuest, Manifest, ScalarFunctionSpec,
 };
 use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
 use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
 use bindings::postgis::wasm::postgis_accessors as pg_acc;
+use bindings::postgis::wasm::postgis_aggregates as pg_agg;
 use bindings::postgis::wasm::postgis_constructors as pg_ctor;
 use bindings::postgis::wasm::postgis_measurements as pg_meas;
 use bindings::postgis::wasm::postgis_output as pg_out;
@@ -39,6 +41,9 @@ use bindings::postgis::wasm::postgis_predicates as pg_pred;
 use bindings::postgis::wasm::postgis_processing as pg_proc;
 use bindings::postgis::wasm::postgis_transformations as pg_xform;
 use bindings::postgis::wasm::postgis_types::Geometry;
+
+use core::cell::RefCell;
+use std::collections::HashMap;
 
 // Function ids. Append-only. Ranges by category to leave space:
 //   1..50    constructors
@@ -162,6 +167,27 @@ const FID_ST_AS_GML: u64 = 258;
 const FID_ST_AS_X3D: u64 = 259;
 const FID_ST_SUMMARY: u64 = 260;
 const FID_ST_GEOHASH: u64 = 261;
+
+// Aggregate function ids (separate namespace, but kept distinct
+// from scalar ids for clarity).
+const AGG_ST_UNION: u64 = 1000;
+const AGG_ST_POLYGONIZE: u64 = 1001;
+const AGG_ST_MAKELINE: u64 = 1002;
+const AGG_ST_CLUSTER_INTERSECTING: u64 = 1003;
+const AGG_ST_CLUSTER_WITHIN: u64 = 1004;
+const AGG_ST_EXTENT_3D: u64 = 1005;
+
+/// Per-aggregation state: collected geometries (as WKB) + the
+/// distance parameter that cluster-within picks up at finalize.
+#[derive(Default)]
+struct AggState {
+    wkbs: Vec<Vec<u8>>,
+    distance: Option<f64>,
+}
+
+thread_local! {
+    static AGGS: RefCell<HashMap<u64, AggState>> = RefCell::new(HashMap::new());
+}
 
 struct PostgisBridge;
 
@@ -288,7 +314,50 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_SUMMARY, "st_summary", 1),
                 s(FID_ST_GEOHASH, "st_geohash", 1),
             ],
-            aggregate_functions: alloc::vec![],
+            aggregate_functions: alloc::vec![
+                AggregateFunctionSpec {
+                    id: AGG_ST_UNION,
+                    name: "st_union_agg".into(),
+                    num_args: 1,
+                    func_flags: det,
+                    is_window: false,
+                },
+                AggregateFunctionSpec {
+                    id: AGG_ST_POLYGONIZE,
+                    name: "st_polygonize_agg".into(),
+                    num_args: 1,
+                    func_flags: det,
+                    is_window: false,
+                },
+                AggregateFunctionSpec {
+                    id: AGG_ST_MAKELINE,
+                    name: "st_makeline_agg".into(),
+                    num_args: 1,
+                    func_flags: det,
+                    is_window: false,
+                },
+                AggregateFunctionSpec {
+                    id: AGG_ST_CLUSTER_INTERSECTING,
+                    name: "st_clusterintersecting_agg".into(),
+                    num_args: 1,
+                    func_flags: det,
+                    is_window: false,
+                },
+                AggregateFunctionSpec {
+                    id: AGG_ST_CLUSTER_WITHIN,
+                    name: "st_clusterwithin_agg".into(),
+                    num_args: 2,
+                    func_flags: det,
+                    is_window: false,
+                },
+                AggregateFunctionSpec {
+                    id: AGG_ST_EXTENT_3D,
+                    name: "st_3dextent_agg".into(),
+                    num_args: 1,
+                    func_flags: det,
+                    is_window: false,
+                },
+            ],
             collations: alloc::vec![],
             vtabs: alloc::vec![],
             has_authorizer: false,
@@ -725,6 +794,128 @@ impl ScalarFunctionGuest for PostgisBridge {
 
             other => Err(format!("postgis bridge: unknown func id {other}")),
         }
+    }
+}
+
+// ───────────── Aggregate dispatch ─────────────
+
+impl AggregateGuest for PostgisBridge {
+    fn step(
+        func_id: u64,
+        context_id: u64,
+        args: Vec<SqlValue>,
+    ) -> Result<(), String> {
+        // NULL arg = no-op (SQL aggregate convention).
+        let arg0 = match args.first() {
+            Some(SqlValue::Null) | None => return Ok(()),
+            Some(v) => v,
+        };
+        let bytes = match arg0 {
+            SqlValue::Blob(b) => b.clone(),
+            SqlValue::Text(s) => s.as_bytes().to_vec(),
+            _ => return Err("postgis agg: arg 0 must be BLOB (WKB)".to_string()),
+        };
+        let distance = if func_id == AGG_ST_CLUSTER_WITHIN {
+            match args.get(1) {
+                Some(SqlValue::Real(r)) => Some(*r),
+                Some(SqlValue::Integer(i)) => Some(*i as f64),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        AGGS.with(|m| {
+            let mut tbl = m.borrow_mut();
+            let entry = tbl.entry(context_id).or_default();
+            entry.wkbs.push(bytes);
+            if let Some(d) = distance {
+                entry.distance = Some(d);
+            }
+        });
+        Ok(())
+    }
+
+    fn finalize(func_id: u64, context_id: u64) -> Result<SqlValue, String> {
+        let state = AGGS.with(|m| m.borrow_mut().remove(&context_id));
+        let state = match state {
+            Some(s) => s,
+            None => return Ok(SqlValue::Null),
+        };
+        if state.wkbs.is_empty() {
+            return Ok(SqlValue::Null);
+        }
+        // Reconstitute geometries.
+        let mut geoms = Vec::with_capacity(state.wkbs.len());
+        for (i, wkb) in state.wkbs.iter().enumerate() {
+            geoms.push(
+                Geometry::from_wkb(wkb)
+                    .map_err(|e| format!("agg arg {i}: {}", postgis_err_string(e)))?,
+            );
+        }
+        let refs: Vec<&Geometry> = geoms.iter().collect();
+        match func_id {
+            AGG_ST_UNION => {
+                let g = pg_agg::st_union_aggregate(&refs)
+                    .map_err(|e| format!("st_union_agg: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            AGG_ST_POLYGONIZE => {
+                let g = pg_agg::st_polygonize_aggregate(&refs)
+                    .map_err(|e| format!("st_polygonize_agg: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            AGG_ST_MAKELINE => {
+                let g = pg_agg::st_make_line_aggregate(&refs)
+                    .map_err(|e| format!("st_makeline_agg: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            AGG_ST_CLUSTER_INTERSECTING => {
+                let parts = pg_agg::st_cluster_intersecting_aggregate(&refs)
+                    .map_err(|e| {
+                        format!("st_clusterintersecting_agg: {}", postgis_err_string(e))
+                    })?;
+                // SQL aggregates return a single value  collapse
+                // the cluster list into one GeometryCollection.
+                let part_refs: Vec<&Geometry> = parts.iter().collect();
+                let collected = pg_acc::st_collect(&part_refs).map_err(|e| {
+                    format!("st_clusterintersecting_agg: {}", postgis_err_string(e))
+                })?;
+                Ok(SqlValue::Blob(collected.as_wkb()))
+            }
+            AGG_ST_CLUSTER_WITHIN => {
+                let distance = state
+                    .distance
+                    .ok_or_else(|| "st_clusterwithin_agg: distance never seen".to_string())?;
+                let parts = pg_agg::st_cluster_within_aggregate(&refs, distance)
+                    .map_err(|e| format!("st_clusterwithin_agg: {}", postgis_err_string(e)))?;
+                let part_refs: Vec<&Geometry> = parts.iter().collect();
+                let collected = pg_acc::st_collect(&part_refs)
+                    .map_err(|e| format!("st_clusterwithin_agg: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(collected.as_wkb()))
+            }
+            AGG_ST_EXTENT_3D => {
+                let bbox = pg_agg::st_extent_threed(&refs);
+                // bbox3d doesn't have a WKB representation directly;
+                // format as a BOX3D text per PostGIS convention.
+                Ok(SqlValue::Text(format!(
+                    "BOX3D({} {} {},{} {} {})",
+                    bbox.min_x, bbox.min_y, bbox.min_z, bbox.max_x, bbox.max_y, bbox.max_z
+                )))
+            }
+            other => Err(format!("postgis agg: unknown id {other}")),
+        }
+    }
+
+    fn value(_func_id: u64, _context_id: u64) -> Result<SqlValue, String> {
+        Err("postgis agg: window mode not supported".to_string())
+    }
+
+    fn inverse(
+        _func_id: u64,
+        _context_id: u64,
+        _args: Vec<SqlValue>,
+    ) -> Result<(), String> {
+        Err("postgis agg: window mode not supported".to_string())
     }
 }
 

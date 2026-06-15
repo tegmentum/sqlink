@@ -58,6 +58,74 @@ mechanical: declare the function in `metadata.describe()`, add a
 match arm in `scalar_function.call()` that calls the matching
 postgis-wasm export.
 
+## Aggregates (6)
+
+The bridge also exports the `stateful`-world aggregate-function
+interface so PostGIS's aggregate forms work through SQL `GROUP BY`
+and table-level summaries:
+
+| SQL                                  | PostGIS                              |
+|--------------------------------------|--------------------------------------|
+| `st_union_agg(g)`                    | `postgis-aggregates.st-union-aggregate` |
+| `st_polygonize_agg(g)`               | `postgis-aggregates.st-polygonize-aggregate` |
+| `st_makeline_agg(g)`                 | `postgis-aggregates.st-make-line-aggregate` |
+| `st_clusterintersecting_agg(g)`      | `postgis-aggregates.st-cluster-intersecting-aggregate` |
+| `st_clusterwithin_agg(g, dist)`      | `postgis-aggregates.st-cluster-within-aggregate` |
+| `st_3dextent_agg(g)`                 | `postgis-aggregates.st-extent-threed` (returns `BOX3D(...)`) |
+
+Each step pushes the row's WKB into a per-context Vec; finalize
+reconstitutes the geometries and calls the matching postgis-wasm
+batch function. The cluster aggregates return a list of cluster
+geometries — the bridge collapses them through `st_collect` into
+a single GeometryCollection so SQL gets one value back.
+
+```sql
+CREATE TABLE pts(g BLOB);
+INSERT INTO pts VALUES (st_makepoint(0, 0)), (st_makepoint(1, 1)), (st_makepoint(2, 2));
+
+SELECT st_astext(st_makeline_agg(g)) FROM pts;   -- "LINESTRING(0 0,1 1,2 2)"
+SELECT st_3dextent_agg(g) FROM pts;              -- "BOX3D(0 0 0,2 2 0)"
+```
+
+## Indexing — pattern (PostGIS-style, via rtree)
+
+SQLite's bundled `rtree` virtual table is enabled in our build,
+so the same pattern PostGIS uses under its GIST indexes works
+unchanged: store the geometry, separately index its bounding
+box, query with a bbox filter first and `st_intersects` /
+`st_contains` / etc. as the exact predicate.
+
+```sql
+-- Geometry table + companion rtree index.
+CREATE TABLE features(id INTEGER PRIMARY KEY, g BLOB);
+CREATE VIRTUAL TABLE features_idx USING rtree(id, minx, maxx, miny, maxy);
+
+-- Insert  populate the bbox into the index in the same step.
+INSERT INTO features VALUES (1, st_geomfromtext('POLYGON((0 0,4 0,4 3,0 3,0 0))'));
+INSERT INTO features_idx VALUES (
+    1,
+    st_xmin(st_geomfromtext('POLYGON((0 0,4 0,4 3,0 3,0 0))')),
+    st_xmax(st_geomfromtext('POLYGON((0 0,4 0,4 3,0 3,0 0))')),
+    st_ymin(st_geomfromtext('POLYGON((0 0,4 0,4 3,0 3,0 0))')),
+    st_ymax(st_geomfromtext('POLYGON((0 0,4 0,4 3,0 3,0 0))'))
+);
+
+-- Spatial query: bbox filter via rtree, exact predicate via postgis.
+SELECT f.id
+FROM features f
+JOIN features_idx i ON f.id = i.id
+WHERE i.minx <= 5 AND i.maxx >= 0
+  AND i.miny <= 5 AND i.maxy >= 0
+  AND st_intersects(f.g, st_makeenvelope(0, 0, 5, 5)) = 1;
+```
+
+A dedicated `postgis-strtree` vtab over postgis-wasm's
+`postgis-spatial-index` interface (STRtree handles + insert-wkb
++ query-envelope) is a planned follow-up. The pattern above is
+fine for production workloads — it's literally how PostGIS
+itself uses its GIST indexes (the index covers the bbox, the
+exact predicate runs on the candidates).
+
 ## Boundary contract
 
 - **Geometry** crosses as `BLOB` containing WKB. Each function

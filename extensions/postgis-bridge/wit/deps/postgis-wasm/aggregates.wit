@@ -1,0 +1,53 @@
+package postgis:wasm@0.1.0;
+
+/// Aggregate forms of common PostGIS functions. These are inherently
+/// set-valued: they accept a list of geometries (one per input row) and
+/// return a single aggregated result. The downstream accumulator stores
+/// per-row WKB and calls these at finalize, matching the postgis-batch
+/// pattern.
+interface postgis-aggregates {
+    use postgis-types.{geometry, postgis-error};
+
+    /// 3D bounding box.
+    record bbox3d {
+        min-x: f64,
+        min-y: f64,
+        min-z: f64,
+        max-x: f64,
+        max-y: f64,
+        max-z: f64,
+    }
+
+    /// Aggregate union: dissolve all input geometries into one. Areal
+    /// inputs are unioned; mixed inputs fall back to a collection.
+    st-union-aggregate: func(geoms: list<borrow<geometry>>) -> result<geometry, postgis-error>;
+
+    /// Aggregate polygonize: closed rings among the input linestrings
+    /// become polygons, returned as a GEOMETRYCOLLECTION.
+    st-polygonize-aggregate: func(geoms: list<borrow<geometry>>) -> result<geometry, postgis-error>;
+
+    /// Aggregate make-line: input POINTs in order form a LINESTRING.
+    st-make-line-aggregate: func(points: list<borrow<geometry>>) -> result<geometry, postgis-error>;
+
+    /// Aggregate cluster-intersecting: each cluster of spatially
+    /// connected geometries is returned as one GEOMETRYCOLLECTION.
+    st-cluster-intersecting-aggregate: func(
+        geoms: list<borrow<geometry>>,
+    ) -> result<list<geometry>, postgis-error>;
+
+    /// Aggregate cluster-within: cluster by a proximity threshold.
+    st-cluster-within-aggregate: func(
+        geoms: list<borrow<geometry>>,
+        distance: f64,
+    ) -> result<list<geometry>, postgis-error>;
+
+    /// 3D bounding box over all inputs (Z defaults to 0 where absent).
+    ///
+    /// NB: spelled with the `-threed` suffix rather than `-3d-` so the
+    /// identifier conforms to the WIT spec (each hyphen-segment must
+    /// start with a letter). The strict guest-side wit-bindgen
+    /// (0.37+) rejected the previous `st-3d-extent` form; matching
+    /// suffix style is already used throughout `measurements.wit` /
+    /// `transformations.wit` / `predicates.wit` etc.
+    st-extent-threed: func(geoms: list<borrow<geometry>>) -> bbox3d;
+}
