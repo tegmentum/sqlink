@@ -2179,6 +2179,84 @@ impl Host {
         self.load_extension_from_bytes(bytes, &hint, policy).await
     }
 
+    /// Describe an extension WITHOUT loading it — instantiates
+    /// briefly, calls `metadata.describe()`, drops the temporary
+    /// LoadedState. Used by the cli to know `(ext_name, digest)`
+    /// before resolving the effective Policy from the grants
+    /// table (PLAN-grants-db.md pre-load enforcement). The C1
+    /// Component cache means the subsequent real `load_extension`
+    /// of the same path skips re-parse. Returns `(name, digest)`
+    /// only; the full manifest re-emerges from `load_extension`
+    /// when the cli actually loads.
+    pub async fn describe_extension(
+        &self,
+        path: PathBuf,
+    ) -> Result<(String, String)> {
+        let bytes = std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))?;
+        let hint = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("extension")
+            .to_string();
+        self.describe_extension_from_bytes(bytes, &hint).await
+    }
+
+    pub async fn describe_extension_from_bytes(
+        &self,
+        bytes: Vec<u8>,
+        name_hint: &str,
+    ) -> Result<(String, String)> {
+        let digest = blake3::hash(&bytes).to_hex().to_string();
+        let component = {
+            let mut cache = self.component_cache.lock();
+            if let Some(c) = cache.get(&digest) {
+                c
+            } else {
+                drop(cache);
+                let c = Component::from_binary(&self.engine, &bytes)
+                    .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
+                self.component_cache.lock().insert(digest.clone(), c.clone());
+                c
+            }
+        };
+        let linker = make_loaded_stateful_linker(&self.engine)?;
+        let tmp_ext = LoadedExtension {
+            name: String::new(),
+            version: String::new(),
+            component: component.clone(),
+            policy: Policy::default(),
+            digest: digest.clone(),
+            scalar_functions: Vec::new(),
+            aggregate_functions: Vec::new(),
+            collations: Vec::new(),
+            vtabs: Vec::new(),
+            has_authorizer: false,
+            has_update_hook: false,
+            has_commit_hook: false,
+            state: Arc::new(Mutex::new(HashMap::new())),
+            cache: Arc::new(Mutex::new(HashMap::new())),
+            spi_conn: Arc::new(Mutex::new(None)),
+            cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
+        };
+        let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
+        let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
+            .await
+            .map_err(|e| anyhow!("instantiate describe-only: {e}"))?;
+        let manifest = instance
+            .sqlite_extension_metadata()
+            .call_describe(&mut store)
+            .await
+            .map_err(|e| anyhow!("describe call: {e}"))?;
+        let name = if manifest.name.is_empty() {
+            name_hint.to_string()
+        } else {
+            manifest.name
+        };
+        Ok((name, digest))
+    }
+
     /// As `load_extension` but takes bytes directly. Used by the
     /// CAS path so cached extensions don't have to round-trip
     /// through a temp file. `name_hint` provides the fallback
@@ -3223,6 +3301,22 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         String::new()
     }
 
+    async fn describe_extension(
+        &mut self,
+        _path: String,
+    ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
+    {
+        Err(loader_stub_err("describe-extension"))
+    }
+
+    async fn describe_extension_from_uri(
+        &mut self,
+        _uri: String,
+    ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
+    {
+        Err(loader_stub_err("describe-extension-from-uri"))
+    }
+
     async fn list_extensions(&mut self) -> Vec<Manifest> {
         Vec::new()
     }
@@ -4002,6 +4096,81 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             .get(&name)
             .map(|e| e.digest.clone())
             .unwrap_or_default()
+    }
+
+    async fn describe_extension(
+        &mut self,
+        path: String,
+    ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
+    {
+        match self.host.describe_extension(PathBuf::from(&path)).await {
+            Ok((name, digest)) => Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                name,
+                digest_hex: digest,
+            }),
+            Err(e) => Err(LoaderError {
+                code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+
+    async fn describe_extension_from_uri(
+        &mut self,
+        uri: String,
+    ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
+    {
+        // v1: short-circuit file: and blake3: (the schemes
+        // load_extension_from_uri handles in-host). Other schemes
+        // need a resolver round-trip and aren't wired into the
+        // describe path yet — callers that need them can fall
+        // back to load_extension_from_uri without pre-load
+        // enforcement, or fetch + cache first via `.cache import`
+        // / a normal load and then describe by file: path.
+        if let Some(path) = uri
+            .strip_prefix("file://")
+            .or_else(|| uri.strip_prefix("file:"))
+        {
+            return match self.host.describe_extension(PathBuf::from(path)).await {
+                Ok((name, digest)) => Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                    name,
+                    digest_hex: digest,
+                }),
+                Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
+            };
+        }
+        if let Some(hex) = uri.strip_prefix("blake3:") {
+            let bytes = {
+                let g = self.host.cache.read();
+                match g.as_ref().and_then(|c| c.lookup_by_hash(hex)) {
+                    Some(b) => b,
+                    None => {
+                        return Err(LoaderError {
+                            code: 1,
+                            message: format!("blake3:{hex} not in cache"),
+                        });
+                    }
+                }
+            };
+            return match self
+                .host
+                .describe_extension_from_bytes(bytes, &format!("blake3:{}", &hex[..hex.len().min(8)]))
+                .await
+            {
+                Ok((name, digest)) => Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                    name,
+                    digest_hex: digest,
+                }),
+                Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
+            };
+        }
+        Err(LoaderError {
+            code: 1,
+            message: format!(
+                "described-extension-from-uri only supports file: and blake3: schemes \
+                 in v1 (got {uri})"
+            ),
+        })
     }
 
     async fn list_extensions(&mut self) -> Vec<Manifest> {

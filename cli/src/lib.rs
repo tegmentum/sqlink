@@ -772,6 +772,7 @@ fn do_load(input: &str) -> String {
     let mut fuel: Option<u64> = None;
     let mut epoch: Option<u64> = None;
     let mut mem: Option<u64> = None;
+    let mut trust = TrustMode::Manifest;
 
     for arg in parts {
         let (k, v) = match arg.split_once('=') {
@@ -799,6 +800,15 @@ fn do_load(input: &str) -> String {
                 Ok(n) => mem = Some(n),
                 Err(_) => return format!("Error: --mem expects bytes, got {v}\n"),
             },
+            "--trust" => match v {
+                "manifest" => trust = TrustMode::Manifest,
+                "stored"   => trust = TrustMode::Stored,
+                other => {
+                    return format!(
+                        "Error: --trust={other} (expected manifest|stored)\n"
+                    )
+                }
+            },
             _ => return format!("Unknown flag: {k}\n"),
         }
     }
@@ -824,6 +834,66 @@ fn do_load(input: &str) -> String {
     };
     let path = &path;
     let is_uri = looks_like_uri(path);
+
+    // PLAN-grants-db.md pre-load enforcement: describe BEFORE
+    // loading so we can know (ext_name, digest) and consult
+    // _capability_grants before applying any policy. C1's
+    // Component cache means describe+load only pay one parse
+    // total.
+    let preflight = if is_uri {
+        extension_loader::describe_extension_from_uri(path)
+    } else {
+        extension_loader::describe_extension(path)
+    };
+    let (preflight_name, preflight_digest) = match preflight {
+        Ok(r) => (r.name, r.digest_hex),
+        Err(e) => return format!("Error describing {path}: {} (code {})\n", e.message, e.code),
+    };
+
+    // Grants pre-load enforcement (PLAN-grants-db.md G1):
+    // --trust=stored requires a stored row with matching
+    // digest; --trust=manifest (default) accepts new
+    // extensions and TOFU-records them later.
+    ensure_cli_conn();
+    let stored_grant = CLI_CONN.with(|c| {
+        let g = c.borrow();
+        g.as_ref().and_then(|conn| grants::get(conn, &preflight_name).ok().flatten())
+    });
+    let mut preload_msg = String::new();
+    match (&stored_grant, trust) {
+        (Some(g), _) => {
+            match (&g.digest_hex, &preflight_digest) {
+                (Some(stored), have) if stored != have => {
+                    return format!(
+                        "Error: '{preflight_name}' bytes changed since last \
+                         grant (was {}…, now {}…). Run `.grants revoke \
+                         {preflight_name}` to re-establish trust.\n",
+                        &stored[..stored.len().min(16)],
+                        &have[..have.len().min(16)],
+                    );
+                }
+                _ => {
+                    preload_msg.push_str(&format!(
+                        "Using stored grant for '{preflight_name}' (granted {}).\n",
+                        g.granted_at
+                    ));
+                }
+            }
+        }
+        (None, TrustMode::Stored) => {
+            return format!(
+                "Error: --trust=stored but no grant on file for \
+                 '{preflight_name}'. Either preload (`.load ...` first \
+                 without --trust=stored, then run subsequent loads under \
+                 stored mode) or drop the flag.\n"
+            );
+        }
+        (None, TrustMode::Manifest) => {
+            // TOFU path: first sight of this extension, will be
+            // recorded post-load.
+        }
+    }
+
     let manifest = if is_uri {
         match extension_loader::load_extension_from_uri(path, &opts) {
             Ok(m) => m,
@@ -836,22 +906,14 @@ fn do_load(input: &str) -> String {
         }
     };
     let ext_name = manifest.name.clone();
-    // Digest comes from the host via a sidecar query (the host
-    // computed blake3 during load_extension_from_bytes; the cli
-    // can't fs-read the path itself when running with :memory:
-    // because the host hasn't preopened the path's parent dir).
-    let digest_str = extension_loader::extension_digest(&ext_name);
-    let digest = if digest_str.is_empty() {
+    let digest = if preflight_digest.is_empty() {
         None
     } else {
-        Some(digest_str)
+        Some(preflight_digest)
     };
-    ensure_cli_conn();
-    // TOFU: record the grant decision in the user's database. v1
-    // is purely advisory — pre-load enforcement is a follow-up
-    // phase that needs a describe-before-load split in the WIT.
-    // If a row exists with a mismatching digest, surface a clear
-    // warning so the user notices the binary changed.
+    // TOFU record on first sight (pre-load enforcement already
+    // handled the mismatch case above; this just persists the
+    // grant row so subsequent --trust=stored loads succeed).
     let mut grants_msg = String::new();
     CLI_CONN.with(|c| {
         let g = c.borrow();
@@ -1050,7 +1112,20 @@ fn do_load(input: &str) -> String {
         "Loaded extension: {} {} from {} ({total} registered: {detail})\n",
         manifest.name, manifest.version, path
     );
-    if grants_msg.is_empty() { main } else { format!("{grants_msg}{main}") }
+    let prefix = format!("{preload_msg}{grants_msg}");
+    if prefix.is_empty() { main } else { format!("{prefix}{main}") }
+}
+
+/// `--trust` flag for `.load`. PLAN-grants-db.md G1.
+#[derive(Debug, Clone, Copy)]
+enum TrustMode {
+    /// Default. Apply manifest-declared policy if no stored
+    /// grant; TOFU-record on first sight; refuse on digest
+    /// mismatch with a stored row.
+    Manifest,
+    /// Refuse to load anything without a stored grant. For
+    /// hardened operation.
+    Stored,
 }
 
 /// TOFU recording for `.load`: write a grant row on first sight

@@ -50,6 +50,27 @@ interface extension-loader {
     /// — `PLAN-grants-db.md` G3.
     extension-digest: func(name: string) -> string;
 
+    /// Describe an extension WITHOUT loading it — reads the bytes,
+    /// computes the digest, instantiates briefly to call
+    /// `metadata.describe()`, tears down. Used by the cli to
+    /// resolve the effective grant Policy BEFORE invoking
+    /// `load-extension` (PLAN-grants-db.md pre-load enforcement
+    /// path). The Component cache (C1) means a subsequent real
+    /// `load-extension` of the same path doesn't re-parse the
+    /// bytes — the describe + load pair pays one parse total.
+    /// Returns just the name + digest; the cli uses those for
+    /// grant-table lookup, and the full manifest comes back
+    /// from the subsequent `load-extension` call as normal.
+    describe-extension: func(path: string) -> result<described-result, loader-error>;
+    /// As `describe-extension` but over a URI. v1 supports
+    /// `file:` and `blake3:` schemes only.
+    describe-extension-from-uri: func(uri: string) -> result<described-result, loader-error>;
+
+    record described-result {
+        name: string,
+        digest-hex: string,
+    }
+
     /// List currently loaded extensions as their manifests.
     list-extensions: func() -> list<manifest>;
 
