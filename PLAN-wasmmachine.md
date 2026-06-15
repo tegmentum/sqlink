@@ -1,5 +1,31 @@
 # Plan: Register sqlite-cli as a wasmMachine application
 
+> **Status: build-pipeline scaffolding shipped (in-tree slice).
+> v86-tool-dependent steps remain — see open questions below.**
+>
+> Landed 2026-06-15:
+> - `wasmmachine/sqlite-cli.json.template` — hand-authored spec
+>   skeleton (one component + WASI provider bindings + sqlite-
+>   extension provider bindings + policy), mirroring
+>   `~/git/v86/plans/python-v86.json`'s shape.
+> - `wasmmachine/build-spec.sh` — builds the cli, hashes the
+>   resulting component with blake3, substitutes the digest
+>   array + path into the template, writes
+>   `wasmmachine/sqlite-cli.json`.
+> - `make wasmmachine-build` / `wasmmachine-seal` /
+>   `wasmmachine-run` Makefile targets. `-build` runs entirely
+>   from this repo; `-seal` and `-run` require the `wasmmachine`
+>   binary on PATH from `~/git/v86`.
+> - `wasmmachine/README.md` documents usage + the seven open
+>   v86-internals questions that remain (which engine
+>   instantiates components, what `wasmmachine seal` produces,
+>   whether tooling can build specs, etc.).
+>
+> Verified: `make wasmmachine-build` produces a valid JSON spec
+> with the correct blake3 array shape on every invocation. The
+> seal/run steps haven't been exercised end-to-end since they
+> need v86 tooling we haven't yet built from `~/git/v86`.
+
 ## Goal
 
 Ship `sqlite-cli` as a sealed, content-addressed wasmMachine

@@ -1,7 +1,8 @@
 # SQLite WASM Component Makefile
 # Builds SQLite as a WebAssembly component targeting WASI Preview 2
 
-.PHONY: all clean deps sqlite wasi-sdk bindings build test test-cli help cli extensions
+.PHONY: all clean deps sqlite wasi-sdk bindings build test test-cli help cli extensions \
+        wasmmachine-build wasmmachine-seal wasmmachine-run
 
 # Directories
 PROJECT_ROOT := $(shell pwd)
@@ -765,6 +766,24 @@ verify-tools:
 	@command -v wit-bindgen >/dev/null 2>&1 || (echo "wit-bindgen not found. Install with: cargo install wit-bindgen-cli" && exit 1)
 	@command -v wasm-tools >/dev/null 2>&1 || (echo "wasm-tools not found. Install with: cargo install wasm-tools" && exit 1)
 	@echo "All required tools found."
+
+# PLAN-wasmmachine.md E3: register sqlite-cli as a wasmMachine
+# application. wasmmachine-build hashes the cli component and
+# substitutes the digest into the spec template; -seal and -run
+# delegate to v86's wasmmachine binary (expected on PATH from
+# ~/git/v86/target/release).
+wasmmachine-build:
+	@./wasmmachine/build-spec.sh
+
+wasmmachine-seal: wasmmachine-build
+	@command -v wasmmachine >/dev/null 2>&1 || \
+		(echo "wasmmachine not found. Build from ~/git/v86 or add it to PATH." && exit 1)
+	wasmmachine seal wasmmachine/sqlite-cli.json
+
+wasmmachine-run: wasmmachine-build
+	@command -v wasmmachine >/dev/null 2>&1 || \
+		(echo "wasmmachine not found. Build from ~/git/v86 or add it to PATH." && exit 1)
+	wasmmachine run wasmmachine/sqlite-cli.json
 
 # Print configuration
 info:
