@@ -1,0 +1,30 @@
+package postgis:wasm@0.1.0;
+
+/// 3D variants of common 2D functions (Feature 8). These use the Z
+/// values carried alongside the 2D geometry (`z_coords`); inputs without
+/// Z are treated as Z = 0.
+///
+/// Note on naming: identifiers use the `-threed` suffix rather than a
+/// `3d-` prefix so they conform to the WIT spec — each hyphen-segment
+/// must start with a letter. Strict guest-side wit-bindgen (0.37+)
+/// rejects `st-3d-*`. Suffix style is already the convention in
+/// measurements.wit / transformations.wit / predicates.wit.
+interface postgis-three-d {
+    use postgis-types.{geometry, postgis-error};
+
+    /// ST_3DMakeLine — input POINTs (in order) form a 3D LINESTRING,
+    /// preserving each point's Z.
+    st-make-line-threed: func(points: list<borrow<geometry>>) -> result<geometry, postgis-error>;
+
+    /// ST_3DReverse — reverse vertex order, keeping Z aligned.
+    st-reverse-threed: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_3DCentroid — centroid of the vertices including Z (POINT Z).
+    st-centroid-threed: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_3DEnvelope — bounding box as a geometry, carrying the Z extent.
+    st-envelope-threed: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_3DBoundary — boundary of the geometry, preserving Z.
+    st-boundary-threed: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+}

@@ -1,0 +1,88 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS linear referencing functions for line operations
+interface postgis-linear-ref {
+    use postgis-types.{geometry, postgis-error};
+
+    // ========================================================================
+    // INTERPOLATION
+    // ========================================================================
+
+    /// ST_LineInterpolatePoint - Get point at fraction along line
+    st-line-interpolate-point: func(geom: borrow<geometry>, fraction: f64) -> result<geometry, postgis-error>;
+
+    /// ST_LineInterpolatePoints - Get multiple points along line at regular intervals
+    st-line-interpolate-points: func(geom: borrow<geometry>, fraction: f64, repeat: bool) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // LOCATE
+    // ========================================================================
+
+    /// ST_LineLocatePoint - Get fraction of line closest to point
+    st-line-locate-point: func(line: borrow<geometry>, point: borrow<geometry>) -> result<f64, postgis-error>;
+
+    // ========================================================================
+    // SUBSTRING
+    // ========================================================================
+
+    /// ST_LineSubstring - Get substring of line between fractions
+    st-line-substring: func(geom: borrow<geometry>, start-fraction: f64, end-fraction: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // POINT EDITING
+    // ========================================================================
+
+    /// ST_AddPoint - Add a point to a LineString at optional position
+    st-add-point: func(line: borrow<geometry>, point: borrow<geometry>, position: option<s32>) -> result<geometry, postgis-error>;
+
+    /// ST_SetPoint - Replace a point in a LineString
+    st-set-point: func(line: borrow<geometry>, position: u32, point: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_RemovePoint - Remove a point from a LineString
+    st-remove-point: func(line: borrow<geometry>, offset: u32) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // MEASURES
+    // ========================================================================
+
+    /// ST_AddMeasure - Add M values to a LineString based on length
+    st-add-measure: func(geom: borrow<geometry>, measure-start: f64, measure-end: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // LOCATE BY MEASURE
+    // ========================================================================
+
+    /// ST_LocateAlong - Get points at specified M value
+    st-locate-along: func(geom: borrow<geometry>, measure: f64) -> result<geometry, postgis-error>;
+
+    /// ST_LocateBetween - Get geometry between M values
+    st-locate-between: func(geom: borrow<geometry>, measure-start: f64, measure-end: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // LINE EXTENSION
+    // ========================================================================
+
+    /// ST_LineExtend - Extend a line by distance at both ends
+    st-line-extend: func(line: borrow<geometry>, start-distance: f64, end-distance: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // LINE CROSSING
+    // ========================================================================
+
+    /// ST_LineCrossingDirection - Get crossing direction of two lines (1=left-to-right, -1=right-to-left, 0=no cross)
+    st-line-crossing-direction: func(line1: borrow<geometry>, line2: borrow<geometry>) -> result<s32, postgis-error>;
+
+    // ========================================================================
+    // 3D INTERPOLATION
+    // ========================================================================
+
+    /// ST_3DLineInterpolatePoint - Get point at fraction along 3D line (preserves Z)
+    st-line-interpolate-point-threed: func(geom: borrow<geometry>, fraction: f64) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // ELEVATION-BASED LOCATE
+    // ========================================================================
+
+    /// ST_LocateBetweenElevations - Get geometry between Z values
+    st-locate-between-elevations: func(geom: borrow<geometry>, z-min: f64, z-max: f64) -> result<geometry, postgis-error>;
+}

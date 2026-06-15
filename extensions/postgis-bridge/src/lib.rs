@@ -40,6 +40,8 @@ use bindings::postgis::wasm::postgis_output as pg_out;
 use bindings::postgis::wasm::postgis_predicates as pg_pred;
 use bindings::postgis::wasm::postgis_processing as pg_proc;
 use bindings::postgis::wasm::postgis_transformations as pg_xform;
+use bindings::postgis::wasm::postgis_linear_ref as pg_lin;
+use bindings::postgis::wasm::postgis_three_d as pg_threed;
 use bindings::postgis::wasm::postgis_types::Geometry;
 
 use core::cell::RefCell;
@@ -167,6 +169,157 @@ const FID_ST_AS_GML: u64 = 258;
 const FID_ST_AS_X3D: u64 = 259;
 const FID_ST_SUMMARY: u64 = 260;
 const FID_ST_GEOHASH: u64 = 261;
+
+// ── v2 batch IDs ──
+// More accessors
+const FID_ST_Z: u64 = 280;
+const FID_ST_M: u64 = 281;
+const FID_ST_ZMIN: u64 = 282;
+const FID_ST_ZMAX: u64 = 283;
+const FID_ST_MMIN: u64 = 284;
+const FID_ST_MMAX: u64 = 285;
+const FID_ST_NRINGS: u64 = 286;
+const FID_ST_DIMENSION: u64 = 287;
+const FID_ST_COORD_DIM: u64 = 288;
+const FID_ST_NDIMS: u64 = 289;
+const FID_ST_ZMFLAG: u64 = 290;
+const FID_ST_MEM_SIZE: u64 = 291;
+const FID_ST_IS_COLLECTION: u64 = 292;
+const FID_ST_HAS_ARC_ACC: u64 = 293;
+const FID_ST_POINTS: u64 = 294;
+const FID_ST_BOUNDING_DIAGONAL: u64 = 295;
+const FID_ST_EXPAND: u64 = 296;
+const FID_ST_COLLECTION_EXTRACT: u64 = 297;
+
+// More measurements
+const FID_ST_CLOSEST_POINT: u64 = 320;
+const FID_ST_CLOSEST_POINT_3D: u64 = 321;
+const FID_ST_SHORTEST_LINE: u64 = 322;
+const FID_ST_SHORTEST_LINE_3D: u64 = 323;
+const FID_ST_LONGEST_LINE: u64 = 324;
+const FID_ST_LONGEST_LINE_3D: u64 = 325;
+const FID_ST_AZIMUTH: u64 = 326;
+const FID_ST_ANGLE: u64 = 327;
+const FID_ST_MIN_CLEARANCE: u64 = 328;
+const FID_ST_MIN_CLEARANCE_LINE: u64 = 329;
+const FID_ST_DISTANCE_CPA: u64 = 330;
+const FID_ST_DISTANCE_SPHEROID: u64 = 331;
+const FID_ST_LENGTH_SPHEROID: u64 = 332;
+
+// More predicates
+const FID_ST_DWITHIN: u64 = 360;
+const FID_ST_DWITHIN_3D: u64 = 361;
+const FID_ST_DFULLY_WITHIN: u64 = 362;
+const FID_ST_EQUALS_EXACT: u64 = 363;
+const FID_ST_RELATE: u64 = 364;
+const FID_ST_RELATE_MATCH: u64 = 365;
+const FID_ST_ORDERING_EQUALS: u64 = 366;
+const FID_ST_HAS_Z: u64 = 367;
+const FID_ST_HAS_M: u64 = 368;
+const FID_ST_IS_POLYGON_CW: u64 = 369;
+const FID_ST_IS_POLYGON_CCW: u64 = 370;
+const FID_ST_IS_VALID_TRAJECTORY: u64 = 371;
+const FID_ST_POINT_INSIDE_CIRCLE: u64 = 372;
+const FID_ST_CONTAINS_3D: u64 = 373;
+const FID_ST_CPA_WITHIN: u64 = 374;
+
+// More processing
+const FID_ST_CHAIKIN_SMOOTHING: u64 = 400;
+const FID_ST_FORCE_RHR: u64 = 401;
+const FID_ST_NORMALIZE: u64 = 402;
+const FID_ST_REMOVE_REPEATED_POINTS: u64 = 403;
+const FID_ST_SNAP_TO_GRID: u64 = 404;
+const FID_ST_SNAP: u64 = 405;
+const FID_ST_REDUCE_PRECISION: u64 = 406;
+const FID_ST_LINE_MERGE_DIRECTED: u64 = 407;
+const FID_ST_OFFSET_CURVE: u64 = 408;
+const FID_ST_SHARED_PATHS: u64 = 409;
+const FID_ST_VORONOI_POLYGONS: u64 = 410;
+const FID_ST_VORONOI_LINES: u64 = 411;
+const FID_ST_DELAUNAY_TRIANGLES: u64 = 412;
+const FID_ST_CONSTRAINED_DELAUNAY: u64 = 413;
+const FID_ST_GENERATE_POINTS: u64 = 414;
+const FID_ST_SEGMENTIZE: u64 = 415;
+const FID_ST_FORCE_POLYGON_CW: u64 = 416;
+const FID_ST_FORCE_POLYGON_CCW: u64 = 417;
+const FID_ST_SPLIT: u64 = 418;
+const FID_ST_NODE: u64 = 419;
+const FID_ST_POLYGONIZE: u64 = 420;
+const FID_ST_BUILD_AREA: u64 = 421;
+const FID_ST_CLIP_BY_BOX2D: u64 = 422;
+const FID_ST_GEOMETRIC_MEDIAN: u64 = 423;
+const FID_ST_MIN_BOUNDING_RADIUS: u64 = 424;
+const FID_ST_MEM_UNION: u64 = 425;
+const FID_ST_MAX_INSCRIBED_CIRCLE: u64 = 426;
+const FID_ST_NUM_CURVES: u64 = 427;
+const FID_ST_LINE_TO_CURVE: u64 = 428;
+const FID_ST_FORCE_CURVE: u64 = 429;
+const FID_ST_TRIANGULATE_POLYGON: u64 = 430;
+
+// More output
+const FID_ST_AS_TWKB: u64 = 460;
+const FID_ST_AS_ENCODED_POLYLINE: u64 = 461;
+const FID_ST_AS_LAT_LON_TEXT: u64 = 462;
+
+// Transformations
+const FID_ST_TRANSLATE: u64 = 500;
+const FID_ST_SCALE: u64 = 501;
+const FID_ST_TRANSSCALE: u64 = 502;
+const FID_ST_ROTATE: u64 = 503;
+const FID_ST_ROTATE_X: u64 = 504;
+const FID_ST_ROTATE_Y: u64 = 505;
+const FID_ST_ROTATE_Z: u64 = 506;
+const FID_ST_AFFINE: u64 = 507;
+const FID_ST_SWAP_ORDINATES: u64 = 508;
+const FID_ST_FORCE_3DZ: u64 = 509;
+const FID_ST_FORCE_3DM: u64 = 510;
+const FID_ST_FORCE_4D: u64 = 511;
+const FID_ST_FORCE_COLLECTION: u64 = 512;
+const FID_ST_SHIFT_LONGITUDE: u64 = 513;
+const FID_ST_WRAP_X: u64 = 514;
+const FID_ST_QUANTIZE_COORDS: u64 = 515;
+const FID_ST_FORCE_SFS: u64 = 516;
+const FID_ST_TRANSFORM: u64 = 517;
+const FID_ST_TRANSFORM_PIPELINE: u64 = 518;
+const FID_ST_INV_TRANSFORM_PIPELINE: u64 = 519;
+
+// Linear-ref
+const FID_ST_LINE_INTERPOLATE_POINT: u64 = 540;
+const FID_ST_LINE_INTERPOLATE_POINTS: u64 = 541;
+const FID_ST_LINE_LOCATE_POINT: u64 = 542;
+const FID_ST_LINE_SUBSTRING: u64 = 543;
+const FID_ST_ADD_POINT: u64 = 544;
+const FID_ST_SET_POINT: u64 = 545;
+const FID_ST_REMOVE_POINT: u64 = 546;
+const FID_ST_ADD_MEASURE: u64 = 547;
+const FID_ST_LOCATE_ALONG: u64 = 548;
+const FID_ST_LOCATE_BETWEEN: u64 = 549;
+const FID_ST_LINE_EXTEND: u64 = 550;
+const FID_ST_LINE_CROSSING_DIRECTION: u64 = 551;
+const FID_ST_LINE_INTERPOLATE_POINT_3D: u64 = 552;
+const FID_ST_LOCATE_BETWEEN_ELEVATIONS: u64 = 553;
+
+// Three-d
+const FID_ST_REVERSE_3D: u64 = 580;
+const FID_ST_CENTROID_3D: u64 = 581;
+const FID_ST_ENVELOPE_3D: u64 = 582;
+const FID_ST_BOUNDARY_3D: u64 = 583;
+
+// More constructors (parsers)
+const FID_ST_LINE_FROM_TEXT: u64 = 600;
+const FID_ST_POLYGON_FROM_TEXT: u64 = 601;
+const FID_ST_MPOINT_FROM_TEXT: u64 = 602;
+const FID_ST_MLINE_FROM_TEXT: u64 = 603;
+const FID_ST_MPOLY_FROM_TEXT: u64 = 604;
+const FID_ST_GEOMCOLL_FROM_TEXT: u64 = 605;
+const FID_ST_GEOM_FROM_EWKB: u64 = 606;
+const FID_ST_GEOM_FROM_HEXEWKB: u64 = 607;
+const FID_ST_GEOM_FROM_GEOHASH: u64 = 608;
+const FID_ST_POINT_FROM_GEOHASH: u64 = 609;
+const FID_ST_GEOM_FROM_KML: u64 = 610;
+const FID_ST_GEOM_FROM_GML: u64 = 611;
+const FID_ST_GEOM_FROM_TWKB: u64 = 612;
+const FID_ST_LINE_FROM_ENCODED_POLY: u64 = 613;
 
 // Aggregate function ids (separate namespace, but kept distinct
 // from scalar ids for clarity).
@@ -313,6 +466,139 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_AS_X3D, "st_asx3d", 1),
                 s(FID_ST_SUMMARY, "st_summary", 1),
                 s(FID_ST_GEOHASH, "st_geohash", 1),
+                // v2 batch
+                s(FID_ST_Z, "st_z", 1),
+                s(FID_ST_M, "st_m", 1),
+                s(FID_ST_ZMIN, "st_zmin", 1),
+                s(FID_ST_ZMAX, "st_zmax", 1),
+                s(FID_ST_MMIN, "st_mmin", 1),
+                s(FID_ST_MMAX, "st_mmax", 1),
+                s(FID_ST_NRINGS, "st_nrings", 1),
+                s(FID_ST_DIMENSION, "st_dimension", 1),
+                s(FID_ST_COORD_DIM, "st_coorddim", 1),
+                s(FID_ST_NDIMS, "st_ndims", 1),
+                s(FID_ST_ZMFLAG, "st_zmflag", 1),
+                s(FID_ST_MEM_SIZE, "st_memsize", 1),
+                s(FID_ST_IS_COLLECTION, "st_iscollection", 1),
+                s(FID_ST_HAS_ARC_ACC, "st_hasarc", 1),
+                s(FID_ST_POINTS, "st_points", 1),
+                s(FID_ST_BOUNDING_DIAGONAL, "st_boundingdiagonal", 1),
+                s(FID_ST_EXPAND, "st_expand", 2),
+                s(FID_ST_COLLECTION_EXTRACT, "st_collectionextract", 2),
+                s(FID_ST_CLOSEST_POINT, "st_closestpoint", 2),
+                s(FID_ST_CLOSEST_POINT_3D, "st_3dclosestpoint", 2),
+                s(FID_ST_SHORTEST_LINE, "st_shortestline", 2),
+                s(FID_ST_SHORTEST_LINE_3D, "st_3dshortestline", 2),
+                s(FID_ST_LONGEST_LINE, "st_longestline", 2),
+                s(FID_ST_LONGEST_LINE_3D, "st_3dlongestline", 2),
+                s(FID_ST_AZIMUTH, "st_azimuth", 2),
+                s(FID_ST_ANGLE, "st_angle", 3),
+                s(FID_ST_MIN_CLEARANCE, "st_minimumclearance", 1),
+                s(FID_ST_MIN_CLEARANCE_LINE, "st_minimumclearanceline", 1),
+                s(FID_ST_DISTANCE_CPA, "st_distancecpa", 2),
+                s(FID_ST_DISTANCE_SPHEROID, "st_distancespheroid", 2),
+                s(FID_ST_LENGTH_SPHEROID, "st_lengthspheroid", 1),
+                s(FID_ST_DWITHIN, "st_dwithin", 3),
+                s(FID_ST_DWITHIN_3D, "st_3ddwithin", 3),
+                s(FID_ST_DFULLY_WITHIN, "st_dfullywithin", 3),
+                s(FID_ST_EQUALS_EXACT, "st_equalsexact", 3),
+                s(FID_ST_RELATE, "st_relate", 2),
+                s(FID_ST_RELATE_MATCH, "st_relatematch", 3),
+                s(FID_ST_ORDERING_EQUALS, "st_orderingequals", 2),
+                s(FID_ST_HAS_Z, "st_hasz", 1),
+                s(FID_ST_HAS_M, "st_hasm", 1),
+                s(FID_ST_IS_POLYGON_CW, "st_ispolygoncw", 1),
+                s(FID_ST_IS_POLYGON_CCW, "st_ispolygonccw", 1),
+                s(FID_ST_IS_VALID_TRAJECTORY, "st_isvalidtrajectory", 1),
+                s(FID_ST_POINT_INSIDE_CIRCLE, "st_pointinsidecircle", 4),
+                s(FID_ST_CONTAINS_3D, "st_3dcontains", 2),
+                s(FID_ST_CPA_WITHIN, "st_cpawithin", 3),
+                s(FID_ST_CHAIKIN_SMOOTHING, "st_chaikinsmoothing", 2),
+                s(FID_ST_FORCE_RHR, "st_forcerhr", 1),
+                s(FID_ST_NORMALIZE, "st_normalize", 1),
+                s(FID_ST_REMOVE_REPEATED_POINTS, "st_removerepeatedpoints", 1),
+                s(FID_ST_SNAP_TO_GRID, "st_snaptogrid", 2),
+                s(FID_ST_SNAP, "st_snap", 3),
+                s(FID_ST_REDUCE_PRECISION, "st_reduceprecision", 2),
+                s(FID_ST_LINE_MERGE_DIRECTED, "st_linemergedirected", 2),
+                s(FID_ST_OFFSET_CURVE, "st_offsetcurve", 2),
+                s(FID_ST_SHARED_PATHS, "st_sharedpaths", 2),
+                s(FID_ST_VORONOI_POLYGONS, "st_voronoipolygons", 2),
+                s(FID_ST_VORONOI_LINES, "st_voronoilines", 2),
+                s(FID_ST_DELAUNAY_TRIANGLES, "st_delaunaytriangles", 2),
+                s(FID_ST_CONSTRAINED_DELAUNAY, "st_constraineddelaunaytriangles", 1),
+                s(FID_ST_GENERATE_POINTS, "st_generatepoints", 2),
+                s(FID_ST_SEGMENTIZE, "st_segmentize", 2),
+                s(FID_ST_FORCE_POLYGON_CW, "st_forcepolygoncw", 1),
+                s(FID_ST_FORCE_POLYGON_CCW, "st_forcepolygonccw", 1),
+                s(FID_ST_SPLIT, "st_split", 2),
+                s(FID_ST_NODE, "st_node", 1),
+                s(FID_ST_POLYGONIZE, "st_polygonize", 1),
+                s(FID_ST_BUILD_AREA, "st_buildarea", 1),
+                s(FID_ST_CLIP_BY_BOX2D, "st_clipbybox2d", 5),
+                s(FID_ST_GEOMETRIC_MEDIAN, "st_geometricmedian", 1),
+                s(FID_ST_MIN_BOUNDING_RADIUS, "st_minimumboundingradius", 1),
+                s(FID_ST_MEM_UNION, "st_memunion", 1),
+                s(FID_ST_MAX_INSCRIBED_CIRCLE, "st_maximuminscribedcircle", 1),
+                s(FID_ST_NUM_CURVES, "st_numcurves", 1),
+                s(FID_ST_LINE_TO_CURVE, "st_linetocurve", 1),
+                s(FID_ST_FORCE_CURVE, "st_forcecurve", 1),
+                s(FID_ST_TRIANGULATE_POLYGON, "st_triangulatepolygon", 1),
+                s(FID_ST_AS_TWKB, "st_astwkb", 1),
+                s(FID_ST_AS_ENCODED_POLYLINE, "st_asencodedpolyline", 1),
+                s(FID_ST_AS_LAT_LON_TEXT, "st_aslatlontext", 1),
+                s(FID_ST_TRANSLATE, "st_translate", 3),
+                s(FID_ST_SCALE, "st_scale", 3),
+                s(FID_ST_TRANSSCALE, "st_transscale", 5),
+                s(FID_ST_ROTATE, "st_rotate", 2),
+                s(FID_ST_ROTATE_X, "st_rotatex", 2),
+                s(FID_ST_ROTATE_Y, "st_rotatey", 2),
+                s(FID_ST_ROTATE_Z, "st_rotatez", 2),
+                s(FID_ST_AFFINE, "st_affine", 7),
+                s(FID_ST_SWAP_ORDINATES, "st_swapordinates", 2),
+                s(FID_ST_FORCE_3DZ, "st_force3dz", 1),
+                s(FID_ST_FORCE_3DM, "st_force3dm", 1),
+                s(FID_ST_FORCE_4D, "st_force4d", 1),
+                s(FID_ST_FORCE_COLLECTION, "st_forcecollection", 1),
+                s(FID_ST_SHIFT_LONGITUDE, "st_shiftlongitude", 1),
+                s(FID_ST_WRAP_X, "st_wrapx", 3),
+                s(FID_ST_QUANTIZE_COORDS, "st_quantizecoordinates", 3),
+                s(FID_ST_FORCE_SFS, "st_forcesfs", 1),
+                s(FID_ST_TRANSFORM, "st_transform", 2),
+                s(FID_ST_TRANSFORM_PIPELINE, "st_transformpipeline", 2),
+                s(FID_ST_INV_TRANSFORM_PIPELINE, "st_inversetransformpipeline", 2),
+                s(FID_ST_LINE_INTERPOLATE_POINT, "st_lineinterpolatepoint", 2),
+                s(FID_ST_LINE_INTERPOLATE_POINTS, "st_lineinterpolatepoints", 3),
+                s(FID_ST_LINE_LOCATE_POINT, "st_linelocatepoint", 2),
+                s(FID_ST_LINE_SUBSTRING, "st_linesubstring", 3),
+                s(FID_ST_ADD_POINT, "st_addpoint", 2),
+                s(FID_ST_SET_POINT, "st_setpoint", 3),
+                s(FID_ST_REMOVE_POINT, "st_removepoint", 2),
+                s(FID_ST_ADD_MEASURE, "st_addmeasure", 3),
+                s(FID_ST_LOCATE_ALONG, "st_locatealong", 2),
+                s(FID_ST_LOCATE_BETWEEN, "st_locatebetween", 3),
+                s(FID_ST_LINE_EXTEND, "st_lineextend", 3),
+                s(FID_ST_LINE_CROSSING_DIRECTION, "st_linecrossingdirection", 2),
+                s(FID_ST_LINE_INTERPOLATE_POINT_3D, "st_3dlineinterpolatepoint", 2),
+                s(FID_ST_LOCATE_BETWEEN_ELEVATIONS, "st_locatebetweenelevations", 3),
+                s(FID_ST_REVERSE_3D, "st_3dreverse", 1),
+                s(FID_ST_CENTROID_3D, "st_3dcentroid", 1),
+                s(FID_ST_ENVELOPE_3D, "st_3denvelope", 1),
+                s(FID_ST_BOUNDARY_3D, "st_3dboundary", 1),
+                s(FID_ST_LINE_FROM_TEXT, "st_linefromtext", 1),
+                s(FID_ST_POLYGON_FROM_TEXT, "st_polygonfromtext", 1),
+                s(FID_ST_MPOINT_FROM_TEXT, "st_mpointfromtext", 1),
+                s(FID_ST_MLINE_FROM_TEXT, "st_mlinefromtext", 1),
+                s(FID_ST_MPOLY_FROM_TEXT, "st_mpolyfromtext", 1),
+                s(FID_ST_GEOMCOLL_FROM_TEXT, "st_geomcollfromtext", 1),
+                s(FID_ST_GEOM_FROM_EWKB, "st_geomfromewkb", 1),
+                s(FID_ST_GEOM_FROM_HEXEWKB, "st_geomfromhexewkb", 1),
+                s(FID_ST_GEOM_FROM_GEOHASH, "st_geomfromgeohash", 1),
+                s(FID_ST_POINT_FROM_GEOHASH, "st_pointfromgeohash", 1),
+                s(FID_ST_GEOM_FROM_KML, "st_geomfromkml", 1),
+                s(FID_ST_GEOM_FROM_GML, "st_geomfromgml", 1),
+                s(FID_ST_GEOM_FROM_TWKB, "st_geomfromtwkb", 1),
+                s(FID_ST_LINE_FROM_ENCODED_POLY, "st_linefromencodedpolyline", 1),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -543,6 +829,124 @@ macro_rules! gd_to_geom {
         let r = $module::$fn(&g, d)
             .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Blob(r.as_wkb()))
+    }};
+}
+
+/// f(geom, f64, f64) -> Result<geometry>  translate/scale shape.
+macro_rules! gff_to_geom {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        let a = arg_f64(&$args, 1, $name)?;
+        let b = arg_f64(&$args, 2, $name)?;
+        let r = $module::$fn(&g, a, b)
+            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        Ok(SqlValue::Blob(r.as_wkb()))
+    }};
+}
+
+/// f(g1, g2, f64) -> Result<bool>  dwithin shape.
+macro_rules! ggd_to_bool {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
+        let d = arg_f64(&$args, 2, $name)?;
+        let r = $module::$fn(&a, &b, d)
+            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        Ok(SqlValue::Integer(r as i64))
+    }};
+}
+
+/// f(g1, g2, f64) -> Result<geometry>  snap shape.
+macro_rules! ggd_to_geom {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
+        let d = arg_f64(&$args, 2, $name)?;
+        let r = $module::$fn(&a, &b, d)
+            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        Ok(SqlValue::Blob(r.as_wkb()))
+    }};
+}
+
+/// f(g1, g2) -> Result<string>  st_relate.
+macro_rules! gg_to_string_result {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
+        let r = $module::$fn(&a, &b)
+            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        Ok(SqlValue::Text(r))
+    }};
+}
+
+/// f(g1, g2) -> Result<f64>  distance variants.
+macro_rules! gg_to_f64_inf {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
+        Ok(SqlValue::Real($module::$fn(&a, &b)))
+    }};
+}
+
+/// f(geom) -> bool  infallible has_*.
+macro_rules! g_to_bool_inf {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        Ok(SqlValue::Integer($module::$fn(&g) as i64))
+    }};
+}
+
+/// f(geom) -> Result<bool>  is_polygon_cw etc.
+macro_rules! g_to_bool_result {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        let r = $module::$fn(&g)
+            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        Ok(SqlValue::Integer(r as i64))
+    }};
+}
+
+/// f(geom) -> u32  ndims / coord-dim.
+macro_rules! g_to_u32 {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        Ok(SqlValue::Integer($module::$fn(&g) as i64))
+    }};
+}
+
+/// f(geom) -> s32  dimension.
+macro_rules! g_to_s32 {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        Ok(SqlValue::Integer($module::$fn(&g) as i64))
+    }};
+}
+
+/// f(geom) -> u64  mem_size.
+macro_rules! g_to_u64 {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
+        Ok(SqlValue::Integer($module::$fn(&g) as i64))
+    }};
+}
+
+/// f(wkt) -> Result<geometry>  parsers.
+macro_rules! text_to_geom {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let t = arg_text(&$args, 0, $name)?;
+        let g = $module::$fn(t)
+            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        Ok(SqlValue::Blob(g.as_wkb()))
+    }};
+}
+
+/// f(wkb) -> Result<geometry>  WKB parsers.
+macro_rules! blob_to_geom {
+    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
+        let b = arg_blob(&$args, 0, $name)?;
+        let g = $module::$fn(b)
+            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        Ok(SqlValue::Blob(g.as_wkb()))
     }};
 }
 
@@ -790,6 +1194,426 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let s = pg_out::st_geohash(&g, None)
                     .map_err(|e| format!("st_geohash: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Text(s))
+            }
+
+            // ── v2 batch (accessors) ──
+            FID_ST_Z => {
+                let g = from_wkb(arg_blob(&args, 0, "st_z")?, "st_z")?;
+                Ok(match pg_acc::st_z(&g)
+                    .map_err(|e| format!("st_z: {}", postgis_err_string(e)))?
+                {
+                    Some(z) => SqlValue::Real(z),
+                    None => SqlValue::Null,
+                })
+            }
+            FID_ST_M => {
+                let g = from_wkb(arg_blob(&args, 0, "st_m")?, "st_m")?;
+                Ok(match pg_acc::st_m(&g)
+                    .map_err(|e| format!("st_m: {}", postgis_err_string(e)))?
+                {
+                    Some(z) => SqlValue::Real(z),
+                    None => SqlValue::Null,
+                })
+            }
+            FID_ST_ZMIN => {
+                let g = from_wkb(arg_blob(&args, 0, "st_zmin")?, "st_zmin")?;
+                Ok(match pg_acc::st_zmin(&g)
+                    .map_err(|e| format!("st_zmin: {}", postgis_err_string(e)))?
+                {
+                    Some(z) => SqlValue::Real(z),
+                    None => SqlValue::Null,
+                })
+            }
+            FID_ST_ZMAX => {
+                let g = from_wkb(arg_blob(&args, 0, "st_zmax")?, "st_zmax")?;
+                Ok(match pg_acc::st_zmax(&g)
+                    .map_err(|e| format!("st_zmax: {}", postgis_err_string(e)))?
+                {
+                    Some(z) => SqlValue::Real(z),
+                    None => SqlValue::Null,
+                })
+            }
+            FID_ST_MMIN => {
+                let g = from_wkb(arg_blob(&args, 0, "st_mmin")?, "st_mmin")?;
+                Ok(match pg_acc::st_mmin(&g)
+                    .map_err(|e| format!("st_mmin: {}", postgis_err_string(e)))?
+                {
+                    Some(z) => SqlValue::Real(z),
+                    None => SqlValue::Null,
+                })
+            }
+            FID_ST_MMAX => {
+                let g = from_wkb(arg_blob(&args, 0, "st_mmax")?, "st_mmax")?;
+                Ok(match pg_acc::st_mmax(&g)
+                    .map_err(|e| format!("st_mmax: {}", postgis_err_string(e)))?
+                {
+                    Some(z) => SqlValue::Real(z),
+                    None => SqlValue::Null,
+                })
+            }
+            FID_ST_NRINGS => g_to_int!(args, "st_nrings", pg_acc::st_nrings),
+            FID_ST_DIMENSION => g_to_s32!(args, "st_dimension", pg_acc::st_dimension),
+            FID_ST_COORD_DIM => g_to_u32!(args, "st_coorddim", pg_acc::st_coord_dim),
+            FID_ST_NDIMS => g_to_u32!(args, "st_ndims", pg_acc::st_ndims),
+            FID_ST_ZMFLAG => g_to_u32!(args, "st_zmflag", pg_acc::st_zmflag),
+            FID_ST_MEM_SIZE => g_to_u64!(args, "st_memsize", pg_acc::st_mem_size),
+            FID_ST_IS_COLLECTION => g_to_bool_inf!(args, "st_iscollection", pg_acc::st_is_collection),
+            FID_ST_HAS_ARC_ACC => g_to_bool_inf!(args, "st_hasarc", pg_acc::st_has_arc),
+            FID_ST_POINTS => {
+                let g = from_wkb(arg_blob(&args, 0, "st_points")?, "st_points")?;
+                Ok(SqlValue::Blob(pg_acc::st_points(&g).as_wkb()))
+            }
+            FID_ST_BOUNDING_DIAGONAL => g_to_geom!(args, "st_boundingdiagonal", pg_acc::st_bounding_diagonal),
+            FID_ST_EXPAND => gd_to_geom!(args, "st_expand", pg_acc::st_expand),
+            FID_ST_COLLECTION_EXTRACT => {
+                let g = from_wkb(arg_blob(&args, 0, "st_collectionextract")?, "st_collectionextract")?;
+                let n = arg_i64(&args, 1, "st_collectionextract")? as u32;
+                let r = pg_acc::st_collection_extract(&g, n)
+                    .map_err(|e| format!("st_collectionextract: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+
+            // ── v2 batch (measurements) ──
+            FID_ST_CLOSEST_POINT => gg_to_geom!(args, "st_closestpoint", pg_meas::st_closest_point),
+            FID_ST_CLOSEST_POINT_3D => gg_to_geom!(args, "st_3dclosestpoint", pg_meas::st_closest_point_threed),
+            FID_ST_SHORTEST_LINE => gg_to_geom!(args, "st_shortestline", pg_meas::st_shortest_line),
+            FID_ST_SHORTEST_LINE_3D => gg_to_geom!(args, "st_3dshortestline", pg_meas::st_shortest_line_threed),
+            FID_ST_LONGEST_LINE => gg_to_geom!(args, "st_longestline", pg_meas::st_longest_line),
+            FID_ST_LONGEST_LINE_3D => gg_to_geom!(args, "st_3dlongestline", pg_meas::st_longest_line_threed),
+            FID_ST_AZIMUTH => gg_to_f64!(args, "st_azimuth", pg_meas::st_azimuth),
+            FID_ST_ANGLE => {
+                let a = from_wkb(arg_blob(&args, 0, "st_angle")?, "st_angle")?;
+                let b = from_wkb(arg_blob(&args, 1, "st_angle")?, "st_angle")?;
+                let c = from_wkb(arg_blob(&args, 2, "st_angle")?, "st_angle")?;
+                let r = pg_meas::st_angle(&a, &b, &c)
+                    .map_err(|e| format!("st_angle: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Real(r))
+            }
+            FID_ST_MIN_CLEARANCE => g_to_f64!(args, "st_minimumclearance", pg_meas::st_minimum_clearance),
+            FID_ST_MIN_CLEARANCE_LINE => g_to_geom!(args, "st_minimumclearanceline", pg_meas::st_minimum_clearance_line),
+            FID_ST_DISTANCE_CPA => gg_to_f64!(args, "st_distancecpa", pg_meas::st_distance_cpa),
+            FID_ST_DISTANCE_SPHEROID => gg_to_f64!(args, "st_distancespheroid", pg_meas::st_distance_spheroid),
+            FID_ST_LENGTH_SPHEROID => g_to_f64!(args, "st_lengthspheroid", pg_meas::st_length_spheroid),
+
+            // ── v2 batch (predicates) ──
+            FID_ST_DWITHIN => ggd_to_bool!(args, "st_dwithin", pg_pred::st_dwithin),
+            FID_ST_DWITHIN_3D => ggd_to_bool!(args, "st_3ddwithin", pg_pred::st_dwithin_threed),
+            FID_ST_DFULLY_WITHIN => ggd_to_bool!(args, "st_dfullywithin", pg_pred::st_dfully_within),
+            FID_ST_EQUALS_EXACT => ggd_to_bool!(args, "st_equalsexact", pg_pred::st_equals_exact),
+            FID_ST_RELATE => gg_to_string_result!(args, "st_relate", pg_pred::st_relate),
+            FID_ST_RELATE_MATCH => {
+                let a = from_wkb(arg_blob(&args, 0, "st_relatematch")?, "st_relatematch")?;
+                let b = from_wkb(arg_blob(&args, 1, "st_relatematch")?, "st_relatematch")?;
+                let p = arg_text(&args, 2, "st_relatematch")?;
+                let r = pg_pred::st_relate_match(&a, &b, p)
+                    .map_err(|e| format!("st_relatematch: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Integer(r as i64))
+            }
+            FID_ST_ORDERING_EQUALS => {
+                let a = from_wkb(arg_blob(&args, 0, "st_orderingequals")?, "st_orderingequals")?;
+                let b = from_wkb(arg_blob(&args, 1, "st_orderingequals")?, "st_orderingequals")?;
+                Ok(SqlValue::Integer(pg_pred::st_ordering_equals(&a, &b) as i64))
+            }
+            FID_ST_HAS_Z => g_to_bool_inf!(args, "st_hasz", pg_pred::st_has_z),
+            FID_ST_HAS_M => g_to_bool_inf!(args, "st_hasm", pg_pred::st_has_m),
+            FID_ST_IS_POLYGON_CW => g_to_bool_result!(args, "st_ispolygoncw", pg_pred::st_is_polygon_cw),
+            FID_ST_IS_POLYGON_CCW => g_to_bool_result!(args, "st_ispolygonccw", pg_pred::st_is_polygon_ccw),
+            FID_ST_IS_VALID_TRAJECTORY => g_to_bool_result!(args, "st_isvalidtrajectory", pg_pred::st_is_valid_trajectory),
+            FID_ST_POINT_INSIDE_CIRCLE => {
+                let p = from_wkb(arg_blob(&args, 0, "st_pointinsidecircle")?, "st_pointinsidecircle")?;
+                let cx = arg_f64(&args, 1, "st_pointinsidecircle")?;
+                let cy = arg_f64(&args, 2, "st_pointinsidecircle")?;
+                let r = arg_f64(&args, 3, "st_pointinsidecircle")?;
+                Ok(SqlValue::Integer(
+                    pg_pred::st_point_inside_circle(&p, cx, cy, r) as i64,
+                ))
+            }
+            FID_ST_CONTAINS_3D => gg_to_bool!(args, "st_3dcontains", pg_pred::st_contains_threed),
+            FID_ST_CPA_WITHIN => ggd_to_bool!(args, "st_cpawithin", pg_pred::st_cpa_within),
+
+            // ── v2 batch (processing) ──
+            FID_ST_CHAIKIN_SMOOTHING => {
+                let g = from_wkb(arg_blob(&args, 0, "st_chaikinsmoothing")?, "st_chaikinsmoothing")?;
+                let n = arg_i64(&args, 1, "st_chaikinsmoothing")? as u32;
+                let r = pg_proc::st_chaikin_smoothing(&g, n)
+                    .map_err(|e| format!("st_chaikinsmoothing: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_FORCE_RHR => g_to_geom!(args, "st_forcerhr", pg_proc::st_force_rhr),
+            FID_ST_NORMALIZE => g_to_geom!(args, "st_normalize", pg_proc::st_normalize),
+            FID_ST_REMOVE_REPEATED_POINTS => {
+                let g = from_wkb(arg_blob(&args, 0, "st_removerepeatedpoints")?, "st_removerepeatedpoints")?;
+                let r = pg_proc::st_remove_repeated_points(&g, None)
+                    .map_err(|e| format!("st_removerepeatedpoints: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_SNAP_TO_GRID => gd_to_geom!(args, "st_snaptogrid", pg_proc::st_snap_to_grid),
+            FID_ST_SNAP => ggd_to_geom!(args, "st_snap", pg_proc::st_snap),
+            FID_ST_REDUCE_PRECISION => gd_to_geom!(args, "st_reduceprecision", pg_proc::st_reduce_precision),
+            FID_ST_LINE_MERGE_DIRECTED => {
+                let g = from_wkb(arg_blob(&args, 0, "st_linemergedirected")?, "st_linemergedirected")?;
+                let d = arg_i64(&args, 1, "st_linemergedirected")? != 0;
+                let r = pg_proc::st_line_merge_directed(&g, d)
+                    .map_err(|e| format!("st_linemergedirected: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_OFFSET_CURVE => gd_to_geom!(args, "st_offsetcurve", pg_proc::st_offset_curve),
+            FID_ST_SHARED_PATHS => gg_to_geom!(args, "st_sharedpaths", pg_proc::st_shared_paths),
+            FID_ST_VORONOI_POLYGONS => gd_to_geom!(args, "st_voronoipolygons", pg_proc::st_voronoi_polygons),
+            FID_ST_VORONOI_LINES => gd_to_geom!(args, "st_voronoilines", pg_proc::st_voronoi_lines),
+            FID_ST_DELAUNAY_TRIANGLES => gd_to_geom!(args, "st_delaunaytriangles", pg_proc::st_delaunay_triangles),
+            FID_ST_CONSTRAINED_DELAUNAY => g_to_geom!(args, "st_constraineddelaunaytriangles", pg_proc::st_constrained_delaunay_triangles),
+            FID_ST_GENERATE_POINTS => {
+                let g = from_wkb(arg_blob(&args, 0, "st_generatepoints")?, "st_generatepoints")?;
+                let n = arg_i64(&args, 1, "st_generatepoints")? as u32;
+                let r = pg_proc::st_generate_points(&g, n)
+                    .map_err(|e| format!("st_generatepoints: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_SEGMENTIZE => gd_to_geom!(args, "st_segmentize", pg_proc::st_segmentize),
+            FID_ST_FORCE_POLYGON_CW => g_to_geom!(args, "st_forcepolygoncw", pg_proc::st_force_polygon_cw),
+            FID_ST_FORCE_POLYGON_CCW => g_to_geom!(args, "st_forcepolygonccw", pg_proc::st_force_polygon_ccw),
+            FID_ST_SPLIT => gg_to_geom!(args, "st_split", pg_proc::st_split),
+            FID_ST_NODE => g_to_geom!(args, "st_node", pg_proc::st_node),
+            FID_ST_POLYGONIZE => g_to_geom!(args, "st_polygonize", pg_proc::st_polygonize),
+            FID_ST_BUILD_AREA => g_to_geom!(args, "st_buildarea", pg_proc::st_build_area),
+            FID_ST_CLIP_BY_BOX2D => {
+                let g = from_wkb(arg_blob(&args, 0, "st_clipbybox2d")?, "st_clipbybox2d")?;
+                let xmin = arg_f64(&args, 1, "st_clipbybox2d")?;
+                let ymin = arg_f64(&args, 2, "st_clipbybox2d")?;
+                let xmax = arg_f64(&args, 3, "st_clipbybox2d")?;
+                let ymax = arg_f64(&args, 4, "st_clipbybox2d")?;
+                let r = pg_proc::st_clip_by_box2d(&g, xmin, ymin, xmax, ymax)
+                    .map_err(|e| format!("st_clipbybox2d: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_GEOMETRIC_MEDIAN => g_to_geom!(args, "st_geometricmedian", pg_proc::st_geometric_median),
+            FID_ST_MIN_BOUNDING_RADIUS => g_to_f64!(args, "st_minimumboundingradius", pg_proc::st_minimum_bounding_radius),
+            FID_ST_MEM_UNION => g_to_geom!(args, "st_memunion", pg_proc::st_mem_union),
+            FID_ST_MAX_INSCRIBED_CIRCLE => g_to_geom!(args, "st_maximuminscribedcircle", pg_proc::st_maximum_inscribed_circle),
+            FID_ST_NUM_CURVES => g_to_u32!(args, "st_numcurves", pg_proc::st_num_curves),
+            FID_ST_LINE_TO_CURVE => g_to_geom!(args, "st_linetocurve", pg_proc::st_line_to_curve),
+            FID_ST_FORCE_CURVE => g_to_geom!(args, "st_forcecurve", pg_proc::st_force_curve),
+            FID_ST_TRIANGULATE_POLYGON => g_to_geom!(args, "st_triangulatepolygon", pg_proc::st_triangulate_polygon),
+
+            // ── v2 batch (output) ──
+            FID_ST_AS_TWKB => {
+                let g = from_wkb(arg_blob(&args, 0, "st_astwkb")?, "st_astwkb")?;
+                let r = pg_out::st_as_twkb(&g, None)
+                    .map_err(|e| format!("st_astwkb: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r))
+            }
+            FID_ST_AS_ENCODED_POLYLINE => {
+                let g = from_wkb(arg_blob(&args, 0, "st_asencodedpolyline")?, "st_asencodedpolyline")?;
+                let r = pg_out::st_as_encoded_polyline(&g, None)
+                    .map_err(|e| format!("st_asencodedpolyline: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Text(r))
+            }
+            FID_ST_AS_LAT_LON_TEXT => {
+                let g = from_wkb(arg_blob(&args, 0, "st_aslatlontext")?, "st_aslatlontext")?;
+                let r = pg_out::st_as_lat_lon_text(&g, None)
+                    .map_err(|e| format!("st_aslatlontext: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Text(r))
+            }
+
+            // ── v2 batch (transformations) ──
+            FID_ST_TRANSLATE => gff_to_geom!(args, "st_translate", pg_xform::st_translate),
+            FID_ST_SCALE => gff_to_geom!(args, "st_scale", pg_xform::st_scale),
+            FID_ST_TRANSSCALE => {
+                let g = from_wkb(arg_blob(&args, 0, "st_transscale")?, "st_transscale")?;
+                let dx = arg_f64(&args, 1, "st_transscale")?;
+                let dy = arg_f64(&args, 2, "st_transscale")?;
+                let sx = arg_f64(&args, 3, "st_transscale")?;
+                let sy = arg_f64(&args, 4, "st_transscale")?;
+                let r = pg_xform::st_transscale(&g, dx, dy, sx, sy)
+                    .map_err(|e| format!("st_transscale: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_ROTATE => gd_to_geom!(args, "st_rotate", pg_xform::st_rotate),
+            FID_ST_ROTATE_X => gd_to_geom!(args, "st_rotatex", pg_xform::st_rotate_x),
+            FID_ST_ROTATE_Y => gd_to_geom!(args, "st_rotatey", pg_xform::st_rotate_y),
+            FID_ST_ROTATE_Z => gd_to_geom!(args, "st_rotatez", pg_xform::st_rotate_z),
+            FID_ST_AFFINE => {
+                let g = from_wkb(arg_blob(&args, 0, "st_affine")?, "st_affine")?;
+                let a = arg_f64(&args, 1, "st_affine")?;
+                let b = arg_f64(&args, 2, "st_affine")?;
+                let c = arg_f64(&args, 3, "st_affine")?;
+                let d = arg_f64(&args, 4, "st_affine")?;
+                let e = arg_f64(&args, 5, "st_affine")?;
+                let f = arg_f64(&args, 6, "st_affine")?;
+                let r = pg_xform::st_affine(&g, a, b, c, d, e, f)
+                    .map_err(|err| format!("st_affine: {}", postgis_err_string(err)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_SWAP_ORDINATES => {
+                let g = from_wkb(arg_blob(&args, 0, "st_swapordinates")?, "st_swapordinates")?;
+                let o = arg_text(&args, 1, "st_swapordinates")?;
+                let r = pg_xform::st_swap_ordinates(&g, o)
+                    .map_err(|e| format!("st_swapordinates: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_FORCE_3DZ => g_to_geom_inf!(args, "st_force3dz", pg_xform::st_force_threedz),
+            FID_ST_FORCE_3DM => g_to_geom_inf!(args, "st_force3dm", pg_xform::st_force_threedm),
+            FID_ST_FORCE_4D => g_to_geom_inf!(args, "st_force4d", pg_xform::st_force_fourd),
+            FID_ST_FORCE_COLLECTION => g_to_geom_inf!(args, "st_forcecollection", pg_xform::st_force_collection),
+            FID_ST_SHIFT_LONGITUDE => g_to_geom!(args, "st_shiftlongitude", pg_xform::st_shift_longitude),
+            FID_ST_WRAP_X => {
+                let g = from_wkb(arg_blob(&args, 0, "st_wrapx")?, "st_wrapx")?;
+                let w = arg_f64(&args, 1, "st_wrapx")?;
+                let mv = arg_f64(&args, 2, "st_wrapx")?;
+                let r = pg_xform::st_wrap_x(&g, w, mv)
+                    .map_err(|e| format!("st_wrapx: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_QUANTIZE_COORDS => {
+                let g = from_wkb(arg_blob(&args, 0, "st_quantizecoordinates")?, "st_quantizecoordinates")?;
+                let px = arg_i64(&args, 1, "st_quantizecoordinates")? as u32;
+                let py = arg_i64(&args, 2, "st_quantizecoordinates")? as u32;
+                let r = pg_xform::st_quantize_coordinates(&g, px, py)
+                    .map_err(|e| format!("st_quantizecoordinates: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_FORCE_SFS => g_to_geom!(args, "st_forcesfs", pg_xform::st_force_sfs),
+            FID_ST_TRANSFORM => {
+                let g = from_wkb(arg_blob(&args, 0, "st_transform")?, "st_transform")?;
+                let to = arg_i64(&args, 1, "st_transform")? as i32;
+                let r = pg_xform::st_transform(&g, to)
+                    .map_err(|e| format!("st_transform: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_TRANSFORM_PIPELINE => {
+                let g = from_wkb(arg_blob(&args, 0, "st_transformpipeline")?, "st_transformpipeline")?;
+                let p = arg_text(&args, 1, "st_transformpipeline")?;
+                let r = pg_xform::st_transform_pipeline(&g, p)
+                    .map_err(|e| format!("st_transformpipeline: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_INV_TRANSFORM_PIPELINE => {
+                let g = from_wkb(arg_blob(&args, 0, "st_inversetransformpipeline")?, "st_inversetransformpipeline")?;
+                let p = arg_text(&args, 1, "st_inversetransformpipeline")?;
+                let r = pg_xform::st_inverse_transform_pipeline(&g, p)
+                    .map_err(|e| format!("st_inversetransformpipeline: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+
+            // ── v2 batch (linear-ref) ──
+            FID_ST_LINE_INTERPOLATE_POINT => gd_to_geom!(args, "st_lineinterpolatepoint", pg_lin::st_line_interpolate_point),
+            FID_ST_LINE_INTERPOLATE_POINTS => {
+                let g = from_wkb(arg_blob(&args, 0, "st_lineinterpolatepoints")?, "st_lineinterpolatepoints")?;
+                let f = arg_f64(&args, 1, "st_lineinterpolatepoints")?;
+                let rep = arg_i64(&args, 2, "st_lineinterpolatepoints")? != 0;
+                let r = pg_lin::st_line_interpolate_points(&g, f, rep)
+                    .map_err(|e| format!("st_lineinterpolatepoints: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_LINE_LOCATE_POINT => gg_to_f64!(args, "st_linelocatepoint", pg_lin::st_line_locate_point),
+            FID_ST_LINE_SUBSTRING => {
+                let g = from_wkb(arg_blob(&args, 0, "st_linesubstring")?, "st_linesubstring")?;
+                let s = arg_f64(&args, 1, "st_linesubstring")?;
+                let e = arg_f64(&args, 2, "st_linesubstring")?;
+                let r = pg_lin::st_line_substring(&g, s, e)
+                    .map_err(|er| format!("st_linesubstring: {}", postgis_err_string(er)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_ADD_POINT => {
+                let l = from_wkb(arg_blob(&args, 0, "st_addpoint")?, "st_addpoint")?;
+                let p = from_wkb(arg_blob(&args, 1, "st_addpoint")?, "st_addpoint")?;
+                let r = pg_lin::st_add_point(&l, &p, None)
+                    .map_err(|e| format!("st_addpoint: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_SET_POINT => {
+                let l = from_wkb(arg_blob(&args, 0, "st_setpoint")?, "st_setpoint")?;
+                let pos = arg_i64(&args, 1, "st_setpoint")? as u32;
+                let p = from_wkb(arg_blob(&args, 2, "st_setpoint")?, "st_setpoint")?;
+                let r = pg_lin::st_set_point(&l, pos, &p)
+                    .map_err(|e| format!("st_setpoint: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_REMOVE_POINT => {
+                let l = from_wkb(arg_blob(&args, 0, "st_removepoint")?, "st_removepoint")?;
+                let pos = arg_i64(&args, 1, "st_removepoint")? as u32;
+                let r = pg_lin::st_remove_point(&l, pos)
+                    .map_err(|e| format!("st_removepoint: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_ADD_MEASURE => {
+                let g = from_wkb(arg_blob(&args, 0, "st_addmeasure")?, "st_addmeasure")?;
+                let s = arg_f64(&args, 1, "st_addmeasure")?;
+                let e = arg_f64(&args, 2, "st_addmeasure")?;
+                let r = pg_lin::st_add_measure(&g, s, e)
+                    .map_err(|er| format!("st_addmeasure: {}", postgis_err_string(er)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_LOCATE_ALONG => gd_to_geom!(args, "st_locatealong", pg_lin::st_locate_along),
+            FID_ST_LOCATE_BETWEEN => {
+                let g = from_wkb(arg_blob(&args, 0, "st_locatebetween")?, "st_locatebetween")?;
+                let s = arg_f64(&args, 1, "st_locatebetween")?;
+                let e = arg_f64(&args, 2, "st_locatebetween")?;
+                let r = pg_lin::st_locate_between(&g, s, e)
+                    .map_err(|er| format!("st_locatebetween: {}", postgis_err_string(er)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_LINE_EXTEND => {
+                let g = from_wkb(arg_blob(&args, 0, "st_lineextend")?, "st_lineextend")?;
+                let s = arg_f64(&args, 1, "st_lineextend")?;
+                let e = arg_f64(&args, 2, "st_lineextend")?;
+                let r = pg_lin::st_line_extend(&g, s, e)
+                    .map_err(|er| format!("st_lineextend: {}", postgis_err_string(er)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+            FID_ST_LINE_CROSSING_DIRECTION => {
+                let a = from_wkb(arg_blob(&args, 0, "st_linecrossingdirection")?, "st_linecrossingdirection")?;
+                let b = from_wkb(arg_blob(&args, 1, "st_linecrossingdirection")?, "st_linecrossingdirection")?;
+                let r = pg_lin::st_line_crossing_direction(&a, &b)
+                    .map_err(|e| format!("st_linecrossingdirection: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Integer(r as i64))
+            }
+            FID_ST_LINE_INTERPOLATE_POINT_3D => gd_to_geom!(args, "st_3dlineinterpolatepoint", pg_lin::st_line_interpolate_point_threed),
+            FID_ST_LOCATE_BETWEEN_ELEVATIONS => {
+                let g = from_wkb(arg_blob(&args, 0, "st_locatebetweenelevations")?, "st_locatebetweenelevations")?;
+                let zmin = arg_f64(&args, 1, "st_locatebetweenelevations")?;
+                let zmax = arg_f64(&args, 2, "st_locatebetweenelevations")?;
+                let r = pg_lin::st_locate_between_elevations(&g, zmin, zmax)
+                    .map_err(|er| format!("st_locatebetweenelevations: {}", postgis_err_string(er)))?;
+                Ok(SqlValue::Blob(r.as_wkb()))
+            }
+
+            // ── v2 batch (three-d) ──
+            FID_ST_REVERSE_3D => g_to_geom!(args, "st_3dreverse", pg_threed::st_reverse_threed),
+            FID_ST_CENTROID_3D => g_to_geom!(args, "st_3dcentroid", pg_threed::st_centroid_threed),
+            FID_ST_ENVELOPE_3D => g_to_geom!(args, "st_3denvelope", pg_threed::st_envelope_threed),
+            FID_ST_BOUNDARY_3D => g_to_geom!(args, "st_3dboundary", pg_threed::st_boundary_threed),
+
+            // ── v2 batch (more constructors) ──
+            FID_ST_LINE_FROM_TEXT => text_to_geom!(args, "st_linefromtext", pg_ctor::st_line_from_text),
+            FID_ST_POLYGON_FROM_TEXT => text_to_geom!(args, "st_polygonfromtext", pg_ctor::st_polygon_from_text),
+            FID_ST_MPOINT_FROM_TEXT => text_to_geom!(args, "st_mpointfromtext", pg_ctor::st_mpoint_from_text),
+            FID_ST_MLINE_FROM_TEXT => text_to_geom!(args, "st_mlinefromtext", pg_ctor::st_mline_from_text),
+            FID_ST_MPOLY_FROM_TEXT => text_to_geom!(args, "st_mpolyfromtext", pg_ctor::st_mpoly_from_text),
+            FID_ST_GEOMCOLL_FROM_TEXT => text_to_geom!(args, "st_geomcollfromtext", pg_ctor::st_geomcoll_from_text),
+            FID_ST_GEOM_FROM_EWKB => blob_to_geom!(args, "st_geomfromewkb", pg_ctor::st_geom_from_ewkb),
+            FID_ST_GEOM_FROM_HEXEWKB => text_to_geom!(args, "st_geomfromhexewkb", pg_ctor::st_geom_from_hexewkb),
+            FID_ST_GEOM_FROM_GEOHASH => {
+                let s = arg_text(&args, 0, "st_geomfromgeohash")?;
+                let g = pg_ctor::st_geom_from_geohash(s, None)
+                    .map_err(|e| format!("st_geomfromgeohash: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_ST_POINT_FROM_GEOHASH => {
+                let s = arg_text(&args, 0, "st_pointfromgeohash")?;
+                let g = pg_ctor::st_point_from_geohash(s, None)
+                    .map_err(|e| format!("st_pointfromgeohash: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
+            }
+            FID_ST_GEOM_FROM_KML => text_to_geom!(args, "st_geomfromkml", pg_ctor::st_geom_from_kml),
+            FID_ST_GEOM_FROM_GML => text_to_geom!(args, "st_geomfromgml", pg_ctor::st_geom_from_gml),
+            FID_ST_GEOM_FROM_TWKB => blob_to_geom!(args, "st_geomfromtwkb", pg_ctor::st_geom_from_twkb),
+            FID_ST_LINE_FROM_ENCODED_POLY => {
+                let s = arg_text(&args, 0, "st_linefromencodedpolyline")?;
+                let g = pg_ctor::st_line_from_encoded_polyline(s, None)
+                    .map_err(|e| format!("st_linefromencodedpolyline: {}", postgis_err_string(e)))?;
+                Ok(SqlValue::Blob(g.as_wkb()))
             }
 
             other => Err(format!("postgis bridge: unknown func id {other}")),
