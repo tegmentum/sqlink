@@ -1,5 +1,14 @@
 # Plan: Resolver Components + CAS Cache
 
+> **Status: shipped — both halves.** Status check 2026-06-15:
+>
+> | Half | Evidence |
+> |---|---|
+> | Resolver components | `.register-resolver SCHEME PATH` / `.unregister-resolver SCHEME` cli dot-commands (`cli/src/lib.rs:286,1298,1337`); host's `register_resolver` / `unregister_resolver` (`lib.rs:2002,2020`); `.load <scheme>://…` routes through the URI path (`load_extension_from_uri`, `host/src/lib.rs:2089`); `looks_like_uri` triages on the cli side |
+> | CAS cache | Split out into `PLAN-cas-cache.md` (commit `88653b0` closed CP8); `sqlite-cas-cache/` workspace member; full `.cache` dot-command family; v2 schema with blake3 + sha256 dual-key |
+>
+> Plan body kept intact for reference.
+
 ## Overview
 
 `.load` today takes a filesystem path only. This plan extends it so

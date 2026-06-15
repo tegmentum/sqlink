@@ -1,5 +1,23 @@
 # Plan: Compose-Orchestration Integration
 
+> **Status: CP1-CP8 shipped.** Note: the plan was authored
+> before the `.fiji` → `.run` rename (see
+> `PLAN-rust-cli-parity.md`); "Fiji functions" are what now
+> ship as "runnable components". Inventory 2026-06-15:
+>
+> | CP | What | Where |
+> |---|---|---|
+> | CP1 | compose-orchestration WIT in build | `compose::sys::compose` + `compose::compose::dynlink` bindgens (`host/src/lib.rs:157+`) |
+> | CP2 | `compose:dynlink/linker` on host | `compose::compose::dynlink::linker::Host` (`lib.rs:415+`) |
+> | CP3 | sqlite-runtime endpoint protocol | `host/COMPOSE-PROTOCOL.md` |
+> | CP4 | sqlite-runtime host provider | `compose_provider::ProviderHandle::SqliteRuntime` (`compose_provider.rs:31`) |
+> | CP5 | example runnable component | `sqlite-wasm-loader/.../fiji_hello.wasm` (sibling repo); also see `examples/rust/runnable-sqlite-demo/` |
+> | CP6 | cli recognizes runnable components | `.run` dot-command (renamed from `.fiji`) |
+> | CP7 | CAS coexistence (sha256 mirror) | commit `88653b0` — schema v2 + dual-key `lookup_by_hash` |
+> | CP8 | docs + validation | `ARCHITECTURE.md` runnable-components section (lines 55-76); `AUTHORING-RUN-COMPONENTS.md`; `host/tests/runnable_sqlite_demo.rs` end-to-end |
+>
+> Plan body kept intact for reference.
+
 ## Overview
 
 Add support for *Fiji functions* — tiny wasm components that resolve

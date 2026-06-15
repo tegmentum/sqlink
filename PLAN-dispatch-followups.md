@@ -1,5 +1,18 @@
 # Plan: Implement Open Dispatch Follow-Ups
 
+> **Status: all three follow-ups shipped.** Status check
+> 2026-06-15:
+>
+> | # | Follow-Up | Evidence |
+> |---|---|---|
+> | 1 | Aggregate dispatch (Stateful) | `Host::dispatch_aggregate_{step,finalize,value,inverse}` wired (`host/src/lib.rs:2394+`); `cached_stateful` keeps the instance live across step/finalize; bridge's `st_makeline_agg` reference test smoke-tested today |
+> | 2 | Collation dispatch | `Host::dispatch_collation` (`lib.rs:2525`); `make_loaded_collating_linker` separate from stateful per the plan's dedicated-world recommendation |
+> | 3 | Hook dispatch (authorizer + update + commit + rollback) | `dispatch_authorize` / `dispatch_on_update` / `dispatch_on_commit` / `dispatch_on_rollback` wired; `host/tests/auth_extension.rs` integration test green |
+>
+> Plan body kept intact for reference; the deferred "Follow-
+> Up 4: In-WASM SPI" was abandoned later — see
+> `host/SPI-LIVE-ARCHITECTURE.md` for the post-mortem.
+
 ## Overview
 
 Three follow-ups remain after the structural dispatch surface
