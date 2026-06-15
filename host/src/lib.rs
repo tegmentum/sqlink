@@ -721,6 +721,14 @@ pub struct LoadedExtension {
     /// inside the loaded extension — a fresh instantiation per
     /// step/finalize would reset it, so we cache and reuse.
     pub cached_stateful: Arc<tokio::sync::Mutex<Option<CachedStateful>>>,
+    /// Same pattern for the `minimal` (scalar) world. Caching
+    /// here is purely a perf win — eliminates per-call
+    /// instantiation of large bundles (e.g. ~100MB postgis).
+    /// Side benefit: bridge thread_locals (handle registries
+    /// like STRtree / TOPO_HANDLES / TOPOGEOM_HANDLES) survive
+    /// across SQL calls deterministically rather than by
+    /// accidentally-reused-Store.
+    pub cached_minimal: Arc<tokio::sync::Mutex<Option<CachedMinimal>>>,
 }
 
 /// Long-lived `Tabular`-world instance backing a vtab module.
@@ -735,6 +743,13 @@ pub struct CachedTabular {
 pub struct CachedStateful {
     pub store: wasmtime::Store<LoadedState>,
     pub instance: loaded_stateful::Stateful,
+}
+
+/// Long-lived `Minimal`-world instance backing scalar
+/// dispatch. See `LoadedExtension.cached_minimal`.
+pub struct CachedMinimal {
+    pub store: wasmtime::Store<LoadedState>,
+    pub instance: loaded::Minimal,
 }
 
 /// State carried by the per-call Store when dispatching into a
@@ -2085,6 +2100,7 @@ impl Host {
             spi_conn: Arc::new(Mutex::new(None)),
             cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
@@ -2195,6 +2211,7 @@ impl Host {
                 spi_conn: Arc::new(Mutex::new(None)),
                 cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
             }),
         );
 
@@ -2211,6 +2228,8 @@ impl Host {
         func_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+        // Look up the extension once so we can pull fuel/epoch
+        // policy off it before acquiring the cached-Store lock.
         let ext = {
             let components = self.components.read();
             components
@@ -2218,21 +2237,31 @@ impl Host {
                 .cloned()
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
-        let linker = make_loaded_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance = loaded::Minimal::instantiate_async(&mut store, &ext.component, &linker)
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name}: {e}"))?;
+        let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
+        let deadline = ext.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000);
+
+        let mut guard = self.minimal_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+
+        // Per-call budget refresh. Without this, a long-running
+        // call earlier in the connection's lifetime would shrink
+        // the budget available to later calls (the cached Store
+        // never re-runs build_loaded_store's fuel/epoch setup).
+        cached
+            .store
+            .set_fuel(fuel)
+            .map_err(|e| anyhow!("scalar set_fuel: {e}"))?;
+        cached.store.set_epoch_deadline(deadline);
 
         // The two bindgens (extension-loader-host's and loaded's)
         // produce structurally-identical but distinctly-typed
         // SqlValue variants. Hand-translate to bridge the boundary.
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
 
-        let result = instance
+        let result = cached
+            .instance
             .sqlite_extension_scalar_function()
-            .call_call(&mut store, func_id, &loaded_args)
+            .call_call(&mut cached.store, func_id, &loaded_args)
             .await
             .map_err(|e| anyhow!("call_call: {e}"))?;
         match result {
@@ -2641,6 +2670,40 @@ impl Host {
             .await
             .map_err(|e| anyhow!("vtab.rowid: {e}"))?;
         Ok(r)
+    }
+
+    /// Shared helper: look up the extension and return a locked
+    /// guard over its cached `minimal`-world Store + Instance.
+    /// Mirrors `tabular_locked` / `stateful_locked` — lazy first
+    /// instantiation, then per-extension serial reuse. Caching
+    /// here is purely a perf win for scalar dispatch (no
+    /// correctness dependency on Store identity across calls).
+    async fn minimal_locked(
+        &self,
+        ext_name: &str,
+    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedMinimal>>> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
+        let cached_arc = ext.cached_minimal.clone();
+        let mut guard = cached_arc.lock_owned().await;
+        if guard.is_none() {
+            let linker = make_loaded_linker(&self.engine)?;
+            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+            let instance = loaded::Minimal::instantiate_async(
+                &mut store,
+                &ext.component,
+                &linker,
+            )
+            .await
+            .map_err(|e| anyhow!("instantiate {ext_name} as minimal: {e}"))?;
+            *guard = Some(CachedMinimal { store, instance });
+        }
+        Ok(guard)
     }
 
     /// Shared helper: look up the extension and return a locked
