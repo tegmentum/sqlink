@@ -80,6 +80,7 @@ mod wasm_export {
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
+                vtabs: alloc::vec![],
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,

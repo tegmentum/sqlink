@@ -20,6 +20,7 @@ package sqlite:wasm@0.1.0;
 /// only fires for slots registered via the dynamic `.load` path.
 interface dispatch {
     use sqlite:extension/types@0.1.0.{sql-value, auth-action, auth-result, update-operation};
+    use sqlite:extension/vtab@0.1.0.{index-info, index-plan};
 
     /// Invoke `func-id` on the extension previously loaded under
     /// `ext-name`, with the given arguments. Errors out if no such
@@ -121,4 +122,93 @@ interface dispatch {
 
     /// Route a post-rollback notification.
     on-rollback: func(ext-name: string);
+
+    /// Vtab dispatches. The in-WASM cli registers an
+    /// `sqlite3_module` whose xCreate/xConnect/xBestIndex/etc
+    /// callbacks marshal here. `vtab-id` from the manifest +
+    /// host-assigned `instance-id` per CREATE VIRTUAL TABLE +
+    /// `cursor-id` per xOpen.
+    vtab-create: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        db-name: string,
+        table-name: string,
+        args: list<string>,
+    ) -> result<string, string>;
+
+    vtab-connect: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        db-name: string,
+        table-name: string,
+        args: list<string>,
+    ) -> result<string, string>;
+
+    vtab-destroy: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+    ) -> result<_, string>;
+
+    vtab-disconnect: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+    ) -> result<_, string>;
+
+    vtab-best-index: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        info: index-info,
+    ) -> result<index-plan, string>;
+
+    vtab-open: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        cursor-id: u64,
+    ) -> result<_, string>;
+
+    vtab-close: func(
+        ext-name: string,
+        vtab-id: u64,
+        cursor-id: u64,
+    ) -> result<_, string>;
+
+    vtab-filter: func(
+        ext-name: string,
+        vtab-id: u64,
+        cursor-id: u64,
+        idx-num: s32,
+        idx-str: option<string>,
+        args: list<sql-value>,
+    ) -> result<_, string>;
+
+    vtab-next: func(
+        ext-name: string,
+        vtab-id: u64,
+        cursor-id: u64,
+    ) -> result<_, string>;
+
+    vtab-eof: func(
+        ext-name: string,
+        vtab-id: u64,
+        cursor-id: u64,
+    ) -> bool;
+
+    vtab-column: func(
+        ext-name: string,
+        vtab-id: u64,
+        cursor-id: u64,
+        col: s32,
+    ) -> result<sql-value, string>;
+
+    vtab-rowid: func(
+        ext-name: string,
+        vtab-id: u64,
+        cursor-id: u64,
+    ) -> result<s64, string>;
 }

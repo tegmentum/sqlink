@@ -113,6 +113,27 @@ pub mod loaded_collating {
     });
 }
 
+/// Used when a loaded extension declares virtual-table modules in
+/// its manifest (`manifest.vtabs` non-empty). The `tabular` world
+/// exports `vtab.*` on top of the minimal-shape metadata. Shares
+/// `loaded`'s types via `with:` for ABI compat across the boundary.
+pub mod loaded_tabular {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "tabular",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+        },
+    });
+}
+
 /// Used when a loaded extension declares `has-authorizer` in its
 /// manifest. The `authorizing` world exports `authorizer.authorize`
 /// in addition to the minimal-shape metadata.
@@ -616,6 +637,15 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
                 name: c.name.clone(),
             })
             .collect(),
+        vtabs: ext
+            .vtabs
+            .iter()
+            .map(|v| bindings::sqlite::extension::metadata::VtabSpec {
+                id: v.id,
+                name: v.name.clone(),
+                eponymous: v.eponymous,
+            })
+            .collect(),
         has_authorizer: ext.has_authorizer,
         has_update_hook: ext.has_update_hook,
         has_commit_hook: ext.has_commit_hook,
@@ -649,6 +679,10 @@ pub struct LoadedExtension {
     pub aggregate_functions: Vec<AggregateFunctionEntry>,
     /// Collation specs declared in the manifest.
     pub collations: Vec<CollationEntry>,
+    /// Vtab module specs declared in the manifest. Populated by
+    /// `load_extension_from_bytes` when the guest reports vtabs;
+    /// the cli uses these to register the modules with SQLite.
+    pub vtabs: Vec<VtabEntry>,
     /// Whether the extension declared an `authorizer` export. Used by
     /// the in-WASM CLI to decide whether to install a sqlite3_set_
     /// authorizer trampoline pointing at this extension.
@@ -1268,6 +1302,17 @@ fn make_loaded_collating_linker(engine: &Engine) -> Result<Linker<LoadedState>> 
     Ok(linker)
 }
 
+/// Build a Linker pre-wired for a `tabular`-world loaded
+/// extension. Used when dispatching vtab callbacks.
+fn make_loaded_tabular_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+    let mut linker: Linker<LoadedState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
+    loaded_tabular::Tabular::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
+        .map_err(|e| anyhow!("loaded-ext tabular: {e}"))?;
+    Ok(linker)
+}
+
 /// Build a Linker pre-wired for an `authorizing`-world loaded
 /// extension. Used when dispatching authorizer callbacks.
 fn make_loaded_authorizing_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
@@ -1349,6 +1394,16 @@ pub struct AggregateFunctionEntry {
 pub struct CollationEntry {
     pub id: u64,
     pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct VtabEntry {
+    pub id: u64,
+    pub name: String,
+    /// True if the vtab is usable without `CREATE VIRTUAL TABLE`
+    /// (`xCreate` collapses to `xConnect`). See the WIT
+    /// `vtab-spec.eponymous` doc-comment.
+    pub eponymous: bool,
 }
 
 /// The wasmtime engine + the registry of loaded extensions.
@@ -1960,6 +2015,7 @@ impl Host {
             scalar_functions: Vec::new(),
             aggregate_functions: Vec::new(),
             collations: Vec::new(),
+            vtabs: Vec::new(),
             has_authorizer: false,
             has_update_hook: false,
             has_commit_hook: false,
@@ -2048,6 +2104,15 @@ impl Host {
             })
             .collect();
 
+        let vtabs: Vec<_> = manifest
+            .vtabs
+            .iter()
+            .map(|v| VtabEntry {
+                id: v.id,
+                name: v.name.clone(),
+                eponymous: v.eponymous,
+            })
+            .collect();
         self.components.write().insert(
             name.clone(),
             Arc::new(LoadedExtension {
@@ -2058,6 +2123,7 @@ impl Host {
                 scalar_functions,
                 aggregate_functions,
                 collations,
+                vtabs,
                 has_authorizer: manifest.has_authorizer,
                 has_update_hook: manifest.has_update_hook,
                 has_commit_hook: manifest.has_commit_hook,
@@ -2286,6 +2352,243 @@ impl Host {
             .await
             .map_err(|e| anyhow!("call_compare: {e}"))?;
         Ok(result)
+    }
+
+    // ─────────── Vtab dispatch ───────────
+    //
+    // Each method instantiates the loaded component fresh against
+    // the `tabular` world, calls the corresponding vtab.* export,
+    // and surfaces the result back to the SQLite C trampoline via
+    // the dispatch WIT bridge.
+
+    pub async fn dispatch_vtab_create(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        db_name: String,
+        table_name: String,
+        args: Vec<String>,
+    ) -> Result<std::result::Result<String, String>> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_create(&mut store, vtab_id, instance_id, &db_name, &table_name, &args)
+            .await
+            .map_err(|e| anyhow!("vtab.create: {e}"))?;
+        Ok(r)
+    }
+
+    pub async fn dispatch_vtab_connect(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        db_name: String,
+        table_name: String,
+        args: Vec<String>,
+    ) -> Result<std::result::Result<String, String>> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_connect(&mut store, vtab_id, instance_id, &db_name, &table_name, &args)
+            .await
+            .map_err(|e| anyhow!("vtab.connect: {e}"))?;
+        Ok(r)
+    }
+
+    pub async fn dispatch_vtab_destroy(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> Result<std::result::Result<(), String>> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_destroy(&mut store, vtab_id, instance_id)
+            .await
+            .map_err(|e| anyhow!("vtab.destroy: {e}"))?;
+        Ok(r)
+    }
+
+    pub async fn dispatch_vtab_disconnect(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> Result<std::result::Result<(), String>> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_disconnect(&mut store, vtab_id, instance_id)
+            .await
+            .map_err(|e| anyhow!("vtab.disconnect: {e}"))?;
+        Ok(r)
+    }
+
+    pub async fn dispatch_vtab_best_index(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        info: bindings::sqlite::extension::vtab::IndexInfo,
+    ) -> Result<
+        std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>,
+    > {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_best_index(
+                &mut store,
+                vtab_id,
+                instance_id,
+                &convert_vtab_index_info_to_loaded(info),
+            )
+            .await
+            .map_err(|e| anyhow!("vtab.best_index: {e}"))?;
+        Ok(r.map(convert_vtab_index_plan_from_loaded))
+    }
+
+    pub async fn dispatch_vtab_open(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        cursor_id: u64,
+    ) -> Result<std::result::Result<(), String>> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_open(&mut store, vtab_id, instance_id, cursor_id)
+            .await
+            .map_err(|e| anyhow!("vtab.open: {e}"))?;
+        Ok(r)
+    }
+
+    pub async fn dispatch_vtab_close(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> Result<std::result::Result<(), String>> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_close(&mut store, vtab_id, cursor_id)
+            .await
+            .map_err(|e| anyhow!("vtab.close: {e}"))?;
+        Ok(r)
+    }
+
+    pub async fn dispatch_vtab_filter(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+        idx_num: i32,
+        idx_str: Option<String>,
+        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+    ) -> Result<std::result::Result<(), String>> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_filter(
+                &mut store,
+                vtab_id,
+                cursor_id,
+                idx_num,
+                idx_str.as_deref(),
+                &loaded_args,
+            )
+            .await
+            .map_err(|e| anyhow!("vtab.filter: {e}"))?;
+        Ok(r)
+    }
+
+    pub async fn dispatch_vtab_next(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> Result<std::result::Result<(), String>> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_next(&mut store, vtab_id, cursor_id)
+            .await
+            .map_err(|e| anyhow!("vtab.next: {e}"))?;
+        Ok(r)
+    }
+
+    pub async fn dispatch_vtab_eof(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> Result<bool> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        instance
+            .sqlite_extension_vtab()
+            .call_eof(&mut store, vtab_id, cursor_id)
+            .await
+            .map_err(|e| anyhow!("vtab.eof: {e}"))
+    }
+
+    pub async fn dispatch_vtab_column(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+        col: i32,
+    ) -> Result<
+        std::result::Result<bindings::sqlite::extension::types::SqlValue, String>,
+    > {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_column(&mut store, vtab_id, cursor_id, col)
+            .await
+            .map_err(|e| anyhow!("vtab.column: {e}"))?;
+        Ok(r.map(convert_sql_value_from_loaded))
+    }
+
+    pub async fn dispatch_vtab_rowid(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> Result<std::result::Result<i64, String>> {
+        let (mut store, instance) = self.tabular_instance(ext_name).await?;
+        let r = instance
+            .sqlite_extension_vtab()
+            .call_rowid(&mut store, vtab_id, cursor_id)
+            .await
+            .map_err(|e| anyhow!("vtab.rowid: {e}"))?;
+        Ok(r)
+    }
+
+    /// Shared helper: look up the extension, build a tabular-world
+    /// linker, instantiate. Used by every dispatch_vtab_* method.
+    async fn tabular_instance(
+        &self,
+        ext_name: &str,
+    ) -> Result<(wasmtime::Store<LoadedState>, loaded_tabular::Tabular)> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
+        let linker = make_loaded_tabular_linker(&self.engine)?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let instance =
+            loaded_tabular::Tabular::instantiate_async(&mut store, &ext.component, &linker)
+                .await
+                .map_err(|e| anyhow!("instantiate {ext_name} as tabular: {e}"))?;
+        Ok((store, instance))
     }
 
     /// Route a SQLite authorizer callback to the loaded extension's
@@ -2891,6 +3194,83 @@ fn convert_sql_value_from_loaded(
     }
 }
 
+// Vtab type conversion between the host's dispatch-side bindgen
+// (`bindings::sqlite::extension::vtab`) and the loaded extension's
+// `tabular`-world bindgen (`loaded_tabular::exports::sqlite::extension::vtab`).
+// Same shape on both sides — these converters exist to bridge
+// distinct-but-equivalent Rust types the two bindgen calls emit.
+
+fn convert_vtab_constraint_op_to_loaded(
+    op: bindings::sqlite::extension::vtab::ConstraintOp,
+) -> loaded_tabular::exports::sqlite::extension::vtab::ConstraintOp {
+    use bindings::sqlite::extension::vtab::ConstraintOp as From;
+    use loaded_tabular::exports::sqlite::extension::vtab::ConstraintOp as To;
+    match op {
+        From::Eq => To::Eq,
+        From::Gt => To::Gt,
+        From::Le => To::Le,
+        From::Lt => To::Lt,
+        From::Ge => To::Ge,
+        From::Ne => To::Ne,
+        From::Match => To::Match,
+        From::Like => To::Like,
+        From::Regexp => To::Regexp,
+        From::Glob => To::Glob,
+        From::IsNull => To::IsNull,
+        From::IsNotNull => To::IsNotNull,
+        From::Limit => To::Limit,
+        From::Offset => To::Offset,
+        From::Function => To::Function,
+    }
+}
+
+fn convert_vtab_index_info_to_loaded(
+    info: bindings::sqlite::extension::vtab::IndexInfo,
+) -> loaded_tabular::exports::sqlite::extension::vtab::IndexInfo {
+    use loaded_tabular::exports::sqlite::extension::vtab as t;
+    t::IndexInfo {
+        constraints: info
+            .constraints
+            .into_iter()
+            .map(|c| t::Constraint {
+                column: c.column,
+                op: convert_vtab_constraint_op_to_loaded(c.op),
+                usable: c.usable,
+            })
+            .collect(),
+        orderbys: info
+            .orderbys
+            .into_iter()
+            .map(|o| t::Orderby {
+                column: o.column,
+                desc: o.desc,
+            })
+            .collect(),
+        col_used: info.col_used,
+    }
+}
+
+fn convert_vtab_index_plan_from_loaded(
+    plan: loaded_tabular::exports::sqlite::extension::vtab::IndexPlan,
+) -> bindings::sqlite::extension::vtab::IndexPlan {
+    use bindings::sqlite::extension::vtab as t;
+    t::IndexPlan {
+        constraint_usage: plan
+            .constraint_usage
+            .into_iter()
+            .map(|u| t::ConstraintUsage {
+                argv_index: u.argv_index,
+                omit: u.omit,
+            })
+            .collect(),
+        idx_num: plan.idx_num,
+        idx_str: plan.idx_str,
+        estimated_cost: plan.estimated_cost,
+        estimated_rows: plan.estimated_rows,
+        orderby_consumed: plan.orderby_consumed,
+    }
+}
+
 fn convert_auth_action_to_loaded(
     a: bindings::sqlite::extension::types::AuthAction,
 ) -> loaded::sqlite::extension::types::AuthAction {
@@ -3116,6 +3496,195 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
     async fn on_rollback(&mut self, ext_name: String) {
         if let Err(e) = self.host.dispatch_on_rollback(&ext_name).await {
             tracing::error!("on_rollback {ext_name}: {e}");
+        }
+    }
+
+    // ─────────── vtab dispatch ───────────
+
+    async fn vtab_create(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        instance_id: u64,
+        db_name: String,
+        table_name: String,
+        args: Vec<String>,
+    ) -> std::result::Result<String, String> {
+        match self
+            .host
+            .dispatch_vtab_create(&ext_name, vtab_id, instance_id, db_name, table_name, args)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_connect(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        instance_id: u64,
+        db_name: String,
+        table_name: String,
+        args: Vec<String>,
+    ) -> std::result::Result<String, String> {
+        match self
+            .host
+            .dispatch_vtab_connect(&ext_name, vtab_id, instance_id, db_name, table_name, args)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_destroy(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> std::result::Result<(), String> {
+        match self.host.dispatch_vtab_destroy(&ext_name, vtab_id, instance_id).await {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_disconnect(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        instance_id: u64,
+    ) -> std::result::Result<(), String> {
+        match self.host.dispatch_vtab_disconnect(&ext_name, vtab_id, instance_id).await {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_best_index(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        instance_id: u64,
+        info: bindings::sqlite::extension::vtab::IndexInfo,
+    ) -> std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>
+    {
+        match self
+            .host
+            .dispatch_vtab_best_index(&ext_name, vtab_id, instance_id, info)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_open(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        instance_id: u64,
+        cursor_id: u64,
+    ) -> std::result::Result<(), String> {
+        match self
+            .host
+            .dispatch_vtab_open(&ext_name, vtab_id, instance_id, cursor_id)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_close(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> std::result::Result<(), String> {
+        match self.host.dispatch_vtab_close(&ext_name, vtab_id, cursor_id).await {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_filter(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        cursor_id: u64,
+        idx_num: i32,
+        idx_str: Option<String>,
+        args: Vec<bindings::sqlite::extension::types::SqlValue>,
+    ) -> std::result::Result<(), String> {
+        match self
+            .host
+            .dispatch_vtab_filter(&ext_name, vtab_id, cursor_id, idx_num, idx_str, args)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_next(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> std::result::Result<(), String> {
+        match self.host.dispatch_vtab_next(&ext_name, vtab_id, cursor_id).await {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_eof(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> bool {
+        match self.host.dispatch_vtab_eof(&ext_name, vtab_id, cursor_id).await {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!("vtab_eof {ext_name}: {e}");
+                // Treat error as EOF so SQL doesn't loop forever
+                // on a broken vtab.
+                true
+            }
+        }
+    }
+
+    async fn vtab_column(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        cursor_id: u64,
+        col: i32,
+    ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String>
+    {
+        match self
+            .host
+            .dispatch_vtab_column(&ext_name, vtab_id, cursor_id, col)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_rowid(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        cursor_id: u64,
+    ) -> std::result::Result<i64, String> {
+        match self.host.dispatch_vtab_rowid(&ext_name, vtab_id, cursor_id).await {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
         }
     }
 }
