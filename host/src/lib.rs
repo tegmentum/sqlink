@@ -716,6 +716,11 @@ pub struct LoadedExtension {
     /// Lazy-init: built on the first vtab dispatch, dropped when
     /// the `LoadedExtension`'s `Arc` count hits zero.
     pub cached_tabular: Arc<tokio::sync::Mutex<Option<CachedTabular>>>,
+    /// Same idea for the `stateful` world (aggregate-function
+    /// dispatch). Aggregator state keyed by `context-id` lives
+    /// inside the loaded extension — a fresh instantiation per
+    /// step/finalize would reset it, so we cache and reuse.
+    pub cached_stateful: Arc<tokio::sync::Mutex<Option<CachedStateful>>>,
 }
 
 /// Long-lived `Tabular`-world instance backing a vtab module.
@@ -723,6 +728,13 @@ pub struct LoadedExtension {
 pub struct CachedTabular {
     pub store: wasmtime::Store<LoadedState>,
     pub instance: loaded_tabular::Tabular,
+}
+
+/// Long-lived `Stateful`-world instance backing aggregate
+/// dispatch. See `LoadedExtension.cached_stateful`.
+pub struct CachedStateful {
+    pub store: wasmtime::Store<LoadedState>,
+    pub instance: loaded_stateful::Stateful,
 }
 
 /// State carried by the per-call Store when dispatching into a
@@ -2065,6 +2077,7 @@ impl Host {
             cache: Arc::new(Mutex::new(HashMap::new())),
             spi_conn: Arc::new(Mutex::new(None)),
             cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
@@ -2174,6 +2187,7 @@ impl Host {
                 cache: Arc::new(Mutex::new(HashMap::new())),
                 spi_conn: Arc::new(Mutex::new(None)),
                 cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
             }),
         );
 
@@ -2231,26 +2245,13 @@ impl Host {
         context_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
-
+        let mut guard = self.stateful_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-
-        let result = instance
+        let result = cached
+            .instance
             .sqlite_extension_aggregate_function()
-            .call_step(&mut store, func_id, context_id, &loaded_args)
+            .call_step(&mut cached.store, func_id, context_id, &loaded_args)
             .await
             .map_err(|e| anyhow!("call_step: {e}"))?;
         Ok(result)
@@ -2264,24 +2265,12 @@ impl Host {
         func_id: u64,
         context_id: u64,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
-
-        let result = instance
+        let mut guard = self.stateful_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let result = cached
+            .instance
             .sqlite_extension_aggregate_function()
-            .call_finalize(&mut store, func_id, context_id)
+            .call_finalize(&mut cached.store, func_id, context_id)
             .await
             .map_err(|e| anyhow!("call_finalize: {e}"))?;
         match result {
@@ -2303,24 +2292,12 @@ impl Host {
         func_id: u64,
         context_id: u64,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
-
-        let result = instance
+        let mut guard = self.stateful_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let result = cached
+            .instance
             .sqlite_extension_aggregate_function()
-            .call_value(&mut store, func_id, context_id)
+            .call_value(&mut cached.store, func_id, context_id)
             .await
             .map_err(|e| anyhow!("call_value: {e}"))?;
         match result {
@@ -2341,6 +2318,29 @@ impl Host {
         context_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
+        let mut guard = self.stateful_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
+        let result = cached
+            .instance
+            .sqlite_extension_aggregate_function()
+            .call_inverse(&mut cached.store, func_id, context_id, &loaded_args)
+            .await
+            .map_err(|e| anyhow!("call_inverse: {e}"))?;
+        Ok(result)
+    }
+
+    /// Shared helper: look up the extension and return a locked
+    /// guard over its cached `stateful`-world (Store, Instance).
+    /// Lazy-instantiates on first call; subsequent calls reuse
+    /// the same Store so aggregator state (per-context
+    /// accumulators) survives across step / value / inverse /
+    /// finalize. See `cached_tabular` for the parallel pattern
+    /// on the vtab world.
+    async fn stateful_locked(
+        &self,
+        ext_name: &str,
+    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedStateful>>> {
         let ext = {
             let components = self.components.read();
             components
@@ -2348,22 +2348,21 @@ impl Host {
                 .cloned()
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
-        let linker = make_loaded_stateful_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
-
-        let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-
-        let result = instance
-            .sqlite_extension_aggregate_function()
-            .call_inverse(&mut store, func_id, context_id, &loaded_args)
+        let cached_arc = ext.cached_stateful.clone();
+        let mut guard = cached_arc.lock_owned().await;
+        if guard.is_none() {
+            let linker = make_loaded_stateful_linker(&self.engine)?;
+            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+            let instance = loaded_stateful::Stateful::instantiate_async(
+                &mut store,
+                &ext.component,
+                &linker,
+            )
             .await
-            .map_err(|e| anyhow!("call_inverse: {e}"))?;
-        Ok(result)
+            .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
+            *guard = Some(CachedStateful { store, instance });
+        }
+        Ok(guard)
     }
 
     /// Forward a collation compare to a loaded extension's

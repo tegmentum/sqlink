@@ -21,6 +21,7 @@ members = [
     "extensions/crypto",
     "extensions/uuid",
     "extensions/regexp",
+    "extensions/stats",
     "examples/rust/runnable-sqlite-demo",
 ]
 

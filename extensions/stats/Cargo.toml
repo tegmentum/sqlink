@@ -1,0 +1,27 @@
+[package]
+name = "stats-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Statistical aggregate functions: stddev_samp, stddev_pop,
+var_samp, var_pop, median, percentile, mode.
+
+Tier-2 reference per PLAN-sqlite-plugins.md. Welford's online
+algorithm for stddev/variance (numerical stability). Median /
+percentile collect samples and quickselect at finalize. Mode
+tracks frequency in a HashMap.
+
+Targets the `sqlite:extension/stateful` world. Per-aggregation
+state lives in a thread_local HashMap keyed by `context-id`;
+relies on the host caching the stateful Store across
+step/finalize calls so the state survives.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
