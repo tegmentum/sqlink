@@ -37,6 +37,7 @@ pub use sqlite_wasm_core::db;
 mod dot;
 mod format;
 mod settings;
+mod vtab;
 
 use std::cell::RefCell;
 use std::io::{BufRead, Write};
@@ -77,6 +78,9 @@ struct ExtRegistrations {
     /// since sqlite3_create_function_v2 removes either shape.
     functions: Vec<(String, i32)>,
     collations: Vec<String>,
+    /// Vtab module names registered via sqlite3_create_module_v2.
+    /// .unload drops them from the connection.
+    vtabs: Vec<String>,
     /// True if .load installed an authorizer on behalf of this
     /// extension. .unload clears the connection's authorizer in
     /// that case so it doesn't keep dispatching into a dropped
@@ -815,7 +819,7 @@ fn do_load(input: &str) -> String {
     };
     let ext_name = manifest.name.clone();
     ensure_cli_conn();
-    let (scalars, aggregates, collations, hooks) = CLI_CONN.with(|c| {
+    let counts = CLI_CONN.with(|c| {
         let g = c.borrow();
         let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
         let mut s_count = 0;
@@ -920,6 +924,25 @@ fn do_load(input: &str) -> String {
             }
         }
 
+        let mut v_count = 0;
+        for spec in &manifest.vtabs {
+            match vtab::register_vtab_module(
+                conn,
+                &spec.name,
+                &ext_name,
+                spec.id,
+                spec.eponymous,
+            ) {
+                Ok(()) => {
+                    v_count += 1;
+                    regs.vtabs.push(spec.name.clone());
+                }
+                Err(e) => {
+                    eprintln!("Error registering vtab {}: {e}", spec.name);
+                }
+            }
+        }
+
         if manifest.has_authorizer {
             let ext_n = ext_name.clone();
             let r = conn.set_authorizer(Some(
@@ -970,14 +993,16 @@ fn do_load(input: &str) -> String {
 
         EXT_REGS.with(|m| m.borrow_mut().insert(ext_name.clone(), regs));
 
-        (s_count, a_count, c_count, h_count)
+        (s_count, a_count, c_count, h_count, v_count)
     });
-    let total = scalars + aggregates + collations + hooks;
+    let (scalars, aggregates, collations, hooks, vtabs) = counts;
+    let total = scalars + aggregates + collations + hooks + vtabs;
     let mut bits = Vec::new();
     if scalars > 0 { bits.push(format!("{scalars} scalar")); }
     if aggregates > 0 { bits.push(format!("{aggregates} aggregate")); }
     if collations > 0 { bits.push(format!("{collations} collation")); }
     if hooks > 0 { bits.push(format!("{hooks} hook")); }
+    if vtabs > 0 { bits.push(format!("{vtabs} vtab")); }
     let detail = if bits.is_empty() { "0 functions".to_string() } else { bits.join(", ") };
     format!(
         "Loaded extension: {} {} from {} ({total} registered: {detail})\n",

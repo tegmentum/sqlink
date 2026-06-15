@@ -147,6 +147,16 @@ pub struct Connection {
     raw: *mut ffi::sqlite3,
 }
 
+impl Connection {
+    /// Raw `sqlite3*` handle. Used by callers that need to invoke
+    /// SQLite C APIs the safe wrapper doesn't cover yet
+    /// (e.g. `sqlite3_create_module_v2` for vtab registration).
+    /// The pointer is valid for the lifetime of the `Connection`.
+    pub fn raw_handle(&self) -> *mut ffi::sqlite3 {
+        self.raw
+    }
+}
+
 /// Register the WASI-backed VFS so SQLite's file opens write to
 /// the host filesystem via WASI syscalls instead of falling back
 /// to libsqlite3-sys's in-memory default. Idempotent: safe to call
