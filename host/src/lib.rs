@@ -26,6 +26,7 @@
 #![allow(deprecated)]
 
 pub mod cache;
+pub mod component_blob_cache;
 pub mod compose_provider;
 pub mod policy;
 
@@ -1591,6 +1592,12 @@ pub struct Host {
     /// `wasmtime::Component` is internally Arc-wrapped so clones
     /// are cheap reference bumps, not deep copies.
     component_cache: Arc<Mutex<ComponentCache>>,
+    /// PLAN-component-cache.md C2: host-local HMAC secret for
+    /// the precompiled-blob cache. Lazy-loaded from
+    /// `~/.sqlite-wasm/cache-hmac.key` on first access; absent
+    /// on platforms where it can't be created (the cache then
+    /// degrades to a no-op).
+    blob_cache_key: Arc<std::sync::OnceLock<Option<Vec<u8>>>>,
 }
 
 /// Tiny insertion-order LRU for parsed Components. Capacity is
@@ -1762,7 +1769,16 @@ impl Host {
             signature_verifier,
             runtimes: Arc::new(RwLock::new(HashMap::new())),
             component_cache: Arc::new(Mutex::new(ComponentCache::new(cap))),
+            blob_cache_key: Arc::new(std::sync::OnceLock::new()),
         })
+    }
+
+    /// C2 HMAC key accessor — lazily initializes the cache key
+    /// on first call; subsequent calls hit the OnceLock.
+    fn blob_cache_key(&self) -> Option<&[u8]> {
+        self.blob_cache_key
+            .get_or_init(component_blob_cache::load_or_create_hmac_key)
+            .as_deref()
     }
 
     /// Borrow the signature verifier. Cheap clone (Arc) — useful
@@ -2207,18 +2223,11 @@ impl Host {
         name_hint: &str,
     ) -> Result<(String, String)> {
         let digest = blake3::hash(&bytes).to_hex().to_string();
-        let component = {
-            let mut cache = self.component_cache.lock();
-            if let Some(c) = cache.get(&digest) {
-                c
-            } else {
-                drop(cache);
-                let c = Component::from_binary(&self.engine, &bytes)
-                    .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
-                self.component_cache.lock().insert(digest.clone(), c.clone());
-                c
-            }
-        };
+        // Route through the same C1+C2 cache helper as the
+        // real load path. This is what lets describe seed the
+        // C2 row on first run; later processes hit C2 from cold
+        // start and skip the from_binary parse entirely.
+        let component = self.component_for_digest(&bytes, &digest, name_hint)?;
         let linker = make_loaded_stateful_linker(&self.engine)?;
         let tmp_ext = LoadedExtension {
             name: String::new(),
@@ -2278,19 +2287,102 @@ impl Host {
         // parsed Component for these exact bytes. wasmtime::
         // Component is Arc-wrapped internally so the clone is a
         // cheap reference bump.
-        let component = {
+        let component = self.component_for_digest(&bytes, &digest, name_hint)?;
+        self.register_component(component, name_hint, policy, digest).await
+    }
+
+    /// Resolve a `Component` for the given digest via the
+    /// three-tier cache: C1 (in-process LRU) → C2 (precompiled
+    /// blobs in the user db, HMAC-verified) → cold parse via
+    /// `Component::from_binary`. Inserts into both cache tiers
+    /// on cold parse.
+    fn component_for_digest(
+        &self,
+        bytes: &[u8],
+        digest: &str,
+        name_hint: &str,
+    ) -> Result<Component> {
+        // C1 — in-process LRU.
+        {
             let mut cache = self.component_cache.lock();
-            if let Some(c) = cache.get(&digest) {
-                c
-            } else {
-                drop(cache);
-                let c = Component::from_binary(&self.engine, &bytes)
-                    .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
-                self.component_cache.lock().insert(digest.clone(), c.clone());
-                c
+            if let Some(c) = cache.get(digest) {
+                return Ok(c);
+            }
+        }
+        // C2 — precompiled blob in the user db. Only attempted
+        // when a db_path is configured and the HMAC secret loads.
+        if let Some(c) = self.try_c2_lookup(digest) {
+            self.component_cache.lock().insert(digest.to_string(), c.clone());
+            return Ok(c);
+        }
+        // Cold path: parse + populate both caches.
+        let component = Component::from_binary(&self.engine, bytes)
+            .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
+        self.try_c2_store(digest, &component);
+        self.component_cache.lock().insert(digest.to_string(), component.clone());
+        Ok(component)
+    }
+
+    fn try_c2_lookup(&self, digest: &str) -> Option<Component> {
+        let key = self.blob_cache_key()?;
+        let db_path = self.db_path();
+        if db_path.is_empty() {
+            return None;
+        }
+        let conn = component_blob_cache::open_user_conn(&db_path).ok()?;
+        let blob = component_blob_cache::lookup(&conn, digest, key).ok()??;
+        tracing::debug!(
+            target: "component_cache",
+            digest = %&digest[..16],
+            "C2 hit"
+        );
+        // SAFETY: the blob was produced by `Component::serialize`
+        // on this same wasmtime version (the cache key includes
+        // engine_identity), and the HMAC verified — so the
+        // caller-trust contract `Component::deserialize` requires
+        // is satisfied.
+        unsafe { Component::deserialize(&self.engine, &blob) }
+            .map_err(|e| {
+                tracing::warn!(
+                    digest = %&digest[..16],
+                    error = %e,
+                    "component_cache: deserialize failed; will reparse"
+                );
+            })
+            .ok()
+    }
+
+    fn try_c2_store(&self, digest: &str, component: &Component) {
+        let Some(key) = self.blob_cache_key() else {
+            return;
+        };
+        let db_path = self.db_path();
+        if db_path.is_empty() {
+            return;
+        }
+        let blob = match component.serialize() {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::warn!(error = %e, "component_cache: serialize failed");
+                return;
             }
         };
+        let conn = match component_blob_cache::open_user_conn(&db_path) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        if let Err(e) = component_blob_cache::store(&conn, digest, &blob, key) {
+            tracing::warn!(error = %e, "component_cache: store failed");
+        }
+    }
 
+    async fn register_component(
+        &self,
+        component: Component,
+        name_hint: &str,
+        policy: Policy,
+        digest: String,
+    ) -> Result<String> {
         // Use the stateful linker (superset of minimal) so extensions
         // that import `state` or `cache` can still resolve their
         // imports during the describe() call. We still `Minimal::
