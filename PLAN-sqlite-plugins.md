@@ -156,3 +156,50 @@ Each ported extension ships:
 None for tier 1. Tier 3 has architectural questions deferred to
 that phase (vtab transaction semantics across the host
 boundary, etc.).
+
+## Tier 3 reality check (post-vtab landing)
+
+After vtab dispatch shipped, two of the tier-3 entries turned
+out to be already-available:
+
+- **fts5**: `libsqlite3-sys` 0.30.1's `bundled` feature compiles
+  sqlite3.c with `-DSQLITE_ENABLE_FTS5`. `CREATE VIRTUAL TABLE
+  docs USING fts5(title, body); SELECT title FROM docs WHERE
+  docs MATCH 'wasm';` works in the cli today with no extension
+  loaded. No port needed.
+- **rtree**: same path  `-DSQLITE_ENABLE_RTREE` is in libsqlite3-
+  sys's bundled flag set. `CREATE VIRTUAL TABLE bbox USING
+  rtree(id, minx, maxx, miny, maxy)` and overlap-window queries
+  work out of the box. No port needed.
+- **geopoly**: NOT in libsqlite3-sys's bundled compile (no
+  `-DSQLITE_ENABLE_GEOPOLY`). Would need either a fork of
+  libsqlite3-sys with the flag added or a custom build. Small
+  scope to enable; useful for tile-shape index queries.
+
+The remaining tier-3 spend therefore reduces to: geopoly enable
+(small) + whatever PostGIS-grade geo coverage the user wants.
+
+## PostGIS bridge (newly identified path)
+
+`~/git/postgis-wasm/` already ships `postgis-composed.wasm` with
+**317 PostGIS functions** implemented (per the repo's
+POSTGIS_FUNCTIONS.md tracking file). The component imports a
+substantial geo-tool ecosystem (geos-wasm / proj / mvt /
+flatgeobuf / kml / gml / ttf-parser / ...) all from sibling
+git/ repos.
+
+A `postgis-sqlite-bridge` extension can adapt those to our
+`sqlite:extension/minimal` world:
+
+  * Bridge's `manifest.describe()` declares ~300+ scalar funcs
+    (ST_MakePoint, ST_AsText, ST_Distance, ST_Intersects, ...).
+  * `scalar_function.call(func_id, args)` routes by id into the
+    matching postgis-wasm export.
+  * Geometry values cross the boundary as BLOB (EWKB binary
+    encoding  what PostGIS itself uses on the wire).
+  * Composed once via `wac` so the cli only loads one bundle.
+
+This sidesteps the "port from scratch" treadmill and lights up
+PostGIS-class SQL geo support immediately. It's the same
+"reuse upstream, wrap the surface" strategy that worked for
+fts5/rtree, just at a different layer.
