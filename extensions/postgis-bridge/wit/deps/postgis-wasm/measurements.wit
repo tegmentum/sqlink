@@ -1,0 +1,113 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS measurement functions for geometric calculations
+interface postgis-measurements {
+    use postgis-types.{geometry, postgis-error};
+
+    // ========================================================================
+    // BASIC MEASUREMENTS
+    // ========================================================================
+
+    /// ST_Area - Calculate area of a geometry
+    st-area: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_Length - Calculate length of a geometry
+    st-length: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_Perimeter - Calculate perimeter of a geometry
+    st-perimeter: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    // ========================================================================
+    // 2D/3D MEASUREMENTS
+    // ========================================================================
+
+    /// ST_Length2D - Calculate 2D length of a geometry (ignores Z)
+    st-length-twod: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_3DLength - Calculate 3D length of a geometry
+    st-length-threed: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_3DPerimeter - Calculate 3D perimeter of a geometry
+    st-perimeter-threed: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    // ========================================================================
+    // DISTANCE FUNCTIONS
+    // ========================================================================
+
+    /// ST_Distance - Calculate minimum distance between geometries
+    st-distance: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_3DDistance - Calculate minimum 3D distance between geometries
+    st-distance-threed: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_MaxDistance - Calculate maximum distance between geometries
+    st-max-distance: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_3DMaxDistance - Calculate maximum 3D distance between geometries
+    st-max-distance-threed: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_HausdorffDistance - Calculate Hausdorff distance between geometries
+    st-hausdorff-distance: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_FrechetDistance - Calculate Fréchet distance between geometries
+    st-frechet-distance: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    // ========================================================================
+    // POINT/LINE FUNCTIONS
+    // ========================================================================
+
+    /// ST_ClosestPoint - Find closest point on geom1 to geom2
+    st-closest-point: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_ShortestLine - Create shortest line between geometries
+    st-shortest-line: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_3DShortestLine - Create shortest 3D line between geometries
+    st-shortest-line-threed: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_LongestLine - Create longest line between geometries
+    st-longest-line: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_3DLongestLine - Find longest line between geometries in 3D
+    st-longest-line-threed: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // ANGLE FUNCTIONS
+    // ========================================================================
+
+    /// ST_Azimuth - Calculate angle from point1 to point2 (radians from north)
+    st-azimuth: func(point1: borrow<geometry>, point2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_Angle - Calculate angle at point2 (vertex) between point1-point2-point3
+    st-angle: func(p1: borrow<geometry>, p2: borrow<geometry>, p3: borrow<geometry>) -> result<f64, postgis-error>;
+
+    // ========================================================================
+    // CLEARANCE FUNCTIONS
+    // ========================================================================
+
+    /// ST_MinimumClearance - Get minimum clearance distance
+    st-minimum-clearance: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_MinimumClearanceLine - Get line representing minimum clearance
+    st-minimum-clearance-line: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // TRAJECTORY FUNCTIONS
+    // ========================================================================
+
+    /// ST_DistanceCPA - Distance at closest point of approach for trajectories
+    st-distance-cpa: func(track1: borrow<geometry>, track2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_3DClosestPoint - Find closest point on geom1 to geom2 in 3D
+    st-closest-point-threed: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // SPHEROID MEASUREMENTS
+    // ========================================================================
+
+    /// ST_DistanceSpheroid - Calculate distance using spheroid (WGS84)
+    st-distance-spheroid: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_LengthSpheroid - Calculate length using spheroid (WGS84)
+    st-length-spheroid: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+}

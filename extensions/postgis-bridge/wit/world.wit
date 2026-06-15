@@ -1,0 +1,19 @@
+package sqlite-bridge:postgis@0.1.0;
+
+/// Bridges postgis-wasm's spatial functions onto the canonical
+/// `sqlite:extension/minimal` world. Geometry crosses the SQL
+/// boundary as BLOB (Well-Known Binary, WKB).
+world bridge {
+    import postgis:wasm/postgis-types@0.1.0;
+    import postgis:wasm/postgis-constructors@0.1.0;
+    import postgis:wasm/postgis-accessors@0.1.0;
+    import postgis:wasm/postgis-measurements@0.1.0;
+    import postgis:wasm/postgis-predicates@0.1.0;
+    import sqlite:extension/types@0.1.0;
+    import sqlite:extension/spi@0.1.0;
+    import sqlite:extension/logging@0.1.0;
+    import sqlite:extension/config@0.1.0;
+
+    export sqlite:extension/metadata@0.1.0;
+    export sqlite:extension/scalar-function@0.1.0;
+}

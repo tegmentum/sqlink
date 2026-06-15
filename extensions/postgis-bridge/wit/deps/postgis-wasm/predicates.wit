@@ -1,0 +1,159 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS predicate functions for spatial testing
+interface postgis-predicates {
+    use postgis-types.{geometry, postgis-error};
+
+    // ========================================================================
+    // SPATIAL RELATIONSHIP PREDICATES
+    // ========================================================================
+
+    /// ST_Contains - Test if geom1 contains geom2
+    st-contains: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_ContainsProperly - Test if geom1 properly contains geom2 (interior only)
+    st-contains-properly: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_CoveredBy - Test if geom1 is covered by geom2
+    st-covered-by: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_Covers - Test if geom1 covers geom2 (no point of geom2 is outside geom1)
+    st-covers: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_Crosses - Test if geometries cross (intersect with dimension less than max)
+    st-crosses: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_Disjoint - Test if geometries are disjoint (no intersection)
+    st-disjoint: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_Equals - Test if geometries are topologically equal
+    st-equals: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_Intersects - Test if geometries intersect
+    st-intersects: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_OrderingEquals - Test if geometries have same coordinates in same order
+    st-ordering-equals: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> bool;
+
+    /// ST_Overlaps - Test if geometries overlap (same dimension, intersect but neither contains other)
+    st-overlaps: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_Touches - Test if geometries touch (share boundary but not interior)
+    st-touches: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_Within - Test if geom1 is within geom2
+    st-within: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    // ========================================================================
+    // DISTANCE PREDICATES
+    // ========================================================================
+
+    /// ST_DWithin - Test if geometries are within specified distance
+    st-dwithin: func(geom1: borrow<geometry>, geom2: borrow<geometry>, distance: f64) -> result<bool, postgis-error>;
+
+    /// ST_3DDWithin - Test if geometries are within specified 3D distance
+    st-dwithin-threed: func(geom1: borrow<geometry>, geom2: borrow<geometry>, distance: f64) -> result<bool, postgis-error>;
+
+    /// ST_DFullyWithin - Test if geom1 is completely within distance of geom2
+    st-dfully-within: func(geom1: borrow<geometry>, geom2: borrow<geometry>, distance: f64) -> result<bool, postgis-error>;
+
+    // ========================================================================
+    // DE-9IM PREDICATES
+    // ========================================================================
+
+    /// ST_Relate - Compute DE-9IM intersection matrix as string
+    st-relate: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<string, postgis-error>;
+
+    /// ST_RelateMatch - Test if geometries match a DE-9IM pattern
+    st-relate-match: func(geom1: borrow<geometry>, geom2: borrow<geometry>, pattern: string) -> result<bool, postgis-error>;
+
+    // ========================================================================
+    // EQUALITY PREDICATES
+    // ========================================================================
+
+    /// ST_EqualsExact - Test if geometries are exactly equal within tolerance
+    st-equals-exact: func(geom1: borrow<geometry>, geom2: borrow<geometry>, tolerance: f64) -> result<bool, postgis-error>;
+
+    // ========================================================================
+    // VALIDITY PREDICATES
+    // ========================================================================
+
+    /// ST_IsValid - Test if geometry is valid
+    st-is-valid: func(geom: borrow<geometry>) -> bool;
+
+    /// ST_IsValidReason - Get reason if geometry is invalid
+    st-is-valid-reason: func(geom: borrow<geometry>) -> option<string>;
+
+    /// ST_IsSimple - Test if geometry is simple (no self-intersection)
+    st-is-simple: func(geom: borrow<geometry>) -> bool;
+
+    /// ST_IsEmpty - Test if geometry is empty
+    st-is-empty: func(geom: borrow<geometry>) -> bool;
+
+    /// ST_IsClosed - Test if linestring is closed (start = end)
+    st-is-closed: func(geom: borrow<geometry>) -> bool;
+
+    /// ST_IsRing - Test if linestring is a ring (closed and simple)
+    st-is-ring: func(geom: borrow<geometry>) -> bool;
+
+    /// ST_IsCollection - Test if geometry is a collection type
+    st-is-collection: func(geom: borrow<geometry>) -> bool;
+
+    // ========================================================================
+    // COORDINATE DIMENSION PREDICATES
+    // ========================================================================
+
+    /// ST_HasZ - Test if geometry has Z coordinates
+    st-has-z: func(geom: borrow<geometry>) -> bool;
+
+    /// ST_HasM - Test if geometry has M coordinates
+    st-has-m: func(geom: borrow<geometry>) -> bool;
+
+    // ========================================================================
+    // POLYGON ORIENTATION PREDICATES
+    // ========================================================================
+
+    /// ST_IsPolygonCW - Test if polygon has clockwise exterior ring
+    st-is-polygon-cw: func(geom: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_IsPolygonCCW - Test if polygon has counter-clockwise exterior ring
+    st-is-polygon-ccw: func(geom: borrow<geometry>) -> result<bool, postgis-error>;
+
+    // ========================================================================
+    // TRAJECTORY PREDICATES
+    // ========================================================================
+
+    /// ST_IsValidTrajectory - Test if geometry is a valid trajectory (has M increasing)
+    st-is-valid-trajectory: func(geom: borrow<geometry>) -> result<bool, postgis-error>;
+
+    // ========================================================================
+    // POINT PREDICATES
+    // ========================================================================
+
+    /// ST_PointInsideCircle - Test if point is inside circle
+    st-point-inside-circle: func(point: borrow<geometry>, center-x: f64, center-y: f64, radius: f64) -> bool;
+
+    // ========================================================================
+    // 3D SPATIAL RELATIONSHIP PREDICATES
+    // ========================================================================
+
+    /// ST_3DContains - Test if geom1 contains geom2 in 3D
+    st-contains-threed: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    /// ST_3DIntersects - Test if geometries intersect in 3D
+    st-intersects-threed: func(geom1: borrow<geometry>, geom2: borrow<geometry>) -> result<bool, postgis-error>;
+
+    // ========================================================================
+    // VALIDITY DETAILS
+    // ========================================================================
+
+    /// ST_IsValidDetail - Get detailed validity information (valid, reason, location)
+    st-is-valid-detail: func(geom: borrow<geometry>) -> tuple<bool, option<string>, option<geometry>>;
+
+    // ========================================================================
+    // TRAJECTORY PREDICATES (CPA)
+    // ========================================================================
+
+    /// ST_CPAWithin - Test if closest point of approach is within distance
+    st-cpa-within: func(track1: borrow<geometry>, track2: borrow<geometry>, max-dist: f64) -> result<bool, postgis-error>;
+}

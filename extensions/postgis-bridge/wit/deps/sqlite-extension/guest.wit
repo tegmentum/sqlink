@@ -1,0 +1,343 @@
+package sqlite:extension@0.1.0;
+
+/// Declarative extension manifest. The host calls `describe()` once
+/// after instantiation and registers everything the manifest names
+/// with the underlying SQLite — no imperative `register-*` calls.
+///
+/// IDs in the manifest are assigned by the guest and used by the host
+/// when dispatching calls back into the corresponding export interface
+/// (e.g. scalar-function.call(func-id, ...)).
+interface metadata {
+    use types.{function-flags};
+    use policy.{capability};
+
+    /// One scalar SQL function declared by the extension.
+    record scalar-function-spec {
+        /// Guest-assigned function ID. Echoed back in scalar-function.call.
+        id: u64,
+        /// SQL name visible inside the database.
+        name: string,
+        /// Number of arguments; -1 means variadic.
+        num-args: s32,
+        func-flags: function-flags,
+    }
+
+    /// One aggregate (or window) SQL function declared by the extension.
+    record aggregate-function-spec {
+        id: u64,
+        name: string,
+        num-args: s32,
+        func-flags: function-flags,
+        /// True if this aggregate also implements window-function ops
+        /// (value() + inverse()).
+        is-window: bool,
+    }
+
+    /// One custom collation declared by the extension.
+    record collation-spec {
+        id: u64,
+        name: string,
+    }
+
+    /// One virtual table module declared by the extension. The
+    /// `vtab` interface dispatches every callback by this id +
+    /// a host-assigned per-instance / per-cursor handle.
+    record vtab-spec {
+        id: u64,
+        name: string,
+        /// "Eponymous" vtabs (SQLite docs term) are usable as a
+        /// SELECT source directly  no CREATE VIRTUAL TABLE
+        /// needed. For these the host treats xCreate as xConnect
+        /// and there is no schema persisted.
+        eponymous: bool,
+    }
+
+    /// Full extension manifest, returned from `describe()`.
+    record manifest {
+        name: string,
+        version: string,
+        scalar-functions: list<scalar-function-spec>,
+        aggregate-functions: list<aggregate-function-spec>,
+        collations: list<collation-spec>,
+        vtabs: list<vtab-spec>,
+        /// True if the extension also exports an `authorizer` interface.
+        has-authorizer: bool,
+        /// True if the extension also exports an `update-hook` interface.
+        has-update-hook: bool,
+        /// True if the extension also exports a `commit-hook` interface.
+        has-commit-hook: bool,
+        /// REQUIRED: every host capability the extension imports MUST be
+        /// listed here. The loader compares this against
+        /// `load-options.grant` and refuses to load if any item is
+        /// missing from the grant list. Empty list = no host
+        /// capabilities used (extension is pure / only uses its own
+        /// allocator).
+        declared-capabilities: list<capability>,
+    }
+
+    /// Return the extension's full manifest. Called once by the host
+    /// after instantiation, before any other guest function is dispatched.
+    describe: func() -> manifest;
+}
+
+/// Optional lifecycle callbacks.
+interface lifecycle {
+    /// Called after instantiation, after `metadata.describe()` has been
+    /// read, before any SQL routes traffic into the extension.
+    on-load: func() -> result<_, string>;
+
+    /// Called before the extension is dropped.
+    on-unload: func();
+
+    /// Called when a database connection on which this extension is
+    /// active opens.
+    on-connect: func(db-name: string);
+
+    /// Called when such a connection closes.
+    on-disconnect: func(db-name: string);
+}
+
+/// Scalar function dispatch. The host calls `call` with the `func-id`
+/// declared in the corresponding `scalar-function-spec`.
+interface scalar-function {
+    use types.{sql-value};
+
+    call: func(func-id: u64, args: list<sql-value>) -> result<sql-value, string>;
+}
+
+/// Aggregate function dispatch. Supports both classic aggregates
+/// (step + finalize) and window functions (also value + inverse).
+///
+/// `context-id` is a host-assigned per-aggregation handle that lets
+/// the guest distinguish concurrent aggregations of the same function.
+interface aggregate-function {
+    use types.{sql-value};
+
+    /// Add one row's contribution to the aggregation context.
+    step: func(func-id: u64, context-id: u64, args: list<sql-value>) -> result<_, string>;
+
+    /// Produce the final aggregate value and release the context.
+    finalize: func(func-id: u64, context-id: u64) -> result<sql-value, string>;
+
+    /// Produce the current intermediate value without releasing the
+    /// context. Required only for window-mode aggregates.
+    value: func(func-id: u64, context-id: u64) -> result<sql-value, string>;
+
+    /// Remove one row's contribution from the context. Required only
+    /// for window-mode aggregates.
+    inverse: func(func-id: u64, context-id: u64, args: list<sql-value>) -> result<_, string>;
+}
+
+/// Custom collation comparison. Host calls `compare` for any string
+/// comparison that names a collation declared in the manifest.
+interface collation {
+    /// Return < 0 if a < b, 0 if a == b, > 0 if a > b.
+    compare: func(collation-id: u64, a: string, b: string) -> s32;
+}
+
+/// Authorization callback. Active only if `manifest.has-authorizer` is true.
+interface authorizer {
+    use types.{auth-action, auth-result};
+
+    authorize: func(
+        action: auth-action,
+        arg1: option<string>,
+        arg2: option<string>,
+        database: option<string>,
+        trigger: option<string>,
+    ) -> auth-result;
+}
+
+/// Row-level update hook. Active only if `manifest.has-update-hook` is true.
+interface update-hook {
+    use types.{update-operation};
+
+    on-update: func(
+        operation: update-operation,
+        database: string,
+        table: string,
+        rowid: s64,
+    );
+}
+
+/// Component-fetched URI resolution. A resolver is itself an
+/// extension component — sandboxed and gated by the same
+/// capability/policy system as any other loadable extension. The
+/// host registers resolvers per URI scheme (https → http-resolver,
+/// oci → oci-resolver, ...); `.load <uri>` looks up the scheme,
+/// calls `resolve(uri)`, hashes the returned bytes into the CAS
+/// cache, and then proceeds with the normal load_extension path
+/// against the cached file.
+interface resolver {
+    /// Fetch the component bytes addressed by `uri`. The host
+    /// hashes + caches whatever this returns. URI parsing is the
+    /// resolver's responsibility — the host dispatches strictly by
+    /// scheme. Errors come back as strings; the host wraps them
+    /// with the URI context.
+    resolve: func(uri: string) -> result<list<u8>, string>;
+}
+
+/// Commit / rollback hook. Active only if `manifest.has-commit-hook` is true.
+interface commit-hook {
+    /// Called immediately before commit. Return false to convert the
+    /// commit into a rollback.
+    on-commit: func() -> bool;
+
+    /// Called after rollback completes.
+    on-rollback: func();
+}
+
+/// Virtual-table dispatch. The host calls every method with the
+/// `vtab-id` declared in the corresponding `vtab-spec` plus a
+/// host-assigned `instance-id` (per `CREATE VIRTUAL TABLE`) and,
+/// for cursor calls, a host-assigned `cursor-id` (per `xOpen`).
+/// v1 is read-only: no `xUpdate`, no `xRename`, no transactional
+/// vtabs, no `xFindFunction` — those land in a `vtab-mutating`
+/// world later.
+interface vtab {
+    use types.{sql-value};
+
+    /// Constraint operators SQLite's query planner pushes down
+    /// through `xBestIndex`. Mirrors `SQLITE_INDEX_CONSTRAINT_*`.
+    enum constraint-op {
+        eq,
+        gt,
+        le,
+        lt,
+        ge,
+        ne,
+        match,
+        like,
+        regexp,
+        glob,
+        is-null,
+        is-not-null,
+        limit,
+        offset,
+        function,
+    }
+
+    /// One constraint from `xBestIndex`'s `aConstraint[]`.
+    /// `column = -1` denotes ROWID.
+    record constraint {
+        column: s32,
+        op: constraint-op,
+        usable: bool,
+    }
+
+    /// One ORDER BY term from `xBestIndex`'s `aOrderBy[]`.
+    record orderby {
+        column: s32,
+        desc: bool,
+    }
+
+    /// Input to `best-index`. `col-used` is the SQLite bitmask
+    /// of columns the query touches (bit i = column i; bit 63 =
+    /// "any column ≥ 63"  same encoding SQLite uses).
+    record index-info {
+        constraints: list<constraint>,
+        orderbys: list<orderby>,
+        col-used: u64,
+    }
+
+    /// Per-constraint output: `argv-index = 0` leaves the
+    /// constraint to SQLite; non-zero binds it to the matching
+    /// argv slot in `filter`. `omit = true` tells SQLite to skip
+    /// the redundant re-check.
+    record constraint-usage {
+        argv-index: s32,
+        omit: bool,
+    }
+
+    /// Output of `best-index`. The shape mirrors SQLite's
+    /// `sqlite3_index_info`'s output fields.
+    record index-plan {
+        constraint-usage: list<constraint-usage>,
+        idx-num: s32,
+        idx-str: option<string>,
+        estimated-cost: f64,
+        estimated-rows: s64,
+        orderby-consumed: bool,
+    }
+
+    /// Module lifecycle. `create` runs on `CREATE VIRTUAL TABLE`
+    /// and is allowed to materialize backing storage. `connect`
+    /// runs on subsequent loads of the same db. Eponymous vtabs
+    /// (per `vtab-spec.eponymous`) see only `connect`. Both
+    /// return the declared schema as a `CREATE TABLE ...` string.
+    create: func(
+        vtab-id: u64,
+        instance-id: u64,
+        db-name: string,
+        table-name: string,
+        args: list<string>,
+    ) -> result<string, string>;
+
+    connect: func(
+        vtab-id: u64,
+        instance-id: u64,
+        db-name: string,
+        table-name: string,
+        args: list<string>,
+    ) -> result<string, string>;
+
+    /// Tears down `CREATE`'s backing storage. Eponymous vtabs
+    /// never see this.
+    destroy: func(vtab-id: u64, instance-id: u64) -> result<_, string>;
+
+    /// Closes the per-instance handle. Always paired with the
+    /// corresponding `create` / `connect`.
+    disconnect: func(vtab-id: u64, instance-id: u64) -> result<_, string>;
+
+    /// Query planner callback. Receives the constraints + order
+    /// SQLite would use; returns a plan that names which
+    /// constraints go in `filter`'s argv and the chosen idx-num /
+    /// idx-str pair `filter` will see again.
+    best-index: func(
+        vtab-id: u64,
+        instance-id: u64,
+        info: index-info,
+    ) -> result<index-plan, string>;
+
+    /// Open a fresh cursor against an existing instance. The
+    /// host allocates `cursor-id`; the guest stores per-cursor
+    /// state keyed by it.
+    open: func(
+        vtab-id: u64,
+        instance-id: u64,
+        cursor-id: u64,
+    ) -> result<_, string>;
+
+    /// Close a cursor. The guest releases per-cursor state.
+    close: func(vtab-id: u64, cursor-id: u64) -> result<_, string>;
+
+    /// Start iteration. `idx-num` / `idx-str` echo what
+    /// `best-index` returned for this query; `args` carries the
+    /// bound constraint values in `argv-index` order.
+    filter: func(
+        vtab-id: u64,
+        cursor-id: u64,
+        idx-num: s32,
+        idx-str: option<string>,
+        args: list<sql-value>,
+    ) -> result<_, string>;
+
+    /// Advance the cursor by one row.
+    next: func(vtab-id: u64, cursor-id: u64) -> result<_, string>;
+
+    /// True if the cursor is past the last row.
+    eof: func(vtab-id: u64, cursor-id: u64) -> bool;
+
+    /// Fetch one column of the current row. `col` is the schema
+    /// column index (`0..N`).
+    column: func(
+        vtab-id: u64,
+        cursor-id: u64,
+        col: s32,
+    ) -> result<sql-value, string>;
+
+    /// Rowid of the current row. SQLite uses this to satisfy
+    /// rowid joins; vtabs that don't have a natural rowid can
+    /// return a monotonic counter.
+    rowid: func(vtab-id: u64, cursor-id: u64) -> result<s64, string>;
+}

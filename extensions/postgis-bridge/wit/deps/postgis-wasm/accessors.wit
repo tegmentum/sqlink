@@ -1,0 +1,191 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS accessor functions for extracting geometry properties
+interface postgis-accessors {
+    use postgis-types.{geometry, coord, bbox, postgis-error};
+
+    // ========================================================================
+    // COORDINATE ACCESSORS
+    // ========================================================================
+
+    /// ST_X - Get X coordinate of point
+    st-x: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_Y - Get Y coordinate of point
+    st-y: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_Z - Get Z coordinate of point (returns none if no Z)
+    st-z: func(geom: borrow<geometry>) -> result<option<f64>, postgis-error>;
+
+    /// ST_M - Get M coordinate of point (returns none if no M)
+    st-m: func(geom: borrow<geometry>) -> result<option<f64>, postgis-error>;
+
+    // ========================================================================
+    // BOUNDING BOX ACCESSORS
+    // ========================================================================
+
+    /// ST_XMin - Get minimum X coordinate of bounding box
+    st-xmin: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_XMax - Get maximum X coordinate of bounding box
+    st-xmax: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_YMin - Get minimum Y coordinate of bounding box
+    st-ymin: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_YMax - Get maximum Y coordinate of bounding box
+    st-ymax: func(geom: borrow<geometry>) -> result<f64, postgis-error>;
+
+    /// ST_ZMin - Get minimum Z coordinate (returns none if no Z)
+    st-zmin: func(geom: borrow<geometry>) -> result<option<f64>, postgis-error>;
+
+    /// ST_ZMax - Get maximum Z coordinate (returns none if no Z)
+    st-zmax: func(geom: borrow<geometry>) -> result<option<f64>, postgis-error>;
+
+    /// ST_MMin - Get minimum M coordinate (returns none if no M)
+    st-mmin: func(geom: borrow<geometry>) -> result<option<f64>, postgis-error>;
+
+    /// ST_MMax - Get maximum M coordinate (returns none if no M)
+    st-mmax: func(geom: borrow<geometry>) -> result<option<f64>, postgis-error>;
+
+    // ========================================================================
+    // POINT ACCESSORS
+    // ========================================================================
+
+    /// ST_NumPoints - Get number of points in linestring
+    st-num-points: func(geom: borrow<geometry>) -> u32;
+
+    /// ST_NPoints - Get total number of coordinates in geometry
+    st-npoints: func(geom: borrow<geometry>) -> u32;
+
+    /// ST_PointN - Get Nth point of linestring (1-indexed)
+    st-point-n: func(geom: borrow<geometry>, n: u32) -> result<geometry, postgis-error>;
+
+    /// ST_StartPoint - Get start point of linestring
+    st-start-point: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_EndPoint - Get end point of linestring
+    st-end-point: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_Points - Get all points as MultiPoint
+    st-points: func(geom: borrow<geometry>) -> geometry;
+
+    // ========================================================================
+    // GEOMETRY COLLECTION ACCESSORS
+    // ========================================================================
+
+    /// ST_NumGeometries - Get number of geometries in collection
+    st-num-geometries: func(geom: borrow<geometry>) -> u32;
+
+    /// ST_GeometryN - Get Nth geometry from collection (1-indexed)
+    st-geometry-n: func(geom: borrow<geometry>, n: u32) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // RING ACCESSORS
+    // ========================================================================
+
+    /// ST_ExteriorRing - Get exterior ring of polygon
+    st-exterior-ring: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_NumInteriorRings - Get number of interior rings in polygon
+    st-num-interior-rings: func(geom: borrow<geometry>) -> result<u32, postgis-error>;
+
+    /// ST_InteriorRingN - Get Nth interior ring of polygon (1-indexed)
+    st-interior-ring-n: func(geom: borrow<geometry>, n: u32) -> result<geometry, postgis-error>;
+
+    /// ST_NRings - Get total number of rings (exterior + interior)
+    st-nrings: func(geom: borrow<geometry>) -> u32;
+
+    // ========================================================================
+    // TYPE AND DIMENSION ACCESSORS
+    // ========================================================================
+
+    /// ST_GeometryType - Get geometry type as string
+    st-geometry-type: func(geom: borrow<geometry>) -> string;
+
+    /// ST_Dimension - Get coordinate dimension (-1 for empty, 0=point, 1=line, 2=polygon)
+    st-dimension: func(geom: borrow<geometry>) -> s32;
+
+    /// ST_CoordDim - Get coordinate dimension (2=XY, 3=XYZ/XYM, 4=XYZM)
+    st-coord-dim: func(geom: borrow<geometry>) -> u32;
+
+    /// ST_NDims - Get number of dimensions (alias for ST_CoordDim)
+    st-ndims: func(geom: borrow<geometry>) -> u32;
+
+    // ========================================================================
+    // SRID AND ENVELOPE
+    // ========================================================================
+
+    /// ST_SRID - Get spatial reference ID
+    st-srid: func(geom: borrow<geometry>) -> s32;
+
+    /// ST_SetSRID - Set spatial reference ID
+    st-set-srid: func(geom: borrow<geometry>, srid: s32) -> geometry;
+
+    /// ST_Envelope - Get bounding box as geometry
+    st-envelope: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // DUMP FUNCTIONS
+    // ========================================================================
+
+    /// ST_Dump - Extract component geometries from collection
+    st-dump: func(geom: borrow<geometry>) -> list<geometry>;
+
+    /// ST_DumpPoints - Extract all points from geometry
+    st-dump-points: func(geom: borrow<geometry>) -> list<geometry>;
+
+    /// ST_DumpRings - Extract all rings from polygon
+    st-dump-rings: func(geom: borrow<geometry>) -> result<list<geometry>, postgis-error>;
+
+    /// ST_DumpSegments - Extract line segments from linestring
+    st-dump-segments: func(geom: borrow<geometry>) -> result<list<geometry>, postgis-error>;
+
+    // ========================================================================
+    // COLLECTION OPERATIONS
+    // ========================================================================
+
+    /// ST_Collect - Collect geometries into GeometryCollection
+    st-collect: func(geoms: list<borrow<geometry>>) -> result<geometry, postgis-error>;
+
+    /// ST_Multi - Convert to Multi* type
+    st-multi: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_CollectionExtract - Extract geometries of specified type from collection
+    st-collection-extract: func(geom: borrow<geometry>, type-num: u32) -> result<geometry, postgis-error>;
+
+    /// ST_CollectionHomogenize - Convert collection to homogeneous Multi* type if possible
+    st-collection-homogenize: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // METADATA
+    // ========================================================================
+
+    /// ST_MemSize - Get approximate memory size in bytes
+    st-mem-size: func(geom: borrow<geometry>) -> u64;
+
+    /// ST_IsCollection - Check if geometry is a collection type
+    st-is-collection: func(geom: borrow<geometry>) -> bool;
+
+    /// ST_HasArc - Check if geometry has circular arc (always false for this implementation)
+    st-has-arc: func(geom: borrow<geometry>) -> bool;
+
+    /// ST_ZMFlag - Get Z/M flag (0=2D, 1=M only, 2=Z only, 3=ZM)
+    st-zmflag: func(geom: borrow<geometry>) -> u32;
+
+    // ========================================================================
+    // DERIVED GEOMETRY ACCESSORS
+    // ========================================================================
+
+    /// ST_BoundingDiagonal - Get diagonal of bounding box as LineString
+    st-bounding-diagonal: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_PointOnSurface - Get point guaranteed to be on the geometry surface
+    st-point-on-surface: func(geom: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_Summary - Get text summary of geometry
+    st-summary: func(geom: borrow<geometry>) -> string;
+
+    /// ST_Expand - Expand geometry bounding box by specified distance
+    st-expand: func(geom: borrow<geometry>, distance: f64) -> result<geometry, postgis-error>;
+}

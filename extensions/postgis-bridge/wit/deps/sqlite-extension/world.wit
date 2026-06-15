@@ -1,0 +1,157 @@
+package sqlite:extension@0.1.0;
+
+/// Minimal extension — read-only SQL + scalar functions. Suitable for
+/// stateless pure functions: text transforms, math, hashing.
+world minimal {
+    import types;
+    import spi;
+    import logging;
+    import config;
+
+    export metadata;
+    export scalar-function;
+}
+
+/// Stateful extension — adds aggregate functions, host-managed state,
+/// and an in-memory cache.
+world stateful {
+    import types;
+    import spi;
+    import logging;
+    import config;
+    import state;
+    import cache;
+
+    export metadata;
+    export scalar-function;
+    export aggregate-function;
+}
+
+/// Extension with full lifecycle awareness. Builds on `stateful` by
+/// adding prepared statements (for setup queries in on-load) and the
+/// lifecycle export.
+world lifecycle-aware {
+    import types;
+    import spi;
+    import prepared;
+    import logging;
+    import config;
+    import state;
+    import cache;
+
+    export metadata;
+    export lifecycle;
+    export scalar-function;
+    export aggregate-function;
+}
+
+/// Extension that resolves URIs to component bytes. Imports `http`
+/// for network-fetching resolvers; the host's capability gate is
+/// what enforces which hosts the resolver can hit (no resolver-
+/// internal policy). scalar-function is exported for the same
+/// metadata-bootstrap reason as `authorizing` / `hooked`.
+world resolving {
+    import types;
+    import spi;
+    import logging;
+    import config;
+    import http;
+
+    export metadata;
+    export scalar-function;
+    export resolver;
+}
+
+/// Extension that adds a custom collation. Inherits the minimal
+/// import set; adds the collation export. Same shape as `minimal`
+/// plus collation — keeps the import surface small for extensions
+/// that only need to compare strings, without forcing them into
+/// the full world's kitchen sink.
+world collating {
+    import types;
+    import spi;
+    import logging;
+    import config;
+
+    export metadata;
+    export scalar-function;
+    export collation;
+}
+
+/// Extension that authorizes SQL actions. scalar-function is
+/// exported alongside the authorizer so the host's metadata
+/// bootstrap path (which always instantiates against the minimal
+/// world to read manifest.describe) can resolve the component;
+/// extensions that don't expose SQL functions just return an error
+/// from `call`.
+world authorizing {
+    import types;
+    import spi;
+    import logging;
+    import config;
+
+    export metadata;
+    export scalar-function;
+    export authorizer;
+}
+
+/// Extension that observes row-level changes and transaction
+/// boundaries. scalar-function exported for the same reason as in
+/// `authorizing` — uniform metadata bootstrap shape.
+world hooked {
+    import types;
+    import spi;
+    import logging;
+    import config;
+
+    export metadata;
+    export scalar-function;
+    export update-hook;
+    export commit-hook;
+}
+
+/// Extension that exposes one or more virtual-table modules
+/// (v1: read-only). scalar-function is exported alongside vtab
+/// for the same metadata-bootstrap reason as `authorizing`. v1
+/// has no xUpdate / xRename / transactional hooks  see the
+/// vtab interface for the scope.
+world tabular {
+    import types;
+    import spi;
+    import logging;
+    import config;
+
+    export metadata;
+    export scalar-function;
+    export vtab;
+}
+
+/// Full-featured extension — every host capability available, every
+/// guest hook offered. Use this when an extension genuinely needs the
+/// kitchen sink; prefer a narrower world otherwise.
+world full {
+    import types;
+    import spi;
+    import prepared;
+    import transaction;
+    import schema;
+    import logging;
+    import config;
+    import state;
+    import cache;
+    import random;
+    import text;
+    import hashing;
+    import encoding;
+    import http;
+
+    export metadata;
+    export lifecycle;
+    export scalar-function;
+    export aggregate-function;
+    export collation;
+    export authorizer;
+    export update-hook;
+    export commit-hook;
+    export vtab;
+}

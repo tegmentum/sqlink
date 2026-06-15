@@ -1,0 +1,265 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS shared types
+/// Common types used across all PostGIS interfaces
+interface postgis-types {
+    // =========================================================================
+    // COORDINATE TYPES
+    // =========================================================================
+
+    /// 2D coordinate
+    record coord {
+        x: f64,
+        y: f64,
+    }
+
+    /// 3D coordinate with Z value
+    record coord-z {
+        x: f64,
+        y: f64,
+        z: f64,
+    }
+
+    /// 4D coordinate with Z and M values
+    record coord-zm {
+        x: f64,
+        y: f64,
+        z: option<f64>,
+        m: option<f64>,
+    }
+
+    // =========================================================================
+    // BOUNDING BOX TYPES
+    // =========================================================================
+
+    /// Bounding box (envelope)
+    record bbox {
+        min-x: f64,
+        min-y: f64,
+        max-x: f64,
+        max-y: f64,
+    }
+
+    /// 3D bounding box
+    record box3d {
+        min-x: f64,
+        min-y: f64,
+        min-z: f64,
+        max-x: f64,
+        max-y: f64,
+        max-z: f64,
+    }
+
+    // =========================================================================
+    // GEOMETRY ENUMERATION
+    // =========================================================================
+
+    /// Geometry type enumeration
+    enum geometry-type {
+        point,
+        line-string,
+        polygon,
+        multi-point,
+        multi-line-string,
+        multi-polygon,
+        geometry-collection,
+    }
+
+    // =========================================================================
+    // ERROR TYPES
+    // =========================================================================
+
+    /// Error types for spatial operations
+    variant postgis-error {
+        /// Invalid geometry (self-intersecting, unclosed ring, etc.)
+        invalid-geometry(string),
+        /// Parse error (invalid WKT/WKB)
+        parse-error(string),
+        /// Operation not supported for geometry type
+        unsupported-operation(string),
+        /// Numeric error (NaN, infinity, overflow)
+        numeric-error(string),
+        /// SRID mismatch between geometries
+        srid-mismatch(string),
+        /// General error
+        general(string),
+    }
+
+    // =========================================================================
+    // PARAMETER TYPES
+    // =========================================================================
+
+    /// Buffer operation parameters
+    record buffer-params {
+        /// Number of segments per quadrant (default 8)
+        quad-segs: option<u32>,
+        /// End cap style: round, flat, square
+        end-cap: option<string>,
+        /// Join style: round, mitre, bevel
+        join: option<string>,
+        /// Mitre limit
+        mitre-limit: option<f64>,
+    }
+
+    // =========================================================================
+    // RESULT TYPES
+    // =========================================================================
+
+    /// Extreme points result
+    record extremes {
+        x-min-point: coord,
+        x-max-point: coord,
+        y-min-point: coord,
+        y-max-point: coord,
+    }
+
+    /// Inscribed circle result
+    record inscribed-circle {
+        center: coord,
+        nearest: coord,
+        radius: f64,
+    }
+
+    /// Validation detail result
+    record valid-detail {
+        valid: bool,
+        reason: option<string>,
+        location: option<coord>,
+    }
+
+    /// Coordinate statistics
+    record coordinate-stats {
+        x-min: f64,
+        x-max: f64,
+        x-avg: f64,
+        y-min: f64,
+        y-max: f64,
+        y-avg: f64,
+        z-min: option<f64>,
+        z-max: option<f64>,
+        z-avg: option<f64>,
+        count: u32,
+    }
+
+    // =========================================================================
+    // GEOMETRY RESOURCE
+    // =========================================================================
+
+    // =========================================================================
+    // GEOGRAPHY RESOURCE
+    // =========================================================================
+
+    /// Geography resource - geometry on the spheroid (uses geodesic calculations)
+    /// Unlike geometry which uses planar calculations, geography uses spherical/ellipsoidal
+    /// calculations for distance, area, and other measurements (WGS84 ellipsoid by default).
+    resource geography {
+        /// Create geography from Well-Known Text (WKT)
+        from-wkt: static func(wkt: string) -> result<geography, postgis-error>;
+
+        /// Create geography from Well-Known Binary (WKB)
+        from-wkb: static func(wkb: list<u8>) -> result<geography, postgis-error>;
+
+        /// Create geography from GeoJSON
+        from-geojson: static func(json: string) -> result<geography, postgis-error>;
+
+        /// Create a geography point
+        point: static func(lon: f64, lat: f64) -> geography;
+
+        /// Export to Well-Known Text (WKT)
+        as-wkt: func() -> string;
+
+        /// Export to Well-Known Binary (WKB)
+        as-wkb: func() -> list<u8>;
+
+        /// Export to GeoJSON
+        as-geojson: func() -> string;
+
+        /// Get geometry type
+        geometry-type: func() -> geometry-type;
+
+        /// Get SRID (typically 4326 for geography)
+        srid: func() -> option<s32>;
+
+        /// Check if geography is empty
+        is-empty: func() -> bool;
+
+        /// Clone the geography
+        clone: func() -> geography;
+
+        /// Calculate geodesic distance to another geography in meters
+        distance: func(other: borrow<geography>) -> f64;
+
+        /// Calculate geodesic length in meters (for linestrings)
+        length: func() -> f64;
+
+        /// Calculate geodesic area in square meters (for polygons)
+        area: func() -> f64;
+
+        /// Calculate geodesic perimeter in meters (for polygons)
+        perimeter: func() -> f64;
+
+        /// Calculate azimuth (bearing) to another point in radians
+        azimuth: func(other: borrow<geography>) -> option<f64>;
+
+        /// Project a point given azimuth and distance (meters)
+        project: func(azimuth: f64, distance: f64) -> result<geography, postgis-error>;
+
+        /// Convert to geometry
+        to-geometry: func() -> geometry;
+    }
+
+    // =========================================================================
+    // GEOMETRY RESOURCE
+    // =========================================================================
+
+    /// Geometry resource - opaque handle to a geometry object
+    resource geometry {
+        /// Create geometry from Well-Known Text (WKT)
+        from-wkt: static func(wkt: string) -> result<geometry, postgis-error>;
+
+        /// Create geometry from Well-Known Binary (WKB)
+        from-wkb: static func(wkb: list<u8>) -> result<geometry, postgis-error>;
+
+        /// Create geometry from GeoJSON
+        from-geojson: static func(json: string) -> result<geometry, postgis-error>;
+
+        /// Create a point geometry
+        point: static func(x: f64, y: f64) -> geometry;
+
+        /// Create a point geometry with Z coordinate
+        point-z: static func(x: f64, y: f64, z: f64) -> geometry;
+
+        /// Create a line string from coordinates
+        line-string: static func(coords: list<coord>) -> result<geometry, postgis-error>;
+
+        /// Create a polygon from exterior ring and optional interior rings (holes)
+        polygon: static func(exterior: list<coord>, holes: list<list<coord>>) -> result<geometry, postgis-error>;
+
+        /// Export to Well-Known Text (WKT)
+        as-wkt: func() -> string;
+
+        /// Export to Well-Known Binary (WKB)
+        as-wkb: func() -> list<u8>;
+
+        /// Export to GeoJSON
+        as-geojson: func() -> string;
+
+        /// Get geometry type
+        geometry-type: func() -> geometry-type;
+
+        /// Get SRID (Spatial Reference ID)
+        srid: func() -> option<s32>;
+
+        /// Set SRID
+        set-srid: func(srid: s32) -> geometry;
+
+        /// Get number of dimensions (2, 3, or 4)
+        num-dimensions: func() -> u32;
+
+        /// Check if geometry is empty
+        is-empty: func() -> bool;
+
+        /// Clone the geometry
+        clone: func() -> geometry;
+    }
+}

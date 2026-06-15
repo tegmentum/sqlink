@@ -1,0 +1,269 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS geometry constructor functions
+interface postgis-constructors {
+    use postgis-types.{geometry, geography, bbox, postgis-error};
+
+    // ========================================================================
+    // POINT CONSTRUCTORS
+    // ========================================================================
+
+    /// ST_MakePoint - Create a 2D point
+    st-make-point: func(x: f64, y: f64) -> geometry;
+
+    /// ST_MakePointM - Create a point with M value
+    st-make-point-m: func(x: f64, y: f64, m: f64) -> geometry;
+
+    /// ST_MakePointZ - Create a point with Z value
+    st-make-point-z: func(x: f64, y: f64, z: f64) -> geometry;
+
+    /// ST_MakePointZM - Create a point with Z and M values
+    st-make-point-zm: func(x: f64, y: f64, z: f64, m: f64) -> geometry;
+
+    /// ST_Point - Alias for ST_MakePoint
+    st-point: func(x: f64, y: f64) -> geometry;
+
+    /// ST_PointZ - Create a point with Z coordinate
+    st-point-z: func(x: f64, y: f64, z: f64) -> geometry;
+
+    /// ST_PointM - Create a point with M coordinate
+    st-point-m: func(x: f64, y: f64, m: f64) -> geometry;
+
+    /// ST_PointZM - Create a point with Z and M coordinates
+    st-point-zm: func(x: f64, y: f64, z: f64, m: f64) -> geometry;
+
+    // ========================================================================
+    // LINE CONSTRUCTORS
+    // ========================================================================
+
+    /// ST_MakeLine - Create a LineString from multiple points
+    st-make-line: func(points: list<borrow<geometry>>) -> result<geometry, postgis-error>;
+
+    /// ST_MakeLineTwo - Create a LineString from two points
+    st-make-line-two: func(point1: borrow<geometry>, point2: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    /// ST_LineFromMultiPoint - Create linestring from multipoint
+    st-line-from-multi-point: func(mp: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // POLYGON CONSTRUCTORS
+    // ========================================================================
+
+    /// ST_MakePolygon - Create a polygon from shell and optional holes
+    st-make-polygon: func(shell: borrow<geometry>, holes: list<borrow<geometry>>) -> result<geometry, postgis-error>;
+
+    /// ST_MakeEnvelope - Create a rectangular polygon from bounding box
+    st-make-envelope: func(xmin: f64, ymin: f64, xmax: f64, ymax: f64) -> geometry;
+
+    /// ST_MakeEnvelopeSRID - Create a rectangular polygon with SRID
+    st-make-envelope-srid: func(xmin: f64, ymin: f64, xmax: f64, ymax: f64, srid: s32) -> geometry;
+
+    // ========================================================================
+    // BOUNDING BOX CONSTRUCTORS
+    // ========================================================================
+
+    /// ST_MakeBox2D - Create a 2D bounding box from two points
+    st-make-box2d: func(low-left: borrow<geometry>, up-right: borrow<geometry>) -> result<bbox, postgis-error>;
+
+    /// ST_BoxFromGeoHash - Create bounding box from GeoHash
+    st-box-from-geohash: func(geohash-str: string, precision: option<u32>) -> result<bbox, postgis-error>;
+
+    // ========================================================================
+    // TEXT PARSERS (WKT)
+    // ========================================================================
+
+    /// ST_GeomFromText - Create geometry from WKT
+    st-geom-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_GeomFromTextSRID - Create geometry from WKT with SRID
+    st-geom-from-text-srid: func(wkt: string, srid: s32) -> result<geometry, postgis-error>;
+
+    /// ST_GeomFromEWKT - Create geometry from Extended WKT
+    st-geom-from-ewkt: func(ewkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_PointFromText - Create point from WKT
+    st-point-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_LineFromText - Create linestring from WKT
+    st-line-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_PolygonFromText - Create polygon from WKT
+    st-polygon-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_MPointFromText - Create multipoint from WKT
+    st-mpoint-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_MLineFromText - Create multilinestring from WKT
+    st-mline-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_MPolyFromText - Create multipolygon from WKT
+    st-mpoly-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_GeomCollFromText - Create geometry collection from WKT
+    st-geomcoll-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_BdPolyFromText - Create polygon from boundary line WKT
+    st-bd-poly-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    /// ST_BdMPolyFromText - Create multipolygon from boundary line WKT
+    st-bd-mpoly-from-text: func(wkt: string) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // BINARY PARSERS (WKB/EWKB)
+    // ========================================================================
+
+    /// ST_GeomFromWKB - Create geometry from WKB
+    st-geom-from-wkb: func(wkb: list<u8>) -> result<geometry, postgis-error>;
+
+    /// ST_GeomFromEWKB - Create geometry from Extended WKB
+    st-geom-from-ewkb: func(ewkb: list<u8>) -> result<geometry, postgis-error>;
+
+    /// ST_GeomFromHexEWKB - Create geometry from hex-encoded EWKB
+    st-geom-from-hexewkb: func(hexewkb: string) -> result<geometry, postgis-error>;
+
+    /// ST_PointFromWKB - Create point from WKB
+    st-point-from-wkb: func(wkb: list<u8>) -> result<geometry, postgis-error>;
+
+    /// ST_LineFromWKB - Create linestring from WKB
+    st-line-from-wkb: func(wkb: list<u8>) -> result<geometry, postgis-error>;
+
+    /// ST_PolygonFromWKB - Create polygon from WKB
+    st-polygon-from-wkb: func(wkb: list<u8>) -> result<geometry, postgis-error>;
+
+    /// ST_MPointFromWKB - Create multipoint from WKB
+    st-mpoint-from-wkb: func(wkb: list<u8>) -> result<geometry, postgis-error>;
+
+    /// ST_MLineFromWKB - Create multilinestring from WKB
+    st-mline-from-wkb: func(wkb: list<u8>) -> result<geometry, postgis-error>;
+
+    /// ST_MPolyFromWKB - Create multipolygon from WKB
+    st-mpoly-from-wkb: func(wkb: list<u8>) -> result<geometry, postgis-error>;
+
+    /// ST_GeomCollFromWKB - Create geometry collection from WKB
+    st-geomcoll-from-wkb: func(wkb: list<u8>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // JSON PARSERS
+    // ========================================================================
+
+    /// ST_GeomFromGeoJSON - Create geometry from GeoJSON
+    st-geom-from-geojson: func(json: string) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // OTHER FORMAT PARSERS
+    // ========================================================================
+
+    /// ST_GeomFromTWKB - Create geometry from Tiny WKB
+    st-geom-from-twkb: func(twkb: list<u8>) -> result<geometry, postgis-error>;
+
+    /// ST_GeomFromGeoHash - Create polygon from GeoHash
+    st-geom-from-geohash: func(geohash-str: string, precision: option<u32>) -> result<geometry, postgis-error>;
+
+    /// ST_PointFromGeoHash - Create point from GeoHash center
+    st-point-from-geohash: func(geohash-str: string, precision: option<u32>) -> result<geometry, postgis-error>;
+
+    /// ST_LineFromEncodedPolyline - Create linestring from encoded polyline
+    st-line-from-encoded-polyline: func(encoded: string, precision: option<u32>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // GRID CONSTRUCTORS
+    // ========================================================================
+
+    /// ST_SquareGrid - Generate a grid of square polygons covering the bounds
+    st-square-grid: func(size: f64, bounds: borrow<geometry>) -> result<list<geometry>, postgis-error>;
+
+    /// ST_Square - Create a single square at grid position
+    st-square: func(size: f64, origin-x: f64, origin-y: f64, i: s32, j: s32) -> result<geometry, postgis-error>;
+
+    /// ST_Hexagon - Create a single hexagon at grid position (i, j)
+    st-hexagon: func(size: f64, origin-x: f64, origin-y: f64, i: s32, j: s32) -> result<geometry, postgis-error>;
+
+    /// ST_HexagonGrid - Generate a grid of hexagon polygons covering the bounds
+    st-hexagon-grid: func(size: f64, bounds: borrow<geometry>) -> result<list<geometry>, postgis-error>;
+
+    // ========================================================================
+    // WEB MAPPING / TILING
+    // ========================================================================
+
+    /// ST_TileEnvelope - Create a tile envelope for web mapping (XYZ tiles)
+    st-tile-envelope: func(zoom: u32, x: u32, y: u32, bounds: option<tuple<f64, f64, f64, f64>>, margin: option<f64>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // 3D BOX CONSTRUCTORS
+    // ========================================================================
+
+    /// ST_3DMakeBox - Create a 3D bounding box from two 3D points
+    st-make-box3d: func(low-left: borrow<geometry>, up-right: borrow<geometry>) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // KML PARSER
+    // ========================================================================
+
+    /// ST_GeomFromKML - Create geometry from KML string
+    st-geom-from-kml: func(kml: string) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // FLATGEOBUF PARSER
+    // ========================================================================
+
+    /// ST_FromFlatGeobuf - Read geometries from FlatGeobuf binary
+    st-from-flatgeobuf: func(fgb: list<u8>) -> result<list<geometry>, postgis-error>;
+
+    // ========================================================================
+    // GEOBUF PARSER
+    // ========================================================================
+
+    /// ST_GeomFromGeobuf - Create geometries from Geobuf binary
+    /// Geobuf is a compact binary encoding of GeoJSON using Protocol Buffers
+    st-geom-from-geobuf: func(geobuf: list<u8>) -> result<list<geometry>, postgis-error>;
+
+    // ========================================================================
+    // MARC21 PARSER
+    // ========================================================================
+
+    /// ST_GeomFromMARC21 - Create geometry from MARC21/XML geographic data record
+    /// MARC21 is used in library cataloging to encode geographic coordinates (034 field)
+    st-geom-from-marc21: func(marc21-xml: string) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // GML PARSER
+    // ========================================================================
+
+    /// ST_GeomFromGML - Create geometry from GML (Geography Markup Language) string
+    /// Supports GML 2.x and 3.x geometry elements
+    st-geom-from-gml: func(gml: string) -> result<geometry, postgis-error>;
+
+    /// ST_GeomFromGML with SRID - Create geometry from GML with explicit SRID
+    st-geom-from-gml-srid: func(gml: string, srid: s32) -> result<geometry, postgis-error>;
+
+    /// ST_GMLToSQL - Alias for ST_GeomFromGML (OGC SQL/MM compliant name)
+    st-gml-to-sql: func(gml: string) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // TEXT TO GEOMETRY (Font-based)
+    // ========================================================================
+
+    /// ST_Letters - Create geometries from text characters using a font
+    /// Renders text as a collection of polygon geometries representing each character
+    /// font_data: TTF/OTF font file bytes
+    /// text: Text string to render
+    /// Returns a MultiPolygon representing the text
+    st-letters: func(font-data: list<u8>, text: string) -> result<geometry, postgis-error>;
+
+    // ========================================================================
+    // GEOGRAPHY CONSTRUCTORS
+    // ========================================================================
+
+    /// ST_GeogFromText - Create geography from WKT
+    /// Geography uses geodesic (spherical/ellipsoidal) calculations
+    st-geog-from-text: func(wkt: string) -> result<geography, postgis-error>;
+
+    /// ST_GeographyFromText - Alias for ST_GeogFromText
+    st-geography-from-text: func(wkt: string) -> result<geography, postgis-error>;
+
+    /// ST_GeogFromWKB - Create geography from WKB
+    st-geog-from-wkb: func(wkb: list<u8>) -> result<geography, postgis-error>;
+
+    /// ST_GeogPoint - Create a geography point from longitude and latitude
+    st-geog-point: func(lon: f64, lat: f64) -> geography;
+}

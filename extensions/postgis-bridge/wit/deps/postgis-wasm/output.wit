@@ -1,0 +1,106 @@
+package postgis:wasm@0.1.0;
+
+/// PostGIS output functions for serializing geometries to various formats
+interface postgis-output {
+    use postgis-types.{geometry, postgis-error};
+
+    // ========================================================================
+    // TEXT FORMATS
+    // ========================================================================
+
+    /// ST_AsText - Convert geometry to WKT
+    st-as-text: func(geom: borrow<geometry>) -> string;
+
+    /// ST_AsEWKT - Convert geometry to Extended WKT (includes SRID)
+    st-as-ewkt: func(geom: borrow<geometry>) -> string;
+
+    // ========================================================================
+    // BINARY FORMATS
+    // ========================================================================
+
+    /// ST_AsBinary - Convert geometry to WKB
+    st-as-binary: func(geom: borrow<geometry>) -> list<u8>;
+
+    /// ST_AsEWKB - Convert geometry to Extended WKB (includes SRID)
+    st-as-ewkb: func(geom: borrow<geometry>) -> list<u8>;
+
+    /// ST_AsHexEWKB - Convert geometry to hex-encoded EWKB
+    st-as-hexewkb: func(geom: borrow<geometry>) -> string;
+
+    /// ST_AsTWKB - Convert geometry to Tiny Well-Known Binary
+    st-as-twkb: func(geom: borrow<geometry>, precision: option<s32>) -> result<list<u8>, postgis-error>;
+
+    // ========================================================================
+    // JSON/XML/MARKUP FORMATS
+    // ========================================================================
+
+    /// ST_AsGeoJSON - Convert geometry to GeoJSON
+    st-as-geojson: func(geom: borrow<geometry>) -> string;
+
+    /// ST_AsSVG - Convert geometry to SVG path data
+    st-as-svg: func(geom: borrow<geometry>) -> result<string, postgis-error>;
+
+    /// ST_AsKML - Convert geometry to KML format
+    st-as-kml: func(geom: borrow<geometry>) -> result<string, postgis-error>;
+
+    /// ST_AsGML - Convert geometry to GML format
+    st-as-gml: func(geom: borrow<geometry>, version: option<u32>, precision: option<u32>) -> result<string, postgis-error>;
+
+    /// ST_AsX3D - Convert geometry to X3D coordinate string
+    st-as-x3d: func(geom: borrow<geometry>) -> result<string, postgis-error>;
+
+    // ========================================================================
+    // SPECIALIZED FORMATS
+    // ========================================================================
+
+    /// ST_AsEncodedPolyline - Convert LineString to Google encoded polyline
+    st-as-encoded-polyline: func(geom: borrow<geometry>, precision: option<u32>) -> result<string, postgis-error>;
+
+    /// ST_AsLatLonText - Convert point to latitude/longitude text (DMS format)
+    st-as-lat-lon-text: func(point: borrow<geometry>, format: option<string>) -> result<string, postgis-error>;
+
+    /// ST_GeoHash - Convert geometry to GeoHash string
+    st-geohash: func(geom: borrow<geometry>, maxchars: option<u32>) -> result<string, postgis-error>;
+
+    // ========================================================================
+    // SUMMARY
+    // ========================================================================
+
+    /// ST_Summary - Returns a text summary of the geometry contents
+    st-summary: func(geom: borrow<geometry>) -> string;
+
+    // ========================================================================
+    // VECTOR TILE FORMATS
+    // ========================================================================
+
+    /// ST_AsMVTGeom - Transform geometry to MVT tile coordinates
+    /// Transforms geometry to tile coordinate space for a given tile (z/x/y)
+    st-as-mvt-geom: func(geom: borrow<geometry>, bounds-minx: f64, bounds-miny: f64, bounds-maxx: f64, bounds-maxy: f64, extent: option<u32>, buffer: option<u32>, clip: option<bool>) -> result<geometry, postgis-error>;
+
+    /// ST_AsMVT - Generate MVT binary from geometries
+    /// Creates a Mapbox Vector Tile from a list of geometries with layer name
+    st-as-mvt: func(geoms: list<borrow<geometry>>, layer-name: string, extent: option<u32>) -> result<list<u8>, postgis-error>;
+
+    // ========================================================================
+    // FLATGEOBUF FORMAT
+    // ========================================================================
+
+    /// ST_AsFlatGeobuf - Convert geometries to FlatGeobuf binary format
+    st-as-flatgeobuf: func(geoms: list<borrow<geometry>>, layer-name: string) -> result<list<u8>, postgis-error>;
+
+    // ========================================================================
+    // GEOBUF FORMAT
+    // ========================================================================
+
+    /// ST_AsGeobuf - Convert geometries to Geobuf binary format
+    /// Geobuf is a compact binary encoding of GeoJSON using Protocol Buffers
+    st-as-geobuf: func(geoms: list<borrow<geometry>>, precision: option<u32>) -> result<list<u8>, postgis-error>;
+
+    // ========================================================================
+    // MARC21 FORMAT
+    // ========================================================================
+
+    /// ST_AsMARC21 - Convert geometry to MARC21/XML geographic data record
+    /// MARC21 is used in library cataloging to encode geographic coordinates
+    st-as-marc21: func(geom: borrow<geometry>) -> result<string, postgis-error>;
+}

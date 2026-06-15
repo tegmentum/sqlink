@@ -1552,6 +1552,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "postgis-bridge-extension"
+version = "0.1.0"
+dependencies = [
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "potential_utf"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

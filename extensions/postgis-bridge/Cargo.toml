@@ -1,0 +1,30 @@
+[package]
+name = "postgis-bridge-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Bridges PostGIS spatial functions onto SQLite's scalar-function
+extension surface. Imports `postgis:wasm/*` from postgis-wasm
+(317 PostGIS functions implemented as a separate component);
+exports `sqlite:extension/minimal`. Geometry crosses the SQL
+boundary as BLOB (Well-Known Binary).
+
+The final loadable wasm is the result of composing this bridge
+crate against `postgis-composed.wasm`  see the crate-level
+`compose.sh` (or wac plug, depending on toolchain). The bridge
+on its own can't load: its postgis imports need to be satisfied
+first.
+
+V1 starter set is intentionally small (~8 functions) to validate
+the marshaling path. Adding the remaining ~300 functions is
+mechanical once the pattern works end-to-end.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
