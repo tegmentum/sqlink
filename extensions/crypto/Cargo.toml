@@ -1,0 +1,28 @@
+[package]
+name = "crypto-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+SQL crypto / encoding scalars: sha1, sha256, sha512, md5, hex,
+unhex, base64_encode, base64_decode. All inputs/outputs are SQL
+TEXT or BLOB; the hash functions return hex TEXT to match
+SQLite's existing `hex(...)` conventions.
+
+Tier-1 plugin per PLAN-sqlite-plugins.md. Pure-Rust crypto deps
+(`sha1`, `sha2`, `md-5`, `hex`, `base64`)  all wasm32-wasip2
+clean.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+sha1 = { version = "0.10", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+md-5 = { version = "0.10", default-features = false }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }

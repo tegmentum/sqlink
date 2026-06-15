@@ -1,0 +1,24 @@
+[package]
+name = "uuid-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+UUID scalars: `uuid()` (= `uuidv4`), `uuidv4()`, `uuidv7()`.
+Returns the canonical hyphenated form as SQL TEXT.
+
+Tier-1 plugin per PLAN-sqlite-plugins.md. Pure-Rust `uuid`
+crate with v4 + v7 features and `getrandom` for entropy
+wasm32-wasip2 has `wasi_snapshot_preview1::random_get`, which
+getrandom uses by default.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+uuid = { version = "1.10", features = ["v4", "v7"] }
+getrandom = { version = "0.2", default-features = false, features = ["js"] }

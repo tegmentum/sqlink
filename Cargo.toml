@@ -17,6 +17,10 @@ members = [
     "sqlite-cas-cache",
     "extensions/json1",
     "extensions/csv",
+    "extensions/math",
+    "extensions/crypto",
+    "extensions/uuid",
+    "extensions/regexp",
     "examples/rust/runnable-sqlite-demo",
 ]
 

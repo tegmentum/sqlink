@@ -1,0 +1,25 @@
+[package]
+name = "regexp-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Regular-expression scalars: regexp_like / regexp_substr /
+regexp_replace, plus the bare `regexp` operator SQLite looks up
+when SQL says `text REGEXP pattern`.
+
+Tier-1 plugin per PLAN-sqlite-plugins.md. Uses the pure-Rust
+`regex` crate (RE2 syntax, no PCRE  no lookaround / no
+backreferences). regex's wasm32 build adds ~250 KB to the
+component, which fits the tier-1 budget; if size matters,
+regex-lite is a drop-in source-compatible alternative.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+regex = "1"

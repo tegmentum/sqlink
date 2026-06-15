@@ -1,0 +1,24 @@
+[package]
+name = "math-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Math scalar functions for SQLite: trig, log, exp, root, power,
+angle conversion, plus constants. 32 scalar functions backed by
+the pure-Rust `libm` crate so the wasm32-wasip2 build needs no
+host math runtime.
+
+Tier-1 plugin per PLAN-sqlite-plugins.md. Targets the canonical
+`sqlite:extension/minimal` world  no SPI, no state, no host
+capabilities.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libm = "0.2"
