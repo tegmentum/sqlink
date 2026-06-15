@@ -527,6 +527,10 @@ const AGG_ST_CLUSTER_WITHIN: u64 = 1004;
 const AGG_ST_EXTENT_3D: u64 = 1005;
 const AGG_ST_CLUSTER_DBSCAN: u64 = 1006;
 const AGG_ST_CLUSTER_KMEANS: u64 = 1007;
+// Raster aggregate (PLAN-raster.md R6). Uses the same AggState
+// wkbs field — for rasters that's the per-row `Raster::as_binary`
+// blob (raw DFER frame), not WKB.
+const AGG_ST_RAST_UNION: u64 = 1008;
 
 /// Per-aggregation state: collected geometries (as WKB) plus
 /// the trailing scalar args some aggregates latch from the
@@ -1016,6 +1020,13 @@ impl MetadataGuest for PostgisBridge {
                     func_flags: det,
                     is_window: false,
                 },
+                AggregateFunctionSpec {
+                    id: AGG_ST_RAST_UNION,
+                    name: "st_rast_union_agg".into(),
+                    num_args: 1,
+                    func_flags: det,
+                    is_window: false,
+                },
             ],
             collations: alloc::vec![],
             vtabs: alloc::vec![VtabSpec {
@@ -1461,7 +1472,12 @@ macro_rules! blob_to_geom {
 
 impl ScalarFunctionGuest for PostgisBridge {
     fn call(func_id: u64, args: Vec<SqlValue>) -> Result<SqlValue, String> {
-        if args.iter().any(|v| matches!(v, SqlValue::Null)) {
+        // Functions whose NULL arguments are MEANINGFUL bypass the
+        // blanket SQL-aggregate-style NULL-propagation. Today only
+        // st_rast_addband uses NULL as "no nodata value" (it maps
+        // to `Option::None` on the WIT boundary).
+        let nulls_meaningful = matches!(func_id, FID_RST_ADD_BAND);
+        if !nulls_meaningful && args.iter().any(|v| matches!(v, SqlValue::Null)) {
             return Ok(SqlValue::Null);
         }
         match func_id {
@@ -3243,6 +3259,24 @@ impl AggregateGuest for PostgisBridge {
         };
         if state.wkbs.is_empty() {
             return Ok(SqlValue::Null);
+        }
+        // Raster aggregates reconstitute their per-row BLOBs as
+        // Raster resources (DFER bytes) rather than geometries.
+        // Short-circuit before the Geometry::from_wkb pass below.
+        if func_id == AGG_ST_RAST_UNION {
+            use bindings::postgis::wasm::postgis_raster_aggregates as pg_rast_agg;
+            let mut rasters = Vec::with_capacity(state.wkbs.len());
+            for (i, blob) in state.wkbs.iter().enumerate() {
+                rasters.push(
+                    rast_from_blob(blob, &format!("st_rast_union_agg arg {i}"))?,
+                );
+            }
+            let refs: Vec<&bindings::postgis::wasm::postgis_raster_types::Raster> =
+                rasters.iter().collect();
+            let out = pg_rast_agg::st_rast_union_aggregate(&refs).map_err(|e| {
+                format!("st_rast_union_agg: {}", raster_err_string(e))
+            })?;
+            return Ok(SqlValue::Blob(out.as_binary()));
         }
         // Reconstitute geometries.
         let mut geoms = Vec::with_capacity(state.wkbs.len());

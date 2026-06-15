@@ -285,3 +285,22 @@ interface postgis-raster-processing {
         rast: borrow<raster>, scale-x: f64, scale-y: f64, algorithm: string,
     ) -> result<raster, raster-error>;
 }
+
+/// Raster aggregates (Feature 1, phase R6). Match the shape of
+/// `postgis-aggregates` for geometry — accept a list of borrows,
+/// return a single combined raster.
+interface postgis-raster-aggregates {
+    use postgis-raster-types.{raster, raster-error};
+
+    /// ST_Union(raster) — aggregate mosaic. All inputs must share
+    /// SRID, scale-x, scale-y, skew-x, skew-y; misalignment surfaces
+    /// as `type-mismatch`. The implementation snaps each input's
+    /// upper-left into the output's grid via nearest-cell rounding,
+    /// so small floating-point drift is forgiven. v1 unions band 1
+    /// only; output pixel type is f64; overlapping pixels are
+    /// last-write-wins (later raster in the input list overwrites
+    /// earlier where both non-nodata).
+    st-rast-union-aggregate: func(
+        rasters: list<borrow<raster>>,
+    ) -> result<raster, raster-error>;
+}

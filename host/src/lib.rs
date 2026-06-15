@@ -1300,7 +1300,11 @@ fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
 
 fn make_loaded_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+    // Async WASI for the same reason as tabular: heavy loaded
+    // extensions (postgis-bridge -> gdal-wasm -> wasivfs) need
+    // async stream/file ops; sync WASI under our async tokio
+    // runtime trips "runtime within a runtime".
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     loaded::Minimal::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
         .map_err(|e| anyhow!("loaded-ext minimal: {e}"))?;
@@ -1312,7 +1316,10 @@ fn make_loaded_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
 /// aggregate calls.
 fn make_loaded_stateful_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
-    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+    // Async WASI — see make_loaded_linker. The raster aggregate
+    // st_rast_union_agg routes through gdal-wasm, which is what
+    // forced this from sync to async.
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     loaded_stateful::Stateful::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
         .map_err(|e| anyhow!("loaded-ext stateful: {e}"))?;

@@ -221,16 +221,17 @@ fts5/rtree, just at a different layer.
 | postgis-sfcgal (wrapped)      |    15  | extensions/postgis-bridge          |
 | direct sfcgal-wasm            |    21  | extensions/postgis-bridge          |
 | postgis raster                |    60  | extensions/postgis-bridge          |
+| postgis raster aggregate      |     1  | extensions/postgis-bridge (R6)     |
 | postgis topology              |     7  | extensions/postgis-bridge          |
 | postgis STRtree (scalar API)  |     8  | extensions/postgis-bridge          |
 | raster_polygon_dump vtab      |    +1  | extensions/postgis-bridge          |
-| **postgis-bridge subtotal**   | **389 scalar + 8 agg + 1 vtab** | (composed against postgis-composed.wasm + sfcgal.component.wasm) |
+| **postgis-bridge subtotal**   | **389 scalar + 9 agg + 1 vtab** | (composed against postgis-composed.wasm + sfcgal.component.wasm) |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
 |                               |        | LIBSQLITE3_FLAGS env               |
 
-**Grand SQL surface delivered**: 457 SQL-callable functions
+**Grand SQL surface delivered**: 458 SQL-callable functions
 (scalars + aggregates) plus 5 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump), all reachable through
 `.load` or directly via the bundled SQLite, on top of the
@@ -252,13 +253,6 @@ extension catalog itself rides on existing wasm components.
   same SQL behavior, and the aggregate forms handle set-shaped
   reductions. See `extensions/postgis-bridge/README.md` for
   the rationale.
-- **postgis raster aggregates** (`raster_union_aggregate`):
-  postgis-wasm doesn't expose a raster aggregate interface
-  upstream. Building a mosaic algorithm from scratch in the
-  bridge is real raster work (alignment, resampling, NoData
-  merging) — out of scope for Plan 2's closure. The single-
-  raster scalars cover per-row use; raster aggregation across
-  rows is the deferred piece. See `PLAN-raster.md` R6.
 - **postgis raster two-band map-algebra** (`st_map_algebra2`
   with cross-band formulas): R3 ships single-band precanned ops
   (`scale`, `threshold`, `cliprange`, `linrescale`); the two-

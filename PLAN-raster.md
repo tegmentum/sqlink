@@ -1,16 +1,23 @@
 # Plan: finish the PostGIS raster surface
 
-> **Status (2026-06-15)**: phases R1-R5 + R7 shipped in commits
-> `3474722` (R1-R4: 9 raster scalars, +9 functions to 389) and
-> the follow-up commit landing R5 (raster_polygon_dump vtab,
-> +1 vtab to 390 total). R6 (raster aggregate) remains deferred
-> per Q3 — postgis-wasm doesn't expose `raster_union_aggregate`;
-> doing it from scratch is real raster work outside Plan 2's
-> scope. The compose blocker discovered mid-execution
-> (wasi-sdk 33 + `-fwasm-exceptions` emitting legacy `try`
-> instructions that wasmtime 45 rejects) is documented in
-> `~/git/proj-wasm/toolchain/wasi-sdk-p2.cmake`; resolution was
-> a clean proj-wasm rebuild with the no-EH toolchain.
+> **Status (2026-06-15)**: ALL PHASES SHIPPED. R1-R4 + R7 in
+> `3474722` and `d5bf9b2` (10 fns + 1 vtab to 390 total). R6
+> (raster aggregate `st_rast_union_agg`) landed via a new
+> `postgis-raster-aggregates` interface in postgis-wasm (1
+> upstream fn) plus bridge wiring (+1 aggregate to 391 total:
+> 381 scalar + 9 aggregate + 1 vtab). Three issues surfaced
+> during execution:
+> - Compose blocker: wasi-sdk 33 + `-fwasm-exceptions` emitted
+>   legacy `try` instructions; resolved by a clean proj-wasm
+>   rebuild with the no-EH toolchain.
+> - NULL propagation in the bridge scalar dispatch was blanket
+>   short-circuiting `st_rast_addband(_, _, _, NULL)` (NULL =
+>   no nodata value); added an allowlist exception.
+> - `make_loaded_linker` / `make_loaded_stateful_linker` were
+>   using sync WASI, which `block_on`-tripped under our async
+>   tokio runtime once raster aggregates touched gdal-wasm's
+>   wasivfs path. Switched both to async WASI (matching the
+>   already-async tabular linker).
 
 
 The postgis-bridge ships 51 raster scalar functions (commits

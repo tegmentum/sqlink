@@ -210,6 +210,42 @@ SELECT st_rast_reclass(rast, 1, '[[0,100,1],[100,200,2]]', '8BUI')
 FROM ...;
 ```
 
+### v3 — raster aggregate (R6)
+
+`st_rast_union_agg(rast)` aggregates a set of rasters into a
+single mosaic. v1 constraints:
+
+- All inputs must share SRID + scale-x + scale-y + skew-x +
+  skew-y (within a 1e-9 epsilon to forgive ULP drift).
+- Band 1 only.
+- Output pixel type is `f64`.
+- Overlapping pixels are last-write-wins (later raster in the
+  scan overwrites earlier where both are non-nodata).
+- NoData is normalized to NaN inside the mosaic.
+
+```sql
+-- Two 2x2 rasters horizontally adjacent -> 4x2 mosaic
+WITH r AS (
+  SELECT st_rast_addband(
+    st_rast_makeemptyraster(2,2,0,0,1,-1,0,0,4326),
+    '64BF', 1.0, NULL) AS rast
+  UNION ALL SELECT st_rast_addband(
+    st_rast_makeemptyraster(2,2,2,0,1,-1,0,0,4326),
+    '64BF', 2.0, NULL)
+)
+SELECT st_rast_width(st_rast_union_agg(rast)),
+       st_rast_height(st_rast_union_agg(rast))
+FROM r;
+-- => 4 | 2
+```
+
+The aggregate lives upstream as `postgis-raster-aggregates`
+in postgis-wasm; the bridge step pushes per-row blobs into the
+shared `AggState.wkbs` (the field name is historical — for
+rasters it holds DFER bytes, not WKB), and finalize
+reconstitutes them via `Raster::from_binary` before calling
+the upstream union.
+
 ### v3 — raster_polygon_dump vtab (R5)
 
 Materializes one row per polygon from `st_dump_as_polygons`
