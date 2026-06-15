@@ -1449,6 +1449,27 @@ fn build_loaded_store(
     Ok(store)
 }
 
+/// Per-call budget refresh for a cached loaded-extension Store.
+/// Without this, fuel and epoch deadline only get set at first
+/// instantiation (in `build_loaded_store`); a long-running call
+/// earlier in the connection's lifetime would shrink the budget
+/// available to later calls. Called from `minimal_locked` /
+/// `stateful_locked` / `tabular_locked` after the lazy
+/// instantiation block so every dispatch site picks it up for
+/// free.
+fn refresh_call_budget(
+    store: &mut wasmtime::Store<LoadedState>,
+    ext: &LoadedExtension,
+) -> Result<()> {
+    let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
+    let deadline = ext.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000);
+    store
+        .set_fuel(fuel)
+        .map_err(|e| anyhow!("refresh_call_budget set_fuel: {e}"))?;
+    store.set_epoch_deadline(deadline);
+    Ok(())
+}
+
 #[derive(Debug, Clone)]
 pub struct ScalarFunctionEntry {
     pub id: u64,
@@ -2228,30 +2249,8 @@ impl Host {
         func_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
-        // Look up the extension once so we can pull fuel/epoch
-        // policy off it before acquiring the cached-Store lock.
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
-        let deadline = ext.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000);
-
         let mut guard = self.minimal_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
-
-        // Per-call budget refresh. Without this, a long-running
-        // call earlier in the connection's lifetime would shrink
-        // the budget available to later calls (the cached Store
-        // never re-runs build_loaded_store's fuel/epoch setup).
-        cached
-            .store
-            .set_fuel(fuel)
-            .map_err(|e| anyhow!("scalar set_fuel: {e}"))?;
-        cached.store.set_epoch_deadline(deadline);
 
         // The two bindgens (extension-loader-host's and loaded's)
         // produce structurally-identical but distinctly-typed
@@ -2398,6 +2397,7 @@ impl Host {
             .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
             *guard = Some(CachedStateful { store, instance });
         }
+        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
         Ok(guard)
     }
 
@@ -2703,6 +2703,7 @@ impl Host {
             .map_err(|e| anyhow!("instantiate {ext_name} as minimal: {e}"))?;
             *guard = Some(CachedMinimal { store, instance });
         }
+        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
         Ok(guard)
     }
 
@@ -2736,6 +2737,7 @@ impl Host {
             .map_err(|e| anyhow!("instantiate {ext_name} as tabular: {e}"))?;
             *guard = Some(CachedTabular { store, instance });
         }
+        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
         Ok(guard)
     }
 

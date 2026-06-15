@@ -1553,15 +1553,6 @@ macro_rules! gg_to_string_result {
     }};
 }
 
-/// f(g1, g2) -> Result<f64>  distance variants.
-macro_rules! gg_to_f64_inf {
-    ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
-        let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
-        let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
-        Ok(SqlValue::Real($module::$fn(&a, &b)))
-    }};
-}
-
 /// f(geom) -> bool  infallible has_*.
 macro_rules! g_to_bool_inf {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
