@@ -153,6 +153,83 @@ avoids the cursor-state lifetime complexity a vtab would need
 for the tree handle. The full vtab-based version can be added
 later if a use case surfaces.
 
+## Raster surface
+
+The bridge wires PostGIS raster as 51 v1/v2 scalars (accessors,
+pixel reads, pixel-as-geometry, coord transforms, predicates,
+terrain, mutators, output) plus 9 v3 scalars (JSON list returns
++ map-algebra + reclass) and one `raster_polygon_dump` vtab.
+Rasters cross as `BLOB` via `Raster::as_binary` /
+`Raster::from_binary`.
+
+### v3 — JSON list returns (R1)
+
+PostGIS list-returning raster functions don't map to scalar SQL
+directly. The pragmatic shape is JSON-in-TEXT — pair with
+`json_each` / `json_extract` for slicing:
+
+| SQL                                    | Returns                                          |
+|----------------------------------------|--------------------------------------------------|
+| `st_rast_histogram(rast, band, bins)`  | `[{"min": f, "max": f, "count": u}, ...]`         |
+| `st_rast_valuecount(rast, band)`       | `[{"value": f, "count": u}, ...]`                 |
+| `st_rast_summarystatsjson(rast, band)` | `{"count": u, "sum": f, "mean": f, "stddev": f, "min": f, "max": f}` |
+
+The per-field decomposition for stats (`st_rast_count` / `_sum` /
+`_mean` / `_stddev` / `_min` / `_max`) shipped earlier and remains
+the right shape for SQL `WHERE` / `GROUP BY`; the JSON form is for
+callers that want the whole bag in one trip.
+
+### v3 — Precanned map-algebra (R3)
+
+PostGIS's `st_map_algebra` takes an expression string evaluated
+by an interpreter inside the C code. The bridge formats four
+common transforms into the underlying `evalexpr` syntax that
+postgis-wasm understands:
+
+| SQL                                                            | Expression formed                                                     |
+|----------------------------------------------------------------|-----------------------------------------------------------------------|
+| `st_rast_scale(rast, band, factor)`                            | `val * {factor}`                                                      |
+| `st_rast_threshold(rast, band, t, lo, hi)`                     | `if val <= {t} { {lo} } else { {hi} }`                                |
+| `st_rast_cliprange(rast, band, lo, hi)`                        | `math::min(math::max(val, {lo}), {hi})`                               |
+| `st_rast_linrescale(rast, band, in_lo, in_hi, out_lo, out_hi)` | `{out_lo} + (val - {in_lo}) * ({out_hi} - {out_lo}) / ({in_hi} - {in_lo})` |
+
+Output band pixel type is `Float64` for all four (one allocation
+per output raster; downstream callers can convert with the
+existing `st_rast_resize` / `st_rast_band_pixel_type` machinery).
+
+### v3 — Reclass + set_values via JSON (R2 + R4)
+
+```sql
+-- 2D pixel block write (row-major). SQL has no native 2D
+-- array — JSON-array-of-arrays is the v1 shape.
+SELECT st_rast_setvalues(rast, 1, 0, 0, '[[1,2,3],[4,5,6]]')
+FROM ...;
+
+-- Reclass — first matching range wins; unmatched -> nodata.
+SELECT st_rast_reclass(rast, 1, '[[0,100,1],[100,200,2]]', '8BUI')
+FROM ...;
+```
+
+### v3 — raster_polygon_dump vtab (R5)
+
+Materializes one row per polygon from `st_dump_as_polygons`
+(default) or `st_pixel_as_polygons`. Reads the raster file at
+xCreate, runs the upstream call once, emits cached rows:
+
+```sql
+CREATE VIRTUAL TABLE polys USING raster_polygon_dump(
+    filename=/path/to/raster.bin,
+    band=1,
+    mode='dump'    -- or 'pixel'
+);
+
+SELECT st_astext(geom), value FROM polys ORDER BY value DESC;
+```
+
+Schema is fixed: `CREATE TABLE x(geom BLOB, value REAL)`. Filesystem
+path (not embedded BLOB) because `CREATE VIRTUAL TABLE` args are
+strings; a BLOB-literal arg would require hex-decode at parse time.
+
 ## Batch interface (deferred by design)
 
 postgis-wasm's `postgis-batch` interface (70 functions —

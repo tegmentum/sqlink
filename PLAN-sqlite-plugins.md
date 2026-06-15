@@ -220,21 +220,22 @@ fts5/rtree, just at a different layer.
 | postgis aggregates            |     8  | extensions/postgis-bridge          |
 | postgis-sfcgal (wrapped)      |    15  | extensions/postgis-bridge          |
 | direct sfcgal-wasm            |    21  | extensions/postgis-bridge          |
-| postgis raster                |    51  | extensions/postgis-bridge          |
+| postgis raster                |    60  | extensions/postgis-bridge          |
 | postgis topology              |     7  | extensions/postgis-bridge          |
 | postgis STRtree (scalar API)  |     8  | extensions/postgis-bridge          |
-| **postgis-bridge subtotal**   | **380**| (composed against postgis-         |
-|                               |        | composed.wasm + sfcgal.component.wasm) |
+| raster_polygon_dump vtab      |    +1  | extensions/postgis-bridge          |
+| **postgis-bridge subtotal**   | **389 scalar + 8 agg + 1 vtab** | (composed against postgis-composed.wasm + sfcgal.component.wasm) |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
 |                               |        | LIBSQLITE3_FLAGS env               |
 
-**Grand SQL surface delivered**: 448 SQL-callable functions
-(scalars + aggregates) plus 4 virtual-table modules (csv, fts5,
-rtree, geopoly), all reachable through `.load` or directly via
-the bundled SQLite, on top of the existing scalar/aggregate/
-collation/hook/vtab dispatch the host implements.
+**Grand SQL surface delivered**: 457 SQL-callable functions
+(scalars + aggregates) plus 5 virtual-table modules (csv, fts5,
+rtree, geopoly, raster_polygon_dump), all reachable through
+`.load` or directly via the bundled SQLite, on top of the
+existing scalar/aggregate/collation/hook/vtab dispatch the host
+implements.
 
 Original Plan 2 budget was ~4-5 weeks for a "substantial
 extension catalog"; the actual delivery beat that by reusing
@@ -251,15 +252,18 @@ extension catalog itself rides on existing wasm components.
   same SQL behavior, and the aggregate forms handle set-shaped
   reductions. See `extensions/postgis-bridge/README.md` for
   the rationale.
-- **postgis raster list/record returns**: `summary_stats` is
-  decomposed into per-field scalars (`st_rast_count`, `sum`,
-  `mean`, `stddev`, `min`, `max`). `histogram` (list of bin
-  records), `value_count` (list of (value, count) pairs), and
-  `dump_as_polygons` / `pixel_as_polygons` (list of geom+value)
-  still want a vtab or JSON pivot; not landed.
-- **postgis raster map-algebra** (`map_algebra`, `reclass`):
-  accept callback expressions; would need a guest scripting
-  hook to be useful from SQL.
+- **postgis raster aggregates** (`raster_union_aggregate`):
+  postgis-wasm doesn't expose a raster aggregate interface
+  upstream. Building a mosaic algorithm from scratch in the
+  bridge is real raster work (alignment, resampling, NoData
+  merging) — out of scope for Plan 2's closure. The single-
+  raster scalars cover per-row use; raster aggregation across
+  rows is the deferred piece. See `PLAN-raster.md` R6.
+- **postgis raster two-band map-algebra** (`st_map_algebra2`
+  with cross-band formulas): R3 ships single-band precanned ops
+  (`scale`, `threshold`, `cliprange`, `linrescale`); the two-
+  band variant needs either expression-language work or a
+  ListBand argument shape. Not landed.
 - **postgis topology mutating ops** (`add_iso_node`,
   `mod_edge_split`, `remove_face`, etc.): operate on the
   topology resource in place and return an id; need vtab

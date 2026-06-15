@@ -27,9 +27,12 @@ mod bindings {
 
 use bindings::exports::sqlite::extension::aggregate_function::Guest as AggregateGuest;
 use bindings::exports::sqlite::extension::metadata::{
-    AggregateFunctionSpec, Guest as MetadataGuest, Manifest, ScalarFunctionSpec,
+    AggregateFunctionSpec, Guest as MetadataGuest, Manifest, ScalarFunctionSpec, VtabSpec,
 };
 use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
+use bindings::exports::sqlite::extension::vtab::{
+    ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
+};
 use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
 use bindings::postgis::wasm::postgis_accessors as pg_acc;
@@ -496,6 +499,11 @@ const FID_STRTREE_NEAREST: u64 = 984;
 const FID_STRTREE_KNN: u64 = 985;
 const FID_STRTREE_WITHIN: u64 = 986;
 const FID_STRTREE_DESTROY: u64 = 987;
+
+// Vtab module ids (separate namespace from scalar/aggregate ids).
+// `raster_polygon_dump` (PLAN-raster.md R5) materializes one row per
+// polygon from st_dump_as_polygons or st_pixel_as_polygons.
+const VTAB_RASTER_POLYGON_DUMP: u64 = 1;
 
 // Raster v3 (PLAN-raster.md phases R1-R4): JSON list returns,
 // map-algebra precanned ops, reclass, set-values.
@@ -1010,7 +1018,11 @@ impl MetadataGuest for PostgisBridge {
                 },
             ],
             collations: alloc::vec![],
-            vtabs: alloc::vec![],
+            vtabs: alloc::vec![VtabSpec {
+                id: VTAB_RASTER_POLYGON_DUMP,
+                name: "raster_polygon_dump".into(),
+                eponymous: false,
+            }],
             has_authorizer: false,
             has_update_hook: false,
             has_commit_hook: false,
@@ -3329,6 +3341,256 @@ impl AggregateGuest for PostgisBridge {
         _args: Vec<SqlValue>,
     ) -> Result<(), String> {
         Err("postgis agg: window mode not supported".to_string())
+    }
+}
+
+// ── raster_polygon_dump vtab (PLAN-raster.md R5) ─────────────
+//
+// CREATE VIRTUAL TABLE polys USING raster_polygon_dump(
+//     filename=/path/to/raster.bin,
+//     band=1,
+//     mode='dump'   -- or 'pixel'
+// );
+//
+// At create/connect time the vtab reads the file, reconstitutes a
+// Raster, runs st_dump_as_polygons (mode='dump') or
+// st_pixel_as_polygons (mode='pixel'), and caches the
+// (geom_wkb, value) rows. Subsequent SELECTs walk the cache.
+//
+// Filesystem path (not BLOB literal) because CREATE VIRTUAL TABLE
+// args are strings; embedding raster bytes in SQL would need
+// hex-decode at parse time. Filesystem keeps v1 simple.
+
+struct RasterPolyDumpInstance {
+    rows: Vec<(Vec<u8>, f64)>,
+}
+
+struct RasterPolyDumpCursor {
+    instance_id: u64,
+    row_idx: usize,
+}
+
+thread_local! {
+    static RPD_INSTANCES: RefCell<HashMap<u64, RasterPolyDumpInstance>> =
+        RefCell::new(HashMap::new());
+    static RPD_CURSORS: RefCell<HashMap<u64, RasterPolyDumpCursor>> =
+        RefCell::new(HashMap::new());
+}
+
+struct RpdArgs {
+    filename: String,
+    band: u32,
+    mode: RpdMode,
+}
+
+enum RpdMode {
+    Dump,
+    Pixel,
+}
+
+fn parse_rpd_args(args: &[String]) -> Result<RpdArgs, String> {
+    let mut filename = None;
+    let mut band: u32 = 1;
+    let mut mode = RpdMode::Dump;
+    for arg in args {
+        let (k, v) = arg
+            .split_once('=')
+            .ok_or_else(|| format!("raster_polygon_dump: arg {arg:?} not key=value"))?;
+        let v = v.trim().trim_matches(|c: char| c == '\'' || c == '"');
+        match k.trim() {
+            "filename" => filename = Some(v.to_string()),
+            "band" => {
+                band = v.parse::<u32>().map_err(|e| {
+                    format!("raster_polygon_dump: band={v:?} not a u32: {e}")
+                })?
+            }
+            "mode" => {
+                mode = match v {
+                    "dump" => RpdMode::Dump,
+                    "pixel" => RpdMode::Pixel,
+                    other => {
+                        return Err(format!(
+                            "raster_polygon_dump: mode={other:?} not 'dump' or 'pixel'"
+                        ))
+                    }
+                }
+            }
+            other => return Err(format!("raster_polygon_dump: unknown arg {other:?}")),
+        }
+    }
+    Ok(RpdArgs {
+        filename: filename
+            .ok_or_else(|| "raster_polygon_dump: filename= is required".to_string())?,
+        band,
+        mode,
+    })
+}
+
+fn rpd_connect(instance_id: u64, args: &[String]) -> Result<String, String> {
+    let parsed = parse_rpd_args(args)?;
+    let bytes = std::fs::read(&parsed.filename)
+        .map_err(|e| format!("raster_polygon_dump: read {}: {e}", parsed.filename))?;
+    let rast = rast_from_blob(&bytes, "raster_polygon_dump")?;
+    let pairs = match parsed.mode {
+        RpdMode::Dump => pg_rast_vec::st_dump_as_polygons(&rast, parsed.band)
+            .map_err(|e| format!("raster_polygon_dump: dump: {}", raster_err_string(e)))?,
+        RpdMode::Pixel => pg_rast_vec::st_pixel_as_polygons(&rast, parsed.band)
+            .map_err(|e| format!("raster_polygon_dump: pixel: {}", raster_err_string(e)))?,
+    };
+    let rows: Vec<(Vec<u8>, f64)> = pairs
+        .into_iter()
+        .map(|(geom, value)| (geom.as_wkb(), value))
+        .collect();
+    RPD_INSTANCES.with(|m| {
+        m.borrow_mut()
+            .insert(instance_id, RasterPolyDumpInstance { rows })
+    });
+    Ok("CREATE TABLE x(geom BLOB, value REAL)".into())
+}
+
+impl VtabGuest for PostgisBridge {
+    fn create(
+        _vtab_id: u64,
+        instance_id: u64,
+        _db_name: String,
+        _table_name: String,
+        args: Vec<String>,
+    ) -> Result<String, String> {
+        rpd_connect(instance_id, &args)
+    }
+
+    fn connect(
+        _vtab_id: u64,
+        instance_id: u64,
+        _db_name: String,
+        _table_name: String,
+        args: Vec<String>,
+    ) -> Result<String, String> {
+        rpd_connect(instance_id, &args)
+    }
+
+    fn destroy(_vtab_id: u64, instance_id: u64) -> Result<(), String> {
+        RPD_INSTANCES.with(|m| m.borrow_mut().remove(&instance_id));
+        Ok(())
+    }
+
+    fn disconnect(_vtab_id: u64, instance_id: u64) -> Result<(), String> {
+        RPD_INSTANCES.with(|m| m.borrow_mut().remove(&instance_id));
+        Ok(())
+    }
+
+    fn best_index(
+        _vtab_id: u64,
+        _instance_id: u64,
+        info: IndexInfo,
+    ) -> Result<IndexPlan, String> {
+        let usage = info
+            .constraints
+            .iter()
+            .map(|_| ConstraintUsage {
+                argv_index: 0,
+                omit: false,
+            })
+            .collect();
+        Ok(IndexPlan {
+            constraint_usage: usage,
+            idx_num: 0,
+            idx_str: None,
+            estimated_cost: 1_000_000.0,
+            estimated_rows: 1_000_000,
+            orderby_consumed: false,
+        })
+    }
+
+    fn open(_vtab_id: u64, instance_id: u64, cursor_id: u64) -> Result<(), String> {
+        RPD_CURSORS.with(|m| {
+            m.borrow_mut().insert(
+                cursor_id,
+                RasterPolyDumpCursor {
+                    instance_id,
+                    row_idx: 0,
+                },
+            )
+        });
+        Ok(())
+    }
+
+    fn close(_vtab_id: u64, cursor_id: u64) -> Result<(), String> {
+        RPD_CURSORS.with(|m| m.borrow_mut().remove(&cursor_id));
+        Ok(())
+    }
+
+    fn filter(
+        _vtab_id: u64,
+        cursor_id: u64,
+        _idx_num: i32,
+        _idx_str: Option<String>,
+        _args: Vec<SqlValue>,
+    ) -> Result<(), String> {
+        RPD_CURSORS.with(|m| {
+            if let Some(c) = m.borrow_mut().get_mut(&cursor_id) {
+                c.row_idx = 0;
+            }
+        });
+        Ok(())
+    }
+
+    fn next(_vtab_id: u64, cursor_id: u64) -> Result<(), String> {
+        RPD_CURSORS.with(|m| {
+            if let Some(c) = m.borrow_mut().get_mut(&cursor_id) {
+                c.row_idx += 1;
+            }
+        });
+        Ok(())
+    }
+
+    fn eof(_vtab_id: u64, cursor_id: u64) -> bool {
+        RPD_CURSORS.with(|m| {
+            let cursors = m.borrow();
+            let Some(cursor) = cursors.get(&cursor_id) else {
+                return true;
+            };
+            RPD_INSTANCES.with(|im| {
+                let instances = im.borrow();
+                let Some(inst) = instances.get(&cursor.instance_id) else {
+                    return true;
+                };
+                cursor.row_idx >= inst.rows.len()
+            })
+        })
+    }
+
+    fn column(_vtab_id: u64, cursor_id: u64, col: i32) -> Result<SqlValue, String> {
+        RPD_CURSORS.with(|m| {
+            let cursors = m.borrow();
+            let cursor = cursors
+                .get(&cursor_id)
+                .ok_or_else(|| "raster_polygon_dump: cursor not open".to_string())?;
+            RPD_INSTANCES.with(|im| {
+                let instances = im.borrow();
+                let inst = instances
+                    .get(&cursor.instance_id)
+                    .ok_or_else(|| "raster_polygon_dump: instance not found".to_string())?;
+                let row = inst.rows.get(cursor.row_idx).ok_or_else(|| {
+                    "raster_polygon_dump: row past EOF".to_string()
+                })?;
+                Ok(match col {
+                    0 => SqlValue::Blob(row.0.clone()),
+                    1 => SqlValue::Real(row.1),
+                    _ => SqlValue::Null,
+                })
+            })
+        })
+    }
+
+    fn rowid(_vtab_id: u64, cursor_id: u64) -> Result<i64, String> {
+        RPD_CURSORS.with(|m| {
+            let cursors = m.borrow();
+            let cursor = cursors
+                .get(&cursor_id)
+                .ok_or_else(|| "raster_polygon_dump: cursor not open".to_string())?;
+            Ok((cursor.row_idx + 1) as i64)
+        })
     }
 }
 

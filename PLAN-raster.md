@@ -1,5 +1,18 @@
 # Plan: finish the PostGIS raster surface
 
+> **Status (2026-06-15)**: phases R1-R5 + R7 shipped in commits
+> `3474722` (R1-R4: 9 raster scalars, +9 functions to 389) and
+> the follow-up commit landing R5 (raster_polygon_dump vtab,
+> +1 vtab to 390 total). R6 (raster aggregate) remains deferred
+> per Q3 — postgis-wasm doesn't expose `raster_union_aggregate`;
+> doing it from scratch is real raster work outside Plan 2's
+> scope. The compose blocker discovered mid-execution
+> (wasi-sdk 33 + `-fwasm-exceptions` emitting legacy `try`
+> instructions that wasmtime 45 rejects) is documented in
+> `~/git/proj-wasm/toolchain/wasi-sdk-p2.cmake`; resolution was
+> a clean proj-wasm rebuild with the no-EH toolchain.
+
+
 The postgis-bridge ships 51 raster scalar functions (commits
 `00672e6`, `046f30e`). The remaining raster shapes — list
 returns, callback-driven map-algebra, raster aggregates — each
