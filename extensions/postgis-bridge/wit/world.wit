@@ -14,6 +14,7 @@ world bridge {
     import postgis:wasm/postgis-transformations@0.1.0;
     import postgis:wasm/postgis-aggregates@0.1.0;
     import postgis:wasm/postgis-clustering@0.1.0;
+    import postgis:wasm/postgis-spatial-index@0.1.0;
     import postgis:wasm/postgis-linear-ref@0.1.0;
     import postgis:wasm/postgis-three-d@0.1.0;
     import postgis:wasm/postgis-geodetic@0.1.0;

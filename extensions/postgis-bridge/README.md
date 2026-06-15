@@ -121,10 +121,67 @@ WHERE i.minx <= 5 AND i.maxx >= 0
 
 A dedicated `postgis-strtree` vtab over postgis-wasm's
 `postgis-spatial-index` interface (STRtree handles + insert-wkb
-+ query-envelope) is a planned follow-up. The pattern above is
-fine for production workloads — it's literally how PostGIS
-itself uses its GIST indexes (the index covers the bbox, the
-exact predicate runs on the candidates).
++ query-envelope) is now exposed as 8 scalar functions instead
+of a vtab — handles cross as INTEGER, the tree lives in
+postgis-wasm's memory across calls via the host's stateful
+Store cache:
+
+```sql
+-- Build the tree.
+SELECT st_strtree_create(10);          -- returns handle (e.g. 1)
+SELECT st_strtree_insert(1, st_geomfromtext('POLYGON((0 0,4 0,4 3,0 3,0 0))'), 42);
+SELECT st_strtree_insert(1, st_geomfromtext('POLYGON((10 10,14 10,14 13,10 13,10 10))'), 99);
+SELECT st_strtree_build(1);
+
+-- Query by envelope returns JSON array of item ids.
+SELECT st_strtree_query(1, 0, 0, 5, 5);     -- "[42]"
+SELECT st_strtree_knn(1, st_makepoint(0,0), 2);  -- "[42,99]"
+SELECT st_strtree_within(1, st_makepoint(0,0), 20);
+
+-- Release when done.
+SELECT st_strtree_destroy(1);
+```
+
+Function names: `st_strtree_create / insert / build / query /
+nearest / knn / within / destroy`. Use `json_each` to fan
+returned id lists back into rows.
+
+The vtab form is intentionally NOT used here — the scalar
+shape composes naturally with SQL JOINs (`JOIN x ON x.id IN
+(SELECT value FROM json_each(st_strtree_query(...)))`) and
+avoids the cursor-state lifetime complexity a vtab would need
+for the tree handle. The full vtab-based version can be added
+later if a use case surfaces.
+
+## Batch interface (deferred by design)
+
+postgis-wasm's `postgis-batch` interface (70 functions —
+st_area_batch, st_distance_batch, st_intersects_batch, etc.)
+takes `list<list<u8>>` of WKB and returns `list<result>`.
+These are NOT wired through the bridge, by intent:
+
+- For a single SQL row, the scalar form (`st_area(geom)`,
+  `st_distance(a, b)`, ...) is identical in cost and reads
+  cleanly.
+- For many rows, SQL already has the right shape — apply the
+  scalar to a column, optionally pre-filtered through the
+  `rtree+st_envelope` pattern above for spatial pruning.
+- For genuinely set-shaped aggregations, the aggregate forms
+  are already wired: `st_union_agg`, `st_polygonize_agg`,
+  `st_makeline_agg`, `st_clusterdbscan_agg`,
+  `st_clusterkmeans_agg`, `st_3dextent_agg`, etc.
+
+The batch interface is useful from non-SQL callers (a Rust
+program holding a `Vec<Vec<u8>>` already) but adds no SQL
+expressiveness over what's already exposed. Wiring it would
+require either array-typed SQL values (which SQLite doesn't
+have natively) or a per-row pumping pattern that's exactly the
+existing scalar.
+
+If a future need surfaces, the natural shape is a vtab whose
+`xFilter` accepts a JSON array of WKBs and emits one row per
+batch result — but until then, the scalars + aggregates cover
+the use cases.
 
 ## Boundary contract
 

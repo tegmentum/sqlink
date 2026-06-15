@@ -35,6 +35,7 @@ use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 use bindings::postgis::wasm::postgis_accessors as pg_acc;
 use bindings::postgis::wasm::postgis_aggregates as pg_agg;
 use bindings::postgis::wasm::postgis_clustering as pg_cluster;
+use bindings::postgis::wasm::postgis_spatial_index as pg_strtree;
 use bindings::postgis::wasm::postgis_constructors as pg_ctor;
 use bindings::postgis::wasm::postgis_measurements as pg_meas;
 use bindings::postgis::wasm::postgis_output as pg_out;
@@ -483,6 +484,18 @@ const FID_TOPO_EDGE_COUNT: u64 = 974;
 const FID_TOPO_FACE_COUNT: u64 = 975;
 const FID_TOPO_AS_TOPOJSON: u64 = 976;
 
+// Spatial-index (STRtree). Handles cross as INTEGER. State
+// lives in the cached stateful Store  trees survive across
+// scalar dispatches via the host's Store cache.
+const FID_STRTREE_CREATE: u64 = 980;
+const FID_STRTREE_INSERT: u64 = 981;
+const FID_STRTREE_BUILD: u64 = 982;
+const FID_STRTREE_QUERY: u64 = 983;
+const FID_STRTREE_NEAREST: u64 = 984;
+const FID_STRTREE_KNN: u64 = 985;
+const FID_STRTREE_WITHIN: u64 = 986;
+const FID_STRTREE_DESTROY: u64 = 987;
+
 // Aggregate function ids (separate namespace, but kept distinct
 // from scalar ids for clarity).
 const AGG_ST_UNION: u64 = 1000;
@@ -905,6 +918,15 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_TOPO_EDGE_COUNT, "st_topo_edgecount", 1),
                 s(FID_TOPO_FACE_COUNT, "st_topo_facecount", 1),
                 s(FID_TOPO_AS_TOPOJSON, "st_topo_astopojson", 1),
+                // Spatial index (STRtree) — handle-based API.
+                s(FID_STRTREE_CREATE, "st_strtree_create", 1),
+                s(FID_STRTREE_INSERT, "st_strtree_insert", 3),
+                s(FID_STRTREE_BUILD, "st_strtree_build", 1),
+                s(FID_STRTREE_QUERY, "st_strtree_query", 5),
+                s(FID_STRTREE_NEAREST, "st_strtree_nearest", 2),
+                s(FID_STRTREE_KNN, "st_strtree_knn", 3),
+                s(FID_STRTREE_WITHIN, "st_strtree_within", 3),
+                s(FID_STRTREE_DESTROY, "st_strtree_destroy", 1),
             ],
             aggregate_functions: alloc::vec![
                 AggregateFunctionSpec {
@@ -2891,6 +2913,61 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_TOPO_AS_TOPOJSON => {
                 let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_astopojson")?, "st_topo_astopojson")?;
                 Ok(SqlValue::Text(pg_topo_out::as_topojson(&t)))
+            }
+
+            // ── Spatial-index (STRtree) ──
+            FID_STRTREE_CREATE => {
+                let cap = arg_i64(&args, 0, "st_strtree_create")? as u32;
+                let h = pg_strtree::create_index(cap);
+                Ok(SqlValue::Integer(h as i64))
+            }
+            FID_STRTREE_INSERT => {
+                let h = arg_i64(&args, 0, "st_strtree_insert")? as u64;
+                let wkb = arg_blob(&args, 1, "st_strtree_insert")?;
+                let id = arg_i64(&args, 2, "st_strtree_insert")? as u64;
+                let ok = pg_strtree::insert_wkb(h, wkb, id);
+                Ok(SqlValue::Integer(ok as i64))
+            }
+            FID_STRTREE_BUILD => {
+                let h = arg_i64(&args, 0, "st_strtree_build")? as u64;
+                let ok = pg_strtree::build(h);
+                Ok(SqlValue::Integer(ok as i64))
+            }
+            FID_STRTREE_QUERY => {
+                let h = arg_i64(&args, 0, "st_strtree_query")? as u64;
+                let minx = arg_f64(&args, 1, "st_strtree_query")?;
+                let miny = arg_f64(&args, 2, "st_strtree_query")?;
+                let maxx = arg_f64(&args, 3, "st_strtree_query")?;
+                let maxy = arg_f64(&args, 4, "st_strtree_query")?;
+                let ids = pg_strtree::query_envelope(h, minx, miny, maxx, maxy);
+                let joined: Vec<String> = ids.iter().map(|i| i.to_string()).collect();
+                Ok(SqlValue::Text(format!("[{}]", joined.join(","))))
+            }
+            FID_STRTREE_NEAREST => {
+                let h = arg_i64(&args, 0, "st_strtree_nearest")? as u64;
+                let wkb = arg_blob(&args, 1, "st_strtree_nearest")?;
+                Ok(SqlValue::Integer(pg_strtree::nearest(h, wkb) as i64))
+            }
+            FID_STRTREE_KNN => {
+                let h = arg_i64(&args, 0, "st_strtree_knn")? as u64;
+                let wkb = arg_blob(&args, 1, "st_strtree_knn")?;
+                let k = arg_i64(&args, 2, "st_strtree_knn")? as u32;
+                let ids = pg_strtree::query_knn(h, wkb, k);
+                let joined: Vec<String> = ids.iter().map(|i| i.to_string()).collect();
+                Ok(SqlValue::Text(format!("[{}]", joined.join(","))))
+            }
+            FID_STRTREE_WITHIN => {
+                let h = arg_i64(&args, 0, "st_strtree_within")? as u64;
+                let wkb = arg_blob(&args, 1, "st_strtree_within")?;
+                let dist = arg_f64(&args, 2, "st_strtree_within")?;
+                let ids = pg_strtree::query_within_distance(h, wkb, dist);
+                let joined: Vec<String> = ids.iter().map(|i| i.to_string()).collect();
+                Ok(SqlValue::Text(format!("[{}]", joined.join(","))))
+            }
+            FID_STRTREE_DESTROY => {
+                let h = arg_i64(&args, 0, "st_strtree_destroy")? as u64;
+                pg_strtree::destroy_index(h);
+                Ok(SqlValue::Integer(1))
             }
 
             other => Err(format!("postgis bridge: unknown func id {other}")),
