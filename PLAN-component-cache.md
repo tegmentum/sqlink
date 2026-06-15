@@ -1,13 +1,12 @@
 # Plan: cache parsed Components across `.load` calls
 
-> **Status: C1 + C2 shipped. C3 deferred per the plan's own
-> "ship, measure, decide" gate.**
+> **Status: C1 + C2 + C3 all shipped.**
 >
 > | Tier | Commit | Measured win on postgis bundle |
 > |---|---|---|
 > | C1 — in-process Component LRU | `b8ff081` | re-load within session: 151s → 12s (~92% saved per hit, ~12s residual = fixture cost) |
 > | C2 — precompiled-blob cache in user db + HMAC | `24fea42` | cold-start: 131s → 22s (~83% wall-clock, ~93% user-time saved; residual = wasi setup + sqlite cli init + function registration) |
-> | C3 — instrumentation + `--no-component-cache` | _deferred_ | no real complaint about lack of observability yet |
+> | C3 — observability counters + `--no-component-cache` | `7c8a21c` | `.cache stats components` surfaces hit rate + cumulative parse/serialize/deserialize ms; `--no-component-cache` flag for benchmarks |
 >
 > C2 ended up entirely host-internal: no new WIT methods, no
 > cli-side awareness. `Host::component_for_digest` is the
