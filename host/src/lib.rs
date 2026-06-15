@@ -1548,6 +1548,51 @@ pub struct Host {
     /// `.run foo.<ext> flavor` picks a specific one. Empty-flavor
     /// entry is the default for that extension.
     runtimes: Arc<RwLock<HashMap<(String, String), Arc<LanguageRuntime>>>>,
+    /// PLAN-component-cache.md C1: parsed-Component LRU keyed
+    /// by blake3(bytes). Saves the ~100-500ms Component::from_binary
+    /// cost on a re-load of the same wasm within the host's
+    /// lifetime. Tiny capacity (4) — entries are big and re-loads
+    /// of more than a handful of distinct bundles are rare.
+    /// `wasmtime::Component` is internally Arc-wrapped so clones
+    /// are cheap reference bumps, not deep copies.
+    component_cache: Arc<Mutex<ComponentCache>>,
+}
+
+/// Tiny insertion-order LRU for parsed Components. Capacity is
+/// a hard cap; once exceeded the oldest entry drops. Values are
+/// cheap clones (wasmtime::Component is Arc-wrapped internally).
+pub struct ComponentCache {
+    cap: usize,
+    /// (digest_hex, parsed-Component). Front is oldest; back is
+    /// most-recently-touched.
+    entries: std::collections::VecDeque<(String, Component)>,
+}
+
+impl ComponentCache {
+    fn new(cap: usize) -> Self {
+        Self { cap, entries: std::collections::VecDeque::with_capacity(cap) }
+    }
+
+    /// On hit, moves the entry to the back (most-recently-used)
+    /// and clones the Component (cheap — bump on its inner Arc).
+    fn get(&mut self, digest: &str) -> Option<Component> {
+        let pos = self.entries.iter().position(|(d, _)| d == digest)?;
+        let entry = self.entries.remove(pos).unwrap();
+        let component = entry.1.clone();
+        self.entries.push_back(entry);
+        Some(component)
+    }
+
+    /// Insert; if full, drops the LRU (front) entry first.
+    fn insert(&mut self, digest: String, component: Component) {
+        if self.entries.iter().any(|(d, _)| d == &digest) {
+            return;
+        }
+        if self.entries.len() >= self.cap {
+            self.entries.pop_front();
+        }
+        self.entries.push_back((digest, component));
+    }
 }
 
 /// Host-side state for a registered language-runtime plugin.
@@ -1662,6 +1707,15 @@ impl Host {
         spawn_epoch_bumper(engine.clone());
 
         let signature_verifier = Arc::new(OpenSslVerifier::new(engine.clone()));
+        // Component-cache cap is intentionally tiny: parsed
+        // Components are big (100+ MB for postgis), and the win
+        // is at small N (re-loading the same bundle, not a
+        // sprawling catalogue). Override via env if a workload
+        // genuinely wants more.
+        let cap: usize = std::env::var("SQLITE_WASM_COMPONENT_CACHE")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(4);
         Ok(Self {
             engine,
             components: Arc::new(RwLock::new(HashMap::new())),
@@ -1672,6 +1726,7 @@ impl Host {
             trust_policy: Arc::new(RwLock::new(TrustPolicy::AllowAll)),
             signature_verifier,
             runtimes: Arc::new(RwLock::new(HashMap::new())),
+            component_cache: Arc::new(Mutex::new(ComponentCache::new(cap))),
         })
     }
 
@@ -2099,12 +2154,29 @@ impl Host {
         name_hint: &str,
         policy: Policy,
     ) -> Result<String> {
-        let component = Component::from_binary(&self.engine, &bytes)
-            .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
         // Compute blake3 of the provider bytes once. The cli uses
         // this to pin grants to specific bytes without needing
-        // its own wasi-fs preopen (PLAN-grants-db.md G3).
+        // its own wasi-fs preopen (PLAN-grants-db.md G3) AND it
+        // doubles as the component-cache key (PLAN-component-
+        // cache.md C1).
         let digest = blake3::hash(&bytes).to_hex().to_string();
+        // PLAN-component-cache.md C1: skip the ~100-500ms
+        // Component::from_binary parse if we already have a
+        // parsed Component for these exact bytes. wasmtime::
+        // Component is Arc-wrapped internally so the clone is a
+        // cheap reference bump.
+        let component = {
+            let mut cache = self.component_cache.lock();
+            if let Some(c) = cache.get(&digest) {
+                c
+            } else {
+                drop(cache);
+                let c = Component::from_binary(&self.engine, &bytes)
+                    .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
+                self.component_cache.lock().insert(digest.clone(), c.clone());
+                c
+            }
+        };
 
         // Use the stateful linker (superset of minimal) so extensions
         // that import `state` or `cache` can still resolve their
