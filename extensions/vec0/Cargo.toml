@@ -1,0 +1,63 @@
+[package]
+name = "vec0-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+vec0  wrapping kNN vtab over a regular source table. Sibling
+to extensions/vec (the scalar surface). Designed for the
+"already have a table of embeddings" pattern:
+
+    CREATE TABLE docs(id INTEGER PRIMARY KEY, emb BLOB, label TEXT);
+    INSERT INTO docs VALUES (1, vec_f32('[1,0,0]'), 'red'), ...;
+
+    CREATE VIRTUAL TABLE knn USING vec0(
+      source=docs,
+      embedding_column=emb,
+      metric=cosine    -- 'l2' (default), 'l1', or 'cosine'
+    );
+
+    SELECT rowid, distance FROM knn
+    WHERE embedding MATCH vec_f32('[0.9,0.1,0]') AND k = 3;
+
+vec0 reads from `source` via the host's spi.execute interface,
+computes distances against the MATCH query vector, sorts, and
+returns the top-k rows. Storage stays the user's responsibility
+in a regular table; vec0 is a kNN-shaped view, not a separate
+data store. Future ANN indexing (HNSW, IVF) can replace the
+brute-force scan without changing the SQL surface.
+
+Args (all optional except source / embedding_column):
+  source            FROM table name
+  rowid_column      defaults to 'rowid'
+  embedding_column  vector BLOB column name
+  metric            'l2' | 'l1' | 'cosine'  (default 'l2')
+
+**Requires a file-backed database.** vec0 calls back into the
+host via `spi.execute` to scan the source table; the host's
+spi connection is a separate sqlite3 instance from the cli's
+in-wasm one and `:memory:` dbs can't be shared between the
+two. Pass `--db PATH` to `sqlite-wasm-run`.
+
+Tier-3 vtab port per PLAN-sqlite-plugins.md. Sibling to
+sqlite-vec's vec0 in spirit, but trades dimension-enforcement-
+at-INSERT for the wrapping shape that fits read-only vtabs
+the cli already supports.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Distance kernels + codec are inlined here (~50 LOC). Sharing
+# them via a path-dep on `extensions/vec` failed because both
+# sides emit the same `wit_bindgen::generate!`/`export!`
+# symbols and rust-lld errored on duplicate
+# `sqlite:extension/...` exports. The right long-term split is
+# a `vec-core` lib crate without any wasm_export module, but
+# that refactor is out of scope for vec0's first ship.

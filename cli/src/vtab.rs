@@ -552,6 +552,73 @@ unsafe extern "C" fn x_destroy_aux(p: *mut c_void) {
     }
 }
 
+/// Stub function pointer registered for every operator vtabs
+/// might want to handle via xBestIndex. Returning a non-null
+/// pxFunc from xFindFunction is what tells SQLite "this vtab
+/// handles `column OP rhs` for OP=name"  the planner then
+/// emits a SQLITE_INDEX_CONSTRAINT_<OP> constraint to xBestIndex
+/// instead of trying to evaluate the operator as a normal
+/// function. The pointer here should never actually be called
+/// (xBestIndex consumes the constraint), but if it is, raise a
+/// loud error so the bug is visible.
+unsafe extern "C" fn x_vtab_op_stub(
+    ctx: *mut ffi::sqlite3_context,
+    _argc: c_int,
+    _argv: *mut *mut ffi::sqlite3_value,
+) {
+    let msg = CString::new("vtab operator stub called  best_index should have consumed it").unwrap();
+    ffi::sqlite3_result_error(ctx, msg.as_ptr(), -1);
+}
+
+/// Tell SQLite the vtab handles `match`, `glob`, `regexp`, `like`
+/// when those operators appear against any of its columns. Without
+/// this, `embedding MATCH ?` parses as a call to a nonexistent
+/// `match()` function and the planner never builds the constraint.
+/// Per the SQLite docs (xFindFunction): a non-zero return tells
+/// the optimizer to push the operator into xBestIndex; the function
+/// pointer the stub returns is never executed because the
+/// constraint is consumed.
+unsafe extern "C" fn x_find_function(
+    _p_vtab: *mut ffi::sqlite3_vtab,
+    _n_arg: c_int,
+    z_name: *const c_char,
+    px_func: *mut Option<
+        unsafe extern "C" fn(*mut ffi::sqlite3_context, c_int, *mut *mut ffi::sqlite3_value),
+    >,
+    pp_arg: *mut *mut c_void,
+) -> c_int {
+    if z_name.is_null() {
+        return 0;
+    }
+    let name = match std::ffi::CStr::from_ptr(z_name).to_str() {
+        Ok(s) => s.to_ascii_lowercase(),
+        Err(_) => return 0,
+    };
+    // Per SQLite's xFindFunction contract, the return value
+    // is the constraint-op code the planner should emit for
+    // this operator into xBestIndex (NOT a 0/1 boolean
+    // FTS5 returns SQLITE_INDEX_CONSTRAINT_MATCH = 64 for
+    // `MATCH`, and similarly LIKE / GLOB / REGEXP have their
+    // own constants). Returning 1 here would tell SQLite to
+    // emit an EQ constraint instead, masquerading MATCH as EQ
+    // and confusing best_index that compares against the
+    // actual op.
+    let constraint_op = match name.as_str() {
+        "match" => ffi::SQLITE_INDEX_CONSTRAINT_MATCH,
+        "glob" => ffi::SQLITE_INDEX_CONSTRAINT_GLOB,
+        "regexp" => ffi::SQLITE_INDEX_CONSTRAINT_REGEXP,
+        "like" => ffi::SQLITE_INDEX_CONSTRAINT_LIKE,
+        _ => return 0,
+    };
+    if !px_func.is_null() {
+        *px_func = Some(x_vtab_op_stub);
+    }
+    if !pp_arg.is_null() {
+        *pp_arg = std::ptr::null_mut();
+    }
+    constraint_op as c_int
+}
+
 // ─────────── Module + registration ───────────
 
 const MODULE: ffi::sqlite3_module = ffi::sqlite3_module {
@@ -574,7 +641,7 @@ const MODULE: ffi::sqlite3_module = ffi::sqlite3_module {
     xSync: None,
     xCommit: None,
     xRollback: None,
-    xFindFunction: None,
+    xFindFunction: Some(x_find_function),
     xRename: None,
     xSavepoint: None,
     xRelease: None,
@@ -607,7 +674,7 @@ const MODULE_EPONYMOUS: ffi::sqlite3_module = ffi::sqlite3_module {
     xSync: None,
     xCommit: None,
     xRollback: None,
-    xFindFunction: None,
+    xFindFunction: Some(x_find_function),
     xRename: None,
     xSavepoint: None,
     xRelease: None,
