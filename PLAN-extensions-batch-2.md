@@ -81,6 +81,23 @@
 > component (the upstream crate's metadata + reader code
 > pulls a substantial tree).
 >
+> **F11 (pmtiles) status: shipped.** extensions/pmtiles
+> read-only vtab over PMTiles v3 archives via the
+> `oxigdal-pmtiles` crate. Fixed schema (tile_id, z, x, y,
+> data BLOB); each row = one tile, `data` is the raw
+> (still-compressed) payload  caller can pipe through
+> the `compress` / `codecs` extensions or wait for a
+> follow-on that enables the upstream `compression`
+> feature. Also ships `pmtiles_metadata(path)` 
+> TEXT(JSON) for the header's metadata blob. No
+> network capability needed  reads from local disk
+> only (cloud reader is a separate follow-on tied to
+> the http / dns work). Wasm size: 308 KB component 
+> oxigdal-pmtiles is pure-rust + minimal deps.
+>
+> No new capability declared; mbtiles + dns_resolve
+> remain the F11 follow-ons.
+>
 > **F6c status: shipped.** extensions/excel read-only vtab
 > via the `calamine` crate covers .xlsx / .xlsb / .xls /
 > .ods in one extension. First row is treated as the

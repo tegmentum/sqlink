@@ -288,6 +288,7 @@ fts5/rtree, just at a different layer.
 | parquet read vtab               |    +1  | extensions/parquet                 |
 | arrow IPC read vtab             |    +1  | extensions/arrow                   |
 | excel/xlsx/ods read vtab        |    +1  | extensions/excel (calamine)        |
+| pmtiles v3 read vtab            |    +1  | extensions/pmtiles (oxigdal)       |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
