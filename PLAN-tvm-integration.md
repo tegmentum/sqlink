@@ -1,5 +1,17 @@
 # Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)
 
+> **Status (2026-06-15): TVM track fully shipped.** Phases 1
+> (pcache), 2 (mem methods, 2.0 only; 2.1 abandoned with
+> rationale in the Phase 2 finding), and 4 (TVM-backed VFS)
+> all landed with capacity tests. Order-of-operations step 5
+> (combined B + E ribbon-cut) shipped in `fcc14bc` as
+> `host/tests/tvm_combined_capacity.rs` driving
+> `probe/tvm-combined-wasip2/`. Mem64 track (Phase 3) remains
+> deferred on upstream toolchain availability — `rustc` doesn't
+> ship a `wasm64-wasip2` target yet and wasi-sdk 33 has no
+> wasm64 sysroot; the host already calls `wasm_memory64(true)`,
+> so re-opens trivially when those gates lift.
+
 Goal: support SQLite working sets — including page caches,
 `:memory:` databases, intermediate query state — substantially
 larger than 4 GB. Two parallel tracks:
