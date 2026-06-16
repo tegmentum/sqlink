@@ -1773,75 +1773,92 @@ fn do_compose(arg: &str, conn: &db::Connection) -> String {
         Some((s, r)) => (s, r.trim()),
         None => (arg, ""),
     };
-    let result = orchestration::STORE.with(|s| {
-        let store = s.borrow();
-        match sub {
-            "" | "list" => match store.list(conn) {
-                Ok(names) => {
-                    if names.is_empty() {
-                        "(no stored orchestrations)\n".to_string()
-                    } else {
-                        names.join("\n") + "\n"
-                    }
-                }
-                Err(e) => format!("Error: {e}\n"),
-            },
-            "show" => {
-                if rest.is_empty() {
-                    return "Usage: .compose show NAME\n".to_string();
-                }
-                match store.get(conn, rest) {
-                    Ok(Some(def)) => format!(
-                        "name      : {}\nformat    : {}\nsaved_at  : {}\nbody_bytes: {}\n",
-                        def.name,
-                        def.format,
-                        def.saved_at,
-                        def.body.len()
-                    ),
-                    Ok(None) => format!("No orchestration on file for '{rest}'.\n"),
-                    Err(e) => format!("Error: {e}\n"),
+    match sub {
+        "" | "list" => match orchestration::list(conn) {
+            Ok(names) => {
+                if names.is_empty() {
+                    "(no stored orchestrations)\n".to_string()
+                } else {
+                    names.join("\n") + "\n"
                 }
             }
-            "delete" => {
-                if rest.is_empty() {
-                    return "Usage: .compose delete NAME\n".to_string();
-                }
-                match store.delete(conn, rest) {
-                    Ok(true) => format!("Deleted '{rest}'.\n"),
-                    Ok(false) => format!("No orchestration on file for '{rest}'.\n"),
-                    Err(e) => format!("Error: {e}\n"),
-                }
+            Err(e) => format!("Error: {}\n", e.message),
+        },
+        "show" => {
+            if rest.is_empty() {
+                return "Usage: .compose show NAME\n".to_string();
             }
-            "save" => {
-                let mut parts = rest.split_whitespace();
-                let name = parts.next();
-                let file = parts.next();
-                let format = parts.next().unwrap_or("json");
-                let (Some(name), Some(file)) = (name, file) else {
-                    return "Usage: .compose save NAME FILE [FORMAT]\n".into();
-                };
-                let body = match std::fs::read(file) {
-                    Ok(b) => b,
-                    Err(e) => return format!("Error: read {file}: {e}\n"),
-                };
-                let def = orchestration::OrchestrationDef {
-                    name: name.into(),
-                    format: format.into(),
-                    body,
-                    saved_at: grants::now_iso8601(),
-                };
-                match store.put(conn, &def) {
-                    Ok(()) => format!("Saved orchestration '{name}'.\n"),
-                    Err(e) => format!("Error: {e}\n"),
-                }
+            match orchestration::get(conn, rest) {
+                Ok(Some(def)) => format!(
+                    "name       : {}\nversion    : {}\nroot       : {}\ndigest_hex : {}\nformat     : {}\nsaved_at   : {}\nbody_bytes : {}\n",
+                    def.name,
+                    def.version,
+                    def.root,
+                    def.digest_hex,
+                    def.format,
+                    def.saved_at,
+                    def.body.len()
+                ),
+                Ok(None) => format!("No orchestration on file for '{rest}'.\n"),
+                Err(e) => format!("Error: {}\n", e.message),
             }
-            other => format!(
-                "Unknown .compose subcommand: {other:?}. \
-                 Try: list / show NAME / save NAME FILE [FORMAT] / delete NAME\n"
-            ),
         }
-    });
-    result
+        "delete" => {
+            if rest.is_empty() {
+                return "Usage: .compose delete NAME\n".to_string();
+            }
+            match orchestration::delete(conn, rest) {
+                Ok(true) => format!("Deleted '{rest}'.\n"),
+                Ok(false) => format!("No orchestration on file for '{rest}'.\n"),
+                Err(e) => format!("Error: {}\n", e.message),
+            }
+        }
+        "save" => {
+            let mut parts = rest.split_whitespace();
+            let name = parts.next();
+            let file = parts.next();
+            // Default format tag matches what compose-store-sqlite
+            // and composectl write — readers that round-trip the
+            // body through compose-core::plan::deserialize get a
+            // valid PlanV1.
+            let format = parts.next().unwrap_or(orchestration::FORMAT_V1);
+            let (Some(name), Some(file)) = (name, file) else {
+                return "Usage: .compose save NAME FILE [FORMAT]\n".into();
+            };
+            let body = match std::fs::read(file) {
+                Ok(b) => b,
+                Err(e) => return format!("Error: read {file}: {e}\n"),
+            };
+            // body_signature is a cheap blake3 "did the bytes
+            // change" diff key. The orchestrator's
+            // `compute_plan_digest` (sha-256 over canonical CBOR)
+            // is the canonical identity; the cli doesn't link
+            // compose-core, so we record blake3 here and let
+            // composectl/compose-store-sqlite overwrite with the
+            // real digest on a subsequent put if needed.
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            let def = orchestration::OrchestrationDef {
+                name: name.into(),
+                version: String::new(),
+                root: String::new(),
+                digest_hex: orchestration::body_signature(&body),
+                format: format.into(),
+                body,
+                saved_at: now,
+            };
+            match orchestration::put(conn, &def) {
+                Ok(()) => format!("Saved orchestration '{name}'.\n"),
+                Err(e) => format!("Error: {}\n", e.message),
+            }
+        }
+        other => format!(
+            "Unknown .compose subcommand: {other:?}. \
+             Try: list / show NAME / save NAME FILE [FORMAT] / delete NAME\n"
+        ),
+    }
 }
 
 fn do_unload(name: &str) -> String {
