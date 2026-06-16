@@ -1,12 +1,18 @@
 //! vec0  wrapping kNN vtab over a source table.
 //!
-//! In xFilter we call back into the host via `spi.execute` to
-//! pull `(rowid_column, embedding_column)` from `source`, score
-//! each row against the MATCH query vector, keep the top-k via
-//! a min-heap-ish bounded scan, and serve the result through the
-//! cursor. Single-pass; no index. Adequate for <1M rows of
-//! float32 embeddings  the architectural slot for ANN
-//! (HNSW/IVF) goes right here without changing the SQL shape.
+//! Two backends, switchable per-table at create time:
+//!
+//!   * `index=brute` (default): every query scans the entire
+//!     source table via `spi.execute` and ranks rows by the
+//!     chosen metric. Fits ≤100k rows where brute-force at
+//!     ~1µs/row is still cheap.
+//!   * `index=ivf`: k-means partitioning. xFilter classifies
+//!     the query against `n_partitions` centroids, scans only
+//!     the `n_probes` nearest partitions, and ranks within
+//!     those. Built lazily on first query and cached per
+//!     instance; rebuild requires recreating the vtab. See the
+//!     `ivf` module below for the data structure + Lloyd's
+//!     algorithm implementation.
 
 extern crate alloc;
 
@@ -70,6 +76,278 @@ mod kernels {
     }
 }
 
+/// Inverted-file (IVF) index over f32 vectors. Lloyd's k-means
+/// for centroid training; each vector assigned to its nearest
+/// centroid. Search picks the M nearest centroids and probes
+/// only those partitions.
+///
+/// Recall/speed tradeoff is governed by `n_partitions` (K) and
+/// query-time `n_probes` (M). Higher K = finer-grained
+/// partitions (faster but more centroid distances upfront);
+/// higher M = better recall (more partitions scanned).
+/// Rule-of-thumb defaults: K = ceil(sqrt(N)), M = ceil(K/16),
+/// clamped to non-zero. Build is deterministic  same input
+/// produces the same index  via an xorshift PRNG seeded from
+/// the data, so smoke tests stay reproducible.
+pub mod ivf {
+    use alloc::vec::Vec;
+
+    pub struct Index {
+        pub centroids: Vec<Vec<f32>>,
+        /// `partitions[i]` lists `(rowid, vector)` pairs assigned
+        /// to centroid `i`. Storing vectors inline avoids a
+        /// second source-table scan at query time.
+        pub partitions: Vec<Vec<(i64, Vec<f32>)>>,
+        pub n_probes: usize,
+    }
+
+    impl Index {
+        pub fn n_partitions(&self) -> usize {
+            self.centroids.len()
+        }
+
+        pub fn n_vectors(&self) -> usize {
+            self.partitions.iter().map(|p| p.len()).sum()
+        }
+    }
+
+    /// Lloyd's algorithm. Returns (centroids, assignments).
+    /// Deterministic: initial centroid selection is seeded by an
+    /// xorshift PRNG keyed off the byte-content of the first
+    /// vector, so identical inputs produce identical indexes.
+    /// Stops when no assignments change or `max_iter` is reached.
+    pub fn kmeans(
+        points: &[Vec<f32>],
+        k: usize,
+        max_iter: usize,
+    ) -> (Vec<Vec<f32>>, Vec<usize>) {
+        let n = points.len();
+        if n == 0 {
+            return (Vec::new(), Vec::new());
+        }
+        let dim = points[0].len();
+        let k = k.max(1).min(n);
+        // Deterministic seed: xorshift state initialized from the
+        // first vector's bytes (XORd) so identical data produces
+        // identical indexes. New runs picking new initial points
+        // would shuffle results between invocations  bad for
+        // reproducibility tests.
+        let mut rng_state: u64 = 0xcafef00dd15ea5e5;
+        for p in points.iter().take(8) {
+            for x in p.iter().take(16) {
+                rng_state ^= x.to_bits() as u64;
+                rng_state = rng_state.wrapping_mul(0x9e3779b97f4a7c15);
+            }
+        }
+        let mut rng = || {
+            rng_state ^= rng_state << 13;
+            rng_state ^= rng_state >> 7;
+            rng_state ^= rng_state << 17;
+            rng_state
+        };
+
+        // Initial centroids: pick K random distinct indices.
+        // Fisher-Yates-light: when N is small we shuffle a
+        // [0..N) array; when K is small relative to N we just
+        // sample-with-rejection.
+        let mut centroids: Vec<Vec<f32>> = Vec::with_capacity(k);
+        if k * 4 < n {
+            let mut seen = std::collections::HashSet::with_capacity(k);
+            while centroids.len() < k {
+                let idx = (rng() as usize) % n;
+                if seen.insert(idx) {
+                    centroids.push(points[idx].clone());
+                }
+            }
+        } else {
+            // K is comparable to N  shuffle once.
+            let mut indices: Vec<usize> = (0..n).collect();
+            for i in (1..n).rev() {
+                let j = (rng() as usize) % (i + 1);
+                indices.swap(i, j);
+            }
+            for idx in indices.into_iter().take(k) {
+                centroids.push(points[idx].clone());
+            }
+        }
+
+        let mut assignments: Vec<usize> = alloc::vec![0; n];
+        for _iter in 0..max_iter {
+            // 1) Assign each point to its nearest centroid.
+            let mut changed = false;
+            for (i, p) in points.iter().enumerate() {
+                let mut best = 0usize;
+                let mut best_d = f64::INFINITY;
+                for (c_i, c) in centroids.iter().enumerate() {
+                    let d = squared_l2(p, c);
+                    if d < best_d {
+                        best_d = d;
+                        best = c_i;
+                    }
+                }
+                if assignments[i] != best {
+                    changed = true;
+                    assignments[i] = best;
+                }
+            }
+            if !changed {
+                break;
+            }
+            // 2) Recompute centroids as the mean of assigned
+            //    points. Empty partitions keep their previous
+            //    centroid  reseeding them is a refinement; for
+            //    v1 we accept the slight skew if a centroid
+            //    happens to win zero points.
+            let mut sums: Vec<Vec<f32>> = (0..k)
+                .map(|_| alloc::vec![0.0f32; dim])
+                .collect();
+            let mut counts: Vec<usize> = alloc::vec![0; k];
+            for (i, p) in points.iter().enumerate() {
+                let c_i = assignments[i];
+                for d in 0..dim {
+                    sums[c_i][d] += p[d];
+                }
+                counts[c_i] += 1;
+            }
+            for c_i in 0..k {
+                if counts[c_i] > 0 {
+                    let inv = 1.0 / counts[c_i] as f32;
+                    for d in 0..dim {
+                        centroids[c_i][d] = sums[c_i][d] * inv;
+                    }
+                }
+            }
+        }
+        (centroids, assignments)
+    }
+
+    /// Squared L2  cheaper than the full distance and
+    /// monotonic, so it's the right kernel for "find the
+    /// nearest centroid" comparisons inside kmeans.
+    pub fn squared_l2(a: &[f32], b: &[f32]) -> f64 {
+        if a.len() != b.len() {
+            return f64::INFINITY;
+        }
+        let mut s = 0.0f64;
+        for i in 0..a.len() {
+            let d = a[i] as f64 - b[i] as f64;
+            s += d * d;
+        }
+        s
+    }
+
+    /// Build an IVF index from `vectors`. `n_partitions` is the
+    /// target K (clamped to [1, n]); `max_iter` caps the
+    /// k-means refinement loop.
+    pub fn build(
+        vectors: Vec<(i64, Vec<f32>)>,
+        n_partitions: usize,
+        n_probes: usize,
+        max_iter: usize,
+    ) -> Index {
+        if vectors.is_empty() {
+            return Index {
+                centroids: Vec::new(),
+                partitions: Vec::new(),
+                n_probes,
+            };
+        }
+        let just_points: Vec<Vec<f32>> = vectors.iter().map(|(_, v)| v.clone()).collect();
+        let (centroids, assignments) = kmeans(&just_points, n_partitions, max_iter);
+        let k = centroids.len();
+        let mut partitions: Vec<Vec<(i64, Vec<f32>)>> =
+            (0..k).map(|_| Vec::new()).collect();
+        for (idx, (rid, v)) in vectors.into_iter().enumerate() {
+            let c_i = assignments[idx];
+            partitions[c_i].push((rid, v));
+        }
+        Index {
+            centroids,
+            partitions,
+            n_probes: n_probes.max(1).min(k),
+        }
+    }
+
+    /// Return the indices of the `n_probes` nearest centroids
+    /// to `query`. Used by xFilter to pick which partitions to
+    /// scan.
+    pub fn probe_partitions(idx: &Index, query: &[f32]) -> Vec<usize> {
+        let mut scored: Vec<(f64, usize)> = idx
+            .centroids
+            .iter()
+            .enumerate()
+            .map(|(i, c)| (squared_l2(query, c), i))
+            .collect();
+        scored.sort_by(|a, b| {
+            a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal)
+        });
+        scored
+            .into_iter()
+            .take(idx.n_probes)
+            .map(|(_, i)| i)
+            .collect()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        fn pts(specs: &[&[f32]]) -> Vec<Vec<f32>> {
+            specs.iter().map(|s| s.to_vec()).collect()
+        }
+
+        #[test]
+        fn kmeans_two_clusters_separates_them() {
+            // Two tight clusters around (0,0) and (10,10).
+            let points = pts(&[
+                &[0.0, 0.0],
+                &[0.1, 0.1],
+                &[-0.1, 0.0],
+                &[10.0, 10.0],
+                &[10.1, 9.9],
+                &[9.9, 10.1],
+            ]);
+            let (centroids, assignments) = kmeans(&points, 2, 50);
+            assert_eq!(centroids.len(), 2);
+            // The three (0,0) points should share a cluster;
+            // same for the (10,10) points.
+            assert_eq!(assignments[0], assignments[1]);
+            assert_eq!(assignments[1], assignments[2]);
+            assert_eq!(assignments[3], assignments[4]);
+            assert_eq!(assignments[4], assignments[5]);
+            assert_ne!(assignments[0], assignments[3]);
+        }
+
+        #[test]
+        fn build_then_probe_keeps_query_in_own_partition() {
+            let vectors: Vec<(i64, Vec<f32>)> = (0..20)
+                .map(|i| (i, alloc::vec![i as f32, 0.0]))
+                .collect();
+            let idx = build(vectors, 4, 1, 50);
+            assert_eq!(idx.n_partitions(), 4);
+            // Query near 0 should pick the partition containing
+            // small values; query near 20 should pick the one
+            // with large values.
+            let near_zero = probe_partitions(&idx, &[0.0, 0.0]);
+            let near_twenty = probe_partitions(&idx, &[20.0, 0.0]);
+            assert_eq!(near_zero.len(), 1);
+            assert_eq!(near_twenty.len(), 1);
+            // They must be different partitions  otherwise the
+            // index isn't actually separating the data.
+            assert_ne!(near_zero[0], near_twenty[0]);
+        }
+
+        #[test]
+        fn build_with_k_larger_than_n_clamps() {
+            let vectors: Vec<(i64, Vec<f32>)> =
+                (0..3).map(|i| (i, alloc::vec![i as f32])).collect();
+            let idx = build(vectors, 10, 5, 20);
+            assert_eq!(idx.n_partitions(), 3); // clamped to n
+            assert_eq!(idx.n_vectors(), 3);
+        }
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 mod wasm_export {
     use super::kernels;
@@ -113,6 +391,24 @@ mod wasm_export {
         rowid_column: String,
         embedding_column: String,
         metric: Metric,
+        backend: Backend,
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    enum Backend {
+        /// Full scan, no index. Default.
+        Brute,
+        /// Inverted-file partitioning via k-means. Built lazily
+        /// on first query; cached per-instance.
+        Ivf {
+            n_partitions: usize,
+            n_probes: usize,
+            /// Lloyd's k-means refinement cap. Higher = better
+            /// centroids but slower build. 20 iterations is a
+            /// reasonable default for the working sizes we
+            /// target.
+            max_iter: usize,
+        },
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -156,6 +452,14 @@ mod wasm_export {
     thread_local! {
         static INSTANCES: RefCell<HashMap<u64, Instance>> = RefCell::new(HashMap::new());
         static CURSORS: RefCell<HashMap<u64, Cursor>> = RefCell::new(HashMap::new());
+        /// Lazy IVF cache. Keyed by instance_id. Populated on
+        /// the first kNN query against an `index=ivf` vtab; not
+        /// invalidated thereafter, so user-visible writes to the
+        /// source table aren't reflected until the vtab is
+        /// recreated. Documented limitation; ANN backends that
+        /// support online updates (HNSW) can lift it later.
+        static IVF_CACHE: RefCell<HashMap<u64, super::ivf::Index>> =
+            RefCell::new(HashMap::new());
     }
 
     struct Vec0;
@@ -192,6 +496,10 @@ mod wasm_export {
         let mut rowid_column = "rowid".to_string();
         let mut embedding_column = None;
         let mut metric = Metric::L2;
+        let mut index = "brute".to_string();
+        let mut n_partitions: Option<usize> = None;
+        let mut n_probes: Option<usize> = None;
+        let mut max_iter: usize = 20;
         for arg in args {
             let (k, v) = arg
                 .split_once('=')
@@ -202,16 +510,178 @@ mod wasm_export {
                 "rowid_column" => rowid_column = v.to_string(),
                 "embedding_column" => embedding_column = Some(v.to_string()),
                 "metric" => metric = Metric::parse(v)?,
+                "index" => index = v.to_ascii_lowercase(),
+                "n_partitions" => {
+                    n_partitions = Some(
+                        v.parse()
+                            .map_err(|e| format!("vec0: n_partitions: {e}"))?,
+                    )
+                }
+                "n_probes" => {
+                    n_probes = Some(
+                        v.parse().map_err(|e| format!("vec0: n_probes: {e}"))?,
+                    )
+                }
+                "max_iter" => {
+                    max_iter = v.parse().map_err(|e| format!("vec0: max_iter: {e}"))?
+                }
                 other => return Err(format!("vec0: unknown arg {other:?}")),
             }
         }
+        let backend = match index.as_str() {
+            "brute" => Backend::Brute,
+            "ivf" => Backend::Ivf {
+                // Defaults are filled in lazily once we know N
+                // (sqrt-N rule). Carry 0 as a "decide at build
+                // time" sentinel.
+                n_partitions: n_partitions.unwrap_or(0),
+                n_probes: n_probes.unwrap_or(0),
+                max_iter,
+            },
+            other => return Err(format!("vec0: unknown index {other:?}")),
+        };
         Ok(Instance {
             source: source.ok_or_else(|| "vec0: source= is required".to_string())?,
             rowid_column,
             embedding_column: embedding_column
                 .ok_or_else(|| "vec0: embedding_column= is required".to_string())?,
             metric,
+            backend,
         })
+    }
+
+    /// Brute-force scan: read every row of the source table,
+    /// score against `query`, sort, truncate to k.
+    fn brute_force_topk(
+        inst: &Instance,
+        query: &[f32],
+        k: usize,
+    ) -> Result<Vec<ScoredRow>, String> {
+        let sql = alloc::format!(
+            "SELECT {rid}, {emb} FROM {src}",
+            rid = inst.rowid_column,
+            emb = inst.embedding_column,
+            src = inst.source,
+        );
+        let result = spi::execute(&sql, &[])
+            .map_err(|e| format!("vec0: scan source: {e:?}"))?;
+        let mut scored: Vec<ScoredRow> = Vec::with_capacity(result.rows.len());
+        for row in &result.rows {
+            let Some(SqlValue::Integer(rid)) = row.first() else {
+                continue;
+            };
+            let Some(SqlValue::Blob(emb)) = row.get(1) else {
+                continue;
+            };
+            let v = match kernels::from_blob(emb) {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            if let Some(d) = inst.metric.distance(query, &v) {
+                if !d.is_nan() {
+                    scored.push(ScoredRow {
+                        rowid: *rid,
+                        distance: d,
+                    });
+                }
+            }
+        }
+        sort_truncate(&mut scored, k);
+        Ok(scored)
+    }
+
+    /// IVF scan: build the index on first call (cached in
+    /// IVF_CACHE), pick the n_probes nearest partitions, score
+    /// only those, sort, truncate to k.
+    fn ivf_topk(
+        inst_id: u64,
+        inst: &Instance,
+        query: &[f32],
+        k: usize,
+    ) -> Result<Vec<ScoredRow>, String> {
+        let Backend::Ivf {
+            n_partitions,
+            n_probes,
+            max_iter,
+        } = inst.backend
+        else {
+            return Err("vec0: ivf_topk called on non-IVF backend".to_string());
+        };
+        // Build once, on demand.
+        let needs_build = IVF_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
+        if needs_build {
+            let sql = alloc::format!(
+                "SELECT {rid}, {emb} FROM {src}",
+                rid = inst.rowid_column,
+                emb = inst.embedding_column,
+                src = inst.source,
+            );
+            let result = spi::execute(&sql, &[])
+                .map_err(|e| format!("vec0: scan source: {e:?}"))?;
+            let mut vectors: Vec<(i64, Vec<f32>)> =
+                Vec::with_capacity(result.rows.len());
+            for row in &result.rows {
+                let Some(SqlValue::Integer(rid)) = row.first() else {
+                    continue;
+                };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else {
+                    continue;
+                };
+                if let Ok(v) = kernels::from_blob(emb) {
+                    vectors.push((*rid, v));
+                }
+            }
+            // Defaults per the sqrt-N rule; clamp to non-zero.
+            let n = vectors.len();
+            let k_default = (n as f64).sqrt().ceil() as usize;
+            let chosen_k = if n_partitions == 0 {
+                k_default.max(1).min(n.max(1))
+            } else {
+                n_partitions.min(n.max(1))
+            };
+            let chosen_probes = if n_probes == 0 {
+                (chosen_k / 16).max(1)
+            } else {
+                n_probes
+            };
+            let idx = super::ivf::build(vectors, chosen_k, chosen_probes, max_iter);
+            IVF_CACHE.with(|m| m.borrow_mut().insert(inst_id, idx));
+        }
+
+        IVF_CACHE.with(|m| -> Result<Vec<ScoredRow>, String> {
+            let cache = m.borrow();
+            let idx = cache
+                .get(&inst_id)
+                .ok_or_else(|| "vec0: IVF cache missing after build".to_string())?;
+            if idx.centroids.is_empty() {
+                return Ok(Vec::new());
+            }
+            let probe_ids = super::ivf::probe_partitions(idx, query);
+            let mut scored: Vec<ScoredRow> = Vec::new();
+            for pid in probe_ids {
+                for (rid, v) in &idx.partitions[pid] {
+                    if let Some(d) = inst.metric.distance(query, v) {
+                        if !d.is_nan() {
+                            scored.push(ScoredRow {
+                                rowid: *rid,
+                                distance: d,
+                            });
+                        }
+                    }
+                }
+            }
+            sort_truncate(&mut scored, k);
+            Ok(scored)
+        })
+    }
+
+    fn sort_truncate(scored: &mut Vec<ScoredRow>, k: usize) {
+        scored.sort_by(|a, b| {
+            a.distance
+                .partial_cmp(&b.distance)
+                .unwrap_or(core::cmp::Ordering::Equal)
+        });
+        scored.truncate(k);
     }
 
     fn strip_quotes(s: &str) -> &str {
@@ -400,54 +870,16 @@ mod wasm_export {
             let inst = INSTANCES.with(|m| m.borrow().get(&inst_id).cloned())
                 .ok_or_else(|| "vec0: instance not connected".to_string())?;
 
-            // Stream the source table; score each row; keep the
-            // bottom-k by distance. spi.execute() materialises
-            // the whole result set today  no streaming cursor
-            // API surface yet  so this trades simplicity for
-            // peak memory at the source-table size. Adequate
-            // for the regime brute-force kNN already addresses;
-            // an ANN backend would replace this whole leg.
-            let sql = alloc::format!(
-                "SELECT {rid}, {emb} FROM {src}",
-                rid = inst.rowid_column,
-                emb = inst.embedding_column,
-                src = inst.source,
-            );
             // spi.execute requires a file-backed db (--db PATH on the
             // sqlite-wasm-run invocation). The host runs spi calls
             // through a SEPARATE sqlite3 connection from the cli's
             // in-wasm one; :memory: dbs aren't shareable across
             // those two libraries, and the host errors immediately
             // in that case. See host/src/lib.rs::spi_ensure_open.
-            let result = spi::execute(&sql, &[])
-                .map_err(|e| format!("vec0: scan source: {e:?}"))?;
-            let mut scored: Vec<ScoredRow> = Vec::with_capacity(result.rows.len());
-            for row in &result.rows {
-                let rid = match row.first() {
-                    Some(SqlValue::Integer(n)) => *n,
-                    _ => continue, // skip rows whose rowid isn't an integer
-                };
-                let emb = match row.get(1) {
-                    Some(SqlValue::Blob(b)) => b,
-                    _ => continue,
-                };
-                let v = match kernels::from_blob(emb) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                if let Some(d) = inst.metric.distance(&query, &v) {
-                    if d.is_nan() {
-                        continue;
-                    }
-                    scored.push(ScoredRow { rowid: rid, distance: d });
-                }
-            }
-            scored.sort_by(|a, b| {
-                a.distance
-                    .partial_cmp(&b.distance)
-                    .unwrap_or(core::cmp::Ordering::Equal)
-            });
-            scored.truncate(k);
+            let scored = match inst.backend {
+                Backend::Brute => brute_force_topk(&inst, &query, k)?,
+                Backend::Ivf { .. } => ivf_topk(inst_id, &inst, &query, k)?,
+            };
             CURSORS.with(|m| {
                 if let Some(c) = m.borrow_mut().get_mut(&cursor_id) {
                     c.rows = scored;

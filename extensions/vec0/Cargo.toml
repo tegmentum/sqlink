@@ -31,6 +31,18 @@ Args (all optional except source / embedding_column):
   rowid_column      defaults to 'rowid'
   embedding_column  vector BLOB column name
   metric            'l2' | 'l1' | 'cosine'  (default 'l2')
+  index             'brute' (default) | 'ivf'
+  n_partitions      IVF: number of k-means partitions; default
+                    ceil(sqrt(N)) where N = source-table row count
+  n_probes          IVF: number of nearest partitions to scan at
+                    query time; default ceil(n_partitions / 16),
+                    clamped to >= 1
+  max_iter          IVF: Lloyd's algorithm cap; default 20
+
+IVF builds the index lazily on the first kNN query and caches
+it per-instance for the rest of the process lifetime. Rebuild
+requires recreating the vtab  inserts to the source table
+after the first query are invisible to the cached index.
 
 **Requires a file-backed database.** vec0 calls back into the
 host via `spi.execute` to scan the source table; the host's

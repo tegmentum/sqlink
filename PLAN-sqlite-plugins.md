@@ -1,11 +1,12 @@
 # Plan: Port well-known SQLite plugins to our component system
 
 > **Status (2026-06-16): shipped.** 513 SQL-callable functions
-> (scalars + aggregates) plus 10 virtual-table modules (csv,
+> (scalars + aggregates) plus 11 virtual-table modules (csv,
 > fts5, rtree, geopoly, raster_polygon_dump, dbstat,
-> sqlite_stmt, bytecode, generate_series, vec0) all delivered
-> see "Final state (delivered)" below for the per-source
-> breakdown. Of the three items under
+> sqlite_stmt, bytecode, generate_series, vec0, vec_each) all
+> delivered  see "Final state (delivered)" below for the
+> per-source breakdown. vec0 ships brute-force AND IVF
+> (k-means partitioning) backends with identical SQL surface. Of the three items under
 > "Deferred (intentional)", TopoGeometry has since shipped in
 > `8fe182b`; what genuinely remains deferred is the
 > `postgis-batch` interface (70 fns whose `list<list<u8>> ->
@@ -248,7 +249,8 @@ fts5/rtree, just at a different layer.
 | decimal aggregates            |     1  | extensions/decimal                 |
 | vec scalars (sqlite-vec port) |    14  | extensions/vec                     |
 | generate_series TVF (eponymous vtab) | +1 | extensions/series              |
-| vec0 wrapping kNN vtab        |    +1  | extensions/vec0                    |
+| vec0 wrapping kNN vtab        |    +1  | extensions/vec0 (brute + IVF)      |
+| vec_each TVF (eponymous vtab) |    +1  | extensions/vec_each                |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
@@ -259,12 +261,16 @@ fts5/rtree, just at a different layer.
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
 **Grand SQL surface delivered**: 513 SQL-callable functions
-(scalars + aggregates) plus 10 virtual-table modules (csv, fts5,
+(scalars + aggregates) plus 11 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
-bytecode, generate_series, vec0), all reachable through `.load`
-or directly via the bundled SQLite, on top of the existing
-scalar / aggregate / collation / hook / vtab dispatch the host
-implements.
+bytecode, generate_series, vec0, vec_each), all reachable
+through `.load` or directly via the bundled SQLite, on top of
+the existing scalar / aggregate / collation / hook / vtab
+dispatch the host implements. vec0 ships two backends  brute
+force (default) and IVF k-means partitioning (configurable
+`index=ivf, n_partitions=K, n_probes=M`)  with identical SQL
+surface so an HNSW backend can slot in later without query
+rewrites.
 
 Original Plan 2 budget was ~4-5 weeks for a "substantial
 extension catalog"; the actual delivery beat that by reusing
