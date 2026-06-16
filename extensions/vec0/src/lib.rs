@@ -97,7 +97,9 @@ mod kernels {
 /// the data, so smoke tests stay reproducible.
 pub mod ivf {
     use alloc::vec::Vec;
+    use serde::{Deserialize, Serialize};
 
+    #[derive(Serialize, Deserialize)]
     pub struct Index {
         pub centroids: Vec<Vec<f32>>,
         /// `partitions[i]` lists `(rowid, vector)` pairs assigned
@@ -117,8 +119,36 @@ pub mod ivf {
         pub last_indexed_count: usize,
         pub last_indexed_max_rowid: i64,
         /// Soft-deleted rowids. xFilter filters these out
-        /// before truncating to k.
+        /// before truncating to k. Serialized as a Vec  serde's
+        /// default for HashSet<T: Hash + Eq> serializes as a
+        /// sequence anyway, but going through a Vec keeps the
+        /// wire format ordering-stable for tests and makes
+        /// hashing not part of the persisted-format contract.
+        #[serde(with = "hashset_via_vec_i64")]
         pub tombstones: std::collections::HashSet<i64>,
+    }
+
+    /// Round-trip helper for HashSet<i64>  serializes as a
+    /// sorted Vec so persisted-blob bytes are stable across
+    /// runs (HashSet iteration order is randomized).
+    mod hashset_via_vec_i64 {
+        use alloc::vec::Vec;
+        use serde::{Deserialize, Deserializer, Serialize, Serializer};
+        use std::collections::HashSet;
+        pub fn serialize<S: Serializer>(
+            v: &HashSet<i64>,
+            s: S,
+        ) -> Result<S::Ok, S::Error> {
+            let mut sorted: Vec<i64> = v.iter().copied().collect();
+            sorted.sort();
+            sorted.serialize(s)
+        }
+        pub fn deserialize<'de, D: Deserializer<'de>>(
+            d: D,
+        ) -> Result<HashSet<i64>, D::Error> {
+            let v: Vec<i64> = Vec::deserialize(d)?;
+            Ok(v.into_iter().collect())
+        }
     }
 
     impl Index {
@@ -425,6 +455,7 @@ pub mod hnsw {
     use super::kernels;
     use alloc::vec::Vec;
     use core::cmp::Reverse;
+    use serde::{Deserialize, Serialize};
     use std::collections::{BinaryHeap, HashSet};
 
     /// Distance + node id, wrapped so f64 can sit in BinaryHeap.
@@ -457,6 +488,7 @@ pub mod hnsw {
         }
     }
 
+    #[derive(Serialize, Deserialize)]
     pub struct Index {
         pub m: usize,
         pub m_max: usize, // hard cap per neighbor list at layer > 0
@@ -478,7 +510,28 @@ pub mod hnsw {
         pub rng_state: u64,
         pub last_indexed_count: usize,
         pub last_indexed_max_rowid: i64,
+        #[serde(with = "hashset_via_vec_i64_hnsw")]
         pub tombstones: HashSet<i64>,
+    }
+
+    mod hashset_via_vec_i64_hnsw {
+        use alloc::vec::Vec;
+        use serde::{Deserialize, Deserializer, Serialize, Serializer};
+        use std::collections::HashSet;
+        pub fn serialize<S: Serializer>(
+            v: &HashSet<i64>,
+            s: S,
+        ) -> Result<S::Ok, S::Error> {
+            let mut sorted: Vec<i64> = v.iter().copied().collect();
+            sorted.sort();
+            sorted.serialize(s)
+        }
+        pub fn deserialize<'de, D: Deserializer<'de>>(
+            d: D,
+        ) -> Result<HashSet<i64>, D::Error> {
+            let v: Vec<i64> = Vec::deserialize(d)?;
+            Ok(v.into_iter().collect())
+        }
     }
 
     impl Index {
@@ -901,6 +954,8 @@ mod wasm_export {
     /// Per-instance configuration captured at connect time.
     #[derive(Debug, Clone)]
     struct Instance {
+        /// vtab table name; used as the persistence key.
+        table_name: String,
         source: String,
         rowid_column: String,
         embedding_column: String,
@@ -1036,24 +1091,33 @@ mod wasm_export {
             match func_id {
                 // vec0_refresh(table_name)  drop the cached
                 // index for that vtab so the next kNN rebuilds
-                // from scratch. Returns 1 if a cache entry was
-                // dropped, 0 otherwise.
+                // from scratch. Drops the persisted blob too,
+                // so a stale cli session that runs
+                // vec0_refresh doesn't get its rebuild
+                // immediately overwritten on next open. Returns
+                // 1 iff either the cache or the persisted blob
+                // had an entry to drop.
                 FID_VEC0_REFRESH => {
                     let Some(SqlValue::Text(name)) = args.first() else {
                         return Err("vec0_refresh: TEXT table name required".to_string());
                     };
                     let inst_id = NAME_TO_INSTANCE
                         .with(|m| m.borrow().get(name).copied());
-                    let Some(inst_id) = inst_id else {
-                        return Ok(SqlValue::Integer(0));
-                    };
-                    let ivf_dropped = IVF_CACHE
-                        .with(|m| m.borrow_mut().remove(&inst_id).is_some());
-                    let hnsw_dropped = HNSW_CACHE
-                        .with(|m| m.borrow_mut().remove(&inst_id).is_some());
-                    Ok(SqlValue::Integer(
-                        (ivf_dropped || hnsw_dropped) as i64,
-                    ))
+                    let mut hit = false;
+                    if let Some(inst_id) = inst_id {
+                        hit |= IVF_CACHE
+                            .with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                        hit |= HNSW_CACHE
+                            .with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                    }
+                    // Best-effort: drop the persisted blob too
+                    // so the next session rebuilds rather than
+                    // re-hydrating the stale snapshot. Errors
+                    // (e.g. read-only db) are swallowed; the
+                    // in-process cache drop is the load-bearing
+                    // half of the refresh.
+                    let _ = drop_persisted(name);
+                    Ok(SqlValue::Integer(hit as i64))
                 }
                 // vec0_delete(table_name, rowid)  add rowid to
                 // the cached index's tombstones. Returns 1 if a
@@ -1083,6 +1147,14 @@ mod wasm_export {
                             hit = true;
                         }
                     });
+                    // The persisted blob no longer reflects the
+                    // tombstone set  drop it so the next
+                    // session rebuilds rather than re-hydrating
+                    // a now-stale snapshot. (Phase 2 doesn't
+                    // re-serialize on tombstone add to avoid
+                    // 100 MB re-writes; rebuild on next open
+                    // is the simpler invariant.)
+                    let _ = drop_persisted(name);
                     Ok(SqlValue::Integer(hit as i64))
                 }
                 other => Err(format!("vec0: unknown func id {other}")),
@@ -1090,7 +1162,7 @@ mod wasm_export {
         }
     }
 
-    fn parse_args(args: &[String]) -> Result<Instance, String> {
+    fn parse_args(table_name: &str, args: &[String]) -> Result<Instance, String> {
         let mut source = None;
         let mut rowid_column = "rowid".to_string();
         let mut embedding_column = None;
@@ -1156,6 +1228,7 @@ mod wasm_export {
             other => return Err(format!("vec0: unknown index {other:?}")),
         };
         Ok(Instance {
+            table_name: table_name.to_string(),
             source: source.ok_or_else(|| "vec0: source= is required".to_string())?,
             rowid_column,
             embedding_column: embedding_column
@@ -1163,6 +1236,151 @@ mod wasm_export {
             metric,
             backend,
         })
+    }
+
+    // ── Phase 2: persistence ──────────────────────────────────
+    //
+    // Single shadow table keyed by vtab name. Stale rows are
+    // detected on load by comparing (source_count, max_rowid)
+    // against the current source; mismatch invalidates the blob
+    // and forces a rebuild. format_version bumps when the
+    // serialized layout changes  any old blob whose version
+    // doesn't match is ignored.
+
+    const FORMAT_VERSION: i64 = 1;
+    const SHADOW_SCHEMA: &str = "\
+        CREATE TABLE IF NOT EXISTS _vec0_index ( \
+            vtab_name TEXT PRIMARY KEY, \
+            backend TEXT NOT NULL, \
+            source_count INTEGER NOT NULL, \
+            source_max_rowid INTEGER NOT NULL, \
+            format_version INTEGER NOT NULL, \
+            built_at INTEGER NOT NULL, \
+            payload BLOB NOT NULL \
+        );";
+
+    fn ensure_shadow_schema() -> Result<(), String> {
+        spi::execute_batch(SHADOW_SCHEMA)
+            .map_err(|e| format!("vec0: ensure _vec0_index: {e:?}"))?;
+        Ok(())
+    }
+
+    /// Returns Ok(Some(payload)) when a matching, format-current
+    /// persisted blob exists and the source-table fingerprint
+    /// matches (count + max_rowid). Anything stale or wrong-
+    /// version yields Ok(None) and the caller rebuilds.
+    fn load_persisted(
+        table_name: &str,
+        backend_kind: &str,
+        cur_count: usize,
+        cur_max: i64,
+    ) -> Result<Option<Vec<u8>>, String> {
+        ensure_shadow_schema()?;
+        let result = spi::execute(
+            "SELECT payload, source_count, source_max_rowid, format_version, backend \
+             FROM _vec0_index WHERE vtab_name = ?1",
+            &[SqlValue::Text(table_name.to_string())],
+        )
+        .map_err(|e| format!("vec0: load_persisted lookup: {e:?}"))?;
+        let Some(row) = result.rows.first() else {
+            return Ok(None);
+        };
+        let payload = match row.first() {
+            Some(SqlValue::Blob(b)) => b.clone(),
+            _ => return Ok(None),
+        };
+        let stored_count = match row.get(1) {
+            Some(SqlValue::Integer(n)) => *n,
+            _ => return Ok(None),
+        };
+        let stored_max = match row.get(2) {
+            Some(SqlValue::Integer(n)) => *n,
+            _ => return Ok(None),
+        };
+        let stored_version = match row.get(3) {
+            Some(SqlValue::Integer(n)) => *n,
+            _ => return Ok(None),
+        };
+        let stored_backend = match row.get(4) {
+            Some(SqlValue::Text(s)) => s.clone(),
+            _ => return Ok(None),
+        };
+        if stored_version != FORMAT_VERSION
+            || stored_backend != backend_kind
+            || stored_count as usize != cur_count
+            || stored_max != cur_max
+        {
+            return Ok(None);
+        }
+        Ok(Some(payload))
+    }
+
+    fn persist_index(
+        table_name: &str,
+        backend_kind: &str,
+        source_count: usize,
+        source_max_rowid: i64,
+        payload: Vec<u8>,
+    ) -> Result<(), String> {
+        ensure_shadow_schema()?;
+        // `built_at` is informational only  we don't need a
+        // wall-clock for correctness. wasi-p2 has a clock; use
+        // it via strftime/unixepoch through sqlite. Cheaper:
+        // accept 0 and let SQLite's CURRENT_TIMESTAMP-equivalent
+        // not matter for our staleness check.
+        spi::execute(
+            "INSERT OR REPLACE INTO _vec0_index \
+                 (vtab_name, backend, source_count, source_max_rowid, \
+                  format_version, built_at, payload) \
+             VALUES (?1, ?2, ?3, ?4, ?5, unixepoch(), ?6)",
+            &[
+                SqlValue::Text(table_name.to_string()),
+                SqlValue::Text(backend_kind.to_string()),
+                SqlValue::Integer(source_count as i64),
+                SqlValue::Integer(source_max_rowid),
+                SqlValue::Integer(FORMAT_VERSION),
+                SqlValue::Blob(payload),
+            ],
+        )
+        .map_err(|e| format!("vec0: persist_index: {e:?}"))?;
+        Ok(())
+    }
+
+    /// `(count, max_rowid)` from the source table. Returns
+    /// (0, 0) when the source is empty.
+    fn source_fingerprint(inst: &Instance) -> Result<(usize, i64), String> {
+        let sql = alloc::format!(
+            "SELECT count(*), coalesce(max({rid}), 0) FROM {src}",
+            rid = inst.rowid_column,
+            src = inst.source,
+        );
+        let result = spi::execute(&sql, &[])
+            .map_err(|e| format!("vec0: fingerprint: {e:?}"))?;
+        let Some(row) = result.rows.first() else {
+            return Ok((0, 0));
+        };
+        let count = match row.first() {
+            Some(SqlValue::Integer(n)) => *n as usize,
+            _ => 0,
+        };
+        let max = match row.get(1) {
+            Some(SqlValue::Integer(n)) => *n,
+            _ => 0,
+        };
+        Ok((count, max))
+    }
+
+    /// Drop the persisted blob for `table_name`. Used by
+    /// vec0_refresh + vec0_delete to invalidate the on-disk
+    /// copy in lockstep with the in-process cache.
+    fn drop_persisted(table_name: &str) -> Result<(), String> {
+        ensure_shadow_schema()?;
+        spi::execute(
+            "DELETE FROM _vec0_index WHERE vtab_name = ?1",
+            &[SqlValue::Text(table_name.to_string())],
+        )
+        .map_err(|e| format!("vec0: drop_persisted: {e:?}"))?;
+        Ok(())
     }
 
     /// Brute-force scan: read every row of the source table,
@@ -1225,6 +1443,21 @@ mod wasm_export {
         // Build once, on demand.
         let needs_build = IVF_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
         if needs_build {
+            // Phase 2: source-table fingerprint  used both to
+            // probe persisted blobs and to seed the new index's
+            // bookkeeping after build.
+            let (cur_count, cur_max) = source_fingerprint(inst)?;
+            // Try a persisted load before paying the rebuild cost.
+            if let Some(blob) =
+                load_persisted(&inst.table_name, "ivf", cur_count, cur_max)?
+            {
+                if let Ok(idx) = postcard::from_bytes::<super::ivf::Index>(&blob) {
+                    IVF_CACHE.with(|m| m.borrow_mut().insert(inst_id, idx));
+                }
+            }
+        }
+        let needs_build = IVF_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
+        if needs_build {
             let sql = alloc::format!(
                 "SELECT {rid}, {emb} FROM {src}",
                 rid = inst.rowid_column,
@@ -1260,6 +1493,21 @@ mod wasm_export {
                 n_probes
             };
             let idx = super::ivf::build(vectors, chosen_k, chosen_probes, max_iter);
+            // Persist before caching; postcard alloc-fails on
+            // very large indexes are caught here, not after the
+            // user's session has been "querying happily" for
+            // minutes and the next reopen hits the bad path.
+            let cur_count = idx.last_indexed_count;
+            let cur_max = idx.last_indexed_max_rowid;
+            if let Ok(encoded) = postcard::to_allocvec(&idx) {
+                let _ = persist_index(
+                    &inst.table_name,
+                    "ivf",
+                    cur_count,
+                    cur_max,
+                    encoded,
+                );
+            }
             IVF_CACHE.with(|m| m.borrow_mut().insert(inst_id, idx));
         }
 
@@ -1378,6 +1626,17 @@ mod wasm_export {
         };
         let needs_build = HNSW_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
         if needs_build {
+            let (cur_count, cur_max) = source_fingerprint(inst)?;
+            if let Some(blob) =
+                load_persisted(&inst.table_name, "hnsw", cur_count, cur_max)?
+            {
+                if let Ok(idx) = postcard::from_bytes::<super::hnsw::Index>(&blob) {
+                    HNSW_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
+                }
+            }
+        }
+        let needs_build = HNSW_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
+        if needs_build {
             let sql = alloc::format!(
                 "SELECT {rid}, {emb} FROM {src}",
                 rid = inst.rowid_column,
@@ -1395,6 +1654,17 @@ mod wasm_export {
                 }
             }
             let idx = super::hnsw::build(vectors, m, ef_construction, ef_search);
+            let cur_count = idx.last_indexed_count;
+            let cur_max = idx.last_indexed_max_rowid;
+            if let Ok(encoded) = postcard::to_allocvec(&idx) {
+                let _ = persist_index(
+                    &inst.table_name,
+                    "hnsw",
+                    cur_count,
+                    cur_max,
+                    encoded,
+                );
+            }
             HNSW_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
         }
 
@@ -1509,7 +1779,7 @@ mod wasm_export {
             table_name: String,
             args: Vec<String>,
         ) -> Result<String, String> {
-            let inst = parse_args(&args)?;
+            let inst = parse_args(&table_name, &args)?;
             INSTANCES.with(|m| m.borrow_mut().insert(instance_id, inst));
             // Register the table-name  instance lookup so
             // vec0_refresh / vec0_delete can find this cache

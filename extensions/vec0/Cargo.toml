@@ -72,6 +72,12 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Persistent IVF / HNSW indexes (PLAN-vec-followups.md Phase
+# 2) serialize through postcard  no_std-friendly, compact
+# wire format, derive-driven Encode/Decode. Pinned at a recent
+# 1.x to keep the wasm bundle small.
+postcard = { version = "1", features = ["alloc"], default-features = false }
+serde    = { version = "1", features = ["derive", "alloc"], default-features = false }
 # Distance kernels + codec are inlined here (~50 LOC). Sharing
 # them via a path-dep on `extensions/vec` failed because both
 # sides emit the same `wit_bindgen::generate!`/`export!`

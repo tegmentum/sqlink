@@ -9,6 +9,16 @@
 > verifies INSERT-then-query surfaces new rows, tombstones
 > filter results, and refresh both drops the cache and clears
 > the tombstone set.
+>
+> **Phase 2 status: shipped.** Persistent IVF and HNSW
+> indexes via postcard serialization into a `_vec0_index`
+> shadow table. Build paths persist after first build;
+> connect paths try-load before paying the rebuild cost;
+> staleness check matches (source_count, source_max_rowid,
+> format_version, backend). vec0_refresh / vec0_delete drop
+> the persisted blob in lockstep with the in-process cache
+> drop. Cross-session smoke confirms session 2 sees the same
+> kNN ordering as session 1 with the persisted blob unchanged.
 
 ## Goal
 
