@@ -1,0 +1,39 @@
+[package]
+name = "ieee754-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+IEEE 754 float introspection. Port of SQLite's ext/misc/ieee754.c
+to the canonical `sqlite:extension/minimal` world. Pure-Rust
+no FFI needed; f64::to_bits / from_bits already expose the
+mantissa + exponent split we need.
+
+Functions:
+  - ieee754(mantissa, exp)            REAL  rebuild
+  - ieee754_mantissa(R)               INTEGER  signed mantissa
+  - ieee754_exponent(R)               INTEGER  unbiased exponent
+  - ieee754_from_blob(B)              REAL  read big-endian 8-byte blob
+  - ieee754_to_blob(R)                BLOB  big-endian 8-byte blob
+
+Matches SQLite's own surface (see ext/misc/ieee754.c). Useful for
+deterministic round-trips of float bits through TEXT/BLOB columns
+without losing precision.
+
+Tier-1 plugin per PLAN-sqlite-plugins.md.
+"""
+license = "MIT"
+publish = false
+
+# Opt out of cargo's workspace-root autodetection. The sibling
+# `extensions/uuid/` and friends don't need this because they
+# have stale lockfiles that pre-date the cli's adoption of
+# `[package]` at repo root; this fresh crate would otherwise
+# resolve repo-root's cli `[package]` as a phantom workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

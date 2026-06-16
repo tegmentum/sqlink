@@ -1,0 +1,39 @@
+[package]
+name = "decimal-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Exact decimal arithmetic. Port of SQLite's ext/misc/decimal.c
+shape, backed by Rust's `bigdecimal` crate so the precision is
+arbitrary  no float rounding for money / scientific values.
+
+Scalars (5):
+  - decimal_add(A, B)        TEXT  A + B
+  - decimal_sub(A, B)        TEXT  A - B
+  - decimal_mul(A, B)        TEXT  A * B
+  - decimal_cmp(A, B)        INT   -1 / 0 / 1
+  - decimal_pow2(N)          TEXT  exact 2^N for any integer N
+
+Aggregate (1):
+  - decimal_sum(X)           TEXT  exact running sum (no f64 hop)
+
+Inputs accepted as TEXT (parsed as a decimal literal) or numeric
+(rendered to a decimal string first). Errors propagate the
+parser's message back to SQL.
+
+Tier-1/-2 plugin per PLAN-sqlite-plugins.md. Targets the
+canonical `sqlite:extension/stateful` world (scalar +
+aggregate). Pure-Rust deps  wasm32-wasip2 clean.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+bigdecimal = "0.4"

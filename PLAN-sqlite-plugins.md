@@ -1,12 +1,13 @@
 # Plan: Port well-known SQLite plugins to our component system
 
-> **Status (2026-06-15): shipped.** 488 SQL-callable functions
-> (scalars + aggregates) plus 5 virtual-table modules (csv, fts5,
-> rtree, geopoly, raster_polygon_dump) all delivered  see "Final
-> state (delivered)" below for the per-source breakdown. Of the
-> three items under "Deferred (intentional)", TopoGeometry has
-> since shipped in `8fe182b`; what genuinely remains deferred is
-> the `postgis-batch` interface (70 fns whose `list<list<u8>> ->
+> **Status (2026-06-15): shipped.** 499 SQL-callable functions
+> (scalars + aggregates) plus 8 virtual-table modules (csv, fts5,
+> rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
+> bytecode) all delivered  see "Final state (delivered)" below
+> for the per-source breakdown. Of the three items under
+> "Deferred (intentional)", TopoGeometry has since shipped in
+> `8fe182b`; what genuinely remains deferred is the
+> `postgis-batch` interface (70 fns whose `list<list<u8>> ->
 > list<result>` shape doesn't map to scalar SQL  the scalar +
 > aggregate forms already cover the SQL semantics) and the two-
 > band raster `st_map_algebra2` (needs expression-language work
@@ -241,17 +242,24 @@ fts5/rtree, just at a different layer.
 | postgis geocoder (parse-only) |     2  | extensions/postgis-bridge          |
 | raster_polygon_dump vtab      |    +1  | extensions/postgis-bridge          |
 | **postgis-bridge subtotal**   | **419 scalar + 9 agg + 1 vtab** | (composed against postgis-composed.wasm + sfcgal.component.wasm) |
+| ieee754 scalars               |     5  | extensions/ieee754                 |
+| decimal scalars               |     5  | extensions/decimal                 |
+| decimal aggregates            |     1  | extensions/decimal                 |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
 |                               |        | LIBSQLITE3_FLAGS env               |
+| dbstat vtab                   |    +1  | -DSQLITE_ENABLE_DBSTAT_VTAB        |
+| sqlite_stmt vtab              |    +1  | -DSQLITE_ENABLE_STMTVTAB           |
+| bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
+| session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
-**Grand SQL surface delivered**: 488 SQL-callable functions
-(scalars + aggregates) plus 5 virtual-table modules (csv, fts5,
-rtree, geopoly, raster_polygon_dump), all reachable through
-`.load` or directly via the bundled SQLite, on top of the
-existing scalar/aggregate/collation/hook/vtab dispatch the host
-implements.
+**Grand SQL surface delivered**: 499 SQL-callable functions
+(scalars + aggregates) plus 8 virtual-table modules (csv, fts5,
+rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
+bytecode), all reachable through `.load` or directly via the
+bundled SQLite, on top of the existing scalar / aggregate /
+collation / hook / vtab dispatch the host implements.
 
 Original Plan 2 budget was ~4-5 weeks for a "substantial
 extension catalog"; the actual delivery beat that by reusing

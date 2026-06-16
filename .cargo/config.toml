@@ -17,9 +17,20 @@ CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysr
 # Extra defines threaded into libsqlite3-sys's bundled compile.
 # libsqlite3-sys 0.30.1's build.rs honors LIBSQLITE3_FLAGS for
 # extra -D/-U flags. The bundled flag set covers FTS5 + RTREE +
-# JSON1 + a few others, but not GEOPOLY  add it here so
-# `CREATE VIRTUAL TABLE x USING geopoly()` works without a fork.
-LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_GEOPOLY"
+# JSON1 + a few others; everything below extends what ships
+# turned on by default.
+#
+#   GEOPOLY        polygon spatial index (CREATE VIRTUAL TABLE
+#                  ... USING geopoly())
+#   DBSTAT_VTAB    page-level diagnostics (SELECT * FROM dbstat)
+#   STMTVTAB       runtime statement enumeration
+#                  (SELECT sql FROM sqlite_stmt)
+#   BYTECODE_VTAB  query plan introspection (SELECT * FROM
+#                  bytecode('SELECT ...'))
+#   SESSION /      changeset/patchset primitives
+#   PREUPDATE_HOOK (sqlite3_session_*, requires the preupdate
+#                  hook to capture pre-image rows)
+LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK"
 
 [target.wasm32-wasip2]
 linker = "rust-lld"
