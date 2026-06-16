@@ -81,6 +81,24 @@
 > component (the upstream crate's metadata + reader code
 > pulls a substantial tree).
 >
+> **F6c status: shipped.** extensions/excel read-only vtab
+> via the `calamine` crate covers .xlsx / .xlsb / .xls /
+> .ods in one extension. First row is treated as the
+> column header by default (`headers=false` to disable);
+> `sheet=Name` selects a specific sheet (defaults to the
+> first). Cell-value mapping: Int  INTEGER, Float / Excel
+> serial date  REAL, Bool  INTEGER(0/1), String / iso
+> dates / iso durations  TEXT, Empty / Error  NULL.
+> Wasm size: 982 KB component (smallest of the F6 trio 
+> calamine is lean once compression is the only heavy
+> code).
+>
+> Caveat: build needs `RUSTC_BOOTSTRAP=1` until the
+> upstream typed-path crate (transitive via zip 7.2.0)
+> drops its unconditional `#![feature(wasip2)]` gate.
+> Noted in extensions/excel/Cargo.toml; remove once the
+> patch lands.
+>
 > **F6a status: shipped.** extensions/arrow read-only vtab
 > over the Arrow IPC format (.arrow / .arrows). Auto-
 > detects file vs stream variant from the magic prefix

@@ -1,0 +1,51 @@
+[package]
+name = "excel-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Read-only Excel / OpenDocument Spreadsheet vtab via the
+`calamine` crate. Supports .xlsx / .xlsb / .xls / .ods.
+
+    CREATE VIRTUAL TABLE t USING excel('/path/to/sheet.xlsx');
+    CREATE VIRTUAL TABLE t USING excel('/path/to/sheet.xlsx', 'sheet=Sales');
+    SELECT * FROM t LIMIT 10;
+
+The first row is treated as the column header by default
+(disable with `headers=false`, then columns become c0, c1).
+If no `sheet=` arg is given the first sheet wins.
+
+Cell value mapping:
+  Int    INTEGER
+  Float  REAL
+  Bool   INTEGER (0/1)
+  String  TEXT
+  DateTime  REAL (Excel serial date  raw f64)
+  DateTimeIso / DurationIso  TEXT
+  Empty  NULL
+  Error  NULL (excel error cell  json-rendered to TEXT
+                  is a follow-on if anyone needs it)
+
+Whole workbook is loaded into memory in xFilter; calamine
+streams sheets internally so memory peak is one Range at a
+time, then we keep just the chosen sheet's cells.
+
+Build requires `RUSTC_BOOTSTRAP=1` until the upstream
+typed-path crate (transitive dep via zip 7.2.0) drops its
+unconditional `#![feature(wasip2)]` gate for wasm targets.
+The feature is a no-op on stable; the bootstrap env var
+permits stable rustc to compile it. Tracked upstream:
+chipsenkbeil/typed-path#?  remove once a patched release
+lands.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+calamine = { version = "0.35", default-features = false }
