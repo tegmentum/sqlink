@@ -59,7 +59,10 @@
 > deferred. F6 remaining items (arrow / parquet / excel)
 > and F11 deferred too  larger individual surfaces.
 >
-> **F6d status: shipped.** extensions/parquet wraps the
+> **F6b status: shipped.** (Earlier commit labelled this as
+> F6d; the plan layout below has F6a=arrow, F6b=parquet,
+> F6c=excel, so F6b is the correct ID for the parquet vtab.)
+> extensions/parquet wraps the
 > upstream `parquet` + `arrow` crates v57 directly
 > (same versions the user's ~/git/parquet-wasm component
 > uses internally). Read-only vtab over a .parquet file
@@ -77,6 +80,19 @@
 > the architectural follow-on. Wasm size: 8.7 MB
 > component (the upstream crate's metadata + reader code
 > pulls a substantial tree).
+>
+> **F6a status: shipped.** extensions/arrow read-only vtab
+> over the Arrow IPC format (.arrow / .arrows). Auto-
+> detects file vs stream variant from the magic prefix
+> (`ARROW1`  random-access file with footer; otherwise
+> sequential stream). Same scalar surface as the parquet
+> vtab; same direct-crate-now / WAC-compose-later note
+> applies for sharing the arrow runtime with the user's
+> ~/git/arrow-wasm component. Wasm size: 2.2 MB (much
+> smaller than parquet  no compression backend, no
+> parquet metadata code, just the IPC reader). Shares
+> the arrow 57 crate tree with parquet, so loading both
+> at once doesn't double the resident metadata.
 
 ## Goal
 

@@ -1,0 +1,46 @@
+[package]
+name = "arrow-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Read-only Arrow IPC vtab over a .arrow / .arrows file. Both
+the random-access file format (ARROW1 magic + footer) and the
+streaming format (sequential record batches) are auto-detected
+from the first 6 bytes.
+
+    CREATE VIRTUAL TABLE t USING arrow('/path/to/data.arrow');
+    SELECT * FROM t LIMIT 10;
+    SELECT count(*) FROM t;
+
+Schema is inferred from the file's Arrow schema. v1 exposes
+the same scalar surface as the parquet vtab (bool / int* /
+float / utf8 / binary); nested struct + list columns get the
+Arrow Debug repr.
+
+Reads the whole file into memory in xFilter. Streaming a
+batch at a time is a follow-on; for large archives the caller
+should split the source up front. Shares the arrow 57 crate
+tree with extensions/parquet, so the .wasm bundle's metadata
++ reader code overlaps cleanly when both are loaded.
+
+Future architectural improvement: WAC-compose against
+~/git/arrow-wasm so the arrow runtime is shared across the
+cli's columnar consumers instead of statically linked per
+extension. Same direct-crate-now / component-compose-later
+shape as the parquet extension.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+arrow = { version = "57", default-features = false, features = ["ipc"] }
+arrow-array = { version = "57", default-features = false }
+arrow-ipc = { version = "57", default-features = false }
+arrow-schema = { version = "57", default-features = false }

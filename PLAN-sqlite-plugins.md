@@ -286,6 +286,7 @@ fts5/rtree, just at a different layer.
 | avro (encode + decode)          |     3  | extensions/avro                    |
 | bpe (tiktoken cl100k_base)      |     4  | extensions/bpe                     |
 | parquet read vtab               |    +1  | extensions/parquet                 |
+| arrow IPC read vtab             |    +1  | extensions/arrow                   |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
