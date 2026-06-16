@@ -43,6 +43,21 @@
 > Remaining F6 items (arrow / parquet / excel) +
 > F5 + F11 deferred  individual heavy crates each
 > deserve dedicated commits.
+>
+> **F5a status: shipped.** bpe extension wraps tiktoken-rs's
+> cl100k_base encoding (the GPT-3.5/GPT-4 vocab); the model
+> ~3 MB of vocab + merges  is bundled directly into the
+> .wasm so callers don't ship vocab files out-of-band.
+> Encoder is lazily-initialised in a thread_local on first
+> call. 4 scalars: bpe_encode, bpe_decode, bpe_count_tokens,
+> bpe_model_name. 3 native tests pass including the
+> canonical "hello world"  [15339, 1917] vector. End-to-
+> end smoke through the cli verifies the full encode 
+> count  decode cycle.
+>
+> F5b (ONNX inference) + F5c (bundled embedding model)
+> deferred. F6 remaining items (arrow / parquet / excel)
+> and F11 deferred too  larger individual surfaces.
 
 ## Goal
 

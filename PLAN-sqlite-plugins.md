@@ -284,6 +284,7 @@ fts5/rtree, just at a different layer.
 | sketches (t-digest + MinHash)   | 4 + 2 agg | extensions/sketches            |
 | formats (toml + ini + xml/xpath) | 7 | extensions/formats                  |
 | avro (encode + decode)          |     3  | extensions/avro                    |
+| bpe (tiktoken cl100k_base)      |     4  | extensions/bpe                     |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
@@ -293,7 +294,7 @@ fts5/rtree, just at a different layer.
 | bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
-**Grand SQL surface delivered**: 683 SQL-callable functions
+**Grand SQL surface delivered**: 687 SQL-callable functions
 (scalars + aggregates) plus 17 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 bytecode, generate_series, vec0, vec_each, listargs, closure,

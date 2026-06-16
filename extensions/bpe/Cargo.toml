@@ -1,0 +1,29 @@
+[package]
+name = "bpe-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+BPE tokenizer via tiktoken-rs. Bundles OpenAI's cl100k_base
+encoding by default (the GPT-3.5/GPT-4 vocab); the model is
+embedded in the wasm so callers don't need to ship a vocab
+file out-of-band.
+
+Functions:
+  bpe_encode(text)          TEXT  JSON list of token IDs
+  bpe_decode(ids_json)      TEXT  decoded text
+  bpe_count_tokens(text)    INTEGER  token count
+  bpe_model_name()          TEXT  the bundled encoding name
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+tiktoken-rs = "0.7"
