@@ -1,0 +1,36 @@
+[package]
+name = "zipfile-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+zipfile vtab. Pure-Rust `zip` crate read-only access to ZIP
+archives by file path.
+
+    CREATE VIRTUAL TABLE z USING zipfile('/path/to/archive.zip');
+    SELECT name, sz, data FROM z;
+    SELECT name FROM z WHERE method = 'deflate';
+
+Schema:
+  name      TEXT      entry filename
+  mode      INTEGER   POSIX permission bits (or 0)
+  mtime     INTEGER   unix epoch (or 0 if not present)
+  sz        INTEGER   uncompressed size
+  data      BLOB      decompressed entry contents
+  method    TEXT      'store' | 'deflate' | etc.
+
+Tier-3 vtab port per PLAN-extensions-followups Phase E8.
+Filesystem access flows through WASI's preopen surface
+same caveat as extensions/fileio.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }

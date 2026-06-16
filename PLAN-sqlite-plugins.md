@@ -272,6 +272,7 @@ fts5/rtree, just at a different layer.
 | web-parsers (jsonpath+html)   |     7  | extensions/web-parsers             |
 | ipaddr scalars                |     7  | extensions/ipaddr                  |
 | fileio (read/write/stat)      |     7  | extensions/fileio                  |
+| zipfile vtab                  |    +1  | extensions/zipfile                 |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
@@ -282,13 +283,13 @@ fts5/rtree, just at a different layer.
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
 **Grand SQL surface delivered**: 591 SQL-callable functions
-(scalars + aggregates) plus 16 virtual-table modules (csv, fts5,
+(scalars + aggregates) plus 17 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 bytecode, generate_series, vec0, vec_each, listargs, closure,
-trie, prefixes, spellfix1), all reachable through `.load` or
-directly via the bundled SQLite, on top of the existing scalar
-/ aggregate / collation / hook / vtab dispatch the host
-implements. vec0 ships five backends  brute
+trie, prefixes, spellfix1, zipfile), all reachable through
+`.load` or directly via the bundled SQLite, on top of the
+existing scalar / aggregate / collation / hook / vtab dispatch
+the host implements. vec0 ships five backends  brute
 force (default), IVF k-means partitioning, HNSW graph, int8-
 quantized HNSW (`index=hnsw8`), and binary LSH
 (`index=lsh, d_signature=D, n_probes=M`)  with identical SQL
