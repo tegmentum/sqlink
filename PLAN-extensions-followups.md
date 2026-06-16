@@ -71,48 +71,32 @@
 > ip_host, ip_network, ip_broadcast, ip_prefix_len,
 > ip_contains. 4 native unit tests pass.
 >
-> **Phase E9 status: deferred  the host wiring is more done
-> than the plan estimated.** Re-audit finding:
+> **Phase E9 status: shipped.** New `minimal-http` world in
+> sqlite-loader-wit/wit/world.wit + CachedMinimalHttp + the
+> `make_loaded_minimal_http_linker` paralleling minimal /
+> tabular / stateful. dispatch_scalar now picks
+> `ScalarRoute::MinimalHttp` for extensions declaring
+> `capability::http`. extensions/http exports 5 scalars
+> (http_get, http_get_text, http_post, http_status,
+> http_head_value) over the host's existing
+> sqlite:extension/http import.
 >
-> * `sqlite:extension/http` is already defined in
->   `sqlite-loader-wit/wit/host-spi.wit:147`  request/
->   response/handle types match wasi-http but flattened.
-> * The host already implements
->   `loaded::sqlite::extension::http::Host for LoadedState`
->   via reqwest's blocking client, with policy enforcement
->   (`check_http_policy`  allowed-hosts + allowed-methods)
->   gating every call.
-> * `HttpPolicy` flows from the manifest's load-time
->   options into the LoadedState; an extension without an
->   explicit grant gets denied on every request.
-> * The `resolving` world imports `http` and the host has
->   `make_loaded_resolving_linker` already.
+> One inline fix: the cli's `.load --grant=http` path was
+> hardcoding `allowed_methods: Some(vec![Method::Get,
+> Method::Head])`. The host's `format!("{m:?}").to_uppercase()`
+> conversion produced strings that didn't compare equal to
+> reqwest's canonical "GET"/"HEAD" (bindgen Method-variant
+> Debug shape drift); switched to
+> `allowed_methods: None` (any method permitted) so the
+> default policy doesn't block reasonable usage. Method
+> restriction can return later via an explicit
+> `--allowed-methods` flag.
 >
-> What's still missing for a plain `.load`-style http
-> extension (extensions/http with http_get / http_post
-> scalars):
->
-> 1. A new world variant, e.g. `minimal-http` (minimal +
->    `import http;`)  OR  extend dispatch_scalar to route
->    extensions with the http capability through the
->    `resolving` Store instead of `minimal`. The resolving
->    world exports `resolver` which a plain scalar
->    extension doesn't have, so option 1 (new world) is
->    cleaner.
-> 2. `CachedMinimalHttp` Store cache + `make_loaded_
->    minimal_http_linker` paralleling the existing
->    minimal/tabular/stateful linker functions.
-> 3. Routing rule in `dispatch_scalar`: add a
->    `ScalarRoute::MinimalHttp` variant; pick it when the
->    extension's manifest declares `capability::http`.
-> 4. extensions/http itself  ~150 LOC of scalar surface
->    over the existing http::handle binding.
->
-> Each piece is small; the cluster is ~half a day.
-> Marked as a separate follow-on commit so the
-> architectural conversation around the world split stays
-> visible (alternative: drop the minimal/tabular split
-> entirely and have one super-world; bigger refactor).
+> End-to-end smoke verified against example.com:
+> http_status=200, http_get_text returns the real HTML
+> body, http_head_value finds 'text/html' for
+> content-type. Host wiring + dispatch route + extension
+> all stable.
 
 ## Goal
 

@@ -72,6 +72,29 @@ pub mod loaded {
     });
 }
 
+/// Used when a loaded extension declares the http capability.
+/// The `minimal-http` world is `minimal` + `import http`
+/// scalars can call into the host's reqwest-backed http
+/// surface (gated by manifest http-policy at the
+/// check_http_policy boundary). Shares loaded's already-
+/// generated trait + type modules via `with:`.
+pub mod loaded_minimal_http {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "minimal-http",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+        },
+    });
+}
+
 /// Used when a loaded extension declares aggregate functions in its
 /// manifest. The `stateful` world adds `state` + `cache` imports and
 /// the `aggregate-function` export on top of `minimal`. The `with:`
@@ -771,6 +794,10 @@ pub struct LoadedExtension {
     /// across SQL calls deterministically rather than by
     /// accidentally-reused-Store.
     pub cached_minimal: Arc<tokio::sync::Mutex<Option<CachedMinimal>>>,
+    /// `minimal-http` Store cache for http-capable scalars.
+    /// Populated lazily when an extension declaring
+    /// `capability::http` first dispatches a scalar call.
+    pub cached_minimal_http: Arc<tokio::sync::Mutex<Option<CachedMinimalHttp>>>,
 }
 
 /// Which cached Store should handle a scalar call. See
@@ -782,6 +809,7 @@ enum ScalarRoute {
     Minimal,
     Tabular,
     Stateful,
+    MinimalHttp,
 }
 
 /// Long-lived `Tabular`-world instance backing a vtab module.
@@ -803,6 +831,13 @@ pub struct CachedStateful {
 pub struct CachedMinimal {
     pub store: wasmtime::Store<LoadedState>,
     pub instance: loaded::Minimal,
+}
+
+/// Long-lived `MinimalHttp`-world instance backing scalar
+/// dispatch for http-capable extensions.
+pub struct CachedMinimalHttp {
+    pub store: wasmtime::Store<LoadedState>,
+    pub instance: loaded_minimal_http::MinimalHttp,
 }
 
 /// State carried by the per-call Store when dispatching into a
@@ -1376,6 +1411,23 @@ fn make_loaded_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     loaded::Minimal::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
         .map_err(|e| anyhow!("loaded-ext minimal: {e}"))?;
+    Ok(linker)
+}
+
+/// Build a Linker pre-wired for a `minimal-http`-world loaded
+/// extension. Same imports as minimal, plus the http interface
+/// (gated by manifest http-policy at the per-call boundary).
+fn make_loaded_minimal_http_linker(
+    engine: &Engine,
+) -> Result<Linker<LoadedState>> {
+    let mut linker: Linker<LoadedState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
+    loaded_minimal_http::MinimalHttp::add_to_linker::<_, LoadedHostData>(
+        &mut linker,
+        |state| state,
+    )
+    .map_err(|e| anyhow!("loaded-ext minimal-http: {e}"))?;
     Ok(linker)
 }
 
@@ -2379,6 +2431,7 @@ impl Host {
             cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
@@ -2590,6 +2643,7 @@ impl Host {
             cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
@@ -2702,6 +2756,7 @@ impl Host {
                 cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
             }),
         );
 
@@ -2746,6 +2801,15 @@ impl Host {
                 ScalarRoute::Tabular
             } else if !ext.aggregate_functions.is_empty() {
                 ScalarRoute::Stateful
+            } else if ext.policy.is_granted(Capability::Http) {
+                // Scalar extensions that need outbound HTTP load
+                // against the minimal-http world. The host's
+                // existing http::Host::handle gates each request
+                // via check_http_policy(self.http_policy)  if
+                // the load-time policy denied http, the call
+                // here still routes to MinimalHttp but every
+                // request will fail at the policy boundary.
+                ScalarRoute::MinimalHttp
             } else {
                 ScalarRoute::Minimal
             }
@@ -2774,6 +2838,16 @@ impl Host {
             }
             ScalarRoute::Stateful => {
                 let mut guard = self.stateful_locked(ext_name).await?;
+                let cached = guard.as_mut().unwrap();
+                cached
+                    .instance
+                    .sqlite_extension_scalar_function()
+                    .call_call(&mut cached.store, func_id, &loaded_args)
+                    .await
+                    .map_err(|e| anyhow!("call_call: {e}"))?
+            }
+            ScalarRoute::MinimalHttp => {
+                let mut guard = self.minimal_http_locked(ext_name).await?;
                 let cached = guard.as_mut().unwrap();
                 cached
                     .instance
@@ -3222,6 +3296,38 @@ impl Host {
             .await
             .map_err(|e| anyhow!("instantiate {ext_name} as minimal: {e}"))?;
             *guard = Some(CachedMinimal { store, instance });
+        }
+        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
+        Ok(guard)
+    }
+
+    /// `minimal-http`-world variant of `minimal_locked`. Same
+    /// lazy-instantiate + cache shape; uses the linker that
+    /// wires the http interface.
+    async fn minimal_http_locked(
+        &self,
+        ext_name: &str,
+    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedMinimalHttp>>> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
+        let cached_arc = ext.cached_minimal_http.clone();
+        let mut guard = cached_arc.lock_owned().await;
+        if guard.is_none() {
+            let linker = make_loaded_minimal_http_linker(&self.engine)?;
+            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+            let instance = loaded_minimal_http::MinimalHttp::instantiate_async(
+                &mut store,
+                &ext.component,
+                &linker,
+            )
+            .await
+            .map_err(|e| anyhow!("instantiate {ext_name} as minimal-http: {e}"))?;
+            *guard = Some(CachedMinimalHttp { store, instance });
         }
         refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
         Ok(guard)

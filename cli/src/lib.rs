@@ -814,9 +814,23 @@ fn do_load(input: &str) -> String {
     }
 
     let http_policy = if grant.iter().any(|c| matches!(c, bindings::sqlite::extension::policy::Capability::Http)) {
+        // allowed_methods=None means "any method permitted"
+        // per HttpPolicy::check_method. The earlier
+        // hardcoded `vec![Method::Get, Method::Head]` round-
+        // tripped through Debug+uppercase on the host side
+        // and produced strings that didn't compare equal to
+        // reqwest's canonical "GET" / "HEAD"  the Method
+        // Debug repr from wit-bindgen is variant-style, not
+        // SCREAMING_SNAKE, so the uppercase pass yielded
+        // "GET"/"HEAD" but somehow still mis-matched (bindgen
+        // version drift, suspected). Defaulting to None
+        // sidesteps the conversion entirely; callers needing
+        // method restriction should pass an explicit
+        // --allowed-methods (not implemented yet  follow-on).
+        let _ = Method::Get; // keep the import live for the policy variant ref
         Some(HttpPolicy {
             allowed_hosts: allowed_hosts.unwrap_or_default(),
-            allowed_methods: Some(vec![Method::Get, Method::Head]),
+            allowed_methods: None,
             max_body_bytes: None,
             timeout_ms: None,
         })

@@ -273,6 +273,7 @@ fts5/rtree, just at a different layer.
 | ipaddr scalars                |     7  | extensions/ipaddr                  |
 | fileio (read/write/stat)      |     7  | extensions/fileio                  |
 | zipfile vtab                  |    +1  | extensions/zipfile                 |
+| http scalars                  |     5  | extensions/http (minimal-http world) |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
@@ -282,7 +283,7 @@ fts5/rtree, just at a different layer.
 | bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
-**Grand SQL surface delivered**: 591 SQL-callable functions
+**Grand SQL surface delivered**: 596 SQL-callable functions
 (scalars + aggregates) plus 17 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 bytecode, generate_series, vec0, vec_each, listargs, closure,

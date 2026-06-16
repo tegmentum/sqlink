@@ -1,0 +1,35 @@
+[package]
+name = "http-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+HTTP scalars. Wraps the host's `sqlite:extension/http` import
+the host's implementation does the actual request via reqwest
+with policy enforcement (allowed-hosts / allowed-methods)
+gating every call.
+
+Functions:
+  http_get(url)            BLOB    response body
+  http_get_text(url)       TEXT
+  http_post(url, body, ct) BLOB
+  http_status(url)         INTEGER  status code of a GET probe
+  http_head_value(url, h)  TEXT     first matching response header
+
+Loads against the `minimal-http` world. Manifest declares
+`capability::http`; the cli's load path errors before
+instantiation if the user's grant doesn't include http.
+
+Tier-2 architectural extension per PLAN-extensions-followups
+Phase E9.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
