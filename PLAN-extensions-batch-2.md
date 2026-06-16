@@ -103,8 +103,33 @@
 > full op set (nnef, hir, pulse, transformers). That's
 > the expected cost of bundling an inference engine; the
 > caller pays it only when they `.load onnx`. F5c
-> (bundled embedding model) will layer on top of this,
-> adding the 22 MB MiniLM weights for a ~45 MB total.
+> (bundled embedding model) is deferred  see note
+> below.
+>
+> **F5c status: deferred (achievable via F5a + F5b).**
+> sentence-transformers/all-MiniLM-L6-v2 only ships an
+> unquantized 90 MB ONNX file; bundling that into the
+> .wasm would push the component past 113 MB. The
+> Xenova/all-MiniLM-L6-v2 mirror has a 23 MB int8
+> quantized variant matching the original plan estimate,
+> but quantized ONNX uses MatMulInteger / QLinearConv 
+> tract-onnx 0.23's support is unverified and may need
+> per-op patches that turn this into a multi-day spike.
+>
+> The ergonomic shortcut F5c promised  one call from
+> text to vector  is reachable today by composing the
+> already-shipped extensions:
+>
+>     .load bpe
+>     .load onnx
+>     SELECT onnx_load('/path/to/minilm.onnx');
+>     SELECT onnx_run(1, bpe_encode(text)) AS vec
+>     FROM docs;
+>
+> Revisit F5c when (a) a small bundled-friendly embedding
+> model lands in a tract-onnx-compatible op set, OR (b)
+> we verify quantized-op support and accept the 23 MB
+> model in the .wasm payload.
 >
 > **F11 (pmtiles) status: shipped.** extensions/pmtiles
 > read-only vtab over PMTiles v3 archives via the
@@ -536,6 +561,26 @@ caller asks.
 - `dns_resolve(name, type)`  TEXT (JSON array of records)
 `hickory-resolver` crate. Same capability/policy machinery as
 http  pass `--grant=dns --allowed-domains=...` at load.
+
+**Status: deferred  multi-layer.** Unlike the other F11
+items, dns_resolve isn't a self-contained extension; it
+needs:
+
+  1. New `capability::dns` variant in
+     `sqlite-loader-wit/wit/policy.wit` (alongside `http`).
+  2. New `dns-policy` record (allowed-domains, timeout-ms)
+     + `dns-policy: option<dns-policy>` field on
+     `load-options`.
+  3. A new `dns` host-spi interface in `host-spi.wit`
+     mirroring how `http` is shaped (one `resolve`
+     function with allow-list enforcement on the host).
+  4. Host-side wiring in `cli/src/extension_loader.rs`
+     to construct + enforce the policy.
+  5. The extension itself.
+
+Each layer is small but they're sequenced; can't be one
+loop iteration. Schedule as a dedicated session when a
+caller asks for it.
 
 ### mbtiles / pmtiles (~3 days, capability-gated)
 vtabs over Mapbox raster tile formats. Used heavily by
