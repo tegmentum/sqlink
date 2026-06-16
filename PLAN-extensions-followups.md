@@ -37,6 +37,15 @@
 > interval_add deferred  the former needs chrono-tz's ~1 MB
 > tzdata; the latter is redundant with SQLite's datetime()
 > modifier syntax. 7 native unit tests pass.
+>
+> **Phase E6 status: shipped.** extensions/crypto-auth bundles
+> JWT (verify/decode_header/decode_payload), TOTP (RFC 6238
+> with hand-rolled HMAC-SHA1 over base32-secret), Argon2
+> (hash/verify), and bcrypt (hash/verify with cost arg).
+> Components-wrap requires the wasi-preview1 adapter
+> (argon2/bcrypt pull rand_core::OsRng  preview1
+> random_get import). 6 native unit tests pass including
+> the RFC 6238 reference vector at T=59  '94287082'.
 
 ## Goal
 
