@@ -20,6 +20,13 @@
 > recall, O(N) per query. 11 native unit tests pass; smoke
 > verifies typo-tolerant lookup ("thier"  their/them/there/
 > three/water).
+>
+> **Phase E4 status: shipped.** extensions/stats gains seven
+> new aggregates: percentile_cont / percentile_disc, skewness
+> / kurtosis (one-pass Pébay 2008 moments aggregator),
+> regr_slope / regr_intercept / regr_r2 (closed-form least
+> squares). 15 native unit tests pass (6 new); smoke verifies
+> regression on y=2x+1 returns exact slope=2 intercept=1 r2=1.
 
 ## Goal
 

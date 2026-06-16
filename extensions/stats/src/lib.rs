@@ -42,6 +42,14 @@ mod wasm_export {
     const FID_MEDIAN: u64 = 5;
     const FID_PERCENTILE: u64 = 6;
     const FID_MODE: u64 = 7;
+    // Phase E4 additions:
+    const FID_PERCENTILE_CONT: u64 = 8;
+    const FID_PERCENTILE_DISC: u64 = 9;
+    const FID_SKEWNESS: u64 = 10;
+    const FID_KURTOSIS: u64 = 11;
+    const FID_REGR_SLOPE: u64 = 12;
+    const FID_REGR_INTERCEPT: u64 = 13;
+    const FID_REGR_R2: u64 = 14;
 
     /// All running state for one in-flight aggregation. The host
     /// passes us the same `context_id` for every step/value/
@@ -53,6 +61,12 @@ mod wasm_export {
         Median(Samples),
         Percentile { p: Option<f64>, samples: Samples },
         Mode(ModeTracker),
+        // Continuous + discrete percentile share the same state
+        // shape  the difference is the finalize() path.
+        PercentileCont { p: Option<f64>, samples: super::aggs::Samples },
+        PercentileDisc { p: Option<f64>, samples: super::aggs::Samples },
+        Moments(super::aggs::Moments),
+        Regression(super::aggs::Regression),
     }
 
     thread_local! {
@@ -84,6 +98,15 @@ mod wasm_export {
                     // percentile(value, p)  p in 0..100.
                     a(FID_PERCENTILE, "percentile", 2),
                     a(FID_MODE, "mode", 1),
+                    // E4 additions:
+                    a(FID_PERCENTILE_CONT, "percentile_cont", 2),
+                    a(FID_PERCENTILE_DISC, "percentile_disc", 2),
+                    a(FID_SKEWNESS, "skewness", 1),
+                    a(FID_KURTOSIS, "kurtosis", 1),
+                    // regression: 2-arg (y, x).
+                    a(FID_REGR_SLOPE, "regr_slope", 2),
+                    a(FID_REGR_INTERCEPT, "regr_intercept", 2),
+                    a(FID_REGR_R2, "regr_r2", 2),
                 ],
                 collations: alloc::vec![],
                 vtabs: alloc::vec![],
@@ -141,6 +164,20 @@ mod wasm_export {
                         samples: Samples::default(),
                     },
                     FID_MODE => AggState::Mode(ModeTracker::default()),
+                    FID_PERCENTILE_CONT => AggState::PercentileCont {
+                        p: None,
+                        samples: super::aggs::Samples::default(),
+                    },
+                    FID_PERCENTILE_DISC => AggState::PercentileDisc {
+                        p: None,
+                        samples: super::aggs::Samples::default(),
+                    },
+                    FID_SKEWNESS | FID_KURTOSIS => {
+                        AggState::Moments(super::aggs::Moments::default())
+                    }
+                    FID_REGR_SLOPE | FID_REGR_INTERCEPT | FID_REGR_R2 => {
+                        AggState::Regression(super::aggs::Regression::default())
+                    }
                     _ => AggState::Stddev(Welford::default()),
                 });
                 match (func_id, entry) {
@@ -175,6 +212,38 @@ mod wasm_export {
                             None => return Ok(()),
                         };
                         m.add(k);
+                    }
+                    (FID_PERCENTILE_CONT, AggState::PercentileCont { p, samples })
+                    | (FID_PERCENTILE_DISC, AggState::PercentileDisc { p, samples }) => {
+                        let x = to_f64(&args[0])
+                            .ok_or_else(|| "non-numeric value arg".to_string())?;
+                        let p_arg = args
+                            .get(1)
+                            .and_then(to_f64)
+                            .ok_or_else(|| "non-numeric percentile arg".to_string())?;
+                        if p.is_none() {
+                            *p = Some(p_arg);
+                        }
+                        samples.add(x);
+                    }
+                    (FID_SKEWNESS | FID_KURTOSIS, AggState::Moments(m)) => {
+                        let x = to_f64(&args[0])
+                            .ok_or_else(|| "non-numeric arg".to_string())?;
+                        m.add(x);
+                    }
+                    (
+                        FID_REGR_SLOPE | FID_REGR_INTERCEPT | FID_REGR_R2,
+                        AggState::Regression(r),
+                    ) => {
+                        // SQL order is `regr_slope(y, x)`  matches
+                        // PostgreSQL's signature. add(y, x).
+                        let y = to_f64(&args[0])
+                            .ok_or_else(|| "non-numeric y arg".to_string())?;
+                        let x = args
+                            .get(1)
+                            .and_then(to_f64)
+                            .ok_or_else(|| "non-numeric x arg".to_string())?;
+                        r.add(y, x);
                     }
                     _ => return Err(format!("stats: bad func_id {func_id} for state")),
                 }
@@ -214,6 +283,37 @@ mod wasm_export {
                     }
                     (FID_MODE, AggState::Mode(m)) => {
                         m.mode().map(|(k, _)| SqlValue::Text(k)).unwrap_or(SqlValue::Null)
+                    }
+                    (FID_PERCENTILE_CONT, AggState::PercentileCont { p, samples }) => {
+                        let p = p.unwrap_or(50.0);
+                        samples
+                            .percentile(p)
+                            .map(SqlValue::Real)
+                            .unwrap_or(SqlValue::Null)
+                    }
+                    (FID_PERCENTILE_DISC, AggState::PercentileDisc { p, samples }) => {
+                        let p = p.unwrap_or(50.0);
+                        samples
+                            .percentile_disc(p)
+                            .map(SqlValue::Real)
+                            .unwrap_or(SqlValue::Null)
+                    }
+                    (FID_SKEWNESS, AggState::Moments(m)) => m
+                        .skewness()
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null),
+                    (FID_KURTOSIS, AggState::Moments(m)) => m
+                        .kurtosis()
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null),
+                    (FID_REGR_SLOPE, AggState::Regression(r)) => {
+                        r.slope().map(SqlValue::Real).unwrap_or(SqlValue::Null)
+                    }
+                    (FID_REGR_INTERCEPT, AggState::Regression(r)) => {
+                        r.intercept().map(SqlValue::Real).unwrap_or(SqlValue::Null)
+                    }
+                    (FID_REGR_R2, AggState::Regression(r)) => {
+                        r.r2().map(SqlValue::Real).unwrap_or(SqlValue::Null)
                     }
                     _ => return Err(format!("stats: bad func_id {func_id} in finalize")),
                 };

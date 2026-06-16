@@ -232,7 +232,7 @@ fts5/rtree, just at a different layer.
 | crypto scalars                |     8  | extensions/crypto                  |
 | uuid scalars                  |     3  | extensions/uuid                    |
 | regexp scalars                |     4  | extensions/regexp                  |
-| stats aggregates              |     7  | extensions/stats                   |
+| stats aggregates              |    14  | extensions/stats                   |
 | csv vtab                      |     1  | extensions/csv                     |
 | postgis geometry              |   235  | extensions/postgis-bridge          |
 | postgis geography             |    32  | extensions/postgis-bridge          |
@@ -276,7 +276,7 @@ fts5/rtree, just at a different layer.
 | bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
-**Grand SQL surface delivered**: 542 SQL-callable functions
+**Grand SQL surface delivered**: 549 SQL-callable functions
 (scalars + aggregates) plus 16 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 bytecode, generate_series, vec0, vec_each, listargs, closure,
