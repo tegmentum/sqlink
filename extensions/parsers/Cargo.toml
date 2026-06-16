@@ -1,0 +1,36 @@
+[package]
+name = "parsers-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Small parsers and converters: color spaces, unit
+conversion, financial-ID validation. All hand-rolled
+no external deps, fast wasm build, small artifact.
+
+Functions:
+  hex_to_rgb(hex)                  TEXT  'r,g,b'
+  rgb_to_hex(r, g, b)              TEXT  '#rrggbb'
+  rgb_to_hsl(r, g, b)              TEXT  'h,s,l'
+  hsl_to_rgb(h, s, l)              TEXT  'r,g,b'
+  color_lighten(hex, pct)          TEXT  '#rrggbb'
+  color_darken(hex, pct)           TEXT  '#rrggbb'
+
+  convert_length(value, from, to)  REAL
+  convert_mass(value, from, to)    REAL
+  convert_temperature(value, f, t) REAL
+
+  luhn_check(n)                    INTEGER 0/1
+  iban_validate(iban)              INTEGER 0/1
+  iban_format(iban)                TEXT
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

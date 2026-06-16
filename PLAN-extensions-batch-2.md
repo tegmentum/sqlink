@@ -1,13 +1,31 @@
 # Plan: extension catalog batch 2
 
-> **Phases F1 + F2 + F3 + F4 status: shipped.** geo (h3 +
-> geohash + maidenhead, 11 scalars), ids (ulid + nanoid +
-> snowflake, 9 scalars), crypto-keys (ed25519 + x25519 +
-> AEAD + merkle, 13 scalars), time-series (time_bucket
-> scalar + gap_fill_series eponymous TVF). 17 native unit
-> tests pass across the four extensions. Pure-Rust deps only;
-> components wrap with the wasi-preview1 adapter where rng
-> is needed (ids + crypto-keys).
+> **Phases F1 + F2 + F3 + F4 + F7 + F8 + F9 + F10 status:
+> shipped.** Eight extensions delivered:
+>
+> * F1 geo  H3 + geohash + Maidenhead (11 scalars)
+> * F2 ids  ULID + nanoid + Twitter snowflake (9 scalars)
+> * F3 crypto-keys  ed25519 + x25519 + AEAD + merkle
+>   (13 scalars)
+> * F4 time-series  time_bucket scalar + gap_fill_series
+>   eponymous TVF
+> * F7 text-nlp  text_diff + markdown_to_html +
+>   stem_porter + soundex + metaphone (5 scalars)
+> * F8 db-utils  schema_tables / schema_columns /
+>   schema_indexes / schema_to_sql / explain_query_plan
+>   (6 scalars, spi-driven)
+> * F9 parsers  hex/RGB/HSL color conversions + color
+>   lighten/darken + length/mass/temperature unit
+>   conversion + Luhn + IBAN validation (12 scalars)
+> * F10 sketches  hand-rolled t-digest + MinHash with
+>   in-tree wire formats (4 scalars + 2 aggregates)
+>
+> 31 native unit tests pass across the eight extensions.
+> Pure-Rust deps only; components wrap with the
+> wasi-preview1 adapter where rng is needed (ids,
+> crypto-keys). F5 (vector/AI) and F6 (data formats) +
+> F11 (networking) deferred  larger surfaces saved for
+> dedicated commits.
 
 ## Goal
 

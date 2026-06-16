@@ -1,0 +1,29 @@
+[package]
+name = "text-nlp-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Deeper text / NLP helpers. Complements text-utils
+(sql_normalize + prefixes) and spellfix1 (Levenshtein).
+
+Functions:
+  text_diff(a, b)          TEXT  unified-style diff
+  markdown_to_html(md)     TEXT  CommonMark
+  stem_porter(word)        TEXT  Porter stemmer (English)
+  soundex(word)            TEXT  4-char phonetic key
+  metaphone(word)          TEXT  primary metaphone code
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+similar = { version = "2", default-features = false, features = ["text"] }
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
+rust-stemmers = "1"
