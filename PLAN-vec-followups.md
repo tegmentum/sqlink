@@ -1,5 +1,15 @@
 # Plan: vector-search follow-ups for vec0
 
+> **Phase 1 status: shipped.** Polling-based online insert
+> wired into both IVF and HNSW backends; vec0_refresh /
+> vec0_delete scalars exposed; host scalar dispatch now routes
+> to the tabular cache when the extension has vtabs, so vec0
+> scalars share thread_locals with vec0 vtab callbacks. 9
+> native unit tests pass; end-to-end smoke through the cli
+> verifies INSERT-then-query surfaces new rows, tombstones
+> filter results, and refresh both drops the cache and clears
+> the tombstone set.
+
 ## Goal
 
 Take the three-backend vec0 vtab from "good enough for v1 brute /

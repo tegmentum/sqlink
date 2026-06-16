@@ -105,6 +105,20 @@ pub mod ivf {
         /// second source-table scan at query time.
         pub partitions: Vec<Vec<(i64, Vec<f32>)>>,
         pub n_probes: usize,
+        /// Bookkeeping for the polling-based online-insert path
+        /// (see PLAN-vec-followups.md Phase 1). Track the
+        /// source-table count + max rowid at the point this
+        /// index was last fully aligned with the source; new
+        /// rows whose rowid exceeds `last_indexed_max_rowid`
+        /// get assigned to the nearest existing centroid on
+        /// the fly  no re-clustering. Recall degrades as the
+        /// online inserts drift the cluster structure;
+        /// vec0_refresh() forces a full rebuild.
+        pub last_indexed_count: usize,
+        pub last_indexed_max_rowid: i64,
+        /// Soft-deleted rowids. xFilter filters these out
+        /// before truncating to k.
+        pub tombstones: std::collections::HashSet<i64>,
     }
 
     impl Index {
@@ -256,6 +270,9 @@ pub mod ivf {
                 centroids: Vec::new(),
                 partitions: Vec::new(),
                 n_probes,
+                last_indexed_count: 0,
+                last_indexed_max_rowid: 0,
+                tombstones: std::collections::HashSet::new(),
             };
         }
         let just_points: Vec<Vec<f32>> = vectors.iter().map(|(_, v)| v.clone()).collect();
@@ -263,6 +280,8 @@ pub mod ivf {
         let k = centroids.len();
         let mut partitions: Vec<Vec<(i64, Vec<f32>)>> =
             (0..k).map(|_| Vec::new()).collect();
+        let count = vectors.len();
+        let max_rowid = vectors.iter().map(|(r, _)| *r).max().unwrap_or(0);
         for (idx, (rid, v)) in vectors.into_iter().enumerate() {
             let c_i = assignments[idx];
             partitions[c_i].push((rid, v));
@@ -271,6 +290,34 @@ pub mod ivf {
             centroids,
             partitions,
             n_probes: n_probes.max(1).min(k),
+            last_indexed_count: count,
+            last_indexed_max_rowid: max_rowid,
+            tombstones: std::collections::HashSet::new(),
+        }
+    }
+
+    /// Assign a single new vector to its nearest centroid. No
+    /// re-clustering; the centroid stays put. Cheap O(K)
+    /// distance comparison; recall slowly degrades as the
+    /// data distribution drifts away from the original
+    /// k-means partitioning. Caller bumps `last_indexed_*`.
+    pub fn insert_one(idx: &mut Index, rowid: i64, vector: Vec<f32>) {
+        if idx.centroids.is_empty() {
+            return;
+        }
+        let mut best = 0usize;
+        let mut best_d = f64::INFINITY;
+        for (i, c) in idx.centroids.iter().enumerate() {
+            let d = squared_l2(&vector, c);
+            if d < best_d {
+                best_d = d;
+                best = i;
+            }
+        }
+        idx.partitions[best].push((rowid, vector));
+        idx.last_indexed_count += 1;
+        if rowid > idx.last_indexed_max_rowid {
+            idx.last_indexed_max_rowid = rowid;
         }
     }
 
@@ -425,6 +472,13 @@ pub mod hnsw {
         /// that layer. Top index = node's assigned top layer.
         pub neighbors: Vec<Vec<Vec<u32>>>,
         pub levels: Vec<usize>, // top layer per node
+        /// PRNG state used for the geometric layer draw. Carried
+        /// across builds so online insert (`insert_one`) keeps
+        /// rolling the same deterministic sequence.
+        pub rng_state: u64,
+        pub last_indexed_count: usize,
+        pub last_indexed_max_rowid: i64,
+        pub tombstones: HashSet<i64>,
     }
 
     impl Index {
@@ -460,6 +514,10 @@ pub mod hnsw {
             vectors: Vec::new(),
             neighbors: Vec::new(),
             levels: Vec::new(),
+            rng_state: 0xcafef00dd15ea5e5,
+            last_indexed_count: 0,
+            last_indexed_max_rowid: 0,
+            tombstones: HashSet::new(),
         }
     }
 
@@ -562,6 +620,9 @@ pub mod hnsw {
         candidates.iter().take(m).map(|s| s.node).collect()
     }
 
+    /// Internal insert. `rng_state` is mutated; in steady state
+    /// the caller (`insert_one` or `build`) lives the state on
+    /// the index itself so determinism survives across calls.
     fn insert(idx: &mut Index, rowid: i64, vector: Vec<f32>, rng_state: &mut u64) {
         let layer = random_layer(rng_state, idx.layer_mult);
         let new_id = idx.vectors.len() as u32;
@@ -663,11 +724,32 @@ pub mod hnsw {
         if vectors.is_empty() {
             return idx;
         }
-        let mut rng_state = rng_seed(&vectors);
+        idx.rng_state = rng_seed(&vectors);
+        let count = vectors.len();
+        let max_rid = vectors.iter().map(|(r, _)| *r).max().unwrap_or(0);
         for (rid, v) in vectors {
-            insert(&mut idx, rid, v, &mut rng_state);
+            let mut s = idx.rng_state;
+            insert(&mut idx, rid, v, &mut s);
+            idx.rng_state = s;
         }
+        idx.last_indexed_count = count;
+        idx.last_indexed_max_rowid = max_rid;
         idx
+    }
+
+    /// Public online insert. The graph algorithm itself is the
+    /// same as build()'s per-row step; this entry point just
+    /// keeps the rng state on the index so subsequent calls
+    /// stay deterministic w.r.t. an empty-cache rebuild that
+    /// inserted the same rows in the same order.
+    pub fn insert_one(idx: &mut Index, rowid: i64, vector: Vec<f32>) {
+        let mut s = idx.rng_state;
+        insert(idx, rowid, vector, &mut s);
+        idx.rng_state = s;
+        idx.last_indexed_count += 1;
+        if rowid > idx.last_indexed_max_rowid {
+            idx.last_indexed_max_rowid = rowid;
+        }
     }
 
     /// Top-k search. Returns the `k` nearest rowids to `query`
@@ -675,6 +757,7 @@ pub mod hnsw {
     /// `ef_search`. Caller computes the distance with its
     /// chosen metric on the returned rowids  HNSW only commits
     /// to "ef_search candidates closest by build-time L2".
+    /// Tombstoned rowids are filtered out before truncation.
     pub fn search(idx: &Index, query: &[f32], k: usize) -> Vec<i64> {
         let Some(mut cur_ep) = idx.entry_point else {
             return Vec::new();
@@ -687,12 +770,17 @@ pub mod hnsw {
             }
             cur_layer -= 1;
         }
-        let ef = idx.ef_search.max(k);
+        // Pull extra candidates if there are tombstones so we
+        // still hit k after filtering. With no tombstones the
+        // ef_search.max(k) heuristic is what we want; with
+        // tombstones we want ef_search.max(k + tombstones.len()).
+        let ef = idx.ef_search.max(k + idx.tombstones.len());
         let candidates = search_layer(idx, query, cur_ep, ef, 0);
         candidates
             .into_iter()
-            .take(k)
             .map(|s| idx.rowids[s.node as usize])
+            .filter(|rid| !idx.tombstones.contains(rid))
+            .take(k)
             .collect()
     }
 
@@ -742,6 +830,34 @@ pub mod hnsw {
             assert_eq!(a.levels, b.levels);
             assert_eq!(a.entry_point, b.entry_point);
         }
+
+        #[test]
+        fn insert_one_finds_a_late_arrival() {
+            // 10 vectors at [0,0]..[9,0]. Query [100,0]  no row
+            // is close to it; rowid 9 at [9,0] is the best of a
+            // bad lot. We insert a new row at [100,0] (exact
+            // match for the query) and verify it surfaces.
+            let pts: Vec<(i64, Vec<f32>)> = (0..10)
+                .map(|i| (i, alloc::vec![i as f32, 0.0]))
+                .collect();
+            let mut idx = build(pts, 8, 50, 50);
+            assert_eq!(search(&idx, &[100.0, 0.0], 1), alloc::vec![9i64]);
+            insert_one(&mut idx, 999, alloc::vec![100.0, 0.0]);
+            assert_eq!(search(&idx, &[100.0, 0.0], 1), alloc::vec![999i64]);
+            assert_eq!(idx.last_indexed_count, 11);
+            assert_eq!(idx.last_indexed_max_rowid, 999);
+        }
+
+        #[test]
+        fn tombstones_filter_out_results() {
+            let pts: Vec<(i64, Vec<f32>)> = (0..5)
+                .map(|i| (i, alloc::vec![i as f32, 0.0]))
+                .collect();
+            let mut idx = build(pts, 8, 50, 50);
+            assert_eq!(search(&idx, &[0.0, 0.0], 2), alloc::vec![0i64, 1]);
+            idx.tombstones.insert(0);
+            assert_eq!(search(&idx, &[0.0, 0.0], 2), alloc::vec![1i64, 2]);
+        }
     }
 }
 
@@ -763,8 +879,9 @@ mod wasm_export {
     }
 
     use bindings::exports::sqlite::extension::metadata::{
-        Guest as MetadataGuest, Manifest, VtabSpec,
+        Guest as MetadataGuest, Manifest, ScalarFunctionSpec, VtabSpec,
     };
+    use bindings::sqlite::extension::types::FunctionFlags;
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
         ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
@@ -867,16 +984,38 @@ mod wasm_export {
         /// HNSW cache, same lazy-build-once shape as IVF.
         static HNSW_CACHE: RefCell<HashMap<u64, super::hnsw::Index>> =
             RefCell::new(HashMap::new());
+        /// `(table_name, instance_id)` lookup so the scalars
+        /// (vec0_refresh, vec0_delete) can target the right
+        /// cache entry. Populated at xConnect/xCreate, cleared
+        /// at xDestroy/xDisconnect.
+        static NAME_TO_INSTANCE: RefCell<HashMap<String, u64>> =
+            RefCell::new(HashMap::new());
     }
 
     struct Vec0;
 
+    const FID_VEC0_REFRESH: u64 = 1;
+    const FID_VEC0_DELETE: u64 = 2;
+
     impl MetadataGuest for Vec0 {
         fn describe() -> Manifest {
+            // vec0_refresh / vec0_delete are non-deterministic
+            // (they mutate the cached index); leave the flags
+            // empty so SQLite doesn't try to fold them.
+            let nd = FunctionFlags::empty();
+            let s = |id, name: &str, num_args: i32| ScalarFunctionSpec {
+                id,
+                name: name.into(),
+                num_args,
+                func_flags: nd,
+            };
             Manifest {
                 name: "vec0".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
-                scalar_functions: alloc::vec![],
+                scalar_functions: alloc::vec![
+                    s(FID_VEC0_REFRESH, "vec0_refresh", 1),
+                    s(FID_VEC0_DELETE, "vec0_delete", 2),
+                ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
                 vtabs: alloc::vec![VtabSpec {
@@ -893,8 +1032,61 @@ mod wasm_export {
     }
 
     impl ScalarFunctionGuest for Vec0 {
-        fn call(_func_id: u64, _args: Vec<SqlValue>) -> Result<SqlValue, String> {
-            Err("vec0: no scalar functions exported".to_string())
+        fn call(func_id: u64, args: Vec<SqlValue>) -> Result<SqlValue, String> {
+            match func_id {
+                // vec0_refresh(table_name)  drop the cached
+                // index for that vtab so the next kNN rebuilds
+                // from scratch. Returns 1 if a cache entry was
+                // dropped, 0 otherwise.
+                FID_VEC0_REFRESH => {
+                    let Some(SqlValue::Text(name)) = args.first() else {
+                        return Err("vec0_refresh: TEXT table name required".to_string());
+                    };
+                    let inst_id = NAME_TO_INSTANCE
+                        .with(|m| m.borrow().get(name).copied());
+                    let Some(inst_id) = inst_id else {
+                        return Ok(SqlValue::Integer(0));
+                    };
+                    let ivf_dropped = IVF_CACHE
+                        .with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                    let hnsw_dropped = HNSW_CACHE
+                        .with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                    Ok(SqlValue::Integer(
+                        (ivf_dropped || hnsw_dropped) as i64,
+                    ))
+                }
+                // vec0_delete(table_name, rowid)  add rowid to
+                // the cached index's tombstones. Returns 1 if a
+                // cache entry was tombstoned, 0 otherwise.
+                FID_VEC0_DELETE => {
+                    let Some(SqlValue::Text(name)) = args.first() else {
+                        return Err("vec0_delete: TEXT table name required".to_string());
+                    };
+                    let Some(SqlValue::Integer(rowid)) = args.get(1) else {
+                        return Err("vec0_delete: integer rowid required".to_string());
+                    };
+                    let inst_id = NAME_TO_INSTANCE
+                        .with(|m| m.borrow().get(name).copied());
+                    let Some(inst_id) = inst_id else {
+                        return Ok(SqlValue::Integer(0));
+                    };
+                    let mut hit = false;
+                    IVF_CACHE.with(|m| {
+                        if let Some(idx) = m.borrow_mut().get_mut(&inst_id) {
+                            idx.tombstones.insert(*rowid);
+                            hit = true;
+                        }
+                    });
+                    HNSW_CACHE.with(|m| {
+                        if let Some(idx) = m.borrow_mut().get_mut(&inst_id) {
+                            idx.tombstones.insert(*rowid);
+                            hit = true;
+                        }
+                    });
+                    Ok(SqlValue::Integer(hit as i64))
+                }
+                other => Err(format!("vec0: unknown func id {other}")),
+            }
         }
     }
 
@@ -1071,6 +1263,12 @@ mod wasm_export {
             IVF_CACHE.with(|m| m.borrow_mut().insert(inst_id, idx));
         }
 
+        // Online-insert poll: pick up any rows whose rowid
+        // exceeds the cached max. See PLAN-vec-followups.md
+        // Phase 1  documented limitation that updates / deletes
+        // require an explicit vec0_refresh(...).
+        poll_for_inserts_ivf(inst_id, inst)?;
+
         IVF_CACHE.with(|m| -> Result<Vec<ScoredRow>, String> {
             let cache = m.borrow();
             let idx = cache
@@ -1083,6 +1281,9 @@ mod wasm_export {
             let mut scored: Vec<ScoredRow> = Vec::new();
             for pid in probe_ids {
                 for (rid, v) in &idx.partitions[pid] {
+                    if idx.tombstones.contains(rid) {
+                        continue;
+                    }
                     if let Some(d) = inst.metric.distance(query, v) {
                         if !d.is_nan() {
                             scored.push(ScoredRow {
@@ -1096,6 +1297,63 @@ mod wasm_export {
             sort_truncate(&mut scored, k);
             Ok(scored)
         })
+    }
+
+    /// Polling-based delta pickup: cheap `SELECT count(*),
+    /// coalesce(max(rowid), 0) FROM source`. If either changed,
+    /// fetch rows whose rowid > last_indexed_max_rowid and
+    /// stream them into the cached index. Catches inserts; misses
+    /// updates and deletes (those require an explicit refresh).
+    fn poll_for_inserts_ivf(inst_id: u64, inst: &Instance) -> Result<(), String> {
+        let (last_count, last_max) = IVF_CACHE.with(|m| {
+            m.borrow()
+                .get(&inst_id)
+                .map(|idx| (idx.last_indexed_count, idx.last_indexed_max_rowid))
+                .unwrap_or((0, 0))
+        });
+        let probe_sql = alloc::format!(
+            "SELECT count(*), coalesce(max({rid}), 0) FROM {src}",
+            rid = inst.rowid_column,
+            src = inst.source,
+        );
+        let probe = spi::execute(&probe_sql, &[])
+            .map_err(|e| format!("vec0: poll source: {e:?}"))?;
+        let Some(row) = probe.rows.first() else {
+            return Ok(());
+        };
+        let (cur_count, cur_max) = match (row.first(), row.get(1)) {
+            (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => {
+                (*c as usize, *m)
+            }
+            _ => return Ok(()),
+        };
+        // Same count + same max means no new rows. Skip the
+        // fetch entirely.
+        if cur_count == last_count && cur_max == last_max {
+            return Ok(());
+        }
+        let fetch_sql = alloc::format!(
+            "SELECT {rid}, {emb} FROM {src} WHERE {rid} > ?1 ORDER BY {rid}",
+            rid = inst.rowid_column,
+            emb = inst.embedding_column,
+            src = inst.source,
+        );
+        let new_rows = spi::execute(&fetch_sql, &[SqlValue::Integer(last_max)])
+            .map_err(|e| format!("vec0: fetch new rows: {e:?}"))?;
+        IVF_CACHE.with(|m| {
+            let mut cache = m.borrow_mut();
+            let Some(idx) = cache.get_mut(&inst_id) else {
+                return;
+            };
+            for row in &new_rows.rows {
+                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                if let Ok(v) = kernels::from_blob(emb) {
+                    super::ivf::insert_one(idx, *rid, v);
+                }
+            }
+        });
+        Ok(())
     }
 
     /// HNSW scan: build the graph on first call (cached in
@@ -1140,6 +1398,8 @@ mod wasm_export {
             HNSW_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
         }
 
+        poll_for_inserts_hnsw(inst_id, inst)?;
+
         HNSW_CACHE.with(|cache| -> Result<Vec<ScoredRow>, String> {
             let map = cache.borrow();
             let idx = map
@@ -1171,6 +1431,54 @@ mod wasm_export {
         })
     }
 
+    fn poll_for_inserts_hnsw(inst_id: u64, inst: &Instance) -> Result<(), String> {
+        let (last_count, last_max) = HNSW_CACHE.with(|m| {
+            m.borrow()
+                .get(&inst_id)
+                .map(|idx| (idx.last_indexed_count, idx.last_indexed_max_rowid))
+                .unwrap_or((0, 0))
+        });
+        let probe_sql = alloc::format!(
+            "SELECT count(*), coalesce(max({rid}), 0) FROM {src}",
+            rid = inst.rowid_column,
+            src = inst.source,
+        );
+        let probe = spi::execute(&probe_sql, &[])
+            .map_err(|e| format!("vec0: poll source: {e:?}"))?;
+        let Some(row) = probe.rows.first() else {
+            return Ok(());
+        };
+        let (cur_count, cur_max) = match (row.first(), row.get(1)) {
+            (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => {
+                (*c as usize, *m)
+            }
+            _ => return Ok(()),
+        };
+        if cur_count == last_count && cur_max == last_max {
+            return Ok(());
+        }
+        let fetch_sql = alloc::format!(
+            "SELECT {rid}, {emb} FROM {src} WHERE {rid} > ?1 ORDER BY {rid}",
+            rid = inst.rowid_column,
+            emb = inst.embedding_column,
+            src = inst.source,
+        );
+        let new_rows = spi::execute(&fetch_sql, &[SqlValue::Integer(last_max)])
+            .map_err(|e| format!("vec0: fetch new rows: {e:?}"))?;
+        HNSW_CACHE.with(|m| {
+            let mut cache = m.borrow_mut();
+            let Some(idx) = cache.get_mut(&inst_id) else { return };
+            for row in &new_rows.rows {
+                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                if let Ok(v) = kernels::from_blob(emb) {
+                    super::hnsw::insert_one(idx, *rid, v);
+                }
+            }
+        });
+        Ok(())
+    }
+
     fn sort_truncate(scored: &mut Vec<ScoredRow>, k: usize) {
         scored.sort_by(|a, b| {
             a.distance
@@ -1198,11 +1506,19 @@ mod wasm_export {
             _vtab_id: u64,
             instance_id: u64,
             _db_name: String,
-            _table_name: String,
+            table_name: String,
             args: Vec<String>,
         ) -> Result<String, String> {
             let inst = parse_args(&args)?;
             INSTANCES.with(|m| m.borrow_mut().insert(instance_id, inst));
+            // Register the table-name  instance lookup so
+            // vec0_refresh / vec0_delete can find this cache
+            // entry. Multiple connections in the same process
+            // would collide on the same table name; we accept
+            // last-writer-wins for v1  the underlying cache
+            // entries differ by instance_id anyway.
+            NAME_TO_INSTANCE
+                .with(|m| m.borrow_mut().insert(table_name, instance_id));
             Ok(schema_str())
         }
 
@@ -1218,10 +1534,18 @@ mod wasm_export {
 
         fn destroy(_vtab_id: u64, instance_id: u64) -> Result<(), String> {
             INSTANCES.with(|m| m.borrow_mut().remove(&instance_id));
+            IVF_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
+            HNSW_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
+            NAME_TO_INSTANCE
+                .with(|m| m.borrow_mut().retain(|_, v| *v != instance_id));
             Ok(())
         }
         fn disconnect(_vtab_id: u64, instance_id: u64) -> Result<(), String> {
             INSTANCES.with(|m| m.borrow_mut().remove(&instance_id));
+            IVF_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
+            HNSW_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
+            NAME_TO_INSTANCE
+                .with(|m| m.borrow_mut().retain(|_, v| *v != instance_id));
             Ok(())
         }
 

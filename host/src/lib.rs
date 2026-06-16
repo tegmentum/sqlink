@@ -773,6 +773,17 @@ pub struct LoadedExtension {
     pub cached_minimal: Arc<tokio::sync::Mutex<Option<CachedMinimal>>>,
 }
 
+/// Which cached Store should handle a scalar call. See
+/// `dispatch_scalar` for the routing rule  the goal is to
+/// keep scalar + vtab (or scalar + aggregate) calls inside
+/// the same wasm Store so they can share thread_local state
+/// (e.g. vec0's NAME_TO_INSTANCE registry).
+enum ScalarRoute {
+    Minimal,
+    Tabular,
+    Stateful,
+}
+
 /// Long-lived `Tabular`-world instance backing a vtab module.
 /// See `LoadedExtension.cached_tabular`.
 pub struct CachedTabular {
@@ -2707,20 +2718,71 @@ impl Host {
         func_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
-        let mut guard = self.minimal_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-
         // The two bindgens (extension-loader-host's and loaded's)
         // produce structurally-identical but distinctly-typed
         // SqlValue variants. Hand-translate to bridge the boundary.
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
 
-        let result = cached
-            .instance
-            .sqlite_extension_scalar_function()
-            .call_call(&mut cached.store, func_id, &loaded_args)
-            .await
-            .map_err(|e| anyhow!("call_call: {e}"))?;
+        // Route to the "most capable" cached Store for this
+        // extension. The minimal/tabular/stateful Stores hold
+        // separate wasm instances with separate thread_locals;
+        // if vec0 (tabular) registers its name in the vtab
+        // create path and reads it back from a scalar, the
+        // scalar MUST run in the same Store as the vtab or the
+        // thread_local lookup misses. Picking by manifest:
+        //
+        //   * vtabs present  use tabular Store (vec0 etc.)
+        //   * aggregates present  use stateful Store
+        //   * otherwise  minimal
+        //
+        // Each world's instance has the scalar-function export,
+        // so the call signature is identical across paths.
+        let route = {
+            let components = self.components.read();
+            let ext = components
+                .get(ext_name)
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?;
+            if !ext.vtabs.is_empty() {
+                ScalarRoute::Tabular
+            } else if !ext.aggregate_functions.is_empty() {
+                ScalarRoute::Stateful
+            } else {
+                ScalarRoute::Minimal
+            }
+        };
+
+        let result = match route {
+            ScalarRoute::Minimal => {
+                let mut guard = self.minimal_locked(ext_name).await?;
+                let cached = guard.as_mut().unwrap();
+                cached
+                    .instance
+                    .sqlite_extension_scalar_function()
+                    .call_call(&mut cached.store, func_id, &loaded_args)
+                    .await
+                    .map_err(|e| anyhow!("call_call: {e}"))?
+            }
+            ScalarRoute::Tabular => {
+                let mut guard = self.tabular_locked(ext_name).await?;
+                let cached = guard.as_mut().unwrap();
+                cached
+                    .instance
+                    .sqlite_extension_scalar_function()
+                    .call_call(&mut cached.store, func_id, &loaded_args)
+                    .await
+                    .map_err(|e| anyhow!("call_call: {e}"))?
+            }
+            ScalarRoute::Stateful => {
+                let mut guard = self.stateful_locked(ext_name).await?;
+                let cached = guard.as_mut().unwrap();
+                cached
+                    .instance
+                    .sqlite_extension_scalar_function()
+                    .call_call(&mut cached.store, func_id, &loaded_args)
+                    .await
+                    .map_err(|e| anyhow!("call_call: {e}"))?
+            }
+        };
         match result {
             Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
             Err(s) => Ok(Err(s)),
