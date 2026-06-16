@@ -1,0 +1,53 @@
+[package]
+name = "vec-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+sqlite-vec scalar surface  vector similarity primitives for
+embedded k-NN. Pure-Rust port; no FFI, no upstream C compile.
+
+Storage representation matches sqlite-vec's: tightly packed
+little-endian f32 in a BLOB. Dimension is implied by
+`blob.len() / 4`. Brute-force kNN through the cli works as:
+
+    SELECT id FROM docs
+    ORDER BY vec_distance_cosine(embedding, ?) LIMIT 10;
+
+Functions (15 total):
+  Constructors / converters
+    - vec_f32(X)               BLOB  X = JSON array or 4N-byte BLOB
+    - vec_to_json(V)           TEXT  packed BLOB  '[...]'
+    - vec_length(V)            INT   dim = byte_len / 4
+    - vec_type(V)              TEXT  'float32' for now
+    - vec_version()            TEXT  this crate's version
+  Distance
+    - vec_distance_l1(A, B)    REAL  Manhattan
+    - vec_distance_l2(A, B)    REAL  Euclidean
+    - vec_distance_cosine(A,B) REAL  1 - cos similarity
+  Arithmetic
+    - vec_add(A, B)            BLOB  element-wise A+B
+    - vec_sub(A, B)            BLOB  element-wise A-B
+    - vec_normalize(V)         BLOB  unit vector (L2)
+    - vec_slice(V, start, end) BLOB  half-open Python-style
+  Quantization (lossy storage helpers)
+    - vec_quantize_binary(V)   BLOB  1 bit/dim (sign)  ceil(dim/8)
+    - vec_quantize_int8(V)     BLOB  signed int8 per dim, scaled
+                                     by 127 / max(|V|)
+
+Errors propagate to SQL as TEXT.
+
+Tier-1 plugin per PLAN-sqlite-plugins.md. Pure-Rust  wasm32-
+wasip2 clean.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

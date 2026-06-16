@@ -1,6 +1,6 @@
 # Plan: Port well-known SQLite plugins to our component system
 
-> **Status (2026-06-15): shipped.** 499 SQL-callable functions
+> **Status (2026-06-16): shipped.** 513 SQL-callable functions
 > (scalars + aggregates) plus 8 virtual-table modules (csv, fts5,
 > rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 > bytecode) all delivered  see "Final state (delivered)" below
@@ -245,6 +245,7 @@ fts5/rtree, just at a different layer.
 | ieee754 scalars               |     5  | extensions/ieee754                 |
 | decimal scalars               |     5  | extensions/decimal                 |
 | decimal aggregates            |     1  | extensions/decimal                 |
+| vec scalars (sqlite-vec port) |    14  | extensions/vec                     |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
@@ -254,7 +255,7 @@ fts5/rtree, just at a different layer.
 | bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
-**Grand SQL surface delivered**: 499 SQL-callable functions
+**Grand SQL surface delivered**: 513 SQL-callable functions
 (scalars + aggregates) plus 8 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 bytecode), all reachable through `.load` or directly via the
