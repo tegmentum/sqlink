@@ -1,0 +1,47 @@
+[package]
+name = "onnx-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ONNX inference scalars via the pure-Rust `tract-onnx` crate.
+Loads a model from disk, returns a session handle, runs
+inference with a JSON-encoded input vector.
+
+    SELECT onnx_load('/path/to/model.onnx');           -- INTEGER handle
+    SELECT onnx_input_names(1);                         -- TEXT (JSON array)
+    SELECT onnx_output_names(1);                        -- TEXT (JSON array)
+    SELECT onnx_run(1, '[0.1, 0.2, 0.3, 0.4]');         -- TEXT (JSON array)
+    SELECT onnx_unload(1);                              -- INTEGER (1 if dropped)
+
+v1 scope: input is a JSON array of f32 reshaped to the
+model's declared input fact; the run returns the first
+output tensor as a JSON array of f32. Multi-input /
+multi-output / non-f32 / non-flat-shape models error
+out with `unsupported`. That covers the most common
+embedding + classification path; richer support is a
+follow-on.
+
+Combines naturally with vec0 + bpe_count_tokens:
+
+    SELECT bpe_count_tokens(doc) AS toks,
+           onnx_run(:cls_handle, embed_features(doc)) AS pred
+    FROM docs;
+
+Model handle registry is per-extension (thread_local
+HashMap); handles aren't valid across loads of the same
+extension. Caller must `.unload` between sessions if
+managing many models.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+tract-onnx = { version = "0.23", default-features = false }
+serde_json = "1"

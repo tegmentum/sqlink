@@ -81,6 +81,31 @@
 > component (the upstream crate's metadata + reader code
 > pulls a substantial tree).
 >
+> **F5b status: shipped (minimal scope).** extensions/onnx
+> wraps `tract-onnx` 0.23 (pure-rust ONNX runtime) with
+> a five-scalar surface:
+>
+>     onnx_load(path)        INTEGER  (session handle)
+>     onnx_input_names(h)    TEXT     (JSON array)
+>     onnx_output_names(h)   TEXT     (JSON array)
+>     onnx_run(h, json)      TEXT     (JSON array of f32)
+>     onnx_unload(h)         INTEGER  (1 if dropped)
+>
+> v1 scope is tight: input is a JSON array of f32
+> reshaped to the model's first input fact; the output
+> is the first output tensor read as f32. Models with
+> symbolic shapes, non-f32 inputs/outputs, or multiple
+> inputs error out cleanly so the caller knows to wait
+> for a richer release. Covers the embedding + classifier
+> path most callers actually run.
+>
+> Wasm size: 23 MB component  tract-onnx pulls in the
+> full op set (nnef, hir, pulse, transformers). That's
+> the expected cost of bundling an inference engine; the
+> caller pays it only when they `.load onnx`. F5c
+> (bundled embedding model) will layer on top of this,
+> adding the 22 MB MiniLM weights for a ~45 MB total.
+>
 > **F11 (pmtiles) status: shipped.** extensions/pmtiles
 > read-only vtab over PMTiles v3 archives via the
 > `oxigdal-pmtiles` crate. Fixed schema (tile_id, z, x, y,

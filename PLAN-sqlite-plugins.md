@@ -289,6 +289,7 @@ fts5/rtree, just at a different layer.
 | arrow IPC read vtab             |    +1  | extensions/arrow                   |
 | excel/xlsx/ods read vtab        |    +1  | extensions/excel (calamine)        |
 | pmtiles v3 read vtab            |    +1  | extensions/pmtiles (oxigdal)       |
+| onnx inference (5 scalars)      |    +5  | extensions/onnx (tract-onnx)       |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
