@@ -46,6 +46,14 @@
 > (argon2/bcrypt pull rand_core::OsRng  preview1
 > random_get import). 6 native unit tests pass including
 > the RFC 6238 reference vector at T=59  '94287082'.
+>
+> **Phase E7 status: shipped.** extensions/web-parsers bundles
+> JSONPath (via serde_json_path, RFC 9535) and HTML CSS
+> selection (via scraper / html5ever). 7 scalars total
+> jsonpath / jsonpath_first / jsonpath_exists +
+> html_extract / html_extract_all / html_attr / html_text.
+> html5ever adds ~400 KB to the wasm bundle. 6 native unit
+> tests pass.
 
 ## Goal
 
