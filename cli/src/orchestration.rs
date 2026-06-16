@@ -33,7 +33,6 @@ pub struct OrchestrationDef {
 /// orchestrator project and wraps its own schema/migration
 /// machinery.
 pub trait OrchestrationStore: Send + Sync {
-    fn name(&self) -> &'static str;
     fn get(
         &self,
         conn: &Connection,
@@ -53,9 +52,6 @@ pub trait OrchestrationStore: Send + Sync {
 pub struct NullOrchestrationStore;
 
 impl OrchestrationStore for NullOrchestrationStore {
-    fn name(&self) -> &'static str {
-        "null"
-    }
     fn get(
         &self,
         _conn: &Connection,

@@ -129,9 +129,9 @@ impl Settings {
     }
 }
 
-/// Buffer the trace callback appends to. Drained by `eval_sql`
-/// after each statement so the captured lines render inline with
-/// the result.
+// Buffer the trace callback appends to. Drained by `eval_sql`
+// after each statement so the captured lines render inline with
+// the result.
 thread_local! {
     pub static TRACE_BUF: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
 }

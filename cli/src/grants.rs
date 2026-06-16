@@ -106,32 +106,6 @@ pub fn delete(conn: &Connection, extension_name: &str) -> Result<bool, Error> {
     Ok(conn.total_changes() > before)
 }
 
-/// Look up a grant by digest_hex. Useful when the cli reads
-/// provider bytes before knowing the extension name (the
-/// pre-load path).
-pub fn get_by_digest(
-    conn: &Connection,
-    digest_hex: &str,
-) -> Result<Option<StoredGrant>, Error> {
-    ensure_schema(conn)?;
-    let mut stmt = conn.prepare(
-        "SELECT extension_name, digest_hex, policy_json, granted_at, granted_by, notes
-         FROM _capability_grants WHERE digest_hex = ?1 LIMIT 1",
-    )?;
-    stmt.bind(1, &Value::Text(digest_hex.into()))?;
-    match stmt.step()? {
-        StepResult::Row => Ok(Some(StoredGrant {
-            extension_name: text_col(&stmt, 0),
-            digest_hex: text_col_opt(&stmt, 1),
-            policy_json: text_col(&stmt, 2),
-            granted_at: text_col(&stmt, 3),
-            granted_by: text_col_opt(&stmt, 4),
-            notes: text_col_opt(&stmt, 5),
-        })),
-        StepResult::Done => Ok(None),
-    }
-}
-
 /// All stored grants, ordered by name. Used by `.grants list`.
 pub fn list(conn: &Connection) -> Result<Vec<StoredGrant>, Error> {
     ensure_schema(conn)?;
@@ -151,15 +125,6 @@ pub fn list(conn: &Connection) -> Result<Vec<StoredGrant>, Error> {
         });
     }
     Ok(out)
-}
-
-/// blake3 hex of the provider bytes. The digest is the integrity
-/// check on every load: a stored grant + matching digest is the
-/// fast path; mismatch is a hard error by default; absence is
-/// trust-on-first-use.
-pub fn digest_hex(bytes: &[u8]) -> String {
-    let hash = blake3::hash(bytes);
-    hash.to_hex().to_string()
 }
 
 /// Tiny ISO-8601 stamp using std::time. Avoids pulling in chrono

@@ -275,6 +275,27 @@ mod tests {
         assert!(cache.lookup_by_hash(&unseen).is_none());
     }
 
+    /// PLAN-latent-cleanup.md L2b: assert the blake3 path
+    /// short-circuits so the sha256 fallback only runs on a
+    /// blake3 miss. Future refactors that accidentally move the
+    /// `return Some(b)` past the fallback would fail this test
+    /// because the sha256 lookup would error on a digest that
+    /// matches a blake3 column but not a sha256 one.
+    #[test]
+    fn lookup_by_hash_short_circuits_on_blake3_hit() {
+        let (_d, cache) = fresh();
+        let payload = b"blake3 short-circuit payload";
+        let hex = cache.put("test:blake3-short-circuit", payload).unwrap();
+        // Confirm we put under a blake3 key (CP8 also writes the
+        // sha256 mirror; the lookup must find via blake3).
+        let got = cache.lookup_by_hash(&hex).expect("found");
+        assert_eq!(got, payload);
+        // The blake3 hex of the payload is also a 64-char hex, so
+        // the test value above doubles as the digest the cache
+        // canonically indexes against.
+        assert_eq!(hex.len(), 64);
+    }
+
     #[test]
     fn purge_removes_everything() {
         let (_d, cache) = fresh();

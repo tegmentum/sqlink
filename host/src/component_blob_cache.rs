@@ -66,10 +66,11 @@ pub fn engine_identity() -> (String, String) {
 }
 
 fn wasmtime_version() -> &'static str {
-    // wasmtime doesn't expose a stable runtime version
-    // primitive; pin to the version we depend on so a Cargo.toml
-    // bump cleanly invalidates rows.
-    "45.0.1"
+    // Derived at build time from Cargo.toml (build.rs writes
+    // OUT_DIR/wasmtime_version.txt). Bumping the wasmtime
+    // version in Cargo.toml automatically invalidates cached
+    // blobs the next build — no manual constant to drift.
+    include_str!(concat!(env!("OUT_DIR"), "/wasmtime_version.txt"))
 }
 
 /// Look up + HMAC-verify a row. Returns None on miss, garbage
@@ -297,19 +298,54 @@ fn unix_now() -> i64 {
 /// `~/.sqlite-wasm/cache-hmac.key`. Returns None if /dev/urandom
 /// or the file path is unreadable — the caller MUST gracefully
 /// degrade to a no-cache path when this happens.
+///
+/// PLAN-latent-cleanup.md L3c: any non-success outcome emits a
+/// one-time `tracing::warn!` so users diagnosing "why isn't the
+/// component cache working" see a clue. Subsequent calls stay
+/// silent (debounced via a static OnceLock).
 pub fn load_or_create_hmac_key() -> Option<Vec<u8>> {
-    let home = std::env::var_os("HOME")?;
+    use std::sync::OnceLock;
+    static WARNED: OnceLock<()> = OnceLock::new();
+    let warn_once = |reason: &str| {
+        if WARNED.set(()).is_ok() {
+            tracing::warn!(
+                target: "component_cache",
+                reason,
+                "HMAC key unavailable — C2 component cache disabled"
+            );
+        }
+    };
+
+    let Some(home) = std::env::var_os("HOME") else {
+        warn_once("HOME env var unset");
+        return None;
+    };
     let mut path = PathBuf::from(home);
     path.push(".sqlite-wasm");
-    let _ = std::fs::create_dir_all(&path);
+    if let Err(e) = std::fs::create_dir_all(&path) {
+        warn_once(&format!("create_dir_all {}: {e}", path.display()));
+        return None;
+    }
     path.push("cache-hmac.key");
     if let Ok(bytes) = std::fs::read(&path) {
         if bytes.len() >= 32 {
             return Some(bytes);
         }
+        warn_once(&format!(
+            "{} exists but is {} bytes (need 32)",
+            path.display(),
+            bytes.len()
+        ));
+        return None;
     }
-    let secret = read_urandom_32()?;
-    write_mode_0600(&path, &secret).ok()?;
+    let Some(secret) = read_urandom_32() else {
+        warn_once("/dev/urandom unreadable");
+        return None;
+    };
+    if let Err(e) = write_mode_0600(&path, &secret) {
+        warn_once(&format!("write {}: {e}", path.display()));
+        return None;
+    }
     Some(secret.to_vec())
 }
 
