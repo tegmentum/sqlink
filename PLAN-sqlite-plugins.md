@@ -5,8 +5,9 @@
 > fts5, rtree, geopoly, raster_polygon_dump, dbstat,
 > sqlite_stmt, bytecode, generate_series, vec0, vec_each) all
 > delivered  see "Final state (delivered)" below for the
-> per-source breakdown. vec0 ships brute-force AND IVF
-> (k-means partitioning) backends with identical SQL surface. Of the three items under
+> per-source breakdown. vec0 ships three pluggable backends 
+> brute-force, IVF k-means partitioning, and HNSW graph  with
+> identical SQL surface. Of the three items under
 > "Deferred (intentional)", TopoGeometry has since shipped in
 > `8fe182b`; what genuinely remains deferred is the
 > `postgis-batch` interface (70 fns whose `list<list<u8>> ->
@@ -249,7 +250,7 @@ fts5/rtree, just at a different layer.
 | decimal aggregates            |     1  | extensions/decimal                 |
 | vec scalars (sqlite-vec port) |    14  | extensions/vec                     |
 | generate_series TVF (eponymous vtab) | +1 | extensions/series              |
-| vec0 wrapping kNN vtab        |    +1  | extensions/vec0 (brute + IVF)      |
+| vec0 wrapping kNN vtab        |    +1  | extensions/vec0 (brute+IVF+HNSW)   |
 | vec_each TVF (eponymous vtab) |    +1  | extensions/vec_each                |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
@@ -266,11 +267,12 @@ rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 bytecode, generate_series, vec0, vec_each), all reachable
 through `.load` or directly via the bundled SQLite, on top of
 the existing scalar / aggregate / collation / hook / vtab
-dispatch the host implements. vec0 ships two backends  brute
-force (default) and IVF k-means partitioning (configurable
-`index=ivf, n_partitions=K, n_probes=M`)  with identical SQL
-surface so an HNSW backend can slot in later without query
-rewrites.
+dispatch the host implements. vec0 ships three backends  brute
+force (default), IVF k-means partitioning (`index=ivf,
+n_partitions=K, n_probes=M`), and HNSW graph (`index=hnsw, m=M,
+ef_construction=N, ef_search=K`)  with identical SQL surface,
+so backend swap is a CREATE-VIRTUAL-TABLE arg change rather
+than a query rewrite.
 
 Original Plan 2 budget was ~4-5 weeks for a "substantial
 extension catalog"; the actual delivery beat that by reusing

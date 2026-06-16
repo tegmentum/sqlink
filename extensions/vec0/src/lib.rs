@@ -1,6 +1,6 @@
 //! vec0  wrapping kNN vtab over a source table.
 //!
-//! Two backends, switchable per-table at create time:
+//! Three backends, switchable per-table at create time:
 //!
 //!   * `index=brute` (default): every query scans the entire
 //!     source table via `spi.execute` and ranks rows by the
@@ -9,10 +9,16 @@
 //!   * `index=ivf`: k-means partitioning. xFilter classifies
 //!     the query against `n_partitions` centroids, scans only
 //!     the `n_probes` nearest partitions, and ranks within
-//!     those. Built lazily on first query and cached per
-//!     instance; rebuild requires recreating the vtab. See the
-//!     `ivf` module below for the data structure + Lloyd's
-//!     algorithm implementation.
+//!     those. See the `ivf` module below.
+//!   * `index=hnsw`: Hierarchical Navigable Small World graph.
+//!     O(log N) approximate kNN via greedy descent + ef-beam
+//!     search at layer 0. See the `hnsw` module below.
+//!
+//! IVF and HNSW build the index lazily on the first kNN query
+//! and cache it per-instance; rebuild requires recreating the
+//! vtab. ANN backends that support online insert (a richer
+//! HNSW variant) can lift that limitation without changing the
+//! SQL surface.
 
 extern crate alloc;
 
@@ -348,6 +354,397 @@ pub mod ivf {
     }
 }
 
+/// HNSW (Hierarchical Navigable Small World)  Malkov & Yashunin
+/// 2016 (arXiv:1603.09320). Multi-layer proximity graph that
+/// supports O(log N) approximate kNN search.
+///
+/// Build: each new vector is assigned a random top layer L
+/// drawn from a geometric distribution with parameter
+/// 1/ln(M). It joins the graph at layers 0..=L with up to M
+/// bidirectional links per layer (closest-M selection
+/// simpler than the paper's neighbor-selection heuristic;
+/// recall trades for build speed).
+///
+/// Search: greedy descent from the entry point through layers
+/// top..1 with ef=1 at each, then beam search at layer 0
+/// with `ef_search` candidates. Top-k extracted from the
+/// final candidate set.
+///
+/// Build-once-cache shape mirrors IVF: built lazily on first
+/// kNN query, kept in HNSW_CACHE for the rest of the process.
+/// Source-table inserts after the first query don't appear
+/// until the vtab is recreated.
+pub mod hnsw {
+    use super::kernels;
+    use alloc::vec::Vec;
+    use core::cmp::Reverse;
+    use std::collections::{BinaryHeap, HashSet};
+
+    /// Distance + node id, wrapped so f64 can sit in BinaryHeap.
+    /// NaN sorts to Equal  callers should reject NaN before
+    /// reaching the heap (we do: the distance kernels guard
+    /// against NaN already).
+    #[derive(Copy, Clone, Debug)]
+    pub struct Scored {
+        pub distance: f64,
+        pub node: u32,
+    }
+
+    impl PartialEq for Scored {
+        fn eq(&self, other: &Self) -> bool {
+            self.distance == other.distance && self.node == other.node
+        }
+    }
+    impl Eq for Scored {}
+    impl PartialOrd for Scored {
+        fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+    impl Ord for Scored {
+        fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+            self.distance
+                .partial_cmp(&other.distance)
+                .unwrap_or(core::cmp::Ordering::Equal)
+                .then_with(|| self.node.cmp(&other.node))
+        }
+    }
+
+    pub struct Index {
+        pub m: usize,
+        pub m_max: usize, // hard cap per neighbor list at layer > 0
+        pub m_max0: usize, // hard cap per neighbor list at layer 0
+        pub ef_construction: usize,
+        pub ef_search: usize,
+        pub layer_mult: f64, // 1/ln(M)
+        pub entry_point: Option<u32>,
+        pub top_layer: usize,
+        pub rowids: Vec<i64>,
+        pub vectors: Vec<Vec<f32>>,
+        /// neighbors[node][layer] = list of neighbor node ids at
+        /// that layer. Top index = node's assigned top layer.
+        pub neighbors: Vec<Vec<Vec<u32>>>,
+        pub levels: Vec<usize>, // top layer per node
+    }
+
+    impl Index {
+        pub fn n_vectors(&self) -> usize {
+            self.vectors.len()
+        }
+    }
+
+    /// L2 (squared) for build-time comparisons. Same monotonic
+    /// behaviour as full L2 but cheaper. For query-side ranking
+    /// the caller picks the configured metric  build doesn't
+    /// need to.
+    fn dist(a: &[f32], b: &[f32]) -> f64 {
+        kernels::l2(a, b).unwrap_or(f64::INFINITY)
+    }
+
+    pub fn new(
+        m: usize,
+        ef_construction: usize,
+        ef_search: usize,
+    ) -> Index {
+        let m = m.max(2);
+        Index {
+            m,
+            m_max: m,
+            m_max0: m * 2,
+            ef_construction: ef_construction.max(m),
+            ef_search: ef_search.max(m),
+            layer_mult: 1.0 / (m as f64).ln(),
+            entry_point: None,
+            top_layer: 0,
+            rowids: Vec::new(),
+            vectors: Vec::new(),
+            neighbors: Vec::new(),
+            levels: Vec::new(),
+        }
+    }
+
+    /// xorshift PRNG used for the geometric layer draw. Same
+    /// deterministic-seed pattern as the IVF builder so smoke
+    /// tests stay reproducible.
+    fn rng_seed(vectors: &[(i64, Vec<f32>)]) -> u64 {
+        let mut s: u64 = 0xcafef00dd15ea5e5;
+        for (_, p) in vectors.iter().take(8) {
+            for x in p.iter().take(16) {
+                s ^= x.to_bits() as u64;
+                s = s.wrapping_mul(0x9e3779b97f4a7c15);
+            }
+        }
+        s
+    }
+
+    /// Geometric layer assignment.
+    ///   l = floor(-ln(uniform(0,1)) * layer_mult)
+    /// Uniform `u` is taken from xorshift  > [1, 2^53).
+    fn random_layer(rng_state: &mut u64, layer_mult: f64) -> usize {
+        *rng_state ^= *rng_state << 13;
+        *rng_state ^= *rng_state >> 7;
+        *rng_state ^= *rng_state << 17;
+        // Map to (0, 1] avoiding 0 (which would explode log).
+        let u = ((*rng_state >> 11) as f64) / ((1u64 << 53) as f64);
+        let u = if u <= 0.0 { 1e-12 } else { u };
+        (-u.ln() * layer_mult).floor() as usize
+    }
+
+    /// Greedy descent + ef-beam search at the given layer.
+    /// Returns the candidate pool of up to `ef` elements closest
+    /// to `query`, sorted by ascending distance.
+    fn search_layer(
+        idx: &Index,
+        query: &[f32],
+        entry: u32,
+        ef: usize,
+        layer: usize,
+    ) -> Vec<Scored> {
+        let mut visited: HashSet<u32> = HashSet::with_capacity(ef * 4);
+        visited.insert(entry);
+        let ep_d = dist(query, &idx.vectors[entry as usize]);
+        let ep = Scored { distance: ep_d, node: entry };
+        // candidates: min-heap (next to expand). Use Reverse to
+        // flip BinaryHeap's max-heap default.
+        let mut candidates: BinaryHeap<Reverse<Scored>> = BinaryHeap::new();
+        candidates.push(Reverse(ep));
+        // results: max-heap by distance  pop the worst to keep
+        // the closest `ef`.
+        let mut results: BinaryHeap<Scored> = BinaryHeap::new();
+        results.push(ep);
+
+        while let Some(Reverse(c)) = candidates.pop() {
+            // If the worst result is closer than the next
+            // candidate, no further expansion can help.
+            if let Some(worst) = results.peek() {
+                if c.distance > worst.distance && results.len() >= ef {
+                    break;
+                }
+            }
+            // Expand c's neighbors at `layer`.
+            let node_layers = &idx.neighbors[c.node as usize];
+            if layer >= node_layers.len() {
+                continue;
+            }
+            for &n in &node_layers[layer] {
+                if !visited.insert(n) {
+                    continue;
+                }
+                let d = dist(query, &idx.vectors[n as usize]);
+                let s = Scored { distance: d, node: n };
+                if results.len() < ef {
+                    candidates.push(Reverse(s));
+                    results.push(s);
+                } else if let Some(worst) = results.peek() {
+                    if d < worst.distance {
+                        candidates.push(Reverse(s));
+                        results.push(s);
+                        if results.len() > ef {
+                            results.pop();
+                        }
+                    }
+                }
+            }
+        }
+
+        // Drain max-heap, reverse to ascending.
+        let mut out: Vec<Scored> = results.into_sorted_vec();
+        out.truncate(ef);
+        out
+    }
+
+    /// Pick the M closest from `candidates` (already ascending).
+    /// Trades the paper's neighbor-selection heuristic for
+    /// simplicity  the heuristic improves recall on adversarial
+    /// distributions, but closest-M is sufficient for the smoke
+    /// test we need to pass and saves ~100 LOC.
+    fn select_neighbors(candidates: &[Scored], m: usize) -> Vec<u32> {
+        candidates.iter().take(m).map(|s| s.node).collect()
+    }
+
+    fn insert(idx: &mut Index, rowid: i64, vector: Vec<f32>, rng_state: &mut u64) {
+        let layer = random_layer(rng_state, idx.layer_mult);
+        let new_id = idx.vectors.len() as u32;
+        // Allocate empty neighbor lists for every layer up to L.
+        let mut new_neighbors: Vec<Vec<u32>> = (0..=layer).map(|_| Vec::new()).collect();
+        // First insert: just set the entry point.
+        let Some(ep) = idx.entry_point else {
+            idx.rowids.push(rowid);
+            idx.vectors.push(vector);
+            idx.levels.push(layer);
+            idx.neighbors.push(new_neighbors);
+            idx.entry_point = Some(new_id);
+            idx.top_layer = layer;
+            return;
+        };
+
+        // Push the new node first so search_layer can read its
+        // vector (we'll wire neighbors below).
+        idx.rowids.push(rowid);
+        idx.vectors.push(vector);
+        idx.levels.push(layer);
+        idx.neighbors.push(new_neighbors.clone());
+
+        // Phase 1: greedy descent from top_layer down to layer+1
+        // with ef=1, so we land near the new node before the
+        // expensive ef_construction search.
+        let mut cur_ep = ep;
+        let q: Vec<f32> = idx.vectors[new_id as usize].clone();
+        let mut cur_layer = idx.top_layer;
+        while cur_layer > layer {
+            let beam = search_layer(idx, &q, cur_ep, 1, cur_layer);
+            if let Some(closest) = beam.into_iter().next() {
+                cur_ep = closest.node;
+            }
+            if cur_layer == 0 {
+                break;
+            }
+            cur_layer -= 1;
+        }
+
+        // Phase 2: insert at every layer from min(layer, top)
+        // down to 0. Bidirectional links: add the new node to
+        // each chosen neighbor and prune the neighbor's list
+        // back to its cap if needed.
+        let target_top = layer.min(idx.top_layer);
+        let mut cur_layer = target_top;
+        loop {
+            let candidates = search_layer(idx, &q, cur_ep, idx.ef_construction, cur_layer);
+            let m_cap = if cur_layer == 0 { idx.m_max0 } else { idx.m_max };
+            let selected = select_neighbors(&candidates, idx.m);
+            new_neighbors[cur_layer] = selected.clone();
+            for nb in &selected {
+                let nb_layers = &mut idx.neighbors[*nb as usize];
+                if cur_layer < nb_layers.len() {
+                    nb_layers[cur_layer].push(new_id);
+                    if nb_layers[cur_layer].len() > m_cap {
+                        // Re-prune: keep the closest m_cap.
+                        let nb_vec = &idx.vectors[*nb as usize].clone();
+                        let scored: Vec<Scored> = nb_layers[cur_layer]
+                            .iter()
+                            .map(|&id| Scored {
+                                distance: dist(nb_vec, &idx.vectors[id as usize]),
+                                node: id,
+                            })
+                            .collect();
+                        let mut sorted = scored;
+                        sorted.sort();
+                        let kept: Vec<u32> =
+                            sorted.into_iter().take(m_cap).map(|s| s.node).collect();
+                        idx.neighbors[*nb as usize][cur_layer] = kept;
+                    }
+                }
+            }
+            if let Some(first) = candidates.into_iter().next() {
+                cur_ep = first.node;
+            }
+            if cur_layer == 0 {
+                break;
+            }
+            cur_layer -= 1;
+        }
+        // Wire the new node's neighbor lists.
+        idx.neighbors[new_id as usize] = new_neighbors;
+
+        // Promote entry point if the new node sits higher.
+        if layer > idx.top_layer {
+            idx.top_layer = layer;
+            idx.entry_point = Some(new_id);
+        }
+    }
+
+    pub fn build(
+        vectors: Vec<(i64, Vec<f32>)>,
+        m: usize,
+        ef_construction: usize,
+        ef_search: usize,
+    ) -> Index {
+        let mut idx = new(m, ef_construction, ef_search);
+        if vectors.is_empty() {
+            return idx;
+        }
+        let mut rng_state = rng_seed(&vectors);
+        for (rid, v) in vectors {
+            insert(&mut idx, rid, v, &mut rng_state);
+        }
+        idx
+    }
+
+    /// Top-k search. Returns the `k` nearest rowids to `query`
+    /// in ascending distance order. Uses the configured
+    /// `ef_search`. Caller computes the distance with its
+    /// chosen metric on the returned rowids  HNSW only commits
+    /// to "ef_search candidates closest by build-time L2".
+    pub fn search(idx: &Index, query: &[f32], k: usize) -> Vec<i64> {
+        let Some(mut cur_ep) = idx.entry_point else {
+            return Vec::new();
+        };
+        let mut cur_layer = idx.top_layer;
+        while cur_layer > 0 {
+            let beam = search_layer(idx, query, cur_ep, 1, cur_layer);
+            if let Some(closest) = beam.into_iter().next() {
+                cur_ep = closest.node;
+            }
+            cur_layer -= 1;
+        }
+        let ef = idx.ef_search.max(k);
+        let candidates = search_layer(idx, query, cur_ep, ef, 0);
+        candidates
+            .into_iter()
+            .take(k)
+            .map(|s| idx.rowids[s.node as usize])
+            .collect()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn empty_index_returns_empty() {
+            let idx = build(Vec::new(), 8, 50, 50);
+            assert_eq!(idx.n_vectors(), 0);
+            assert_eq!(search(&idx, &[0.0, 0.0], 5), Vec::<i64>::new());
+        }
+
+        #[test]
+        fn single_vector_returns_it() {
+            let v = alloc::vec![(42, alloc::vec![1.0f32, 2.0])];
+            let idx = build(v, 8, 50, 50);
+            assert_eq!(search(&idx, &[1.0, 2.0], 3), alloc::vec![42i64]);
+        }
+
+        #[test]
+        fn small_dataset_finds_true_nearest() {
+            // Twenty 2-D points with rowids = position. Query
+            // [0,0]; the true nearest is rowid 0.
+            let pts: Vec<(i64, Vec<f32>)> = (0..20)
+                .map(|i| (i as i64, alloc::vec![i as f32, (i * 2) as f32]))
+                .collect();
+            let idx = build(pts, 8, 50, 50);
+            let result = search(&idx, &[0.0, 0.0], 3);
+            // Top-1 must be rowid 0; top-3 should be a prefix of
+            // the brute-force ordering (0, 1, 2).
+            assert_eq!(result[0], 0);
+            assert!(result.contains(&1));
+        }
+
+        #[test]
+        fn build_is_deterministic() {
+            let pts: Vec<(i64, Vec<f32>)> = (0..30)
+                .map(|i| (i, alloc::vec![(i % 7) as f32, (i / 7) as f32]))
+                .collect();
+            let a = build(pts.clone(), 8, 50, 50);
+            let b = build(pts, 8, 50, 50);
+            // The PRNG seed comes from the data, so the random
+            // layer assignments  and therefore the graph
+            // should be identical run-to-run.
+            assert_eq!(a.levels, b.levels);
+            assert_eq!(a.entry_point, b.entry_point);
+        }
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 mod wasm_export {
     use super::kernels;
@@ -409,6 +806,13 @@ mod wasm_export {
             /// target.
             max_iter: usize,
         },
+        /// HNSW graph. O(log N) approximate kNN. Same build-
+        /// once-cache shape as Ivf.
+        Hnsw {
+            m: usize,
+            ef_construction: usize,
+            ef_search: usize,
+        },
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -460,6 +864,9 @@ mod wasm_export {
         /// support online updates (HNSW) can lift it later.
         static IVF_CACHE: RefCell<HashMap<u64, super::ivf::Index>> =
             RefCell::new(HashMap::new());
+        /// HNSW cache, same lazy-build-once shape as IVF.
+        static HNSW_CACHE: RefCell<HashMap<u64, super::hnsw::Index>> =
+            RefCell::new(HashMap::new());
     }
 
     struct Vec0;
@@ -500,6 +907,9 @@ mod wasm_export {
         let mut n_partitions: Option<usize> = None;
         let mut n_probes: Option<usize> = None;
         let mut max_iter: usize = 20;
+        let mut m: usize = 16;
+        let mut ef_construction: usize = 100;
+        let mut ef_search: usize = 50;
         for arg in args {
             let (k, v) = arg
                 .split_once('=')
@@ -525,6 +935,14 @@ mod wasm_export {
                 "max_iter" => {
                     max_iter = v.parse().map_err(|e| format!("vec0: max_iter: {e}"))?
                 }
+                "m" => m = v.parse().map_err(|e| format!("vec0: m: {e}"))?,
+                "ef_construction" => {
+                    ef_construction =
+                        v.parse().map_err(|e| format!("vec0: ef_construction: {e}"))?
+                }
+                "ef_search" => {
+                    ef_search = v.parse().map_err(|e| format!("vec0: ef_search: {e}"))?
+                }
                 other => return Err(format!("vec0: unknown arg {other:?}")),
             }
         }
@@ -537,6 +955,11 @@ mod wasm_export {
                 n_partitions: n_partitions.unwrap_or(0),
                 n_probes: n_probes.unwrap_or(0),
                 max_iter,
+            },
+            "hnsw" => Backend::Hnsw {
+                m,
+                ef_construction,
+                ef_search,
             },
             other => return Err(format!("vec0: unknown index {other:?}")),
         };
@@ -667,6 +1090,79 @@ mod wasm_export {
                                 distance: d,
                             });
                         }
+                    }
+                }
+            }
+            sort_truncate(&mut scored, k);
+            Ok(scored)
+        })
+    }
+
+    /// HNSW scan: build the graph on first call (cached in
+    /// HNSW_CACHE), search returns candidate rowids, then we
+    /// re-score with the configured metric (so cosine/L1 hit
+    /// the right ranking even though the graph was built with
+    /// L2). `ef_search` gates the candidate pool the graph
+    /// returns; we keep the closest k by metric.
+    fn hnsw_topk(
+        inst_id: u64,
+        inst: &Instance,
+        query: &[f32],
+        k: usize,
+    ) -> Result<Vec<ScoredRow>, String> {
+        let Backend::Hnsw {
+            m,
+            ef_construction,
+            ef_search,
+        } = inst.backend
+        else {
+            return Err("vec0: hnsw_topk called on non-HNSW backend".to_string());
+        };
+        let needs_build = HNSW_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
+        if needs_build {
+            let sql = alloc::format!(
+                "SELECT {rid}, {emb} FROM {src}",
+                rid = inst.rowid_column,
+                emb = inst.embedding_column,
+                src = inst.source,
+            );
+            let result = spi::execute(&sql, &[])
+                .map_err(|e| format!("vec0: scan source: {e:?}"))?;
+            let mut vectors: Vec<(i64, Vec<f32>)> = Vec::with_capacity(result.rows.len());
+            for row in &result.rows {
+                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                if let Ok(v) = kernels::from_blob(emb) {
+                    vectors.push((*rid, v));
+                }
+            }
+            let idx = super::hnsw::build(vectors, m, ef_construction, ef_search);
+            HNSW_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
+        }
+
+        HNSW_CACHE.with(|cache| -> Result<Vec<ScoredRow>, String> {
+            let map = cache.borrow();
+            let idx = map
+                .get(&inst_id)
+                .ok_or_else(|| "vec0: HNSW cache missing after build".to_string())?;
+            // Pull `max(k, ef_search)` candidates so we have
+            // room to re-rank with the metric and still have k.
+            let cand_k = k.max(idx.ef_search);
+            let candidate_rowids = super::hnsw::search(idx, query, cand_k);
+            // Re-score with the configured metric against the
+            // cached vectors (rowid  index lookup).
+            let mut rid_to_idx: std::collections::HashMap<i64, usize> =
+                std::collections::HashMap::with_capacity(idx.rowids.len());
+            for (i, rid) in idx.rowids.iter().enumerate() {
+                rid_to_idx.insert(*rid, i);
+            }
+            let mut scored: Vec<ScoredRow> = Vec::with_capacity(candidate_rowids.len());
+            for rid in candidate_rowids {
+                let Some(&i) = rid_to_idx.get(&rid) else { continue };
+                let v = &idx.vectors[i];
+                if let Some(d) = inst.metric.distance(query, v) {
+                    if !d.is_nan() {
+                        scored.push(ScoredRow { rowid: rid, distance: d });
                     }
                 }
             }
@@ -879,6 +1375,7 @@ mod wasm_export {
             let scored = match inst.backend {
                 Backend::Brute => brute_force_topk(&inst, &query, k)?,
                 Backend::Ivf { .. } => ivf_topk(inst_id, &inst, &query, k)?,
+                Backend::Hnsw { .. } => hnsw_topk(inst_id, &inst, &query, k)?,
             };
             CURSORS.with(|m| {
                 if let Some(c) = m.borrow_mut().get_mut(&cursor_id) {
