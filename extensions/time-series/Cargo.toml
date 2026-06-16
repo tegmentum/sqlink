@@ -1,0 +1,35 @@
+[package]
+name = "time-series-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Time-series helpers complementing the existing `time`
+extension. Adds bucketing + gap-fill primitives for
+observability/analytics workloads.
+
+Functions:
+  time_bucket(ts, interval)   TEXT
+                              `interval` is '5 min', '1 hour',
+                              '1 day' (Postgres-style) OR
+                              integer seconds.
+  time_bucket_gapfill TVF: see below.
+
+  SELECT bucket FROM gap_fill_series(start, end, interval);
+   yields one row per bucket between [start, end] (inclusive
+   start, exclusive end). Useful as the left side of a LEFT
+   JOIN to fill gaps in aggregated time-series.
+
+Tier-2 helpers per PLAN-extensions-batch-2 Phase F4.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }

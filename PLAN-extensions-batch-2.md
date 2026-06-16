@@ -1,10 +1,11 @@
 # Plan: extension catalog batch 2
 
-> **Phases F1 + F2 + F3 status: shipped.** geo (h3 +
+> **Phases F1 + F2 + F3 + F4 status: shipped.** geo (h3 +
 > geohash + maidenhead, 11 scalars), ids (ulid + nanoid +
 > snowflake, 9 scalars), crypto-keys (ed25519 + x25519 +
-> AEAD + merkle, 13 scalars). 13 native unit tests pass
-> across the three extensions. Pure-Rust deps only;
+> AEAD + merkle, 13 scalars), time-series (time_bucket
+> scalar + gap_fill_series eponymous TVF). 17 native unit
+> tests pass across the four extensions. Pure-Rust deps only;
 > components wrap with the wasi-preview1 adapter where rng
 > is needed (ids + crypto-keys).
 
