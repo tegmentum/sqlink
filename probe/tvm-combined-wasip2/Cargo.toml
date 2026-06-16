@@ -1,0 +1,59 @@
+[package]
+name = "probe-tvm-combined-wasip2"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = """
+PLAN-tvm-integration Order-of-operations step 5: the ribbon-cut
+test that installs BOTH the pcache (B) and the VFS (E) TVM
+subsystems in the same wasm component and exercises a workload
+that crosses both at once.
+
+Each prior probe wired exactly one subsystem in isolation:
+
+  - probe/tvm-pcache-wasip2 installs sqlite-pcache-tvm, opens a
+    file-backed db through the host's bundled wasivfs, runs a
+    cache_size = 5 workload so almost every page evicts to TVM.
+    Proves B works against real on-disk storage.
+  - probe/tvm-vfs-wasip2 installs sqlite-vfs-tvm as the default
+    VFS, opens a file-backed db whose storage lives in TVM
+    regions, runs an insert workload. Proves E works with the
+    default SQLite pcache.
+
+Neither exercises the destination shape: pcache evictions and
+file bytes BOTH offloaded to TVM in the same instance. That is
+this probe.
+
+Install order matters. `sqlite_pcache_tvm::install()` must run
+before `sqlite3_initialize`; the VFS install can follow because
+SQLite re-resolves the VFS lookup on each `sqlite3_open*`. Both
+calls are idempotent.
+
+Standalone workspace member  the wasm32-wasip2 target shouldn't
+trip up `cargo build` at the workspace root.
+"""
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# The sibling probes still list `features = ["tvm"]` here from
+# when those crates carried an opt-in feature; the feature was
+# dropped (the wit-bindgen-backed cold tier is always-on now)
+# but the spec lines weren't pruned and silently broke rebuild
+# of those probes. Don't repeat that mistake here.
+sqlite-pcache-tvm = { path = "../../sqlite-pcache-tvm" }
+sqlite-vfs-tvm    = { path = "../../sqlite-vfs-tvm" }
+sqlite-wasm-core  = { path = "../../core" }
+# Both pcache and vfs crates declare extern blocks for the same
+# tvm:memory imports  rust-lld dedupes them at link time, same
+# as the per-subsystem probes already do.
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+wit-bindgen    = { version = "0.44", features = ["macros"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

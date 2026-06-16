@@ -1,0 +1,35 @@
+// Probe world for PLAN-tvm-integration Order-of-operations step
+// 5. Combines `tvm:memory` (imported, satisfied by the host's
+// `tvm-wasmtime::add_to_linker`) with the SQLite-driven probe
+// the host calls to validate the combined B + E TVM stack.
+
+package sqlite:probe-tvm-combined@0.0.0;
+
+world probe {
+    import tvm:memory/types@0.1.0;
+    import tvm:memory/manager@0.1.0;
+    import tvm:memory/bytes@0.1.0;
+    import tvm:memory/diagnostics@0.1.0;
+
+    /// Combined-stack capacity test. Installs the pcache (B) and
+    /// the VFS (E) as the SQLite defaults, opens a tvm-mem VFS
+    /// file-backed db, sets `cache_size = 5` so the pcache evicts
+    /// aggressively, then inserts `rows` rows with `payload-bytes`
+    /// of payload each. Both subsystems  page-cache evictions AND
+    /// file storage  flow through TVM regions for the duration.
+    /// Returns count(*) so the host can confirm SQL integrity end-
+    /// to-end. The host inspects `TvmHost.directory` and asserts on
+    /// both the total byte usage AND the region count (there must
+    /// be > 1 region: at minimum one for the pcache shadow tier
+    /// and one per VFS-managed file).
+    export run-capacity-test: func(rows: u32, payload-bytes: u32) -> u32;
+
+    /// VFS-managed file count. Lets the host confirm the VFS
+    /// participated (main db + journal == 2 typically).
+    export file-count: func() -> u32;
+
+    /// Number of evictions the pcache shadow tier has written to
+    /// the TVM cold tier. Non-zero proves the pcache participated
+    /// (vs. running the whole workload from default memory).
+    export tvm-write-count: func() -> u32;
+}
