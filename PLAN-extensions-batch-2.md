@@ -514,9 +514,25 @@ http  pass `--grant=dns --allowed-domains=...` at load.
 
 ### mbtiles / pmtiles (~3 days, capability-gated)
 vtabs over Mapbox raster tile formats. Used heavily by
-mapping pipelines. mbtiles is SQLite-backed already (just a
-read wrapper); pmtiles is a single-file format with its own
-parser  `pmtiles` crate.
+mapping pipelines.
+
+**mbtiles status: not needed.** mbtiles is just a SQLite
+file with a fixed schema (`metadata(name, value)`,
+`tiles(zoom_level, tile_column, tile_row, tile_data)`).
+SQLite's built-in `ATTACH DATABASE` already exposes it:
+
+    ATTACH DATABASE '/path/to/world.mbtiles' AS m;
+    SELECT zoom_level, tile_column, tile_row, length(tile_data)
+    FROM m.tiles WHERE zoom_level = 6 LIMIT 20;
+    SELECT name, value FROM m.metadata;
+
+A dedicated vtab would only earn its keep by normalizing
+schema variants (e.g. exposing decompressed tile_data
+transparently); not worth a separate extension until a
+specific caller asks for that.
+
+**pmtiles status: shipped** (extensions/pmtiles  see
+status block at the top of the plan).
 
 ### typst / latex math render  **DEFERRED**
 `typst-cli` is large + binary-shipping; outside the
