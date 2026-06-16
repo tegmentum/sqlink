@@ -1,0 +1,34 @@
+[package]
+name = "series-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+`generate_series(START, STOP, STEP)` table-valued function. Port
+of SQLite's well-known ext/misc/series.c to the canonical
+`sqlite:extension/tabular` world. Eponymous vtab  no explicit
+`CREATE VIRTUAL TABLE` needed; SQL just calls it:
+
+    SELECT value FROM generate_series(1, 10);
+    SELECT value FROM generate_series(1, 100, 5);
+    SELECT value FROM generate_series WHERE start=1 AND stop=10;
+
+START / STOP / STEP are HIDDEN columns; `best_index` binds them
+to filter argv when the planner sees EQ constraints, so either
+call form works. `value` is the only visible column.
+
+Negative STEP iterates downward. STEP=0 errors.
+
+Tier-3 vtab port per PLAN-sqlite-plugins.md; first ride of the
+generic vtab dispatch infrastructure outside the csv reference.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

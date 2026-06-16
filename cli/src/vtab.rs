@@ -583,6 +583,39 @@ const MODULE: ffi::sqlite3_module = ffi::sqlite3_module {
     xIntegrity: None,
 };
 
+/// Variant with `xCreate = NULL`. SQLite's eponymous-vtab rule:
+/// if xCreate is null, instances of the module are accessible by
+/// the module name itself without a `CREATE VIRTUAL TABLE` first.
+/// Used when the manifest's `VtabSpec.eponymous` is true (TVFs
+/// like `generate_series`).
+const MODULE_EPONYMOUS: ffi::sqlite3_module = ffi::sqlite3_module {
+    iVersion: 1,
+    xCreate: None,
+    xConnect: Some(x_connect),
+    xBestIndex: Some(x_best_index),
+    xDisconnect: Some(x_disconnect),
+    xDestroy: Some(x_destroy),
+    xOpen: Some(x_open),
+    xClose: Some(x_close),
+    xFilter: Some(x_filter),
+    xNext: Some(x_next),
+    xEof: Some(x_eof),
+    xColumn: Some(x_column),
+    xRowid: Some(x_rowid),
+    xUpdate: None,
+    xBegin: None,
+    xSync: None,
+    xCommit: None,
+    xRollback: None,
+    xFindFunction: None,
+    xRename: None,
+    xSavepoint: None,
+    xRelease: None,
+    xRollbackTo: None,
+    xShadowName: None,
+    xIntegrity: None,
+};
+
 /// Register `name` as a vtab module on `conn`, routing every
 /// callback through the loaded extension `ext_name` / `vtab_id`.
 /// Eponymous modules can be used in SELECT without a prior
@@ -600,11 +633,16 @@ pub fn register_vtab_module(
         eponymous,
     })) as *mut c_void;
     let name_c = CString::new(name).map_err(|e| format!("vtab name: {e}"))?;
+    let module_ptr: *const ffi::sqlite3_module = if eponymous {
+        &MODULE_EPONYMOUS
+    } else {
+        &MODULE
+    };
     let rc = unsafe {
         ffi::sqlite3_create_module_v2(
             conn.raw_handle(),
             name_c.as_ptr(),
-            &MODULE as *const ffi::sqlite3_module,
+            module_ptr,
             aux,
             Some(x_destroy_aux),
         )
