@@ -58,6 +58,25 @@
 > F5b (ONNX inference) + F5c (bundled embedding model)
 > deferred. F6 remaining items (arrow / parquet / excel)
 > and F11 deferred too  larger individual surfaces.
+>
+> **F6d status: shipped.** extensions/parquet wraps the
+> upstream `parquet` + `arrow` crates v57 directly
+> (same versions the user's ~/git/parquet-wasm component
+> uses internally). Read-only vtab over a .parquet file
+> path; schema inferred at xConnect time. Materialises
+> all batches in xFilter; column extraction handles the
+> common scalar types (bool/int*/float/utf8/binary).
+>
+> The user's parquet-wasm + arrow-wasm components are
+> `cdylib`-only (no rlib) and arrow-wasm is currently
+> built for wasm32-wasip1; WAC-composing them with our
+> wasi-p2 extension is a multi-step architectural change
+> (new world variant for the composed surface, build the
+> arrow component for wasip2, wac-plug the trio). Direct-
+> crate path ships now; component-composed path remains
+> the architectural follow-on. Wasm size: 8.7 MB
+> component (the upstream crate's metadata + reader code
+> pulls a substantial tree).
 
 ## Goal
 

@@ -1,0 +1,49 @@
+[package]
+name = "parquet-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Read-only Parquet vtab over the upstream `parquet` crate
+(same crate the user's ~/git/parquet-wasm component wraps).
+Future architectural improvement: WAC-compose against
+parquet-wasm + arrow-wasm to share a single Arrow runtime
+across the cli; for now we link the crate directly so the
+extension is self-contained.
+
+    CREATE VIRTUAL TABLE t USING parquet('/path/to/data.parquet');
+    SELECT * FROM t LIMIT 10;
+    SELECT count(*) FROM t;
+
+Schema is inferred from the file's Parquet schema. v1
+exposes the most common scalar types (bool / int* / float
+/ utf8 / binary); nested struct + list columns get
+stringified as JSON.
+
+Reads the whole file into memory in xFilter  the cursor
+materialises all rows up front. Streaming via row-groups is
+a follow-on; for archives larger than working-set memory
+the caller should pre-filter with `read-options.columns` /
+`row-groups` (when we surface that arg).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Same crate + features parquet-wasm uses  pure-Rust
+# compression backends so the wasm32-wasip2 build stays
+# clean.
+parquet = { version = "57", default-features = false, features = [
+    "arrow",
+    "snap",
+] }
+arrow = { version = "57", default-features = false, features = ["ipc"] }
+arrow-array = { version = "57", default-features = false }
+arrow-schema = { version = "57", default-features = false }
+bytes = "1"
