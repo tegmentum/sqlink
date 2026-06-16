@@ -1,5 +1,21 @@
 # Plan: persist component capability grants + orchestration definitions in the database
 
+> **Status (2026-06-15): all phases shipped.**
+> - **G1**: `_capability_grants` table + `cli/src/grants.rs`
+>   helpers (`ensure_schema`, `put`, `get`, `list`, `delete`)
+>   live in-tree; `do_load` consults the table to seed Policy.
+> - **G2**: `.grants` dot-command family (`list`, `get`,
+>   `revoke`, `delete`) shipped via `cli/src/lib.rs::do_grants`.
+> - **G3**: digest pinning lives in the table schema; `.load
+>   --trust=manifest|stored` (`TrustMode` enum) covers fast-path
+>   trust + pinned-digest verification.
+> - **G4**: `cli/src/orchestration.rs` ships the in-tree
+>   `_compose_plans` storage against `sqlite_wasm_core::db`; the
+>   parallel orchestrator-side crate
+>   `~/git/webassembly-component-orchestration/libs/compose-store-sqlite/`
+>   reads/writes the same schema (cross-tool interop test in
+>   that crate's `tests/cli_interop.rs`).
+
 ## Goal
 
 Two related-but-separable capabilities:

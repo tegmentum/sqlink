@@ -1,5 +1,17 @@
 # Plan: Port well-known SQLite plugins to our component system
 
+> **Status (2026-06-15): shipped.** 488 SQL-callable functions
+> (scalars + aggregates) plus 5 virtual-table modules (csv, fts5,
+> rtree, geopoly, raster_polygon_dump) all delivered  see "Final
+> state (delivered)" below for the per-source breakdown. Of the
+> three items under "Deferred (intentional)", TopoGeometry has
+> since shipped in `8fe182b`; what genuinely remains deferred is
+> the `postgis-batch` interface (70 fns whose `list<list<u8>> ->
+> list<result>` shape doesn't map to scalar SQL  the scalar +
+> aggregate forms already cover the SQL semantics) and the two-
+> band raster `st_map_algebra2` (needs expression-language work
+> not yet started).
+
 ## Goal
 
 Ship wasm-component implementations of the well-known SQLite
@@ -261,12 +273,13 @@ extension catalog itself rides on existing wasm components.
   (`scale`, `threshold`, `cliprange`, `linrescale`); the two-
   band variant needs either expression-language work or a
   ListBand argument shape. Not landed.
-- **postgis-topology-topogeom (6 fns)**: TopoGeometry
-  references topology elements across SQL calls. Needs its
-  own bridge-side handle registry like the topology edit API
-  uses; the existing TOPO_HANDLES registry doesn't yet model
-  the TopoGeometry-topology back-reference. Defer until a
-  caller asks.
+~~- **postgis-topology-topogeom (6 fns)**: TopoGeometry
+  references topology elements across SQL calls.~~ **Shipped
+  in `8fe182b`** as 7 scalar functions
+  (`st_topogeom_create / close / type / element_count /
+  elements / geom / clear`) backed by its own
+  `TOPOGEOM_HANDLES` registry. See `PLAN-topogeom.md` for
+  the design rationale.
 
 These are mechanical additions when surfaced; nothing
 architectural blocks them.

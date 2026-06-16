@@ -1,5 +1,27 @@
 # Plan: bridge TopoGeometry (last unbridged postgis surface)
 
+> **Status: shipped in `8fe182b`** ("feat(extensions): TopoGeometry
+> handle API (421 fns, full postgis coverage)"). All four phases
+> (TG1 plumbing, TG2 registry, TG3 dispatch, TG4 test + docs) are
+> live in `extensions/postgis-bridge/src/lib.rs`:
+>
+> - WIT: `import postgis:wasm/postgis-topology-topogeom@0.1.0;` is
+>   in the bridge world (`wit/world.wit:39`).
+> - Registry: `TOPOGEOM_HANDLES` + `TOPOGEOM_NEXT_ID` thread-locals
+>   + `with_topogeom_handle` helper.
+> - FIDs `1260..1266` allocated; 7 manifest specs registered.
+> - Dispatch arms for `st_topogeom_create / close / type /
+>   element_count / elements / geom / clear` all wired.
+> - JSON `[[id,type]]` element shape per Q2/Q3 decisions.
+> - Session-bounded lifetime per Q4 decision (no persistence API).
+>
+> PLAN-sqlite-plugins.md's "Deferred (intentional)" line for
+> topogeom is therefore stale  this surface is now part of the
+> 488-fn delivered catalog. With this and PLAN-tvm-integration
+> closed, only `postgis-batch` (intentionally not bridged  see
+> README) and two-band raster map-algebra (needs expression
+> language) remain on the postgis defer list.
+
 ## Goal
 
 Wire `postgis-topology-topogeom` — the 6-fn resource interface
