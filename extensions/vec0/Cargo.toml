@@ -31,7 +31,7 @@ Args (all optional except source / embedding_column):
   rowid_column      defaults to 'rowid'
   embedding_column  vector BLOB column name
   metric            'l2' | 'l1' | 'cosine'  (default 'l2')
-  index             'brute' (default) | 'ivf' | 'hnsw'
+  index             'brute' (default) | 'ivf' | 'hnsw' | 'hnsw8' | 'lsh'
   n_partitions      IVF: number of k-means partitions; default
                     ceil(sqrt(N)) where N = source-table row count
   n_probes          IVF: number of nearest partitions to scan at
@@ -44,6 +44,12 @@ Args (all optional except source / embedding_column):
                     default 100
   ef_search         HNSW: candidate pool size at query time;
                     default 50; effective k = max(k, ef_search)
+  d_signature       LSH: signature bit length; default 128.
+                    Higher = finer-grained partitioning but
+                    more hyperplane dot products at build
+  n_probes          LSH: same param as IVF; how many Hamming-
+                    nearest candidates to re-rank with the
+                    configured metric. Default ceil(sqrt(N))
 
 IVF and HNSW build the index lazily on the first kNN query and
 cache it per-instance for the rest of the process lifetime.

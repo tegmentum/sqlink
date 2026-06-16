@@ -250,7 +250,7 @@ fts5/rtree, just at a different layer.
 | decimal aggregates            |     1  | extensions/decimal                 |
 | vec scalars (sqlite-vec port) |    14  | extensions/vec                     |
 | generate_series TVF (eponymous vtab) | +1 | extensions/series              |
-| vec0 wrapping kNN vtab        |    +1  | extensions/vec0 (brute+IVF+HNSW)   |
+| vec0 wrapping kNN vtab        |    +1  | extensions/vec0 (5 backends, persist) |
 | vec_each TVF (eponymous vtab) |    +1  | extensions/vec_each                |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
@@ -267,12 +267,13 @@ rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 bytecode, generate_series, vec0, vec_each), all reachable
 through `.load` or directly via the bundled SQLite, on top of
 the existing scalar / aggregate / collation / hook / vtab
-dispatch the host implements. vec0 ships three backends  brute
-force (default), IVF k-means partitioning (`index=ivf,
-n_partitions=K, n_probes=M`), and HNSW graph (`index=hnsw, m=M,
-ef_construction=N, ef_search=K`)  with identical SQL surface,
-so backend swap is a CREATE-VIRTUAL-TABLE arg change rather
-than a query rewrite.
+dispatch the host implements. vec0 ships five backends  brute
+force (default), IVF k-means partitioning, HNSW graph, int8-
+quantized HNSW (`index=hnsw8`), and binary LSH
+(`index=lsh, d_signature=D, n_probes=M`)  with identical SQL
+surface and persistent indexes via a `_vec0_index` shadow
+table. Online inserts pick up new source rows automatically;
+vec0_refresh / vec0_delete provide explicit invalidation.
 
 Original Plan 2 budget was ~4-5 weeks for a "substantial
 extension catalog"; the actual delivery beat that by reusing

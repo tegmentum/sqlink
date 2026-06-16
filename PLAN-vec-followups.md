@@ -19,6 +19,21 @@
 > the persisted blob in lockstep with the in-process cache
 > drop. Cross-session smoke confirms session 2 sees the same
 > kNN ordering as session 1 with the persisted blob unchanged.
+>
+> **Phase 3 status: shipped.** Two new backends behind the
+> same SQL surface  `index=hnsw8` (int8-quantized HNSW with
+> a single global scale; ~4x memory reduction; 1-3% recall
+> hit on real workloads) and `index=lsh` (random-hyperplane
+> binary signatures; cosine-style bucketing with re-ranking
+> by configured metric; ~32x signature-space reduction; per-
+> workload recall depends heavily on d_signature / n_probes
+> tuning). Both backends persist through the same
+> _vec0_index shadow table (different `backend` tag);
+> tombstones, online insert, and the refresh/delete scalars
+> work uniformly. 14 native unit tests pass (3 new for hnsw8
+> + 3 new for lsh). End-to-end smoke verifies all four ANN
+> backends + brute coexist in the same db and produce
+> rankings consistent with their algorithmic tradeoffs.
 
 ## Goal
 

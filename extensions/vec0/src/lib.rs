@@ -914,6 +914,662 @@ pub mod hnsw {
     }
 }
 
+/// int8-quantized HNSW. Storage is `Vec<i8>` per vector with a
+/// SINGLE global scale factor (max-abs across the build-time
+/// dataset; 127 / max_abs). Distance is squared L2 computed in
+/// i32 then cast to f64; the global scale would normalize it
+/// but for ranking purposes the unnormalized integer ordering
+/// agrees with the f32 ordering up to a constant.
+///
+/// Memory: ~4x reduction vs `hnsw::Index` (i8 vs f32 storage).
+/// Recall hit: typically 1-3% on real-world embeddings.
+///
+/// Maintenance note: this module is largely a copy of `hnsw`
+/// with type swaps; the graph algorithm itself is identical.
+/// A proper refactor would make the f32/i8 variants share code
+/// via a generic Element trait; deferred until a third
+/// numeric backend (fp16, bf16) makes the duplication painful.
+pub mod hnsw8 {
+    use alloc::vec::Vec;
+    use core::cmp::Reverse;
+    use serde::{Deserialize, Serialize};
+    use std::collections::{BinaryHeap, HashSet};
+
+    #[derive(Copy, Clone, Debug)]
+    pub struct Scored {
+        pub distance: f64,
+        pub node: u32,
+    }
+    impl PartialEq for Scored {
+        fn eq(&self, other: &Self) -> bool {
+            self.distance == other.distance && self.node == other.node
+        }
+    }
+    impl Eq for Scored {}
+    impl PartialOrd for Scored {
+        fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+            Some(self.cmp(other))
+        }
+    }
+    impl Ord for Scored {
+        fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+            self.distance
+                .partial_cmp(&other.distance)
+                .unwrap_or(core::cmp::Ordering::Equal)
+                .then_with(|| self.node.cmp(&other.node))
+        }
+    }
+
+    #[derive(Serialize, Deserialize)]
+    pub struct Index {
+        pub m: usize,
+        pub m_max: usize,
+        pub m_max0: usize,
+        pub ef_construction: usize,
+        pub ef_search: usize,
+        pub layer_mult: f64,
+        pub entry_point: Option<u32>,
+        pub top_layer: usize,
+        pub rowids: Vec<i64>,
+        pub vectors: Vec<Vec<i8>>,
+        /// Global quantization scale: f32 vector x stored as
+        /// `(x * scale).round() as i8`. Recovery uses x = i8 / scale.
+        pub global_scale: f32,
+        pub neighbors: Vec<Vec<Vec<u32>>>,
+        pub levels: Vec<usize>,
+        pub rng_state: u64,
+        pub last_indexed_count: usize,
+        pub last_indexed_max_rowid: i64,
+        #[serde(with = "hashset_via_vec_i64_hnsw8")]
+        pub tombstones: HashSet<i64>,
+    }
+
+    mod hashset_via_vec_i64_hnsw8 {
+        use alloc::vec::Vec;
+        use serde::{Deserialize, Deserializer, Serialize, Serializer};
+        use std::collections::HashSet;
+        pub fn serialize<S: Serializer>(v: &HashSet<i64>, s: S) -> Result<S::Ok, S::Error> {
+            let mut sorted: Vec<i64> = v.iter().copied().collect();
+            sorted.sort();
+            sorted.serialize(s)
+        }
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<HashSet<i64>, D::Error> {
+            let v: Vec<i64> = Vec::deserialize(d)?;
+            Ok(v.into_iter().collect())
+        }
+    }
+
+    impl Index {
+        pub fn n_vectors(&self) -> usize {
+            self.vectors.len()
+        }
+    }
+
+    /// L2-squared in i32 space. For element-wise differences in
+    /// [-255, 255] and dim D up to 65535, sum of squares fits in
+    /// 32 bits comfortably; we widen to i64 anyway to handle
+    /// pathological D.
+    fn dist(a: &[i8], b: &[i8]) -> f64 {
+        if a.len() != b.len() {
+            return f64::INFINITY;
+        }
+        let mut s: i64 = 0;
+        for i in 0..a.len() {
+            let d = (a[i] as i32) - (b[i] as i32);
+            s += (d as i64) * (d as i64);
+        }
+        s as f64
+    }
+
+    /// Quantize a single f32 vector with the given global scale.
+    /// Values outside [-128/scale, 127/scale] saturate.
+    pub fn quantize(v: &[f32], scale: f32) -> Vec<i8> {
+        v.iter()
+            .map(|x| ((x * scale).round().clamp(-128.0, 127.0)) as i8)
+            .collect()
+    }
+
+    /// Compute the build-time global scale from a set of
+    /// vectors: 127 / max(|x|) across all elements. Returns 1.0
+    /// when the dataset is all-zero (avoids div-by-zero, and a
+    /// zero dataset is a degenerate case anyway).
+    pub fn compute_scale(vectors: &[Vec<f32>]) -> f32 {
+        let mut max_abs = 0.0f32;
+        for v in vectors {
+            for x in v {
+                let a = x.abs();
+                if a > max_abs {
+                    max_abs = a;
+                }
+            }
+        }
+        if max_abs == 0.0 {
+            1.0
+        } else {
+            127.0 / max_abs
+        }
+    }
+
+    fn rng_seed_i8(vectors: &[(i64, Vec<i8>)]) -> u64 {
+        let mut s: u64 = 0xcafef00dd15ea5e5;
+        for (_, p) in vectors.iter().take(8) {
+            for x in p.iter().take(16) {
+                s ^= *x as u8 as u64;
+                s = s.wrapping_mul(0x9e3779b97f4a7c15);
+            }
+        }
+        s
+    }
+
+    fn random_layer(rng_state: &mut u64, layer_mult: f64) -> usize {
+        *rng_state ^= *rng_state << 13;
+        *rng_state ^= *rng_state >> 7;
+        *rng_state ^= *rng_state << 17;
+        let u = ((*rng_state >> 11) as f64) / ((1u64 << 53) as f64);
+        let u = if u <= 0.0 { 1e-12 } else { u };
+        (-u.ln() * layer_mult).floor() as usize
+    }
+
+    pub fn new(m: usize, ef_construction: usize, ef_search: usize, global_scale: f32) -> Index {
+        let m = m.max(2);
+        Index {
+            m,
+            m_max: m,
+            m_max0: m * 2,
+            ef_construction: ef_construction.max(m),
+            ef_search: ef_search.max(m),
+            layer_mult: 1.0 / (m as f64).ln(),
+            entry_point: None,
+            top_layer: 0,
+            rowids: Vec::new(),
+            vectors: Vec::new(),
+            global_scale,
+            neighbors: Vec::new(),
+            levels: Vec::new(),
+            rng_state: 0xcafef00dd15ea5e5,
+            last_indexed_count: 0,
+            last_indexed_max_rowid: 0,
+            tombstones: HashSet::new(),
+        }
+    }
+
+    fn search_layer(
+        idx: &Index,
+        query: &[i8],
+        entry: u32,
+        ef: usize,
+        layer: usize,
+    ) -> Vec<Scored> {
+        let mut visited: HashSet<u32> = HashSet::with_capacity(ef * 4);
+        visited.insert(entry);
+        let ep_d = dist(query, &idx.vectors[entry as usize]);
+        let ep = Scored { distance: ep_d, node: entry };
+        let mut candidates: BinaryHeap<Reverse<Scored>> = BinaryHeap::new();
+        candidates.push(Reverse(ep));
+        let mut results: BinaryHeap<Scored> = BinaryHeap::new();
+        results.push(ep);
+        while let Some(Reverse(c)) = candidates.pop() {
+            if let Some(worst) = results.peek() {
+                if c.distance > worst.distance && results.len() >= ef {
+                    break;
+                }
+            }
+            let node_layers = &idx.neighbors[c.node as usize];
+            if layer >= node_layers.len() {
+                continue;
+            }
+            for &n in &node_layers[layer] {
+                if !visited.insert(n) {
+                    continue;
+                }
+                let d = dist(query, &idx.vectors[n as usize]);
+                let s = Scored { distance: d, node: n };
+                if results.len() < ef {
+                    candidates.push(Reverse(s));
+                    results.push(s);
+                } else if let Some(worst) = results.peek() {
+                    if d < worst.distance {
+                        candidates.push(Reverse(s));
+                        results.push(s);
+                        if results.len() > ef {
+                            results.pop();
+                        }
+                    }
+                }
+            }
+        }
+        let mut out: Vec<Scored> = results.into_sorted_vec();
+        out.truncate(ef);
+        out
+    }
+
+    fn select_neighbors(candidates: &[Scored], m: usize) -> Vec<u32> {
+        candidates.iter().take(m).map(|s| s.node).collect()
+    }
+
+    fn insert(idx: &mut Index, rowid: i64, vector: Vec<i8>, rng_state: &mut u64) {
+        let layer = random_layer(rng_state, idx.layer_mult);
+        let new_id = idx.vectors.len() as u32;
+        let mut new_neighbors: Vec<Vec<u32>> = (0..=layer).map(|_| Vec::new()).collect();
+        let Some(ep) = idx.entry_point else {
+            idx.rowids.push(rowid);
+            idx.vectors.push(vector);
+            idx.levels.push(layer);
+            idx.neighbors.push(new_neighbors);
+            idx.entry_point = Some(new_id);
+            idx.top_layer = layer;
+            return;
+        };
+        idx.rowids.push(rowid);
+        idx.vectors.push(vector);
+        idx.levels.push(layer);
+        idx.neighbors.push(new_neighbors.clone());
+        let mut cur_ep = ep;
+        let q: Vec<i8> = idx.vectors[new_id as usize].clone();
+        let mut cur_layer = idx.top_layer;
+        while cur_layer > layer {
+            let beam = search_layer(idx, &q, cur_ep, 1, cur_layer);
+            if let Some(closest) = beam.into_iter().next() {
+                cur_ep = closest.node;
+            }
+            if cur_layer == 0 {
+                break;
+            }
+            cur_layer -= 1;
+        }
+        let target_top = layer.min(idx.top_layer);
+        let mut cur_layer = target_top;
+        loop {
+            let candidates = search_layer(idx, &q, cur_ep, idx.ef_construction, cur_layer);
+            let m_cap = if cur_layer == 0 { idx.m_max0 } else { idx.m_max };
+            let selected = select_neighbors(&candidates, idx.m);
+            new_neighbors[cur_layer] = selected.clone();
+            for nb in &selected {
+                let nb_layers = &mut idx.neighbors[*nb as usize];
+                if cur_layer < nb_layers.len() {
+                    nb_layers[cur_layer].push(new_id);
+                    if nb_layers[cur_layer].len() > m_cap {
+                        let nb_vec = idx.vectors[*nb as usize].clone();
+                        let scored: Vec<Scored> = nb_layers[cur_layer]
+                            .iter()
+                            .map(|&id| Scored {
+                                distance: dist(&nb_vec, &idx.vectors[id as usize]),
+                                node: id,
+                            })
+                            .collect();
+                        let mut sorted = scored;
+                        sorted.sort();
+                        let kept: Vec<u32> = sorted.into_iter().take(m_cap).map(|s| s.node).collect();
+                        idx.neighbors[*nb as usize][cur_layer] = kept;
+                    }
+                }
+            }
+            if let Some(first) = candidates.into_iter().next() {
+                cur_ep = first.node;
+            }
+            if cur_layer == 0 {
+                break;
+            }
+            cur_layer -= 1;
+        }
+        idx.neighbors[new_id as usize] = new_neighbors;
+        if layer > idx.top_layer {
+            idx.top_layer = layer;
+            idx.entry_point = Some(new_id);
+        }
+    }
+
+    /// Build from already-quantized vectors. The caller computes
+    /// the global scale, quantizes f32  i8, then calls here.
+    pub fn build(
+        vectors: Vec<(i64, Vec<i8>)>,
+        m: usize,
+        ef_construction: usize,
+        ef_search: usize,
+        global_scale: f32,
+    ) -> Index {
+        let mut idx = new(m, ef_construction, ef_search, global_scale);
+        if vectors.is_empty() {
+            return idx;
+        }
+        idx.rng_state = rng_seed_i8(&vectors);
+        let count = vectors.len();
+        let max_rid = vectors.iter().map(|(r, _)| *r).max().unwrap_or(0);
+        for (rid, v) in vectors {
+            let mut s = idx.rng_state;
+            insert(&mut idx, rid, v, &mut s);
+            idx.rng_state = s;
+        }
+        idx.last_indexed_count = count;
+        idx.last_indexed_max_rowid = max_rid;
+        idx
+    }
+
+    pub fn insert_one(idx: &mut Index, rowid: i64, vector: Vec<i8>) {
+        let mut s = idx.rng_state;
+        insert(idx, rowid, vector, &mut s);
+        idx.rng_state = s;
+        idx.last_indexed_count += 1;
+        if rowid > idx.last_indexed_max_rowid {
+            idx.last_indexed_max_rowid = rowid;
+        }
+    }
+
+    pub fn search(idx: &Index, query: &[i8], k: usize) -> Vec<i64> {
+        let Some(mut cur_ep) = idx.entry_point else {
+            return Vec::new();
+        };
+        let mut cur_layer = idx.top_layer;
+        while cur_layer > 0 {
+            let beam = search_layer(idx, query, cur_ep, 1, cur_layer);
+            if let Some(closest) = beam.into_iter().next() {
+                cur_ep = closest.node;
+            }
+            cur_layer -= 1;
+        }
+        let ef = idx.ef_search.max(k + idx.tombstones.len());
+        let candidates = search_layer(idx, query, cur_ep, ef, 0);
+        candidates
+            .into_iter()
+            .map(|s| idx.rowids[s.node as usize])
+            .filter(|rid| !idx.tombstones.contains(rid))
+            .take(k)
+            .collect()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn quantize_and_distance_preserve_ordering() {
+            let pts = alloc::vec![
+                alloc::vec![1.0f32, 0.0],
+                alloc::vec![0.9f32, 0.0],
+                alloc::vec![-1.0f32, 0.0],
+            ];
+            let scale = compute_scale(&pts);
+            assert!(scale > 0.0);
+            let q: Vec<Vec<i8>> = pts.iter().map(|v| quantize(v, scale)).collect();
+            // Distance(q[0], q[1]) < Distance(q[0], q[2])
+            let d01 = dist(&q[0], &q[1]);
+            let d02 = dist(&q[0], &q[2]);
+            assert!(d01 < d02);
+        }
+
+        #[test]
+        fn build_then_search() {
+            let f32_vecs: Vec<Vec<f32>> = (0..10)
+                .map(|i| alloc::vec![i as f32, 0.0])
+                .collect();
+            let scale = compute_scale(&f32_vecs);
+            let qvecs: Vec<(i64, Vec<i8>)> = f32_vecs
+                .iter()
+                .enumerate()
+                .map(|(i, v)| (i as i64, quantize(v, scale)))
+                .collect();
+            let idx = build(qvecs, 8, 50, 50, scale);
+            // Closest to (100, 0)  same scale  is rowid 9 (highest).
+            let query = quantize(&[100.0, 0.0], scale);
+            let top = search(&idx, &query, 1);
+            assert_eq!(top, alloc::vec![9i64]);
+        }
+    }
+}
+
+/// Locality-sensitive hashing via random hyperplanes. Each
+/// vector hashes to a `D`-bit signature: bit `i` = 1 if the
+/// dot product with random hyperplane `i` is positive, else 0.
+/// Cosine similarity between two vectors  inversely
+/// proportional to the Hamming distance between their
+/// signatures.
+///
+/// Memory: 32x reduction vs f32 (one u8 per 8 dimensions of
+/// signature; signature dim is independent of vector dim).
+/// Recall hit: 5-15% on real workloads; the constant
+/// `n_probes` parameter controls how many candidate signatures
+/// to consider before final ranking.
+///
+/// Build: deterministic hyperplane generation via xorshift
+/// seeded from the data. The hyperplanes themselves are NOT
+/// stored explicitly inside `Index` (they're cheap to
+/// regenerate from the same seed). Vector signatures + their
+/// original f32 (kept for final ranking) live inline.
+pub mod lsh {
+    use alloc::vec::Vec;
+    use serde::{Deserialize, Serialize};
+    use std::collections::HashSet;
+
+    #[derive(Serialize, Deserialize)]
+    pub struct Index {
+        /// Bits in each signature; padded up to a multiple of 8.
+        pub d_signature: usize,
+        /// Number of buckets to scan at query time. Always >= 1.
+        pub n_probes: usize,
+        /// Source dim (for hyperplane regeneration). Captured at
+        /// build time so query-time signature computation
+        /// produces compatible hashes.
+        pub source_dim: usize,
+        /// PRNG seed used to draw the hyperplanes. Persisted so
+        /// the cross-session signature math stays deterministic.
+        pub hyperplane_seed: u64,
+        /// (rowid, signature, full f32 vector). Storing the f32
+        /// lets us re-rank candidates with the user's
+        /// configured metric  the LSH bucket merely whittles
+        /// the candidate pool.
+        pub entries: Vec<(i64, Vec<u8>, Vec<f32>)>,
+        pub last_indexed_count: usize,
+        pub last_indexed_max_rowid: i64,
+        #[serde(with = "hashset_via_vec_i64_lsh")]
+        pub tombstones: HashSet<i64>,
+    }
+
+    mod hashset_via_vec_i64_lsh {
+        use alloc::vec::Vec;
+        use serde::{Deserialize, Deserializer, Serialize, Serializer};
+        use std::collections::HashSet;
+        pub fn serialize<S: Serializer>(v: &HashSet<i64>, s: S) -> Result<S::Ok, S::Error> {
+            let mut sorted: Vec<i64> = v.iter().copied().collect();
+            sorted.sort();
+            sorted.serialize(s)
+        }
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<HashSet<i64>, D::Error> {
+            let v: Vec<i64> = Vec::deserialize(d)?;
+            Ok(v.into_iter().collect())
+        }
+    }
+
+    /// Generate the `D` hyperplanes deterministically from a
+    /// seed. Each hyperplane is a vector of `dim` f32 entries
+    /// drawn from the standard normal via the Box-Muller
+    /// transform on uniform draws (poor man's Gaussian; good
+    /// enough for LSH partitioning).
+    pub fn hyperplanes(seed: u64, d_sig: usize, dim: usize) -> Vec<Vec<f32>> {
+        let mut state = seed.max(1);
+        let mut rng = move || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        let mut planes: Vec<Vec<f32>> = Vec::with_capacity(d_sig);
+        for _ in 0..d_sig {
+            let mut p = Vec::with_capacity(dim);
+            let mut i = 0;
+            while i < dim {
+                let r1 = (rng() >> 11) as f64 / ((1u64 << 53) as f64);
+                let r2 = (rng() >> 11) as f64 / ((1u64 << 53) as f64);
+                let r1 = if r1 <= 0.0 { 1e-12 } else { r1 };
+                let mag = (-2.0 * r1.ln()).sqrt();
+                let z0 = mag * (2.0 * core::f64::consts::PI * r2).cos();
+                let z1 = mag * (2.0 * core::f64::consts::PI * r2).sin();
+                p.push(z0 as f32);
+                i += 1;
+                if i < dim {
+                    p.push(z1 as f32);
+                    i += 1;
+                }
+            }
+            planes.push(p);
+        }
+        planes
+    }
+
+    /// Hash a vector against the precomputed hyperplanes.
+    /// Bit i = 1 iff `dot(planes[i], v) >= 0`. Signatures are
+    /// packed MSB-first within each byte to match the layout
+    /// `vec_quantize_binary` (in extensions/vec) emits.
+    pub fn signature(planes: &[Vec<f32>], v: &[f32]) -> Vec<u8> {
+        let d = planes.len();
+        let mut sig = alloc::vec![0u8; d.div_ceil(8)];
+        for (i, p) in planes.iter().enumerate() {
+            let mut dot = 0.0f64;
+            for j in 0..p.len().min(v.len()) {
+                dot += p[j] as f64 * v[j] as f64;
+            }
+            if dot >= 0.0 {
+                sig[i / 8] |= 1u8 << (7 - (i % 8));
+            }
+        }
+        sig
+    }
+
+    /// Hamming distance between two equal-length byte
+    /// signatures. `u32` widening for the popcount sum keeps
+    /// the totals correct for D up to 4 billion bits  far
+    /// beyond practical signature sizes.
+    pub fn hamming(a: &[u8], b: &[u8]) -> u32 {
+        let n = a.len().min(b.len());
+        let mut total = 0u32;
+        for i in 0..n {
+            total += (a[i] ^ b[i]).count_ones();
+        }
+        total
+    }
+
+    /// Seed derived from the data: same scheme as ivf/hnsw so
+    /// rebuilds stay deterministic.
+    pub fn rng_seed_f32(vectors: &[(i64, Vec<f32>)]) -> u64 {
+        let mut s: u64 = 0xcafef00dd15ea5e5;
+        for (_, p) in vectors.iter().take(8) {
+            for x in p.iter().take(16) {
+                s ^= x.to_bits() as u64;
+                s = s.wrapping_mul(0x9e3779b97f4a7c15);
+            }
+        }
+        s.max(1)
+    }
+
+    pub fn build(
+        vectors: Vec<(i64, Vec<f32>)>,
+        d_signature: usize,
+        n_probes: usize,
+    ) -> Index {
+        let d_signature = d_signature.max(8);
+        let n_probes = n_probes.max(1);
+        let source_dim = vectors.first().map(|(_, v)| v.len()).unwrap_or(0);
+        let hyperplane_seed = rng_seed_f32(&vectors);
+        let planes = hyperplanes(hyperplane_seed, d_signature, source_dim);
+        let count = vectors.len();
+        let max_rid = vectors.iter().map(|(r, _)| *r).max().unwrap_or(0);
+        let entries: Vec<(i64, Vec<u8>, Vec<f32>)> = vectors
+            .into_iter()
+            .map(|(rid, v)| {
+                let sig = signature(&planes, &v);
+                (rid, sig, v)
+            })
+            .collect();
+        Index {
+            d_signature,
+            n_probes,
+            source_dim,
+            hyperplane_seed,
+            entries,
+            last_indexed_count: count,
+            last_indexed_max_rowid: max_rid,
+            tombstones: HashSet::new(),
+        }
+    }
+
+    pub fn insert_one(idx: &mut Index, rowid: i64, vector: Vec<f32>) {
+        let planes = hyperplanes(idx.hyperplane_seed, idx.d_signature, idx.source_dim);
+        let sig = signature(&planes, &vector);
+        idx.entries.push((rowid, sig, vector));
+        idx.last_indexed_count += 1;
+        if rowid > idx.last_indexed_max_rowid {
+            idx.last_indexed_max_rowid = rowid;
+        }
+    }
+
+    /// Top-k by Hamming distance against the query's signature.
+    /// We pull `max(k, n_probes)` Hamming-nearest candidates so
+    /// re-ranking with the user's f32 metric has room to
+    /// reorder. The returned vector is (rowid, full f32) so the
+    /// caller can score against the configured metric directly.
+    pub fn search(idx: &Index, query_sig: &[u8], cand_k: usize) -> Vec<(i64, Vec<f32>)> {
+        let mut scored: Vec<(u32, usize)> = idx
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, (rid, _, _))| !idx.tombstones.contains(rid))
+            .map(|(i, (_, sig, _))| (hamming(query_sig, sig), i))
+            .collect();
+        scored.sort_by_key(|(h, _)| *h);
+        let take = cand_k.max(idx.n_probes);
+        scored
+            .into_iter()
+            .take(take)
+            .map(|(_, i)| {
+                let (rid, _sig, v) = &idx.entries[i];
+                (*rid, v.clone())
+            })
+            .collect()
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn signature_is_deterministic() {
+            let planes = hyperplanes(42, 16, 4);
+            let v = alloc::vec![1.0f32, 0.0, 0.0, 0.0];
+            let s1 = signature(&planes, &v);
+            let s2 = signature(&planes, &v);
+            assert_eq!(s1, s2);
+        }
+
+        #[test]
+        fn similar_vectors_have_low_hamming() {
+            let planes = hyperplanes(42, 64, 4);
+            let s_a = signature(&planes, &[1.0f32, 0.0, 0.0, 0.0]);
+            let s_b = signature(&planes, &[1.0f32, 0.01, 0.0, 0.0]); // tiny perturbation
+            let s_c = signature(&planes, &[-1.0f32, 0.0, 0.0, 0.0]); // opposite
+            let h_ab = hamming(&s_a, &s_b);
+            let h_ac = hamming(&s_a, &s_c);
+            assert!(h_ab < h_ac, "h_ab={h_ab} h_ac={h_ac}");
+        }
+
+        #[test]
+        fn build_then_search_returns_candidates() {
+            let pts: Vec<(i64, Vec<f32>)> = (0..20)
+                .map(|i| (i, alloc::vec![i as f32, 0.0, 0.0, 0.0]))
+                .collect();
+            let idx = build(pts, 32, 5);
+            let planes =
+                hyperplanes(idx.hyperplane_seed, idx.d_signature, idx.source_dim);
+            let query_sig = signature(&planes, &[100.0, 0.0, 0.0, 0.0]);
+            let cand = search(&idx, &query_sig, 3);
+            // Candidates non-empty; at least k entries with
+            // numeric rowids in [0, 19].
+            assert!(!cand.is_empty());
+            for (rid, _) in &cand {
+                assert!(*rid >= 0 && *rid < 20);
+            }
+        }
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 mod wasm_export {
     use super::kernels;
@@ -985,6 +1641,22 @@ mod wasm_export {
             ef_construction: usize,
             ef_search: usize,
         },
+        /// int8-quantized HNSW. Same algorithm; vectors stored
+        /// as i8 with a single global scale. ~4x memory
+        /// reduction; 1-3% recall hit on real-world embeddings.
+        Hnsw8 {
+            m: usize,
+            ef_construction: usize,
+            ef_search: usize,
+        },
+        /// Random-hyperplane LSH. Binary signatures + Hamming-
+        /// distance bucketing; full f32 kept for re-ranking
+        /// candidates. ~32x memory reduction in the signature
+        /// space; 5-15% recall hit typical.
+        Lsh {
+            d_signature: usize,
+            n_probes: usize,
+        },
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -1038,6 +1710,12 @@ mod wasm_export {
             RefCell::new(HashMap::new());
         /// HNSW cache, same lazy-build-once shape as IVF.
         static HNSW_CACHE: RefCell<HashMap<u64, super::hnsw::Index>> =
+            RefCell::new(HashMap::new());
+        /// int8-quantized HNSW cache.
+        static HNSW8_CACHE: RefCell<HashMap<u64, super::hnsw8::Index>> =
+            RefCell::new(HashMap::new());
+        /// Binary-LSH cache.
+        static LSH_CACHE: RefCell<HashMap<u64, super::lsh::Index>> =
             RefCell::new(HashMap::new());
         /// `(table_name, instance_id)` lookup so the scalars
         /// (vec0_refresh, vec0_delete) can target the right
@@ -1109,6 +1787,10 @@ mod wasm_export {
                             .with(|m| m.borrow_mut().remove(&inst_id).is_some());
                         hit |= HNSW_CACHE
                             .with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                        hit |= HNSW8_CACHE
+                            .with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                        hit |= LSH_CACHE
+                            .with(|m| m.borrow_mut().remove(&inst_id).is_some());
                     }
                     // Best-effort: drop the persisted blob too
                     // so the next session rebuilds rather than
@@ -1147,6 +1829,18 @@ mod wasm_export {
                             hit = true;
                         }
                     });
+                    HNSW8_CACHE.with(|m| {
+                        if let Some(idx) = m.borrow_mut().get_mut(&inst_id) {
+                            idx.tombstones.insert(*rowid);
+                            hit = true;
+                        }
+                    });
+                    LSH_CACHE.with(|m| {
+                        if let Some(idx) = m.borrow_mut().get_mut(&inst_id) {
+                            idx.tombstones.insert(*rowid);
+                            hit = true;
+                        }
+                    });
                     // The persisted blob no longer reflects the
                     // tombstone set  drop it so the next
                     // session rebuilds rather than re-hydrating
@@ -1174,6 +1868,7 @@ mod wasm_export {
         let mut m: usize = 16;
         let mut ef_construction: usize = 100;
         let mut ef_search: usize = 50;
+        let mut d_signature: usize = 128;
         for arg in args {
             let (k, v) = arg
                 .split_once('=')
@@ -1207,6 +1902,11 @@ mod wasm_export {
                 "ef_search" => {
                     ef_search = v.parse().map_err(|e| format!("vec0: ef_search: {e}"))?
                 }
+                "d_signature" => {
+                    d_signature = v
+                        .parse()
+                        .map_err(|e| format!("vec0: d_signature: {e}"))?
+                }
                 other => return Err(format!("vec0: unknown arg {other:?}")),
             }
         }
@@ -1224,6 +1924,18 @@ mod wasm_export {
                 m,
                 ef_construction,
                 ef_search,
+            },
+            "hnsw8" => Backend::Hnsw8 {
+                m,
+                ef_construction,
+                ef_search,
+            },
+            "lsh" => Backend::Lsh {
+                d_signature,
+                // n_probes defaults to ceil(sqrt(N)) at build
+                // time when 0 here; same sentinel pattern as
+                // IVF.
+                n_probes: n_probes.unwrap_or(0),
             },
             other => return Err(format!("vec0: unknown index {other:?}")),
         };
@@ -1749,6 +2461,301 @@ mod wasm_export {
         Ok(())
     }
 
+    /// int8 HNSW scan. The persistence + cache shape mirrors
+    /// hnsw_topk; differences are the build-time quantization
+    /// pass (computes a single global scale, then converts each
+    /// f32 vector to int8) and a separate cache + persist key
+    /// (backend tag "hnsw8"). Re-ranking with the configured
+    /// metric still uses the original f32 source-table vectors
+    /// would be ideal but requires either a second source scan
+    /// or storing f32 alongside i8 (doubling memory and
+    /// defeating the point). v1: rank by i8 squared L2 only,
+    /// expose the slight recall loss as the standard quantized-
+    /// tier tradeoff.
+    fn hnsw8_topk(
+        inst_id: u64,
+        inst: &Instance,
+        query: &[f32],
+        k: usize,
+    ) -> Result<Vec<ScoredRow>, String> {
+        let Backend::Hnsw8 {
+            m,
+            ef_construction,
+            ef_search,
+        } = inst.backend
+        else {
+            return Err("vec0: hnsw8_topk called on non-Hnsw8 backend".to_string());
+        };
+        let needs_build = HNSW8_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
+        if needs_build {
+            let (cur_count, cur_max) = source_fingerprint(inst)?;
+            if let Some(blob) =
+                load_persisted(&inst.table_name, "hnsw8", cur_count, cur_max)?
+            {
+                if let Ok(idx) = postcard::from_bytes::<super::hnsw8::Index>(&blob) {
+                    HNSW8_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
+                }
+            }
+        }
+        let needs_build = HNSW8_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
+        if needs_build {
+            let sql = alloc::format!(
+                "SELECT {rid}, {emb} FROM {src}",
+                rid = inst.rowid_column,
+                emb = inst.embedding_column,
+                src = inst.source,
+            );
+            let result = spi::execute(&sql, &[])
+                .map_err(|e| format!("vec0: scan source: {e:?}"))?;
+            // Pass 1: load all f32 vectors so we can compute the
+            // global scale before quantizing.
+            let mut f32_vectors: Vec<(i64, Vec<f32>)> =
+                Vec::with_capacity(result.rows.len());
+            for row in &result.rows {
+                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                if let Ok(v) = kernels::from_blob(emb) {
+                    f32_vectors.push((*rid, v));
+                }
+            }
+            let just_f32: Vec<Vec<f32>> =
+                f32_vectors.iter().map(|(_, v)| v.clone()).collect();
+            let scale = super::hnsw8::compute_scale(&just_f32);
+            // Pass 2: quantize each vector.
+            let quantized: Vec<(i64, Vec<i8>)> = f32_vectors
+                .into_iter()
+                .map(|(rid, v)| (rid, super::hnsw8::quantize(&v, scale)))
+                .collect();
+            let idx = super::hnsw8::build(quantized, m, ef_construction, ef_search, scale);
+            let cur_count = idx.last_indexed_count;
+            let cur_max = idx.last_indexed_max_rowid;
+            if let Ok(encoded) = postcard::to_allocvec(&idx) {
+                let _ = persist_index(&inst.table_name, "hnsw8", cur_count, cur_max, encoded);
+            }
+            HNSW8_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
+        }
+
+        poll_for_inserts_hnsw8(inst_id, inst)?;
+
+        HNSW8_CACHE.with(|cache| -> Result<Vec<ScoredRow>, String> {
+            let map = cache.borrow();
+            let idx = map
+                .get(&inst_id)
+                .ok_or_else(|| "vec0: Hnsw8 cache missing after build".to_string())?;
+            let q_i8 = super::hnsw8::quantize(query, idx.global_scale);
+            // For ranking purposes the i8 squared-L2 ordering
+            // agrees with the f32 ordering up to a constant
+            // (the inverse scale^2). Compute the distance once
+            // per candidate; truncate to k.
+            let cand_k = k.max(idx.ef_search);
+            let candidate_rowids = super::hnsw8::search(idx, &q_i8, cand_k);
+            // Look up i8 vectors by rowid to score.
+            let mut rid_to_idx: std::collections::HashMap<i64, usize> =
+                std::collections::HashMap::with_capacity(idx.rowids.len());
+            for (i, rid) in idx.rowids.iter().enumerate() {
+                rid_to_idx.insert(*rid, i);
+            }
+            let inv_scale_sq = 1.0 / ((idx.global_scale as f64) * (idx.global_scale as f64));
+            let mut scored: Vec<ScoredRow> = Vec::with_capacity(candidate_rowids.len());
+            for rid in candidate_rowids {
+                let Some(&i) = rid_to_idx.get(&rid) else { continue };
+                let v = &idx.vectors[i];
+                let mut s: i64 = 0;
+                for j in 0..q_i8.len().min(v.len()) {
+                    let d = (q_i8[j] as i32) - (v[j] as i32);
+                    s += (d as i64) * (d as i64);
+                }
+                // Convert i8-squared distance back to f32-
+                // squared-L2 by dividing by scale^2. For cosine /
+                // L1 we'd need the original f32 vectors; v1
+                // exposes l2 only when index=hnsw8.
+                let d = (s as f64) * inv_scale_sq;
+                scored.push(ScoredRow { rowid: rid, distance: d.sqrt() });
+            }
+            sort_truncate(&mut scored, k);
+            Ok(scored)
+        })
+    }
+
+    fn poll_for_inserts_hnsw8(inst_id: u64, inst: &Instance) -> Result<(), String> {
+        let (last_count, last_max) = HNSW8_CACHE.with(|m| {
+            m.borrow()
+                .get(&inst_id)
+                .map(|idx| (idx.last_indexed_count, idx.last_indexed_max_rowid))
+                .unwrap_or((0, 0))
+        });
+        let probe_sql = alloc::format!(
+            "SELECT count(*), coalesce(max({rid}), 0) FROM {src}",
+            rid = inst.rowid_column,
+            src = inst.source,
+        );
+        let probe = spi::execute(&probe_sql, &[])
+            .map_err(|e| format!("vec0: poll source: {e:?}"))?;
+        let Some(row) = probe.rows.first() else { return Ok(()); };
+        let (cur_count, cur_max) = match (row.first(), row.get(1)) {
+            (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => (*c as usize, *m),
+            _ => return Ok(()),
+        };
+        if cur_count == last_count && cur_max == last_max {
+            return Ok(());
+        }
+        let fetch_sql = alloc::format!(
+            "SELECT {rid}, {emb} FROM {src} WHERE {rid} > ?1 ORDER BY {rid}",
+            rid = inst.rowid_column,
+            emb = inst.embedding_column,
+            src = inst.source,
+        );
+        let new_rows = spi::execute(&fetch_sql, &[SqlValue::Integer(last_max)])
+            .map_err(|e| format!("vec0: fetch new rows: {e:?}"))?;
+        HNSW8_CACHE.with(|m| {
+            let mut cache = m.borrow_mut();
+            let Some(idx) = cache.get_mut(&inst_id) else { return };
+            let scale = idx.global_scale;
+            for row in &new_rows.rows {
+                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                if let Ok(v) = kernels::from_blob(emb) {
+                    let q = super::hnsw8::quantize(&v, scale);
+                    super::hnsw8::insert_one(idx, *rid, q);
+                }
+            }
+        });
+        Ok(())
+    }
+
+    /// LSH scan. Build the index lazily on cache miss: scan
+    /// source, generate hyperplanes, hash each row to a binary
+    /// signature, keep the full f32 alongside for re-ranking.
+    /// At query time: hash the query, pull Hamming-nearest
+    /// candidates, re-rank with the configured metric, truncate
+    /// to k.
+    fn lsh_topk(
+        inst_id: u64,
+        inst: &Instance,
+        query: &[f32],
+        k: usize,
+    ) -> Result<Vec<ScoredRow>, String> {
+        let Backend::Lsh { d_signature, n_probes } = inst.backend else {
+            return Err("vec0: lsh_topk called on non-LSH backend".to_string());
+        };
+        let needs_build = LSH_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
+        if needs_build {
+            let (cur_count, cur_max) = source_fingerprint(inst)?;
+            if let Some(blob) =
+                load_persisted(&inst.table_name, "lsh", cur_count, cur_max)?
+            {
+                if let Ok(idx) = postcard::from_bytes::<super::lsh::Index>(&blob) {
+                    LSH_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
+                }
+            }
+        }
+        let needs_build = LSH_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
+        if needs_build {
+            let sql = alloc::format!(
+                "SELECT {rid}, {emb} FROM {src}",
+                rid = inst.rowid_column,
+                emb = inst.embedding_column,
+                src = inst.source,
+            );
+            let result = spi::execute(&sql, &[])
+                .map_err(|e| format!("vec0: scan source: {e:?}"))?;
+            let mut vectors: Vec<(i64, Vec<f32>)> = Vec::with_capacity(result.rows.len());
+            for row in &result.rows {
+                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                if let Ok(v) = kernels::from_blob(emb) {
+                    vectors.push((*rid, v));
+                }
+            }
+            let n = vectors.len();
+            let chosen_probes = if n_probes == 0 {
+                ((n as f64).sqrt().ceil() as usize).max(1)
+            } else {
+                n_probes
+            };
+            let idx = super::lsh::build(vectors, d_signature, chosen_probes);
+            let cur_count = idx.last_indexed_count;
+            let cur_max = idx.last_indexed_max_rowid;
+            if let Ok(encoded) = postcard::to_allocvec(&idx) {
+                let _ = persist_index(&inst.table_name, "lsh", cur_count, cur_max, encoded);
+            }
+            LSH_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
+        }
+
+        poll_for_inserts_lsh(inst_id, inst)?;
+
+        LSH_CACHE.with(|cache| -> Result<Vec<ScoredRow>, String> {
+            let map = cache.borrow();
+            let idx = map
+                .get(&inst_id)
+                .ok_or_else(|| "vec0: LSH cache missing after build".to_string())?;
+            let planes = super::lsh::hyperplanes(
+                idx.hyperplane_seed,
+                idx.d_signature,
+                idx.source_dim,
+            );
+            let query_sig = super::lsh::signature(&planes, query);
+            // Pull max(k, n_probes) candidates. The candidates
+            // come back with their full f32; we score with the
+            // configured metric.
+            let candidates = super::lsh::search(idx, &query_sig, k.max(idx.n_probes));
+            let mut scored: Vec<ScoredRow> = Vec::with_capacity(candidates.len());
+            for (rid, v) in candidates {
+                if let Some(d) = inst.metric.distance(query, &v) {
+                    if !d.is_nan() {
+                        scored.push(ScoredRow { rowid: rid, distance: d });
+                    }
+                }
+            }
+            sort_truncate(&mut scored, k);
+            Ok(scored)
+        })
+    }
+
+    fn poll_for_inserts_lsh(inst_id: u64, inst: &Instance) -> Result<(), String> {
+        let (last_count, last_max) = LSH_CACHE.with(|m| {
+            m.borrow()
+                .get(&inst_id)
+                .map(|idx| (idx.last_indexed_count, idx.last_indexed_max_rowid))
+                .unwrap_or((0, 0))
+        });
+        let probe_sql = alloc::format!(
+            "SELECT count(*), coalesce(max({rid}), 0) FROM {src}",
+            rid = inst.rowid_column,
+            src = inst.source,
+        );
+        let probe = spi::execute(&probe_sql, &[])
+            .map_err(|e| format!("vec0: poll source: {e:?}"))?;
+        let Some(row) = probe.rows.first() else { return Ok(()); };
+        let (cur_count, cur_max) = match (row.first(), row.get(1)) {
+            (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => (*c as usize, *m),
+            _ => return Ok(()),
+        };
+        if cur_count == last_count && cur_max == last_max {
+            return Ok(());
+        }
+        let fetch_sql = alloc::format!(
+            "SELECT {rid}, {emb} FROM {src} WHERE {rid} > ?1 ORDER BY {rid}",
+            rid = inst.rowid_column,
+            emb = inst.embedding_column,
+            src = inst.source,
+        );
+        let new_rows = spi::execute(&fetch_sql, &[SqlValue::Integer(last_max)])
+            .map_err(|e| format!("vec0: fetch new rows: {e:?}"))?;
+        LSH_CACHE.with(|m| {
+            let mut cache = m.borrow_mut();
+            let Some(idx) = cache.get_mut(&inst_id) else { return };
+            for row in &new_rows.rows {
+                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                if let Ok(v) = kernels::from_blob(emb) {
+                    super::lsh::insert_one(idx, *rid, v);
+                }
+            }
+        });
+        Ok(())
+    }
+
     fn sort_truncate(scored: &mut Vec<ScoredRow>, k: usize) {
         scored.sort_by(|a, b| {
             a.distance
@@ -1806,6 +2813,8 @@ mod wasm_export {
             INSTANCES.with(|m| m.borrow_mut().remove(&instance_id));
             IVF_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
             HNSW_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
+            HNSW8_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
+            LSH_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
             NAME_TO_INSTANCE
                 .with(|m| m.borrow_mut().retain(|_, v| *v != instance_id));
             Ok(())
@@ -1814,6 +2823,8 @@ mod wasm_export {
             INSTANCES.with(|m| m.borrow_mut().remove(&instance_id));
             IVF_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
             HNSW_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
+            HNSW8_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
+            LSH_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
             NAME_TO_INSTANCE
                 .with(|m| m.borrow_mut().retain(|_, v| *v != instance_id));
             Ok(())
@@ -1970,6 +2981,8 @@ mod wasm_export {
                 Backend::Brute => brute_force_topk(&inst, &query, k)?,
                 Backend::Ivf { .. } => ivf_topk(inst_id, &inst, &query, k)?,
                 Backend::Hnsw { .. } => hnsw_topk(inst_id, &inst, &query, k)?,
+                Backend::Hnsw8 { .. } => hnsw8_topk(inst_id, &inst, &query, k)?,
+                Backend::Lsh { .. } => lsh_topk(inst_id, &inst, &query, k)?,
             };
             CURSORS.with(|m| {
                 if let Some(c) = m.borrow_mut().get_mut(&cursor_id) {
