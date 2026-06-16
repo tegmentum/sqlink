@@ -1,0 +1,39 @@
+[package]
+name = "closure-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Recursive graph closure vtab. Port of SQLite's
+`ext/misc/closure.c`. Walks a parent/child relationship across
+N hops and emits `(id, depth)` tuples.
+
+Setup:
+  CREATE VIRTUAL TABLE c USING closure(
+    tablename='people', idcolumn='id', parentcolumn='parent'
+  );
+  SELECT id, depth FROM c WHERE root=42;            -- all descendants
+  SELECT id FROM c WHERE root=42 AND depth<=3;       -- bounded BFS
+
+Schema (declared by xConnect):
+  id    INTEGER  visible
+  depth INTEGER  visible
+  root  INTEGER  HIDDEN (required EQ constraint at query time)
+
+The vtab reads the source via spi.execute. Cyclic graphs are
+handled by a visited-set inside xFilter; each node yields once
+at its shortest depth from `root`.
+
+Tier-1 vtab port per PLAN-extensions-followups Phase E1.
+Requires a file-backed db (spi can't read :memory:).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

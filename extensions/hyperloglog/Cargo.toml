@@ -1,0 +1,36 @@
+[package]
+name = "hyperloglog-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+HyperLogLog cardinality estimation. p=14 (16 KB state, ~0.8%
+standard error). Standard LogLog-Beta finalize for the bias
+correction across the small / medium / large cardinality
+regimes.
+
+Aggregate:
+  hll(value)              STATE  16 KB BLOB containing the
+                                  HLL register array
+Scalar:
+  hll_cardinality(state)  INTEGER cardinality estimate
+  hll_merge(a, b)         BLOB    union of two states
+  hll_version()           TEXT    this crate's version
+
+Pairs with our stats aggregates; the canonical use is
+`SELECT hll_cardinality(hll(user_id)) FROM events` for
+constant-memory unique counting over big tables.
+
+Tier-1 aggregate per PLAN-extensions-followups Phase E1.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+twox-hash = { version = "1", default-features = false }

@@ -258,6 +258,11 @@ fts5/rtree, just at a different layer.
 | compress scalars (5 algos)    |     5  | extensions/compress                |
 | listargs TVF (eponymous vtab) |    +1  | extensions/listargs                |
 | define scalars                |     4  | extensions/define                  |
+| bloom scalars                 |     5  | extensions/bloom                   |
+| hll (agg) + cardinality/merge |     1 agg + 3 scalar | extensions/hyperloglog |
+| count_min (agg) + estimate/merge | 1 agg + 3 scalar | extensions/count_min |
+| closure graph vtab            |    +1  | extensions/closure                 |
+| trie prefix vtab              |    +1  | extensions/trie                    |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
@@ -267,13 +272,13 @@ fts5/rtree, just at a different layer.
 | bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
-**Grand SQL surface delivered**: 522 SQL-callable functions
-(scalars + aggregates) plus 12 virtual-table modules (csv, fts5,
+**Grand SQL surface delivered**: 535 SQL-callable functions
+(scalars + aggregates) plus 14 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
-bytecode, generate_series, vec0, vec_each, listargs), all
-reachable through `.load` or directly via the bundled SQLite,
-on top of the existing scalar / aggregate / collation / hook /
-vtab dispatch the host implements. vec0 ships five backends  brute
+bytecode, generate_series, vec0, vec_each, listargs, closure,
+trie), all reachable through `.load` or directly via the
+bundled SQLite, on top of the existing scalar / aggregate /
+collation / hook / vtab dispatch the host implements. vec0 ships five backends  brute
 force (default), IVF k-means partitioning, HNSW graph, int8-
 quantized HNSW (`index=hnsw8`), and binary LSH
 (`index=lsh, d_signature=D, n_probes=M`)  with identical SQL

@@ -1,0 +1,33 @@
+[package]
+name = "trie-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Prefix-tree vtab over a TEXT column. Pre-built per-instance
+from the source table on first query; cached in a thread_local
+that lives for the cli session.
+
+    CREATE VIRTUAL TABLE words USING trie(
+      source=dictionary, key_column=word
+    );
+    SELECT word FROM words WHERE prefix='auto';
+
+Schema (declared by xConnect):
+  word    TEXT  visible
+  prefix  TEXT  HIDDEN  (required EQ at query time)
+
+Pure-Rust hash-map trie  no crate dep. Tier-1 vtab port per
+PLAN-extensions-followups Phase E1. Requires a file-backed db
+(spi can't read :memory:).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

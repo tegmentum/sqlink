@@ -1,5 +1,11 @@
 # Plan: extension catalog follow-ups
 
+> **Phase E1 status: shipped.** bloom + hyperloglog +
+> count_min + closure (graph) + trie (prefix) all delivered.
+> 11 native unit tests pass; end-to-end smoke verifies each
+> extension through the cli. Pure-Rust deps only
+> (twox-hash for hash kernels).
+
 ## Goal
 
 Ship the remaining well-known SQLite extension surfaces

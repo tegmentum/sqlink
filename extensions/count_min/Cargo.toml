@@ -1,0 +1,31 @@
+[package]
+name = "count-min-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Count-Min Sketch for top-k frequency estimation. Sized at
+2048 (width)  4 (depth) by default = 32 KB state, ~0.05%
+error with 99.99% confidence. Parameters are fixed in the
+v1 wire format.
+
+Aggregate:
+  count_min(value)               STATE  32 KB BLOB
+Scalar:
+  count_min_estimate(state, value)  INTEGER  estimated count
+  count_min_merge(a, b)             BLOB
+  count_min_version()                TEXT
+
+Tier-1 aggregate per PLAN-extensions-followups Phase E1.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+twox-hash = { version = "1", default-features = false }
