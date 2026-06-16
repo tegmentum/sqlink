@@ -267,6 +267,7 @@ fts5/rtree, just at a different layer.
 | sql_normalize scalar          |     1  | extensions/text-utils              |
 | prefixes eponymous TVF        |    +1  | extensions/text-utils              |
 | spellfix1 fuzzy-match vtab    |    +1  | extensions/spellfix1               |
+| time/date scalars (chrono)    |     8  | extensions/time                    |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
@@ -276,7 +277,7 @@ fts5/rtree, just at a different layer.
 | bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
-**Grand SQL surface delivered**: 549 SQL-callable functions
+**Grand SQL surface delivered**: 557 SQL-callable functions
 (scalars + aggregates) plus 16 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 bytecode, generate_series, vec0, vec_each, listargs, closure,

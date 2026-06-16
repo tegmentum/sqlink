@@ -27,6 +27,16 @@
 > regr_slope / regr_intercept / regr_r2 (closed-form least
 > squares). 15 native unit tests pass (6 new); smoke verifies
 > regression on y=2x+1 returns exact slope=2 intercept=1 r2=1.
+>
+> **Phase E5 status: shipped.** extensions/time ships eight
+> scalars: date_trunc, iso_year / iso_week / iso_weekday,
+> fiscal_year / fiscal_quarter (configurable start_month),
+> business_days_between (Mon-Fri counting, signed by
+> direction), weekday_name. chrono with `default-features =
+> false` keeps the wasm size small. tz_convert and
+> interval_add deferred  the former needs chrono-tz's ~1 MB
+> tzdata; the latter is redundant with SQLite's datetime()
+> modifier syntax. 7 native unit tests pass.
 
 ## Goal
 

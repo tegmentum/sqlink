@@ -1,0 +1,42 @@
+[package]
+name = "time-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Date / time helpers that fill gaps in SQLite's built-in
+`date()`/`datetime()`/`strftime()` family. All scalars accept
+ISO-8601 strings (or any SQLite-recognised timestamp format)
+and return either strings or integers.
+
+Functions:
+  date_trunc(unit, ts)           TEXT   truncate to year/month/
+                                          day/hour/minute/second
+  iso_year(ts)                   INTEGER  ISO 8601 year
+  iso_week(ts)                   INTEGER  ISO 8601 week number
+  iso_weekday(ts)                INTEGER  1..7 (Mon..Sun)
+  fiscal_year(ts, start_month)   INTEGER  fiscal year given a
+                                            configurable start
+  fiscal_quarter(ts, start_month) INTEGER 1..4
+  business_days_between(s, e)    INTEGER  count of Mon-Fri days
+  weekday_name(ts)               TEXT     'Monday'..'Sunday'
+
+Skipped from the original PLAN-extensions-followups list:
+  interval_add  redundant with SQLite's datetime(ts, '+N units')
+                 modifier syntax.
+  tz_convert    chrono-tz pulls ~1 MB of timezone data into the
+                 wasm bundle. Deferred until a use case lands.
+
+Tier-1 scalar extension per PLAN-extensions-followups Phase E5.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+chrono = { version = "0.4", default-features = false, features = ["alloc"] }
