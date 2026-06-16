@@ -23,9 +23,26 @@
 > 31 native unit tests pass across the eight extensions.
 > Pure-Rust deps only; components wrap with the
 > wasi-preview1 adapter where rng is needed (ids,
-> crypto-keys). F5 (vector/AI) and F6 (data formats) +
-> F11 (networking) deferred  larger surfaces saved for
-> dedicated commits.
+> crypto-keys).
+>
+> **F6a + F6b status: shipped (partial F6).** Two more
+> codec extensions:
+>
+> * formats  TOML / INI / XML+XPath-lite bundled into one
+>   .wasm. Hand-rolled INI parser (~80 LOC), quick-xml
+>   for XML with an in-tree minimal XPath subset
+>   (absolute paths, descendant-anywhere `//`, attribute
+>   selector `@`). 7 scalars; 5 native tests pass.
+> * avro  Apache Avro single-record encode + decode via
+>   the apache-avro crate. Schema-on-call (caller passes
+>   the schema string alongside each value). 3 scalars
+>   (encode + decode + version); 2 native tests pass
+>   including a round-trip + a "smaller than JSON" size
+>   assertion.
+>
+> Remaining F6 items (arrow / parquet / excel) +
+> F5 + F11 deferred  individual heavy crates each
+> deserve dedicated commits.
 
 ## Goal
 

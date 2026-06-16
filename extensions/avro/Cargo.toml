@@ -1,0 +1,29 @@
+[package]
+name = "avro-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Apache Avro encode / decode scalars. Schema-on-call (the
+schema travels with each value at the SQL boundary  the
+caller passes both the data BLOB and a JSON schema string).
+
+Functions:
+  avro_encode(json_text, schema_text)   BLOB   single record
+                                                 in OCF-less form
+  avro_decode(blob, schema_text)        TEXT   JSON record
+  avro_version()                        TEXT
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+apache-avro = "0.17"
+serde = { version = "1", features = ["derive"] }

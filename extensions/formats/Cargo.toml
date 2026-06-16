@@ -1,0 +1,34 @@
+[package]
+name = "formats-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Lighter data-format codecs bundled together: TOML, INI, and
+XML/XPath. Bigger formats (Arrow, Parquet, Excel, Avro) get
+their own extensions because their crates pull substantial
+deps.
+
+Functions:
+  toml_to_json(text)            TEXT
+  json_to_toml(text)            TEXT
+  ini_to_json(text)             TEXT
+  json_to_ini(text)             TEXT
+  xml_extract(doc, xpath_lite)  TEXT  concatenated matched text
+  xml_to_json(doc)              TEXT  basic XMLJSON shape
+  xml_attr(doc, xpath, attr)    TEXT  attribute of first match
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+quick-xml = { version = "0.36", features = ["serialize"] }
