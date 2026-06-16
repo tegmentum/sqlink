@@ -1,0 +1,38 @@
+[package]
+name = "spellfix1-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Fuzzy / typo-tolerant text-match vtab. Levenshtein
+edit-distance over a source TEXT column. Pure-Rust port of
+SQLite's spellfix1 simplified surface  brute-force edit
+distance with early-exit, no Soundex prefilter in v1.
+
+Setup:
+  CREATE VIRTUAL TABLE corpus USING spellfix1(
+    source=dictionary, word_column=word
+  );
+  SELECT word, distance FROM corpus
+    WHERE word MATCH 'thier' AND distance<=2
+    ORDER BY distance;
+
+Schema:
+  word     TEXT      visible
+  distance INTEGER   visible
+  query    TEXT      HIDDEN  the MATCH operand
+  top      INTEGER   HIDDEN  optional limit (default 20)
+
+Tier-3 vtab port per PLAN-extensions-followups Phase E3.
+Requires a file-backed db (spi can't read :memory:).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

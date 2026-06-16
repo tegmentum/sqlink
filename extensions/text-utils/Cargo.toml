@@ -1,0 +1,29 @@
+[package]
+name = "text-utils-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Text utilities  two small extras bundled into one .wasm:
+
+Scalar:
+  sql_normalize(sql)  TEXT  literals replaced with '?', keywords
+                              lowercased, whitespace collapsed.
+                              Useful for query-plan caching by shape.
+
+Vtab (eponymous TVF):
+  SELECT prefix FROM prefixes('hello');
+   yields 'h', 'he', 'hel', 'hell', 'hello' (one row per prefix)
+
+Tier-1 utilities per PLAN-extensions-followups Phase E3.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

@@ -12,6 +12,14 @@
 > Round-trip via serde_json::Value as the common interchange
 > shape. 4 native unit tests pass; smoke shows JSON 31B 
 > CBOR/MessagePack 16B on a 5-field test object.
+>
+> **Phase E3 status: shipped.** Two extensions  text-utils
+> (sql_normalize scalar + prefixes eponymous TVF) and
+> spellfix1 (Levenshtein edit-distance vtab over a TEXT
+> column). Brute-force scan with early-exit banding; full
+> recall, O(N) per query. 11 native unit tests pass; smoke
+> verifies typo-tolerant lookup ("thier"  their/them/there/
+> three/water).
 
 ## Goal
 
