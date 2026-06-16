@@ -743,6 +743,7 @@ fn parse_grants(s: &str) -> Result<Vec<bindings::sqlite::extension::policy::Capa
             "hashing" => Capability::Hashing,
             "encoding" => Capability::Encoding,
             "http" => Capability::Http,
+            "dns" => Capability::Dns,
             _ => return Err(format!("unknown capability: {token}")),
         };
         out.push(c);
@@ -756,7 +757,7 @@ fn parse_grants(s: &str) -> Result<Vec<bindings::sqlite::extension::policy::Capa
 /// Default is empty grant (deny-all) — the user must opt extensions
 /// in. Matches the security-first defaults of the native loader.
 fn do_load(input: &str) -> String {
-    use bindings::sqlite::extension::policy::{HttpPolicy, LoadOptions, Method};
+    use bindings::sqlite::extension::policy::{DnsPolicy, HttpPolicy, LoadOptions, Method};
     use bindings::sqlite::extension::types::SqlValue as WitSqlValue;
     use bindings::sqlite::wasm::dispatch;
     use bindings::sqlite::wasm::extension_loader;
@@ -769,6 +770,7 @@ fn do_load(input: &str) -> String {
 
     let mut grant = Vec::new();
     let mut allowed_hosts: Option<Vec<String>> = None;
+    let mut allowed_domains: Option<Vec<String>> = None;
     let mut fuel: Option<u64> = None;
     let mut epoch: Option<u64> = None;
     let mut mem: Option<u64> = None;
@@ -786,6 +788,10 @@ fn do_load(input: &str) -> String {
             },
             "--allowed-hosts" => {
                 allowed_hosts = Some(v.split(',').map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty()).collect());
+            }
+            "--allowed-domains" => {
+                allowed_domains = Some(v.split(',').map(|s| s.trim().to_string())
                     .filter(|s| !s.is_empty()).collect());
             }
             "--fuel" => match v.parse::<u64>() {
@@ -838,9 +844,19 @@ fn do_load(input: &str) -> String {
         None
     };
 
+    let dns_policy = if grant.iter().any(|c| matches!(c, bindings::sqlite::extension::policy::Capability::Dns)) {
+        Some(DnsPolicy {
+            allowed_domains: allowed_domains.unwrap_or_default(),
+            timeout_ms: None,
+        })
+    } else {
+        None
+    };
+
     let opts = LoadOptions {
         grant,
         http_policy,
+        dns_policy,
         fs_policy: None,
         fuel_per_call: fuel,
         memory_limit_bytes: mem,
@@ -1304,6 +1320,7 @@ fn do_run(arg: &str) -> String {
         let opts = LoadOptions {
             grant: vec![Capability::Spi],
             http_policy: None,
+            dns_policy: None,
             fs_policy: None,
             fuel_per_call: None,
             memory_limit_bytes: None,
@@ -1343,6 +1360,7 @@ fn do_register_runtime(arg: &str) -> String {
     let opts = LoadOptions {
         grant: vec![],
         http_policy: None,
+        dns_policy: None,
         fs_policy: None,
         fuel_per_call: None,
         memory_limit_bytes: None,
@@ -1406,6 +1424,7 @@ fn do_register_resolver(arg: &str) -> String {
     let opts = LoadOptions {
         grant: vec![Capability::Http, Capability::Spi],
         http_policy: None,
+        dns_policy: None,
         fs_policy: None,
         fuel_per_call: None,
         memory_limit_bytes: None,

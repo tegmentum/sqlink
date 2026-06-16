@@ -1,0 +1,40 @@
+[package]
+name = "dns-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+DNS resolver scalar. Calls into the host's `dns::resolve`
+SPI through `world: minimal-dns`. Capability-gated:
+
+    .load extensions/dns/...component.wasm \\
+      --grant=dns --allowed-domains=example.com,*.cloudflare.com
+
+    SELECT dns_resolve('example.com', 'A');
+    SELECT dns_resolve('cloudflare.com', 'MX');
+
+Returns a JSON array of string-rendered records (see the
+host-spi `dns.resolve` doc for per-type render shape):
+
+    A      "1.2.3.4"
+    AAAA   "2001:db8::1"
+    CNAME / NS / PTR  hostname
+    MX     "<preference> <exchange>"
+    TXT    semicolon-joined chunks
+    SOA    "<mname> <rname> <serial> <refresh> <retry> <expire> <minimum>"
+    SRV    "<priority> <weight> <port> <target>"
+
+Empty array means resolution succeeded but no records of
+that type were returned (distinct from a hard error).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = "1"

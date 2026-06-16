@@ -41,7 +41,7 @@ use parking_lot::{Mutex, RwLock};
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine};
 
-pub use policy::{Capability, HttpPolicy, Policy};
+pub use policy::{Capability, DnsPolicy, HttpPolicy, Policy};
 
 /// Bindgen against the `extension-loader-host` world. Generates a
 /// `Host` trait (under `sqlite::wasm::extension_loader::Host`) with
@@ -82,6 +82,27 @@ pub mod loaded_minimal_http {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
         world: "minimal-http",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+        },
+    });
+}
+
+/// Used when a loaded extension declares the dns capability. The
+/// `minimal-dns` world is `minimal` + `import dns`  scalars can
+/// call into the host's hickory-backed resolver (gated by
+/// dns-policy at the check_dns_policy boundary).
+pub mod loaded_minimal_dns {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "minimal-dns",
         imports: { default: async },
         exports: { default: async },
         with: {
@@ -615,6 +636,7 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
         WitCapability::Hashing => Capability::Hashing,
         WitCapability::Encoding => Capability::Encoding,
         WitCapability::Http => Capability::Http,
+        WitCapability::Dns => Capability::Dns,
     }
 }
 
@@ -634,6 +656,12 @@ fn policy_from_load_options(opts: &bindings::sqlite::extension::policy::LoadOpti
             allowed_methods: methods,
             max_body_bytes: http.max_body_bytes,
             timeout_ms: http.timeout_ms,
+        });
+    }
+    if let Some(dns) = &opts.dns_policy {
+        policy = policy.with_dns(DnsPolicy {
+            allowed_domains: dns.allowed_domains.clone(),
+            timeout_ms: dns.timeout_ms,
         });
     }
     if let Some(n) = opts.fuel_per_call {
@@ -798,6 +826,10 @@ pub struct LoadedExtension {
     /// Populated lazily when an extension declaring
     /// `capability::http` first dispatches a scalar call.
     pub cached_minimal_http: Arc<tokio::sync::Mutex<Option<CachedMinimalHttp>>>,
+    /// `minimal-dns` Store cache for dns-capable scalars. Same
+    /// shape as `cached_minimal_http`; populated lazily on first
+    /// dispatch for extensions declaring `capability::dns`.
+    pub cached_minimal_dns: Arc<tokio::sync::Mutex<Option<CachedMinimalDns>>>,
 }
 
 /// Which cached Store should handle a scalar call. See
@@ -810,6 +842,7 @@ enum ScalarRoute {
     Tabular,
     Stateful,
     MinimalHttp,
+    MinimalDns,
 }
 
 /// Long-lived `Tabular`-world instance backing a vtab module.
@@ -838,6 +871,13 @@ pub struct CachedMinimal {
 pub struct CachedMinimalHttp {
     pub store: wasmtime::Store<LoadedState>,
     pub instance: loaded_minimal_http::MinimalHttp,
+}
+
+/// Long-lived `MinimalDns`-world instance backing scalar
+/// dispatch for dns-capable extensions.
+pub struct CachedMinimalDns {
+    pub store: wasmtime::Store<LoadedState>,
+    pub instance: loaded_minimal_dns::MinimalDns,
 }
 
 /// State carried by the per-call Store when dispatching into a
@@ -869,6 +909,10 @@ pub struct LoadedState {
     /// the right default: an extension without an `http` capability
     /// grant has no policy and shouldn't be able to make requests.
     http_policy: Option<HttpPolicy>,
+    /// DNS policy granted at load time, same shape as http_policy
+    /// but for dns::resolve. None means the extension wasn't granted
+    /// `Capability::Dns`; the resolver denies every query.
+    dns_policy: Option<DnsPolicy>,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -1008,6 +1052,119 @@ impl loaded::sqlite::extension::http::Host for LoadedState {
             headers,
             body,
         })
+    }
+}
+
+/// Same fail-closed shape as `check_http_policy`: a missing dns_policy
+/// is a hard deny. Wildcard / suffix matching delegates to DnsPolicy.
+fn check_dns_policy(
+    policy: Option<&DnsPolicy>,
+    name: &str,
+) -> std::result::Result<(), loaded_minimal_dns::sqlite::extension::dns::DnsError> {
+    use loaded_minimal_dns::sqlite::extension::dns::DnsError;
+    let policy = policy.ok_or_else(|| {
+        DnsError::Refused(
+            "dns policy denied: extension was not granted any dns policy at load time"
+                .to_string(),
+        )
+    })?;
+    policy
+        .check_domain(name)
+        .map_err(|e| DnsError::Refused(format!("dns policy denied: {e}")))?;
+    Ok(())
+}
+
+impl loaded_minimal_dns::sqlite::extension::dns::Host for LoadedState {
+    async fn resolve(
+        &mut self,
+        name: String,
+        record_type: loaded_minimal_dns::sqlite::extension::dns::RecordType,
+    ) -> std::result::Result<Vec<String>, loaded_minimal_dns::sqlite::extension::dns::DnsError> {
+        use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+        use hickory_resolver::proto::rr::RecordType as HRecordType;
+        use hickory_resolver::TokioAsyncResolver;
+        use loaded_minimal_dns::sqlite::extension::dns::{DnsError, RecordType};
+
+        check_dns_policy(self.dns_policy.as_ref(), &name)?;
+
+        let rtype = match record_type {
+            RecordType::A => HRecordType::A,
+            RecordType::Aaaa => HRecordType::AAAA,
+            RecordType::Cname => HRecordType::CNAME,
+            RecordType::Mx => HRecordType::MX,
+            RecordType::Ns => HRecordType::NS,
+            RecordType::Txt => HRecordType::TXT,
+            RecordType::Ptr => HRecordType::PTR,
+            RecordType::Soa => HRecordType::SOA,
+            RecordType::Srv => HRecordType::SRV,
+            RecordType::Other(s) => match s.to_uppercase().parse::<HRecordType>() {
+                Ok(rt) => rt,
+                Err(_) => return Err(DnsError::Other(format!("unknown record type {s:?}"))),
+            },
+        };
+
+        let timeout = self
+            .dns_policy
+            .as_ref()
+            .and_then(|p| p.timeout_ms)
+            .map(|ms| std::time::Duration::from_millis(ms as u64))
+            .unwrap_or(std::time::Duration::from_secs(5));
+
+        let mut opts = ResolverOpts::default();
+        opts.timeout = timeout;
+        let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), opts);
+
+        let lookup = match resolver.lookup(name.as_str(), rtype).await {
+            Ok(l) => l,
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("NXDomain") || msg.contains("no record found") {
+                    return Err(DnsError::Nxdomain);
+                }
+                if msg.contains("timed out") || msg.contains("timeout") {
+                    return Err(DnsError::TimedOut);
+                }
+                return Err(DnsError::Other(msg));
+            }
+        };
+
+        let mut out: Vec<String> = Vec::new();
+        for record in lookup.iter() {
+            use hickory_resolver::proto::rr::RData;
+            let s = match record {
+                RData::A(ip) => ip.to_string(),
+                RData::AAAA(ip) => ip.to_string(),
+                RData::CNAME(name) => name.to_string(),
+                RData::NS(name) => name.to_string(),
+                RData::PTR(name) => name.to_string(),
+                RData::MX(mx) => format!("{} {}", mx.preference(), mx.exchange()),
+                RData::TXT(txt) => txt
+                    .iter()
+                    .map(|chunk| String::from_utf8_lossy(chunk).to_string())
+                    .collect::<Vec<_>>()
+                    .join(";"),
+                RData::SOA(soa) => format!(
+                    "{} {} {} {} {} {} {}",
+                    soa.mname(),
+                    soa.rname(),
+                    soa.serial(),
+                    soa.refresh(),
+                    soa.retry(),
+                    soa.expire(),
+                    soa.minimum()
+                ),
+                RData::SRV(srv) => format!(
+                    "{} {} {} {}",
+                    srv.priority(),
+                    srv.weight(),
+                    srv.port(),
+                    srv.target()
+                ),
+                other => format!("{other:?}"),
+            };
+            out.push(s);
+        }
+        Ok(out)
     }
 }
 
@@ -1431,6 +1588,21 @@ fn make_loaded_minimal_http_linker(
     Ok(linker)
 }
 
+/// Build a Linker pre-wired for a `minimal-dns`-world loaded
+/// extension: WASI + the minimal imports + dns. Used when an
+/// extension declares `Capability::Dns`.
+fn make_loaded_minimal_dns_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+    let mut linker: Linker<LoadedState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
+    loaded_minimal_dns::MinimalDns::add_to_linker::<_, LoadedHostData>(
+        &mut linker,
+        |state| state,
+    )
+    .map_err(|e| anyhow!("loaded-ext minimal-dns: {e}"))?;
+    Ok(linker)
+}
+
 /// Build a Linker pre-wired for a `stateful`-world loaded extension:
 /// WASI + the minimal imports + state + cache. Used when dispatching
 /// aggregate calls.
@@ -1443,6 +1615,15 @@ fn make_loaded_stateful_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     loaded_stateful::Stateful::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
         .map_err(|e| anyhow!("loaded-ext stateful: {e}"))?;
+    // Stateful world doesn't import dns directly, but the
+    // bootstrap linker is shared with describe(), which may run
+    // a dns-capable extension. Wire the dns interface in
+    // explicitly so that `describe()` and load both succeed.
+    loaded_minimal_dns::sqlite::extension::dns::add_to_linker::<_, LoadedHostData>(
+        &mut linker,
+        |state| state,
+    )
+    .map_err(|e| anyhow!("loaded-ext bootstrap dns: {e}"))?;
     Ok(linker)
 }
 
@@ -1544,6 +1725,7 @@ fn build_loaded_store(
         db_path,
         spi_conn: ext.spi_conn.clone(),
         http_policy: ext.policy.http.clone(),
+        dns_policy: ext.policy.dns.clone(),
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
@@ -2432,6 +2614,7 @@ impl Host {
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
@@ -2644,6 +2827,7 @@ impl Host {
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
         };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
@@ -2675,6 +2859,7 @@ impl Host {
                     L::Hashing => Capability::Hashing,
                     L::Encoding => Capability::Encoding,
                     L::Http => Capability::Http,
+                    L::Dns => Capability::Dns,
                 }
             })
             .collect();
@@ -2757,6 +2942,7 @@ impl Host {
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
             }),
         );
 
@@ -2810,6 +2996,11 @@ impl Host {
                 // here still routes to MinimalHttp but every
                 // request will fail at the policy boundary.
                 ScalarRoute::MinimalHttp
+            } else if ext.policy.is_granted(Capability::Dns) {
+                // Same pattern as MinimalHttp  scalars that need
+                // outbound DNS load against the minimal-dns world;
+                // check_dns_policy gates each call.
+                ScalarRoute::MinimalDns
             } else {
                 ScalarRoute::Minimal
             }
@@ -2848,6 +3039,16 @@ impl Host {
             }
             ScalarRoute::MinimalHttp => {
                 let mut guard = self.minimal_http_locked(ext_name).await?;
+                let cached = guard.as_mut().unwrap();
+                cached
+                    .instance
+                    .sqlite_extension_scalar_function()
+                    .call_call(&mut cached.store, func_id, &loaded_args)
+                    .await
+                    .map_err(|e| anyhow!("call_call: {e}"))?
+            }
+            ScalarRoute::MinimalDns => {
+                let mut guard = self.minimal_dns_locked(ext_name).await?;
                 let cached = guard.as_mut().unwrap();
                 cached
                     .instance
@@ -3328,6 +3529,38 @@ impl Host {
             .await
             .map_err(|e| anyhow!("instantiate {ext_name} as minimal-http: {e}"))?;
             *guard = Some(CachedMinimalHttp { store, instance });
+        }
+        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
+        Ok(guard)
+    }
+
+    /// `minimal-dns`-world variant of `minimal_locked`. Same
+    /// lazy-instantiate + cache shape; uses the linker that
+    /// wires the dns interface.
+    async fn minimal_dns_locked(
+        &self,
+        ext_name: &str,
+    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedMinimalDns>>> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
+        let cached_arc = ext.cached_minimal_dns.clone();
+        let mut guard = cached_arc.lock_owned().await;
+        if guard.is_none() {
+            let linker = make_loaded_minimal_dns_linker(&self.engine)?;
+            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+            let instance = loaded_minimal_dns::MinimalDns::instantiate_async(
+                &mut store,
+                &ext.component,
+                &linker,
+            )
+            .await
+            .map_err(|e| anyhow!("instantiate {ext_name} as minimal-dns: {e}"))?;
+            *guard = Some(CachedMinimalDns { store, instance });
         }
         refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
         Ok(guard)

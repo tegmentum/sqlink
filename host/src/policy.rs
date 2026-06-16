@@ -8,4 +8,4 @@
 //! lib.rs bindgen invocation site keeps the dependency graph
 //! simpler.
 
-pub use sqlite_extension_policy::{Capability, HttpPolicy, Policy, PolicyError};
+pub use sqlite_extension_policy::{Capability, DnsPolicy, HttpPolicy, Policy, PolicyError};

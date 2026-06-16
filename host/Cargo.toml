@@ -37,6 +37,10 @@ async-trait = "0.1"
 # is OK for v1; future revision uses async reqwest with proper
 # cooperative scheduling.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
+# Async DNS resolver used by the host's `dns::resolve` impl for
+# `Capability::Dns`-granted extensions. Same async story as reqwest;
+# the Host trait method is already async, so we just `.await` it.
+hickory-resolver = { version = "0.24", default-features = false, features = ["tokio-runtime", "system-config"] }
 # Host-side SQLite for the hybrid SPI path + sqlite-runtime
 # compose provider. Same sqlite3.c the wasm crates use — we drive
 # it through `core::db` (in-tree libsqlite3-sys wrapper) so the

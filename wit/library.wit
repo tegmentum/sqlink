@@ -54,6 +54,7 @@ interface library {
         hashing,
         encoding,
         http,
+        dns,
     }
 
     /// Mirrors `sqlite:extension/policy.method`.
@@ -77,6 +78,12 @@ interface library {
         timeout-ms: option<u32>,
     }
 
+    /// Mirrors `sqlite:extension/policy.dns-policy`.
+    record dns-policy {
+        allowed-domains: list<string>,
+        timeout-ms: option<u32>,
+    }
+
     /// Mirrors `sqlite:extension/policy.fs-policy`.
     record fs-policy {
         readable-prefixes: list<string>,
@@ -90,6 +97,7 @@ interface library {
     record load-options {
         grant: list<capability>,
         http-policy: option<http-policy>,
+        dns-policy: option<dns-policy>,
         fs-policy: option<fs-policy>,
         fuel-per-call: option<u64>,
         memory-limit-bytes: option<u64>,

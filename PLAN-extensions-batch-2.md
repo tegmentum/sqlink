@@ -562,25 +562,53 @@ caller asks.
 `hickory-resolver` crate. Same capability/policy machinery as
 http  pass `--grant=dns --allowed-domains=...` at load.
 
-**Status: deferred  multi-layer.** Unlike the other F11
-items, dns_resolve isn't a self-contained extension; it
-needs:
+**Status: shipped.** All five layers landed in one
+sequenced /loop iteration:
 
-  1. New `capability::dns` variant in
-     `sqlite-loader-wit/wit/policy.wit` (alongside `http`).
-  2. New `dns-policy` record (allowed-domains, timeout-ms)
-     + `dns-policy: option<dns-policy>` field on
-     `load-options`.
-  3. A new `dns` host-spi interface in `host-spi.wit`
-     mirroring how `http` is shaped (one `resolve`
-     function with allow-list enforcement on the host).
-  4. Host-side wiring in `cli/src/extension_loader.rs`
-     to construct + enforce the policy.
-  5. The extension itself.
+  1. `capability::dns` variant + `dns-policy` record +
+     `dns-policy` field on `load-options`  added to
+     `sqlite-loader-wit/wit/policy.wit`.
+  2. `dns` interface (resolve func, record-type variant,
+     dns-error variant)  added to
+     `sqlite-loader-wit/wit/host-spi.wit`.
+  3. `minimal-dns` world + dns import added to `full`
+     world  added to `sqlite-loader-wit/wit/world.wit`.
+  4. Mirror types in `sqlite-loader-wit/src/lib.rs`
+     (`DnsPolicy`, `Capability::Dns`, error variants).
+     Also mirrored in `wit/library.wit` for sqlite-lib.
+  5. Host wiring: `dns::Host` impl on `LoadedState`,
+     hickory-resolver dep, `check_dns_policy`, lazy
+     instance cache, scalar-route selection, linker
+     factory  all in `host/src/lib.rs`. Bootstrap
+     `make_loaded_stateful_linker` explicitly wires the
+     dns interface so describe() / load both succeed
+     against dns-capable components.
+  6. CLI: `--grant=dns` + `--allowed-domains=...` flags
+     parsed in `cli/src/lib.rs`.
+  7. Extension: `extensions/dns/` (80 KB component).
 
-Each layer is small but they're sequenced; can't be one
-loop iteration. Schedule as a dedicated session when a
-caller asks for it.
+Smoke (end-to-end):
+
+    .load extensions/dns/target/.../dns_extension.component.wasm \
+        --grant=dns --allowed-domains=example.com
+    SELECT dns_resolve('example.com', 'A');
+        ["172.66.147.243","104.20.23.154"]
+    SELECT dns_resolve('google.com', 'A');
+        Error: dns_resolve refused: dns policy denied:
+        domain "google.com" not on dns allowlist
+
+Capability gate is fail-closed (extensions without
+`dns-policy` get a hard deny at the SPI boundary).
+Wildcard suffix matching (`*.example.com`) works the
+same way it does for `http-policy.allowed-hosts`.
+
+Caveat: WIT changes are ABI-breaking. Existing extension
+binaries built before this commit need a one-time
+rebuild  the new capability variant + the new load-
+options field shift discriminants / record offsets.
+extensions/http was rebuilt + smoke-tested as part of
+this commit; remaining extensions rebuild cleanly with
+no source changes.
 
 ### mbtiles / pmtiles (~3 days, capability-gated)
 vtabs over Mapbox raster tile formats. Used heavily by

@@ -653,9 +653,10 @@ mod lib_load {
     use super::bindings;
     use bindings::exports::sqlite::wasm::library::{
         AggregateFunctionSpec as LibAggSpec, Capability as LibCap, CollationSpec as LibCollSpec,
-        FsPolicy as LibFsPolicy, FunctionFlags as LibFlags, HttpMethod as LibMethod,
-        HttpPolicy as LibHttpPolicy, LoadOptions as LibOpts, LoaderError as LibLoaderError,
-        Manifest as LibManifest, ScalarFunctionSpec as LibScalarSpec,
+        DnsPolicy as LibDnsPolicy, FsPolicy as LibFsPolicy, FunctionFlags as LibFlags,
+        HttpMethod as LibMethod, HttpPolicy as LibHttpPolicy, LoadOptions as LibOpts,
+        LoaderError as LibLoaderError, Manifest as LibManifest,
+        ScalarFunctionSpec as LibScalarSpec,
     };
     use bindings::sqlite::extension::metadata as md;
     use bindings::sqlite::extension::policy as pol;
@@ -675,6 +676,7 @@ mod lib_load {
             LibCap::Hashing => pol::Capability::Hashing,
             LibCap::Encoding => pol::Capability::Encoding,
             LibCap::Http => pol::Capability::Http,
+            LibCap::Dns => pol::Capability::Dns,
         }
     }
 
@@ -691,6 +693,7 @@ mod lib_load {
             pol::Capability::Hashing => LibCap::Hashing,
             pol::Capability::Encoding => LibCap::Encoding,
             pol::Capability::Http => LibCap::Http,
+            pol::Capability::Dns => LibCap::Dns,
         }
     }
 
@@ -732,6 +735,10 @@ mod lib_load {
                 allowed_methods: hp.allowed_methods.map(|ms| ms.into_iter().map(method_to_pol).collect()),
                 max_body_bytes: hp.max_body_bytes,
                 timeout_ms: hp.timeout_ms,
+            }),
+            dns_policy: o.dns_policy.map(|dp: LibDnsPolicy| pol::DnsPolicy {
+                allowed_domains: dp.allowed_domains,
+                timeout_ms: dp.timeout_ms,
             }),
             fs_policy: o.fs_policy.map(|fp: LibFsPolicy| pol::FsPolicy {
                 readable_prefixes: fp.readable_prefixes,
