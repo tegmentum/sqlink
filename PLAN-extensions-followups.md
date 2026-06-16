@@ -54,6 +54,22 @@
 > html_extract / html_extract_all / html_attr / html_text.
 > html5ever adds ~400 KB to the wasm bundle. 6 native unit
 > tests pass.
+>
+> **Phase E8 status: shipped (fileio half).** extensions/fileio
+> ships 7 scalars over std::fs: readfile / writefile /
+> appendfile + file_exists / file_size / file_is_dir +
+> fileio_version. Filesystem access flows through WASI's
+> preopen surface (host preopens `.` and `/` with full
+> DirPerms / FilePerms on the loaded-extension Store). The
+> capability variant in policy.wit doesn't yet have a `fs`
+> flag; once added, the manifest can declare it for an
+> explicit grant. zipfile vtab deferred  uses the `zip`
+> crate, follow-on commit.
+>
+> **Phase E10 status: shipped.** extensions/ipaddr  7
+> scalars over the `ipnet` crate: ip_family, ip_in_cidr,
+> ip_host, ip_network, ip_broadcast, ip_prefix_len,
+> ip_contains. 4 native unit tests pass.
 
 ## Goal
 

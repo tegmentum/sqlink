@@ -1,0 +1,31 @@
+[package]
+name = "ipaddr-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+IP address / CIDR scalar helpers. Single-purpose extension
+sibling to sqlean-ipaddr's surface.
+
+Functions:
+  ip_family(addr)         INTEGER  4 or 6
+  ip_in_cidr(addr, cidr)  INTEGER  0/1
+  ip_host(cidr)           TEXT     bare address from a CIDR
+  ip_network(cidr)        TEXT     network address (lowest in range)
+  ip_broadcast(cidr)      TEXT     broadcast address (highest)
+  ip_prefix_len(cidr)     INTEGER  the /N value
+  ip_contains(a, b)       INTEGER  1 if CIDR a contains CIDR b
+
+Tier-1 small port per PLAN-extensions-followups Phase E10.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+ipnet = "2"

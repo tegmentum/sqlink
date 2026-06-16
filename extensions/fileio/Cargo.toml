@@ -1,0 +1,37 @@
+[package]
+name = "fileio-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Filesystem helpers. Port of SQLite's ext/misc/fileio.c surface
+plus a few stat-flavored extras.
+
+Functions:
+  readfile(path)           BLOB    full file contents
+  writefile(path, blob)    INTEGER bytes written
+  appendfile(path, blob)   INTEGER bytes appended
+  file_exists(path)        INTEGER 0/1
+  file_size(path)          INTEGER bytes
+  file_is_dir(path)        INTEGER 0/1
+  fileio_version()         TEXT
+
+Filesystem access flows through WASI's preopen surface  the
+host preopens `.` (cwd) and `/` with full DirPerms / FilePerms
+on the loaded-extension Store. The capability variant in
+sqlite:extension/policy doesn't yet have a `fs` flag; once it
+does, gate this extension's manifest with declared_capabilities
+to make the permission model explicit.
+
+Tier-3 capability-gated per PLAN-extensions-followups Phase E8.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
