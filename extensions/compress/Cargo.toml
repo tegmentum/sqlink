@@ -1,0 +1,46 @@
+[package]
+name = "compress-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Compression scalars  five pure-Rust algorithms exposed through
+two unified SQL functions, backed by Tegmentum's
+compression-multiplexer crate (`~/git/compression-multiplexer/`).
+
+Functions:
+  compress(blob, algo)    BLOB    `algo` is TEXT:
+                                   'store' | 'deflate' | 'bzip2'
+                                   | 'lzma' | 'lz4'
+  decompress(blob)        BLOB    reads the 1-byte algorithm tag
+                                   from the front of the input;
+                                   auto-routes to the right
+                                   decoder
+  compress_version()      TEXT    this crate's version
+  compress_algorithms()   TEXT    JSON list of supported algos
+
+Wire format (per compressed BLOB):
+  byte 0     algorithm tag (matches the Algorithm enum)
+  bytes 1-4 original length (u32, little-endian)
+  bytes 5+   algorithm-specific compressed payload
+
+Substitutes for sqlite-zstd in PLAN-vec-followups Phase 4
+note that zstd itself is intentionally absent (it's a C compile
+that doesn't fit wasm32-wasip2 cleanly); the five algorithms we
+ship cover the typical 2-3x shrink target for embedding-shaped
+BLOBs.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# rlib mode (no `component` feature) so we link the providers as
+# plain Rust  no WAC composition needed. The crate's wasm
+# zstd feature is off; we just get Store/Deflate/Bzip2/Lzma/Lz4.
+compression-multiplexer = { path = "../../../compression-multiplexer", default-features = false }

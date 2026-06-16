@@ -1,0 +1,35 @@
+[package]
+name = "listargs-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+`listargs(json)`  eponymous TVF that yields one row per element
+of a JSON array. Sibling to vec_each but value-agnostic: cells
+come out as INTEGER / REAL / TEXT depending on what the JSON
+element parses to.
+
+    SELECT value FROM listargs('[1, 2, 3]');
+    SELECT value FROM listargs('[\"a\", \"b\", \"c\"]');
+    SELECT d.id, d.title FROM docs d
+      JOIN listargs(?) AS picks ON d.id = picks.value;
+
+Carray-shaped: the host code (or SQL author) hands a list of
+keys to filter by. Different from SQLite's carray() in that
+binding is from SQL, not from native code  the wasm sandbox
+can't accept raw host pointers. JSON is the wire format; users
+who need binary efficiency can compress() it first.
+
+Tier-3 vtab port per PLAN-vec-followups Phase 4.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

@@ -286,6 +286,16 @@ swap types, add scale-factor handling); 2 days binary LSH
 
 ---
 
+> **Phase 4 status: shipped (3 of 4 originally listed).**
+> compress, listargs, and define extensions all delivered.
+> wal2 was dropped from scope after audit: it's a separate
+> upstream SQLite branch, not a mainline compile-time flag, so
+> we can't enable it through `LIBSQLITE3_FLAGS`. The compress
+> extension routes through `~/git/compression-multiplexer/`
+> rather than re-rolling encoders  five algorithms exposed
+> via a unified `compress(blob, algo)` / `decompress(blob)`
+> pair with a self-describing 1-byte tag header.
+
 ## Phase 4  Companion extensions (~1-2 weeks; parallelizable)
 
 Not vec0-specific; rounds out the broader SQL surface beyond

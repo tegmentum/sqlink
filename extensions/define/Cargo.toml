@@ -1,0 +1,40 @@
+[package]
+name = "define-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+User-defined SQL functions stored in the database. Sibling to
+sqlean's `define` extension, simplified for our extension
+model.
+
+True unknown-function interception (where calling foo(x) after
+`define('foo', 'SELECT $1 + 1')` runs the stored body) isn't
+possible from a wasm extension  SQLite errors on undefined
+functions before any vtab/scalar hook fires. So `define`
+provides three scalars that work together:
+
+  define(name, body)       store a SQL body keyed by `name`
+                            returns the body as TEXT for confirmation
+  define_call(name, args)  evaluate the stored body, substituting
+                            `?` placeholders in argument order
+                            `args` is JSON list, e.g. '[5, 7]'
+                            returns the first column of the first row
+  define_drop(name)        remove the named definition
+
+Schema (lazy-created on first call):
+  _define_funcs(name TEXT PRIMARY KEY, body TEXT NOT NULL, created_at INTEGER)
+
+Tier-4 reference per PLAN-vec-followups Phase 4.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

@@ -3,11 +3,14 @@
 > **Status (2026-06-16): shipped.** 513 SQL-callable functions
 > (scalars + aggregates) plus 11 virtual-table modules (csv,
 > fts5, rtree, geopoly, raster_polygon_dump, dbstat,
-> sqlite_stmt, bytecode, generate_series, vec0, vec_each) all
-> delivered  see "Final state (delivered)" below for the
-> per-source breakdown. vec0 ships three pluggable backends 
-> brute-force, IVF k-means partitioning, and HNSW graph  with
-> identical SQL surface. Of the three items under
+> sqlite_stmt, bytecode, generate_series, vec0, vec_each,
+> listargs) all delivered  see "Final state (delivered)" below
+> for the per-source breakdown. vec0 ships five pluggable
+> backends (brute / IVF / HNSW / int8-HNSW / binary LSH) with
+> identical SQL surface; companion extensions cover
+> compression (5 algorithms via compression-multiplexer),
+> filter-by-list JOINs (listargs), and persisted SQL function
+> definitions (define). Of the three items under
 > "Deferred (intentional)", TopoGeometry has since shipped in
 > `8fe182b`; what genuinely remains deferred is the
 > `postgis-batch` interface (70 fns whose `list<list<u8>> ->
@@ -252,6 +255,9 @@ fts5/rtree, just at a different layer.
 | generate_series TVF (eponymous vtab) | +1 | extensions/series              |
 | vec0 wrapping kNN vtab        |    +1  | extensions/vec0 (5 backends, persist) |
 | vec_each TVF (eponymous vtab) |    +1  | extensions/vec_each                |
+| compress scalars (5 algos)    |     5  | extensions/compress                |
+| listargs TVF (eponymous vtab) |    +1  | extensions/listargs                |
+| define scalars                |     4  | extensions/define                  |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
@@ -261,13 +267,13 @@ fts5/rtree, just at a different layer.
 | bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
-**Grand SQL surface delivered**: 513 SQL-callable functions
-(scalars + aggregates) plus 11 virtual-table modules (csv, fts5,
+**Grand SQL surface delivered**: 522 SQL-callable functions
+(scalars + aggregates) plus 12 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
-bytecode, generate_series, vec0, vec_each), all reachable
-through `.load` or directly via the bundled SQLite, on top of
-the existing scalar / aggregate / collation / hook / vtab
-dispatch the host implements. vec0 ships five backends  brute
+bytecode, generate_series, vec0, vec_each, listargs), all
+reachable through `.load` or directly via the bundled SQLite,
+on top of the existing scalar / aggregate / collation / hook /
+vtab dispatch the host implements. vec0 ships five backends  brute
 force (default), IVF k-means partitioning, HNSW graph, int8-
 quantized HNSW (`index=hnsw8`), and binary LSH
 (`index=lsh, d_signature=D, n_probes=M`)  with identical SQL
