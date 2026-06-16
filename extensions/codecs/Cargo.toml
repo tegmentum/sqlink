@@ -1,0 +1,42 @@
+[package]
+name = "codecs-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Data interchange codecs  CBOR, MessagePack, YAML  bundled
+into one extension since each is just a scalar pair and they
+share the same serde_json::Value intermediate.
+
+Functions:
+  cbor_encode(json_text)     BLOB
+  cbor_decode(blob)          TEXT  canonical JSON
+  msgpack_encode(json_text)  BLOB
+  msgpack_decode(blob)       TEXT  canonical JSON
+  yaml_to_json(yaml_text)    TEXT
+  json_to_yaml(json_text)    TEXT
+
+JSON is the common interchange shape for binary codecs because
+SQL only handles TEXT/BLOB/numbers natively. Round-tripping
+through serde_json::Value loses ordering of object keys and
+binary-blob CBOR/MessagePack values (they come out as
+stringified base64), but for the typical "I want to store
+structured data compactly" use case the JSON pivot is fine.
+
+Tier-1 codecs per PLAN-extensions-followups Phase E2.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+ciborium = { version = "0.2", default-features = false }
+rmp-serde = "1"
+serde_yaml = "0.9"
+serde = { version = "1", features = ["derive"] }

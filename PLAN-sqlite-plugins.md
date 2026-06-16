@@ -263,6 +263,7 @@ fts5/rtree, just at a different layer.
 | count_min (agg) + estimate/merge | 1 agg + 3 scalar | extensions/count_min |
 | closure graph vtab            |    +1  | extensions/closure                 |
 | trie prefix vtab              |    +1  | extensions/trie                    |
+| codecs (cbor/msgpack/yaml)    |     6  | extensions/codecs                  |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
@@ -272,7 +273,7 @@ fts5/rtree, just at a different layer.
 | bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
 | session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
 
-**Grand SQL surface delivered**: 535 SQL-callable functions
+**Grand SQL surface delivered**: 541 SQL-callable functions
 (scalars + aggregates) plus 14 virtual-table modules (csv, fts5,
 rtree, geopoly, raster_polygon_dump, dbstat, sqlite_stmt,
 bytecode, generate_series, vec0, vec_each, listargs, closure,

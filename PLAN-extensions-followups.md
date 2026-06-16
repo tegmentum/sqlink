@@ -5,6 +5,13 @@
 > 11 native unit tests pass; end-to-end smoke verifies each
 > extension through the cli. Pure-Rust deps only
 > (twox-hash for hash kernels).
+>
+> **Phase E2 status: shipped.** codecs extension bundles all
+> three  cbor + msgpack + yaml  into one .wasm (each codec
+> is just a scalar pair, so a single load is the cleaner UX).
+> Round-trip via serde_json::Value as the common interchange
+> shape. 4 native unit tests pass; smoke shows JSON 31B 
+> CBOR/MessagePack 16B on a 5-field test object.
 
 ## Goal
 
