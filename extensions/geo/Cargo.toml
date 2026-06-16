@@ -1,0 +1,41 @@
+[package]
+name = "geo-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Compact geo-coding helpers bundled together: H3 hex grid,
+geohash, Maidenhead grids. None of them need the postgis-
+wasm composed bundle  pure-Rust scalars.
+
+H3 (Uber's hex grid):
+  h3_to_cell(lat, lon, res)         TEXT  cell index
+  h3_to_geo(cell)                   TEXT  'lat,lon' centroid
+  h3_resolution(cell)               INTEGER
+  h3_neighbors(cell)                TEXT  JSON array
+  h3_is_pentagon(cell)              INTEGER
+
+Geohash:
+  geohash_encode(lat, lon, prec)    TEXT
+  geohash_decode(hash)              TEXT  'lat,lon'
+  geohash_neighbors(hash)           TEXT  JSON 8-neighbor array
+  geohash_bbox(hash)                TEXT  JSON [s, w, n, e]
+
+Maidenhead (ham radio):
+  maidenhead_encode(lat, lon, prec) TEXT
+  maidenhead_decode(grid)           TEXT  'lat,lon'
+
+Tier-1 cluster per PLAN-extensions-batch-2 Phase F1.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+h3o = { version = "0.7", default-features = false }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

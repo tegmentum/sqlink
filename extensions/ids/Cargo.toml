@@ -1,0 +1,33 @@
+[package]
+name = "ids-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ID generators  ULID, nanoid, snowflake  bundled together.
+Complements the existing uuid extension.
+
+Functions:
+  ulid()                     TEXT  128-bit, time-sortable
+  ulid_to_timestamp(ulid)    INTEGER  unix epoch ms
+  nanoid([size])             TEXT  URL-safe, default 21 chars
+  nanoid_custom(alphabet, n) TEXT  caller-defined alphabet
+  snowflake([worker_id])     INTEGER  Twitter scheme
+  snowflake_to_timestamp(id) INTEGER  unix epoch ms
+  ids_version()              TEXT
+
+Tier-1 cluster per PLAN-extensions-batch-2 Phase F2.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+ulid = "1"
+nanoid = "0.4"
+getrandom = "0.2"
