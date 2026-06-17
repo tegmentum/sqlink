@@ -294,6 +294,7 @@ fts5/rtree, just at a different layer.
 | detect (slug/lang/mime)         |    +5  | extensions/detect                  |
 | baseN (base32 + base58)         |    +4  | extensions/baseN                   |
 | url decomposition (9 scalars)   |    +9  | extensions/url                     |
+| emoji (count/extract/lookup)    |    +7  | extensions/emoji                   |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
