@@ -1,0 +1,41 @@
+[package]
+name = "case-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Identifier case-conversion scalars via the `heck`
+crate (the same case converter Cargo uses):
+
+    to_snake_case(text)       TEXT  "hello world"  "hello_world"
+    to_kebab_case(text)       TEXT  "Hello World"  "hello-world"
+    to_camel_case(text)       TEXT  "hello_world"  "helloWorld"
+    to_pascal_case(text)      TEXT  "hello_world"  "HelloWorld"
+    to_screaming_snake(text)  TEXT  "hello world"  "HELLO_WORLD"
+    to_screaming_kebab(text)  TEXT  "hello world"  "HELLO-WORLD"
+    to_title_case(text)       TEXT  "hello world"  "Hello World"
+    to_train_case(text)       TEXT  "hello world"  "Hello-World"
+
+Heck's classifier handles word boundaries between
+letters/digits/case-changes/punctuation, so all
+input dialects (spaces, hyphens, underscores,
+camel-runs) round-trip cleanly.
+
+Use cases:
+  * Normalize user-supplied tag columns to a single form
+  * Migrate column names: SELECT to_snake_case(name)
+    FROM pragma_table_info('t')
+  * Convert API field names between Rust (snake) and JS
+    (camel) conventions in JSON glue
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+heck = "0.5"

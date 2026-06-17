@@ -309,6 +309,7 @@ fts5/rtree, just at a different layer.
 | csscolor (CSS3 color parsing)   |    +9  | extensions/csscolor                |
 | ical (RFC 5545 calendar parse)  |    +5  | extensions/ical                    |
 | hexdump (formatted BLOB view)   |    +3  | extensions/hexdump                 |
+| case (snake/kebab/camel/etc)    |    +8  | extensions/case (heck)             |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
