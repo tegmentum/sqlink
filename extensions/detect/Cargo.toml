@@ -1,0 +1,33 @@
+[package]
+name = "detect-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Small detection / canonicalization scalar pack:
+
+    slug(text)             -- TEXT  URL-safe slug
+    lang_detect(text)      -- TEXT  ISO 639-3 lang code or NULL
+    lang_confidence(text)  -- REAL  detector confidence (0..1)
+    mime_detect(blob)      -- TEXT  MIME type or NULL
+    mime_extension(blob)   -- TEXT  canonical file extension or NULL
+
+Three small crates, each lean: `slug` (unicode  ascii
+slug), `whatlang` (n-gram lang ID, 69 languages), `infer`
+(file-magic MIME sniffer, no_std). Pair with `fileio` /
+`zipfile` for "read a blob from disk, identify the type,
+slug the title".
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+slug = "0.1"
+whatlang = "0.18"
+infer = { version = "0.19", default-features = false }

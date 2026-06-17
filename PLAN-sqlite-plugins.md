@@ -291,6 +291,7 @@ fts5/rtree, just at a different layer.
 | pmtiles v3 read vtab            |    +1  | extensions/pmtiles (oxigdal)       |
 | onnx inference (5 scalars)      |    +5  | extensions/onnx (tract-onnx)       |
 | dns_resolve (capability-gated)  |    +1  | extensions/dns + host hickory      |
+| detect (slug/lang/mime)         |    +5  | extensions/detect                  |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
