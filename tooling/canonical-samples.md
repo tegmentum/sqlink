@@ -19,6 +19,12 @@ Each entry lists:
 | ISBN-13 | `9780198526636` | same book, ISBN-13 form |
 | ISBN registration-group example (English) | `9780198526636` | maps to "English language" |
 | ISBN registration-group example (Brazil) | `9788578205614` | maps to "Brazil" |
+| ISIN (Apple) | `US0378331005` | Apple Inc. common stock |
+| ISIN (Tesla) | `US88160R1014` | Tesla Inc. common stock |
+| ISIN (BMW) | `DE0005190003` | BMW AG common stock |
+| ABA / RTN | `021000021` | JPMorgan Chase Bank, NY  district 2 |
+| ABA / RTN (Dallas) | `111000038` | district 11 |
+| ABA / RTN (San Francisco) | `322271627` | district 32-20=12 (thrift fold) |
 | VIN | `1M8GDM9AXKP042788` | Wikipedia algorithm worked example; check digit X |
 | ULID | `01JZ7E5XYZK4VPS9TQM03R2HBN` | example valid Crockford base32 |
 

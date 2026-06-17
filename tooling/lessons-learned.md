@@ -345,4 +345,42 @@ bisect: does it happen on the host-side `dispatch_scalar`
 path, or only after the cli wasm has been running for several
 statements? Note it; revisit when it gets in the way.
 
+---
+
+### 2026-06-17  aba (US bank routing)
+
+**What I built:** 3-scalar ABA RTN validator + FRB district +
+fed region. Hand-rolled (~70 LOC) including the district-range
+folding (01-12 normal, 21-32 thrift -20, 61-72 electronic -60,
+80 traveler's cheques).
+
+**What worked:**
+- Picked a real-world canonical sample (021000021 = JPMorgan
+Chase NY) for smoke; verified it validates. Added to
+canonical-samples.md  reinforces T-6.
+- The weighted-check (3,7,1,3,7,1,3,7,1) is a one-liner
+zip-and-multiply  smaller than Luhn. No need for an
+ABA-specific snippet; the `weighted_mod10` helper in
+tooling/snippets/luhn.rs generalizes this.
+- FRB district mapping is a small lookup table  fits in 20
+LOC. Bonus value over just validate is real (callers
+reporting on "where is this routing number's bank").
+
+**What surprised me:**
+- The OOM is escalating. ABA smoke had 3 occurrences (out of
+7 statements), all on the SELECT-after-multi-statement
+pattern. Outputs were correct on each retry. The cli
+recovers gracefully but the noise in smoke logs is annoying.
+Real T-9 work needed: bisect the cli's wasm for per-statement
+memory accumulation.
+
+**Tooling opportunity:**
+- (T-8 closed) Snippets directory landed this commit:
+`tooling/snippets/luhn.rs` covers the three Luhn variants
+(classic, ISIN-style, weighted). README explains the
+paste-and-own model + tradeoff vs. a shared crate.
+- (T-9 reinforced) The OOM pattern hits every smoke run with
+the right shape. Priority is escalating from "annoying" to
+"noisy." Bisect when it gets in the way of a real port.
+
 
