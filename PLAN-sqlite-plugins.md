@@ -301,6 +301,7 @@ fts5/rtree, just at a different layer.
 | phone (libphonenumber)          |    +6  | extensions/phone                   |
 | iso (country/currency/language) |   +12  | extensions/iso                     |
 | idna (xn-- punycode round-trip) |    +3  | extensions/idna                    |
+| lorem (test text generation)    |    +5  | extensions/lorem                   |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |

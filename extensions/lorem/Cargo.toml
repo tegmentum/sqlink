@@ -1,0 +1,43 @@
+[package]
+name = "lorem-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Lorem ipsum + filler text generation via the `lipsum`
+crate. Useful for seeding test databases, generating
+placeholder content, fuzz inputs.
+
+    lorem_words(n)            TEXT  N words of lorem ipsum
+    lorem_sentences(n)        TEXT  N sentences
+    lorem_title()             TEXT  Title-Cased Headline
+    lorem_words_seeded(n,s)   TEXT  deterministic by seed s
+    lorem_sentences_seeded(n,s) TEXT same, seedable
+
+Markov-chain text generated from the classic Latin
+corpus  output is technically a Markov walk, not
+verbatim Lorem Ipsum.
+
+Use cases:
+  * Seed `INSERT INTO articles (title, body) VALUES
+    (lorem_title(), lorem_sentences(5))` over a row
+    generator
+  * Generate deterministic test fixtures via the
+    seedable variants (same seed  same text)
+  * Fuzz scalar functions with non-trivial input
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+lipsum = { version = "0.9", default-features = false }
+# Pinned to match what lipsum 0.9.1 expects (rand_chacha
+# 0.3) so the SeedableRng trait impls line up.
+rand_chacha = "0.3"
+rand = "0.8"
