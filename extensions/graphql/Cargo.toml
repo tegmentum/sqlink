@@ -1,0 +1,40 @@
+[package]
+name = "graphql-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+GraphQL query inspection scalars via `graphql-parser`.
+Parses a GraphQL query string without executing it
+useful for audit, security checks, complexity scoring.
+
+    gql_validate(query)        INTEGER  1 if parses, 0 if not
+    gql_operations(query)      TEXT     JSON array of {name, type}
+                                          where type =
+                                          "query"/"mutation"/
+                                          "subscription"
+    gql_fields(query)          TEXT     JSON array of field paths
+                                          touched (e.g. "user.posts.title")
+    gql_normalize(query)       TEXT     reformatted canonical form
+
+Use cases:
+  * Reject queries before they hit the resolver if
+    they touch forbidden field paths
+  * Log a normalized form for telemetry / dedup
+  * Count fields for complexity-budget gates
+
+Same shape as the `sqlparse` extension  no execution,
+just inspect.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+graphql-parser = "0.4"
+serde_json = "1"
