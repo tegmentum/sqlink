@@ -1001,6 +1001,58 @@ future workaround-then-discover episodes. Cheap to write,
 hugely valuable as a habit anchor.
 - (T-19 closed)
 
+---
+
+### 2026-06-17  color extension
+
+**What I built:** SQLite extension for color parsing + WCAG
+accessibility math.
+
+Parsers (all on a single `parse() -> Option<Rgb>` entry point):
+  - `#rgb` and `#rrggbb` hex (with or without leading `#`)
+  - `rgb(r, g, b)` and `rgba(r, g, b, a)` (alpha ignored)
+  - CSS basic-16 named colors (`red`, `aqua`, `silver`, ...)
+
+Scalars:
+  - `color_to_hex(s)`  canonical `#rrggbb` lowercase
+  - `color_to_rgb(s)`  `rgb(r, g, b)` string
+  - `color_red/green/blue(s)`  channel as INTEGER 0-255
+  - `color_luminance(s)`  WCAG relative luminance 0..1
+  - `color_contrast_ratio(a, b)`  WCAG ratio 1..21
+
+Unknown input  NULL (T-19 sentinel renders cleanly).
+
+**What worked:**
+- WCAG luminance is the kind of formula where copy-pasting from
+the spec at the URL embedded in a `///` doccomment makes the
+code self-document. No external dep.
+- Mixed-input parse via union-of-strippers (`#rgb` OR
+`rgb(...)` OR named) is a different shape from the recent
+classifier extensions. The `parse() -> Option<Rgb>` entry
+point keeps it composable.
+- T-19 paid off immediately: the unknown-color row reads as
+`<NULL>` in smoke.expected with no SQL workaround. Felt
+like the right move 30 minutes ago, feels even more right
+in actual use.
+
+**What surprised me:**
+- smoke.expected `#`-line-as-comment collided with hex output
+on row 1. Fixed in tooling/smoke.py: only `#` followed by
+whitespace counts as a comment. Bare `#abc...` is data.
+This is the kind of harness bug that doesn't surface until
+an extension's output format includes the comment marker.
+- WCAG contrast(#000, #fff) rounds to 21 not 21.00 in the cli
+output  sqlite drops trailing zeros on `round()` results that
+land on integers. Mention so future-me doesn't pad
+smoke.expected with phantom decimal precision.
+
+**Tooling opportunity:**
+- (T-22 new) Smoke output format quirks  the "integer-valued
+real shows as `21` not `21.00`" surprise above. A 10-line note
+in tooling/smoke.py or in extensions/README.md listing
+"things the cli does that may surprise smoke authors" would
+prevent the same correction twice.
+
 
 
 

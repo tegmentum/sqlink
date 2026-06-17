@@ -1,0 +1,18 @@
+# Round-trip + short-hex expand + rgb() parse + named + fail-clean.
+# `<NULL>` rendered via T-19 (.nullvalue prepended by smoke harness).
+#ff8800
+#ffffff
+#aabbcc
+#0080ff
+#0a141e
+#00ffff
+<NULL>
+rgb(255, 136, 0)
+255
+136
+0
+1
+0
+21
+21
+4.48

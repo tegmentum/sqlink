@@ -68,13 +68,19 @@ def parse_results(raw: str) -> list[str]:
 
 
 def parse_expected(path: Path) -> list[str]:
-    """Parse smoke.expected. Comments + blank lines ignored."""
+    """Parse smoke.expected. Comments + blank lines ignored.
+
+    A comment line is `#` followed by whitespace (or EOL). A bare
+    `#` glued to a value (e.g. `#ff8800`) is NOT a comment  the
+    `color` extension's hex output collides with `#` otherwise.
+    """
     out: list[str] = []
     for line in path.read_text().splitlines():
         s = line.rstrip()
         if not s.strip():
             continue
-        if s.lstrip().startswith("#"):
+        ls = s.lstrip()
+        if ls == "#" or ls.startswith("# "):
             continue
         out.append(s)
     return out
