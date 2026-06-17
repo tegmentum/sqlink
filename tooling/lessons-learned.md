@@ -653,6 +653,79 @@ workspace-member and scaffolded extensions. Fixed in this
 commit. Side-effect benefit: smoke.sql `.load` paths are now
 guaranteed-uniform across extension classes.
 
+---
+
+### 2026-06-17  T-16 investigation (scaffold + ext speedup)
+
+**What I built:** Shared `CARGO_TARGET_DIR` for scaffolded
+extensions  build artifacts (wit-bindgen, serde, etc.) shared
+across the catalog instead of recompiled per extension.
+
+**What I found:** every scaffolded extension declares
+`[workspace]` in its Cargo.toml (so cargo treats it as its
+own root). That meant every scaffold's `cargo check` step AND
+every `make ext` rebuilt the full dep tree from scratch.
+
+Timings measured:
+
+  scaffold (no shared target):
+    cold cache:  49.8s
+  scaffold (shared CARGO_TARGET_DIR=extensions/_shared-target):
+    cold cache:  49.8s   (first scaffold still pays)
+    second:      29.6s
+    steady-state: 3.3s   (94% reduction)
+
+  make ext (no shared target):  ~33s per build
+  make ext (shared target):     17.5s fresh / 14.3s rebuild
+                                (50% reduction)
+
+The 50% reduction on `make ext` is because cargo build (vs
+check) still does some optimization work even when the source
+is unchanged, but most of the wit-bindgen + serde compile is
+shared.
+
+**The fix:**
+
+  tooling/scaffold.py  set env[CARGO_TARGET_DIR] to
+                        extensions/_shared-target before
+                        spawning cargo check.
+
+  Makefile             EXT_SHARED_TARGET var; `make ext` sets
+                        CARGO_TARGET_DIR when the extension is
+                        scaffolded ([workspace] declared) AND
+                        looks in the shared dir first when
+                        finding the build artifact.
+
+  provenance/scan.py    skip any extensions/_* dir  the
+                        leading underscore is the convention
+                        for tooling-managed dirs that look
+                        like extensions but aren't.
+
+  .gitignore            extensions/_shared-target/
+
+**What surprised me:**
+- Scaffolded extensions can NOT just drop their `[workspace]`
+declaration  if they did, cargo would try to join the
+parent sqlite-wasm workspace, which has different deps and
+build profiles. The `[workspace] {}` empty table is load-
+bearing.
+- The .cargo/config.toml-based approach (per-extension config
+setting target dir) would also work but requires writing one
+extra file per scaffold. The env var path is one-line.
+- I almost forgot the provenance/scan.py filter  the shared-
+target dir was being categorized as a non-extension on each
+scan run. Annoying noise.
+
+**Tooling opportunity:**
+- (T-16 closed inline) The speedup is the fix.
+- (T-17 new) `make ext-smoke-all` would benefit from a
+parallel mode  smoke tests are independent. Currently it's
+serial; ~85 extensions × 3-5s each = 4-7 minutes. A
+`--parallel` flag (`concurrent.futures.ProcessPoolExecutor`)
+would cut this to under a minute.
+
+
+
 
 
 

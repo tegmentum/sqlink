@@ -457,6 +457,10 @@ def main() -> int:
     for sub in sorted(ext_dir.iterdir()):
         if not sub.is_dir():
             continue
+        # Skip tooling-managed dirs that look like extensions but aren't.
+        # Leading `_` is the convention.
+        if sub.name.startswith("_"):
+            continue
         info = scan_rust(sub) or scan_c_bundled(sub)
         if not info:
             skipped.append(sub.name)

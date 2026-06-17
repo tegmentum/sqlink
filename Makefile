@@ -809,18 +809,32 @@ info:
 # adapter at $HOME/.cache/xtran/.
 WASI_ADAPTER ?= $(HOME)/.cache/xtran/wasi_snapshot_preview1.reactor.wasm
 
+# Shared target dir for all scaffolded extensions. wit-bindgen + serde
+# + common deps recompile once across the whole catalog instead of once
+# per extension. Steady-state per-ext rebuild drops from 30-50s to ~5s.
+EXT_SHARED_TARGET := $(PROJECT_ROOT)/extensions/_shared-target
+
 ext:
 	@test -n "$(NAME)" || (echo "usage: make ext NAME=<extension>"; exit 1)
 	@test -d "extensions/$(NAME)" || (echo "no such extension: extensions/$(NAME)"; exit 1)
-	$(if $(BOOTSTRAP),RUSTC_BOOTSTRAP=1) cargo build --release \
-		--manifest-path extensions/$(NAME)/Cargo.toml \
-		--target wasm32-wasip2
-	@# Scaffolded extensions declare `[workspace]` and land artifacts
-	@# under extensions/<name>/target/. Older extensions are workspace
-	@# members and land under top-level target/. Check both.
+	@# Look for the artifact in three places, in order:
+	@#   1. shared scaffold target (scaffolded extensions w/ shared cache)
+	@#   2. per-extension target (older scaffold layout, kept for back-compat)
+	@#   3. top-level target (workspace-member extensions like uuid / crypto)
 	@NAME_UNDERSCORE=$$(echo "$(NAME)" | tr - _); \
+	if grep -q '^\[workspace\]' extensions/$(NAME)/Cargo.toml 2>/dev/null; then \
+		CARGO_TARGET_DIR=$(EXT_SHARED_TARGET) $(if $(BOOTSTRAP),RUSTC_BOOTSTRAP=1 )cargo build --release \
+			--manifest-path extensions/$(NAME)/Cargo.toml \
+			--target wasm32-wasip2; \
+	else \
+		$(if $(BOOTSTRAP),RUSTC_BOOTSTRAP=1) cargo build --release \
+			--manifest-path extensions/$(NAME)/Cargo.toml \
+			--target wasm32-wasip2; \
+	fi; \
 	WASM_BASE=""; \
-	for D in extensions/$(NAME)/target/wasm32-wasip2/release target/wasm32-wasip2/release; do \
+	for D in $(EXT_SHARED_TARGET)/wasm32-wasip2/release \
+	         extensions/$(NAME)/target/wasm32-wasip2/release \
+	         target/wasm32-wasip2/release; do \
 		CAND=$$D/$${NAME_UNDERSCORE}_extension.wasm; \
 		if [ -f "$$CAND" ]; then WASM_BASE=$$CAND; break; fi; \
 	done; \

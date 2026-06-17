@@ -35,3 +35,4 @@ compile_commands.json
 # Rust workspace + per-crate build artifacts.
 target/
 host/target/
+extensions/_shared-target/

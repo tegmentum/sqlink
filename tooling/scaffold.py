@@ -140,11 +140,17 @@ def scaffold_extension(name: str, crates: list[str], description: str) -> None:
     # Build-check to confirm the skeleton compiles before the caller edits.
     if shutil.which("cargo"):
         print(f"\nrunning: cargo check --release --target wasm32-wasip2 (cwd={name})")
+        # Share a target dir across all scaffolded extensions so wit-bindgen
+        # + serde + common deps don't recompile per extension. Steady-state
+        # 5s vs cold 50s.
+        env = {**__import__("os").environ}
+        env["CARGO_TARGET_DIR"] = str(REPO_ROOT / "extensions" / "_shared-target")
         result = subprocess.run(
             ["cargo", "check", "--release", "--target", "wasm32-wasip2"],
             cwd=target,
             capture_output=True,
             text=True,
+            env=env,
         )
         if result.returncode != 0:
             print("FAILED  build-check exited non-zero")
