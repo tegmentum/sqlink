@@ -326,6 +326,7 @@ fts5/rtree, just at a different layer.
 | postcode (multi-country postal  |    +4  | extensions/postcode                |
 | escape (URL/HTML/SQL/shell han  |    +6  | extensions/escape                  |
 | ssn (US SSN format validation)  |    +6  | extensions/ssn                     |
+| geo-distance (Haversine + bear  |    +4  | extensions/geo-distance            |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
