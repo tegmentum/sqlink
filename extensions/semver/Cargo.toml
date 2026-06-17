@@ -1,0 +1,49 @@
+[package]
+name = "semver-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Semantic Versioning scalars via dtolnay's `semver`
+crate (Cargo's flavor of semver  the de-facto
+standard).
+
+    semver_validate(v)            INTEGER  1 if valid
+    semver_major(v)               INTEGER
+    semver_minor(v)               INTEGER
+    semver_patch(v)               INTEGER
+    semver_pre(v)                 TEXT     "alpha.1" / NULL
+    semver_build(v)               TEXT     "20231101" / NULL
+    semver_compare(a, b)          INTEGER  -1 / 0 / 1
+    semver_max(a, b)              TEXT     higher of two versions
+    semver_satisfies(v, req)      INTEGER  1 if v matches req
+                                            e.g. semver_satisfies('1.2.3', '^1.0')
+    semver_increment(v, part)     TEXT     v with major/minor/patch
+                                            bumped + sub-parts reset
+
+Use cases:
+  * ORDER BY semver_compare(version, '1.0.0') for upgrade
+    pathing analytics
+  * GROUP BY semver_major(version) for "users on each major"
+  * Filter rows where the installed version doesn't satisfy
+    a min-version requirement
+  * Compute the next release version programmatically
+
+Invalid input returns NULL rather than raising  except
+semver_compare which raises (since there's no NULL i64
+slot in the return shape that makes semantic sense).
+
+Compatible with Cargo's `^1.2.3` / `~1.2.3` / `>=1.0`
+requirement syntax.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+semver = "1"
