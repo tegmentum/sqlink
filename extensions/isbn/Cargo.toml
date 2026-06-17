@@ -1,0 +1,42 @@
+[package]
+name = "isbn-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ISBN-10 / ISBN-13 validation + canonicalization via the
+`isbn` crate.
+
+    isbn_validate(text)        INTEGER  1 if valid (10 or 13)
+    isbn_is_isbn10(text)       INTEGER  1 if specifically ISBN-10
+    isbn_is_isbn13(text)       INTEGER  1 if specifically ISBN-13
+    isbn_to_isbn13(text)       TEXT     ISBN-10 (or 13)  ISBN-13
+    isbn_to_isbn10(text)       TEXT     ISBN-13  ISBN-10 (or NULL)
+    isbn_hyphenate(text)       TEXT     "9780198526636"
+                                          "978-0-19-852663-6"
+    isbn_registration_group(text)  TEXT  e.g. "English" / NULL
+
+Input forms accepted: with-hyphens, without-hyphens,
+with-whitespace, case-insensitive checksum X. Invalid
+inputs return NULL on extraction scalars and 0 on
+validators.
+
+Use cases:
+  * Normalize bookstore inventory columns to a canonical
+    form before unique-constraint checks
+  * Migrate legacy ISBN-10 columns to ISBN-13 in bulk
+  * Group books by registration group (English-language
+    publishers vs Spanish vs ...)
+  * Pre-flight check on user-submitted catalog uploads
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+isbn = "0.8"
