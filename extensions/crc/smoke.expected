@@ -1,0 +1,8 @@
+# Canonical "123456789" CRC values from the Rocksoft CRC catalog
+# plus a couple extras. If any of these change, the polynomial
+# or initial value drifted  diagnose the snippet, not the test.
+3421780262
+4236843288
+47933
+0
+1095738169
