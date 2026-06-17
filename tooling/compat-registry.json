@@ -245,6 +245,17 @@
       "version_tested": "1.x",
       "used_by": ["ids"]
     },
+    "eui48": {
+      "status": "broken",
+      "version_tested": "1.1.0",
+      "notes": "Transitive `rustc-serialize` 0.3.25 fails E0046 on modern rustc (missing trait items on Encodable/Decodable for path types). MAC address parsing is trivial enough to hand-roll  no crate needed for the common case.",
+      "alternates": ["hand-roll"]
+    },
+    "mac_address": {
+      "status": "unverified",
+      "version_tested": "1.1.8",
+      "notes": "Cross-platform retrieval of interface MAC  evaluates host network interfaces, not parsing. Not what we want for SQL scalars."
+    },
     "rand_chacha": {
       "status": "clean",
       "version_tested": "0.3.1",

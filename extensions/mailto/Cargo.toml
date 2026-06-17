@@ -1,0 +1,21 @@
+[package]
+name = "mailto-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+mailto: URI parser  decompose into recipient + subject + body
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# default-features = false works; idna transitively brought in
+url = "2.5"
+serde_json = "1"
