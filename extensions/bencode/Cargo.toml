@@ -1,0 +1,47 @@
+[package]
+name = "bencode-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Bencode (BEP 0003) encode/decode scalars. Bencode is
+the wire format used by BitTorrent for .torrent files
+and DHT traffic.
+
+    bencode_encode(json)   BLOB  JSON value  bencode bytes
+    bencode_decode(blob)   TEXT  bencode bytes  JSON value
+    bencode_validate(blob) INT   1 if parses
+
+Bencode types map to JSON like this:
+    integer  number     (i42e  42)
+    bytes    string     (5:hello  "hello")
+    list     array      (li1ei2ee  [1,2])
+    dict     object     (d3:fooi1ee  {"foo":1})
+
+Binary strings that don't decode as UTF-8 are returned
+as base64-encoded JSON strings with the prefix
+"!base64:" so caller can distinguish them from real
+text. Round-tripping pure-ASCII payloads is exact;
+mixed binary payloads need re-decoding on the consumer
+side.
+
+Use cases:
+  * Read .torrent files via fileio + bencode_decode
+  * Compute info_hash from a torrent (extract info dict
+    + sha1)
+  * Diff two .torrent files semantically (decode both,
+    compare JSON)
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+bt_bencode = "0.8"
+serde_json = "1"
+base64 = "0.22"

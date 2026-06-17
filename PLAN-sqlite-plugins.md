@@ -305,6 +305,7 @@ fts5/rtree, just at a different layer.
 | graphql (validate/fields/ops)   |    +4  | extensions/graphql                 |
 | sentiment (VADER scoring)       |    +6  | extensions/sentiment               |
 | semver (parse/cmp/satisfies)    |   +10  | extensions/semver                  |
+| bencode (BEP 0003 encode/decode)|    +3  | extensions/bencode                 |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
