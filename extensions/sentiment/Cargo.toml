@@ -1,0 +1,46 @@
+[package]
+name = "sentiment-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Text sentiment scoring via VADER (Valence Aware
+Dictionary and sEntiment Reasoner), a rule-based
+lexical analyzer especially calibrated for social-
+media-style short text.
+
+    sentiment_score(text)      REAL  compound polarity (-1..1)
+    sentiment_label(text)      TEXT  "positive"/"neutral"/"negative"
+    sentiment_breakdown(text)  TEXT  JSON {pos, neu, neg, compound}
+    sentiment_positive(text)   REAL  0..1 share that's positive
+    sentiment_negative(text)   REAL  0..1 share that's negative
+    sentiment_neutral(text)    REAL  0..1 share that's neutral
+
+VADER's compound score thresholds (per the original
+paper):
+    >=  0.05  positive
+    <= -0.05  negative
+    else      neutral
+
+Use cases:
+  * Tag user-submitted reviews / comments at write time
+  * Compute aggregate sentiment per topic/period
+  * Filter content for moderation queues
+  * A/B test how a copy change shifts polarity
+
+Lexicon-only  no model file, no GPU, deterministic
+across runs. Good baseline; transformer-based scoring
+(via the `onnx` extension) is the upgrade path.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+vader_sentiment = "0.1"
+serde_json = "1"

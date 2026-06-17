@@ -303,6 +303,7 @@ fts5/rtree, just at a different layer.
 | idna (xn-- punycode round-trip) |    +3  | extensions/idna                    |
 | lorem (test text generation)    |    +5  | extensions/lorem                   |
 | graphql (validate/fields/ops)   |    +4  | extensions/graphql                 |
+| sentiment (VADER scoring)       |    +6  | extensions/sentiment               |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
