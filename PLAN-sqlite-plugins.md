@@ -312,6 +312,7 @@ fts5/rtree, just at a different layer.
 | case (snake/kebab/camel/etc)    |    +8  | extensions/case (heck)             |
 | cron (validate/next/upcoming)   |    +3  | extensions/cron                    |
 | roman (encode/decode/validate)  |    +3  | extensions/roman                   |
+| morse (encode/decode)           |    +2  | extensions/morse                   |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |

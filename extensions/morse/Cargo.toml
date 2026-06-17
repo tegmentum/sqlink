@@ -1,0 +1,35 @@
+[package]
+name = "morse-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+International Morse code encode/decode scalars.
+Hand-rolled (no crate dep, ~150 LOC table).
+
+    morse_encode(text)   TEXT  ASCII  ". --- ..."
+    morse_decode(morse)  TEXT  ". --- ..."  ASCII
+
+Encoding:
+    Letters use the standard ITU-R M.1677-1 table
+    Words separated by " / " (slash with spaces)
+    Symbols separated by " " (single space)
+    Unknown chars become "?" in the output
+
+Decoding accepts both standard "." / "-" and the
+fallback ASCII-art "*" / "_" for callers piping
+through systems that mangle dots.
+
+Useful for hobbyist signal-processing pipelines, CTF
+warmups, retro-themed UIs.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
