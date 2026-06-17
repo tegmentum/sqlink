@@ -1,0 +1,41 @@
+[package]
+name = "phone-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Phone number validation + canonicalization via the
+`phonenumber` crate (Rust port of Google's
+libphonenumber). Covers parsing, validation, and the
+four standard format styles.
+
+    phone_validate(num, region)   INTEGER  1 if valid
+    phone_e164(num, region)       TEXT     "+14155552671"
+    phone_international(num, r)   TEXT     "+1 415-555-2671"
+    phone_national(num, region)   TEXT     "(415) 555-2671"
+    phone_country(num, region)    INT      country calling code
+    phone_region(num, region)     TEXT     "US" / "GB" / ...
+
+`region` is an ISO 3166-1 alpha-2 country code used as
+the default when `num` doesn't already start with `+`.
+Pass `''` (empty) when `num` is already in E.164
+international format.
+
+Invalid input returns NULL rather than raising so SQL
+composition stays clean.
+
+Use cases: normalize user-submitted numbers before
+storage, group rows by country, validate before sending
+SMS via `http`, format consistently for display.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+phonenumber = { version = "0.3", default-features = false }

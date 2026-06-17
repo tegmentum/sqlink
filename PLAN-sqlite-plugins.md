@@ -298,6 +298,7 @@ fts5/rtree, just at a different layer.
 | sqlparse (validate/tables/etc)  |    +6  | extensions/sqlparse                |
 | template_render (Jinja2)        |    +1  | extensions/template (minijinja)    |
 | email (validate/local/domain)   |    +4  | extensions/email                   |
+| phone (libphonenumber)          |    +6  | extensions/phone                   |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
