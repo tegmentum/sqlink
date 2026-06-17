@@ -31,6 +31,14 @@ pub fn jsonpath_exists(doc: &str, expr: &str) -> Result<bool, String> {
     Ok(!path.query(&v).all().is_empty())
 }
 
+pub fn jsonpath_count(doc: &str, expr: &str) -> Result<usize, String> {
+    let v: serde_json::Value =
+        serde_json::from_str(doc).map_err(|e| alloc::format!("jsonpath_count: JSON: {e}"))?;
+    let path = serde_json_path::JsonPath::parse(expr)
+        .map_err(|e| alloc::format!("jsonpath_count: parse {expr:?}: {e}"))?;
+    Ok(path.query(&v).all().len())
+}
+
 pub fn html_extract(doc: &str, selector: &str) -> Result<String, String> {
     use scraper::{Html, Selector};
     let html = Html::parse_document(doc);
@@ -160,6 +168,7 @@ mod wasm_export {
     const FID_H_EXTRACT_ALL: u64 = 5;
     const FID_H_ATTR: u64 = 6;
     const FID_H_TEXT: u64 = 7;
+    const FID_JP_COUNT: u64 = 8;
 
     struct Ext;
 
@@ -179,6 +188,7 @@ mod wasm_export {
                     s(FID_JP, "jsonpath", 2),
                     s(FID_JP_FIRST, "jsonpath_first", 2),
                     s(FID_JP_EXISTS, "jsonpath_exists", 2),
+                    s(FID_JP_COUNT, "jsonpath_count", 2),
                     s(FID_H_EXTRACT, "html_extract", 2),
                     s(FID_H_EXTRACT_ALL, "html_extract_all", 2),
                     s(FID_H_ATTR, "html_attr", 3),
@@ -220,6 +230,11 @@ mod wasm_export {
                     let d = arg_text(&args, 0, "jsonpath_exists")?;
                     let e = arg_text(&args, 1, "jsonpath_exists")?;
                     super::jsonpath_exists(&d, &e).map(|b| SqlValue::Integer(b as i64))
+                }
+                FID_JP_COUNT => {
+                    let d = arg_text(&args, 0, "jsonpath_count")?;
+                    let e = arg_text(&args, 1, "jsonpath_count")?;
+                    super::jsonpath_count(&d, &e).map(|n| SqlValue::Integer(n as i64))
                 }
                 FID_H_EXTRACT => {
                     let d = arg_text(&args, 0, "html_extract")?;

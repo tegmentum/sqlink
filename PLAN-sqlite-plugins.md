@@ -292,7 +292,6 @@ fts5/rtree, just at a different layer.
 | onnx inference (5 scalars)      |    +5  | extensions/onnx (tract-onnx)       |
 | dns_resolve (capability-gated)  |    +1  | extensions/dns + host hickory      |
 | detect (slug/lang/mime)         |    +5  | extensions/detect                  |
-| jsonpath (RFC 9535)             |    +4  | extensions/jsonpath                |
 | baseN (base32 + base58)         |    +4  | extensions/baseN                   |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
