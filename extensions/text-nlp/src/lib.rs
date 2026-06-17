@@ -24,6 +24,50 @@ pub fn text_diff(a: &str, b: &str) -> String {
     out
 }
 
+pub fn text_diff_added(a: &str, b: &str) -> String {
+    use similar::{ChangeTag, TextDiff};
+    let diff = TextDiff::from_lines(a, b);
+    let added: alloc::vec::Vec<String> = diff
+        .iter_all_changes()
+        .filter(|c| c.tag() == ChangeTag::Insert)
+        .map(|c| c.value().trim_end_matches('\n').to_string())
+        .collect();
+    serde_json::to_string(&added).unwrap_or_else(|_| "[]".to_string())
+}
+
+pub fn text_diff_removed(a: &str, b: &str) -> String {
+    use similar::{ChangeTag, TextDiff};
+    let diff = TextDiff::from_lines(a, b);
+    let removed: alloc::vec::Vec<String> = diff
+        .iter_all_changes()
+        .filter(|c| c.tag() == ChangeTag::Delete)
+        .map(|c| c.value().trim_end_matches('\n').to_string())
+        .collect();
+    serde_json::to_string(&removed).unwrap_or_else(|_| "[]".to_string())
+}
+
+pub fn text_diff_summary(a: &str, b: &str) -> String {
+    use similar::{ChangeTag, TextDiff};
+    let diff = TextDiff::from_lines(a, b);
+    let (mut added, mut removed) = (0u64, 0u64);
+    for c in diff.iter_all_changes() {
+        match c.tag() {
+            ChangeTag::Insert => added += 1,
+            ChangeTag::Delete => removed += 1,
+            _ => {}
+        }
+    }
+    alloc::format!(r#"{{"added":{added},"removed":{removed}}}"#)
+}
+
+/// Ratcliff/Obershelp similarity at the character level. 1.0 = identical,
+/// 0.0 = nothing in common. Char-level (not line-level) so single-line
+/// inputs that differ by a few characters still score high.
+pub fn text_similarity(a: &str, b: &str) -> f64 {
+    use similar::TextDiff;
+    TextDiff::from_chars(a, b).ratio() as f64
+}
+
 pub fn markdown_to_html(md: &str) -> String {
     use pulldown_cmark::{html, Parser};
     let parser = Parser::new(md);
@@ -370,6 +414,10 @@ mod wasm_export {
     const FID_STEM: u64 = 3;
     const FID_SOUNDEX: u64 = 4;
     const FID_METAPHONE: u64 = 5;
+    const FID_DIFF_ADDED: u64 = 6;
+    const FID_DIFF_REMOVED: u64 = 7;
+    const FID_DIFF_SUMMARY: u64 = 8;
+    const FID_SIMILARITY: u64 = 9;
 
     struct Ext;
 
@@ -391,6 +439,10 @@ mod wasm_export {
                     s(FID_STEM, "stem_porter", 1),
                     s(FID_SOUNDEX, "soundex", 1),
                     s(FID_METAPHONE, "metaphone", 1),
+                    s(FID_DIFF_ADDED, "text_diff_added", 2),
+                    s(FID_DIFF_REMOVED, "text_diff_removed", 2),
+                    s(FID_DIFF_SUMMARY, "text_diff_summary", 2),
+                    s(FID_SIMILARITY, "text_similarity", 2),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -433,6 +485,26 @@ mod wasm_export {
                 FID_METAPHONE => {
                     let w = arg_text(&args, 0, "metaphone")?;
                     Ok(SqlValue::Text(super::metaphone(&w)))
+                }
+                FID_DIFF_ADDED => {
+                    let a = arg_text(&args, 0, "text_diff_added")?;
+                    let b = arg_text(&args, 1, "text_diff_added")?;
+                    Ok(SqlValue::Text(super::text_diff_added(&a, &b)))
+                }
+                FID_DIFF_REMOVED => {
+                    let a = arg_text(&args, 0, "text_diff_removed")?;
+                    let b = arg_text(&args, 1, "text_diff_removed")?;
+                    Ok(SqlValue::Text(super::text_diff_removed(&a, &b)))
+                }
+                FID_DIFF_SUMMARY => {
+                    let a = arg_text(&args, 0, "text_diff_summary")?;
+                    let b = arg_text(&args, 1, "text_diff_summary")?;
+                    Ok(SqlValue::Text(super::text_diff_summary(&a, &b)))
+                }
+                FID_SIMILARITY => {
+                    let a = arg_text(&args, 0, "text_similarity")?;
+                    let b = arg_text(&args, 1, "text_similarity")?;
+                    Ok(SqlValue::Real(super::text_similarity(&a, &b)))
                 }
                 other => Err(format!("text-nlp: unknown func id {other}")),
             }

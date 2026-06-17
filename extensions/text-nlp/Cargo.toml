@@ -8,6 +8,10 @@ Deeper text / NLP helpers. Complements text-utils
 
 Functions:
   text_diff(a, b)          TEXT  unified-style diff
+  text_diff_added(a, b)    TEXT  JSON array of added lines
+  text_diff_removed(a, b)  TEXT  JSON array of removed lines
+  text_diff_summary(a, b)  TEXT  JSON {added:N, removed:N}
+  text_similarity(a, b)    REAL  Ratcliff/Obershelp ratio
   markdown_to_html(md)     TEXT  CommonMark
   stem_porter(word)        TEXT  Porter stemmer (English)
   soundex(word)            TEXT  4-char phonetic key
@@ -27,3 +31,4 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 similar = { version = "2", default-features = false, features = ["text"] }
 pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
 rust-stemmers = "1"
+serde_json = "1"

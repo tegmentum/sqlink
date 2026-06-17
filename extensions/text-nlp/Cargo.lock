@@ -322,6 +322,7 @@ version = "0.1.0"
 dependencies = [
  "pulldown-cmark",
  "rust-stemmers",
+ "serde_json",
  "similar",
  "wit-bindgen",
  "wit-bindgen-rt",
