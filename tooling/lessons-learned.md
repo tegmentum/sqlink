@@ -577,6 +577,47 @@ matches { return Some(cc) } }`. A 5-line helper isn't
 worth a snippet alone but would compound if 3+
 extensions copy it.
 
+---
+
+### 2026-06-17  escape (URL / HTML / SQL / shell)
+
+**What I built:** 6-scalar text-escaping extension. Hand-rolled,
+~150 LOC. url_encode / url_decode (RFC 3986 percent-encoding +
+form-urlencoded `+`), html_escape / html_unescape (5 named +
+numeric &#NN; / &#xHH; entities), sql_quote (SQLite-style
+double-quote escaping), shell_quote (POSIX single-quote safe).
+
+**What worked:**
+- Each scalar is independent and small (~20-30 LOC each); the
+file is mostly readable as 6 separate algorithms.
+- HTML unescape's numeric-entity path (`&#65;`  'A', `&#x43;`
+ 'C') was a fun bit  uses `char::from_u32` to convert.
+- shell_quote uses the canonical `'...'` wrap with `'\''`
+substitution for embedded apostrophes  the only POSIX-safe
+quoting for arbitrary text.
+
+**What surprised me:**
+- HTML unescape needs to handle 5 named entities (amp, lt, gt,
+quot, apos/&#39;) PLUS numeric entities PLUS pass-through
+for unknown sequences. The full set is much bigger (~250
+named entities like &copy; &deg; etc.) but the 5 + numeric
+covers ~95% of real-world content. Documented the
+limitation in the source.
+- `core::fmt::write(&mut out, format_args!("%{:02X}", b))` is
+the no-std way to do hex formatting into a String. Cleaner
+than `out.push_str(&format!(...))` (no temp allocation) but
+syntax is heavier.
+
+**Tooling opportunity:**
+- (T-14 new) The HTML entity table (the named entities I
+chose plus the long tail) could be its own snippet  the
+tradeoff is "include the long table (~250 entries, ~5KB
+source) for completeness" vs "ship the common-5 and tell
+callers to chain through markdown for full rendering."
+Defer until a caller asks for the long tail.
+
+
+
 
 
 

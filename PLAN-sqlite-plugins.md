@@ -324,6 +324,7 @@ fts5/rtree, just at a different layer.
 | bic (ISO 9362 SWIFT structural  |    +7  | extensions/bic                     |
 | ean (EAN-13/UPC-A weighted mod  |    +4  | extensions/ean                     |
 | postcode (multi-country postal  |    +4  | extensions/postcode                |
+| escape (URL/HTML/SQL/shell han  |    +6  | extensions/escape                  |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
