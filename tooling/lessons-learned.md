@@ -530,6 +530,55 @@ Wouldn't enforce  just surfaces "this extension's pasted
 copy is now stale." Low effort, high value if a snippet ever
 gets a bugfix.
 
+---
+
+### 2026-06-17  postcode (multi-country postal code)
+
+**What I built:** 4-scalar postal-code validator covering 9
+countries (US, UK/GB, CA, DE, FR, JP, NL, AU, BR) via per-country
+anchored regexes. Validate / detect_country / validate_country /
+normalize.
+
+**What worked:**
+- The `regex` crate was already in the compat-registry as
+clean (used by `regexp` extension). Scaffold consumed it
+cleanly.
+- `std::sync::OnceLock` for the per-country compiled regex is
+cheaper than lazy_static! and avoids the macro dep. One
+declaration per country, ~12 LOC.
+- The "try all countries in order, return first match" pattern
+in `detect()` works because UK / CA / JP / NL / BR all have
+distinctive prefixes/structure that don't overlap with the
+digit-only ones (US, DE, FR, AU). Documented the ordering
+constraint in a comment.
+
+**What surprised me:**
+- The Canadian postal code regex is hairier than expected.
+Real CA codes use specific subsets of letters in each slot
+(D, F, I, O, Q, U are excluded; W and Z are restricted in
+the first position). The pattern landed at
+`[A-CEGHJ-NPRSTVXY][0-9][A-CEGHJ-NPRSTV-Z] ?[0-9][A-CEGHJ-NPRSTV-Z][0-9]`
+ dense but mechanical.
+- UK GIR 0AA (the Girobank exception) is a real historical
+quirk that real-world validators still need to accept.
+Added it as an alternation.
+- Order in `detect()` matters: US's `\d{5}` would accept
+"12345" and shadow Australia's `[0-9]{4}` if we tried US
+first. Listed digit-only countries LAST.
+
+**Tooling opportunity:**
+- (T-13 new) The "try all countries in order" pattern for
+detect_*-style scalars could be a helper-snippet. Right
+now my `detect()` has the ordering hardcoded in the
+extension. If we ship more detect-classifier extensions
+(MAC vendor lookup by OUI, phone region by prefix, etc.),
+the same shape repeats: `for cc in candidates { if
+matches { return Some(cc) } }`. A 5-line helper isn't
+worth a snippet alone but would compound if 3+
+extensions copy it.
+
+
+
 
 
 
