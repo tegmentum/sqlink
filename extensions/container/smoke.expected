@@ -1,0 +1,10 @@
+# Outputs for extensions/container/smoke.sql.
+# CSQU3054383 = canonical Wikipedia / BIC example: owner=CSQ,
+# category=U (freight), serial=305438, check=3.
+1
+0
+0
+3
+CSQ
+U
+305438

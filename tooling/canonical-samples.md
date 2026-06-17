@@ -24,6 +24,7 @@ Each entry lists:
 | ISIN (BMW) | `DE0005190003` | BMW AG common stock |
 | CUSIP (Apple) | `037833100` | issuer=037833, issue=10, check=0; pairs with US0378331005 |
 | CUSIP (Tesla) | `88160R101` | pairs with US88160R1014 |
+| ISO 6346 container | `CSQU3054383` | Wikipedia / BIC canonical example  owner=CSQ, cat=U, serial=305438, check=3 |
 | ABA / RTN | `021000021` | JPMorgan Chase Bank, NY  district 2 |
 | ABA / RTN (Dallas) | `111000038` | district 11 |
 | ABA / RTN (San Francisco) | `322271627` | district 32-20=12 (thrift fold) |
