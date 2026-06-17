@@ -1,0 +1,34 @@
+[package]
+name = "hexdump-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Hex-dump formatting for binary BLOBs. Renders bytes in
+the classic `hexdump -C` style with offset, hex pairs,
+and ASCII gutter.
+
+    hexdump(blob)             TEXT  classic 16-col hex dump
+    hexdump_width(blob, w)    TEXT  hex dump with `w` bytes per row
+    hexdump_compact(blob)     TEXT  hex only, no offsets / gutter
+
+Output shape:
+
+    00000000  48 65 6c 6c 6f 2c 20 57  6f 72 6c 64 21 0a        |Hello, World!.  |
+
+Useful for storing or displaying byte-level data in
+SQL output, debugging stored BLOBs, building hex-view
+UIs over query results.
+
+Hand-rolled (no crate dep)  formatter is ~40 LOC.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
