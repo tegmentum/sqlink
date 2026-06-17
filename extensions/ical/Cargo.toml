@@ -1,0 +1,48 @@
+[package]
+name = "ical-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+iCalendar (RFC 5545) parsing scalars via the
+`icalendar` crate. Lets SQL queries inspect .ics
+content without needing a calendar-aware client.
+
+    ical_validate(text)      INTEGER  1 if parses
+    ical_event_count(text)   INTEGER  # of VEVENT components
+    ical_todo_count(text)    INTEGER  # of VTODO components
+    ical_events(text)        TEXT     JSON [{summary, start, end,
+                                              description, uid}]
+    ical_summaries(text)     TEXT     JSON array of event summaries
+
+Event date fields are emitted in their stored form (no
+timezone normalization)  iCalendar VEVENT.DTSTART can be
+a DATE, DATE-TIME, or VALUE=DATE-TIME with explicit
+TZID; the v1 surface preserves whatever the source had.
+
+Use cases:
+  * Parse user-uploaded .ics files into row data
+  * Diff two calendar exports (decode both, compare
+    summaries / start times)
+  * Filter rows by event keyword:
+        SELECT id FROM uploads
+        WHERE ical_summaries(content) LIKE '%standup%';
+  * Validate webcal subscription content before
+    pulling it into the schedule table
+
+Limited to events + todos in v1; FREEBUSY / JOURNAL /
+TIMEZONE blocks are parsed (validate succeeds) but
+not surfaced as scalars.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+icalendar = { version = "0.17", default-features = false, features = ["parser"] }
+serde_json = "1"

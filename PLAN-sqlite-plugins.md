@@ -307,6 +307,7 @@ fts5/rtree, just at a different layer.
 | semver (parse/cmp/satisfies)    |   +10  | extensions/semver                  |
 | bencode (BEP 0003 encode/decode)|    +3  | extensions/bencode                 |
 | csscolor (CSS3 color parsing)   |    +9  | extensions/csscolor                |
+| ical (RFC 5545 calendar parse)  |    +5  | extensions/ical                    |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
