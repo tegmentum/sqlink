@@ -1,0 +1,39 @@
+[package]
+name = "baseN-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Compact base-N codecs not covered by SQLite's built-in
+`hex()` / json1's base64 helpers:
+
+    base32_encode(blob)        TEXT   RFC 4648 standard, no pad
+    base32_decode(text)        BLOB
+    base58_encode(blob)        TEXT   Bitcoin alphabet
+    base58_decode(text)        BLOB
+
+Useful for Bitcoin / Solana / IPFS CID storage (base58)
+and TOTP secret sharing (base32). Encode is determin-
+istic; decode errors return NULL rather than raising so
+SQL composition (e.g. `COALESCE(base58_decode(x),
+default_blob)`) stays clean.
+
+base62 was considered but dropped from v1: the
+upstream crate treats base62 as an integer encoding
+(u128 in, string out) rather than a bytes-bytes codec,
+which doesn't fit the BLOB-in / TEXT-out shape the
+other two have. Revisit if a caller asks for it
+(easiest path: accept an INTEGER + return TEXT).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+base32 = { version = "0.5", default-features = false }
+bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
