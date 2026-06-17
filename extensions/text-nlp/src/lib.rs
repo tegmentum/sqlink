@@ -76,6 +76,13 @@ pub fn markdown_to_html(md: &str) -> String {
     html_out
 }
 
+/// HTML to Markdown via htmd (a turndown.js-inspired converter).
+/// Returns the input unchanged if conversion fails  the v1
+/// fail-clean shape.
+pub fn html_to_markdown(html: &str) -> String {
+    htmd::convert(html).unwrap_or_else(|_| html.to_string())
+}
+
 /// Plain-text view of a markdown document: strips all syntax,
 /// joins block text with newlines. Useful as the input to
 /// downstream NLP (whatlang detection, embedding, etc.) when
@@ -539,6 +546,7 @@ mod wasm_export {
     const FID_MD_TEXT: u64 = 10;
     const FID_MD_LINKS: u64 = 11;
     const FID_MD_HEADINGS: u64 = 12;
+    const FID_HTML_TO_MD: u64 = 13;
 
     struct Ext;
 
@@ -567,6 +575,7 @@ mod wasm_export {
                     s(FID_MD_TEXT, "markdown_to_text", 1),
                     s(FID_MD_LINKS, "markdown_extract_links", 1),
                     s(FID_MD_HEADINGS, "markdown_extract_headings", 1),
+                    s(FID_HTML_TO_MD, "html_to_markdown", 1),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -641,6 +650,10 @@ mod wasm_export {
                 FID_MD_HEADINGS => {
                     let m = arg_text(&args, 0, "markdown_extract_headings")?;
                     Ok(SqlValue::Text(super::markdown_extract_headings(&m)))
+                }
+                FID_HTML_TO_MD => {
+                    let h = arg_text(&args, 0, "html_to_markdown")?;
+                    Ok(SqlValue::Text(super::html_to_markdown(&h)))
                 }
                 other => Err(format!("text-nlp: unknown func id {other}")),
             }
