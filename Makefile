@@ -854,4 +854,7 @@ ext-list-broken:
 ext-smoke-all:
 	@python3 tooling/smoke.py --all
 
-.PHONY: ext ext-list-broken ext-smoke-all
+ext-check-snippets:
+	@python3 tooling/check-snippets.py
+
+.PHONY: ext ext-list-broken ext-smoke-all ext-check-snippets

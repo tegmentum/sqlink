@@ -857,6 +857,57 @@ stale.
   side (~10 LOC). Worth doing if the parser approach trips up
   another extension.
 
+---
+
+### 2026-06-17  T-12 investigation (snippet drift checker)
+
+**What I built:** `tooling/check-snippets.py` + `make
+ext-check-snippets` target. Walks every
+`extensions/*/src/lib.rs`, finds blocks delimited by
+
+    // --- snippet: <path> (<fn_name>) ---
+    ...
+    // --- end snippet ---
+
+extracts the named fn from the source file, normalizes (strip
+doc comments + attributes + per-line leading whitespace), and
+compares against the inlined copy. Reports drift with side-by-
+side line-level diff.
+
+**What worked:**
+- Convention from snippets/README.md is clear enough for
+`re.search` to find blocks reliably.
+- Normalization rules ("strip ///, //!, #[...], per-line
+leading whitespace") match what every consumer naturally
+does to a pasted-in snippet.
+- Tested BOTH drift directions:
+  - Tamper source (`sum % 10 == 0`  `sum %% 10 == 999`)
+   ean drift caught with line + expected/actual values.
+  - Tamper inlined (`Some(sum % 10 == 0)`  `Some(false)`)
+   same drift report.
+- Currently 1 inlined-snippet consumer (ean.weighted_mod10);
+the tool reports `OK ean  1 snippet(s) match source` on a
+clean run.
+
+**What surprised me:**
+- Brace-counting to find the matching `}` for a fn body is
+slightly fragile  comments containing `{` or `}` would
+throw it off. Not a problem TODAY (Rust comments aren't
+nested in our inlined snippets), but worth noting.
+- The whole-snippet mode (no fn name in parens) is
+implementable and left in the code, but I haven't used it
+yet. Defer fixing edge cases until a real consumer hits
+them.
+
+**Tooling opportunity:**
+- (T-12 closed) Inline.
+- (T-20 new) The brace-counting parser would benefit from
+ignoring `{` / `}` inside `"..."` strings + `//` comments
++ `/* ... */` blocks. ~10 LOC of state-machine code if
+ever needed. Defer until a real snippet trips it.
+
+
+
 
 
 
