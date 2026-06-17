@@ -235,4 +235,49 @@ transliteration map.
   swapped). Currently smoke.py only catches "did anything
   panic" failures; this would catch behavior drift.
 
+---
+
+### 2026-06-17  creditcard
+
+**What I built:** 6-scalar credit card BIN-range type detection
++ Luhn-validate + mask + last4 + BIN + normalize. Hand-rolled.
+Covers visa / mastercard / amex / discover / jcb / diners /
+unionpay / maestro.
+
+**What worked:**
+- Reused the canonical ISO 8583 test cards (4111111111111111,
+  378282246310005, etc.) from memory  these are well-known
+  enough that I didn't have to look up "what's a Luhn-passing
+  Visa." That's exactly the T-6 canonical-samples doc I
+  flagged in the vin entry. Worth shipping.
+- The hand-roll pattern was again fast: BIN ranges +
+  digit-count tests fit in one big `brand()` fn. ~100 LOC
+  total for the parser including the Luhn helper.
+- The new manifest closure pattern (`s(..., det)`) reads
+  cleaner than the old implicit-deterministic shape. The
+  6 scalars line up nicely.
+
+**What surprised me:**
+- I almost duplicated `parsers.luhn_check` — the parsers
+  extension already has Luhn. Inlining a one-fn copy here is
+  fine (no cross-extension dispatch), but worth noting: the
+  Luhn helper is now in TWO places. If a bug were found in one,
+  the other might lag.
+- BIN-range tables are surprisingly hairy. Mastercard alone
+  has two disjoint ranges (51-55 AND 2221-2720); Discover has
+  3 (6011, 65, 644-649); JCB is 3528-3589. Easy to typo or
+  swap. The `smoke.expected` (T-7) testing pattern would
+  catch a swap immediately.
+
+**Tooling opportunity:**
+- (T-6 reinforced) The canonical-samples doc is now wanted by
+  both vin and creditcard. Worth ~30 min to write up.
+- (T-8) `tooling/shared-helpers.rs` or similar  a way to
+  share small algorithms (Luhn, hex decode, etc.) across
+  extensions WITHOUT pulling each into a separate crate. Could
+  be a `tooling/snippets/` directory with files the scaffold
+  optionally appends. Or a single `extensions-common` crate
+  the workspace pulls in. The latter is cleaner long-term but
+  adds workspace complexity; the former is faster.
+
 
