@@ -115,6 +115,69 @@ pub fn weekday_name(ts: &str) -> Result<String, String> {
     Ok(name.to_string())
 }
 
+/// Format a duration in seconds as a compact human string
+/// ("3d 4h 12m", "5s", "-1h 2m"). Negative durations are
+/// prefixed with `-`.
+pub fn duration_humanize(seconds: i64) -> String {
+    if seconds == 0 {
+        return "0s".to_string();
+    }
+    let sign = if seconds < 0 { "-" } else { "" };
+    let mut n = seconds.unsigned_abs();
+    let days = n / 86_400;
+    n %= 86_400;
+    let hours = n / 3_600;
+    n %= 3_600;
+    let minutes = n / 60;
+    let secs = n % 60;
+    let mut out = String::new();
+    out.push_str(sign);
+    if days > 0 {
+        out.push_str(&alloc::format!("{days}d "));
+    }
+    if hours > 0 {
+        out.push_str(&alloc::format!("{hours}h "));
+    }
+    if minutes > 0 {
+        out.push_str(&alloc::format!("{minutes}m "));
+    }
+    if secs > 0 || out.trim_end().is_empty() || out.trim_end() == sign {
+        out.push_str(&alloc::format!("{secs}s"));
+    }
+    out.trim_end().to_string()
+}
+
+/// Format a unix timestamp relative to `now_ts` in human-friendly
+/// form ("5 minutes ago" / "in 2 hours" / "now").
+pub fn time_humanize(ts: i64, now_ts: i64) -> String {
+    let delta = now_ts - ts;
+    if delta == 0 {
+        return "now".to_string();
+    }
+    let abs = delta.unsigned_abs();
+    let (n, unit) = if abs < 60 {
+        (abs as i64, "second")
+    } else if abs < 3_600 {
+        ((abs / 60) as i64, "minute")
+    } else if abs < 86_400 {
+        ((abs / 3_600) as i64, "hour")
+    } else if abs < 604_800 {
+        ((abs / 86_400) as i64, "day")
+    } else if abs < 2_629_746 {
+        ((abs / 604_800) as i64, "week")
+    } else if abs < 31_556_952 {
+        ((abs / 2_629_746) as i64, "month")
+    } else {
+        ((abs / 31_556_952) as i64, "year")
+    };
+    let plural = if n == 1 { "" } else { "s" };
+    if delta > 0 {
+        alloc::format!("{n} {unit}{plural} ago")
+    } else {
+        alloc::format!("in {n} {unit}{plural}")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -209,6 +272,8 @@ mod wasm_export {
     const FID_FISCAL_QUARTER: u64 = 6;
     const FID_BUSINESS_DAYS: u64 = 7;
     const FID_WEEKDAY_NAME: u64 = 8;
+    const FID_DURATION_HUMANIZE: u64 = 9;
+    const FID_TIME_HUMANIZE: u64 = 10;
 
     struct Ext;
 
@@ -233,6 +298,8 @@ mod wasm_export {
                     s(FID_FISCAL_QUARTER, "fiscal_quarter", 2),
                     s(FID_BUSINESS_DAYS, "business_days_between", 2),
                     s(FID_WEEKDAY_NAME, "weekday_name", 1),
+                    s(FID_DURATION_HUMANIZE, "duration_humanize", 1),
+                    s(FID_TIME_HUMANIZE, "time_humanize", 2),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -298,6 +365,15 @@ mod wasm_export {
                 FID_WEEKDAY_NAME => {
                     let t = arg_text(&args, 0, "weekday_name")?;
                     super::weekday_name(&t).map(SqlValue::Text)
+                }
+                FID_DURATION_HUMANIZE => {
+                    let s = arg_int(&args, 0, "duration_humanize")?;
+                    Ok(SqlValue::Text(super::duration_humanize(s)))
+                }
+                FID_TIME_HUMANIZE => {
+                    let ts = arg_int(&args, 0, "time_humanize")?;
+                    let now = arg_int(&args, 1, "time_humanize")?;
+                    Ok(SqlValue::Text(super::time_humanize(ts, now)))
                 }
                 other => Err(format!("time: unknown func id {other}")),
             }
