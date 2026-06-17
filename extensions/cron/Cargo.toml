@@ -1,0 +1,52 @@
+[package]
+name = "cron-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Cron expression parsing + next-fire-time calculation
+via the `cron` crate.
+
+    cron_validate(expr)               INTEGER  1 if parses
+    cron_next(expr, after_ts)         INTEGER  next fire time
+                                                  (unix seconds)
+                                                  STRICTLY after `after_ts`
+    cron_upcoming(expr, after_ts, n)  TEXT     JSON array of next n
+                                                  fire times
+
+`expr` accepts both 5-field standard cron
+(`* * * * *`  every minute) and 7-field cron-with-
+seconds-and-year (`* * * * * * *`). `after_ts` is
+seconds since unix epoch; results are also in UTC
+seconds.
+
+Smoke (end-to-end via cli):
+    SELECT cron_validate('0 0 * * *');           1
+    SELECT cron_validate('not a cron');          0
+    SELECT cron_next('0 0 * * *',
+                     strftime('%s', '2026-06-15 12:00:00'));
+        the next midnight UTC
+
+Use cases:
+  * Validate user-submitted cron strings before
+    storing them in a schedules table
+  * Schedule-driven queries:
+        SELECT cron_next(c.expr, strftime('%s','now'))
+        FROM crons c WHERE c.enabled = 1
+        ORDER BY 1 LIMIT 10;
+  * Build a calendar view of upcoming runs over a
+    horizon
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+cron = { version = "0.16", default-features = false }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+serde_json = "1"
