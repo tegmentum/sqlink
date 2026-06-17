@@ -815,13 +815,22 @@ ext:
 	$(if $(BOOTSTRAP),RUSTC_BOOTSTRAP=1) cargo build --release \
 		--manifest-path extensions/$(NAME)/Cargo.toml \
 		--target wasm32-wasip2
-	@WASM_BASE=$$(ls extensions/$(NAME)/target/wasm32-wasip2/release/*.wasm 2>/dev/null \
-		| grep -v '\.component\.wasm$$' | head -1); \
+	@# Scaffolded extensions declare `[workspace]` and land artifacts
+	@# under extensions/<name>/target/. Older extensions are workspace
+	@# members and land under top-level target/. Check both.
+	@NAME_UNDERSCORE=$$(echo "$(NAME)" | tr - _); \
+	WASM_BASE=""; \
+	for D in extensions/$(NAME)/target/wasm32-wasip2/release target/wasm32-wasip2/release; do \
+		CAND=$$D/$${NAME_UNDERSCORE}_extension.wasm; \
+		if [ -f "$$CAND" ]; then WASM_BASE=$$CAND; break; fi; \
+	done; \
 	test -n "$$WASM_BASE" || (echo "no built wasm artifact found"; exit 1); \
-	COMPONENT_OUT=$${WASM_BASE%.wasm}.component.wasm; \
+	mkdir -p extensions/$(NAME)/target/wasm32-wasip2/release; \
+	COMPONENT_OUT=extensions/$(NAME)/target/wasm32-wasip2/release/$${NAME_UNDERSCORE}_extension.component.wasm; \
 	wasm-tools component new "$$WASM_BASE" \
 		--adapt wasi_snapshot_preview1=$(WASI_ADAPTER) \
-		-o "$$COMPONENT_OUT"
+		-o "$$COMPONENT_OUT"; \
+	echo "wrote $$COMPONENT_OUT"
 	@python3 provenance/scan.py 2>&1 | tail -3
 	@python3 tooling/smoke.py $(NAME) || true
 

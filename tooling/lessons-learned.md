@@ -616,6 +616,45 @@ source) for completeness" vs "ship the common-5 and tell
 callers to chain through markdown for full rendering."
 Defer until a caller asks for the long tail.
 
+---
+
+### 2026-06-17  uuid (parse + version + timestamp augmentation)
+
+**What I built:** Augmented the existing 3-scalar uuid extension
+with 5 more parse/inspect scalars: validate, version, nil,
+timestamp_ms, variant. uuid is now 8 scalars.
+
+**What worked:**
+- Augmentation pattern is by now well-established (see text-nlp,
+ids, web-parsers). Just add FIDs + match arms + manifest
+entries. No new deps.
+- The `uuid` crate exposes parse_str() + get_version_num() +
+get_timestamp() + get_variant() cleanly  exact API I needed.
+- T-2's flags closure became important here: nil() and the
+inspect functions are DETERMINISTIC; the generators are
+nondet. Pre-bound `det` + `nd` made the manifest a single
+visual scan.
+
+**What surprised me:**
+- The Makefile `ext` target broke on uuid because uuid is a
+top-level workspace member (built into target/wasm32-wasip2/
+release/), whereas scaffolded extensions declare `[workspace]`
+in their Cargo.toml and land artifacts under extensions/<name>/
+target/. Pure mechanical mismatch  not a code bug, just a
+build-output-location bug.
+- The fix is "look in both places, but always WRITE the
+.component.wasm at the per-extension path" so smoke.sql's
+`.load extensions/<name>/target/...` line stays stable for
+both extension classes.
+
+**Tooling opportunity:**
+- (T-15 closed inline) Makefile `ext` target now handles both
+workspace-member and scaffolded extensions. Fixed in this
+commit. Side-effect benefit: smoke.sql `.load` paths are now
+guaranteed-uniform across extension classes.
+
+
+
 
 
 

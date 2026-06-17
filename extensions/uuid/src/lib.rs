@@ -1,9 +1,10 @@
-//! UUID v4 / v7 scalar functions.
+//! UUID generation + parse/extract scalar functions.
 
 extern crate alloc;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_export {
+    use alloc::format;
     use alloc::string::{String, ToString};
     use alloc::vec::Vec;
 
@@ -26,26 +27,43 @@ mod wasm_export {
     const FID_UUID: u64 = 1;
     const FID_UUIDV4: u64 = 2;
     const FID_UUIDV7: u64 = 3;
+    const FID_VALIDATE: u64 = 4;
+    const FID_VERSION: u64 = 5;
+    const FID_NIL: u64 = 6;
+    const FID_TIMESTAMP_MS: u64 = 7;
+    const FID_VARIANT: u64 = 8;
 
     struct UuidExtension;
 
+    fn arg_text(args: &[SqlValue], i: usize, fname: &str) -> Result<String, String> {
+        match args.get(i) {
+            Some(SqlValue::Text(s)) => Ok(s.clone()),
+            _ => Err(format!("{fname}: TEXT arg at {i}")),
+        }
+    }
+
     impl MetadataGuest for UuidExtension {
         fn describe() -> Manifest {
-            // UUID generators are NON-deterministic (each call new).
-            let f = FunctionFlags::empty();
-            let s = |id, name: &str, num_args: i32| ScalarFunctionSpec {
+            let nd = FunctionFlags::empty();
+            let det = FunctionFlags::DETERMINISTIC;
+            let s = |id, name: &str, n: i32, flags: FunctionFlags| ScalarFunctionSpec {
                 id,
                 name: name.into(),
-                num_args,
-                func_flags: f,
+                num_args: n,
+                func_flags: flags,
             };
             Manifest {
                 name: "uuid".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
-                    s(FID_UUID, "uuid", 0),
-                    s(FID_UUIDV4, "uuidv4", 0),
-                    s(FID_UUIDV7, "uuidv7", 0),
+                    s(FID_UUID, "uuid", 0, nd),
+                    s(FID_UUIDV4, "uuidv4", 0, nd),
+                    s(FID_UUIDV7, "uuidv7", 0, nd),
+                    s(FID_VALIDATE, "uuid_validate", 1, det),
+                    s(FID_VERSION, "uuid_version", 1, det),
+                    s(FID_NIL, "uuid_nil", 0, det),
+                    s(FID_TIMESTAMP_MS, "uuid_timestamp_ms", 1, det),
+                    s(FID_VARIANT, "uuid_variant", 1, det),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -59,13 +77,51 @@ mod wasm_export {
     }
 
     impl ScalarFunctionGuest for UuidExtension {
-        fn call(func_id: u64, _args: Vec<SqlValue>) -> Result<SqlValue, String> {
-            let s = match func_id {
-                FID_UUID | FID_UUIDV4 => Uuid::new_v4().to_string(),
-                FID_UUIDV7 => Uuid::now_v7().to_string(),
-                other => return Err(alloc::format!("uuid: unknown func id {other}")),
-            };
-            Ok(SqlValue::Text(s))
+        fn call(func_id: u64, args: Vec<SqlValue>) -> Result<SqlValue, String> {
+            match func_id {
+                FID_UUID | FID_UUIDV4 => Ok(SqlValue::Text(Uuid::new_v4().to_string())),
+                FID_UUIDV7 => Ok(SqlValue::Text(Uuid::now_v7().to_string())),
+                FID_NIL => Ok(SqlValue::Text(Uuid::nil().to_string())),
+                FID_VALIDATE => {
+                    let t = arg_text(&args, 0, "uuid_validate")?;
+                    Ok(SqlValue::Integer(Uuid::parse_str(&t).is_ok() as i64))
+                }
+                FID_VERSION => {
+                    let t = arg_text(&args, 0, "uuid_version")?;
+                    Ok(Uuid::parse_str(&t)
+                        .ok()
+                        .map(|u| SqlValue::Integer(u.get_version_num() as i64))
+                        .unwrap_or(SqlValue::Null))
+                }
+                FID_TIMESTAMP_MS => {
+                    let t = arg_text(&args, 0, "uuid_timestamp_ms")?;
+                    Ok(Uuid::parse_str(&t)
+                        .ok()
+                        .and_then(|u| u.get_timestamp())
+                        .map(|ts| {
+                            let (secs, nanos) = ts.to_unix();
+                            SqlValue::Integer((secs as i64) * 1000 + (nanos as i64) / 1_000_000)
+                        })
+                        .unwrap_or(SqlValue::Null))
+                }
+                FID_VARIANT => {
+                    let t = arg_text(&args, 0, "uuid_variant")?;
+                    Ok(Uuid::parse_str(&t)
+                        .ok()
+                        .map(|u| {
+                            let name = match u.get_variant() {
+                                uuid::Variant::NCS => "ncs",
+                                uuid::Variant::RFC4122 => "rfc4122",
+                                uuid::Variant::Microsoft => "microsoft",
+                                uuid::Variant::Future => "future",
+                                _ => "unknown",
+                            };
+                            SqlValue::Text(name.to_string())
+                        })
+                        .unwrap_or(SqlValue::Null))
+                }
+                other => Err(format!("uuid: unknown func id {other}")),
+            }
         }
     }
 
