@@ -322,6 +322,7 @@ fts5/rtree, just at a different layer.
 | isin (ISO 6166 hand-rolled)     |    +4  | extensions/isin                    |
 | aba (US bank routing (FRB dist  |    +3  | extensions/aba                     |
 | bic (ISO 9362 SWIFT structural  |    +7  | extensions/bic                     |
+| ean (EAN-13/UPC-A weighted mod  |    +4  | extensions/ean                     |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |

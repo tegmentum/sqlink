@@ -487,6 +487,51 @@ empty after a known-good validator returns 1, flag it.
 Lightweight version of T-7's full expected-output
 assertion.
 
+---
+
+### 2026-06-17  ean (EAN-13 / UPC-A / EAN-8)
+
+**What I built:** 4-scalar barcode validator + decomposer +
+upca_to_ean13 cross-converter. Uses the `weighted_mod10`
+snippet from `tooling/snippets/luhn.rs`  first actual user
+of the snippets directory.
+
+    ean_validate(text)     INTEGER  1 if 8/12/13-digit + check ok
+    ean_check_digit(text)  INTEGER  computes the 13th digit from
+                                      a 12-digit prefix
+    ean_gs1_prefix(text)   INTEGER  first 3 digits (country/region)
+    upca_to_ean13(text)    TEXT     '0' + 12-digit UPC = 13-digit EAN
+
+**What worked:**
+- Inlining the snippet via copy-paste was as simple as the
+README promised  ~10 LOC for `weighted_mod10`, marked with
+"// --- snippet: tooling/snippets/luhn.rs ---" delimiters so
+future-me knows where to look for updates.
+- EAN-13/UPC-A/EAN-8 all use the same weighted-mod-10 shape
+with different weights tables  the snippet generalizes
+cleanly.
+- T-9 fix payoff is huge: smoke output is now CLEAN. 9 SELECTs,
+9 clear answers, zero ghost OOM lines.
+
+**What surprised me:**
+- EAN-13 weight table is `1,3,1,3,...` from position 0;
+UPC-A is `3,1,3,1,...` from position 0. Subtle but matters.
+Documented inline in the const arrays.
+- The check_digit formula is `(10 - (sum%10)) % 10`  the
+outer mod-10 catches the case where sum%10 = 0 (check
+digit = 0, not 10). Easy to drop the outer mod and get bug.
+
+**Tooling opportunity:**
+- (T-12 new) The snippet pasting pattern is working but the
+"// --- snippet: ... ---" delimiter is just a convention.
+A `tooling/check-snippets.py` could grep for those delimiters,
+diff the inlined copy against the source snippet, flag drift.
+Wouldn't enforce  just surfaces "this extension's pasted
+copy is now stale." Low effort, high value if a snippet ever
+gets a bugfix.
+
+
+
 
 
 
