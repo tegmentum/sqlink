@@ -14,7 +14,7 @@ SELECT phone_prefix_country('+44 20 7946 0958');
 SELECT phone_prefix_country('+81 3 1234 5678');
 SELECT phone_prefix_country('+86 10 1234 5678');
 SELECT phone_prefix_country('+1242 555 1234');
-SELECT coalesce(phone_prefix_country('+999'), '<unknown>');
+SELECT phone_prefix_country('+999');  /* unknown prefix  NULL */
 SELECT phone_prefix_region('+44 ...');
 SELECT phone_prefix_region('+55 ...');
 SELECT phone_prefix_prefix('+44 ...');

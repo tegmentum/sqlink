@@ -953,6 +953,54 @@ documenting WHEN-TO-extract. Anyone tempted to write a
 until predicates with the same shape ALSO share signatures
 (unlikely without crate-level coordination).
 
+---
+
+### 2026-06-17  T-19 investigation (NULL handling)
+
+**What I built:** Two-line change to tooling/smoke.py. The
+harness now prepends `.nullvalue <NULL>` to every smoke.sql
+before piping it to the cli, so NULL results render as a
+literal `<NULL>` line instead of a blank that parse_results
+drops. Test files just write `<NULL>` in smoke.expected.
+
+**What worked:**
+- The cli already exposes `.nullvalue <s>`  no Rust changes
+needed. I'd spent 20 minutes earlier this week tip-toeing
+around the missing NULL row by `coalesce()`-ing in SQL.
+That's exactly the kind of workaround that signals there's
+a real tooling gap underneath.
+- Audited every smoke.expected for `?`-wildcard NULL
+placeholders before changing the parser; found zero (the
+wildcard was documented but never used  callers ALSO worked
+around the gap by avoiding NULLs entirely). So the change has
+no back-compat risk.
+- phone-prefix smoke.sql goes from
+  `SELECT coalesce(f('+999'), '<unknown>');`
+to plain
+  `SELECT f('+999');`
+with `<NULL>` in smoke.expected. Reads like a spec again.
+
+**What surprised me:**
+- The 20-line comment in parse_results from a prior attempt
+("A more elaborate parser tried to recover NULLs as a `<NULL>`
+sentinel by splitting on `sqlite>`...") was right about the
+problem but wrong about the solution. The fix wasn't a
+smarter parser  it was an existing cli feature I hadn't
+noticed.
+- This is the second time `.nullvalue` came up. First was a
+half-remembered dot-command grep weeks ago. Worth a habit:
+when a tooling workaround feels gross, grep cli/src/dot.rs
+for the noun first.
+
+**Tooling opportunity:**
+- (T-21 new) The cli has ~50 dot-commands (.headers, .mode,
+.nullvalue, .timer, ...). I keep half-remembering which ones
+exist. A tooling/cli-cheatsheet.md listing each + one-line
+purpose + when it's useful in smoke tests would prevent
+future workaround-then-discover episodes. Cheap to write,
+hugely valuable as a habit anchor.
+- (T-19 closed)
+
 
 
 

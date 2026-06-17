@@ -50,18 +50,11 @@ def parse_results(raw: str) -> list[str]:
     """Convert cli stdout into the ordered list of SELECT results.
 
     Strategy is intentionally simple: strip leading prompts from each
-    line, skip blanks + the load banner, return what's left. NULL
-    outputs render as empty lines that this parser drops  callers
-    can use the `?` wildcard in smoke.expected to match them
-    positionally (see compare()).
-
-    A more elaborate parser tried to recover NULLs as a `<NULL>`
-    sentinel by splitting on `sqlite>` instead of by line, but the
-    cli's prompt-buffering behavior (two prompts back-to-back after
-    `.load` when a block comment is read next) makes it impossible
-    to distinguish "NULL result" from "buffering artifact" without
-    cli-side cooperation. Kept simple; use `?` in smoke.expected
-    for NULLs and tolerate the count drift.
+    line, skip blanks + the load banner, return what's left. The
+    harness injects `.nullvalue <NULL>` before piping smoke.sql to
+    the cli (see smoke_one()) so a NULL result renders as a literal
+    `<NULL>` line  not blank  and survives the blank-skip below.
+    Test files just write `<NULL>` in smoke.expected.
     """
     out: list[str] = []
     for line in raw.splitlines():
@@ -167,6 +160,10 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
         line for line in smoke.read_text().splitlines()
         if not line.lstrip().startswith("--")
     )
+    # T-19: render NULL results as a literal sentinel so parse_results
+    # doesn't silently drop them. Test files write `<NULL>` in
+    # smoke.expected for any column that should be NULL.
+    sql = ".nullvalue <NULL>\n" + sql
 
     try:
         result = subprocess.run(
@@ -234,6 +231,7 @@ def main() -> None:
         # already did this but it's not exposed. Run again cheaply.
         smoke = REPO_ROOT / "extensions" / args.show_parsed / "smoke.sql"
         sql = "\n".join(l for l in smoke.read_text().splitlines() if not l.lstrip().startswith("--"))
+        sql = ".nullvalue <NULL>\n" + sql  # T-19, see smoke_one()
         r = subprocess.run(
             [str(CLI_BIN), str(CLI_COMPONENT), "--db", ":memory:"],
             input=sql, capture_output=True, text=True, timeout=args.timeout,
