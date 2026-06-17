@@ -383,4 +383,61 @@ paste-and-own model + tradeoff vs. a shared crate.
 the right shape. Priority is escalating from "annoying" to
 "noisy." Bisect when it gets in the way of a real port.
 
+---
+
+### 2026-06-17  T-9 investigation (cli misleading OOM)
+
+**What I built:** root-cause + 1-line fix in core/src/db.rs +
+6-line fix in cli/src/lib.rs for the "Error: out of memory"
+spam in multi-statement smoke runs.
+
+**What I found:** the OOM message was misleading. Real cause:
+
+1. SQL like `SELECT 1; -- comment\n` reaches the cli.
+2. After the `;`, the cli's eval loop sees `tail = " -- comment\n"`
+   as the remainder.
+3. `prepare_with_tail(" -- comment\n")` calls
+   `sqlite3_prepare_v2`, which returns SQLITE_OK with
+   stmt=NULL (per SQLite docs: comment-only input produces no
+   stmt).
+4. The Rust wrapper happily constructs a `Statement{raw: NULL}`
+   and the eval loop calls `stmt.collect_rows()` on it.
+5. `collect_rows  step  sqlite3_step(NULL)` returns
+   SQLITE_MISUSE.
+6. Error path calls `sqlite3_db_handle(NULL)  sqlite3_errmsg(NULL)`.
+7. **Per SQLite documentation**: `sqlite3_errmsg(NULL)` returns
+   the static string "out of memory".
+
+So the OOM was actually "you called step() on a null stmt
+pointer" wearing a misleading mask.
+
+Repro shrinker: started from a 7-statement smoke that hit OOM
+3x. Bisected via heredoc-vs-pipe difference (turned out the
+trigger was inline `-- xxx` comments after `SELECT ...;`, NOT
+block comments). Confirmed by stripping inline comments 
+clean output.
+
+**The fix:**
+
+  - `core/src/db.rs`: add `Statement::is_empty() -> bool` that
+    returns true iff `self.raw.is_null()`. Annotated with the
+    full rationale.
+  - `cli/src/lib.rs::eval_sql_inner`: after `prepare_with_tail`,
+    check `stmt.is_empty()`. If true, skip to the tail without
+    stepping. Restores correct comment-only handling.
+
+After fix: smoke.py --all on all 11 extensions PASS, no OOM
+in any output.
+
+**Tooling opportunity:**
+- (T-9 closed) The cli bug is fixed in this commit. Removed
+the smoke.py defense from being misclassified  the OOM was
+never an extension issue.
+- (T-10 new) The smoke.py heuristic looks for the literal
+string "Error: out of memory" as a failure marker. Now that
+we know that string was a misleading SQLite-internal message,
+remove it from the failure list  the real failure signatures
+are "Error loading", "no such function", "panicked",
+"instantiate loaded ext".
+
 

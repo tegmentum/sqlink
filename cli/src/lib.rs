@@ -469,6 +469,18 @@ fn eval_sql_inner(sql: &str) -> String {
                     }
                 }
             };
+            // Comment-only or whitespace-only segments produce a
+            // NULL stmt with SQLITE_OK. Calling step() on that
+            // returns SQLITE_MISUSE; sqlite3_errmsg(NULL) returns
+            // the misleading static string "out of memory". Just
+            // advance past it without stepping.
+            if stmt.is_empty() {
+                if tail >= remaining.len() {
+                    break;
+                }
+                remaining = &remaining[tail..];
+                continue;
+            }
             // Bind named `.parameter set` values. cli stores names
             // without the sigil; FFI returns sigil-prefixed names.
             let nparams = stmt.parameter_count();

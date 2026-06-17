@@ -892,6 +892,16 @@ impl Statement<'_> {
     pub fn parameter_count(&self) -> i32 {
         unsafe { ffi::sqlite3_bind_parameter_count(self.raw) }
     }
+
+    /// True when this statement is a no-op  e.g. SQLite returned
+    /// SQLITE_OK with a NULL stmt because the input was comment-only
+    /// or trailing-whitespace-only. Callers should advance past this
+    /// statement without stepping it; calling `step()` on a NULL stmt
+    /// returns SQLITE_MISUSE and `sqlite3_errmsg(NULL)` returns the
+    /// static string "out of memory", which is misleading.
+    pub fn is_empty(&self) -> bool {
+        self.raw.is_null()
+    }
 }
 
 impl Drop for Statement<'_> {

@@ -64,6 +64,9 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
     # Heuristic: an extension that fails to load shows "Error loading"
     # and a missing scalar shows "no such function". A panic shows
     # "thread '<unnamed>' panicked" in stderr.
+    #
+    # NOT in the list: "Error: out of memory". SQLite's misleading
+    # default error message  see lessons-learned T-9.
     out = result.stdout + result.stderr
     failed = any(
         marker in out
