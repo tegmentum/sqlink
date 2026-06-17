@@ -60,18 +60,24 @@ mod wasm_export {{
 
     impl MetadataGuest for Ext {{
         fn describe() -> Manifest {{
+            // Available flags  pass `det` for deterministic scalars
+            // (most cases), `nd` for ones that produce different
+            // output each call (rng / time-of-call / counter).
+            #[allow(unused_variables)]
             let det = FunctionFlags::DETERMINISTIC;
-            let s = |id, name: &str, n: i32| ScalarFunctionSpec {{
+            #[allow(unused_variables)]
+            let nd = FunctionFlags::empty();
+            let s = |id, name: &str, n: i32, flags: FunctionFlags| ScalarFunctionSpec {{
                 id,
                 name: name.into(),
                 num_args: n,
-                func_flags: det,
+                func_flags: flags,
             }};
             Manifest {{
                 name: "{NAME}".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
-                    s(FID_PLACEHOLDER, "{NAME}_placeholder", 0),
+                    s(FID_PLACEHOLDER, "{NAME}_placeholder", 0, det),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],

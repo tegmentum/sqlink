@@ -7,6 +7,7 @@
       "needs-bootstrap": "builds with RUSTC_BOOTSTRAP=1 (nightly-feature gate in tree)",
       "needs-feature-tweak": "builds clean only with non-default feature flags noted in `notes`",
       "broken": "panics or fails to instantiate on wasi-p2; do not use without forking",
+      "hand-roll-preferred": "ecosystem doesn't have a usable crate; the inline implementation is short enough that hand-rolling beats fighting any crate (see `notes` for the rough LOC + algorithm hint)",
       "unverified": "not yet evaluated in this catalog"
     }
   },
@@ -248,8 +249,24 @@
     "eui48": {
       "status": "broken",
       "version_tested": "1.1.0",
-      "notes": "Transitive `rustc-serialize` 0.3.25 fails E0046 on modern rustc (missing trait items on Encodable/Decodable for path types). MAC address parsing is trivial enough to hand-roll  no crate needed for the common case.",
-      "alternates": ["hand-roll"]
+      "notes": "Transitive `rustc-serialize` 0.3.25 fails E0046 on modern rustc (missing trait items on Encodable/Decodable for path types).",
+      "alternates": ["hand-roll  see status `_mac-address-parse` below"]
+    },
+    "_mac-address-parse": {
+      "status": "hand-roll-preferred",
+      "notes": "~30 LOC: filter hex digits, parse 12-char string into [u8;6], format with separator. Implementation in extensions/mac/src/lib.rs; copy-edit if you need this elsewhere."
+    },
+    "_roman-numerals": {
+      "status": "hand-roll-preferred",
+      "notes": "~50 LOC: subtractive pairs lookup table + greedy encode + symbol-pair decode + canonical-form re-encode validation. Range 1..3999; vinculum notation deferred. See extensions/roman/src/lib.rs."
+    },
+    "_morse-code": {
+      "status": "hand-roll-preferred",
+      "notes": "~150 LOC including the ITU-R M.1677-1 table (letters / digits / punctuation). See extensions/morse/src/lib.rs."
+    },
+    "_hex-dump": {
+      "status": "hand-roll-preferred",
+      "notes": "~40 LOC formatter. Classic `hexdump -C` shape: offset + hex pairs + ASCII gutter. See extensions/hexdump/src/lib.rs."
     },
     "mac_address": {
       "status": "unverified",

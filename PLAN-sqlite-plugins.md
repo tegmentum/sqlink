@@ -317,6 +317,7 @@ fts5/rtree, just at a different layer.
 | mailto (RFC 6068 URI parser)    |    +7  | extensions/mailto                  |
 | mac (EUI-48 hand-rolled)        |    +7  | extensions/mac                     |
 | faker (test data generation)    |   +14  | extensions/faker                   |
+| vin (ISO 3779 hand-rolled)      |    +7  | extensions/vin                     |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
