@@ -1093,6 +1093,54 @@ note is a verbal staleness check  if a future T-* automates
 that (grep dispatch arms vs. cheatsheet rows + warn on diff),
 note it then. Premature today.
 
+---
+
+### 2026-06-17  unitconv extension
+
+**What I built:** SQLite extension for unit conversion across
+five categories. Five 3-arg scalars sharing one shape:
+
+  conv_length(value, from, to)   m, km, cm, mm, in, ft, yd, mi, nmi, ...
+  conv_mass(value, from, to)     g, kg, mg, t, oz, lb, st, ...
+  conv_time(value, from, to)     s, ms, min, h, d, wk, yr, ...
+  conv_data(value, from, to)     B, bit, KB/MB/GB (1000), KiB/MiB/GiB (1024)
+  conv_temperature(value, from, to)  C, F, K, R (affine path)
+
+Length/mass/time/data share one helper: `convert(v, from, to,
+TABLE) = v * factor(from) / factor(to)`. Tables are sorted-by-
+category alias lists. Temperature has its own path because
+C/F/K are affine (offset + scale), not pure scaling.
+
+**What worked:**
+- The "TABLE-of-aliases  scaling factor" pattern is the
+opposite of the classifier pattern  here the input ORDER
+doesn't matter because we look up by exact (case-insensitive)
+match, not prefix. Different shape, intentional.
+- Smoke uses round() to dodge FP-precision sensitivity. The
+affine fixed-point check (-40C = -40F) is a smoke I always
+include for temperature conversions  catches the off-by-one
+where the offset slips into the scale step.
+- T-19 sentinel ('<NULL>' on unknown 'parsec') showcased again.
+The smoke reads as a spec from top to bottom.
+
+**What surprised me:**
+- `1024.0_f64.powi(2)` is NOT const-callable. Build error
+"cannot call non-const method `std::f64::<impl f64>::powi`
+in constants." Replaced with literal `1048576.0`. Save 30
+seconds in future extensions by reaching for the literal
+directly when defining static lookup tables. Note for the
+const-tables idiom: stick to additive/multiplicative literals.
+
+**Tooling opportunity:**
+- (T-23 new) The const-fn limitation surprise is the kind of
+"thing the language does that bites you when building static
+tables" that belongs in tooling/cli-cheatsheet.md alongside
+the smoke quirks  but it's a Rust-language quirk not a
+cli quirk, so a different doc. tooling/extension-recipes.md
+could collect "patterns that compile cleanly in scaffold
+extensions" (const-table syntax, alias-list shape, etc.).
+Defer until a 3rd such surprise.
+
 
 
 
