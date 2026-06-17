@@ -906,6 +906,55 @@ ignoring `{` / `}` inside `"..."` strings + `//` comments
 + `/* ... */` blocks. ~10 LOC of state-machine code if
 ever needed. Defer until a real snippet trips it.
 
+---
+
+### 2026-06-17  T-13 investigation (classifier pattern)
+
+**What I built:** Two artifacts.
+
+1. tooling/snippets/README.md grew a "Design patterns (not
+snippets)" section. Documents the ordered-classifier shape
+(used in postcode, creditcard, phone-prefix) and the
+validator+extractor pair (used in every check-digit
+identifier). Explicitly says why we DON'T extract these as
+code  capturing closures don't compose, the boilerplate is
+5-7 LOC, the explicit form reads like a spec.
+
+2. New `phone-prefix` extension. E.164 prefix  ISO country +
+region. ~150 prefixes hand-curated. Uses the classifier
+pattern, and the smoke test proves it works correctly: `+1242`
+(Bahamas) resolves to BS, not US, because the 4-digit prefix
+is listed before the 1-digit `+1` US entry.
+
+**What worked:**
+- The documented design tip is more durable than an extracted
+helper would have been. Future-me will read the section before
+reaching for a worse classifier impl. Snippets/README.md is
+already the "where do I look first?" file.
+- The phone-prefix smoke catches a real classification edge
+case (NANP prefix shadowing) that proves the design tip's
+"order matters" advice is load-bearing.
+- The classifier pattern now has 3 documented consumers
+(postcode, creditcard, phone-prefix). Per the original T-13
+note, that's the threshold for revisiting code extraction.
+
+**What surprised me:**
+- I tried sketching a `classify<K, F>(input, table) -> Option<K>`
+generic helper and a `first_match!` macro before committing to
+the doc-only approach. Both compile but read worse than the
+loop they replace. The macro hides an early `return` which
+is a footgun.
+- Documenting WHY-NOT-extract is more valuable than
+documenting WHEN-TO-extract. Anyone tempted to write a
+"smarter" classifier will see the reasoning first.
+
+**Tooling opportunity:**
+- (T-13 closed) Documented as design tip; extraction deferred
+until predicates with the same shape ALSO share signatures
+(unlikely without crate-level coordination).
+
+
+
 
 
 

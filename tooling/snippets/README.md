@@ -45,3 +45,74 @@ Classic Luhn mod-10 check + variations. Three patterns:
   generic weighted-sum mod-10 check (ABA, EAN, etc.)
 
 Consumers: `parsers`, `creditcard`, `isin`, `aba`.
+
+## Design patterns (not snippets)
+
+These are shapes you'll keep wanting to write but they're too
+small (or too context-dependent) to extract as inlinable code.
+Documented here so future-you reaches for the right one
+instead of inventing a worse version.
+
+### Ordered classifier  "try each candidate in priority order"
+
+When you have an input and want to identify which of N kinds
+it matches (postcode  country, IP  region, MAC OUI 
+vendor, brand from BIN range, etc.), the canonical shape is:
+
+```rust
+fn classify(input: &str) -> Option<&'static str> {
+    let n = normalize(input);
+    // Order matters: place specific patterns BEFORE patterns
+    // they're subsets of, so the right key wins on overlap.
+    for key in &["specific-1", "specific-2", "general"] {
+        if predicate(key, &n) {
+            return Some(key);
+        }
+    }
+    None
+}
+```
+
+Why not extract as a fn or macro:
+
+- Generic helper would need `Fn(&str) -> bool` predicates;
+  closures capturing context (regex tables, lookup maps)
+  don't coerce to `fn` pointers, and boxed closures add
+  per-call allocation
+- A macro could preserve captures (`first_match! { ... }`) but
+  hides an early-return which is a footgun
+- The hand-written form is 5-7 lines, trivially debuggable
+
+Consumers as of this writing: `postcode` (country detection),
+`creditcard` (brand-by-BIN), `phone-prefix` (region by
+international prefix). If a 3rd consumer with overlapping
+input shape appears, revisit extraction  the `fn pointer
++ static table` form may finally win.
+
+### Validator + extractor pair
+
+Every check-digit-bearing identifier (ISIN, CUSIP, VIN, ISBN,
+EAN, etc.) ends up with this shape:
+
+```rust
+pub fn validate(raw: &str) -> bool {
+    let n = normalize(raw);
+    if n.len() != EXPECTED_LEN { return false; }
+    let (body, last) = n.split_at(EXPECTED_LEN - 1);
+    let last_d = last.chars().next().and_then(|c| c.to_digit(10));
+    match (check_digit(body), last_d) {
+        (Some(expected), Some(actual)) => expected == actual,
+        _ => false,
+    }
+}
+```
+
+Followed by extractor scalars (`<id>_issuer`, `<id>_serial`,
+etc.) that all gate on `if n.len() == EXPECTED_LEN { ... }
+else { NULL }`.
+
+Why not extract: the LENGTH and the slicing boundaries are
+domain-specific; the check digit algorithm differs (Luhn vs
+mod-11 vs custom). Sharing the SHELL would obscure those
+real differences. Better to keep the pattern explicit so
+each extension's `validate()` reads like a spec.

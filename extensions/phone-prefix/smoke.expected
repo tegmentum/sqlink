@@ -1,0 +1,12 @@
+# +1242 correctly resolves to BS (Bahamas), not US  proves
+# the classifier pattern's longest-prefix-first ordering works.
+US
+GB
+JP
+CN
+BS
+<unknown>
+Europe
+South America
+44
++14155552671
