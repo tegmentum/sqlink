@@ -724,6 +724,76 @@ serial; ~85 extensions × 3-5s each = 4-7 minutes. A
 `--parallel` flag (`concurrent.futures.ProcessPoolExecutor`)
 would cut this to under a minute.
 
+---
+
+### 2026-06-17  T-7 investigation (smoke output assertions)
+
+**What I built:** Optional `extensions/<name>/smoke.expected`
+files; smoke.py diffs the parsed cli output against them when
+present. Backward-compatible (no file = panic-only as before).
+
+**What I found:** the existing panic-only smoke check only
+catches "did anything crash." A Luhn helper that silently
+returns wrong values (or a typoed BIN range in creditcard, or
+the AS-Australia regex matching US 5-digit ZIPs) would PASS
+because validators still return 0/1; just wrong values.
+
+**The design:**
+
+  smoke.expected format  one line per SELECT result, in
+  smoke.sql order:
+    plain value     exact match
+    ~~             skip (nondet  rng / time-of-call /
+                    fresh-each-call generators)
+    ?               any non-empty value (output exists but
+                    value varies, e.g. fake_name())
+    leading `#`     comment, ignored
+
+  smoke.py changes:
+    parse_results(stdout)        strip cli prompts + Loaded line
+    parse_expected(file)         strip comments + blank lines
+    compare(actual, expected)    diff with ~~ / ? semantics
+
+  --show-parsed <NAME> flag      print parsed rows for seeding
+                                  smoke.expected files
+  --list now shows "[asserted]"  for extensions with
+                                  smoke.expected.
+
+**Seeded smoke.expected for 7 validator extensions:** aba, bic,
+creditcard, ean, isin, ssn, vin. These are deterministic
+algorithm-with-check-digit shapes where a silent regression
+would be the biggest concern. Verified:
+
+  - `tooling/smoke.py --all` PASSes on all 18 extensions
+    (7 asserted, 11 panic-only)
+  - Bug-injection test: tampered isin smoke.expected to
+    expect '9' where actual is '5'. smoke.py correctly FAILed
+    with line-level diff: `row 6: expected '9', got '5'`.
+
+**What surprised me:**
+- Strip-the-cli-prompts parsing is fragile. Block comments in
+smoke.sql get buffered into prompt continuations; the regex
+`^(sqlite>\s*|\s*\.\.\.>\s*)+` handles the chained case but
+required iteration to nail down.
+- The "Loaded extension:" line is the smoke prelude that ISN'T
+a SELECT result. Easy to forget; parser explicitly skips it.
+- NULL outputs from a SELECT render as empty lines in the
+cli's output, which my parser drops. That's the right
+default for "empty smoke output is not a row" but means
+smoke.expected needs to NOT have empty lines representing
+NULL  use a sentinel? For now I just don't seed NULL-row
+extensions; they have a "?" wildcard if needed.
+
+**Tooling opportunity:**
+- (T-7 closed) Inline.
+- (T-18 new) smoke.expected files need to be rebuilt when
+the corresponding smoke.sql changes (added/removed
+statements, reordered, etc.). A `tooling/check-smoke.py`
+that detects "smoke.sql changed but smoke.expected has the
+old N rows" would warn before a CI surprise. Cheap (~30 LOC).
+
+
+
 
 
 

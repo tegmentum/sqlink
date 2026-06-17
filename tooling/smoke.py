@@ -1,10 +1,22 @@
 #!/usr/bin/env python3
-"""Run an extension's smoke.sql against the cli.
+"""Run an extension's smoke.sql against the cli + optional output assertions.
 
 Each extension owns extensions/<name>/smoke.sql. This harness pipes
-the file's statements through the cli and prints what comes back.
-No assertions in v1 — failures are advisory only (the goal is "did
-anything panic").
+the file's statements through the cli and surfaces what comes back.
+
+Failure modes detected:
+  * panic / load error / missing scalar / instantiation failure
+    (heuristic match on stdout+stderr)
+  * if extensions/<name>/smoke.expected exists, the parsed cli
+    output is diffed against the expected file. Mismatches FAIL.
+
+smoke.expected format (one expected output per line, in SELECT order):
+    plain text     exact match required
+    ~~             skip this output (nondet / random / time-of-call)
+    ?              any non-empty value accepted
+    leading #      comment, ignored
+
+If smoke.expected is absent the harness behaves as before (panic-only).
 
 Usage:
     tooling/smoke.py <name>      # smoke one extension
@@ -15,7 +27,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import shutil
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -25,9 +37,65 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 CLI_BIN = REPO_ROOT / "target" / "release" / "sqlite-wasm-run"
 CLI_COMPONENT = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.wasm"
 
+# Strip leading prompts the cli prints: "sqlite> " and "   ...> ".
+# Multiple can chain on one line when block comments are buffered.
+PROMPT_RE = re.compile(r"^(sqlite>\s*|\s*\.\.\.>\s*)+")
+
 
 def find_smoke_files() -> list[Path]:
     return sorted(REPO_ROOT.glob("extensions/*/smoke.sql"))
+
+
+def parse_results(raw: str) -> list[str]:
+    """Convert cli stdout into the ordered list of SELECT results.
+
+    The cli writes one prompt per statement. Block-comment buffering
+    can chain prompts on one line. The "Loaded extension:" line is
+    the smoke prelude  not a SELECT result. Blank lines after
+    prompt-stripping are also skipped (they correspond to NULL or
+    no-row outputs, which the cli renders as empty).
+    """
+    out: list[str] = []
+    for line in raw.splitlines():
+        stripped = PROMPT_RE.sub("", line).rstrip()
+        if not stripped:
+            continue
+        if stripped.startswith("Loaded extension:"):
+            continue
+        out.append(stripped)
+    return out
+
+
+def parse_expected(path: Path) -> list[str]:
+    """Parse smoke.expected. Comments + blank lines ignored."""
+    out: list[str] = []
+    for line in path.read_text().splitlines():
+        s = line.rstrip()
+        if not s.strip():
+            continue
+        if s.lstrip().startswith("#"):
+            continue
+        out.append(s)
+    return out
+
+
+def compare(actual: list[str], expected: list[str]) -> list[str]:
+    """Return a list of mismatch descriptions (empty = match)."""
+    diffs: list[str] = []
+    if len(actual) != len(expected):
+        diffs.append(
+            f"length mismatch: actual={len(actual)} rows, expected={len(expected)}"
+        )
+    for i, (got, want) in enumerate(zip(actual, expected)):
+        if want == "~~":
+            continue
+        if want == "?":
+            if not got:
+                diffs.append(f"row {i+1}: expected any non-empty value, got empty")
+            continue
+        if got != want:
+            diffs.append(f"row {i+1}: expected {want!r}, got {got!r}")
+    return diffs
 
 
 def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
@@ -40,10 +108,9 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
     if not CLI_COMPONENT.exists():
         return (False, f"cli component not built: {CLI_COMPONENT.relative_to(REPO_ROOT)} missing")
 
-    # Strip `--` line comments before piping: the cli's parser
-    # fuses a leading comment block with the following dot-command
-    # and chokes on the `.` of `.load`. SQL comments later in the
-    # file (inside a statement) are fine.
+    # Strip `--` line comments. The cli's parser fuses leading
+    # `--` comments with the following dot-command and chokes
+    # on `.load`. See lessons-learned T-9.
     sql = "\n".join(
         line for line in smoke.read_text().splitlines()
         if not line.lstrip().startswith("--")
@@ -61,37 +128,66 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
     except subprocess.TimeoutExpired:
         return (False, f"timeout after {timeout}s")
 
-    # Heuristic: an extension that fails to load shows "Error loading"
-    # and a missing scalar shows "no such function". A panic shows
-    # "thread '<unnamed>' panicked" in stderr.
-    #
-    # NOT in the list: "Error: out of memory". SQLite's misleading
-    # default error message  see lessons-learned T-9.
     out = result.stdout + result.stderr
-    failed = any(
-        marker in out
-        for marker in (
-            "Error loading",
-            "no such function",
-            "panicked",
-            "instantiate loaded ext",
-        )
+
+    # First-pass: panic / load failure heuristic.
+    panic_markers = (
+        "Error loading",
+        "no such function",
+        "panicked",
+        "instantiate loaded ext",
     )
-    return (not failed, out)
+    if any(m in out for m in panic_markers):
+        return (False, out)
+
+    # Second-pass (optional): assert outputs against smoke.expected.
+    expected_path = REPO_ROOT / "extensions" / name / "smoke.expected"
+    if expected_path.exists():
+        actual = parse_results(result.stdout)
+        expected = parse_expected(expected_path)
+        diffs = compare(actual, expected)
+        if diffs:
+            msg = ["output mismatch vs smoke.expected:"]
+            msg.extend(f"  {d}" for d in diffs)
+            msg.append("--- parsed actual ---")
+            msg.extend(f"  {i+1}: {row}" for i, row in enumerate(actual))
+            return (False, "\n".join(msg))
+
+    return (True, out)
 
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
-    g = p.add_mutually_exclusive_group(required=True)
-    g.add_argument("name", nargs="?", help="extension to smoke")
-    g.add_argument("--all", action="store_true", help="smoke every extension that has smoke.sql")
-    g.add_argument("--list", action="store_true", help="list extensions with smoke.sql")
+    p.add_argument("name", nargs="?", help="extension to smoke")
+    p.add_argument("--all", action="store_true", help="smoke every extension that has smoke.sql")
+    p.add_argument("--list", action="store_true", help="list extensions with smoke.sql")
     p.add_argument("--timeout", type=int, default=30)
+    p.add_argument("--show-parsed", metavar="NAME",
+                   help="print the parsed result rows for one extension and exit "
+                        "(useful when seeding smoke.expected)")
     args = p.parse_args()
+    if not (args.name or args.all or args.list or args.show_parsed):
+        p.error("specify <name>, --all, --list, or --show-parsed")
+
+    if args.show_parsed:
+        ok, output = smoke_one(args.show_parsed, args.timeout)
+        # Re-run only to fetch fresh stdout for parsing  smoke_one
+        # already did this but it's not exposed. Run again cheaply.
+        smoke = REPO_ROOT / "extensions" / args.show_parsed / "smoke.sql"
+        sql = "\n".join(l for l in smoke.read_text().splitlines() if not l.lstrip().startswith("--"))
+        r = subprocess.run(
+            [str(CLI_BIN), str(CLI_COMPONENT), "--db", ":memory:"],
+            input=sql, capture_output=True, text=True, timeout=args.timeout,
+        )
+        for row in parse_results(r.stdout):
+            print(row)
+        return
 
     if args.list:
         for f in find_smoke_files():
-            print(f.parent.name)
+            has_expected = (f.parent / "smoke.expected").exists()
+            marker = " [asserted]" if has_expected else ""
+            print(f"{f.parent.name}{marker}")
         return
 
     targets: list[str]
@@ -107,7 +203,7 @@ def main() -> None:
         print(f"{status}  {name}")
         if not ok:
             fails.append(name)
-            for line in output.split("\n")[:20]:
+            for line in output.split("\n")[:30]:
                 print(f"    {line}")
 
     if fails:

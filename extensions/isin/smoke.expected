@@ -1,0 +1,13 @@
+# Expected outputs for extensions/isin/smoke.sql.
+# Format: one line per SELECT result, in order.
+#   exact value  match required
+#   ~~            skip (nondet output)
+#   ?             any non-empty value
+1
+1
+1
+0
+0
+5
+US
+037833100
