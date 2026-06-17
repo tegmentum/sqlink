@@ -1,0 +1,46 @@
+[package]
+name = "template-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Jinja2-style template rendering via the `minijinja` crate.
+Useful for generating text from row data without
+client-side templating.
+
+    template_render(template, context_json)  TEXT
+
+Where `context_json` is a JSON object whose keys are
+variable names. Supports the full Jinja2 surface
+(loops, conditionals, filters, blocks):
+
+    SELECT template_render(
+        'Hello, {{ name }}! You have {{ msgs|length }} messages.',
+        json_object('name', u.name, 'msgs', user_messages_json)
+    ) FROM users u;
+
+Errors (parse / render) surface as SQL errors so a
+caller can wrap in `iif(...)` or `coalesce()` if needed.
+
+Single-shot rendering only  no environment caching
+across calls (template recompiled each invocation).
+Acceptable for moderate-volume rendering; if a tight
+loop appears, follow-on is to cache compiled templates
+keyed by source hash.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+minijinja = { version = "2", default-features = false, features = [
+    "builtins",
+    "macros",
+    "serde",
+] }
+serde_json = "1"
