@@ -8,10 +8,14 @@
 > | T2 — Authorizer dispatch | **All steps shipped.** Authorizer is wired in `cli/src/lib.rs` via `Connection::set_authorizer` (core/src/db.rs:1353 wraps `sqlite3_set_authorizer` directly — rusqlite was dropped, so T2.2's "is `handle()` public?" question is moot). Both the `.auth on|off` REPL command and the `has_authorizer`-driven dispatch in `do_load` are live, and the T2.6 acceptance test against the sibling `auth-extension` lives at `host/tests/auth_extension.rs`. |
 >
 > The "out of scope" bullets at the bottom of this plan still
-> stand as named follow-ups (HTTP `allowed_hosts` runtime
-> enforcement is still TODO — `host/src/lib.rs:384` copies the
-> list into `HttpPolicy` but `http::Host::handle` doesn't gate on
-> it). Kept for traceability — don't act on Thread 1 or Thread 2
+> stand as named follow-ups, EXCEPT the HTTP `allowed_hosts`
+> enforcement note  that one is now stale. As of the F11 dns
+> work landed in this session, `http::Host::handle` does gate
+> on the policy via `check_http_policy(self.http_policy,
+> &authority, method)` at the request-shape boundary (see
+> `host/src/lib.rs` around line 1005). The earlier note
+> referenced an older copy site that has since been replaced.
+> Kept for traceability  don't act on Thread 1 or Thread 2
 > step descriptions as if they're open work.
 
 Everything that landed this session leaves two open implementation
