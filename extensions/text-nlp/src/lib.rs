@@ -76,6 +76,124 @@ pub fn markdown_to_html(md: &str) -> String {
     html_out
 }
 
+/// Plain-text view of a markdown document: strips all syntax,
+/// joins block text with newlines. Useful as the input to
+/// downstream NLP (whatlang detection, embedding, etc.) when
+/// the source is markdown.
+pub fn markdown_to_text(md: &str) -> String {
+    use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+    let mut out = String::with_capacity(md.len());
+    let mut last_was_text = false;
+    for event in Parser::new(md) {
+        match event {
+            Event::Text(t) | Event::Code(t) => {
+                out.push_str(&t);
+                last_was_text = true;
+            }
+            Event::SoftBreak | Event::HardBreak => {
+                out.push('\n');
+                last_was_text = false;
+            }
+            Event::Start(Tag::Paragraph)
+            | Event::Start(Tag::Heading { .. })
+            | Event::Start(Tag::Item) => {
+                if last_was_text && !out.ends_with('\n') {
+                    out.push('\n');
+                }
+            }
+            Event::End(TagEnd::Paragraph)
+            | Event::End(TagEnd::Heading(_))
+            | Event::End(TagEnd::Item) => {
+                if last_was_text && !out.ends_with('\n') {
+                    out.push('\n');
+                    last_was_text = false;
+                }
+            }
+            _ => {}
+        }
+    }
+    out.trim().to_string()
+}
+
+/// JSON array of `{href, title, text}` records for every link
+/// in the document. `href` is required; `title` and `text` are
+/// empty string when absent (rather than null) to keep the
+/// downstream JSON shape simple.
+pub fn markdown_extract_links(md: &str) -> String {
+    use pulldown_cmark::{Event, Parser, Tag, TagEnd};
+    let mut links: alloc::vec::Vec<serde_json::Value> = alloc::vec::Vec::new();
+    let mut current_href: Option<String> = None;
+    let mut current_title: String = String::new();
+    let mut current_text: String = String::new();
+    for event in Parser::new(md) {
+        match event {
+            Event::Start(Tag::Link {
+                dest_url, title, ..
+            }) => {
+                current_href = Some(dest_url.into_string());
+                current_title = title.into_string();
+                current_text.clear();
+            }
+            Event::Text(t) if current_href.is_some() => {
+                current_text.push_str(&t);
+            }
+            Event::End(TagEnd::Link) => {
+                if let Some(href) = current_href.take() {
+                    links.push(serde_json::json!({
+                        "href":  href,
+                        "title": current_title,
+                        "text":  current_text,
+                    }));
+                    current_title.clear();
+                    current_text.clear();
+                }
+            }
+            _ => {}
+        }
+    }
+    serde_json::to_string(&links).unwrap_or_else(|_| "[]".to_string())
+}
+
+/// JSON array of `{level, text}` records for every heading.
+pub fn markdown_extract_headings(md: &str) -> String {
+    use pulldown_cmark::{Event, HeadingLevel, Parser, Tag, TagEnd};
+    let mut out: alloc::vec::Vec<serde_json::Value> = alloc::vec::Vec::new();
+    let mut current_level: Option<u8> = None;
+    let mut current_text: String = String::new();
+    for event in Parser::new(md) {
+        match event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                current_level = Some(match level {
+                    HeadingLevel::H1 => 1,
+                    HeadingLevel::H2 => 2,
+                    HeadingLevel::H3 => 3,
+                    HeadingLevel::H4 => 4,
+                    HeadingLevel::H5 => 5,
+                    HeadingLevel::H6 => 6,
+                });
+                current_text.clear();
+            }
+            Event::Text(t) if current_level.is_some() => {
+                current_text.push_str(&t);
+            }
+            Event::Code(t) if current_level.is_some() => {
+                current_text.push_str(&t);
+            }
+            Event::End(TagEnd::Heading(_)) => {
+                if let Some(level) = current_level.take() {
+                    out.push(serde_json::json!({
+                        "level": level,
+                        "text":  current_text.clone(),
+                    }));
+                    current_text.clear();
+                }
+            }
+            _ => {}
+        }
+    }
+    serde_json::to_string(&out).unwrap_or_else(|_| "[]".to_string())
+}
+
 pub fn stem_porter(word: &str) -> String {
     use rust_stemmers::{Algorithm, Stemmer};
     let stemmer = Stemmer::create(Algorithm::English);
@@ -418,6 +536,9 @@ mod wasm_export {
     const FID_DIFF_REMOVED: u64 = 7;
     const FID_DIFF_SUMMARY: u64 = 8;
     const FID_SIMILARITY: u64 = 9;
+    const FID_MD_TEXT: u64 = 10;
+    const FID_MD_LINKS: u64 = 11;
+    const FID_MD_HEADINGS: u64 = 12;
 
     struct Ext;
 
@@ -443,6 +564,9 @@ mod wasm_export {
                     s(FID_DIFF_REMOVED, "text_diff_removed", 2),
                     s(FID_DIFF_SUMMARY, "text_diff_summary", 2),
                     s(FID_SIMILARITY, "text_similarity", 2),
+                    s(FID_MD_TEXT, "markdown_to_text", 1),
+                    s(FID_MD_LINKS, "markdown_extract_links", 1),
+                    s(FID_MD_HEADINGS, "markdown_extract_headings", 1),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -505,6 +629,18 @@ mod wasm_export {
                     let a = arg_text(&args, 0, "text_similarity")?;
                     let b = arg_text(&args, 1, "text_similarity")?;
                     Ok(SqlValue::Real(super::text_similarity(&a, &b)))
+                }
+                FID_MD_TEXT => {
+                    let m = arg_text(&args, 0, "markdown_to_text")?;
+                    Ok(SqlValue::Text(super::markdown_to_text(&m)))
+                }
+                FID_MD_LINKS => {
+                    let m = arg_text(&args, 0, "markdown_extract_links")?;
+                    Ok(SqlValue::Text(super::markdown_extract_links(&m)))
+                }
+                FID_MD_HEADINGS => {
+                    let m = arg_text(&args, 0, "markdown_extract_headings")?;
+                    Ok(SqlValue::Text(super::markdown_extract_headings(&m)))
                 }
                 other => Err(format!("text-nlp: unknown func id {other}")),
             }
