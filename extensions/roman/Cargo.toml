@@ -1,0 +1,30 @@
+[package]
+name = "roman-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Roman numeral encode/decode scalars. Hand-rolled (no
+crate dep, ~30 LOC).
+
+    roman_encode(n)     TEXT     1  "I", 1994  "MCMXCIV"
+    roman_decode(text)  INTEGER  "MCMXCIV"  1994
+    roman_validate(t)   INTEGER  1 if parses
+
+Range: 1..3999 inclusive (the largest classical roman
+without overlines). Out-of-range encode returns NULL;
+decode of invalid text returns NULL.
+
+Useful for tabletop / academic / display-only contexts
+(chapter numbers, copyright dates, edition badges).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

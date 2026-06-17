@@ -311,6 +311,7 @@ fts5/rtree, just at a different layer.
 | hexdump (formatted BLOB view)   |    +3  | extensions/hexdump                 |
 | case (snake/kebab/camel/etc)    |    +8  | extensions/case (heck)             |
 | cron (validate/next/upcoming)   |    +3  | extensions/cron                    |
+| roman (encode/decode/validate)  |    +3  | extensions/roman                   |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
