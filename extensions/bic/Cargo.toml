@@ -1,0 +1,19 @@
+[package]
+name = "bic-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+BIC / SWIFT code (ISO 9362) structural validation + decomposition
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# add your upstream crate deps here

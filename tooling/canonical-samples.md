@@ -25,6 +25,9 @@ Each entry lists:
 | ABA / RTN | `021000021` | JPMorgan Chase Bank, NY  district 2 |
 | ABA / RTN (Dallas) | `111000038` | district 11 |
 | ABA / RTN (San Francisco) | `322271627` | district 32-20=12 (thrift fold) |
+| BIC / SWIFT (11-char primary) | `DEUTDEFFXXX` | Deutsche Bank Frankfurt |
+| BIC / SWIFT (8-char primary) | `CHASUS33` | JPMorgan Chase NY  branch omitted = primary |
+| BIC / SWIFT (test marker) | `DEUTDE20XXX` | second char of location = `0`  test BIC |
 | VIN | `1M8GDM9AXKP042788` | Wikipedia algorithm worked example; check digit X |
 | ULID | `01JZ7E5XYZK4VPS9TQM03R2HBN` | example valid Crockford base32 |
 

@@ -440,4 +440,53 @@ remove it from the failure list  the real failure signatures
 are "Error loading", "no such function", "panicked",
 "instantiate loaded ext".
 
+---
+
+### 2026-06-17  bic (ISO 9362 SWIFT codes)
+
+**What I built:** 7-scalar BIC validator + decomposer. Hand-
+rolled, ~80 LOC. Validate / bank / country / location / branch
+/ is_primary / is_test.
+
+**What worked:**
+- Structural validation only (no check digit on BIC) means
+the code is just: filter whitespace, uppercase, count chars,
+verify each region's char class. Tiny.
+- T-1's `.load` first / block comment after was clean. The
+T-9 fix means smoke.sql with multi-line block comments
+runs without ghost OOMs.
+- ISO 9362's quirks (8-char vs 11-char form, "XXX" branch =
+primary office, '0' second-char-of-location = test BIC) are
+exactly the kind of domain trivia that belongs in scalars
+rather than every consumer reimplementing.
+
+**What surprised me:**
+- I made my OWN test-BIC fake (TEST0FRPP plus XXX = 12 chars,
+1 over) on the first pass. Validator correctly returned 0;
+result was a confusing "0 returned for the is_test case".
+Lesson: count the chars before typing a test input. Same
+mistake-class as the vin one (made up a check digit), but
+now caught by smoke output inspection rather than a
+debugger.
+- ISO 9362 test-BIC convention is position-7 (second char of
+location code) = '0'. Not widely known; worth documenting
+in code comments  did so.
+- The validator-then-extract pattern is repeated across all 7
+scalars: `if valid { extract } else { NULL }`. Same shape as
+vin, isin, mac. Could be factored, but each extension's
+extraction logic differs enough (slice positions, formats)
+that a generic factor would be lossy.
+
+**Tooling opportunity:**
+- (T-11 new) Smoke harness could detect "all-empty output"
+from a scalar that should produce text  catches my
+test-BIC-12-char-typo class of error WITHOUT needing
+output assertions (T-7). Heuristic: count NULL/empty rows
+following a SELECT; if all rows in a 5+ SELECT batch are
+empty after a known-good validator returns 1, flag it.
+Lightweight version of T-7's full expected-output
+assertion.
+
+
+
 
