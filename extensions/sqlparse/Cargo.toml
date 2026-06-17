@@ -1,0 +1,47 @@
+[package]
+name = "sqlparse-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+SQL parsing scalars over the `sqlparser` crate (ANSI
+SQL:2011 dialect with extensions). Returns shape and
+table-touching information about a SQL string without
+executing it.
+
+    sql_validate(text)         INTEGER   1 if parses, 0 if not
+    sql_statement_type(text)   TEXT      "SELECT"/"INSERT"/...
+    sql_statement_count(text)  INTEGER   # of statements
+    sql_tables(text)           TEXT      JSON array of table names
+                                            referenced (FROM / INSERT
+                                            INTO / UPDATE / DELETE)
+    sql_is_readonly(text)      INTEGER   1 if all statements are
+                                            SELECT / EXPLAIN / WITH
+    sql_dialect()              TEXT      "generic" (the configured
+                                            dialect)
+
+Uses the GenericDialect  good enough for most "what
+does this query do" analysis; doesn't aim to match
+SQLite's exact accepted-grammar. Pair with rusqlite's
+`prepare()` for the "will this actually run" check
+(higher fidelity but requires a connection).
+
+Use cases:
+  * Pre-flight check on user-submitted SQL before
+    running it (read-only audit query)
+  * Extract table-touching pattern for schema
+    visualization
+  * Lint queries in CI for forbidden patterns
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+sqlparser = { version = "0.62", features = ["visitor"] }
+serde_json = "1"
