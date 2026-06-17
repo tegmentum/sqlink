@@ -1,0 +1,34 @@
+[package]
+name = "url-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+URL decomposition / canonicalization scalars via the
+WHATWG-conforming `url` crate (Servo's rust-url).
+
+    url_scheme(url)    TEXT   "https" / "http" / "ftp" / ...
+    url_host(url)      TEXT   "example.com" (no port)
+    url_port(url)      INT    port (default port if omitted)
+    url_path(url)      TEXT   "/a/b/c" (no query / fragment)
+    url_query(url)     TEXT   "k=v&x=y" (without leading ?)
+    url_fragment(url)  TEXT   "section-3" (without leading #)
+    url_normalize(url) TEXT   canonicalized URL string
+    url_join(base, rel) TEXT  resolve relative against base
+    url_param(url, k)  TEXT   value of query param k (first match)
+
+Invalid URLs return NULL rather than raising. Designed
+to pair with `http` (capability-gated outbound) and
+`detect.slug` (URL-friendly text  slug).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+url = { version = "2", default-features = false }

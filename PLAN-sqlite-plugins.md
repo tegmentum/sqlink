@@ -293,6 +293,7 @@ fts5/rtree, just at a different layer.
 | dns_resolve (capability-gated)  |    +1  | extensions/dns + host hickory      |
 | detect (slug/lang/mime)         |    +5  | extensions/detect                  |
 | baseN (base32 + base58)         |    +4  | extensions/baseN                   |
+| url decomposition (9 scalars)   |    +9  | extensions/url                     |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
