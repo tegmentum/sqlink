@@ -16,6 +16,20 @@ pub fn ulid_to_timestamp(s: &str) -> Result<i64, String> {
     Ok(u.timestamp_ms() as i64)
 }
 
+/// True iff `s` is a valid Crockford-base32 ULID (26 chars).
+pub fn ulid_validate(s: &str) -> bool {
+    s.parse::<ulid::Ulid>().is_ok()
+}
+
+/// Construct a ULID from an explicit ms-since-epoch + randomness.
+/// `randomness` is the lower 80 bits taken from an unsigned BLOB-
+/// shaped hex input. Useful for deterministic reproducible IDs in
+/// tests; production should use `ulid()` for fresh randomness.
+pub fn ulid_from_parts(timestamp_ms: u64, randomness_lo: u64, randomness_hi: u16) -> String {
+    let rand = ((randomness_hi as u128) << 64) | (randomness_lo as u128);
+    ulid::Ulid::from_parts(timestamp_ms, rand).to_string()
+}
+
 pub fn make_nanoid(size: usize) -> String {
     // The `nanoid!` macro takes a literal-only size arg; use
     // the function form for runtime size.
@@ -186,6 +200,8 @@ mod wasm_export {
     const FID_SNOWFLAKE_1: u64 = 7;
     const FID_SNOWFLAKE_TS: u64 = 8;
     const FID_VERSION: u64 = 9;
+    const FID_ULID_VALIDATE: u64 = 10;
+    const FID_ULID_FROM_PARTS: u64 = 11;
 
     struct Ext;
 
@@ -212,6 +228,8 @@ mod wasm_export {
                     s(FID_SNOWFLAKE_1, "snowflake", 1, nd),
                     s(FID_SNOWFLAKE_TS, "snowflake_to_timestamp", 1, det),
                     s(FID_VERSION, "ids_version", 0, nd),
+                    s(FID_ULID_VALIDATE, "ulid_validate", 1, det),
+                    s(FID_ULID_FROM_PARTS, "ulid_from_parts", 3, det),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -265,6 +283,16 @@ mod wasm_export {
                 FID_SNOWFLAKE_TS => {
                     let id = arg_int(&args, 0, "snowflake_to_timestamp")?;
                     Ok(SqlValue::Integer(super::snowflake_to_timestamp(id)))
+                }
+                FID_ULID_VALIDATE => {
+                    let s = arg_text(&args, 0, "ulid_validate")?;
+                    Ok(SqlValue::Integer(super::ulid_validate(&s) as i64))
+                }
+                FID_ULID_FROM_PARTS => {
+                    let ts = arg_int(&args, 0, "ulid_from_parts")? as u64;
+                    let lo = arg_int(&args, 1, "ulid_from_parts")? as u64;
+                    let hi = arg_int(&args, 2, "ulid_from_parts")? as u16;
+                    Ok(SqlValue::Text(super::ulid_from_parts(ts, lo, hi)))
                 }
                 other => Err(format!("ids: unknown func id {other}")),
             }
