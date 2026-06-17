@@ -1,0 +1,45 @@
+[package]
+name = "idna-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Internationalized Domain Name (IDN) and Punycode
+scalars. Lets SQL queries deal with `xn--` ascii-
+compatible encodings and their unicode display forms
+on equal footing.
+
+    idn_to_ascii(domain)      TEXT  unicode  punycode
+                                       "" -> "xn--..."
+    idn_to_unicode(domain)    TEXT  punycode  unicode
+                                       "xn--..." -> ""
+    idn_is_internationalized(d)  INTEGER  1 if contains
+                                            non-ASCII
+
+Use cases:
+  * Normalize user-submitted email + URL columns
+    before unique-constraint checks (alice@xn--g6w251d
+    and alice@台灣 are the same address)
+  * Render stored xn-- forms back to unicode in
+    reporting queries
+  * Filter / GROUP BY contains-non-ASCII
+
+Invalid inputs (idna processing errors) return NULL
+rather than raising so SQL composition stays clean.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# `compiled_data` ships UTS46 tables compiled in; alternative
+# is `icu` for fully dynamic processing but that's much heavier.
+idna = { version = "1", default-features = false, features = [
+    "compiled_data",
+    "alloc",
+] }
