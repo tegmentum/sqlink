@@ -1053,6 +1053,46 @@ in tooling/smoke.py or in extensions/README.md listing
 "things the cli does that may surprise smoke authors" would
 prevent the same correction twice.
 
+---
+
+### 2026-06-17  T-21 investigation (cli cheatsheet)
+
+**What I built:** tooling/cli-cheatsheet.md  one-row-per-
+dot-command reference with a "smoke?" column. Lists all 34
+dispatch entries from cli/src/dot.rs in a single table.
+Includes a "smoke-test idioms" section (when `.print` helps,
+which commands DON'T work on stdin) and a "things that
+surprise smoke authors" section (folds in the T-22 note
+about `round()` precision and the T-9 dash-comment quirk).
+
+**What worked:**
+- Inventoried via `grep '^\s*"\.' cli/src/dot.rs` against the
+dispatch match. Compact enough to fit on one screen.
+- Found two bugs while writing  my draft confidently said
+"prepend `.bail on` for first-failure-wins" and "use `.echo on`
+to debug." Both wrong! Reading cli/src/lib.rs:678 showed
+echo + bail are ONLY honored inside `.read FILE`. Caught and
+corrected before committing. Writing-as-debugging works.
+
+**What surprised me:**
+- I'd been carrying around a vague memory that `.bail` worked
+on stdin too. Standard sqlite3 CLI honors it more broadly,
+but ours does not  it's a `.read` flag. Future me would
+absolutely have wasted 15 minutes on this.
+- Folding the T-22 note ("integer-valued real prints unpadded")
+into the same doc rather than spinning a separate file is the
+right call. The cheatsheet becomes the "things that bite you
+in smoke" centerpiece, not three half-pages.
+
+**Tooling opportunity:**
+- (T-22 closed in same doc.)
+- (T-21 closed.)
+- The cheatsheet's "Authoritative source: cli/src/dot.rs
+dispatch (~line 41). If this drifts, re-run T-21's audit."
+note is a verbal staleness check  if a future T-* automates
+that (grep dispatch arms vs. cheatsheet rows + warn on diff),
+note it then. Premature today.
+
 
 
 
