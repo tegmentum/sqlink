@@ -319,6 +319,7 @@ fts5/rtree, just at a different layer.
 | faker (test data generation)    |   +14  | extensions/faker                   |
 | vin (ISO 3779 hand-rolled)      |    +7  | extensions/vin                     |
 | creditcard (BIN-range detectio  |    +6  | extensions/creditcard              |
+| isin (ISO 6166 hand-rolled)     |    +4  | extensions/isin                    |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |

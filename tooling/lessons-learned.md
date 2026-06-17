@@ -280,4 +280,69 @@ unionpay / maestro.
   the workspace pulls in. The latter is cleaner long-term but
   adds workspace complexity; the former is faster.
 
+---
+
+### 2026-06-17  tooling commit (canonical samples doc)
+
+**What I built:** tooling/canonical-samples.md  reference doc
+of known-good test inputs for the algorithm-validators we've
+shipped (ISBN, VIN, base32/base58, ISIN, BIC, etc.) plus a few
+cross-extension ones (canonical SHA-256, BPE token sequence,
+common timestamps).
+
+**What worked:**
+- Walking my own ship history was the right way to seed this 
+each canonical sample is verifiably anchored (Wikipedia,
+RFC, ISO standard, manufacturer test card).
+- Doc fits in one screen; not too long to skim before
+choosing a sample for new smoke.sql.
+
+**What surprised me:** nothing  this was clean scope.
+
+**Tooling opportunity:** none new. T-6 closed.
+
+---
+
+### 2026-06-17  isin
+
+**What I built:** 4-scalar ISIN (ISO 6166) validator. validate /
+check_digit / country / nsin. Hand-rolled  ~60 LOC including
+the letter-expansion table and modulo-10 check.
+
+**What worked:**
+- Used the brand-new canonical-samples.md to pick test cases:
+Apple (US0378331005), Tesla (US88160R1014), BMW
+(DE0005190003). All verified-correct check digits  exactly
+the use case T-6 was supposed to solve.
+- The algorithm shape is "expand alphanumeric to digits, then
+Luhn." Reused the same Luhn helper shape as creditcard 
+which is now in THREE places (parsers, creditcard, isin).
+- 4 scalars (validate + 3 decomposers) fits the pattern of
+the other identifier extensions (isbn, vin) cleanly. Same
+ergonomics  caller knows what to expect.
+
+**What surprised me:**
+- The transient "Error: out of memory" recurred  same shape
+as the vin smoke test, single scalar SELECT after several
+earlier ones, then the correct result on a retry. This is a
+real cli quirk (probably per-statement memory accumulation in
+the wasm component cache), not extension-specific.
+- The Luhn variant for ISIN is slightly different from the
+classic credit-card Luhn: the first "multiply by 2" position
+is the RIGHTMOST digit (after expansion), not the second-from-
+right. My code handles this correctly via `let mut alt = true`
+initially, but it's worth a comment for future-me. Real source
+of bugs in other Luhn impls.
+
+**Tooling opportunity:**
+- (T-8 reinforced) Luhn helper now duplicated in THREE places.
+This is the line where copy-paste should give way to either
+a `tooling/snippets/luhn.rs` or an `extensions-common` crate.
+- (T-9) The transient OOM appearing in 2/2 smoke tests with
+the same shape (single SELECT scalar after several
+multi-arg-ish statements) might be a real cli bug. Worth a
+bisect: does it happen on the host-side `dispatch_scalar`
+path, or only after the cli wasm has been running for several
+statements? Note it; revisit when it gets in the way.
+
 
