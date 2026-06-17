@@ -792,6 +792,73 @@ statements, reordered, etc.). A `tooling/check-smoke.py`
 that detects "smoke.sql changed but smoke.expected has the
 old N rows" would warn before a CI surprise. Cheap (~30 LOC).
 
+---
+
+### 2026-06-17  T-18 investigation (smoke.expected staleness)
+
+**What I built:** `count_smoke_selects(path)` + `staleness(name)`
+helpers in smoke.py. `--list` annotates `[asserted, STALE]`
+when smoke.sql's SELECT count doesn't match smoke.expected's
+row count. Live smoke runs prepend a `WARN: ...` line when
+stale.
+
+**What I found:** Two things, one as expected and one not.
+
+  1. The expected: dropping the staleness check on existing
+     smoke.expected files surfaced a real false negative I
+     would have shipped silently. creditcard's smoke.expected
+     had 11 rows but smoke.sql has 12 SELECTs. Counts off-by-1
+     because one statement returns NULL.
+
+  2. The NOT-expected: parsing NULL outputs from the cli is
+     fundamentally ambiguous. The cli prints back-to-back
+     `sqlite>` prompts in several distinct cases:
+       - Between two statements where the first returned NULL
+       - As buffering before reading a multi-line statement
+         (block comments cause this)
+       - Right after `.load` when the next statement is being
+         read in
+     I tried a sentinel-based parser ("recover NULLs as
+     `<NULL>`") but couldn't distinguish case 1 from case 2/3
+     without cli-side cooperation.
+
+**The fix:**
+
+  - Kept the simple line-based parser (NULL rows get dropped).
+  - smoke.expected for creditcard updated: the
+    `SELECT cc_type('not a card')` statement is now
+    `SELECT coalesce(cc_type('not a card'), '<unknown>')`
+    so the row is non-NULL and shows up in the parsed output.
+    smoke.expected row added accordingly.
+  - count_smoke_selects() needed a `.command`-line strip,
+    which I'd missed initially  the `.load` line has no `;`,
+    so a naive `text.split(";")` glued it onto the first SELECT
+    and undercounted by 1. Now drop dot-command lines before
+    splitting.
+
+**What surprised me:**
+- T-18 + T-7 found a real off-by-one I'd shipped without
+  noticing. The PASS at runtime was coincidence (parser dropped
+  NULL → row count happened to match expected). With T-18 the
+  invisible drift became visible.
+- The cli's prompt behavior is harder to parse than I thought.
+  A future cli improvement would be a `--smoke-mode` flag that
+  emits one result per line, NULL as `\0` or similar  but that's
+  a per-cli change, not something the smoke harness can fix.
+- The `<unknown>` sentinel in SQL is a cleaner workaround than
+  fighting the parser. Documents intent: "this SELECT may return
+  NULL; coalesce to a known-good token for smoke."
+
+**Tooling opportunity:**
+- (T-18 closed) Inline.
+- (T-19 new) The cli-side `--smoke-mode` flag (one result per
+  line, sentinel for NULL, no prompts) would let the smoke
+  harness be precise instead of heuristic. Cheap on the cli
+  side (~10 LOC). Worth doing if the parser approach trips up
+  another extension.
+
+
+
 
 
 

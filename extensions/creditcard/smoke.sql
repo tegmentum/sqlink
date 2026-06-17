@@ -14,7 +14,7 @@ SELECT cc_type('5555 5555 5555 4444');
 SELECT cc_type('378282246310005');
 SELECT cc_type('6011111111111117');
 SELECT cc_type('3530111333300000');
-SELECT cc_type('not a card');
+SELECT coalesce(cc_type('not a card'), '<unknown>');
 SELECT cc_validate('4111111111111111');
 SELECT cc_validate('4111111111111112');
 SELECT cc_mask('4111-1111-1111-1111');

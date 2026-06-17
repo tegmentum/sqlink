@@ -49,11 +49,19 @@ def find_smoke_files() -> list[Path]:
 def parse_results(raw: str) -> list[str]:
     """Convert cli stdout into the ordered list of SELECT results.
 
-    The cli writes one prompt per statement. Block-comment buffering
-    can chain prompts on one line. The "Loaded extension:" line is
-    the smoke prelude  not a SELECT result. Blank lines after
-    prompt-stripping are also skipped (they correspond to NULL or
-    no-row outputs, which the cli renders as empty).
+    Strategy is intentionally simple: strip leading prompts from each
+    line, skip blanks + the load banner, return what's left. NULL
+    outputs render as empty lines that this parser drops  callers
+    can use the `?` wildcard in smoke.expected to match them
+    positionally (see compare()).
+
+    A more elaborate parser tried to recover NULLs as a `<NULL>`
+    sentinel by splitting on `sqlite>` instead of by line, but the
+    cli's prompt-buffering behavior (two prompts back-to-back after
+    `.load` when a block comment is read next) makes it impossible
+    to distinguish "NULL result" from "buffering artifact" without
+    cli-side cooperation. Kept simple; use `?` in smoke.expected
+    for NULLs and tolerate the count drift.
     """
     out: list[str] = []
     for line in raw.splitlines():
@@ -77,6 +85,50 @@ def parse_expected(path: Path) -> list[str]:
             continue
         out.append(s)
     return out
+
+
+def count_smoke_selects(path: Path) -> int:
+    """Static count of SELECT statements in smoke.sql.
+
+    Used to detect smoke.expected staleness before running the cli.
+    Strategy:
+      1. strip block + line comments
+      2. strip dot-commands (`.load`, `.headers`, etc.; they're
+         newline-terminated, not semicolon-terminated, so they'd
+         otherwise glue onto the next SELECT)
+      3. split on `;`, count statements whose stripped content
+         starts with `select` (case-insensitive)
+    """
+    text = path.read_text()
+    text = re.sub(r"/\*.*?\*/", " ", text, flags=re.DOTALL)
+    text = re.sub(r"--[^\n]*", " ", text)
+    # Drop dot-command lines entirely  they terminate on newline.
+    text = "\n".join(
+        line for line in text.splitlines()
+        if not line.lstrip().startswith(".")
+    )
+    count = 0
+    for stmt in text.split(";"):
+        s = stmt.strip()
+        if s.lower().startswith("select"):
+            count += 1
+    return count
+
+
+def staleness(name: str) -> str | None:
+    """Return a one-line description if smoke.expected is stale or
+    missing-and-not-needed. None means "either no smoke.expected or
+    counts agree."
+    """
+    smoke = REPO_ROOT / "extensions" / name / "smoke.sql"
+    expected = REPO_ROOT / "extensions" / name / "smoke.expected"
+    if not smoke.exists() or not expected.exists():
+        return None
+    n_select = count_smoke_selects(smoke)
+    n_expected = len(parse_expected(expected))
+    if n_select != n_expected:
+        return f"smoke.sql has {n_select} SELECT(s) but smoke.expected has {n_expected} row(s)"
+    return None
 
 
 def compare(actual: list[str], expected: list[str]) -> list[str]:
@@ -140,6 +192,13 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
     if any(m in out for m in panic_markers):
         return (False, out)
 
+    # Pre-check: smoke.expected staleness  one-line warning if the
+    # SELECT count in smoke.sql doesn't match the row count in
+    # smoke.expected. Doesn't fail by itself; the actual diff will
+    # catch the mismatch concretely.
+    if (stale := staleness(name)):
+        out = f"WARN: {stale}\n{out}"
+
     # Second-pass (optional): assert outputs against smoke.expected.
     expected_path = REPO_ROOT / "extensions" / name / "smoke.expected"
     if expected_path.exists():
@@ -186,8 +245,14 @@ def main() -> None:
     if args.list:
         for f in find_smoke_files():
             has_expected = (f.parent / "smoke.expected").exists()
-            marker = " [asserted]" if has_expected else ""
-            print(f"{f.parent.name}{marker}")
+            stale = staleness(f.parent.name) if has_expected else None
+            marker = ""
+            if has_expected:
+                marker = " [asserted, STALE]" if stale else " [asserted]"
+            line = f"{f.parent.name}{marker}"
+            if stale:
+                line += f"  {stale}"
+            print(line)
         return
 
     targets: list[str]
