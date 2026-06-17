@@ -795,3 +795,40 @@ info:
 	@echo ""
 	@echo "SQLite flags:"
 	@echo "  $(SQLITE_CFLAGS)" | tr ' ' '\n' | grep -v '^$$'
+
+# PLAN-extension-tooling.md T3 + T4: one-shot build + component-wrap
+# + provenance scan + smoke for a single extension. Replaces the
+# 4-step manual sequence.
+#
+# Usage:
+#   make ext NAME=detect
+#   make ext NAME=detect BOOTSTRAP=1   # if the compat-registry flags it
+#
+# Expects extensions/<NAME>/ to exist (scaffold via
+# tooling/scaffold.py first). Wrapping uses the cached wasi-preview1
+# adapter at $HOME/.cache/xtran/.
+WASI_ADAPTER ?= $(HOME)/.cache/xtran/wasi_snapshot_preview1.reactor.wasm
+
+ext:
+	@test -n "$(NAME)" || (echo "usage: make ext NAME=<extension>"; exit 1)
+	@test -d "extensions/$(NAME)" || (echo "no such extension: extensions/$(NAME)"; exit 1)
+	$(if $(BOOTSTRAP),RUSTC_BOOTSTRAP=1) cargo build --release \
+		--manifest-path extensions/$(NAME)/Cargo.toml \
+		--target wasm32-wasip2
+	@WASM_BASE=$$(ls extensions/$(NAME)/target/wasm32-wasip2/release/*.wasm 2>/dev/null \
+		| grep -v '\.component\.wasm$$' | head -1); \
+	test -n "$$WASM_BASE" || (echo "no built wasm artifact found"; exit 1); \
+	COMPONENT_OUT=$${WASM_BASE%.wasm}.component.wasm; \
+	wasm-tools component new "$$WASM_BASE" \
+		--adapt wasi_snapshot_preview1=$(WASI_ADAPTER) \
+		-o "$$COMPONENT_OUT"
+	@python3 provenance/scan.py 2>&1 | tail -3
+	@python3 tooling/smoke.py $(NAME) || true
+
+ext-list-broken:
+	@python3 tooling/scaffold.py --list-broken
+
+ext-smoke-all:
+	@python3 tooling/smoke.py --all
+
+.PHONY: ext ext-list-broken ext-smoke-all

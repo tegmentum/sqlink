@@ -1,0 +1,10 @@
+-- Smoke test for the `{NAME}` extension.
+-- Run via:  tooling/smoke.py {NAME}
+--
+-- The harness loads the extension at the path below and pipes
+-- this file's statements through the cli. Replace the placeholder
+-- check with a real one for each scalar this extension exposes.
+
+.load extensions/{NAME}/target/wasm32-wasip2/release/{NAME_UNDERSCORE}_extension.component.wasm
+
+SELECT {NAME}_placeholder();

@@ -1,0 +1,97 @@
+//! {DESCRIPTION_SHORT}
+
+extern crate alloc;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_export {{
+    use alloc::format;
+    use alloc::string::{{String, ToString}};
+    use alloc::vec::Vec;
+
+    mod bindings {{
+        wit_bindgen::generate!({{
+            path: "../../sqlite-loader-wit/wit",
+            world: "minimal",
+            generate_all,
+        }});
+    }}
+
+    use bindings::exports::sqlite::extension::metadata::{{
+        Guest as MetadataGuest, Manifest, ScalarFunctionSpec,
+    }};
+    use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
+    use bindings::sqlite::extension::types::{{FunctionFlags, SqlValue}};
+
+    // ---- Function IDs ----
+    // Allocate one constant per scalar. Keep IDs stable: changing
+    // a u64 here is an ABI break for callers that resolved by id.
+    const FID_PLACEHOLDER: u64 = 1;
+
+    struct Ext;
+
+    // ---- Arg helpers ----
+    // The Big Three; copy-pasted into every extension. The
+    // scaffold ships them so you delete what you don't need.
+
+    #[allow(dead_code)]
+    fn arg_text(args: &[SqlValue], i: usize, fname: &str) -> Result<String, String> {{
+        match args.get(i) {{
+            Some(SqlValue::Text(s)) => Ok(s.clone()),
+            _ => Err(format!("{{fname}}: TEXT arg at {{i}}")),
+        }}
+    }}
+
+    #[allow(dead_code)]
+    fn arg_int(args: &[SqlValue], i: usize, fname: &str) -> Result<i64, String> {{
+        match args.get(i) {{
+            Some(SqlValue::Integer(n)) => Ok(*n),
+            _ => Err(format!("{{fname}}: INTEGER arg at {{i}}")),
+        }}
+    }}
+
+    #[allow(dead_code)]
+    fn arg_blob(args: &[SqlValue], i: usize, fname: &str) -> Result<Vec<u8>, String> {{
+        match args.get(i) {{
+            Some(SqlValue::Blob(b)) => Ok(b.clone()),
+            Some(SqlValue::Text(s)) => Ok(s.as_bytes().to_vec()),
+            _ => Err(format!("{{fname}}: BLOB arg at {{i}}")),
+        }}
+    }}
+
+    impl MetadataGuest for Ext {{
+        fn describe() -> Manifest {{
+            let det = FunctionFlags::DETERMINISTIC;
+            let s = |id, name: &str, n: i32| ScalarFunctionSpec {{
+                id,
+                name: name.into(),
+                num_args: n,
+                func_flags: det,
+            }};
+            Manifest {{
+                name: "{NAME}".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                scalar_functions: alloc::vec![
+                    s(FID_PLACEHOLDER, "{NAME}_placeholder", 0),
+                ],
+                aggregate_functions: alloc::vec![],
+                collations: alloc::vec![],
+                vtabs: alloc::vec![],
+                has_authorizer: false,
+                has_update_hook: false,
+                has_commit_hook: false,
+                declared_capabilities: alloc::vec![],
+            }}
+        }}
+    }}
+
+    impl ScalarFunctionGuest for Ext {{
+        fn call(func_id: u64, _args: Vec<SqlValue>) -> Result<SqlValue, String> {{
+            match func_id {{
+                FID_PLACEHOLDER => Ok(SqlValue::Text("hello from {NAME}".to_string())),
+                other => Err(format!("{NAME}: unknown func id {{other}}")),
+            }}
+        }}
+    }}
+
+    bindings::export!(Ext with_types_in bindings);
+}}
