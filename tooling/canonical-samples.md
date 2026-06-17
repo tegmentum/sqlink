@@ -22,6 +22,8 @@ Each entry lists:
 | ISIN (Apple) | `US0378331005` | Apple Inc. common stock |
 | ISIN (Tesla) | `US88160R1014` | Tesla Inc. common stock |
 | ISIN (BMW) | `DE0005190003` | BMW AG common stock |
+| CUSIP (Apple) | `037833100` | issuer=037833, issue=10, check=0; pairs with US0378331005 |
+| CUSIP (Tesla) | `88160R101` | pairs with US88160R1014 |
 | ABA / RTN | `021000021` | JPMorgan Chase Bank, NY  district 2 |
 | ABA / RTN (Dallas) | `111000038` | district 11 |
 | ABA / RTN (San Francisco) | `322271627` | district 32-20=12 (thrift fold) |

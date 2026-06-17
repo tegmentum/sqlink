@@ -328,6 +328,7 @@ fts5/rtree, just at a different layer.
 | ssn (US SSN format validation)  |    +6  | extensions/ssn                     |
 | geo-distance (Haversine + bear  |    +4  | extensions/geo-distance            |
 | crc (CRC-16/32/64 checksums)    |    +5  | extensions/crc                     |
+| cusip (US/CA securities ID han  |    +6  | extensions/cusip                   |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
