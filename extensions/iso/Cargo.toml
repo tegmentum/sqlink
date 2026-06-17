@@ -1,0 +1,48 @@
+[package]
+name = "iso-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ISO code lookups: 3166-1 (country), 4217 (currency),
+639 (language). All static tables; no network access.
+
+Country (ISO 3166-1):
+    iso_country_name(code)        TEXT  alpha-2/alpha-3  English name
+    iso_country_alpha3(alpha2)    TEXT  alpha-2  alpha-3
+    iso_country_alpha2(alpha3)    TEXT  alpha-3  alpha-2
+    iso_country_numeric(code)     INT   alpha-2/alpha-3  numeric code
+
+Currency (ISO 4217):
+    iso_currency_name(code)       TEXT  "EUR"  "Euro"
+    iso_currency_numeric(code)    INT   "EUR"  978
+    iso_currency_symbol(code)     TEXT  "EUR"  ""
+    iso_currency_exponent(code)   INT   "EUR"  2, "JPY"  0
+    iso_currency_from_numeric(n)  TEXT  978  "EUR"
+
+Language (ISO 639):
+    iso_language_name(code)       TEXT  "en" or "eng"  "English"
+    iso_language_639_3(code)      TEXT  "en"  "eng"
+    iso_language_639_1(code)      TEXT  "eng"  "en" (NULL if no 1-letter)
+
+Returns NULL on unknown codes rather than raising so
+SQL composition (`COALESCE(iso_country_name(c),
+'unknown')`) stays clean.
+
+Pair with `detect.lang_detect` for "this text is in <X>
+language" pipelines and `phone.phone_region` for
+"this number is from <X> country" reports.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+rust_iso3166 = "0.1"
+iso_currency = "0.5"
+isolang = "2"
