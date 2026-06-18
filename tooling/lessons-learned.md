@@ -2783,6 +2783,57 @@ rather than general scalar packs.
 - (none new) The pivot itself is the lesson. Plugin count
 112  113.
 
+---
+
+### 2026-06-18  totype  port of SQLite ext/misc/totype.c
+
+**What I built:** Port of SQLite's totype.c bundled extension.
+Two scalars implementing lossless type coercion:
+
+  tointeger(X)   return X as INTEGER if round-trip is exact
+                  else NULL
+  toreal(X)      return X as REAL if conversion is lossless
+                  else NULL
+
+Semantics match the C implementation precisely:
+- INTEGER passes through unchanged
+- REAL  INTEGER ok only if value is exactly representable
+  (no fractional part, in i64 range, not NaN/Inf)
+- TEXT parsed as decimal or hex (0x...) for tointeger
+- BLOB decoded as UTF-8 then parsed like TEXT
+- NULL  NULL
+
+**What worked:**
+- The smoke covers each failure mode separately: fractional
+real, overflow, NaN/Inf, empty string, garbage, NULL. Each
+returns NULL for a different REASON; the smoke documents
+that totype is doing real lossless work, not just casting.
+- The hex literal acceptance ('0x2a'  42) matches SQLite's
+own literal syntax. Easy to forget that totype distinguishes
+"parses as hex" from "is a numeric string."
+- Second pivot-back ship. The pattern is clear now: pick a
+named ext/misc/*.c, port the scalars, lock the behavior
+against the C original's documented semantics. Same shape
+as sha3 (shathree.c).
+
+**What surprised me:**
+- I almost shipped `toreal(42)` returning `Some(42.0)` without
+the round-trip check. SQLite's toreal is documented to
+return NULL when the conversion isn't exact  for most i64
+values this is fine, but values near 2^63 can lose precision
+in f64. The check is `r as i64 == n`. Same defensive shape
+as the float-to-int direction.
+- `toreal('1.5e10')` correctly handles scientific notation
+because Rust's f64::parse covers it. Nice that the host
+language's parser already matches SQLite's expectations.
+
+**Tooling opportunity:**
+- (none new) Plugin count 113  114. Continuing the pivot:
+next candidate is uint collation (ext/misc/uint.c) which would
+be the FIRST consumer of the collation dispatch path. Or eval
+(complex; needs connection access). Choosing whichever has
+cleaner scope next ship.
+
 
 
 

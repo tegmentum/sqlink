@@ -1,0 +1,22 @@
+# Port of SQLite ext/misc/totype.c: lossless type coercion.
+# tointeger accepts INTEGER, lossless REAL, decimal TEXT, hex TEXT;
+# returns NULL for fractional REAL, overflow, NaN/Inf, garbage.
+# toreal accepts REAL, exact INTEGER, decimal TEXT (incl. scientific).
+42
+42
+<NULL>
+42
+-42
+42
+255
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+3.14
+42
+3.14
+15000000000
+<NULL>
+<NULL>
