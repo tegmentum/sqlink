@@ -1678,6 +1678,54 @@ distinct purposes; the wrapper is the one that signals
 - (T-27 closed) The 6-line Makefile target is the right
 amount of ceremony.
 
+---
+
+### 2026-06-17  natsort extension
+
+**What I built:** Natural sort comparison  the "file2 sorts
+before file10" semantics. Three scalars on a tokenize-then-
+compare shape (new this session):
+
+  natsort_compare(a, b)   -1 / 0 / 1
+  natsort_less(a, b)       1 if a sorts before b natural-order, else 0
+  natsort_key(s)           packed string s.t. lexicographic
+                            compare(key(a), key(b))  natsort_compare(a, b)
+
+Tokenizer splits each input into runs of (digits | non-digits).
+Number tokens are compared numerically; text tokens are compared
+case-insensitively. Number tokens sort before text tokens at
+shared positions (the "file10 before filea" convention).
+
+Tie-break: equal numeric value but different digit count  fewer
+digits sorts first ("1" < "01"). All shared positions tied 
+shorter total sequence sorts first.
+
+**What worked:**
+- The key() function lets a smoke verify that the COMPARATOR
+agrees with the KEY function on the same inputs  not via
+testing the implementation twice, but by composing them:
+`compare(key(a), key(b))` should match `compare(a, b)`.
+Smoke includes that round-trip check.
+- Dogfooded `make ext-ship` (T-27) as my end-of-ship check.
+The "ship + regression check + done" flow is one command now.
+30 smokes PASS in 16s.
+
+**What surprised me:**
+- `ta.len() as i64).cmp(...)` returns `Ordering`, not i64, so
+the cast-to-i64 wouldn't work. Replaced with explicit match.
+Rust's type system caught this at compile time  no smoke
+needed. Worth noting as a reminder: try the casts first,
+let the compiler tell you when they're wrong.
+- Mixed token comparison (number vs text at same position)
+isn't a standard the natsort literature agrees on. I picked
+"numbers first" because that's what most filesystems and
+file-managers do. Documented in the source.
+
+**Tooling opportunity:**
+- (none new) ext-ship smoothed the workflow further than I
+expected  felt notably faster than my prior "build,
+smoke, manually-run-all" loop.
+
 
 
 

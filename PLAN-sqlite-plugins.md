@@ -338,6 +338,7 @@ fts5/rtree, just at a different layer.
 | latlon (lat/lon  DMS/DDM forma  |    +5  | extensions/latlon                  |
 | numfmt (number formatting: com  |    +7  | extensions/numfmt                  |
 | radix (integer base conversion  |    +5  | extensions/radix                   |
+| natsort (natural sort (file2 <  |    +3  | extensions/natsort                 |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |

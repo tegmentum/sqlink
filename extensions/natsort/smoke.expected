@@ -1,0 +1,18 @@
+# Three-way compare returning -1/0/1; case-insensitive text segments;
+# leading-zero tie-break; natsort_key round-trip under bytewise sort.
+-1
+1
+0
+1
+-1
+-1
+-1
+0
+-1
+1
+1
+0
+1
+1
+0
+-1
