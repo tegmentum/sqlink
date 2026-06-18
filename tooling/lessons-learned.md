@@ -2119,6 +2119,54 @@ harness-output-limitations section. Tiny edit; do it on the
 next T-* batch.
 Plugin count 104  105.
 
+---
+
+### 2026-06-17  T-32 investigation (empty-string harness limit doc)
+
+**What I built:** Added a 5th bullet to the cli-cheatsheet's
+"Harness output limitations" section explicitly documenting
+that empty-string outputs get dropped by `parse_results`,
+with the canonical workaround:
+
+  SELECT coalesce(nullif(f(), ''), '<empty>');
+
+Specifically notes that this is NOT solvable by another
+`.nullvalue`-style directive  empty string and NULL are
+different types, and the blank-skip exists for the prompt-
+noise reason that's load-bearing.
+
+**What worked:**
+- Took ~2 minutes from "I see the issue" to "documented in
+the place I'll find it." The cheatsheet already had a
+section for this exact category. Adding to an existing
+catalog is much cheaper than starting one.
+- The doc names the SURFACING extension (`tile_quadkey`)
+following the same pattern as the other 4 entries. Each
+entry remains traceable to its origin commit.
+
+**What surprised me:**
+- I almost added `--empty-value <s>` as a smoke.py
+counterpart to `.nullvalue`. Caught myself: that would
+require cli-side cooperation (the cli has no notion of
+"this scalar returned the empty string vs no row"),
+the harness can't tell the difference either, and the
+sentinel-wrap is 22 keystrokes per problem case. Three
+reasons not to build the tool. Documented the workaround
+instead.
+- The "make failures loud" pattern (T-19, T-31) doesn't
+APPLY here. The empty-string drop isn't a bug to fix; it's
+a parser invariant the harness needs to function. The
+correct response is to document the invariant, not to
+remove it.
+
+**Tooling opportunity:**
+- (T-32 closed)
+- The cli-cheatsheet's harness-limitations section now has
+5 entries  big enough to be useful but small enough to
+read in one screen. Worth a periodic re-read; defer until
+catalog adds a 6th entry to confirm it's still load-
+bearing.
+
 
 
 

@@ -117,3 +117,14 @@ rules.
 - **NULLs render as the literal string `<NULL>`** because the
   harness pre-injects `.nullvalue <NULL>` (T-19). Write the
   sentinel verbatim in `smoke.expected`.
+- **Empty-string outputs are dropped.** `parse_results` skips
+  blank lines (to filter the load banner + trailing prompt),
+  so a scalar that returns `""` is indistinguishable from
+  "no row" in the parsed output. Workaround: in smoke,
+  wrap with a sentinel:
+  `SELECT coalesce(nullif(f(), ''), '<empty>');`
+  This is NOT solvable by another `.nullvalue`-style cli
+  directive  empty string and NULL are different types,
+  and the parser strips blanks for the prompt-noise reason.
+  Surfaced via `tile`'s `tile_quadkey(0, 0, 0)` smoke (zoom 0
+  quadkey is "" by spec).
