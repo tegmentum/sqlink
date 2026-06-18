@@ -34,6 +34,8 @@ def main() -> None:
     p.add_argument("name", help="extension name (becomes the table key)")
     p.add_argument("scalars", type=int, help="number of scalars added")
     p.add_argument("description", help="short description for the table")
+    p.add_argument("--force", action="store_true",
+                   help="truncate description rather than refuse (T-31)")
     args = p.parse_args()
 
     if not PLAN.exists():
@@ -41,7 +43,21 @@ def main() -> None:
 
     label = f"{args.name} ({args.description})"
     if len(label) > NAME_W:
-        label = label[:NAME_W - 1] + ""
+        if args.force:
+            label = label[:NAME_W - 1] + ""
+        else:
+            # T-31: silent truncation made the table misleading
+            # (5+ recent ships had their descriptions silently cut).
+            # Refuse by default; --force restores the old behavior.
+            budget = NAME_W - len(args.name) - 3  # name + " ()" overhead
+            sys.exit(
+                f"description too long: '{args.description}' is "
+                f"{len(args.description)} chars but column budget is "
+                f"{budget} (label width {NAME_W}, name takes "
+                f"{len(args.name) + 3} chars including parens).\n"
+                f"hint: pick a shorter description, or pass --force "
+                f"to truncate anyway."
+            )
     scalar_str = f"+{args.scalars}"
     detail = f"extensions/{args.name}"
     row = f"| {label:<{NAME_W}} | {scalar_str:>{SCALARS_W}}  | {detail:<{DETAIL_W}} |"

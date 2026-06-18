@@ -2021,6 +2021,54 @@ decoder. Worth elevating in the skill.
 **Tooling opportunity:**
 - (none new) Plugin count 103  104. Process is humming.
 
+---
+
+### 2026-06-17  T-31 investigation (plan-add silent truncation)
+
+**What I built:** Changed `tooling/plan-add.py` to REFUSE
+descriptions that overflow the column width instead of
+silently truncating with an ellipsis. Added `--force` for
+the rare cases where the truncation is acceptable.
+
+**Why:** The last 5 ships had truncated descriptions in
+PLAN-sqlite-plugins.md without me noticing  the column
+silently lost "(bidirectional)", "(file2 < 10)",
+"(A->Alpha)", etc. Each truncation made the plan less useful
+as a quick scan.
+
+**What worked:**
+- The error message tells you the budget AND your overflow,
+so you can rewrite cleanly: "column budget is 20 (label
+width 31, name takes 11 chars including parens)."
+- `--force` is the explicit opt-in for truncation. Removes
+the silent failure mode while preserving access to the old
+behavior. Same shape as T-24's banner pattern: "do the safe
+thing by default; the unsafe option needs a flag."
+- Verified live: tried a too-long description, got the
+refusal with a useful message; --force restored the
+truncated insert.
+
+**What surprised me:**
+- This bug had been present from the start. Every ship I'd
+just stopped reading the plan-add output after "appended:"
+because the row was always emitted, so I assumed the
+truncation was something the table designer accepted.
+WRONG  it was a silent-data-loss bug, just slow-moving.
+- The pattern "silent data loss in a tool whose output I
+stopped reading" is worth recognizing. T-19 was the same
+class (NULL  empty line silently dropped). The fix shape
+is also the same: make the failure obvious instead of
+hiding it under a workaround.
+
+**Tooling opportunity:**
+- (T-31 closed)
+- (T-32 candidate) The cli-cheatsheet's "Harness output
+limitations" section captures THIS class of bug (silent
+parse-side limitations). plan-add belongs in the same
+catalog. If I add 2 more tools with silent-failure modes,
+write a "tooling design tips" doc with "make failures
+loud" as the headline. Defer until 3rd consumer.
+
 
 
 
