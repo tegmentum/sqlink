@@ -2668,6 +2668,57 @@ with reality, and now I don't have to count.
 should require a real friction; this one barely cleared
 the bar but did.
 
+---
+
+### 2026-06-18  easter extension
+
+**What I built:** Easter date computation. Three scalars:
+
+  easter_western(year)              ISO YYYY-MM-DD via Anonymous
+                                     Gregorian computus
+  easter_orthodox(year)             Eastern Orthodox Easter via
+                                     Meeus Julian + Gregorian shift
+  easter_offset(year, days, cal)    derived dates (Good Friday = -2,
+                                     Pentecost = +49, etc.)
+
+Western works for any year >= 1583 (Gregorian calendar start).
+Orthodox needs the Julian-to-Gregorian shift table (currently
+covers 1583-2199); beyond that  NULL.
+
+**What worked:**
+- Smoke locks the canonical reference cases: Easter 2024 =
+March 31, 2025 = April 20, 2000 = April 23. These match
+the Catholic Church's published lectionary  byte-exact
+agreement with external authority.
+- The smoke also locks an INTERESTING year: 2025 Western and
+2025 Orthodox both fall on April 20  the rare alignment
+when the Julian and Gregorian calendars produce the same
+date. Future-me will smile when reading this.
+- easter_offset() walks dates one day at a time instead of
+implementing full calendar arithmetic. Trades performance
+for code simplicity; for the ~50-day offsets typical in
+liturgical calendars, the cost is microseconds.
+
+**What surprised me:**
+- Ash Wednesday is Easter - 46, NOT 47. I miscounted while
+writing the smoke and saw the comment-vs-output mismatch in
+--show-parsed. Caught before sealing  the function was
+correct, the comment was wrong. Smokes are spec; comments
+need to match.
+- easter_orthodox uses a manual `match year { 1583..=1699 =>
+10, ...}` shift table because the Julian falls one day
+further behind every century not divisible by 400. Three
+extra match arms cover 600 more years. Easy to extend.
+- I almost shipped without testing easter_western(2300) and
+easter_orthodox(2300) as separate cases. The former works
+fine (no shift needed); the latter rightly returns NULL.
+Two scalars, two distinct failure modes  smoke them both.
+
+**Tooling opportunity:**
+- (none new) Plugin count 111  112. Dogfooded T-36
+(lessons-stub) and T-38 (next-fid) on this ship. Both
+saved a small bit of friction.
+
 
 
 
