@@ -202,8 +202,21 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
     if (stale := staleness(name)):
         out = f"WARN: {stale}\n{out}"
 
-    # Second-pass (optional): assert outputs against smoke.expected.
+    # T-11: warn if NO smoke.expected exists AND every parsed row is
+    # <NULL>. That's the "fresh extension where every scalar silently
+    # NULLs everything" signature  catches a fat typo class before
+    # smoke.expected gets seeded. Skip the warn when smoke.expected
+    # is present (the real diff below catches it concretely).
     expected_path = REPO_ROOT / "extensions" / name / "smoke.expected"
+    if not expected_path.exists():
+        actual = parse_results(result.stdout)
+        if len(actual) >= 5 and all(row == "<NULL>" for row in actual):
+            out = ("WARN: every parsed row is <NULL>  is your scalar "
+                   "implementation wired up? (no smoke.expected yet to "
+                   "diff against; this heuristic suppresses once you "
+                   "seed one.)\n" + out)
+
+    # Second-pass (optional): assert outputs against smoke.expected.
     if expected_path.exists():
         actual = parse_results(result.stdout)
         expected = parse_expected(expected_path)

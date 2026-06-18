@@ -1141,6 +1141,46 @@ could collect "patterns that compile cleanly in scaffold
 extensions" (const-table syntax, alias-list shape, etc.).
 Defer until a 3rd such surprise.
 
+---
+
+### 2026-06-17  T-11 investigation (all-NULL warn)
+
+**What I built:** 4-line addition to smoke_one() in
+tooling/smoke.py. When no smoke.expected exists yet AND the
+parsed output has 5+ rows AND every row is `<NULL>`, the
+harness emits a one-line WARN ("is your scalar wired up?").
+Suppresses automatically once smoke.expected gets seeded
+(the real diff catches concrete mismatches).
+
+**What worked:**
+- T-19 made this possible. Before the `<NULL>` sentinel,
+"all rows empty" was indistinguishable from "no rows
+returned" or "buffering artifact." Now an all-NULL run
+is a clean signature with no false positives.
+- Verified threshold logic via inline python -c: 5 NULL
+rows  WARN; 3 mixed  silent; 4 NULL  silent (below
+threshold; intentional to keep cost of false positive low
+for tiny smokes).
+- Catches the "I wired up FID dispatch to the wrong table"
+typo class without needing smoke.expected.
+
+**What surprised me:**
+- Originally I thought T-11 would be subsumed by T-7
+(smoke.expected assertions). It mostly is  but during
+scaffold (before seeding) it's still a real signal. The
+4-line cost is fine for the asymmetric value (catches a
+loud fail-class at the start of every plugin ship).
+- Composes nicely with T-18 (smoke.expected staleness check).
+T-11 fires when there's no smoke.expected, T-18 fires when
+there is one but counts disagree. Different lifecycle
+stages, no overlap.
+
+**Tooling opportunity:**
+- (T-11 closed)
+- The trinity of smoke.py warnings (staleness, all-NULL,
+output diff) now covers most fat-typo classes between
+scaffold and asserted-stable. Nothing immediate to add.
+
 
 
 
