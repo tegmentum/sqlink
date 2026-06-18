@@ -1,0 +1,19 @@
+# ISO 3166-1 auto-detect lookup: alpha-2 / alpha-3 / numeric all
+# accepted on input. Case-insensitive; unknown / malformed  <NULL>.
+United States
+USA
+840
+Americas
+Germany
+DE
+Japan
+JP
+Asia
+Africa
+Americas
+Oceania
+United Kingdom
+<NULL>
+<NULL>
+<NULL>
+<NULL>

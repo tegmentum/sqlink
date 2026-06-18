@@ -1773,6 +1773,58 @@ design tip) now spans the explanation depth gradient. New
 ships look at extension-patterns first for shape, then dip
 into lessons-learned for the why-this-not-that detail.
 
+---
+
+### 2026-06-17  country extension
+
+**What I built:** ISO 3166-1 country reference lookup. Five
+scalars over a 95-entry table:
+
+  country_name(s)      "US" / "USA" / "840"  "United States"
+  country_alpha2(s)    "USA"                  "US"
+  country_alpha3(s)    "US"                   "USA"
+  country_numeric(s)   "US"                   840
+  country_region(s)    "US"                   "Americas"
+
+Auto-detects input format by length + char class:
+  - 2-char alphabetic  alpha-2 lookup
+  - 3-char alphabetic  alpha-3 lookup
+  - 1-3 digit numeric  ISO numeric lookup
+Case-insensitive. Unknown / malformed  NULL.
+
+**What worked:**
+- The auto-detect input is the novelty over the currency
+extension's design: instead of forcing the caller to know
+which column they have, sniff the format. Works because the
+formats are mutually exclusive (no 3-letter all-numeric, no
+2-letter all-alphabetic that's also a number).
+- This is the second consumer of the "exact-key lookup" shape.
+Combined with currency, the pattern in
+tooling/extension-patterns.md now has two reference points.
+- Used T-24 (--seed-expected), T-27 (ext-ship). Workflow
+felt routine  zero seconds of "what do I run next?"
+
+**What surprised me:**
+- The first draft of `lookup()` tried each column unconditionally
+("try alpha-2; if None, try alpha-3; if None, try numeric").
+That's the parser-union shape  WRONG here. The input format
+is unambiguous, so sniff once and dispatch. Cleaner, faster,
+fails earlier on bad input.
+- Documenting this in extension-patterns.md as the difference
+between "parser-union" (parse multiple input grammars) and
+"auto-detect exact-key" (input format is unambiguous,
+dispatch to the right column). They look similar but the
+control flow is opposite.
+
+**Tooling opportunity:**
+- (T-29 new) extension-patterns.md should mention the
+"auto-detect exact-key" variant under the exact-key lookup
+section. Adds ~3 lines. Cheap; defer to the next T-* batch
+since this is the first auto-detect ship and one example
+isn't enough yet to know if it's worth its own row in the
+quick-picker.
+Plugin count 101  102.
+
 
 
 
