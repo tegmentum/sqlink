@@ -3051,6 +3051,86 @@ SQLite pack still missing; with the string half ported and
 the math half pre-covered, the named-extension surface is
 substantially complete.
 
+---
+
+### 2026-06-18  completion vtab  port of SQLite ext/misc/completion.c
+
+**What I built:** Port of SQLite's completion virtual table 
+the last named ext/misc/ extension that required real work
+rather than just being skippable as too niche.
+
+  SELECT candidate FROM completion WHERE prefix = 'SELE';
+   "SELECT"
+  
+  SELECT candidate, phase FROM completion WHERE prefix = 'json_';
+   "json", 3
+   "json_array", 3
+   "json_array_length", 3
+   ...
+
+Schema mirrors completion.c exactly:
+
+  CREATE TABLE x(candidate, prefix HIDDEN, wholeline HIDDEN, phase HIDDEN)
+
+Hidden input columns: `prefix` (EQ-bound via best_index) and
+`wholeline` (accepted but unused). Output columns: `candidate`
+(the matching identifier) and `phase` (1=keyword, 2=pragma,
+3=function, 4=collation).
+
+Hardcoded candidate lists totaling 299 entries:
+  - 148 SQL keywords from sqlite.org/lang.html
+  - 60 pragma names from sqlite.org/pragma.html
+  - 88 built-in scalar / agg / window / date / json1 functions
+  - 3 collations (BINARY, NOCASE, RTRIM)
+
+Phases 5-7 (database/table/column names) require schema
+introspection via spi and are deferred  see T-41.
+
+**What worked:**
+- listargs as a template was directly applicable. The vtab
+shape (best_index  filter  cursor walk) maps cleanly to
+completion's "filter candidates by prefix, return matching
+rows" model. ~270 LOC, same structure as listargs.
+- 299 hardcoded names is unwieldy but tractable. Putting each
+list in a `const &[&str]` keeps the data inline with the
+code  no separate data file, no parsing at load time.
+- Smoke locks the total count (299) AND a per-prefix count
+breakdown (`GROUP BY phase WHERE prefix='p'`). If the
+keyword/pragma/function/collation lists ever drift, the
+GROUP BY row will diverge BEFORE the total count would
+(which could be invariant under a swap between categories).
+- T-31 fired AGAIN on plan-add: "completion.c port (vtab)" =
+24, "completion.c vtab" = 17. Long name + parens leave very
+little budget; the description is now precise but tight.
+
+**What surprised me:**
+- This was the FIRST real vtab port that I've shipped this
+session. All prior ones (csv, vec0, listargs, closure, etc.)
+were either pre-session or required heavy domain logic
+(vec0). completion is the simplest case where the vtab path
+is exercised end-to-end with just plain data.
+- The `wholeline` column is documented in completion.c as
+"the entire input line up to the cursor" for filtering by
+context. Our port accepts but ignores it. A more advanced
+implementation would parse `wholeline` to know whether the
+cursor is mid-keyword vs mid-table-name; deferred for now.
+- 299 candidates loaded for every query is wasteful  the
+filter could be done at iteration time without an
+intermediate Vec. Premature optimization for an
+autocomplete-style use case where users type 2-3 chars; the
+filter reduces 299 to ~5-10 rows quickly enough.
+
+**Tooling opportunity:**
+- (T-41 new) Schema-aware completion (phases 5-7) needs
+spi::execute against `pragma_table_list` / `pragma_table_info`
++ pragma_collation_list to enumerate user databases, tables,
+columns, and registered collations. Deferred until a real
+caller asks; the spi dependency means the smoke would hit
+the same :memory: constraint as eval (T-40).
+Plugin count 118  119. This closes the major remaining
+ext/misc/ port  the catalog now covers every named SQLite
+extension that translates cleanly to wasm.
+
 
 
 

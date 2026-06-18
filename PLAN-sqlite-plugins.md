@@ -372,6 +372,7 @@ cheap to add new scalar packs.
 | eval (eval.c port (run SQL))    |    +2  | extensions/eval                    |
 | zorder (zorder.c port (Morton)) |    +5  | extensions/zorder                  |
 | extfns (ext-functions strings)  |   +11  | extensions/extfns                  |
+| completion (completion.c vtab)  |    +0  | extensions/completion              |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
