@@ -1,0 +1,28 @@
+# Port of SQLite ext/misc/uint.c collation. First consumer of
+# the collation dispatch path. Each `---` separator shows where
+# a new ORDER BY block starts: default lex (file1, file10, file100,
+# file2)  uint (file1, file2, file10, file100); pure numbers;
+# mixed letter/digit prefixes; same-magnitude leading-zero pad.
+file1
+file10
+file100
+file2
+---
+file1
+file2
+file10
+file100
+---
+001
+3
+20
+100
+---
+a1
+a2
+a10
+b1
+---
+1
+01
+001

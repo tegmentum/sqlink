@@ -2834,6 +2834,65 @@ be the FIRST consumer of the collation dispatch path. Or eval
 (complex; needs connection access). Choosing whichever has
 cleaner scope next ship.
 
+---
+
+### 2026-06-18  uint  port of SQLite ext/misc/uint.c collation
+
+**What I built:** First consumer of the collation dispatch path
+in this codebase. The collation has been wired up since day one
+but no extension declared one until now. Port of SQLite's
+ext/misc/uint.c:
+
+  ORDER BY col COLLATE uint
+  
+   compares strings as natural numbers within digit runs,
+     byte-wise elsewhere. "file2" < "file10" instead of the
+     lexicographic "file10" < "file2".
+
+The extension is shape-distinct: ZERO scalar functions, ZERO
+aggregates, ZERO vtabs  just a single collation. The
+ScalarFunctionGuest still has to be exported per the `collating`
+world's WIT contract; it errors on any call (no scalars are
+advertised, so the host won't dispatch to it).
+
+**What worked:**
+- The `collating` world existed in WIT and was wired through
+host + cli BEFORE any consumer landed. Today's ship just
+filled an empty slot in the dispatch table  no host/cli
+changes needed. That's exactly what a clean extension
+ABI should feel like.
+- Smoke uses `.print ---` markers between ORDER BY blocks so
+the diff can pinpoint which sort behavior changed if it
+regresses.
+- The leading-zero handling has three distinct cases that
+all needed smoke coverage: unequal magnitude (longer wins),
+equal magnitude same digits ('1' = '1'), equal magnitude
+different padding ('01' > '1' because more original chars).
+Each case is one row in the smoke.
+
+**What surprised me:**
+- I'd assumed I'd need to edit host or cli code to wire up
+the collation. Wrong  the dispatch path's been there
+since the world was defined. The only "first-time" cost
+was figuring out the WIT-binding import:
+`bindings::exports::sqlite::extension::collation::Guest as
+CollationGuest`. Once you know the path, it's identical
+shape to ScalarFunctionGuest.
+- The `world: "collating"` line in the bindgen macro was
+the actual configuration change vs. the default scaffolding.
+Worth documenting in the scaffold templates if collation
+extensions become a regular thing.
+- The plan-add description landed at "uint.c port (collation)"
+which is exactly informative. T-31 didn't fire this ship.
+
+**Tooling opportunity:**
+- (T-39 new) The scaffold template hardcodes `world: "minimal"`.
+For non-minimal worlds (collating, stateful, tabular, etc.)
+the scaffold currently produces wrong output. A `--world`
+flag would map to the right template variants. Defer until
+a 2nd non-minimal ship; this is the first in months.
+Plugin count 114  115.
+
 
 
 

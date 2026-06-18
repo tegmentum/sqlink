@@ -368,6 +368,7 @@ cheap to add new scalar packs.
 | easter-date (Western+Orthodox)  |    +3  | extensions/easter-date             |
 | sha3 (SHA-3 (shathree port))    |    +6  | extensions/sha3                    |
 | totype (totype.c port)          |    +2  | extensions/totype                  |
+| uint (uint.c port (collation))  |    +0  | extensions/uint                    |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |

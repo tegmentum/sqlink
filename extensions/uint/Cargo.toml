@@ -1,0 +1,19 @@
+[package]
+name = "uint-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+uint collation (ext/misc/uint.c port)
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# add your upstream crate deps here
