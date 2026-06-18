@@ -2628,6 +2628,46 @@ T-34 threshold rule.
 "split when 15" threshold I called out in T-33. Still
 fits on one screen; defer the split decision until 15+.
 
+---
+
+### 2026-06-18  T-38 investigation (next-fid utility)
+
+**What I built:** tooling/next-fid.py prints the next unused
+FID const value for an extension's src/lib.rs. Reads the file,
+finds all `const FID_*: u64 = N`, prints `max(N) + 1`.
+
+  python3 tooling/next-fid.py xor
+    4
+  python3 tooling/next-fid.py cipher
+    7
+
+Exits 0 with the number; exits 1 with stderr if the
+extension doesn't exist or hasn't had FIDs assigned yet.
+
+**What worked:**
+- 30 LOC of Python. Removes a micro-friction I was hitting
+~once per scalar-add (3-5 times per extension on average).
+- Pairs with lessons-stub and the other "small focused
+tools": each one does ONE thing, prints to stdout, exits
+non-zero on failure. The tooling/ directory pattern stays
+clean.
+
+**What surprised me:**
+- I'd been mentally tracking FID numbers as I added scalars.
+Cipher had 6 (FID_CAESAR_ENCODE through FID_ATBASH); xor
+had 3. Each addition costs a few seconds of mental
+bookkeeping. Cumulative across a session  worth saving.
+- The script is so small I almost dismissed it as
+over-tooling. But the test cases (xor=4, cipher=7,
+setops=9) all matched my hand-counts  the tool agrees
+with reality, and now I don't have to count.
+
+**Tooling opportunity:**
+- (T-38 closed)
+- The tooling/ directory now has 8 scripts. Adding more
+should require a real friction; this one barely cleared
+the bar but did.
+
 
 
 
