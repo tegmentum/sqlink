@@ -335,6 +335,7 @@ fts5/rtree, just at a different layer.
 | unitconv (length/mass/time/tem  |    +5  | extensions/unitconv                |
 | currency (ISO 4217 currency  n  |    +4  | extensions/currency                |
 | humansize (humanize bytes + du  |    +5  | extensions/humansize               |
+| latlon (lat/lon  DMS/DDM forma  |    +5  | extensions/latlon                  |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |

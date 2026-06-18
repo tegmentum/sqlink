@@ -1369,6 +1369,94 @@ covers: scaffold (T-11 all-NULL warn)  seed
 (T-18 count mismatch)  fast-CI (T-17 parallel). Full
 lifecycle covered. Nothing immediate to add.
 
+---
+
+### 2026-06-17  T-17 follow-up (cache contention)
+
+**What I found:** The T-17 parallel runner from commit f43134d
+was flaky  reproducible "actual=0 rows" in random subsets
+per run, often 2-9 of the 27 smokes. Root cause: the host's
+cas.sqlite component cache file is opened unconditionally,
+even with --no-component-cache. The flag only skips USING
+the cache; the SQLite file is still opened, and 8+ concurrent
+opens of the same DB race during initialization.
+
+**What I fixed:** Per-worker `--cache-dir` via
+`tempfile.mkdtemp()`. Each parallel subprocess gets its own
+cas.sqlite. Cleaned up in finally{} so timeouts/exceptions
+don't leak. ~1 MB tempdir per worker, short-lived.
+
+Verified: 5 consecutive `-j 0` runs, 27 smokes each, zero
+failures. The flake repro'd in 2-3 of every 5 runs before.
+
+**What I learned:**
+- "--no-component-cache" sounds like "don't touch the cache,"
+but it means "don't use the cache for caching." The file
+machinery still runs. Two-flag idioms are misleading on
+their own  the host should probably honor a "skip cache
+entirely" mode if this comes up again.
+- Diagnosed via repeated runs ("3 in a row, see if it flakes").
+Cheaper than reading code first. If a build looks flaky,
+believe the flake before debugging the test.
+- Almost shipped the wrong fix (--no-component-cache alone)
+because the FIRST run with that change still failed and I
+attributed it to leftover state. Three more runs proved the
+flake was still present  per-worker dirs are the real fix.
+
+**Tooling opportunity:**
+- (none new) The diagnostic loop (3-5x repeated `--all`)
+worked. Could be a `--repeat N` smoke flag for future
+flake-hunting, but that's over-tooling for a problem this
+size. Defer until a 2nd flake hunt.
+
+---
+
+### 2026-06-17  latlon extension
+
+**What I built:** Coordinate format conversion extension. Five
+scalars on a numeric/string transform shape (different from
+all prior shapes this session  not a lookup, not a parser-
+union, not a formatter-only):
+
+  latlon_to_dms(decimal, axis)      40.7128, 'lat'  "40° 42' 46.08\" N"
+  latlon_to_ddm(decimal, axis)      40.7128, 'lat'  "40° 42.768' N"
+  latlon_from_dms(text)             "40° 42' 46\" N"  40.7128
+  latlon_normalize_lon(x)           wrap to [-180, 180)
+  latlon_normalize_lat(x)           clamp to [-90, 90]
+
+`axis` arg picks the hemispheric letter (N/S vs E/W). Parser
+is permissive: handles "40° 42' 46\" N", "40 42 46 N", or
+raw signed "-40.7128". Bad axis  NULL.
+
+**What worked:**
+- Dogfooded T-24 (`--seed-expected`) on this ship. Wrote
+smoke.sql, made the extension, ran --seed-expected, swapped
+the banner for a real description, committed. Saved at
+least 2-3 minutes of manual harvest+paste.
+- Longitude wrap (Euclidean remainder) catches the boundary
+case `180.0  -180.0` so smoke can pin the open-half-
+interval convention.
+- The smoke caught a real bug during development: I'd written
+`'' ` (two apostrophes) in the format string by mistake.
+The DMS output read "40° 42'' 46" instead of "40° 42' 46".
+Fixed before commit. Smoke = spec.
+
+**What surprised me:**
+- T-17 parallel runner regression caught immediately by the
+end-of-ship `--all -j 0` check. Diagnosed and fixed in 15
+minutes. If --all had been silent ("all 27 passed") and I'd
+moved on, the flake would have hit a future committer 
+much harder to debug cold than fresh. The discipline of
+running --all at the end of every ship paid off here.
+- Latitudes clamp (no wrap) but longitudes wrap (no clamp).
+That asymmetry confuses people who've never thought about
+coordinate systems. Documented in code; might be the kind
+of thing worth a one-line note in a "geo extensions"
+overview doc if more land.
+
+**Tooling opportunity:**
+- (none new) Workflow felt smooth. Plugin count 97  98.
+
 
 
 
