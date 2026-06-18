@@ -84,6 +84,8 @@ to match those.
 |                  |        |                                                            |
 | `.load FILE`     |        | Load an extension component (this project's `.load`)      |
 | `.unload NAME`   |        | Unload an extension                                        |
+| `.reload NAME [PATH]` |   | Edit-rebuild-reload shortcut: unload + reload (remembers   |
+|                  |        | source from last `.load` if no PATH given)                |
 | `.cache ?op?`    |        | Inspect/manage component cache (project-specific)         |
 | `.compose ...`   |        | sqlite-wasm-loader compose ops (project-specific)         |
 | `.grants ...`    |        | Capability grants for loaded extensions (project-specific)|

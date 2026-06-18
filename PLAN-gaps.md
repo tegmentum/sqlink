@@ -108,17 +108,20 @@ Update after each commit.
        implementation is ready for whenever we get past the source
        lockout (see below). Original 3-5 day estimate was for VFS
        work only  the actual blocker is upstream patching.
-- [~] 4. Hot-reload + ext dependency declarations
-       Hot-reload  ALREADY WORKS. Verified: `.load X.wasm; SELECT
-       fn(); .unload X; SELECT fn(); .load X.wasm; SELECT fn();`
-       cycles cleanly (unload removes scalars/collations/etc,
-       reload re-registers, function returns the same answer).
-       My earlier audit missed this  the `.unload` impl in
-       cli/src/lib.rs is substantive code (calls unload_extension,
-       removes per-extension function registrations, clears
-       authorizer hook if any). No work needed.
+- [x] 4. Hot-reload  full workflow shipped.
+       `.unload NAME; .load PATH` cycle (already implemented before
+       this session). Added `.reload NAME [PATH]` shortcut for
+       the edit-rebuild-reload dev loop (remembers the source from
+       the last `.load`). Stress-tested across worlds: scalar
+       (sha3), vtab (completion), collation (uint) all cycle
+       correctly; 10x rapid reload no leak. Aggregate (hyperloglog,
+       count_min, sketches) fails to load  PRE-EXISTING bug
+       ("instantiate loaded ext: failed to convert function to
+       given type"), unrelated to hot-reload, logged as
+       follow-up.
 
-       Extension dependency declarations  NOT done. Would require:
+       Extension dependency declarations  NOT done, intentionally
+       deferred. Would require:
          - Adding a `requires-spec` record to the Manifest in
            sqlite-loader-wit/wit/guest.wit
          - Updating host's manifest dispatch path to surface the
@@ -131,6 +134,23 @@ Update after each commit.
        multi-extension dependency case arises  the lesson from
        D/E architecture work was "don't ship speculative
        contracts."
+
+## Item 4 follow-up: aggregate-extension load bug
+
+Surfaced while stress-testing hot-reload across worlds. Loading
+any extension that uses the `stateful` world for aggregates
+fails with:
+
+  Error loading <path>: instantiate loaded ext:
+  failed to convert function to given type (code 1)
+
+Affects: hyperloglog, count_min, sketches (verified). decimal /
+stats build into workspace target paths so weren't tested here.
+
+This is wasmtime-level type-mismatch on one of the aggregate
+WIT functions  it predates this session's work and isn't a
+hot-reload-specific issue. Worth investigating in its own pass
+because the catalog claims aggregate support; ~half a day.
 
 ## Item 3 detail: WAL on WASI
 

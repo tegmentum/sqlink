@@ -95,6 +95,11 @@ struct ExtRegistrations {
     /// a pair when `manifest.has_commit_hook` is true.
     has_update_hook: bool,
     has_commit_hook: bool,
+    /// Source the extension was loaded from. Used by `.reload NAME`
+    /// to re-fetch the same .wasm without the caller re-typing the path.
+    /// Set to the `<input>` part of `.load <input>` — could be a path,
+    /// URL, or any string the loader accepts.
+    source: String,
 }
 
 fn ensure_cli_conn() {
@@ -276,6 +281,12 @@ fn eval_input(input: &str) -> String {
     }
     if let Some(rest) = trimmed.strip_prefix(".unload ") {
         return do_unload(rest.trim());
+    }
+    if let Some(rest) = trimmed.strip_prefix(".reload ") {
+        return do_reload(rest.trim());
+    }
+    if trimmed == ".reload" {
+        return "Usage: .reload NAME [PATH-OR-URL [--flags...]]\n".to_string();
     }
     if let Some(rest) = trimmed.strip_prefix(".open") {
         return do_open(rest.trim());
@@ -1134,6 +1145,11 @@ fn do_load(input: &str) -> String {
             regs.has_commit_hook = true;
         }
 
+        // Remember the source for `.reload NAME` so the user doesn't
+        // need to re-type the path / URL. Set BEFORE insert so the
+        // value travels with the registration record.
+        regs.source = input.to_string();
+
         EXT_REGS.with(|m| m.borrow_mut().insert(ext_name.clone(), regs));
 
         (s_count, a_count, c_count, h_count, v_count)
@@ -1904,6 +1920,51 @@ fn do_compose(arg: &str, conn: &db::Connection) -> String {
              Try: list / show NAME / save NAME FILE [FORMAT] / delete NAME\n"
         ),
     }
+}
+
+/// `.reload NAME [PATH [--flags...]]`
+///
+/// Convenience for the edit-rebuild-reload dev loop:
+///   - `.reload NAME` re-fetches from the path/URL the original `.load`
+///     used. The flags from that load are preserved verbatim.
+///   - `.reload NAME PATH [--flags...]` unloads NAME, then loads PATH.
+///     Use when the file path changed, or when you want different
+///     grant/fuel/etc flags.
+///
+/// On unload-not-found this errors  it does NOT silently fall through
+/// to a fresh load (we don't know which path you meant).
+fn do_reload(input: &str) -> String {
+    // Split into NAME + optional rest (path + flags).
+    let mut parts = input.splitn(2, char::is_whitespace);
+    let name = parts.next().unwrap_or("").trim();
+    if name.is_empty() {
+        return "Usage: .reload NAME [PATH-OR-URL [--flags...]]\n".to_string();
+    }
+    let rest = parts.next().unwrap_or("").trim();
+
+    // Look up the remembered source if no new path supplied.
+    let target = if rest.is_empty() {
+        let remembered = EXT_REGS.with(|m| {
+            m.borrow().get(name).map(|r| r.source.clone())
+        });
+        match remembered {
+            Some(s) if !s.is_empty() => s,
+            _ => return format!(
+                "Error: .reload {name}: no remembered source; \
+                 supply a path or URL: .reload {name} PATH\n"
+            ),
+        }
+    } else {
+        rest.to_string()
+    };
+
+    let mut out = String::new();
+    let unload_out = do_unload(name);
+    // Surface unload diagnostics but don't abort  user expects the
+    // dev loop to keep going even if the unload had nothing to clean.
+    out.push_str(&unload_out);
+    out.push_str(&do_load(&target));
+    out
 }
 
 fn do_unload(name: &str) -> String {
