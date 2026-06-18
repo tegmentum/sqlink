@@ -44,6 +44,10 @@ SQLITE_CFLAGS := \
     -DSQLITE_DEFAULT_MEMSTATUS=0 \
     -DSQLITE_MAX_EXPR_DEPTH=0 \
     -DSQLITE_USE_ALLOCA
+# Note: SESSION + PREUPDATE_HOOK enabled for the cli's sqlite3 via
+# core/Cargo.toml's `libsqlite3-sys = { features = [..., "session"] }`.
+# The Makefile compile is for FTS5/RTREE/etc. .o variants only;
+# the cli's main sqlite3 comes from cargo.
 
 # Compiler flags
 CFLAGS := \

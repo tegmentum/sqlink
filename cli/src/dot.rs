@@ -83,8 +83,249 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".vfslist" => cmd_vfslist(),
         ".vfsname" => cmd_vfsname(arg, conn),
         ".archive" => cmd_archive(arg, conn),
+        ".session" => cmd_session(arg, conn),
         _ => return None,
     })
+}
+
+// ----- .session (sqlite3 cli compatibility) ---------------------
+//
+// Matches the surface of the upstream sqlite3 shell's `.session`
+// command. Sessions are per-name, scoped to this cli's connection,
+// and tracked in a thread_local registry. Each session is a
+// *mut sqlite3_session  the FFI handle that SQLITE_ENABLE_SESSION
+// gives us.
+//
+// Subcommands:
+//   .session NAME create [DB]      open a new session on DB (default "main")
+//   .session NAME attach TABLE     attach a table (or "*" for all)
+//   .session NAME enable on|off    toggle change recording
+//   .session NAME indirect on|off  toggle indirect-changes flag
+//   .session NAME isempty          print 1 or 0
+//   .session NAME changeset FILE   write captured changeset to FILE
+//   .session NAME patchset FILE    write captured patchset to FILE
+//   .session NAME delete           close session (frees the handle)
+//   .session list                  list active session names
+
+/// Manual extern decls for sqlite3session_*. The bundled sqlite3
+/// is compiled with SESSION + PREUPDATE_HOOK via LIBSQLITE3_FLAGS
+/// in .cargo/config.toml, so the symbols are linkable; libsqlite3-sys's
+/// `session` feature would auto-declare them but requires
+/// buildtime_bindgen which fails to cross-compile to wasm32-wasip2.
+mod session_ffi {
+    use std::os::raw::{c_char, c_int, c_void};
+
+    pub enum sqlite3_session {}
+
+    extern "C" {
+        pub fn sqlite3session_create(
+            db: *mut libsqlite3_sys::sqlite3,
+            zDb: *const c_char,
+            ppSession: *mut *mut sqlite3_session,
+        ) -> c_int;
+
+        pub fn sqlite3session_delete(p: *mut sqlite3_session);
+
+        pub fn sqlite3session_attach(p: *mut sqlite3_session, zTab: *const c_char) -> c_int;
+
+        pub fn sqlite3session_enable(p: *mut sqlite3_session, bEnable: c_int) -> c_int;
+
+        pub fn sqlite3session_indirect(p: *mut sqlite3_session, bIndirect: c_int) -> c_int;
+
+        pub fn sqlite3session_isempty(p: *mut sqlite3_session) -> c_int;
+
+        pub fn sqlite3session_changeset(
+            p: *mut sqlite3_session,
+            pnChangeset: *mut c_int,
+            ppChangeset: *mut *mut c_void,
+        ) -> c_int;
+
+        pub fn sqlite3session_patchset(
+            p: *mut sqlite3_session,
+            pnPatch: *mut c_int,
+            ppPatch: *mut *mut c_void,
+        ) -> c_int;
+    }
+}
+
+thread_local! {
+    static SESSIONS: RefCell<std::collections::HashMap<String, *mut session_ffi::sqlite3_session>>
+        = RefCell::new(std::collections::HashMap::new());
+}
+
+fn cmd_session(arg: &str, conn: &Connection) -> String {
+    let trimmed = arg.trim();
+    if trimmed.is_empty() {
+        return ".session NAME {create|attach|enable|indirect|isempty|changeset|patchset|delete}\n\
+                .session list\n".to_string();
+    }
+    // First token is either "list" or a NAME.
+    let mut parts = trimmed.splitn(2, char::is_whitespace);
+    let first = parts.next().unwrap_or("");
+    let rest = parts.next().unwrap_or("").trim();
+    if first == "list" {
+        return session_list();
+    }
+    // first = NAME
+    let name = first;
+    let mut subparts = rest.splitn(2, char::is_whitespace);
+    let sub = subparts.next().unwrap_or("").trim();
+    let subarg = subparts.next().unwrap_or("").trim();
+    match sub {
+        "create" => session_create(name, subarg, conn),
+        "attach" => session_attach(name, subarg),
+        "enable" => session_enable(name, subarg),
+        "indirect" => session_indirect(name, subarg),
+        "isempty" => session_isempty(name),
+        "changeset" => session_changeset(name, subarg, false),
+        "patchset" => session_changeset(name, subarg, true),
+        "delete" => session_delete(name),
+        other => format!(".session {name}: unknown subcommand {other:?}\n\
+                          Valid: create attach enable indirect isempty \
+                          changeset patchset delete\n"),
+    }
+}
+
+fn session_list() -> String {
+    SESSIONS.with(|m| {
+        let map = m.borrow();
+        if map.is_empty() {
+            return "(no active sessions)\n".to_string();
+        }
+        let mut names: Vec<&String> = map.keys().collect();
+        names.sort();
+        let mut out = String::new();
+        for n in names {
+            out.push_str(n);
+            out.push('\n');
+        }
+        out
+    })
+}
+
+fn session_create(name: &str, db_arg: &str, conn: &Connection) -> String {
+    if SESSIONS.with(|m| m.borrow().contains_key(name)) {
+        return format!("Error: session {name:?} already exists\n");
+    }
+    let db_name = if db_arg.is_empty() { "main" } else { db_arg };
+    let db_c = match std::ffi::CString::new(db_name) {
+        Ok(c) => c,
+        Err(_) => return format!("Error: db name {db_name:?} has interior NUL\n"),
+    };
+    let mut session: *mut session_ffi::sqlite3_session = std::ptr::null_mut();
+    let rc = unsafe {
+        session_ffi::sqlite3session_create(conn.raw_handle(), db_c.as_ptr(), &mut session)
+    };
+    if rc != ffi::SQLITE_OK {
+        return format!("Error: sqlite3session_create returned {rc}\n");
+    }
+    SESSIONS.with(|m| m.borrow_mut().insert(name.to_string(), session));
+    String::new()
+}
+
+fn with_session<F: FnOnce(*mut session_ffi::sqlite3_session) -> String>(name: &str, f: F) -> String {
+    let session = SESSIONS.with(|m| m.borrow().get(name).copied());
+    match session {
+        Some(s) => f(s),
+        None => format!("Error: no session named {name:?}\n"),
+    }
+}
+
+fn session_attach(name: &str, tbl: &str) -> String {
+    with_session(name, |session| {
+        let tbl_c = if tbl.is_empty() || tbl == "*" {
+            None
+        } else {
+            match std::ffi::CString::new(tbl) {
+                Ok(c) => Some(c),
+                Err(_) => return format!("Error: table {tbl:?} has interior NUL\n"),
+            }
+        };
+        let tbl_ptr = tbl_c.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+        let rc = unsafe { session_ffi::sqlite3session_attach(session, tbl_ptr) };
+        if rc != ffi::SQLITE_OK {
+            format!("Error: sqlite3session_attach returned {rc}\n")
+        } else {
+            String::new()
+        }
+    })
+}
+
+fn parse_on_off_strict(s: &str) -> Option<bool> {
+    match s.trim().to_lowercase().as_str() {
+        "on" | "true" | "1" | "yes" => Some(true),
+        "off" | "false" | "0" | "no" => Some(false),
+        _ => None,
+    }
+}
+
+fn session_enable(name: &str, arg: &str) -> String {
+    with_session(name, |session| {
+        let want: c_int = match parse_on_off_strict(arg) {
+            Some(true) => 1,
+            Some(false) => 0,
+            None => return format!("Error: .session enable expects on|off (got {arg:?})\n"),
+        };
+        let _prev = unsafe { session_ffi::sqlite3session_enable(session, want) };
+        String::new()
+    })
+}
+
+fn session_indirect(name: &str, arg: &str) -> String {
+    with_session(name, |session| {
+        let want: c_int = match parse_on_off_strict(arg) {
+            Some(true) => 1,
+            Some(false) => 0,
+            None => return format!("Error: .session indirect expects on|off (got {arg:?})\n"),
+        };
+        let _prev = unsafe { session_ffi::sqlite3session_indirect(session, want) };
+        String::new()
+    })
+}
+
+fn session_isempty(name: &str) -> String {
+    with_session(name, |session| {
+        let v = unsafe { session_ffi::sqlite3session_isempty(session) };
+        format!("{}\n", if v != 0 { 1 } else { 0 })
+    })
+}
+
+fn session_changeset(name: &str, file: &str, patchset: bool) -> String {
+    if file.is_empty() {
+        let which = if patchset { "patchset" } else { "changeset" };
+        return format!("Error: .session {which} expects FILE\n");
+    }
+    with_session(name, |session| {
+        let mut out_n: c_int = 0;
+        let mut out_p: *mut std::os::raw::c_void = std::ptr::null_mut();
+        let rc = if patchset {
+            unsafe { session_ffi::sqlite3session_patchset(session, &mut out_n, &mut out_p) }
+        } else {
+            unsafe { session_ffi::sqlite3session_changeset(session, &mut out_n, &mut out_p) }
+        };
+        if rc != ffi::SQLITE_OK {
+            return format!("Error: extract returned {rc}\n");
+        }
+        let bytes = unsafe {
+            std::slice::from_raw_parts(out_p as *const u8, out_n as usize)
+        }.to_vec();
+        unsafe { ffi::sqlite3_free(out_p) };
+        match std::fs::write(file, &bytes) {
+            Ok(_) => format!("wrote {} bytes to {file}\n", bytes.len()),
+            Err(e) => format!("Error: write {file}: {e}\n"),
+        }
+    })
+}
+
+fn session_delete(name: &str) -> String {
+    let session = SESSIONS.with(|m| m.borrow_mut().remove(name));
+    match session {
+        Some(s) => {
+            unsafe { session_ffi::sqlite3session_delete(s) };
+            String::new()
+        }
+        None => format!("Error: no session named {name:?}\n"),
+    }
 }
 
 fn cmd_lint(arg: &str, conn: &Connection) -> String {

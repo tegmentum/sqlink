@@ -56,6 +56,8 @@ If this drifts from the dispatch list, re-run T-21's audit.
 | `.vfsname`       |        | Print active VFS for current connection                   |
 | `.archive ...`   |        | Create/extract sqlar zipfile-style archives               |
 | `.log on\|off`   |        | Toggle sqlite3_log callback echo (handled in `lib.rs`)    |
+| `.session NAME ...` |     | Session/changeset (matches upstream sqlite3 cli)          |
+| `.session list`  |        | List active sessions                                       |
 
 ## Smoke-test idioms
 
@@ -75,6 +77,36 @@ If this drifts from the dispatch list, re-run T-21's audit.
   smoke file so cascading failures produce distinct rows
   (or use a `.print '--- section ---'` marker so a diff
   pinpoints the failing block).
+
+## Session/changeset commands (sqlite3 cli compat)
+
+`.session` mirrors the upstream sqlite3 shell's session API. Each
+named session attaches to the cli's connection and tracks changes
+until you extract the changeset:
+
+```
+.session main create               # create session "main"
+.session main attach *             # attach all tables (or NAME)
+CREATE TABLE t(x);                 # ... changes get captured
+INSERT INTO t VALUES (1), (2);
+.session main isempty              # 0 (changes exist) / 1 (no changes)
+.session main changeset out.cs     # write captured changeset to FILE
+.session main patchset out.cs      # smaller variant (no before-values)
+.session main enable on|off        # toggle change recording
+.session main indirect on|off      # toggle indirect-changes flag
+.session main delete               # close + free
+.session list                      # list active session names
+```
+
+Path arg to `changeset` / `patchset` is relative to wasi cwd
+preopens  use a path inside the directory you invoked
+sqlite-wasm-run from. Absolute paths outside wasi preopens fail
+with "No such file or directory" (this is wasi sandboxing, not a
+session bug).
+
+The captured blob is byte-compatible with `sqlite-wasm-run
+changeset {invert|concat|apply}` host subcommands  capture
+inside the cli, transform / replicate outside.
 
 ## Things the cli does that surprise smoke authors
 

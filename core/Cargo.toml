@@ -13,7 +13,14 @@ crate-type = ["rlib"]
 # it via the cc crate against wasm32-wasip2). The downstream crates
 # build for wasm32-wasip2 so the build env needs CC_wasm32_wasip2 to
 # point at the wasi-sdk clang.
-libsqlite3-sys = { version = "0.30", features = ["bundled", "session"] }
+# NB: SESSION is enabled via LIBSQLITE3_FLAGS in .cargo/config.toml
+# at the C level. The libsqlite3-sys `session` feature would forward
+# bindings but it requires buildtime_bindgen which fails to
+# cross-compile to wasm32-wasip2 (~97 missing-symbol errors in the
+# generated bindings). Callers needing sqlite3session_* / sqlite3changeset_*
+# declare them as `extern "C"` directly  see host/src/main.rs and
+# cli/src/dot.rs.
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 
 [build-dependencies]
 # Used to compile src/vfs/vfs_wasi.c on wasm32 targets so SQLite's

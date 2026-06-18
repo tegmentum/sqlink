@@ -3316,6 +3316,102 @@ phase 2's invert/concat against real (not just empty) blobs.
 - The named-SQLite-extension surface is now substantially
   complete. Session was the last big architectural gap.
 
+---
+
+### 2026-06-18  Option F  .session dot commands (sqlite3 cli compat)
+
+After phase 2/3 landed, the natural follow-up was "interactive
+capture"  changes made by tools other than a pre-supplied SQL
+script. PLAN-interactive-capture.md laid out two options (D
+daemon vs E WIT-extension) with recommendation to defer.
+
+User pointed out the actual question I'd missed: **does sqlite3
+already do interactive capture?** Yes  the upstream sqlite3
+shell has `.session NAME {create|attach|enable|...|changeset}`
+dot commands. Matching them is option F. That made D and E both
+overkill  ship F instead.
+
+**What I built:** .session dot command suite in cli/src/dot.rs
+mirroring the upstream sqlite3 shell:
+
+  .session NAME create [DB]      open session on DB (default "main")
+  .session NAME attach TABLE     attach (or "*" for all)
+  .session NAME enable on|off    toggle recording
+  .session NAME indirect on|off  toggle indirect-changes flag
+  .session NAME isempty          0/1
+  .session NAME changeset FILE   write changeset blob
+  .session NAME patchset FILE    write patchset blob
+  .session NAME delete           close
+  .session list                  list active
+
+Per-session state in a thread_local HashMap<String, *mut
+sqlite3_session>. Same model as compass/listargs cursor maps
+elsewhere in the codebase.
+
+End-to-end verified:
+  1. cli captures CREATE TABLE + 2 INSERTs into a 44-byte blob
+  2. blob is byte-compatible with the host's sqlite-wasm-run
+     changeset apply subcommand
+  3. apply to fresh target db  target has alice + bob
+
+**The libsqlite3-sys feature trap:**
+
+First attempt: enable the `session` feature on libsqlite3-sys
+(core + cli + host). Failed because `session` forces
+`buildtime_bindgen` which then fails to cross-compile to
+wasm32-wasip2 with ~97 missing-symbol errors in the generated
+bindings (bindgen output incomplete on the wasm target).
+
+Fix: LIBSQLITE3_FLAGS env var was ALREADY set in
+.cargo/config.toml with `-DSQLITE_ENABLE_SESSION
+-DSQLITE_ENABLE_PREUPDATE_HOOK`  meaning the bundled sqlite3
+already has the symbols compiled in. The libsqlite3-sys `session`
+feature was only changing the BINDINGS, not the C compile. So:
+
+  1. Revert core/host Cargo.toml session features
+  2. Manually declare sqlite3session_* / sqlite3changeset_* as
+     `extern "C"` in host/src/main.rs's session_ffi module
+     and cli/src/dot.rs's session_ffi module
+  3. Compile flags via LIBSQLITE3_FLAGS unchanged
+
+Both host and cli build clean against wasm32-wasip2; cli's
+ported `.session` works against the wasm-internal sqlite3 (which
+has the same compile-flag set).
+
+**What worked:**
+- The user's "is this something SQLite does now?" question was
+the unlock. I was head-down on D/E architecture trade-offs and
+missed the obvious "match the standard sqlite3 cli." This is
+the lesson: when stuck on architecture choices, look at what
+the canonical implementation already does.
+- Option F shipped in ~3 hours including the libsqlite3-sys
+feature-trap diagnosis. Vs estimated 1-2 days for D, 2-3 days
+for E. The "right" answer was also the cheapest.
+- Manual extern "C" decls are not ugly  they're 30 lines of
+well-documented FFI that future-me can read in 2 minutes.
+Same shape across host and cli.
+
+**What surprised me:**
+- LIBSQLITE3_FLAGS was already set with SESSION+PREUPDATE_HOOK
+flags BEFORE phase 2. That means SESSION was compiled in all
+along; phase 2's session feature change on libsqlite3-sys was
+unnecessary (just added the bindings). Phase 2 commit's "the
+flag wasn't set" claim in T-43 was wrong.
+- The bindings/compile-flags distinction matters: features
+control what Rust SEES; the cc-flags control what C compiles.
+LIBSQLITE3_FLAGS = cc-flags only. Knowing this means we never
+need libsqlite3-sys's session feature, just manual extern decls.
+
+**Tooling opportunity:**
+- (T-44 new) Add a smoke for the .session dot commands. Would
+need `-- smoke-db: tempfile` (the wasi sandbox can't reach
+:memory: for spi but session works on the wasm-internal cli
+sqlite3 which is the same connection running the SQL).
+- Phase 2's "T-43 plan doc claim wrong" entry stays as-is
+historically  but the actual phase 2/3 work could have used
+manual extern decls from the start and avoided the
+libsqlite3-sys feature-trap detour entirely.
+
 
 
 

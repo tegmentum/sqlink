@@ -34,7 +34,12 @@ sqlite-pcache-tvm = { path = "../sqlite-pcache-tvm" }
 sqlite-mem-tvm = { path = "../sqlite-mem-tvm" }
 sqlite-vfs-tvm = { path = "../sqlite-vfs-tvm" }
 # Needed directly for sqlite3_complete + SQLITE_* action codes used
-# by the in-WASM authorizer dispatch.
+# by the in-WASM authorizer dispatch. The cli also calls sqlite3session_*
+# (see cli/src/dot.rs `.session`) via manual extern decls  the
+# `session` feature on libsqlite3-sys forces buildtime_bindgen which
+# fails to cross-compile to wasm32-wasip2. The bundled sqlite3.c IS
+# compiled with -DSQLITE_ENABLE_SESSION (core's session feature), so
+# the symbols are present; we just declare them by hand.
 libsqlite3-sys = { version = "0.30" }
 # .sha3sum uses SHA3-256 over a canonical encoding of every row
 # of every table. Pure Rust impl works on wasm32-wasip2 unchanged.

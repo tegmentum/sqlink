@@ -168,9 +168,9 @@ fn run_changeset_apply(args: &[String]) -> Result<()> {
 extern "C" fn replace_on_conflict(
     _ctx: *mut std::os::raw::c_void,
     _eConflict: std::os::raw::c_int,
-    _p: *mut libsqlite3_sys::sqlite3_changeset_iter,
+    _p: *mut session_ffi::sqlite3_changeset_iter,
 ) -> std::os::raw::c_int {
-    libsqlite3_sys::SQLITE_CHANGESET_REPLACE as std::os::raw::c_int
+    session_ffi::SQLITE_CHANGESET_REPLACE
 }
 
 /// Open a session attached to `db`, attach `table` (or all tables if
@@ -181,7 +181,8 @@ fn changeset_capture(
     sql: &str,
     table: Option<&str>,
 ) -> Result<Vec<u8>> {
-    use libsqlite3_sys::*;
+    use libsqlite3_sys::{sqlite3_exec, sqlite3_free, SQLITE_OK};
+    use session_ffi::*;
     use std::ffi::CString;
     use std::ptr;
 
@@ -247,7 +248,8 @@ fn changeset_capture(
 
 /// Apply a changeset blob to `db`. Uses REPLACE conflict policy.
 fn changeset_apply(db: *mut libsqlite3_sys::sqlite3, blob: &[u8]) -> Result<()> {
-    use libsqlite3_sys::*;
+    use libsqlite3_sys::SQLITE_OK;
+    use session_ffi::sqlite3changeset_apply;
     let rc = unsafe {
         sqlite3changeset_apply(
             db,
@@ -264,11 +266,71 @@ fn changeset_apply(db: *mut libsqlite3_sys::sqlite3, blob: &[u8]) -> Result<()> 
     Ok(())
 }
 
+/// Manual extern decls for sqlite3session_* / sqlite3changeset_*.
+/// The bundled sqlite3 is compiled with SESSION + PREUPDATE_HOOK
+/// (LIBSQLITE3_FLAGS in .cargo/config.toml), so the symbols are
+/// available; the libsqlite3-sys `session` feature would auto-
+/// declare them but requires buildtime_bindgen which fails the
+/// wasm32-wasip2 cross-compile (~97 missing-symbol errors in the
+/// generated bindings).
+mod session_ffi {
+    use std::os::raw::{c_char, c_int, c_void};
+
+    pub enum sqlite3_session {}
+    pub enum sqlite3_changeset_iter {}
+
+    extern "C" {
+        pub fn sqlite3session_create(
+            db: *mut libsqlite3_sys::sqlite3,
+            zDb: *const c_char,
+            ppSession: *mut *mut sqlite3_session,
+        ) -> c_int;
+
+        pub fn sqlite3session_delete(p: *mut sqlite3_session);
+
+        pub fn sqlite3session_attach(p: *mut sqlite3_session, zTab: *const c_char) -> c_int;
+
+        pub fn sqlite3session_changeset(
+            p: *mut sqlite3_session,
+            pnChangeset: *mut c_int,
+            ppChangeset: *mut *mut c_void,
+        ) -> c_int;
+
+        pub fn sqlite3changeset_invert(
+            nIn: c_int,
+            pIn: *const c_void,
+            pnOut: *mut c_int,
+            ppOut: *mut *mut c_void,
+        ) -> c_int;
+
+        pub fn sqlite3changeset_concat(
+            nA: c_int,
+            pA: *mut c_void,
+            nB: c_int,
+            pB: *mut c_void,
+            pnOut: *mut c_int,
+            ppOut: *mut *mut c_void,
+        ) -> c_int;
+
+        pub fn sqlite3changeset_apply(
+            db: *mut libsqlite3_sys::sqlite3,
+            nChangeset: c_int,
+            pChangeset: *mut c_void,
+            xFilter: Option<unsafe extern "C" fn(*mut c_void, *const c_char) -> c_int>,
+            xConflict: Option<unsafe extern "C" fn(*mut c_void, c_int, *mut sqlite3_changeset_iter) -> c_int>,
+            pCtx: *mut c_void,
+        ) -> c_int;
+    }
+
+    pub const SQLITE_CHANGESET_REPLACE: c_int = 4;
+}
+
 /// Wrap sqlite3changeset_invert. Returns an owned `Vec<u8>` of the
 /// inverted blob; the sqlite3-allocated output is copied out before
 /// freeing.
 fn changeset_invert(input: &[u8]) -> Result<Vec<u8>> {
-    use libsqlite3_sys::{sqlite3_free, sqlite3changeset_invert, SQLITE_OK};
+    use libsqlite3_sys::{sqlite3_free, SQLITE_OK};
+    use session_ffi::sqlite3changeset_invert;
     let mut out_n: std::os::raw::c_int = 0;
     let mut out_p: *mut std::os::raw::c_void = std::ptr::null_mut();
     let rc = unsafe {
@@ -289,7 +351,8 @@ fn changeset_invert(input: &[u8]) -> Result<Vec<u8>> {
 
 /// Wrap sqlite3changeset_concat. Merges two changesets into one.
 fn changeset_concat(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
-    use libsqlite3_sys::{sqlite3_free, sqlite3changeset_concat, SQLITE_OK};
+    use libsqlite3_sys::{sqlite3_free, SQLITE_OK};
+    use session_ffi::sqlite3changeset_concat;
     let mut out_n: std::os::raw::c_int = 0;
     let mut out_p: *mut std::os::raw::c_void = std::ptr::null_mut();
     // sqlite3changeset_concat takes *mut c_void for its inputs even

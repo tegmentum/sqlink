@@ -49,11 +49,13 @@ hickory-resolver = { version = "0.24", default-features = false, features = ["to
 # SQLite stacks and (b) every type swap was paid twice.
 sqlite-wasm-core = { path = "../core" }
 # Direct dep so the sqlite-wasm-run binary can call the
-# session/changeset FFI directly for its `changeset` subcommand.
-# Shares the bundled sqlite3 from sqlite-wasm-core (cargo
-# unifies them); the `session` feature there enables the FFI
-# we use here.
-libsqlite3-sys = { version = "0.30", features = ["bundled", "session"] }
+# session/changeset FFI for its `changeset` subcommand. The
+# bundled sqlite3 is compiled with SESSION via LIBSQLITE3_FLAGS
+# (.cargo/config.toml); we declare sqlite3session_* / sqlite3changeset_*
+# as extern "C" manually because the libsqlite3-sys `session`
+# feature forces buildtime_bindgen which fails on wasm32-wasip2
+# cross-compile.
+libsqlite3-sys = { version = "0.30", features = ["bundled"] }
 # SQLite-backed content-addressed cache for resolved extension
 # components. The host's `cache` module is a thin wrapper.
 sqlite-cas-cache = { path = "../sqlite-cas-cache" }
