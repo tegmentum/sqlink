@@ -126,5 +126,5 @@ rules.
   This is NOT solvable by another `.nullvalue`-style cli
   directive  empty string and NULL are different types,
   and the parser strips blanks for the prompt-noise reason.
-  Surfaced via `tile`'s `tile_quadkey(0, 0, 0)` smoke (zoom 0
+  Surfaced via `web-mercator-tile`'s `tile_quadkey(0, 0, 0)` smoke (zoom 0
   quadkey is "" by spec).

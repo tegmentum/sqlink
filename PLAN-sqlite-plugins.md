@@ -225,6 +225,22 @@ fts5/rtree, just at a different layer.
 
 ## Final state (delivered)
 
+The catalog combines two kinds of extension:
+
+1. **Ports of well-known SQLite extensions** (json1, fts5, rtree,
+   geopoly, csv, dbstat, regexp, math, crypto, stats, etc.) and
+   their equivalents where the original is C-only.
+2. **General-purpose scalar extension packs** that share the same
+   loader/dispatch plumbing but aren't ports of any named SQLite
+   extension. These cover identifier validators (vin, isin, ean,
+   etc.), reference data (currency, country, iban), domain math
+   (easter-date, beaufort-scale, compass-bearing), formatters
+   (humansize, numfmt), and similar.
+
+Both kinds appear in the table below. The original plan focused on
+(1); (2) accumulated as the loader/dispatch infrastructure made it
+cheap to add new scalar packs.
+
 | Catalog                       | Count  | Source                             |
 |-------------------------------|-------:|------------------------------------|
 | json1 scalars                 |    13  | extensions/json1                   |
@@ -341,15 +357,15 @@ fts5/rtree, just at a different layer.
 | natsort (natural sort (file2 <  |    +3  | extensions/natsort                 |
 | country (ISO 3166-1 lookup (al  |    +5  | extensions/country                 |
 | iban (ISO 13616 IBAN  validate  |    +6  | extensions/iban                    |
-| nato (NATO phonetic encode/dec  |    +3  | extensions/nato                    |
-| tile (web mercator + quadkey)   |    +7  | extensions/tile                    |
+| nato-phonetic (encode/decode)   |    +3  | extensions/nato-phonetic           |
+| web-mercator-tile (xyz+quadkey) |    +7  | extensions/web-mercator-tile       |
 | setops (JSON-array set ops)     |    +8  | extensions/setops                  |
-| compass (8/16-point cardinal)   |    +5  | extensions/compass                 |
-| beaufort (Beaufort wind scale)  |    +5  | extensions/beaufort                |
-| polyline (polyline coord codec) |    +3  | extensions/polyline                |
-| cipher (classical text ciphers) |    +6  | extensions/cipher                  |
-| xor (XOR cipher (hex codec))    |    +3  | extensions/xor                     |
-| easter (Easter date computus)   |    +3  | extensions/easter                  |
+| compass-bearing (8/16-point)    |    +5  | extensions/compass-bearing         |
+| beaufort-scale (m/s  force)    |    +5  | extensions/beaufort-scale          |
+| google-polyline (coord codec)   |    +3  | extensions/google-polyline         |
+| classic-cipher (Caesar/ROT/etc) |    +6  | extensions/classic-cipher          |
+| xor-cipher (hex codec)          |    +3  | extensions/xor-cipher              |
+| easter-date (Western+Orthodox)  |    +3  | extensions/easter-date             |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |

@@ -24,8 +24,8 @@ signal it's either (a) genuinely novel and worth documenting, or
 | Base-N algorithm         | radix arithmetic / encoding                          | radix                              |
 | Tokenize-then-compare    | string ordering by structure, not bytes              | natsort                            |
 | Variable-length array I/O | set / collection ops returning N items              | setops                             |
-| Quantizer                | continuous value  named band                       | compass, beaufort                  |
-| Text transform with key  | text + key  transformed text                        | cipher, xor                        |
+| Quantizer                | continuous value  named band                       | compass-bearing, beaufort-scale    |
+| Text transform with key  | text + key  transformed text                        | classic-cipher, xor-cipher         |
 
 ## Detailed shapes
 
@@ -223,12 +223,13 @@ Pitfalls:
 - Open-ended top band: beaufort's force 12 catches anything
    32.7 m/s. Smoke a "well beyond" input (100 m/s  12).
 - Reverse direction (name  numeric) needs a pick:
-  lower-bound, center, or upper-bound. compass uses center
-  degrees; beaufort uses lower bound. Same shape, different
+  lower-bound, center, or upper-bound. compass-bearing uses
+  center degrees; beaufort-scale uses lower bound. Same shape,
+  different
   conventions  document per extension.
 
-Use cases: cardinal directions (compass), wind force
-(beaufort), Richter, pH, decibel loudness, generally any
+Use cases: cardinal directions (compass-bearing), wind force
+(beaufort-scale), Richter, pH, decibel loudness, generally any
 "natural-language label for a continuous quantity."
 
 ### Text transform with key
@@ -263,9 +264,9 @@ Pitfalls:
   vigenere_encode("Hello, World", "KEY") shouldn't waste
   key positions on the comma.
 - For binary keys / non-UTF8 input, return Blob instead of
-  Text. xor handles this by output type-switching.
+  Text. xor-cipher handles this by output type-switching.
 
-Use cases: cipher (Caesar/Vigenere/Atbash), xor (byte
+Use cases: classic-cipher (Caesar/Vigenere/Atbash), xor-cipher (byte
 XOR with hex output), template_render (would also fit
 if shipped: text + variables dict  rendered).
 
