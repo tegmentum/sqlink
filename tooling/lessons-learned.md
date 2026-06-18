@@ -1869,6 +1869,62 @@ the SAME turn that I write the lessons-learned entry, not
 later. If the closure is small AND I'm already in the file,
 inline-close beats next-batch.
 
+---
+
+### 2026-06-17  iban extension
+
+**What I built:** ISO 13616 IBAN validator + decomposer. Six
+scalars on the validator+extractor shape (4th consumer):
+
+  iban_validate(s)         1 if valid, else 0
+  iban_normalize(s)        strip whitespace, uppercase
+  iban_country(s)          alpha-2 (first 2 chars)
+  iban_check_digits(s)     2-digit checksum (chars 3-4)
+  iban_bban(s)             body after check (NULL if invalid)
+  iban_format(s)           groups-of-4 display form
+
+Mod-97 algorithm: rearrange first 4 to end, expand A-Z to
+10-35 as decimal digits, accumulate the long-decimal mod 97
+iteratively (no bignum needed). Valid iff remainder == 1.
+
+Length validation per country is REQUIRED  the mod-97 check
+alone catches digit-transposition but NOT missing/extra digits.
+Both checks together cover the typo space.
+
+**What worked:**
+- The iterative mod-97 (carry remainder through digits one
+at a time) means no bignum dependency. ~10 lines including
+the A-Z expansion.
+- Smoke covers the failure modes EXPLICITLY:
+  - tampered check digit (GB82  GB83)
+  - tampered body char (WEST  XEST)
+  - wrong length for country (DE89...0 = 21 chars, not 22)
+  - unknown country (XX)
+  - empty input
+Each fails for a different reason; smoke documents the
+defense-in-depth.
+- Reached for the validator+extractor template from
+extension-patterns.md before writing code. Saved 5 minutes
+of "where do I put the length check?"
+
+**What surprised me:**
+- I almost wrote a `Statement` re-implementation of mod-97
+in bignum (with `String` accumulation). Caught myself: the
+canonical iterative form is what every IBAN reference
+implementation uses, and it's strictly simpler. The
+"accumulate the remainder" pattern is the right answer 
+recognizing it from prior algorithms (mod-N CRC, ABA digital
+root) is the meta-lesson.
+- The 78-country LENGTHS table felt like it should be its
+own snippet (alongside ISIN/CUSIP country lists), but each
+catalog's columns are different shapes (length here, format
+mask in others). Not worth extracting.
+
+**Tooling opportunity:**
+- (none new) Workflow clean. Plugin count 102  103. The
+ext-ship target paid for itself  one keystroke at the end
+to run the regression check.
+
 
 
 

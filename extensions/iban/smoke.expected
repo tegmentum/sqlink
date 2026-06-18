@@ -1,0 +1,17 @@
+# IBAN ISO 13616: mod-97 validate + decompose. Tampered check
+# digit, tampered bban char, and wrong-length all fail validate.
+# Unknown country code rejected before mod-97.
+1
+1
+1
+GB
+82
+WEST12345698765432
+GB82WEST12345698765432
+GB82 WEST 1234 5698 7654 32
+0
+0
+0
+0
+<NULL>
+0
