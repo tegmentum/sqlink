@@ -23,6 +23,7 @@ signal it's either (a) genuinely novel and worth documenting, or
 | Coord transform          | numeric value in domain A  domain B (no lookup)   | latlon, geo-distance               |
 | Base-N algorithm         | radix arithmetic / encoding                          | radix                              |
 | Tokenize-then-compare    | string ordering by structure, not bytes              | natsort                            |
+| Variable-length array I/O | set / collection ops returning N items              | setops                             |
 
 ## Detailed shapes
 
@@ -159,6 +160,33 @@ agrees with the comparator.
 
 Use cases: natural sort, version compare, structured-text
 ordering.
+
+### Variable-length array I/O
+
+JSON-array on input AND output for set / collection ops
+that return N items where N varies with the input. Equality
+is by canonical JSON serialization (`1` != `1.0`,
+`"abc"` != `abc`).
+
+Distinct from the JSON multi-value ANTI-pattern below: that
+warns against shoving FIXED-shape data into JSON when N
+scalars would be cleaner. Variable-length is exactly what
+JSON arrays are for  there's no scalar shape that
+represents "a list of N things where N is part of the
+answer."
+
+Use cases: set ops (setops), distinct collections,
+collection-as-result aggregations.
+
+Pitfalls:
+- Decide order semantics up front: setops preserves first-
+  occurrence order on union/dedupe. Sorted-dedup is also
+  valid but different; pick and document.
+- Empty array `"[]"` is 2 chars  doesn't trigger T-32's
+  empty-string drop. Good news, no sentinel needed.
+- Non-array input  NULL is the standard "fail-clean";
+  caller can `json_each(set_union(a, b))` and a NULL row
+  short-circuits cleanly.
 
 ## Reusable helpers
 

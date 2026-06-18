@@ -2219,6 +2219,47 @@ NEEDS JSON. ~5 lines added to the doc; defer to the next
 T-* batch.
 Plugin count 105  106.
 
+---
+
+### 2026-06-17  T-33 investigation (variable-length array shape)
+
+**What I built:** Added 11th row to the quick-picker table in
+tooling/extension-patterns.md, plus a "Variable-length array
+I/O" detailed section under the existing shape catalog. The
+section explicitly contrasts with the "JSON multi-value
+anti-pattern" entry below it so future-me can tell when JSON
+is right vs wrong.
+
+  Right: setops returns N items where N depends on input
+  Wrong: currency_info(code) returns JSON with fixed shape
+
+Also documents three pitfalls discovered shipping setops:
+order semantics decision, "[]" doesn't drop, NULL on
+malformed input composes with json_each.
+
+**What worked:**
+- The contrast-with-anti-pattern framing was the right move.
+A new "this is correct" entry without the cross-reference
+to the existing "this is incorrect" entry would have left
+the apparent contradiction unresolved. Future-me would
+have read both and been confused.
+- Mentioned T-32 inline ("`[]` doesn't trigger T-32's drop").
+The shape catalog is becoming a hub for cross-references
+into the tooling lessons; that's healthy.
+
+**What surprised me:**
+- I almost wrote the new section ABOVE the anti-pattern entry.
+Moved it BELOW, so the reading order is: detailed shape entry,
+THEN anti-pattern entry next to it. Putting them adjacent
+makes the distinction read like a single thought rather than
+two unrelated points.
+
+**Tooling opportunity:**
+- (T-33 closed) The pattern catalog now has 11 entries; that's
+about the right size for a one-screen quick-picker. If it
+crosses 15, consider splitting by domain (I/O shapes vs
+algorithm shapes). Premature today.
+
 
 
 
