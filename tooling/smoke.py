@@ -244,9 +244,43 @@ def main() -> None:
     p.add_argument("--show-parsed", metavar="NAME",
                    help="print the parsed result rows for one extension and exit "
                         "(useful when seeding smoke.expected)")
+    p.add_argument("--seed-expected", metavar="NAME",
+                   help="write smoke.expected for NAME from the current cli "
+                        "output. Refuses to overwrite an existing file  "
+                        "delete it first if reseeding intentionally.")
     args = p.parse_args()
-    if not (args.name or args.all or args.list or args.show_parsed):
-        p.error("specify <name>, --all, --list, or --show-parsed")
+    if not (args.name or args.all or args.list or args.show_parsed or args.seed_expected):
+        p.error("specify <name>, --all, --list, --show-parsed, or --seed-expected")
+
+    if args.seed_expected:
+        name = args.seed_expected
+        expected = REPO_ROOT / "extensions" / name / "smoke.expected"
+        if expected.exists():
+            print(f"smoke.expected already exists at {expected.relative_to(REPO_ROOT)}",
+                  file=sys.stderr)
+            print("delete it first if you intend to reseed.", file=sys.stderr)
+            sys.exit(1)
+        smoke = REPO_ROOT / "extensions" / name / "smoke.sql"
+        if not smoke.exists():
+            print(f"no smoke.sql at {smoke.relative_to(REPO_ROOT)}", file=sys.stderr)
+            sys.exit(1)
+        sql = "\n".join(l for l in smoke.read_text().splitlines()
+                        if not l.lstrip().startswith("--"))
+        sql = ".nullvalue <NULL>\n" + sql
+        r = subprocess.run(
+            [str(CLI_BIN), str(CLI_COMPONENT), "--db", ":memory:"],
+            input=sql, capture_output=True, text=True, timeout=args.timeout,
+        )
+        rows = parse_results(r.stdout)
+        header = (
+            "# AUTO-SEEDED by smoke.py --seed-expected. Review and trim:\n"
+            "#   - replace nondeterministic rows (timestamps, rng) with ~~\n"
+            "#   - replace order-sensitive rows with ? if any-non-empty is OK\n"
+            "#   - delete this banner once you've reviewed each row\n"
+        )
+        expected.write_text(header + "\n".join(rows) + "\n")
+        print(f"wrote {len(rows)} rows to {expected.relative_to(REPO_ROOT)}")
+        return
 
     if args.show_parsed:
         ok, output = smoke_one(args.show_parsed, args.timeout)

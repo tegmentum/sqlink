@@ -1327,6 +1327,48 @@ That's overkill for ~50 line code with no hot path. The
 runner made the "make ext + smoke + smoke --all" loop fast
 enough that I felt no friction iterating.
 
+---
+
+### 2026-06-17  T-24 investigation (seed-expected automation)
+
+**What I built:** `tooling/smoke.py --seed-expected NAME` flag.
+Writes smoke.expected from the current parsed output, with a
+4-line review-and-trim banner pre-pended so it can't ship
+accidentally without human review. Refuses to overwrite an
+existing file (delete-first is explicit).
+
+**What worked:**
+- Pure removal of friction I'd done 5+ times this session:
+`python3 tooling/smoke.py --show-parsed X | tee
+extensions/X/smoke.expected` followed by manual `# header`
+edit. Now one command writes a properly-banner'd file.
+- The "delete-first to reseed" gate is the right default 
+existing smoke.expected files carry hand-written comments
+and intentional `~~` / `?` wildcards that auto-seed would
+clobber. Make it explicit.
+- Verified: seed produces byte-identical output (minus the
+banner) to a hand-written file from the same run.
+
+**What surprised me:**
+- Almost shipped it without the banner. The whole value of
+smoke.expected is "human reviewed this once and asserted it."
+An auto-seeded file that LOOKS reviewed is a regression
+trap. The banner is the marker that says "review me before
+this is your assertion."
+- Resisted the urge to add `--no-banner` for "I really mean
+it." That switch IS the regression trap. If a future me
+wants no banner, they can manually edit  the 4 lines are
+4 keystrokes to remove. Don't paper over the safety with
+config.
+
+**Tooling opportunity:**
+- (T-24 closed)
+- The trinity of smoke.py warnings + the seed workflow now
+covers: scaffold (T-11 all-NULL warn)  seed
+(T-24 --seed-expected)  iterate (T-7 diffs)  stale-detect
+(T-18 count mismatch)  fast-CI (T-17 parallel). Full
+lifecycle covered. Nothing immediate to add.
+
 
 
 
