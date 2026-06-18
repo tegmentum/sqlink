@@ -372,7 +372,8 @@ cheap to add new scalar packs.
 | dbstat vtab                   |    +1  | -DSQLITE_ENABLE_DBSTAT_VTAB        |
 | sqlite_stmt vtab              |    +1  | -DSQLITE_ENABLE_STMTVTAB           |
 | bytecode vtab                 |    +1  | -DSQLITE_ENABLE_BYTECODE_VTAB      |
-| session / changeset C API     |   free | -DSQLITE_ENABLE_SESSION + _PREUPDATE_HOOK |
+| session / changeset C API     |   +4   | libsqlite3-sys `session` feature + |
+|                               |        | host/src/main.rs `changeset` subcmd |
 
 **Grand SQL surface delivered**: 687 SQL-callable functions
 (scalars + aggregates) plus 17 virtual-table modules (csv, fts5,

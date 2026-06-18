@@ -45,6 +45,8 @@ impl wasmtime_wasi::WasiView for State {
 fn usage() -> ! {
     eprintln!("usage: sqlite-wasm-run [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wasm> [-- guest-args...]");
     eprintln!("       sqlite-wasm-run changeset {{invert|concat}} <in1> [in2] <out>");
+    eprintln!("       sqlite-wasm-run changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
+    eprintln!("       sqlite-wasm-run changeset apply --db PATH --input FILE");
     std::process::exit(2);
 }
 
@@ -59,6 +61,8 @@ fn run_changeset_subcommand(args: &[String]) -> Result<()> {
     if args.len() < 2 {
         eprintln!("usage: sqlite-wasm-run changeset invert <input.cs> <output.cs>");
         eprintln!("       sqlite-wasm-run changeset concat <a.cs> <b.cs> <output.cs>");
+        eprintln!("       sqlite-wasm-run changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
+        eprintln!("       sqlite-wasm-run changeset apply --db PATH --input FILE");
         std::process::exit(2);
     }
     let op = args[0].as_str();
@@ -84,8 +88,180 @@ fn run_changeset_subcommand(args: &[String]) -> Result<()> {
             eprintln!("changeset concat: {} + {}  {} bytes", a.len(), b.len(), output.len());
             Ok(())
         }
-        other => anyhow::bail!("changeset: unknown op {other:?} (expected invert|concat)"),
+        "capture" => run_changeset_capture(&args[1..]),
+        "apply" => run_changeset_apply(&args[1..]),
+        other => anyhow::bail!("changeset: unknown op {other:?} (expected invert|concat|capture|apply)"),
     }
+}
+
+/// Parse --flag VALUE arg pairs into a key-value map. Last-wins on
+/// duplicates. Returns positional args separately.
+fn parse_flags(args: &[String]) -> (std::collections::HashMap<String, String>, Vec<String>) {
+    let mut flags = std::collections::HashMap::new();
+    let mut positional = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let a = &args[i];
+        if let Some(name) = a.strip_prefix("--") {
+            if i + 1 < args.len() {
+                flags.insert(name.to_string(), args[i + 1].clone());
+                i += 2;
+            } else {
+                // Flag without value  store as empty string.
+                flags.insert(name.to_string(), String::new());
+                i += 1;
+            }
+        } else {
+            positional.push(a.clone());
+            i += 1;
+        }
+    }
+    (flags, positional)
+}
+
+/// changeset capture --db PATH --sql FILE --output FILE [--table NAME]
+///
+/// Opens the db, attaches a session to it, runs the SQL script,
+/// extracts the resulting changeset blob, writes it to the output
+/// file. Captures changes from ALL tables by default; --table
+/// restricts to a single table.
+fn run_changeset_capture(args: &[String]) -> Result<()> {
+    let (flags, _) = parse_flags(args);
+    let db_path = flags.get("db").ok_or_else(|| anyhow!("capture: --db PATH required"))?;
+    let sql_path = flags.get("sql").ok_or_else(|| anyhow!("capture: --sql FILE required"))?;
+    let out_path = flags.get("output").ok_or_else(|| anyhow!("capture: --output FILE required"))?;
+    let table = flags.get("table");
+
+    use sqlite_wasm_core::db;
+    let conn = db::Connection::open(db_path, db::OpenFlags::DEFAULT)
+        .map_err(|e| anyhow!("open {db_path}: {}", e.message))?;
+    let raw_db = conn.raw_handle();
+
+    let sql = std::fs::read_to_string(sql_path)?;
+    let bytes = changeset_capture(raw_db, &sql, table.map(|s| s.as_str()))?;
+    std::fs::write(out_path, &bytes)?;
+    eprintln!("changeset capture: {} bytes written to {out_path}", bytes.len());
+    Ok(())
+}
+
+/// changeset apply --db PATH --input FILE
+///
+/// Opens the db, applies the changeset blob to it. Conflict policy:
+/// REPLACE (matches the documented SQLITE_CHANGESET_REPLACE behavior).
+fn run_changeset_apply(args: &[String]) -> Result<()> {
+    let (flags, _) = parse_flags(args);
+    let db_path = flags.get("db").ok_or_else(|| anyhow!("apply: --db PATH required"))?;
+    let in_path = flags.get("input").ok_or_else(|| anyhow!("apply: --input FILE required"))?;
+
+    use sqlite_wasm_core::db;
+    let conn = db::Connection::open(db_path, db::OpenFlags::DEFAULT)
+        .map_err(|e| anyhow!("open {db_path}: {}", e.message))?;
+    let raw_db = conn.raw_handle();
+    let blob = std::fs::read(in_path)?;
+    changeset_apply(raw_db, &blob)?;
+    eprintln!("changeset apply: {} bytes applied to {db_path}", blob.len());
+    Ok(())
+}
+
+/// Default conflict handler  REPLACE (overwrite the existing row).
+/// Matches what `.sqlite3 sessionApply ... --replace` does.
+extern "C" fn replace_on_conflict(
+    _ctx: *mut std::os::raw::c_void,
+    _eConflict: std::os::raw::c_int,
+    _p: *mut libsqlite3_sys::sqlite3_changeset_iter,
+) -> std::os::raw::c_int {
+    libsqlite3_sys::SQLITE_CHANGESET_REPLACE as std::os::raw::c_int
+}
+
+/// Open a session attached to `db`, attach `table` (or all tables if
+/// None), run `sql` via sqlite3_exec, extract the resulting
+/// changeset, clean up. Returns the changeset bytes.
+fn changeset_capture(
+    db: *mut libsqlite3_sys::sqlite3,
+    sql: &str,
+    table: Option<&str>,
+) -> Result<Vec<u8>> {
+    use libsqlite3_sys::*;
+    use std::ffi::CString;
+    use std::ptr;
+
+    let mut session: *mut sqlite3_session = ptr::null_mut();
+    let main_db_name = CString::new("main")?;
+    let rc = unsafe { sqlite3session_create(db, main_db_name.as_ptr(), &mut session) };
+    if rc != SQLITE_OK {
+        anyhow::bail!("sqlite3session_create returned {rc}");
+    }
+
+    // Attach: pass NULL for "all tables" or a specific table name.
+    let attach_target: Option<CString> = match table {
+        Some(t) => Some(CString::new(t)?),
+        None => None,
+    };
+    let attach_ptr = attach_target
+        .as_ref()
+        .map(|c| c.as_ptr())
+        .unwrap_or(ptr::null());
+    let rc = unsafe { sqlite3session_attach(session, attach_ptr) };
+    if rc != SQLITE_OK {
+        unsafe { sqlite3session_delete(session) };
+        anyhow::bail!("sqlite3session_attach returned {rc}");
+    }
+
+    // Run the user's SQL via sqlite3_exec  this drives the changes
+    // the session captures.
+    let sql_c = CString::new(sql)?;
+    let mut errmsg: *mut std::os::raw::c_char = ptr::null_mut();
+    let rc = unsafe {
+        sqlite3_exec(db, sql_c.as_ptr(), None, ptr::null_mut(), &mut errmsg)
+    };
+    if rc != SQLITE_OK {
+        let msg = unsafe {
+            if errmsg.is_null() {
+                "(no message)".to_string()
+            } else {
+                let s = std::ffi::CStr::from_ptr(errmsg).to_string_lossy().into_owned();
+                sqlite3_free(errmsg as *mut _);
+                s
+            }
+        };
+        unsafe { sqlite3session_delete(session) };
+        anyhow::bail!("sqlite3_exec returned {rc}: {msg}");
+    }
+
+    // Extract the changeset.
+    let mut out_n: std::os::raw::c_int = 0;
+    let mut out_p: *mut std::os::raw::c_void = ptr::null_mut();
+    let rc = unsafe { sqlite3session_changeset(session, &mut out_n, &mut out_p) };
+    if rc != SQLITE_OK {
+        unsafe { sqlite3session_delete(session) };
+        anyhow::bail!("sqlite3session_changeset returned {rc}");
+    }
+
+    let bytes = unsafe { std::slice::from_raw_parts(out_p as *const u8, out_n as usize) }.to_vec();
+    unsafe {
+        sqlite3_free(out_p);
+        sqlite3session_delete(session);
+    }
+    Ok(bytes)
+}
+
+/// Apply a changeset blob to `db`. Uses REPLACE conflict policy.
+fn changeset_apply(db: *mut libsqlite3_sys::sqlite3, blob: &[u8]) -> Result<()> {
+    use libsqlite3_sys::*;
+    let rc = unsafe {
+        sqlite3changeset_apply(
+            db,
+            blob.len() as std::os::raw::c_int,
+            blob.as_ptr() as *mut std::os::raw::c_void,
+            None,  // xFilter (None = include all tables)
+            Some(replace_on_conflict),
+            std::ptr::null_mut(),
+        )
+    };
+    if rc != SQLITE_OK {
+        anyhow::bail!("sqlite3changeset_apply returned {rc}");
+    }
+    Ok(())
 }
 
 /// Wrap sqlite3changeset_invert. Returns an owned `Vec<u8>` of the

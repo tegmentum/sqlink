@@ -3219,6 +3219,103 @@ just now; the flag wasn't set. Now it IS set via libsqlite3-sys
 session feature. Update the deferred section in the plan
 when phase 3 lands.
 
+---
+
+### 2026-06-18  session phase 3 + scope-A removal
+
+Two changes landed together.
+
+**Scope-A removal:**
+
+Removed 8 made-up extensions that the rename pass had given
+descriptive names but hadn't promoted to "real ports of named
+SQLite extensions":
+
+  nato-phonetic      easter-date        classic-cipher
+  xor-cipher         beaufort-scale     compass-bearing
+  web-mercator-tile  google-polyline
+
+Pattern catalog dropped from 13 to 11 shapes: Quantizer and
+Text-transform-with-key (both had 2 consumers among the
+removed set) are gone. Both are real ideas; if a future
+consumer pulls them back into the catalog they can be re-
+promoted.
+
+Identifier validators (vin, isin, aba, bic, ean, creditcard,
+postcode, ssn, mac, iban, container, phone-prefix) and utility
+extensions (color, unitconv, currency, humansize, latlon,
+numfmt, radix, natsort, country, setops, geo-distance) kept 
+they're useful general scalar packs and the plan doc's
+"Final state (delivered)" framing already says so.
+
+**Session phase 3 (capture + apply against live connection):**
+
+Continued the subcommand model from phase 2. Two new
+subcommands on sqlite-wasm-run:
+
+  sqlite-wasm-run changeset capture --db PATH --sql FILE
+                                    --output FILE [--table NAME]
+  sqlite-wasm-run changeset apply --db PATH --input FILE
+
+Capture: opens the db, attaches a session, runs the user's SQL
+script, extracts the changeset blob. Attach takes NULL (all
+tables) by default; --table NAME restricts.
+
+Apply: opens the db, calls sqlite3changeset_apply with a
+REPLACE conflict callback (matches the documented
+SQLITE_CHANGESET_REPLACE behavior).
+
+End-to-end verified with a real workflow:
+  1. source.db + target.db both initialized with CREATE TABLE
+  2. capture changes (2 INSERTs + 1 UPDATE) from source  63 bytes
+  3. apply 63 bytes to target  target has the expected state
+  4. invert(captured) + apply to source-copy  source is EMPTY
+     (the undo round-trip works)
+
+The end-to-end verification ALSO closes T-42's "can't smoke
+non-empty changesets without capture" gap and validates
+phase 2's invert/concat against real (not just empty) blobs.
+
+**What worked:**
+- Following phase 2's "subcommand on sqlite-wasm-run, no WIT
+  surgery" pattern. Phase 3 added ~150 LOC to host/src/main.rs
+  on top of phase 2's invert/concat. Same architecture; the
+  added cost was just FFI wiring for session_create / attach /
+  changeset + the apply call.
+- The C API for session is comfortable to wrap: each function
+  is a clean rc-returning operation, and the per-session state
+  is just a *mut sqlite3_session that we hold for the duration
+  of the subcommand. No long-lived handle lifecycle  the
+  subcommand IS the lifecycle.
+- The plan's original "phase 3 = 5-7 days" estimate was
+  pessimistic for the subcommand path. Real cost was ~2 hours
+  including the end-to-end verification.
+
+**What surprised me:**
+- The subcommand model dodges the entire "session handle
+  lifecycle across SQL calls" complexity that drove the plan's
+  pessimistic estimate. Each subcommand is atomic: open db,
+  do the thing, close db, exit. The session lives within ONE
+  process invocation.
+- That's also the limitation: you can't capture changes from
+  an INTERACTIVE session  the user has to provide the changes
+  as a SQL script. For interactive capture, you'd need either
+  a daemon model OR the WIT-extension model originally
+  scoped. Both are real architectural work; defer until a
+  real consumer asks.
+- libsqlite3-sys's session bindings are clean. The session
+  feature flag enables BOTH the compile flag AND the bindgen
+  output for the new symbols. One-line Cargo.toml change.
+
+**Tooling opportunity:**
+- (T-42 closed) End-to-end smoke now possible via the
+  capture/apply round-trip; demonstrated above.
+- (T-43 closed) Plan doc updated  session is no longer
+  "free via flag" misleading; it's +4 (the libsqlite3-sys
+  feature + 4 subcommands: invert/concat/capture/apply).
+- The named-SQLite-extension surface is now substantially
+  complete. Session was the last big architectural gap.
+
 
 
 
