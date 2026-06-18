@@ -1234,6 +1234,52 @@ had unknown codes that NULL-render cleanly, and the 4-line
 WARN didn't fire because the smoke had non-NULL rows. Both
 features earning their keep.
 
+---
+
+### 2026-06-17  T-17 investigation (parallel smoke)
+
+**What I built:** `-j N` / `--jobs N` flag on tooling/smoke.py.
+`-j 0` = cpu_count workers (default for `make ext-smoke-all`).
+Fans out via concurrent.futures.ThreadPoolExecutor; subprocess
+calls are I/O-bound so the GIL release during `subprocess.run`
+is enough  no ProcessPool overhead needed.
+
+Measured: 25 asserted smokes go 69s  12.7s (~5.4 speedup
+on an 8-core mac). Mostly amortizes wasi runtime startup
+across cores; per-extension wall time is unchanged.
+
+**What worked:**
+- Threads vs processes: threads won here because each smoke
+spawns a subprocess. The Python thread waits on subprocess
+I/O the entire time  GIL is held only during the tiny
+parse_results + compare. ProcessPool would pay ~50ms fork
+cost per worker for no gain.
+- Output ordering preserved in serial mode (default for
+single-extension invocations) so logs stay readable.
+Parallel mode uses as_completed  prints arrive interleaved
+but with the extension name prefix, so it's still grep-able.
+- Make integration: `ext-smoke-all` defaults to `-j 0`.
+Single-extension `make ext NAME=...` still hits the
+serial path because it only smokes one.
+
+**What surprised me:**
+- I instinctively reached for ProcessPoolExecutor. Stopped to
+think: what's actually slow? subprocess + wasi cold-start +
+component instantiation, all OUTSIDE the Python process.
+Python thread is parked on a syscall. Threads = correct
+abstraction. ~30 sec saved by NOT writing the wrong code.
+- The 5.4 speedup on an 8-core box leaves headroom. Disk +
+wasi runtime overhead floors per-smoke at ~2s. Adding more
+workers past 8 brings diminishing returns; -j 0 is the
+right default.
+
+**Tooling opportunity:**
+- (T-17 closed)
+- (T-10 silently closed) Verified: smoke.py's panic_markers
+no longer includes "out of memory"  the T-9 fix removed it
+when shipping (commit 2a84ec0). Lessons-learned was the only
+artifact still listing it as open.
+
 
 
 

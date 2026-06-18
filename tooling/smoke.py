@@ -237,6 +237,10 @@ def main() -> None:
     p.add_argument("--all", action="store_true", help="smoke every extension that has smoke.sql")
     p.add_argument("--list", action="store_true", help="list extensions with smoke.sql")
     p.add_argument("--timeout", type=int, default=30)
+    p.add_argument("-j", "--jobs", type=int, default=1,
+                   help="parallel workers for --all (0 = cpu_count). "
+                        "Each smoke is independent; ~85 exts × 4s serial "
+                        "vs <60s with -j 0.")
     p.add_argument("--show-parsed", metavar="NAME",
                    help="print the parsed result rows for one extension and exit "
                         "(useful when seeding smoke.expected)")
@@ -279,14 +283,39 @@ def main() -> None:
         targets = [args.name]
 
     fails: list[str] = []
-    for name in targets:
-        ok, output = smoke_one(name, args.timeout)
-        status = "PASS" if ok else "FAIL"
-        print(f"{status}  {name}")
-        if not ok:
-            fails.append(name)
-            for line in output.split("\n")[:30]:
-                print(f"    {line}")
+    if args.jobs == 1 or len(targets) == 1:
+        # Serial path  preserved output ordering, easiest to read in
+        # logs. Default for single-name invocations.
+        for name in targets:
+            ok, output = smoke_one(name, args.timeout)
+            status = "PASS" if ok else "FAIL"
+            print(f"{status}  {name}")
+            if not ok:
+                fails.append(name)
+                for line in output.split("\n")[:30]:
+                    print(f"    {line}")
+    else:
+        # T-17: parallel fan-out for --all. Each smoke is an independent
+        # subprocess  no shared state, no I/O contention besides the
+        # cli binary (read-only). Threads, not processes  the work is
+        # subprocess-bound (smoke_one waits on subprocess.run), so GIL
+        # release during I/O is enough; ProcessPoolExecutor would
+        # pay fork/import cost per worker for no win.
+        import concurrent.futures
+        import os
+        workers = args.jobs if args.jobs > 0 else (os.cpu_count() or 4)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+            futures = {ex.submit(smoke_one, name, args.timeout): name
+                       for name in targets}
+            for fut in concurrent.futures.as_completed(futures):
+                name = futures[fut]
+                ok, output = fut.result()
+                status = "PASS" if ok else "FAIL"
+                print(f"{status}  {name}")
+                if not ok:
+                    fails.append(name)
+                    for line in output.split("\n")[:30]:
+                        print(f"    {line}")
 
     if fails:
         print(f"\n{len(fails)} failed: {', '.join(fails)}")

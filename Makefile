@@ -852,7 +852,7 @@ ext-list-broken:
 	@python3 tooling/scaffold.py --list-broken
 
 ext-smoke-all:
-	@python3 tooling/smoke.py --all
+	@python3 tooling/smoke.py --all -j 0   # T-17: parallel; -j N to override
 
 ext-check-snippets:
 	@python3 tooling/check-snippets.py
