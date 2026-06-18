@@ -344,6 +344,7 @@ fts5/rtree, just at a different layer.
 | nato (NATO phonetic encode/dec  |    +3  | extensions/nato                    |
 | tile (web mercator + quadkey)   |    +7  | extensions/tile                    |
 | setops (JSON-array set ops)     |    +8  | extensions/setops                  |
+| compass (8/16-point cardinal)   |    +5  | extensions/compass                 |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |

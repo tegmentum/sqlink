@@ -2260,6 +2260,55 @@ about the right size for a one-screen quick-picker. If it
 crosses 15, consider splitting by domain (I/O shapes vs
 algorithm shapes). Premature today.
 
+---
+
+### 2026-06-17  compass extension (quantizer shape)
+
+**What I built:** Compass bearing  cardinal direction
+conversion. Five scalars on a quantizer shape (numeric value
+ discrete band  name):
+
+  compass_cardinal(deg)         8-point (N/NE/E/SE/S/SW/W/NW)
+  compass_cardinal16(deg)        16-point (adds NNE/ENE/etc.)
+  compass_degrees(name)          reverse: name  center degrees
+  compass_distance(a, b)         shortest angular distance 0..180
+  compass_normalize(deg)         wrap to [0, 360)
+
+Bands are CENTERED on the cardinal point. North covers
+[-22.5, +22.5) at the 8-point resolution, NOT [0, 45). This
+matches navigation convention; smoke locks the boundary at
+22 (still N) vs 23 (now NE) so future-me can't accidentally
+shift the bands.
+
+**What worked:**
+- compass_distance properly handles "wrap around": d(0, 350)
+returns 10, not 350. The smoke covers this explicitly  the
+common bug class for angular math is treating distance as
+(b - a) instead of "shortest path on the circle."
+- compass_degrees as the reverse lookup creates a useful
+round-trip: cardinal_16(degrees('NNE')) should equal "NNE".
+The smoke confirms this implicitly via the explicit
+boundary tests.
+- T-31 fired AGAIN (3rd consecutive ship)  "compass cardinal
+8/16-point" was 27 chars, budget 21. Rewrote. The pattern is
+clear now: my natural description style consistently
+overflows the column. The TOOL keeps me honest.
+
+**What surprised me:**
+- I instinctively wanted to call this shape "classifier" but
+that's not quite right. Classifier matches a STRUCTURED
+input (a postcode pattern, a NANP prefix); a quantizer
+takes a CONTINUOUS input and buckets it. The 8/16-point
+case is "named band of degrees" which is a quantizer with
+named buckets. Adding to the patterns doc would over-
+categorize  one example doesn't warrant a new row yet.
+- The "centered band" decision matters: bands centered on the
+cardinal POINTS feels more right than bands aligned to the
+edges. Documented in code.
+
+**Tooling opportunity:**
+- (none new) Plugin count 106  107. Workflow smooth.
+
 
 
 
