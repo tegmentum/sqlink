@@ -233,9 +233,9 @@ The catalog combines two kinds of extension:
 2. **General-purpose scalar extension packs** that share the same
    loader/dispatch plumbing but aren't ports of any named SQLite
    extension. These cover identifier validators (vin, isin, ean,
-   etc.), reference data (currency, country, iban), domain math
-   (easter-date, beaufort-scale, compass-bearing), formatters
-   (humansize, numfmt), and similar.
+   creditcard, etc.), reference data (currency, country, iban),
+   coordinate math (latlon, geo-distance), formatters (humansize,
+   numfmt), and similar.
 
 Both kinds appear in the table below. The original plan focused on
 (1); (2) accumulated as the loader/dispatch infrastructure made it
@@ -357,15 +357,7 @@ cheap to add new scalar packs.
 | natsort (natural sort (file2 <  |    +3  | extensions/natsort                 |
 | country (ISO 3166-1 lookup (al  |    +5  | extensions/country                 |
 | iban (ISO 13616 IBAN  validate  |    +6  | extensions/iban                    |
-| nato-phonetic (encode/decode)   |    +3  | extensions/nato-phonetic           |
-| web-mercator-tile (xyz+quadkey) |    +7  | extensions/web-mercator-tile       |
 | setops (JSON-array set ops)     |    +8  | extensions/setops                  |
-| compass-bearing (8/16-point)    |    +5  | extensions/compass-bearing         |
-| beaufort-scale (m/s  force)    |    +5  | extensions/beaufort-scale          |
-| google-polyline (coord codec)   |    +3  | extensions/google-polyline         |
-| classic-cipher (Caesar/ROT/etc) |    +6  | extensions/classic-cipher          |
-| xor-cipher (hex codec)          |    +3  | extensions/xor-cipher              |
-| easter-date (Western+Orthodox)  |    +3  | extensions/easter-date             |
 | sha3 (SHA-3 (shathree port))    |    +6  | extensions/sha3                    |
 | totype (totype.c port)          |    +2  | extensions/totype                  |
 | uint (uint.c port (collation))  |    +0  | extensions/uint                    |

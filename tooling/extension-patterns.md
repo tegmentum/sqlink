@@ -24,8 +24,6 @@ signal it's either (a) genuinely novel and worth documenting, or
 | Base-N algorithm         | radix arithmetic / encoding                          | radix                              |
 | Tokenize-then-compare    | string ordering by structure, not bytes              | natsort                            |
 | Variable-length array I/O | set / collection ops returning N items              | setops                             |
-| Quantizer                | continuous value  named band                       | compass-bearing, beaufort-scale    |
-| Text transform with key  | text + key  transformed text                        | classic-cipher, xor-cipher         |
 
 ## Detailed shapes
 
@@ -189,86 +187,6 @@ Pitfalls:
 - Non-array input  NULL is the standard "fail-clean";
   caller can `json_each(set_union(a, b))` and a NULL row
   short-circuits cleanly.
-
-### Quantizer
-
-Continuous numeric input  named band (or band  numeric).
-Different from the classifier shape (which matches STRUCTURED
-inputs like postcodes); quantizer takes a CONTINUOUS scalar
-and buckets it into pre-named ranges.
-
-```rust
-const TABLE: &[(u8, f64, &str)] = &[
-    (0, 0.0,  "Calm"),
-    (1, 0.5,  "Light air"),
-    (2, 1.6,  "Light breeze"),
-    /* ... */
-];
-
-fn force_for(v: f64) -> u8 {
-    // Walk from the top so the open-ended last band catches
-    // anything beyond the highest lower bound.
-    for (force, lower, _) in TABLE.iter().rev() {
-        if v >= *lower { return *force; }
-    }
-    0
-}
-```
-
-Pitfalls:
-- Decide whether bands are centered (compass: N spans
-  [-22.5, +22.5)) or edge-aligned (beaufort: force 1 spans
-  [0.5, 1.6)). Both are valid conventions; document the
-  choice and smoke-test the boundary.
-- Open-ended top band: beaufort's force 12 catches anything
-   32.7 m/s. Smoke a "well beyond" input (100 m/s  12).
-- Reverse direction (name  numeric) needs a pick:
-  lower-bound, center, or upper-bound. compass-bearing uses
-  center degrees; beaufort-scale uses lower bound. Same shape,
-  different
-  conventions  document per extension.
-
-Use cases: cardinal directions (compass-bearing), wind force
-(beaufort-scale), Richter, pH, decibel loudness, generally any
-"natural-language label for a continuous quantity."
-
-### Text transform with key
-
-`fn transform(text: &str, key: &str) -> Option<String>` 
-where the key parameterizes the transformation. Pair an
-`encode` scalar with a `decode` scalar so callers can
-round-trip.
-
-```rust
-fn vigenere(text: &str, key: &str, decode: bool) -> Option<String> {
-    let key_shifts: Vec<i32> = key.chars()
-        .filter(|c| c.is_ascii_alphabetic())
-        .map(|c| (c.to_ascii_uppercase() as u8 - b'A') as i32)
-        .collect();
-    if key_shifts.is_empty() { return None; }
-    /* ... apply shifts cycling through key_shifts ... */
-}
-```
-
-Distinct from pure formatter (no key  no parameter beyond
-the input) and from base-N (key replaced by a fixed
-alphabet, not caller-supplied).
-
-Pitfalls:
-- Empty / no-applicable-letter key  NULL is the standard
-  fail-clean. Catches the "user passed integer 0 to a
-  text-key arg" class of bug.
-- Non-letter (or non-byte) chars often pass through, but
-  the KEY CURSOR shouldn't advance on them (the
-  classical convention). Smoke this explicitly: 
-  vigenere_encode("Hello, World", "KEY") shouldn't waste
-  key positions on the comma.
-- For binary keys / non-UTF8 input, return Blob instead of
-  Text. xor-cipher handles this by output type-switching.
-
-Use cases: classic-cipher (Caesar/Vigenere/Atbash), xor-cipher (byte
-XOR with hex output), template_render (would also fit
-if shipped: text + variables dict  rendered).
 
 ## Reusable helpers
 
