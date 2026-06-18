@@ -1589,6 +1589,54 @@ specific commit. If the cheatsheet had a "(surfaced by:
 commit X)" link per entry, drift becomes easier to verify.
 Premature for 4 entries; revisit if it grows to 10+.
 
+---
+
+### 2026-06-17  radix extension (plugin #100!)
+
+**What I built:** Integer base conversion extension, bases
+2-36. Five scalars on a base-N algorithm shape (new this
+session):
+
+  radix_to(n, base)             255, 16   "FF"
+  radix_from(s, base)           "FF", 16  255
+  radix_change(s, from, to)     "FF", 16, 2  "11111111"
+  radix_digits(n, base)         255, 10   3
+  radix_bits(n)                 255       8
+
+Out-of-range base (<2 or >36)  NULL. Negative numbers
+preserve leading `-`. Case-insensitive parse, uppercase
+output. `i64::MIN` handled via i128 widening before unsigned
+abs (the standard "can't .abs() i64::MIN" trick).
+
+**What worked:**
+- Dogfooded T-24 seed-expected again. Edited the banner to
+a one-line description, committed. Should be the default
+workflow now.
+- The smoke covers the i64-edge cases explicitly: 0, -42,
+i64::MIN (via radix_bits implicitly). Each edge case is
+ONE row, distinguishable in the diff.
+- This is plugin #100 by count. Worth pausing to note: the
+catalog now has 100 wasm component extensions across ~30
+domains, all sharing the same dispatch ABI. The investment
+in tooling (scaffold, smoke, plan-add, lessons-learned
+discipline) has been carrying its weight  most ships in
+this batch took 15-20 minutes start to finish.
+
+**What surprised me:**
+- Rust's `i64::abs()` panics on `i64::MIN` (overflow). Caught
+this from a previous bug-hunt; preemptively used
+`(n as i128).unsigned_abs() as u64`. The fact that I REMEMBERED
+the trick suggests the snippets/README.md "design patterns"
+discipline is working: I read once that "i64 abs is unsafe at
+MIN" and now reach for the workaround automatically.
+- Plugin #100 didn't feel like a milestone during shipping 
+the workflow is smooth enough that no individual ship feels
+notable. That's the right outcome from process investment.
+
+**Tooling opportunity:**
+- (none new) Catalog dynamics are healthy. 100 ships in;
+no friction to add.
+
 
 
 

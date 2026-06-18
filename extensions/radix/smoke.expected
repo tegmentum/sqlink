@@ -1,0 +1,24 @@
+# Bases 2/8/16/36 conversions; negative + zero edge cases;
+# case-insensitive parse; out-of-range base  <NULL>.
+11111111
+FF
+377
+0
+-2A
+Z
+ZZ
+255
+255
+255
+-42
+<NULL>
+11111111
+FF
+3
+8
+1
+8
+9
+1
+<NULL>
+<NULL>
