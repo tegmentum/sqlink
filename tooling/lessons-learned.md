@@ -2719,6 +2719,70 @@ Two scalars, two distinct failure modes  smoke them both.
 (lessons-stub) and T-38 (next-fid) on this ship. Both
 saved a small bit of friction.
 
+---
+
+### 2026-06-18  Rename pass + pivot back to SQLite-extension ports
+
+Mid-session honesty check: the user pointed out that "easter"
+and similar made-up names don't sound like SQLite extensions
+because they aren't  the session had drifted from porting
+well-known SQLite extensions into shipping useful general
+scalar packs.
+
+Two-part remediation in one batch:
+
+(1) **Rename 8 cute names** to ones that describe the function:
+  - nato  nato-phonetic
+  - easter  easter-date
+  - cipher  classic-cipher
+  - xor  xor-cipher
+  - beaufort  beaufort-scale
+  - compass  compass-bearing
+  - tile  web-mercator-tile
+  - polyline  google-polyline
+
+The 12 already-descriptive names (phone-prefix, humansize,
+latlon, numfmt, etc.) untouched. Scalar function names
+preserved across all renames  the manifest "name" is
+metadata, not SQL dispatch surface.
+
+(2) **Reframe PLAN-sqlite-plugins.md** to acknowledge the
+catalog now mixes (a) real ports of well-known SQLite
+extensions and (b) general scalar extension packs that
+share the loader/dispatch plumbing. (a) was the original
+plan; (b) accumulated organically.
+
+(3) **Pivot back** to real SQLite extension ports. First ship:
+sha3 (port of SQLite's bundled `shathree.c` extension). Six
+scalars matching the shathree.c surface:
+
+  sha3(X, N)       NIST FIPS 202 SHA-3 at size N (224/256/384/512)
+  sha3_224(X) ... sha3_512(X)   shorthand for fixed sizes
+  sha3_raw(X, N)   Blob output (extra; not in shathree.c)
+
+Smoke locks NIST reference vectors byte-exactly for both empty
+input and "abc" across all four sizes. INTEGER/REAL coerce
+to TEXT representation; NULL hashes as empty string. Matches
+shathree.c semantics.
+
+**What this reaffirms:**
+- Smoke tests against canonical reference data (FIPS 202
+vectors, the Google polyline spec example, classic Vigenere
+"LEMON" + "ATTACKATDAWN" = "LXFOPVEFRNHR") are the strongest
+correctness guarantee available. When the SCALAR is a known-
+hash or known-algorithm, the reference vectors are free
+truth  use them.
+- T-31 fired AGAIN on this ship ("SHA-3 NIST FIPS 202 hashes"
+= 26, "SHA-3 hashes (shathree port)" = 28, settled on
+"SHA-3 (shathree port)" = 21). Budget keeps me honest.
+- Going forward: focus on extensions that ARE ports of
+named SQLite extensions (carray, completion, eval, etc.)
+rather than general scalar packs.
+
+**Tooling opportunity:**
+- (none new) The pivot itself is the lesson. Plugin count
+112  113.
+
 
 
 

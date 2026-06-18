@@ -366,6 +366,7 @@ cheap to add new scalar packs.
 | classic-cipher (Caesar/ROT/etc) |    +6  | extensions/classic-cipher          |
 | xor-cipher (hex codec)          |    +3  | extensions/xor-cipher              |
 | easter-date (Western+Orthodox)  |    +3  | extensions/easter-date             |
+| sha3 (SHA-3 (shathree port))    |    +6  | extensions/sha3                    |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
