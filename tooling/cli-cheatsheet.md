@@ -8,8 +8,20 @@ extension's `smoke.sql` (or pre-pended to `smoke.sql` by
 The harness automatically prepends `.nullvalue <NULL>` to every
 smoke run (T-19); your `smoke.sql` doesn't write it.
 
-Authoritative source: `cli/src/dot.rs` dispatch (~line 41).
-If this drifts from the dispatch list, re-run T-21's audit.
+Authoritative source: `cli/src/dot.rs` dispatch (~line 41)
+AND `cli/src/lib.rs` eval_input (handles ~20 commands inline
+via `strip_prefix` before the dispatcher). If this drifts
+from either, re-run T-21's audit.
+
+## Parity with upstream sqlite3 cli
+
+We implement ~57 dot commands; upstream sqlite3 cli has ~70.
+Gaps are either wasi-sandbox blocked (`.shell`, `.system`,
+`.cd`) or genuinely niche/experimental
+(`.testcase`/`.check`/`.scanstats`/`.expert`/`.imposter`/
+`.filectrl`/`.nonce`/`.crnl`/`.vfsinfo`/`.intck`/`.progress`/
+`.recover`/`.connection`/`.dbtotxt`/`.excel`). Not pretending
+to match those.
 
 ## Quick reference
 
@@ -58,6 +70,26 @@ If this drifts from the dispatch list, re-run T-21's audit.
 | `.log on\|off`   |        | Toggle sqlite3_log callback echo (handled in `lib.rs`)    |
 | `.session NAME ...` |     | Session/changeset (matches upstream sqlite3 cli)          |
 | `.session list`  |        | List active sessions                                       |
+|                  |        |                                                            |
+| `.dump [PAT]`    |        | Render schema + data as replayable SQL                    |
+| `.import F TBL`  |        | Load FILE (CSV/TSV per `.mode`) into TABLE                |
+| `.backup ?DB? F` |        | Copy live db to FILE (alias `.save F` / `.clone F`)       |
+| `.restore ?DB? F` |       | Read FILE back into DB (default `main`)                   |
+| `.open ?FILE?`   |        | Switch to a different db file                             |
+| `.output FILE`   |        | Redirect SQL output to FILE until `.output stdout`        |
+| `.once FILE`     |        | Redirect output for the next command only                 |
+| `.trace ?OPT?`   |        | Log SQL statements as they execute                        |
+| `.auth on\|off`  |        | Toggle authorizer dispatch                                |
+| `.quit` / `.exit`|        | Terminate the cli                                          |
+|                  |        |                                                            |
+| `.load FILE`     |        | Load an extension component (this project's `.load`)      |
+| `.unload NAME`   |        | Unload an extension                                        |
+| `.cache ?op?`    |        | Inspect/manage component cache (project-specific)         |
+| `.compose ...`   |        | sqlite-wasm-loader compose ops (project-specific)         |
+| `.grants ...`    |        | Capability grants for loaded extensions (project-specific)|
+| `.resolvers`     |        | List loaded resolvers (project-specific)                  |
+| `.runtimes`      |        | List runtime providers (project-specific)                 |
+| `.run ?args?`    |        | Run a sqlite-runtime composed wasm component              |
 
 ## Smoke-test idioms
 
