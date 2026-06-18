@@ -41,12 +41,16 @@ def scan() -> tuple[dict[int, tuple[str, str]], dict[int, tuple[str, str]]]:
         if (m := SECTION.match(line)):
             section_title = m.group(1)
             continue
+        # First-match-wins: the ORIGINAL open / close marker is the
+        # canonical one; later mentions (including documentation
+        # quotes of the regex patterns themselves  see T-25's own
+        # body) shouldn't overwrite the recorded section title.
         for m in T_OPEN.finditer(line):
             n = int(m.group(1))
-            opens[n] = (section_title, line.strip())
+            opens.setdefault(n, (section_title, line.strip()))
         for m in T_CLOSED.finditer(line):
             n = int(m.group(1))
-            closes[n] = (section_title, line.strip())
+            closes.setdefault(n, (section_title, line.strip()))
     return opens, closes
 
 
