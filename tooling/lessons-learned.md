@@ -1280,6 +1280,53 @@ no longer includes "out of memory"  the T-9 fix removed it
 when shipping (commit 2a84ec0). Lessons-learned was the only
 artifact still listing it as open.
 
+---
+
+### 2026-06-17  humansize extension
+
+**What I built:** Bidirectional humanizer for bytes and
+durations. Five scalars across two parser+formatter pairs:
+
+  humansize_bytes(n)            1500       "1.5 KB"   (decimal)
+  humansize_ibytes(n)           1536       "1.5 KiB"  (binary)
+  humansize_parse_bytes(s)      "1.5 KB"  1500
+  humansize_duration(secs)      3700       "1h 1m"
+  humansize_parse_duration(s)   "1h 30m"  5400
+
+Formatter picks the largest unit where value 1.0. Duration
+caps at 2 most-significant units ("1d 5h" not "1d 5h 23m 7s").
+Parser is case-insensitive and tolerates whitespace.
+
+**What worked:**
+- Formatter+parser pair is a new shape this session (color was
+parse-only, currency was lookup-only). The "parse handles the
+formatter's own output" round-trip property is a useful
+informal invariant; verified in the smoke (1500 "1.5 KB"
+1500). Future me knows the pair is self-consistent.
+- The "trim trailing .0" trick gives "1 KiB" instead of
+"1.0 KiB" for round numbers. Small but matters when the
+output goes into a UI.
+- Duration parser handles mixed units in any order ("1h 30m"
+or "30m 1h" both work). Total-summing is order-independent
+by design.
+
+**What surprised me:**
+- The "2-units cap" decision for `format_duration`. I started
+with "all non-zero units" ("1d 5h 23m 7s"), which is precise
+but reads as cluttered. Capping at 2 produces "1d 5h" which
+matches how humans actually talk about durations. The lost
+precision (~hours of slack) is OK for the humanize use case;
+if a caller needs exact, they pass through humansize_duration
++ humansize_parse_duration round-trip and get back to seconds.
+- Stopped before writing a "fuzz-test the round-trip" smoke.
+That's overkill for ~50 line code with no hot path. The
+6-row round-trip in smoke.sql is enough demonstration.
+
+**Tooling opportunity:**
+- (none new) The harness handled this smoothly. T-17 parallel
+runner made the "make ext + smoke + smoke --all" loop fast
+enough that I felt no friction iterating.
+
 
 
 

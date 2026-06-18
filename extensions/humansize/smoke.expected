@@ -1,0 +1,26 @@
+# Decimal + binary byte formatters; round-trip parse;
+# duration format/parse pair. NULL on malformed input.
+0 B
+999 B
+1.5 KB
+1.5 MB
+2.5 GB
+1 KiB
+1.5 KiB
+1 MiB
+1500
+1536
+2000000000
+100
+500
+<NULL>
+0s
+45s
+1m 30s
+1h 1m
+1d
+1d 1h
+90
+5400
+172800
+<NULL>
