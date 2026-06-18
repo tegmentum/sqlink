@@ -2069,6 +2069,56 @@ catalog. If I add 2 more tools with silent-failure modes,
 write a "tooling design tips" doc with "make failures
 loud" as the headline. Defer until 3rd consumer.
 
+---
+
+### 2026-06-17  tile extension
+
+**What I built:** Web Mercator XYZ tile coordinate math. Seven
+scalars covering lat/lon  tile, tile  bounding box, and
+quadkey encode/decode:
+
+  tile_x(lon, z) / tile_y(lat, z)        decimal degrees  tile xyz
+  tile_lon(x, z) / tile_lat(y, z)        tile xyz  NW corner deg
+  tile_quadkey(x, y, z)                   Bing-style quadkey string
+  tile_from_quadkey(q)                    JSON {x, y, z}
+  tile_bbox(x, y, z)                      JSON {west, south, east, north}
+
+Web Mercator latitudes clamp to +/-85.05 (the standard range
+beyond which y blows up). Quadkey is "interleave bits as base-4
+digits MSB-first."
+
+**What worked:**
+- T-31 fired IMMEDIATELY on my plan-add call ("web mercator
+tile coords + quadkey" = 34 chars, budget 24). Forced me to
+rewrite to "web mercator + quadkey." Tool-discipline already
+paying off in the same turn it landed.
+- Coord transform shape recognized from extension-patterns.md
+before writing code. Smoke pattern (forward, reverse,
+round-trip) followed directly.
+- Smoke surfaced the "empty-string output" harness quirk:
+`tile_quadkey(0, 0, 0)` returns "" by spec (zoom 0 is one
+tile, no digits) but parse_results strips empty lines.
+Coalesced with `<empty>` sentinel  similar to the T-19
+NULL handling but for empty strings.
+
+**What surprised me:**
+- Quadkey zoom-0 = empty string. Mathematically correct but
+ergonomically awkward. The smoke needed to express both "the
+function returned empty" AND "the row exists." Sentinel
+wrap (`nullif(..., '')` + `coalesce`) was the cleanest
+workaround.
+- Mercator latitude clamp at +/-85.05  not +/-90  is the
+non-obvious constant. Future-me will forget; the smoke's
+"clamps to 0/31 at zoom 5" rows pin it.
+
+**Tooling opportunity:**
+- (T-32 new) Empty-string outputs are the SECOND silent
+parse-side limitation I've hit (after T-19 NULL). T-32 = add
+an "Empty strings dropped" note to the cli-cheatsheet's
+harness-output-limitations section. Tiny edit; do it on the
+next T-* batch.
+Plugin count 104  105.
+
 
 
 
