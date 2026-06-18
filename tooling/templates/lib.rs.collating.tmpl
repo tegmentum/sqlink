@@ -1,0 +1,85 @@
+//! {DESCRIPTION_SHORT}
+//!
+//! Collation extension  registers a custom string-comparison
+//! function under `COLLATE <name>`. Replace `CID_*` and the
+//! `compare` body below with your own logic.
+
+extern crate alloc;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_export {{
+    use alloc::format;
+    use alloc::string::{{String, ToString}};
+    use alloc::vec::Vec;
+
+    mod bindings {{
+        wit_bindgen::generate!({{
+            path: "../../sqlite-loader-wit/wit",
+            world: "collating",
+            generate_all,
+        }});
+    }}
+
+    use bindings::exports::sqlite::extension::collation::Guest as CollationGuest;
+    use bindings::exports::sqlite::extension::metadata::{{
+        CollationSpec, Guest as MetadataGuest, Manifest,
+    }};
+    use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
+    use bindings::sqlite::extension::types::SqlValue;
+
+    // One CID const per declared collation. Keep stable.
+    const CID_DEFAULT: u64 = 1;
+
+    struct Ext;
+
+    /// Comparison function. Replace with your own. Returns negative
+    /// if a < b, 0 if equal, positive if a > b.
+    fn compare_default(a: &str, b: &str) -> i32 {{
+        // Default scaffold: byte-wise comparison (same as BINARY).
+        // Replace with the real algorithm.
+        match a.cmp(b) {{
+            core::cmp::Ordering::Less => -1,
+            core::cmp::Ordering::Equal => 0,
+            core::cmp::Ordering::Greater => 1,
+        }}
+    }}
+
+    impl MetadataGuest for Ext {{
+        fn describe() -> Manifest {{
+            Manifest {{
+                name: "{NAME}".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                scalar_functions: alloc::vec![],
+                aggregate_functions: alloc::vec![],
+                collations: alloc::vec![
+                    CollationSpec {{ id: CID_DEFAULT, name: "{NAME}".to_string() }},
+                ],
+                vtabs: alloc::vec![],
+                has_authorizer: false,
+                has_update_hook: false,
+                has_commit_hook: false,
+                declared_capabilities: alloc::vec![],
+            }}
+        }}
+    }}
+
+    /// No scalars declared, but the world's WIT contract requires
+    /// the export. Always errors  host never dispatches because
+    /// no scalar names are advertised.
+    impl ScalarFunctionGuest for Ext {{
+        fn call(func_id: u64, _args: Vec<SqlValue>) -> Result<SqlValue, String> {{
+            Err(format!("{NAME}: no scalars declared (func_id={{func_id}})"))
+        }}
+    }}
+
+    impl CollationGuest for Ext {{
+        fn compare(collation_id: u64, a: String, b: String) -> i32 {{
+            match collation_id {{
+                CID_DEFAULT => compare_default(&a, &b),
+                _ => 0,  // unknown id  treat as equal
+            }}
+        }}
+    }}
+
+    bindings::export!(Ext with_types_in bindings);
+}}

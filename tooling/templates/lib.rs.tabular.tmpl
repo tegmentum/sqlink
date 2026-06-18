@@ -1,0 +1,218 @@
+//! {DESCRIPTION_SHORT}
+//!
+//! Virtual-table extension. Exposes an eponymous vtab named
+//! `{NAME}` with two columns plus one HIDDEN input column.
+//! Replace the schema, the column constants, and the filter
+//! logic for your real data.
+
+extern crate alloc;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_export {{
+    use alloc::format;
+    use alloc::string::{{String, ToString}};
+    use alloc::vec::Vec;
+    use core::cell::RefCell;
+    use std::collections::HashMap;
+
+    mod bindings {{
+        wit_bindgen::generate!({{
+            path: "../../sqlite-loader-wit/wit",
+            world: "tabular",
+            generate_all,
+        }});
+    }}
+
+    use bindings::exports::sqlite::extension::metadata::{{
+        Guest as MetadataGuest, Manifest, VtabSpec,
+    }};
+    use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
+    use bindings::exports::sqlite::extension::vtab::{{
+        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
+    }};
+    use bindings::sqlite::extension::types::SqlValue;
+
+    const VTAB_ID: u64 = 1;
+    const COL_IDX: i32 = 0;
+    const COL_VALUE: i32 = 1;
+    const COL_INPUT: i32 = 2;  // HIDDEN  caller-bound input
+
+    struct Ext;
+
+    /// Per-cursor state. Customize for your data; common fields:
+    ///   - the rows / values being iterated
+    ///   - the current position
+    struct Cursor {{
+        values: Vec<SqlValue>,
+        idx: usize,
+    }}
+
+    thread_local! {{
+        static CURSORS: RefCell<HashMap<u64, Cursor>> = RefCell::new(HashMap::new());
+    }}
+
+    impl MetadataGuest for Ext {{
+        fn describe() -> Manifest {{
+            Manifest {{
+                name: "{NAME}".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                scalar_functions: alloc::vec![],
+                aggregate_functions: alloc::vec![],
+                collations: alloc::vec![],
+                vtabs: alloc::vec![VtabSpec {{
+                    id: VTAB_ID,
+                    name: "{NAME}".to_string(),
+                    eponymous: true,
+                }}],
+                has_authorizer: false,
+                has_update_hook: false,
+                has_commit_hook: false,
+                declared_capabilities: alloc::vec![],
+            }}
+        }}
+    }}
+
+    impl ScalarFunctionGuest for Ext {{
+        fn call(_func_id: u64, _args: Vec<SqlValue>) -> Result<SqlValue, String> {{
+            Err("{NAME}: no scalar functions exported".to_string())
+        }}
+    }}
+
+    fn schema_str() -> String {{
+        // Customize this schema for your vtab.
+        "CREATE TABLE x(idx INTEGER, value, input HIDDEN)".to_string()
+    }}
+
+    impl VtabGuest for Ext {{
+        fn create(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {{
+            Ok(schema_str())
+        }}
+        fn connect(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {{
+            Ok(schema_str())
+        }}
+        fn destroy(_: u64, _: u64) -> Result<(), String> {{ Ok(()) }}
+        fn disconnect(_: u64, _: u64) -> Result<(), String> {{ Ok(()) }}
+
+        fn best_index(
+            _vtab_id: u64,
+            _instance_id: u64,
+            info: IndexInfo,
+        ) -> Result<IndexPlan, String> {{
+            // EQ on the hidden input column binds the caller's
+            // value into filter argv. Without it, the vtab serves
+            // zero rows (or its default behavior).
+            let mut usage: Vec<ConstraintUsage> = info
+                .constraints
+                .iter()
+                .map(|_| ConstraintUsage {{ argv_index: 0, omit: false }})
+                .collect();
+            let mut bound = false;
+            for (i, c) in info.constraints.iter().enumerate() {{
+                if !c.usable || c.column != COL_INPUT || c.op != ConstraintOp::Eq {{
+                    continue;
+                }}
+                if bound {{ continue; }}
+                bound = true;
+                usage[i] = ConstraintUsage {{ argv_index: 1, omit: true }};
+            }}
+            Ok(IndexPlan {{
+                constraint_usage: usage,
+                idx_num: if bound {{ 1 }} else {{ 0 }},
+                idx_str: None,
+                estimated_cost: if bound {{ 1.0 }} else {{ 1.0e18 }},
+                estimated_rows: 64,
+                orderby_consumed: false,
+            }})
+        }}
+
+        fn open(_: u64, _: u64, cursor_id: u64) -> Result<(), String> {{
+            CURSORS.with(|m| {{
+                m.borrow_mut().insert(
+                    cursor_id,
+                    Cursor {{ values: Vec::new(), idx: 0 }},
+                )
+            }});
+            Ok(())
+        }}
+
+        fn close(_: u64, cursor_id: u64) -> Result<(), String> {{
+            CURSORS.with(|m| m.borrow_mut().remove(&cursor_id));
+            Ok(())
+        }}
+
+        fn filter(
+            _vtab_id: u64,
+            cursor_id: u64,
+            idx_num: i32,
+            _idx_str: Option<String>,
+            args: Vec<SqlValue>,
+        ) -> Result<(), String> {{
+            // When best_index bound the input, idx_num & 1 is set
+            // and args[0] holds the bound value. Use it to populate
+            // your cursor's row data.
+            let values = if idx_num & 1 != 0 {{
+                match args.first() {{
+                    // TODO: customize  parse the bound value into
+                    // your cursor's row format.
+                    Some(SqlValue::Text(_)) => Vec::new(),
+                    _ => Vec::new(),
+                }}
+            }} else {{
+                Vec::new()
+            }};
+            CURSORS.with(|m| {{
+                if let Some(c) = m.borrow_mut().get_mut(&cursor_id) {{
+                    c.values = values;
+                    c.idx = 0;
+                }}
+            }});
+            Ok(())
+        }}
+
+        fn next(_: u64, cursor_id: u64) -> Result<(), String> {{
+            CURSORS.with(|m| {{
+                if let Some(c) = m.borrow_mut().get_mut(&cursor_id) {{
+                    c.idx += 1;
+                }}
+            }});
+            Ok(())
+        }}
+
+        fn eof(_: u64, cursor_id: u64) -> bool {{
+            CURSORS.with(|m| {{
+                m.borrow()
+                    .get(&cursor_id)
+                    .map(|c| c.idx >= c.values.len())
+                    .unwrap_or(true)
+            }})
+        }}
+
+        fn column(_: u64, cursor_id: u64, col: i32) -> Result<SqlValue, String> {{
+            CURSORS.with(|m| {{
+                let cursors = m.borrow();
+                let c = cursors
+                    .get(&cursor_id)
+                    .ok_or_else(|| "{NAME}: cursor not open".to_string())?;
+                let v = c.values.get(c.idx).cloned();
+                match (col, v) {{
+                    (COL_IDX, _) => Ok(SqlValue::Integer(c.idx as i64)),
+                    (COL_VALUE, Some(v)) => Ok(v),
+                    (COL_VALUE, None) => Ok(SqlValue::Null),
+                    (COL_INPUT, _) => Ok(SqlValue::Null),
+                    (other, _) => Err(format!("{NAME}: bad column {{other}}")),
+                }}
+            }})
+        }}
+
+        fn rowid(_: u64, cursor_id: u64) -> Result<i64, String> {{
+            CURSORS.with(|m| {{
+                m.borrow()
+                    .get(&cursor_id)
+                    .map(|c| (c.idx + 1) as i64)
+                    .ok_or_else(|| "{NAME}: cursor not open".to_string())
+            }})
+        }}
+    }}
+
+    bindings::export!(Ext with_types_in bindings);
+}}

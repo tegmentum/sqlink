@@ -25,6 +25,17 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATES = REPO_ROOT / "tooling" / "templates"
 REGISTRY = REPO_ROOT / "tooling" / "compat-registry.json"
 
+# T-39: world maps to its lib.rs template + a one-line "next steps"
+# hint. The "minimal" template is the default for scalar-only
+# extensions; the others bring in the per-world Guest impls.
+WORLDS = {
+    "minimal":     ("lib.rs.minimal.tmpl",     "scalar functions"),
+    "collating":   ("lib.rs.collating.tmpl",   "custom collation"),
+    "tabular":     ("lib.rs.tabular.tmpl",     "virtual table"),
+    "stateful":    ("lib.rs.stateful.tmpl",    "aggregate function"),
+    "authorizing": ("lib.rs.authorizing.tmpl", "authorizer callback"),
+}
+
 
 def load_registry() -> dict:
     with REGISTRY.open() as f:
@@ -89,9 +100,12 @@ def _suggest_version(name: str, registry: dict) -> str:
     return parts[0]
 
 
-def scaffold_extension(name: str, crates: list[str], description: str) -> None:
+def scaffold_extension(name: str, crates: list[str], description: str,
+                       world: str = "minimal") -> None:
     if not re.match(r"^[a-z][a-z0-9-]*$", name):
         sys.exit(f"error: extension name must be lowercase alphanumeric + hyphens (got {name!r})")
+    if world not in WORLDS:
+        sys.exit(f"error: unknown world {world!r}; valid: {', '.join(sorted(WORLDS))}")
 
     target = REPO_ROOT / "extensions" / name
     if target.exists():
@@ -114,9 +128,10 @@ def scaffold_extension(name: str, crates: list[str], description: str) -> None:
             DEPS=deps_block,
         )
     )
+    template_name, world_hint = WORLDS[world]
     (target / "src" / "lib.rs").write_text(
         render(
-            "lib.rs.tmpl",
+            template_name,
             NAME=name_underscore,
             DESCRIPTION_SHORT=desc_short,
         )
@@ -158,8 +173,8 @@ def scaffold_extension(name: str, crates: list[str], description: str) -> None:
             sys.exit(1)
         print("OK  skeleton compiles clean")
 
-    print(f"\nnext:")
-    print(f"  1. edit extensions/{name}/src/lib.rs  add your real scalars")
+    print(f"\nnext (world={world}, scaffold focus: {world_hint}):")
+    print(f"  1. edit extensions/{name}/src/lib.rs  customize the {world_hint}")
     print(f"  2. edit extensions/{name}/smoke.sql  add real test inputs")
     print(f"  3. make ext NAME={name}  build + component-wrap + smoke + provenance scan")
 
@@ -190,6 +205,13 @@ def main() -> None:
     )
     p.add_argument("--description", default="", help="multi-line description for Cargo.toml")
     p.add_argument(
+        "--world", default="minimal",
+        choices=sorted(WORLDS.keys()),
+        help="WIT world the extension uses. Default 'minimal' (scalar-only). "
+             "Pick 'tabular' for vtab, 'collating' for collation, "
+             "'stateful' for aggregate, 'authorizing' for authorizer.",
+    )
+    p.add_argument(
         "--list-broken",
         action="store_true",
         help="list crates flagged in compat-registry; exits without scaffolding",
@@ -204,7 +226,7 @@ def main() -> None:
         p.error("the following arguments are required: name")
 
     crates = [c.strip() for c in args.crate.split(",") if c.strip()]
-    scaffold_extension(args.name, crates, args.description)
+    scaffold_extension(args.name, crates, args.description, args.world)
 
 
 if __name__ == "__main__":

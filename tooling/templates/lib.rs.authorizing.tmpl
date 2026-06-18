@@ -1,0 +1,82 @@
+//! {DESCRIPTION_SHORT}
+//!
+//! Authorizer extension  invoked by sqlite3 for every privilege
+//! check (CREATE, READ, INSERT, DELETE, ATTACH, etc.). Return
+//! Allow / Deny / Ignore per action. Set `has_authorizer: true`
+//! in the manifest below.
+
+extern crate alloc;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_export {{
+    use alloc::format;
+    use alloc::string::{{String, ToString}};
+    use alloc::vec::Vec;
+
+    mod bindings {{
+        wit_bindgen::generate!({{
+            path: "../../sqlite-loader-wit/wit",
+            world: "authorizing",
+            generate_all,
+        }});
+    }}
+
+    use bindings::exports::sqlite::extension::authorizer::Guest as AuthorizerGuest;
+    use bindings::exports::sqlite::extension::metadata::{{
+        Guest as MetadataGuest, Manifest,
+    }};
+    use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
+    use bindings::sqlite::extension::types::{{AuthAction, AuthResult, SqlValue}};
+
+    struct Ext;
+
+    impl MetadataGuest for Ext {{
+        fn describe() -> Manifest {{
+            Manifest {{
+                name: "{NAME}".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                scalar_functions: alloc::vec![],
+                aggregate_functions: alloc::vec![],
+                collations: alloc::vec![],
+                vtabs: alloc::vec![],
+                has_authorizer: true,
+                has_update_hook: false,
+                has_commit_hook: false,
+                declared_capabilities: alloc::vec![],
+            }}
+        }}
+    }}
+
+    /// No scalars declared, but the world's WIT contract requires
+    /// the export. Always errors  the host never dispatches.
+    impl ScalarFunctionGuest for Ext {{
+        fn call(func_id: u64, _args: Vec<SqlValue>) -> Result<SqlValue, String> {{
+            Err(format!("{NAME}: no scalars declared (func_id={{func_id}})"))
+        }}
+    }}
+
+    impl AuthorizerGuest for Ext {{
+        fn authorize(
+            action: AuthAction,
+            _arg1: Option<String>,
+            _arg2: Option<String>,
+            _database: Option<String>,
+            _trigger: Option<String>,
+        ) -> AuthResult {{
+            // Default scaffold: allow everything. Customize by
+            // matching on `action` (and the arg1/arg2/database/
+            // trigger fields, which carry action-specific detail)
+            // and returning AuthResult::Deny or AuthResult::Ignore.
+            //
+            // Examples:
+            //   - block CREATE TABLE  match AuthAction::CreateTable
+            //   - read-only mode  Deny all writes (Insert, Update,
+            //     Delete, CreateTable, ...)
+            //   - audit log  log every action, return Ok
+            let _ = action;
+            AuthResult::Ok
+        }}
+    }}
+
+    bindings::export!(Ext with_types_in bindings);
+}}

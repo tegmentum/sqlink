@@ -1,0 +1,130 @@
+//! {DESCRIPTION_SHORT}
+//!
+//! Stateful extension  aggregate function over multiple rows.
+//! Per-call state is keyed by `context_id` (a u64 the host
+//! generates for each aggregate-function invocation in a query).
+//! Set `is_window: true` and implement `value` / `inverse` if you
+//! want to support WINDOW frames.
+
+extern crate alloc;
+
+#[cfg(target_arch = "wasm32")]
+mod wasm_export {{
+    use alloc::format;
+    use alloc::string::{{String, ToString}};
+    use alloc::vec::Vec;
+    use core::cell::RefCell;
+    use std::collections::HashMap;
+
+    mod bindings {{
+        wit_bindgen::generate!({{
+            path: "../../sqlite-loader-wit/wit",
+            world: "stateful",
+            generate_all,
+        }});
+    }}
+
+    use bindings::exports::sqlite::extension::aggregate_function::Guest as AggregateGuest;
+    use bindings::exports::sqlite::extension::metadata::{{
+        AggregateFunctionSpec, Guest as MetadataGuest, Manifest,
+    }};
+    use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
+    use bindings::sqlite::extension::types::{{FunctionFlags, SqlValue}};
+
+    // Aggregate function id  one per declared agg.
+    const FID_PLACEHOLDER: u64 = 1;
+
+    struct Ext;
+
+    /// Per-context accumulator state. Customize the fields for
+    /// your aggregate.
+    #[derive(Default)]
+    struct Acc {{
+        count: i64,
+        sum: f64,
+    }}
+
+    thread_local! {{
+        static CTX: RefCell<HashMap<u64, Acc>> = RefCell::new(HashMap::new());
+    }}
+
+    impl MetadataGuest for Ext {{
+        fn describe() -> Manifest {{
+            let det = FunctionFlags::DETERMINISTIC;
+            let a = |id, name: &str, num_args: i32| AggregateFunctionSpec {{
+                id,
+                name: name.into(),
+                num_args,
+                func_flags: det,
+                // Flip to `true` if your agg should support WINDOW frames
+                // (and implement `value` / `inverse` below).
+                is_window: false,
+            }};
+            Manifest {{
+                name: "{NAME}".to_string(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                scalar_functions: alloc::vec![],
+                aggregate_functions: alloc::vec![
+                    a(FID_PLACEHOLDER, "{NAME}_placeholder", 1),
+                ],
+                collations: alloc::vec![],
+                vtabs: alloc::vec![],
+                has_authorizer: false,
+                has_update_hook: false,
+                has_commit_hook: false,
+                declared_capabilities: alloc::vec![],
+            }}
+        }}
+    }}
+
+    impl ScalarFunctionGuest for Ext {{
+        fn call(_func_id: u64, _args: Vec<SqlValue>) -> Result<SqlValue, String> {{
+            Err("{NAME}: no scalar functions exported".to_string())
+        }}
+    }}
+
+    impl AggregateGuest for Ext {{
+        fn step(_func_id: u64, context_id: u64, args: Vec<SqlValue>) -> Result<(), String> {{
+            // NULL inputs  no-op (SQL aggregate convention).
+            let v = match args.first() {{
+                Some(SqlValue::Null) | None => return Ok(()),
+                Some(SqlValue::Integer(n)) => *n as f64,
+                Some(SqlValue::Real(r)) => *r,
+                Some(SqlValue::Text(s)) => s.parse::<f64>().unwrap_or(0.0),
+                _ => return Ok(()),
+            }};
+            CTX.with(|m| {{
+                let mut map = m.borrow_mut();
+                let acc = map.entry(context_id).or_default();
+                acc.count += 1;
+                acc.sum += v;
+            }});
+            Ok(())
+        }}
+
+        fn finalize(_func_id: u64, context_id: u64) -> Result<SqlValue, String> {{
+            let acc = CTX.with(|m| m.borrow_mut().remove(&context_id));
+            // Default scaffold returns the running sum. Customize as
+            // your aggregate requires (avg, mode, percentile, ...).
+            Ok(match acc {{
+                Some(a) if a.count > 0 => SqlValue::Real(a.sum),
+                _ => SqlValue::Null,
+            }})
+        }}
+
+        /// Window-mode getter (called for each row's window value when
+        /// `is_window: true`). Return the current accumulator state
+        /// without consuming it.
+        fn value(_func_id: u64, _context_id: u64) -> Result<SqlValue, String> {{
+            Err("{NAME}: window mode not supported (set is_window=true and implement)".to_string())
+        }}
+
+        /// Window-mode remove. Called when a value falls out of the
+        /// window frame. Must undo what step() did.
+        fn inverse(_func_id: u64, _context_id: u64, _args: Vec<SqlValue>) -> Result<(), String> {{
+            Err("{NAME}: window mode not supported".to_string())
+        }}
+    }}
+
+    bindings::export!(Ext with_types_in bindings);
+}}
