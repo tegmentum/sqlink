@@ -1976,6 +1976,51 @@ Currently relies on memory; if drift recurs, formalize as a
 `tooling/skill-currency.py` check that warns when a tool was
 added without a skill mention.
 
+---
+
+### 2026-06-17  nato extension
+
+**What I built:** NATO phonetic alphabet encode/decode. Three
+scalars on a "lookup-table-with-bidirectional-traversal" shape
+(close to formatter+parser, but the underlying table is the
+same for both directions so the round-trip property is
+table-internal, not algorithmic):
+
+  nato_encode("ABC")        "Alpha Bravo Charlie"
+  nato_decode("Alpha Bravo")  "AB"
+  nato_word('A')             "Alpha"
+
+Multi-word input/output: " | " between word boundaries on
+encode; "|" decodes back to space. Case-insensitive in both
+directions. Unknown decode words fall back to first-char.
+
+**What worked:**
+- Smoke verifies the round-trip `decode(encode(x))  upper(x)`
+on "Hello World"  composes both directions through the
+sentence boundary handling.
+- Catching myself before shipping `Box::leak` in the encode
+function. The leak was small (one Box per non-alpha char,
+freed at process exit anyway) but tasteless. Restructured to
+`Vec<String>` and `.join(" ")` instead. ~5 LOC longer but
+zero unsafe / zero leak. Worth it.
+- nato_word as a single-char lookup is a useful primitive
+even though encode covers full strings. Composable in SQL
+queries.
+
+**What surprised me:**
+- The need for "|" as a word boundary. Without it,
+encode("AB CD")  "Alpha Bravo Charlie Delta" would be
+indistinguishable from encode("ABCD"). The boundary marker
+is necessary information that has to survive the round-trip.
+Once I saw the smoke for it, the design becomes obvious;
+without the smoke, I'd have shipped the lossy version.
+- Smokes drive design. The "round-trip property" check forced
+me to think about boundary preservation BEFORE writing the
+decoder. Worth elevating in the skill.
+
+**Tooling opportunity:**
+- (none new) Plugin count 103  104. Process is humming.
+
 
 
 
