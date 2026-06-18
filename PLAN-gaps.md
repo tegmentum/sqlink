@@ -101,14 +101,36 @@ Update after each commit.
 
 - [x] 1. Top-level README  (db7d264)
 - [x] 2. `sqlite3_deserialize` + `.serialize` / `.deserialize` dot cmds (3461f3c)
-- [~] 3. WAL support  shm methods implemented in vfs_wasi.c (this commit)
+- [~] 3. WAL support  shm methods implemented in vfs_wasi.c (729a612)
        but UNREACHABLE. Upstream blocker found: sqlite3.c has
        `#if defined(__wasi__) ... #define SQLITE_OMIT_WAL 1`. The
        WAL code isn't compiled in at all on WASI targets. The shm
        implementation is ready for whenever we get past the source
        lockout (see below). Original 3-5 day estimate was for VFS
        work only  the actual blocker is upstream patching.
-- [ ] 4. Hot-reload + ext dependency declarations
+- [~] 4. Hot-reload + ext dependency declarations
+       Hot-reload  ALREADY WORKS. Verified: `.load X.wasm; SELECT
+       fn(); .unload X; SELECT fn(); .load X.wasm; SELECT fn();`
+       cycles cleanly (unload removes scalars/collations/etc,
+       reload re-registers, function returns the same answer).
+       My earlier audit missed this  the `.unload` impl in
+       cli/src/lib.rs is substantive code (calls unload_extension,
+       removes per-extension function registrations, clears
+       authorizer hook if any). No work needed.
+
+       Extension dependency declarations  NOT done. Would require:
+         - Adding a `requires-spec` record to the Manifest in
+           sqlite-loader-wit/wit/guest.wit
+         - Updating host's manifest dispatch path to surface the
+           field through bindgen
+         - Updating cli's `.load` flow to check requires against
+           loaded set before registering
+         - Manifest macro / scaffold template updates so authors
+           can declare requires from extension Rust code
+       Real WIT contract change. ~1-2 days. Deferred until a real
+       multi-extension dependency case arises  the lesson from
+       D/E architecture work was "don't ship speculative
+       contracts."
 
 ## Item 3 detail: WAL on WASI
 
