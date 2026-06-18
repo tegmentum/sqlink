@@ -92,6 +92,33 @@ fast on garbage.
 Different from alias-table: the code IS the canonical name, no
 synonyms.
 
+**Auto-detect variant**: when a record has multiple equally-canonical
+codes (ISO 3166 alpha-2 / alpha-3 / numeric all identify the same
+country), sniff the input format ONCE and dispatch to the right
+column. Mutually exclusive formats let you skip parser-union's
+"try-each" overhead.
+
+```rust
+fn lookup(raw: &str) -> Option<&Entry> {
+    if let Ok(n) = raw.parse::<u16>() {
+        return TABLE.iter().find(|e| e.numeric == n);
+    }
+    let upper = raw.to_ascii_uppercase();
+    match upper.len() {
+        2 => TABLE.iter().find(|e| e.alpha2 == upper),
+        3 => TABLE.iter().find(|e| e.alpha3 == upper),
+        _ => None,
+    }
+}
+```
+
+NOT a parser-union: parser-union's input formats are GRAMMARS
+that may overlap (a `#rgb` MIGHT also parse as a named color);
+auto-detect's formats are character-class-disjoint. Different
+control flow: sniff-then-dispatch vs. try-then-fall-back.
+
+Reference: `country` (alpha-2 / alpha-3 / numeric autodetect).
+
 ### Formatter + parser pair
 
 `format(n)  "1.5 KB"`; `parse("1.5 KB")  n`. The

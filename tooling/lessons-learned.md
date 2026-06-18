@@ -1825,6 +1825,50 @@ isn't enough yet to know if it's worth its own row in the
 quick-picker.
 Plugin count 101  102.
 
+---
+
+### 2026-06-17  T-29 investigation (auto-detect exact-key variant)
+
+**What I built:** Added an "Auto-detect variant" subsection
+under exact-key lookup in tooling/extension-patterns.md.
+Includes a 10-line code template, a note distinguishing it
+from parser-union (overlapping grammars vs. character-class-
+disjoint formats), and `country` as the reference.
+
+**What worked:**
+- Folding into the existing exact-key section rather than
+spinning a new row in the quick-picker. With ONE consumer,
+a top-level row would over-promise; a subsection under the
+parent shape signals "variant, not new shape." If a 2nd
+auto-detect ship lands and the dispatch pattern is the same,
+promote to its own row.
+- The "NOT a parser-union" call-out matters. Both shapes have
+"try multiple input forms" energy, but the control flow is
+opposite. Future-me will hit this distinction and the doc
+saves the wrong choice.
+
+**What surprised me:**
+- Wrote the original lookup() in country as parser-union
+("try alpha-2, then alpha-3, then numeric"). The cleanup to
+sniff-then-dispatch was a real refactor, not a stylistic
+preference. With the wrong shape, an obviously-not-alpha-3
+input ("US") still TRIED the alpha-3 lookup before failing
+ wasted cycles AND obscured the "the formats are disjoint"
+truth.
+- The deferred-to-next-batch threshold from T-29's original
+note ("first auto-detect ship and one example isn't enough")
+was already met before next-batch  the moment I added
+extension-patterns.md and looked at it for the auto-detect
+section, the lack of it was friction. Closed same batch
+instead of next.
+
+**Tooling opportunity:**
+- (T-29 closed)
+- Notable meta-lesson: T-* closure timing is sometimes
+the SAME turn that I write the lessons-learned entry, not
+later. If the closure is small AND I'm already in the file,
+inline-close beats next-batch.
+
 
 
 
