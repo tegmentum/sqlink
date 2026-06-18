@@ -147,6 +147,18 @@ make ext-smoke-all
 ```
 
 This walks every `extensions/*/smoke.sql` and reports PASS/FAIL.
-The harness intentionally doesn't assert outputs  it just catches
-"failed to load" / "no such function" / "panicked" classes of
-failure.
+Asserted smokes (those with `smoke.expected`) diff against the
+expected output; unasserted ones just check for panics / load
+failures.
+
+## At end of every new-extension ship
+
+```bash
+make ext-ship NAME=<name>
+```
+
+`ext-ship` is the end-of-ship wrapper: `make ext` then
+`smoke --all -j 0`. The full regression check is ~15s parallel
+and catches anything the single-extension smoke missed. Use this
+before committing a new plugin  not just `make ext`  so a
+silent regression in an unrelated extension can't sneak in.

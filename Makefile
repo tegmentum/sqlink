@@ -857,4 +857,15 @@ ext-smoke-all:
 ext-check-snippets:
 	@python3 tooling/check-snippets.py
 
-.PHONY: ext ext-list-broken ext-smoke-all ext-check-snippets
+# T-27: end-of-ship wrapper. Build + single-smoke (via `ext`) then
+# run --all to catch regressions before committing. Cheap (~15s for
+# the full catalog at -j 0); the only reason `ext` itself doesn't
+# do this is to keep the compile-fix-iterate loop fast.
+ext-ship:
+	@test -n "$(NAME)" || (echo "usage: make ext-ship NAME=<extension>"; exit 1)
+	@$(MAKE) ext NAME=$(NAME)
+	@echo ""
+	@echo "=== regression check: smoke --all -j 0 ==="
+	@python3 tooling/smoke.py --all -j 0
+
+.PHONY: ext ext-list-broken ext-smoke-all ext-check-snippets ext-ship

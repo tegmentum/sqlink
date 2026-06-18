@@ -1637,6 +1637,47 @@ notable. That's the right outcome from process investment.
 - (none new) Catalog dynamics are healthy. 100 ships in;
 no friction to add.
 
+---
+
+### 2026-06-17  T-27 investigation (ext-ship wrapper)
+
+**What I built:** `make ext-ship NAME=<x>` target. Bundles
+the existing `make ext NAME=<x>` (build + single-smoke) with
+a full `smoke --all -j 0` regression check at the end. Also
+updated the new-extension Claude skill so future-me sees the
+recommendation in the workflow doc.
+
+**Why:** Each ship this session I manually ran `--all -j 0`
+after committing the plugin. Once it caught a real bug
+(T-17 parallel flake during the latlon ship). The
+discipline is load-bearing  but it's easy to forget when
+the prior step said "PASS." A single target removes the
+forget-failure path.
+
+**What worked:**
+- Kept `make ext` itself unchanged. The compile-fix-compile
+loop during DEVELOPMENT needs to be fast (single smoke,
+not full --all). Only the end-of-ship wrapper opts into
+the full pass.
+- Cost: ~15s for the full catalog at -j 0. Worth it once per
+ship; would NOT be worth it per-iteration.
+- Verified live by running `make ext-ship NAME=radix` 
+all 29 smokes PASS.
+
+**What surprised me:**
+- The skill (`.claude/commands/new-extension.md`) had a
+"Smoke-everything" section but framed it as "if you suspect
+a regression." That's wrong  the right framing is "at
+end of every ship, default." Reframed and renamed.
+- Almost added `ext-ship` AS the default `make ext`. Stopped:
+that breaks the iteration loop. The two targets need
+distinct purposes; the wrapper is the one that signals
+"I'm done."
+
+**Tooling opportunity:**
+- (T-27 closed) The 6-line Makefile target is the right
+amount of ceremony.
+
 
 
 
