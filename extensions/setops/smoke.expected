@@ -1,0 +1,22 @@
+# JSON-array set ops: union / intersection / difference /
+# sym-difference / unique (preserves first-occurrence order)
+# + predicates (contains, subset, disjoint). Mixed-type dedupe
+# uses canonical JSON encoding. Non-array input  <NULL>.
+[1,2,3,4,5]
+[2,3]
+[1]
+[1,2,4,5]
+[3,1,2]
+1
+0
+1
+0
+1
+0
+["a","b","c"]
+[1,true]
+[1,2]
+[]
+[]
+<NULL>
+<NULL>

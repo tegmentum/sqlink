@@ -2167,6 +2167,58 @@ read in one screen. Worth a periodic re-read; defer until
 catalog adds a 6th entry to confirm it's still load-
 bearing.
 
+---
+
+### 2026-06-17  setops extension (new shape: variable-array)
+
+**What I built:** Set operations on JSON arrays. Eight scalars:
+
+  set_union(a, b)              [1,2,3] + [3,4,5]  [1,2,3,4,5]
+  set_intersection(a, b)        [1,2,3] [2,3,4]  [2,3]
+  set_difference(a, b)          [1,2,3] - [2,3]   [1]
+  set_sym_difference(a, b)      A  B = (A-B) + (B-A)
+  set_unique(a)                 [3,1,2,1]  [3,1,2]
+  set_contains(arr, x)          1 / 0
+  set_subset(small, big)        1 / 0
+  set_disjoint(a, b)            1 / 0
+
+Equality is by canonical JSON serialization  `1` != `1.0` and
+`"abc"` != `abc`. Matches what SQLite users expect from
+json_equal-style functions. Lossy for FP equality but
+predictable.
+
+**What worked:**
+- This is a NEW shape: "variable-length array I/O via JSON."
+The extension-patterns.md anti-pattern entry warned against
+returning JSON for FIXED-shape multi-values  but variable-
+length is exactly what JSON arrays are for. The distinction
+got me unstuck on the shape decision.
+- Dedup preserving first-occurrence order is more useful than
+sorted dedup for the SQL ergonomics: `set_unique` over a
+typed-input column shouldn't reorder the input.
+- T-31 fired AGAIN ("set operations on JSON arrays" = 29
+chars, budget 22). Rewrote to "JSON-array set ops" (18
+chars). Second consecutive ship where the tool caught me.
+That's a real workflow improvement, not noise.
+
+**What surprised me:**
+- The intersection-with-empty case ('[]') returns '[]' (2
+chars), which DOESN'T trigger T-32's empty-string drop.
+I'd assumed I'd need a sentinel and wrote one; then realized
+the JSON encoding has explicit brackets and the harness was
+fine. Removed the sentinel wrap. ~30 seconds of "oh wait."
+- The canonical-JSON equality choice means callers shouldn't
+mix `1` and `1.0` in the same set; serde_json preserves
+trailing `.0` so they hash separately. Documented in code.
+
+**Tooling opportunity:**
+- (T-33 new) extension-patterns.md should add a "Variable-
+length array I/O" shape entry. Distinct from the "JSON
+multi-value anti-pattern" because the variable-length case
+NEEDS JSON. ~5 lines added to the doc; defer to the next
+T-* batch.
+Plugin count 105  106.
+
 
 
 
