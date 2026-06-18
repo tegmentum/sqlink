@@ -149,7 +149,7 @@ def compare(actual: list[str], expected: list[str]) -> list[str]:
     return diffs
 
 
-def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
+def smoke_one(name: str, timeout: int = 30, no_cache: bool = False) -> tuple[bool, str]:
     smoke = REPO_ROOT / "extensions" / name / "smoke.sql"
     if not smoke.exists():
         return (False, f"no smoke.sql at {smoke.relative_to(REPO_ROOT)}")
@@ -171,9 +171,22 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
     # smoke.expected for any column that should be NULL.
     sql = ".nullvalue <NULL>\n" + sql
 
+    # Parallel mode (no_cache=True): each subprocess gets its own
+    # cache file. The host opens cas.sqlite unconditionally even
+    # with --no-component-cache (the flag only skips USING the
+    # cache  the file is still opened, and concurrent opens
+    # contend). Per-worker --cache-dir sidesteps the contention.
+    # Cleaned up on tempdir GC; small one-shot files (<1MB).
+    import tempfile
+    argv = [str(CLI_BIN)]
+    tmpdir = None
+    if no_cache:
+        tmpdir = tempfile.mkdtemp(prefix="sqlite-wasm-smoke-")
+        argv += ["--cache-dir", tmpdir, "--no-component-cache"]
+    argv += [str(CLI_COMPONENT), "--db", ":memory:"]
     try:
         result = subprocess.run(
-            [str(CLI_BIN), str(CLI_COMPONENT), "--db", ":memory:"],
+            argv,
             input=sql,
             capture_output=True,
             text=True,
@@ -182,6 +195,10 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
         )
     except subprocess.TimeoutExpired:
         return (False, f"timeout after {timeout}s")
+    finally:
+        if tmpdir:
+            import shutil
+            shutil.rmtree(tmpdir, ignore_errors=True)
 
     out = result.stdout + result.stderr
 
@@ -339,7 +356,7 @@ def main() -> None:
         import os
         workers = args.jobs if args.jobs > 0 else (os.cpu_count() or 4)
         with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
-            futures = {ex.submit(smoke_one, name, args.timeout): name
+            futures = {ex.submit(smoke_one, name, args.timeout, True): name
                        for name in targets}
             for fut in concurrent.futures.as_completed(futures):
                 name = futures[fut]
