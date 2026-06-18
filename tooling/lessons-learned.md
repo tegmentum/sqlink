@@ -1925,6 +1925,57 @@ mask in others). Not worth extracting.
 ext-ship target paid for itself  one keystroke at the end
 to run the regression check.
 
+---
+
+### 2026-06-17  T-30 investigation (skill currency update)
+
+**What I built:** Updated `.claude/commands/new-extension.md`
+to reflect the tooling that's shipped this session. The skill
+was authored before T-19/T-21/T-24/T-25/T-26/T-27/T-28 landed
+and was missing significant workflow steps.
+
+Changes:
+- Step 3 now starts with "Identify the shape" and points to
+extension-patterns.md. The shape decision must come BEFORE
+writing code  picking right here saves significant
+refactoring.
+- Step 4 mentions T-19 NULL sentinel and the harness-
+limitations section of cli-cheatsheet.md.
+- Step 5 adds `--seed-expected` as the canonical way to
+write smoke.expected, with explicit advice that the banner
+is a TODO marker.
+- Step 7 (new) standardizes the lessons-learned entry shape
+with the four-section template I've converged on.
+- Step 8 (new) makes `make ext-ship` the canonical
+end-of-ship check, not bare `make ext`.
+- Bottom "Status checks" section points to t-status.py and
+smoke.py --list.
+
+**What worked:**
+- Diffing against the skill found 6 distinct things I'd been
+doing manually that the skill didn't document. Each was a
+small recurring tax; collectively, the new ship workflow
+should be smoother for a future-me coming back cold.
+- Kept the original `make ext` step intact for the iteration
+loop; only the FINAL check uses ext-ship.
+
+**What surprised me:**
+- The skill is the primary touchpoint for future-me running
+this workflow cold. Every new tool I add HAS to land in the
+skill or it doesn't get used. Treating skill updates as a
+mandatory "after T-* closure" step would prevent this drift.
+Logged as the meta-lesson; not formalizing as a T-* until I
+see drift again.
+- Total skill grew from 164 to ~190 lines. Still scannable
+in one screen.
+
+**Tooling opportunity:**
+- (T-30 closed)
+- The pattern "ship tool  update skill" should be a habit.
+Currently relies on memory; if drift recurs, formalize as a
+`tooling/skill-currency.py` check that warns when a tool was
+added without a skill mention.
+
 
 
 

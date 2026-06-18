@@ -53,7 +53,20 @@ This:
 If the build-check fails, fix the immediate issue (usually a
 feature-flag tweak the registry knew about) before continuing.
 
-### 3. Edit `extensions/<name>/src/lib.rs`
+### 3. Identify the shape, then edit `extensions/<name>/src/lib.rs`
+
+BEFORE writing code, read `tooling/extension-patterns.md` to find
+which of the 10 documented shapes this extension matches:
+
+  classifier / validator+extractor / parser-union / alias-table /
+  exact-key lookup (+ auto-detect variant) / formatter+parser pair /
+  pure formatter / coord transform / base-N algorithm / tokenize-
+  then-compare
+
+The shape determines the entire skeleton. Picking right at this
+step saves significant refactoring. If the new extension doesn't
+fit a documented shape, plan to ADD it to extension-patterns.md
+in your lessons-learned entry.
 
 The scaffold ships with one placeholder scalar (`<name>_placeholder`).
 Replace it with the real scalars. Pattern per scalar:
@@ -82,7 +95,14 @@ scalar. Cover:
 - One "fail-clean" case (invalid input that should NULL or 0,
   not panic)
 
-### 5. Build + smoke
+NULL results render as `<NULL>` in the harness output (T-19 sentinel).
+Write `<NULL>` literally in smoke.expected.
+
+Common gotchas in smoke.sql output  see `tooling/cli-cheatsheet.md`
+under "Harness output limitations" (leading whitespace eaten by
+prompt regex, integer-valued reals drop `.00`, etc.).
+
+### 5. Build + smoke + seed
 
 ```bash
 make ext NAME=<name>
@@ -94,9 +114,21 @@ If the compat-registry flagged the crate as `needs-bootstrap`, run:
 make ext NAME=<name> BOOTSTRAP=1
 ```
 
-`make ext` does the full sequence: cargo build, wasm-tools component
-new with the wasi adapter, provenance scan, smoke run. Output ends
-with PASS/FAIL.
+`make ext` does: cargo build, wasm-tools component new with the
+wasi adapter, provenance scan, single-extension smoke. Output
+ends with PASS/FAIL.
+
+Once the outputs are right, seed the assertion file:
+
+```bash
+python3 tooling/smoke.py --seed-expected <name>
+```
+
+Writes `extensions/<name>/smoke.expected` from the current parsed
+output with a `# AUTO-SEEDED  review and trim` banner. Replace
+the banner with a short, real description of what the smoke covers
+BEFORE committing. The banner is the guard against shipping
+unreviewed assertions  treat it as a TODO marker.
 
 ### 6. Update plan doc
 
@@ -106,7 +138,35 @@ python3 tooling/plan-add.py <name> <scalar-count> "<short-desc>"
 
 Appends a row to `PLAN-sqlite-plugins.md`.
 
-### 7. Commit
+### 7. Lessons-learned entry
+
+Add a `### YYYY-MM-DD  <name> extension` section to
+`tooling/lessons-learned.md`. Structure:
+
+  **What I built:** signatures + one-line algorithm summary
+  **What worked:** patterns that helped, esp. from prior ships
+  **What surprised me:** wrong-shape choices, subtle bugs
+  **Tooling opportunity:** (T-NN new) or (none new)
+
+Where this lives in the depth gradient:
+  - lessons-learned.md  one-liner WHY-NOT for this ship
+  - extension-patterns.md  shape this matched (or new shape)
+  - snippets/README.md  paste-and-own code if extracted
+
+### 8. End-of-ship regression check
+
+```bash
+make ext-ship NAME=<name>
+```
+
+`ext-ship` bundles `make ext` with a full `smoke --all -j 0`
+regression pass (~15s parallel). Use this instead of bare
+`make ext` for the FINAL pre-commit run  it catches regressions
+in unrelated extensions that the single-extension smoke can't
+see. This discipline caught the T-17 parallel-flake bug
+mid-session (commit 98470b4); the cost of skipping it is real.
+
+### 9. Commit
 
 Use the established commit-message shape: `feat(extensions): <name>
  <one-line summary>`, then a body that includes:
@@ -139,26 +199,21 @@ editing.
 
 ## Smoke-everything
 
-If a recent change might have broken the catalog (e.g. an ABI-
-breaking WIT change), regression-check every extension:
+If a non-extension change might have broken the catalog (e.g. an
+ABI-breaking WIT change, a host-side refactor):
 
 ```bash
-make ext-smoke-all
+make ext-smoke-all   # equivalent to: tooling/smoke.py --all -j 0
 ```
 
-This walks every `extensions/*/smoke.sql` and reports PASS/FAIL.
+Walks every `extensions/*/smoke.sql` and reports PASS/FAIL.
 Asserted smokes (those with `smoke.expected`) diff against the
 expected output; unasserted ones just check for panics / load
-failures.
+failures. Parallel at -j 0 = cpu_count workers (~15s on 8 cores).
 
-## At end of every new-extension ship
+## Status checks
 
 ```bash
-make ext-ship NAME=<name>
+python3 tooling/t-status.py         # T-* open vs closed report
+python3 tooling/smoke.py --list     # what's smoked + asserted
 ```
-
-`ext-ship` is the end-of-ship wrapper: `make ext` then
-`smoke --all -j 0`. The full regression check is ~15s parallel
-and catches anything the single-extension smoke missed. Use this
-before committing a new plugin  not just `make ext`  so a
-silent regression in an unrelated extension can't sneak in.
