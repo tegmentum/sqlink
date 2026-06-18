@@ -1457,6 +1457,49 @@ overview doc if more land.
 **Tooling opportunity:**
 - (none new) Workflow felt smooth. Plugin count 97  98.
 
+---
+
+### 2026-06-17  T-25 investigation (T-* status reader)
+
+**What I built:** `tooling/t-status.py`  scans this file for
+`(T-N new)` / `(T-N closed)` markers and prints the open
+vs closed lists. Usage:
+
+  python3 tooling/t-status.py          all
+  python3 tooling/t-status.py open     just open
+  python3 tooling/t-status.py closed   just closed
+
+The section title each marker sits in becomes the displayed
+label. Anything with a `new` marker but no `closed` is open.
+
+**What worked:**
+- The 18 T-numbered items so far (most over the last 24 hours)
+have been getting hard to keep mental track of. Each ship I
+manually grepped lessons-learned for "what's still open" 
+~30 seconds per check, multiplied by 3-4 checks per ship.
+- Tested live: produced exactly 3 open (T-14, T-20, T-23 
+all explicitly deferred) and 15 closed, matching my mental
+model. No surprises in the categorization.
+
+**What surprised me:**
+- The regex needed to be lenient about "closed" sub-clauses:
+"(T-13 closed)", "(T-10 silently closed)", "(T-15 closed
+inline)", "(T-22 closed in same doc.)" all appear in the
+real corpus. A strict `(T-N closed)` regex would miss those.
+The pattern `(T-N[^)]*closed[^)]*)` covers all observed
+variants without overmatching.
+- The display picks the markdown `###` section title above
+each marker. Made the output more useful  it shows the
+CONTEXT each T-* lived in, not just the bare number. Same
+T-* in section "container" vs "T-21 investigation" reads
+very differently.
+
+**Tooling opportunity:**
+- (T-25 closed) The 30-line script is the right amount of
+ceremony for this. Anything more ambitious (interactive
+filters, age-of-open, frequency-of-mention) would be
+over-tooling for ~20 T-* items.
+
 
 
 
