@@ -1,0 +1,13 @@
+# XOR cipher: byte-wise XOR with repeating key, hex output on encode.
+# Round-trip via xor_decode recovers original. Empty key / malformed
+# hex / odd hex length  <NULL>.
+0a
+230e070704
+230015070a
+Hello, World!
+230e070704
+1
+0
+<NULL>
+<NULL>
+<NULL>

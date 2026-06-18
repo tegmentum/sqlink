@@ -2565,6 +2565,69 @@ consumer arrives. Single-consumer doesn't warrant promotion;
 deferred per the T-34 lesson on shape thresholds.
 Plugin count 109  110.
 
+---
+
+### 2026-06-18  xor extension + T-37 (text-transform-with-key promoted)
+
+**What I built:** Two things again, T-34 style.
+
+(1) `xor` extension. Three scalars over the byte-XOR cipher
+with hex codec:
+
+  xor_encode(text, key)    UTF-8 text + key  hex string of XOR'd bytes
+  xor_decode(hex, key)     hex + key  recovered text (or Blob if !utf8)
+  xor_raw(text, key)       text + key  raw Blob (no hex round-trip)
+
+Empty key  NULL; malformed/odd-length hex  NULL.
+
+(2) Promoted "Text transform with key" to the 13th row in
+extension-patterns.md, with cipher + xor as consumers. The
+shape entry calls out:
+  - encode + decode pair convention
+  - empty/no-applicable-key  NULL is the standard
+  - key-cursor convention (advance only on transformable chars,
+    matches Vigenere classical rule)
+  - output type-switching for binary keys (xor's Blob fallback)
+
+(3) Bonus: fixed a T-35 (doc-refs-check) limitation surfaced
+mid-promotion  the PICKER_ROW regex hardcoded shape names
+("Quantizer|Classifier|...") and missed the new "Text transform
+with key" row. Replaced with a generic 3-column matcher that
+skips the header. Now flexible to future shape additions
+without code changes.
+
+**What worked:**
+- T-37 promotion paired with the 2nd consumer ship is the
+right rhythm. Cipher alone gave me the SHAPE intuition;
+xor's byte/hex variant proved the abstraction generalizes
+beyond Caesar-style letter math. Two consumers also forced
+me to write the "output type-switching" pitfall  Caesar
+wouldn't have needed that note.
+- The T-35 regex limitation surfaced exactly when I expected
+it to (I'd called it out in T-35's lessons entry). Fixing
+it took 5 minutes. The fact that the doc tools self-flag
+their own staleness is healthy.
+
+**What surprised me:**
+- My initial smoke had `xor_decode(xor_encode(xor_encode(x,k),k),k)`
+labeled "self-inverse." That's WRONG: XOR is self-inverse for
+RAW bytes, but my encode wraps in hex, so `encode(encode(x,k),k)`
+treats the inner hex as text and produces something else. The
+test still passed (just locked the actual behavior), but I
+corrected the comment to "composition, not self-inverse"
+before shipping. Smoke tests prove behavior; comments need
+to match.
+- doc-refs-check went from 24  26 references after the
+picker-row regex fix. Confirmed the fix actually picks up
+the new rows.
+
+**Tooling opportunity:**
+- (T-37 closed) Shape promoted with 2 consumers per the
+T-34 threshold rule.
+- The pattern catalog is now 13 entries. Approaching the
+"split when 15" threshold I called out in T-33. Still
+fits on one screen; defer the split decision until 15+.
+
 
 
 

@@ -46,14 +46,12 @@ PATTERNS = [
     (re.compile(rf"Surfaced via\s*{NAME}"),  "Surfaced via"),
 ]
 
-# Last column of the extension-patterns.md picker table. Match a row,
-# strip the leading "| Shape | When | " columns, take what's left.
-PICKER_ROW = re.compile(r"^\|\s*(?:Quantizer|Classifier|Validator \+ extractor|"
-                        r"Parser-union|Alias-table|Exact-key lookup|"
-                        r"Formatter \+ parser pair|Pure formatter|"
-                        r"Coord transform|Base-N algorithm|"
-                        r"Tokenize-then-compare|Variable-length array I/O)\b"
-                        r"[^|]*\|[^|]*\|([^|]+)\|", re.MULTILINE)
+# Last column of the extension-patterns.md picker table. Match any
+# 3-column row whose first column is a capitalized shape name and
+# whose third column looks like a comma-separated list of names.
+# Skips the table header (which starts with "|----" or "| Shape").
+PICKER_ROW = re.compile(
+    r"^\|\s*([A-Z][^|]*?)\s*\|([^|]+)\|([^|]+)\|", re.MULTILINE)
 
 
 def all_extensions() -> set[str]:
@@ -75,8 +73,14 @@ def extract_refs(text: str) -> set[str]:
             # Patterns 0 and 2 capture the name directly  the
             # findall above covers them too.
     # Picker-table last-column entries: comma-separated bare names.
+    # Match any 3-column row; the second group is the last column.
+    # Skip header rows whose first column is "Shape" or contains
+    # only dashes / pipes.
     for m in PICKER_ROW.finditer(text):
-        for n in m.group(1).split(","):
+        shape = m.group(1).strip()
+        if shape.lower() == "shape" or set(shape) <= {"-", " "}:
+            continue
+        for n in m.group(3).split(","):
             n = n.strip()
             if re.fullmatch(r"[a-z][a-z0-9_-]{2,}", n):
                 refs.add(n)
