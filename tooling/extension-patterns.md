@@ -24,6 +24,7 @@ signal it's either (a) genuinely novel and worth documenting, or
 | Base-N algorithm         | radix arithmetic / encoding                          | radix                              |
 | Tokenize-then-compare    | string ordering by structure, not bytes              | natsort                            |
 | Variable-length array I/O | set / collection ops returning N items              | setops                             |
+| Quantizer                | continuous value  named band                       | compass, beaufort                  |
 
 ## Detailed shapes
 
@@ -187,6 +188,47 @@ Pitfalls:
 - Non-array input  NULL is the standard "fail-clean";
   caller can `json_each(set_union(a, b))` and a NULL row
   short-circuits cleanly.
+
+### Quantizer
+
+Continuous numeric input  named band (or band  numeric).
+Different from the classifier shape (which matches STRUCTURED
+inputs like postcodes); quantizer takes a CONTINUOUS scalar
+and buckets it into pre-named ranges.
+
+```rust
+const TABLE: &[(u8, f64, &str)] = &[
+    (0, 0.0,  "Calm"),
+    (1, 0.5,  "Light air"),
+    (2, 1.6,  "Light breeze"),
+    /* ... */
+];
+
+fn force_for(v: f64) -> u8 {
+    // Walk from the top so the open-ended last band catches
+    // anything beyond the highest lower bound.
+    for (force, lower, _) in TABLE.iter().rev() {
+        if v >= *lower { return *force; }
+    }
+    0
+}
+```
+
+Pitfalls:
+- Decide whether bands are centered (compass: N spans
+  [-22.5, +22.5)) or edge-aligned (beaufort: force 1 spans
+  [0.5, 1.6)). Both are valid conventions; document the
+  choice and smoke-test the boundary.
+- Open-ended top band: beaufort's force 12 catches anything
+   32.7 m/s. Smoke a "well beyond" input (100 m/s  12).
+- Reverse direction (name  numeric) needs a pick:
+  lower-bound, center, or upper-bound. compass uses center
+  degrees; beaufort uses lower bound. Same shape, different
+  conventions  document per extension.
+
+Use cases: cardinal directions (compass), wind force
+(beaufort), Richter, pH, decibel loudness, generally any
+"natural-language label for a continuous quantity."
 
 ## Reusable helpers
 

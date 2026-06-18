@@ -2309,6 +2309,68 @@ edges. Documented in code.
 **Tooling opportunity:**
 - (none new) Plugin count 106  107. Workflow smooth.
 
+---
+
+### 2026-06-18  beaufort extension + T-34 (Quantizer shape promoted)
+
+**What I built:** Two things in one ship.
+
+(1) `beaufort` extension. Five scalars over the 13-band WMO
+Beaufort wind scale:
+
+  beaufort_force(ms)         m/s  0..12 integer band
+  beaufort_name(ms)          m/s  "Calm" / "Gale" / etc.
+  beaufort_from_kmh(kmh)     km/h convenience
+  beaufort_from_mph(mph)     mph convenience
+  beaufort_min_ms(force)     reverse: force  lower-bound m/s
+
+Force 12 is open-ended (hurricane covers anything beyond
+32.7 m/s).
+
+(2) Promoted "Quantizer" to a top-level shape in
+extension-patterns.md, with compass + beaufort as the two
+consumers. Includes pitfalls discovered shipping both:
+band-centering vs edge-alignment (compass uses centered, beaufort
+uses edge), open-ended top band (test "well beyond"), and the
+reverse-direction convention (compass returns center, beaufort
+returns lower bound).
+
+**What worked:**
+- Compass alone wasn't enough to justify the new shape entry.
+Beaufort made it concrete: same Vec<(low, name)> table pattern,
+same bucket-walk-from-top logic, different domain. Two
+consumers ARE the right threshold.
+- T-31 didn't fire this ship  "Beaufort wind scale" is 19
+chars, budget 20. Just under. Confirms the budget is
+realistic for thoughtful descriptions.
+- The "walk from the top to handle open-ended top band"
+trick is the kind of subtle correctness detail the patterns
+doc captures. Future quantizer ships will reach for it.
+
+**What surprised me:**
+- I'd written compass and considered "quantizer" as the shape
+but held back from documenting it (1 example isn't enough).
+The discipline paid off: beaufort surfaced the band-centering
+question that compass alone wouldn't have. With both
+examples in hand, the doc entry captures the REAL choice
+(centered vs edge-aligned) rather than just describing the
+loop.
+- My initial smoke comment for `beaufort_from_kmh(120)` was
+wrong  said "11" but the actual answer is 12 (120/3.6 =
+33.33 m/s, which is over the 32.7 hurricane threshold). The
+smoke caught my arithmetic error during --show-parsed. Smoke
+tests > my arithmetic.
+
+**Tooling opportunity:**
+- (T-34 new) Promoted the quantizer shape  retroactively
+opened so t-status counts the lifecycle (the compass entry
+informally noticed it; beaufort's 2nd-consumer ship justified
+the formal write-up).
+- (T-34 closed) Quantizer shape documented with 2 consumers.
+- The pattern catalog now has 12 entries. Still readable in
+one screen. The "split when 15" threshold from T-33 is
+roughly the right calibration.
+
 
 
 

@@ -1,0 +1,23 @@
+# WMO Beaufort scale m/s  force band. Convenience kmh/mph
+# wrappers; reverse force  lower-bound m/s. Open-ended force 12
+# catches anything beyond 32.7 m/s.
+0
+1
+1
+2
+5
+6
+12
+12
+Calm
+Fresh breeze
+Gale
+Hurricane
+5
+12
+5
+0
+8
+32.7
+<NULL>
+0
