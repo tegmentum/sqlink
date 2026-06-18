@@ -9,6 +9,7 @@
  * a serialized mode suitable for single-process access.
  */
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -29,12 +30,29 @@
 /* Forward declarations */
 typedef struct WasiFile WasiFile;
 
+/* SHM-related state attached to the main db file. The wal-index
+ * is held in process memory (we don't write the .db-shm file).
+ * SQLite rebuilds the index from .db-wal frames on open  the
+ * disk wal-index is just a coordination cache between processes,
+ * which we don't need for a single-process cli.
+ */
+#define WASIVFS_SHM_NLOCK 8
+typedef struct WasiShm WasiShm;
+struct WasiShm {
+    int refcount;                       /* open WasiFile handles */
+    int n_regions;                       /* allocated regions */
+    void **regions;                      /* malloc'd region pages */
+    int region_size;                     /* bytes per region (set on first xShmMap) */
+    int locks[WASIVFS_SHM_NLOCK];       /* 0 unlocked; >0 shared holders; -1 exclusive */
+};
+
 /* WASI file structure */
 struct WasiFile {
     sqlite3_file base;      /* Base class - must be first */
     int fd;                 /* File descriptor */
     char *path;             /* File path for debugging */
     int lock_level;         /* Current lock level (simulated) */
+    WasiShm *shm;           /* lazy-alloc'd on first xShmMap; main db files only */
 };
 
 /* Forward declarations of VFS methods */
@@ -65,10 +83,14 @@ static int wasifile_checkreservedlock(sqlite3_file*, int*);
 static int wasifile_filecontrol(sqlite3_file*, int, void*);
 static int wasifile_sectorsize(sqlite3_file*);
 static int wasifile_devicecharacteristics(sqlite3_file*);
+static int wasifile_shmmap(sqlite3_file*, int iPg, int pgsz, int isWrite, void volatile **pp);
+static int wasifile_shmlock(sqlite3_file*, int offset, int n, int flags);
+static void wasifile_shmbarrier(sqlite3_file*);
+static int wasifile_shmunmap(sqlite3_file*, int deleteFlag);
 
 /* I/O methods structure */
 static const sqlite3_io_methods g_wasifile_methods = {
-    1,                          /* iVersion */
+    2,                          /* iVersion (2 = Shm* methods present) */
     wasifile_close,
     wasifile_read,
     wasifile_write,
@@ -81,11 +103,11 @@ static const sqlite3_io_methods g_wasifile_methods = {
     wasifile_filecontrol,
     wasifile_sectorsize,
     wasifile_devicecharacteristics,
-    /* Version 2+ methods */
-    NULL,                       /* xShmMap */
-    NULL,                       /* xShmLock */
-    NULL,                       /* xShmBarrier */
-    NULL,                       /* xShmUnmap */
+    /* Version 2+ methods  in-memory shm for single-process WAL */
+    wasifile_shmmap,
+    wasifile_shmlock,
+    wasifile_shmbarrier,
+    wasifile_shmunmap,
     /* Version 3+ methods */
     NULL,                       /* xFetch */
     NULL                        /* xUnfetch */
@@ -242,6 +264,116 @@ static int wasifile_sectorsize(sqlite3_file *pFile) {
 static int wasifile_devicecharacteristics(sqlite3_file *pFile) {
     (void)pFile;
     return SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
+}
+
+/*
+ * Shared-memory (xShm*) for WAL  in-memory only.
+ *
+ * SQLite's WAL mode coordinates writers + readers via a small index
+ * file (.db-shm) that lives in shared memory. For multi-process
+ * access the index must be mmap'd from a real on-disk file; for a
+ * single-process cli like ours, an in-process buffer is enough: the
+ * index is just a cached view of the .db-wal frames, which SQLite
+ * rebuilds at open time. We don't write the .db-shm file at all.
+ *
+ * Locks become trivial bookkeeping because we're single-threaded
+ * single-connection. If we ever go multi-connection, the SHM region
+ * + lock state would need to be hoisted into a global registry
+ * keyed by the on-disk db path.
+ *
+ * NOTE: This implementation is currently UNREACHABLE. Upstream
+ * sqlite3.c sets `#define SQLITE_OMIT_WAL 1` when `__wasi__` is
+ * defined  the entire WAL subsystem is compiled out of the WASI
+ * build. The shm methods stay here so WAL works the moment we
+ * vendor an sqlite3.c that doesn't OMIT_WAL on WASI. See
+ * PLAN-gaps.md item 3 for the blocker.
+ */
+
+static int wasifile_shmmap(sqlite3_file *pFile, int iPg, int pgsz,
+                            int isWrite, void volatile **pp) {
+    WasiFile *file = (WasiFile*)pFile;
+    if (!file->shm) {
+        file->shm = (WasiShm*)sqlite3_malloc(sizeof(WasiShm));
+        if (!file->shm) return SQLITE_NOMEM;
+        memset(file->shm, 0, sizeof(WasiShm));
+        file->shm->refcount = 1;
+        file->shm->region_size = pgsz;
+    }
+    WasiShm *shm = file->shm;
+    /* Page index out of range  grow if isWrite, else return NULL. */
+    if (iPg >= shm->n_regions) {
+        if (!isWrite) {
+            *pp = 0;
+            return SQLITE_OK;
+        }
+        int new_n = iPg + 1;
+        void **new_regions = (void**)sqlite3_realloc(shm->regions,
+                                                     new_n * sizeof(void*));
+        if (!new_regions) return SQLITE_NOMEM;
+        for (int i = shm->n_regions; i < new_n; i++) new_regions[i] = NULL;
+        shm->regions = new_regions;
+        shm->n_regions = new_n;
+    }
+    if (!shm->regions[iPg]) {
+        if (!isWrite) {
+            *pp = 0;
+            return SQLITE_OK;
+        }
+        shm->regions[iPg] = sqlite3_malloc(pgsz);
+        if (!shm->regions[iPg]) return SQLITE_NOMEM;
+        memset(shm->regions[iPg], 0, pgsz);
+    }
+    *pp = shm->regions[iPg];
+    return SQLITE_OK;
+}
+
+static int wasifile_shmlock(sqlite3_file *pFile, int offset, int n, int flags) {
+    WasiFile *file = (WasiFile*)pFile;
+    if (!file->shm) return SQLITE_OK;
+    WasiShm *shm = file->shm;
+    if (offset < 0 || offset + n > WASIVFS_SHM_NLOCK) return SQLITE_RANGE;
+    /* In single-process single-threaded mode, lock contention is
+     * impossible. We still maintain the lock state so SQLite's
+     * internal sanity checks see consistent values. */
+    if (flags & SQLITE_SHM_UNLOCK) {
+        for (int i = offset; i < offset + n; i++) {
+            if (shm->locks[i] > 0) shm->locks[i]--;
+            else if (shm->locks[i] == -1) shm->locks[i] = 0;
+        }
+    } else if (flags & SQLITE_SHM_EXCLUSIVE) {
+        for (int i = offset; i < offset + n; i++) {
+            if (shm->locks[i] != 0) return SQLITE_BUSY;
+        }
+        for (int i = offset; i < offset + n; i++) shm->locks[i] = -1;
+    } else { /* SQLITE_SHM_SHARED */
+        for (int i = offset; i < offset + n; i++) {
+            if (shm->locks[i] == -1) return SQLITE_BUSY;
+        }
+        for (int i = offset; i < offset + n; i++) shm->locks[i]++;
+    }
+    return SQLITE_OK;
+}
+
+static void wasifile_shmbarrier(sqlite3_file *pFile) {
+    (void)pFile;
+    /* Single-threaded WASI  no actual memory barrier needed. */
+}
+
+static int wasifile_shmunmap(sqlite3_file *pFile, int deleteFlag) {
+    WasiFile *file = (WasiFile*)pFile;
+    (void)deleteFlag;  /* we never wrote the .db-shm file */
+    if (!file->shm) return SQLITE_OK;
+    WasiShm *shm = file->shm;
+    shm->refcount--;
+    if (shm->refcount <= 0) {
+        for (int i = 0; i < shm->n_regions; i++) {
+            if (shm->regions[i]) sqlite3_free(shm->regions[i]);
+        }
+        if (shm->regions) sqlite3_free(shm->regions);
+        sqlite3_free(shm);
+    }
+    file->shm = NULL;
+    return SQLITE_OK;
 }
 
 /*

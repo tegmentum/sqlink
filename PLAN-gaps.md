@@ -100,6 +100,44 @@ This section tracks what's actually shipped from items 1-4.
 Update after each commit.
 
 - [x] 1. Top-level README  (db7d264)
-- [x] 2. `sqlite3_deserialize` + `.serialize` / `.deserialize` dot cmds (this commit)
-- [ ] 3. WAL support
+- [x] 2. `sqlite3_deserialize` + `.serialize` / `.deserialize` dot cmds (3461f3c)
+- [~] 3. WAL support  shm methods implemented in vfs_wasi.c (this commit)
+       but UNREACHABLE. Upstream blocker found: sqlite3.c has
+       `#if defined(__wasi__) ... #define SQLITE_OMIT_WAL 1`. The
+       WAL code isn't compiled in at all on WASI targets. The shm
+       implementation is ready for whenever we get past the source
+       lockout (see below). Original 3-5 day estimate was for VFS
+       work only  the actual blocker is upstream patching.
 - [ ] 4. Hot-reload + ext dependency declarations
+
+## Item 3 detail: WAL on WASI
+
+What I did: implemented xShmMap, xShmLock, xShmBarrier, xShmUnmap
+in `src/vfs/vfs_wasi.c`. The implementation is correct in shape:
+in-memory shm with per-file refcounted regions; lock state as
+trivial bookkeeping (single-threaded single-connection); no
+.db-shm file written.
+
+Why it doesn't work yet: the bundled sqlite3.c in libsqlite3-sys
+unconditionally defines `SQLITE_OMIT_WAL` when `__wasi__` is set
+(comment in source: "because it requires shared memory APIs").
+That's a defensible upstream choice  most WASI runtimes can't
+provide shm. Our wasivfs CAN, but the WAL code is compiled out
+before our VFS gets to see anything.
+
+Three paths forward, by cost:
+
+| Path | Cost | Risk |
+|---|---|---|
+| A. Patch sqlite3.c via cargo build script (sed surgery before cc compile) | ~1-2 days | Fragile against libsqlite3-sys upgrades; cargo's bundled source path is not stable API |
+| B. Vendor our own sqlite3.c, fork the WASI conditional | ~3-5 days | Maintenance burden; lose libsqlite3-sys's defaults; have to track upstream releases |
+| C. Drop a custom #define before sqlite3.c is included (Makefile-based separate build) | ~1 week | Two parallel sqlite3 builds; complicates testing matrix |
+
+Realistic recommendation: stay on path A but only commit to it
+when we have a real WAL consumer. The shm implementation already
+landed makes path A a 1-day surgery instead of a week of work.
+
+For now, "read external WAL-mode db" remains BROKEN  this is the
+real user-facing gap. Workaround: use `sqlite3` cli to
+`PRAGMA journal_mode=DELETE` the external db before opening with
+our cli.
