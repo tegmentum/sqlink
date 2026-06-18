@@ -1181,6 +1181,59 @@ stages, no overlap.
 output diff) now covers most fat-typo classes between
 scaffold and asserted-stable. Nothing immediate to add.
 
+---
+
+### 2026-06-17  currency extension
+
+**What I built:** ISO 4217 reference-lookup extension. Four
+scalars over a single 70-entry table:
+
+  currency_name(code)      "USD"  "United States dollar"
+  currency_symbol(code)    "USD"  "$"
+  currency_decimals(code)  "USD"  2 (JPY=0, KWD=3, ...)
+  currency_numeric(code)   "USD"  840
+
+Table columns: (alpha-3, ISO-numeric, decimals, symbol, name).
+Case-insensitive input; non-3-letter input rejected before
+lookup. Unknown code  NULL.
+
+**What worked:**
+- Exact-key-lookup shape  3rd distinct retrieval pattern this
+session: (1) classifier (longest-prefix-wins, phone-prefix),
+(2) alias-table (unitconv: one canonical, many names), (3)
+exact-key (here: code IS canonical). Each table shape is its
+own idiom; trying to extract a generic "lookup" helper would
+flatten useful distinctions.
+- Pre-filter (len==3 && all alphabetic) lets the table loop
+exit fast on garbage input. Same hygiene as phone-prefix's
+trim_start_matches('+').
+- The decimal-places-per-currency field is the
+not-obvious-from-the-code value here. JPY having 0
+decimals is the kind of fact a future query needs to format
+amounts correctly. Documenting in the table beats
+documenting in code comments.
+
+**What surprised me:**
+- The full ISO 4217 catalog is ~180 currencies. Shipped ~70
+(top-30 by GDP + regional reserve currencies + the unusual
+decimal-counts as illustrative examples). The header note
+says "curated ~70 most-used; full list is 180+" so future-me
+knows it's intentional. Adding the rest is a 1:1 table
+append if a real consumer needs them.
+- Symbols are a multi-byte Unicode minefield: euro (), Indian
+rupee (), Turkish lira () etc. The table holds them as
+&str literals; the cli prints them verbatim through wasi
+stdout, which is what smoke.expected compares against. No
+encoding fiddling needed  worth noting for future symbol-
+heavy tables (Norse runes? IPA?).
+
+**Tooling opportunity:**
+- (none new) Currency shipped without any tooling surprises.
+The T-11 + T-19 pair worked end-to-end: the smoke I drafted
+had unknown codes that NULL-render cleanly, and the 4-line
+WARN didn't fire because the smoke had non-NULL rows. Both
+features earning their keep.
+
 
 
 

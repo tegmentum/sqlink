@@ -1,0 +1,17 @@
+# ISO 4217 lookup: name, numeric, decimals, symbol. Case-insensitive
+# input; malformed/unknown  <NULL> (T-19 sentinel).
+United States dollar
+840
+Euro
+978
+Japanese yen
+392
+2
+0
+3
+£
+$
+United States dollar
+<NULL>
+<NULL>
+<NULL>

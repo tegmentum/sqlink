@@ -1,0 +1,19 @@
+[package]
+name = "currency-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ISO 4217 currency code  name, symbol, decimals
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# add your upstream crate deps here
