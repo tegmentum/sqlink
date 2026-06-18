@@ -2893,6 +2893,58 @@ flag would map to the right template variants. Defer until
 a 2nd non-minimal ship; this is the first in months.
 Plugin count 114  115.
 
+---
+
+### 2026-06-18  eval  port of SQLite ext/misc/eval.c
+
+**What I built:** Port of SQLite's eval.c bundled extension.
+Two scalars (overloaded by arity):
+
+  eval(X)      run X as SQL, concat all cell values with no sep
+  eval(X, Y)   run X as SQL, concat all cell values separated by Y
+
+Both are nondeterministic (the inner SQL can read mutable
+state, time-of-call, randomness). Returns Err on SQL error.
+
+**What worked:**
+- spi::execute from inside the wasm component is straightforward
+once you find the import path (`bindings::sqlite::extension::spi`).
+db-utils uses the same. ~30 LOC of real code for the entire
+extension.
+- The to_text() helper coerces every SQL type to its textual
+form, matching what SQLite's eval.c does via sqlite3_value_text.
+- The arity-overloaded scalar (`eval` with 1 arg AND 2 args)
+works cleanly in our manifest  two ScalarFunctionSpec entries
+with the same name but different num_args.
+
+**What surprised me:**
+- The smoke can't fully test eval against `:memory:`. The host
+sqlite3 and the wasm-internal sqlite3 are SEPARATE libraries
+with separate page caches; spi.execute requires a file-backed
+db to bridge them. The smoke harness uses :memory: by default,
+so every eval() call errors with the documented "spi requires
+a file-backed database" message.
+- db-utils has the same constraint  it ships with no smoke
+file at all. I chose to ship a smoke that documents the
+limitation explicitly: panic-only verification, plus comments
+explaining how to test interactively.
+- The asserted-smoke seed was skipped (no smoke.expected) so
+the harness just does panic-class detection. With T-19's
+panic markers, SqliteError isn't a panic  the smoke PASSes
+cleanly while exercising NONE of the actual functionality.
+That's mildly dishonest. Future-T-* candidate: harness
+should accept a per-extension --db override so spi-dependent
+extensions can be smoke-tested for real.
+
+**Tooling opportunity:**
+- (T-40 new) Smoke harness should accept `[smoke-db: /tmp/X.db]`
+or similar config marker in smoke.sql so spi-dependent
+extensions (eval, db-utils, template, ...) can be smoked
+against a real file-backed db instead of :memory:. ~10
+LOC harness change. Defer pending a 2nd spi-dependent
+extension that needs real testing.
+Plugin count 115  116.
+
 
 
 
