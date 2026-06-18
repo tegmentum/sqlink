@@ -2418,6 +2418,53 @@ doc-refs-check. Each one fits in 50-300 LOC. The "small
 focused tools" pattern is working; resist the urge to merge
 them into a single CLI.
 
+---
+
+### 2026-06-18  polyline extension
+
+**What I built:** Google polyline encoder/decoder. Three scalars
+on the formatter+parser shape (variable-length JSON input on
+encode, JSON output on decode):
+
+  polyline_encode(json)    [[lat,lon],...]  "_p~iF~ps|U..."
+  polyline_decode(text)    text  [[lat,lon],...]
+  polyline_length(text)    count of coords without full decode
+
+The encoding is the classic delta + zigzag + 5-bit-chunk +
++63-to-ASCII scheme used by Google Maps Directions API,
+Mapbox, OSRM, etc. Precision is fixed at 5dp (the standard
+default).
+
+**What worked:**
+- Smoke locks to the EXACT canonical spec example: the input
+`[[38.5,-120.2], [40.7,-120.95], [43.252,-126.453]]` MUST
+encode to `_p~iF~ps|U_ulLnnqC_mqNvxq@`. That's a byte-exact
+match against Google's reference  if I'd shipped a wrong
+implementation, this single row would catch it.
+- T-31 fired TWICE on this ship: "Google polyline encode/decode"
+(29 chars), then "lat/lon polyline codec" (22 chars) before
+landing on "polyline coord codec" (20 chars). The budget is
+HARD; descriptions need to be punchy. That's a feature.
+- T-35 (doc-refs-check) ran clean after the ship  no doc
+references to polyline yet, no orphan risk.
+
+**What surprised me:**
+- The zigzag encoding ((v << 1) ^ (v >> 31) for signed ints)
+is a common trick I'd forgotten about. My implementation
+uses the equivalent form `(v << 1) as u32` followed by `if
+neg { !v }` which produces the same bytes but reads more
+clearly. Same operation, different style.
+- `coords_to_json` had to round to 5dp explicitly  without
+rounding, the round-trip `decode(encode([[40.7128, -74.0060]]))`
+returned `40.71279999999...` due to f64 representation. The
+fix is to round at the JSON boundary, matching the
+precision the polyline format actually preserves.
+
+**Tooling opportunity:**
+- (none new) Plugin count 108  109. Workflow continues
+to be smooth. T-31 fired twice without complaint; T-35
+ran clean.
+
 
 
 

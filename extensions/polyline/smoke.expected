@@ -1,0 +1,13 @@
+# Google polyline algorithm  canonical spec example encodes to
+# "_p~iF~ps|U_ulLnnqC_mqNvxq`@" exactly. Round-trip; '??' = single (0,0);
+# garbage / wrong-shape / sub-63-byte input  <NULL>.
+_p~iF~ps|U_ulLnnqC_mqNvxq`@
+[[38.5,-120.2],[40.7,-120.95],[43.252,-126.453]]
+3
+0
+[[40.7128,-74.006]]
+??
+[[0,0]]
+<NULL>
+<NULL>
+<NULL>
