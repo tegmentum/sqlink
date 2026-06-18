@@ -90,6 +90,9 @@ to match those.
 | `.resolvers`     |        | List loaded resolvers (project-specific)                  |
 | `.runtimes`      |        | List runtime providers (project-specific)                 |
 | `.run ?args?`    |        | Run a sqlite-runtime composed wasm component              |
+|                  |        |                                                            |
+| `.serialize F`   |        | Write live `main` db to FILE as a blob (sqlite3_serialize) |
+| `.deserialize F` |        | Load FILE into `main` as an in-memory db (sqlite3_deserialize) |
 
 ## Smoke-test idioms
 

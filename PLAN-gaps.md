@@ -99,7 +99,7 @@ daemon-vs-WIT-extension exercise. Defer until someone pulls.
 This section tracks what's actually shipped from items 1-4.
 Update after each commit.
 
-- [ ] 1. Top-level README
-- [ ] 2. `sqlite3_deserialize`
+- [x] 1. Top-level README  (db7d264)
+- [x] 2. `sqlite3_deserialize` + `.serialize` / `.deserialize` dot cmds (this commit)
 - [ ] 3. WAL support
 - [ ] 4. Hot-reload + ext dependency declarations

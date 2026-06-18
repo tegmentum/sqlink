@@ -84,8 +84,88 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".vfsname" => cmd_vfsname(arg, conn),
         ".archive" => cmd_archive(arg, conn),
         ".session" => cmd_session(arg, conn),
+        ".serialize" => cmd_serialize(arg, conn),
+        ".deserialize" => cmd_deserialize(arg, conn),
         _ => return None,
     })
+}
+
+/// `.serialize FILE` and `.deserialize FILE`  the sqlite3_serialize
+/// / sqlite3_deserialize API surfaced as dot commands. Useful for
+/// fixture-driven testing: capture a db state as a blob, distribute
+/// it via fs, load it back into an in-memory db elsewhere.
+///
+/// Upstream sqlite3 cli exposes this via `.open --deserialize FILE`.
+/// Our cli has a thinner `.open` (single-arg path); we add explicit
+/// dot commands for clarity.
+
+fn cmd_serialize(arg: &str, conn: &Connection) -> String {
+    let file = arg.trim();
+    if file.is_empty() {
+        return "Usage: .serialize FILE\n".to_string();
+    }
+    let schema = match std::ffi::CString::new("main") {
+        Ok(c) => c,
+        Err(_) => return "Error: invalid schema name\n".to_string(),
+    };
+    let mut size: i64 = 0;
+    // mFlags=0 means "give me a copy I own"  the returned buffer is
+    // a fresh malloc that the caller frees via sqlite3_free.
+    let ptr = unsafe {
+        ds_ffi::sqlite3_serialize(conn.raw_handle(), schema.as_ptr(), &mut size, 0)
+    };
+    if ptr.is_null() {
+        return "Error: sqlite3_serialize returned NULL (db has no main schema?)\n".to_string();
+    }
+    let bytes = unsafe {
+        std::slice::from_raw_parts(ptr, size as usize)
+    }.to_vec();
+    unsafe { ffi::sqlite3_free(ptr as *mut std::os::raw::c_void) };
+    match std::fs::write(file, &bytes) {
+        Ok(_) => format!("wrote {} bytes to {file}\n", bytes.len()),
+        Err(e) => format!("Error: write {file}: {e}\n"),
+    }
+}
+
+fn cmd_deserialize(arg: &str, conn: &Connection) -> String {
+    let file = arg.trim();
+    if file.is_empty() {
+        return "Usage: .deserialize FILE\n".to_string();
+    }
+    let bytes = match std::fs::read(file) {
+        Ok(b) => b,
+        Err(e) => return format!("Error: read {file}: {e}\n"),
+    };
+    let schema = match std::ffi::CString::new("main") {
+        Ok(c) => c,
+        Err(_) => return "Error: invalid schema name\n".to_string(),
+    };
+    // sqlite3_deserialize takes ownership of the buffer when the
+    // FREEONCLOSE flag is set. We allocate via sqlite3_malloc so
+    // sqlite3 can free it; copy our bytes in; hand the pointer over.
+    let size = bytes.len() as i64;
+    let alloc = unsafe { ffi::sqlite3_malloc64(size as u64) };
+    if alloc.is_null() {
+        return "Error: sqlite3_malloc64 returned NULL\n".to_string();
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), alloc as *mut u8, bytes.len());
+    }
+    let rc = unsafe {
+        ds_ffi::sqlite3_deserialize(
+            conn.raw_handle(),
+            schema.as_ptr(),
+            alloc as *mut std::os::raw::c_uchar,
+            size,
+            size,
+            ds_ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ds_ffi::SQLITE_DESERIALIZE_RESIZEABLE,
+        )
+    };
+    if rc != ffi::SQLITE_OK {
+        unsafe { ffi::sqlite3_free(alloc) };
+        return format!("Error: sqlite3_deserialize returned {rc}\n");
+    }
+    format!("loaded {} bytes from {file} into main\n", bytes.len())
 }
 
 // ----- .session (sqlite3 cli compatibility) ---------------------
@@ -106,6 +186,36 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
 //   .session NAME patchset FILE    write captured patchset to FILE
 //   .session NAME delete           close session (frees the handle)
 //   .session list                  list active session names
+
+/// Manual extern decls for sqlite3_serialize / sqlite3_deserialize.
+/// Same rationale as session_ffi  the bundled sqlite3 has the
+/// symbols via LIBSQLITE3_FLAGS, but the libsqlite3-sys feature
+/// that would auto-declare them forces buildtime_bindgen.
+mod ds_ffi {
+    use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+
+    extern "C" {
+        pub fn sqlite3_serialize(
+            db: *mut libsqlite3_sys::sqlite3,
+            zSchema: *const c_char,
+            piSize: *mut i64,
+            mFlags: c_uint,
+        ) -> *mut c_uchar;
+
+        pub fn sqlite3_deserialize(
+            db: *mut libsqlite3_sys::sqlite3,
+            zSchema: *const c_char,
+            pData: *mut c_uchar,
+            szDb: i64,
+            szBuf: i64,
+            mFlags: c_uint,
+        ) -> c_int;
+    }
+
+    /// Free the buffer with sqlite3_free; allow sqlite to resize.
+    pub const SQLITE_DESERIALIZE_FREEONCLOSE: c_uint = 1;
+    pub const SQLITE_DESERIALIZE_RESIZEABLE: c_uint = 2;
+}
 
 /// Manual extern decls for sqlite3session_*. The bundled sqlite3
 /// is compiled with SESSION + PREUPDATE_HOOK via LIBSQLITE3_FLAGS
