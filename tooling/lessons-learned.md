@@ -2371,6 +2371,53 @@ the formal write-up).
 one screen. The "split when 15" threshold from T-33 is
 roughly the right calibration.
 
+---
+
+### 2026-06-18  T-35 investigation (doc-refs drift check)
+
+**What I built:** tooling/doc-refs-check.py walks three
+tooling docs and flags any extension citation whose
+extensions/<name>/ directory doesn't exist:
+
+  tooling/extension-patterns.md   shape  representative
+  tooling/snippets/README.md      snippet  consumers
+  tooling/cli-cheatsheet.md       limitation  surfacing ext
+
+Matches narrow patterns (Reference:, Consumers:, Surfaced via,
+quick-picker table rows) to avoid false positives on backticked
+keywords like `fn`, `name`, `column`.
+
+**What worked:**
+- 24 references checked across 3 docs on the first run. Zero
+orphans  caught the catalog at a clean baseline.
+- Verified by temporarily moving extensions/compass/, running
+the tool, seeing it flag the orphan, then restoring. End-to-end
+detection confirmed.
+- The narrow-pattern approach (markers + table cells) keeps
+the false-positive rate at 0 even as the docs grow. Compare
+to "any backtick string"  which would flag `fn`/`name`/etc.
+The cost is that I have to maintain the picker-table regex
+when new shapes get added.
+
+**What surprised me:**
+- I'd been worrying about doc drift in the abstract for ~3
+ships now. The actual tool to fix it is 50 LOC of Python.
+The DURATION of worry was longer than the work to fix it.
+Worth recognizing as a pattern: "I keep meaning to" lasting
+multiple ships  it's time to just build the thing.
+- Almost matched "any backtick string of 3+ chars" as the
+pattern. That would have flagged `fn`, `len`, `key`, etc.
+The marker-prefix approach is strictly better but I had to
+catch myself before shipping the lazy version.
+
+**Tooling opportunity:**
+- (T-35 closed) Inline. The script IS the closure.
+- The tooling/ directory now has 6 self-contained Python
+scripts: scaffold, smoke, plan-add, check-snippets, t-status,
+doc-refs-check. Each one fits in 50-300 LOC. The "small
+focused tools" pattern is working; resist the urge to merge
+them into a single CLI.
+
 
 
 
