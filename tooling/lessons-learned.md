@@ -2465,6 +2465,49 @@ precision the polyline format actually preserves.
 to be smooth. T-31 fired twice without complaint; T-35
 ran clean.
 
+---
+
+### 2026-06-18  T-36 investigation (lessons-stub template)
+
+**What I built:** tooling/lessons-stub.py emits a paste-ready
+lessons-learned.md section with today's date pre-filled.
+Two flavors:
+
+  python3 tooling/lessons-stub.py <name>                  # plugin
+  python3 tooling/lessons-stub.py --kind investigation T-N "scope"
+
+Each variant prints the four-section structure (built /
+worked / surprised / opportunity) ready to fill in.
+
+**What worked:**
+- I was guessing the date from the most recent system reminder
+("date changed to YYYY-MM-DD") and sometimes copying yesterday's
+header out of habit. `datetime.date.today()` is the reliable
+source. Mini-friction removed.
+- The investigation flavor pre-populates `(T-NN closed)` in
+the opportunity section, since most investigations are closed
+inline by their own write-up.
+- Updated .claude/commands/new-extension.md so future-me sees
+the recommended workflow in step 7.
+
+**What surprised me:**
+- I almost templated the "What I built" section with a
+sample-signature placeholder. Held back: each ship's
+signatures are different, and a sample template invites
+copying without adapting. Better to leave it blank as a
+prompt to fill in.
+- Trade-off between rigid structure (auto-generates) and
+flexibility (some ships need a 5th section). Resolved by
+making the template minimum-viable  add sections inline
+if the ship needs them; the script just covers the floor.
+
+**Tooling opportunity:**
+- (T-36 closed)
+- The tooling/ directory now has 7 self-contained scripts.
+Each does ONE thing and prints to stdout for paste-in or
+exits non-zero on failure. Composability without a CLI
+wrapper.
+
 
 
 

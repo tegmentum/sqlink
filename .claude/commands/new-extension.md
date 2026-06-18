@@ -140,8 +140,16 @@ Appends a row to `PLAN-sqlite-plugins.md`.
 
 ### 7. Lessons-learned entry
 
-Add a `### YYYY-MM-DD  <name> extension` section to
-`tooling/lessons-learned.md`. Structure:
+Generate the stub with today's date pre-filled:
+
+```bash
+python3 tooling/lessons-stub.py <name>            # plugin
+python3 tooling/lessons-stub.py --kind investigation T-NN "scope"
+```
+
+Pipes a paste-ready section to stdout. Append to
+`tooling/lessons-learned.md` and fill in the bullets. The
+template enforces the four-section shape:
 
   **What I built:** signatures + one-line algorithm summary
   **What worked:** patterns that helped, esp. from prior ships
