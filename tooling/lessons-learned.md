@@ -1726,6 +1726,53 @@ file-managers do. Documented in the source.
 expected  felt notably faster than my prior "build,
 smoke, manually-run-all" loop.
 
+---
+
+### 2026-06-17  T-28 investigation (extension-patterns catalog)
+
+**What I built:** tooling/extension-patterns.md. ~150 LOC
+markdown that distills the 10 retrieval shapes I've called
+out across lessons-learned.md (now ~1700 lines) into a
+quick-picker table + one-paragraph descriptions + reusable
+helper checklist + anti-patterns list.
+
+Quick-picker maps shape  representative extension so a
+future ship can start with "this is like currency  exact-
+key lookup" instead of grepping 100 lessons-learned entries.
+
+**What worked:**
+- Each row in the picker names a CONCRETE extension so the
+"like X" mental model has somewhere to point. classifier 
+postcode; alias-table  unitconv; tokenize  natsort. Names
+beat abstractions.
+- The "anti-patterns" section captures decisions I almost
+made and rejected: returning JSON multi-value instead of N
+scalars, wrapping a heavy crate for 1-2 fns, adding a generic
+_normalize. Future-me will recognize the temptations.
+- Keeping the doc TIGHT (one paragraph per shape) prevents
+it from drifting into a tutorial. The deep lessons stay in
+lessons-learned; this is the index.
+
+**What surprised me:**
+- Writing this revealed two shapes I'd been conflating:
+"coord transform" (numeric mapping, no lookup) is genuinely
+distinct from "alias-table" (lookup-driven scaling). latlon
++ geo-distance fit the former; unitconv fits the latter.
+Documented separately.
+- I added a "When to add a new shape" footer ("happens ~once
+per 5-10 ships"). Setting the calibration explicitly means
+future-me doesn't either (a) add a new shape for every
+ship (over-categorization) or (b) cram a new shape into
+a near-fit existing category (under-categorization).
+
+**Tooling opportunity:**
+- (T-28 closed)
+- The pair of (lessons-learned.md  one-liner; extension-
+patterns.md  one-paragraph; snippets/README.md  code or
+design tip) now spans the explanation depth gradient. New
+ships look at extension-patterns first for shape, then dip
+into lessons-learned for the why-this-not-that detail.
+
 
 
 
