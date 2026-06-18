@@ -1549,6 +1549,46 @@ to tooling/cli-cheatsheet.md listing:
 Cheap update; defer the file edit to the next batch.
 Plugin count 98  99.
 
+---
+
+### 2026-06-17  T-26 investigation (harness output limits doc)
+
+**What I built:** Added a "Harness output limitations" section
+to tooling/cli-cheatsheet.md collecting the four parser-side
+behaviors that have surprised me during recent ships. Each
+entry names: the symptom, the workaround, and the extension
+that surfaced it.
+
+  - leading whitespace eaten by prompt regex (numfmt pad_left)
+  - integer-valued reals lose .00 (color WCAG contrast)
+  - `#` hex output  comment marker (color hex)
+  - NULLs render as <NULL> sentinel (T-19, baseline)
+
+**What worked:**
+- Each entry traces back to a specific extension that hit it.
+Future-me reads "ah,  in pad_left was surfaced by numfmt
+ they probably had the same problem" and skips ahead.
+- The section sits below "Things the cli does that surprise"
+(real cli quirks) so the difference is clear: cli-level vs
+harness-level. The harness behaviors are MORE recoverable
+(rewrite the smoke) than the cli ones (work with what the
+cli emits).
+
+**What surprised me:**
+- Almost wrote the section as "things the harness gets wrong."
+Reframed to "harness output limitations"  these are
+intentional simplifications (the parse_results regex IS
+greedy by design, the # comment marker IS shorter than
+needed), not bugs. The doc should communicate "this is the
+contract, work with it" not "this is broken, work around it."
+
+**Tooling opportunity:**
+- (T-26 closed)
+- Notice the pattern: 3 of 4 entries trace back to a
+specific commit. If the cheatsheet had a "(surfaced by:
+commit X)" link per entry, drift becomes easier to verify.
+Premature for 4 entries; revisit if it grows to 10+.
+
 
 
 

@@ -89,3 +89,31 @@ If this drifts from the dispatch list, re-run T-21's audit.
 - A trailing blank line is normal; `parse_results()` strips
   blanks. Don't end `smoke.expected` with one and expect a
   match  it'll just be ignored.
+
+## Harness output limitations
+
+These are NOT cli quirks  they're side effects of how
+`tooling/smoke.py` parses the cli's stdout. Mostly relevant
+when an extension's output overlaps with the parser's strip
+rules.
+
+- **Leading whitespace is eaten by the prompt regex.** Output
+  like `"  hi"` (two spaces + text) becomes `"hi"` after
+  parsing, because `PROMPT_RE = ^(sqlite>\s*|...)+` greedily
+  consumes the trailing whitespace of the `sqlite>` prompt
+  along with any user-output spaces immediately following.
+  Workaround: in smoke tests for `pad_left`-style scalars,
+  use a non-whitespace fill character (`.`, `0`, `_`) so the
+  pad is visible after parsing. Surfaced via `numfmt`'s
+  `numfmt_pad_left` smoke.
+- **Integer-valued reals lose `.00`.** `round(3.0, 2)` prints
+  as `3`, not `3.00`. Match what the cli prints, not what you
+  expect mathematically. Surfaced via `color`'s WCAG contrast
+  smoke (contrast=21 not 21.00).
+- **Hex output collides with the comment marker.** `smoke.expected`
+  treats `# foo` as a comment but a literal `#ff8800`
+  (color hex) is NOT a comment  parse_expected requires `#`
+  + whitespace. Surfaced via `color`'s hex output smoke.
+- **NULLs render as the literal string `<NULL>`** because the
+  harness pre-injects `.nullvalue <NULL>` (T-19). Write the
+  sentinel verbatim in `smoke.expected`.
