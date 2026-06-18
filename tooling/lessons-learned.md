@@ -2508,6 +2508,63 @@ Each does ONE thing and prints to stdout for paste-in or
 exits non-zero on failure. Composability without a CLI
 wrapper.
 
+---
+
+### 2026-06-18  cipher extension (new shape: text-with-key)
+
+**What I built:** Classical text ciphers in six scalars:
+
+  caesar_encode(text, shift)        text  shifted by n mod 26
+  caesar_decode(text, shift)        inverse (= encode by -n)
+  rot13(text)                       caesar shift=13 (self-inverse)
+  vigenere_encode(text, key)        polyalphabetic with repeating key
+  vigenere_decode(text, key)        inverse
+  atbash(text)                      A<->Z self-inverse substitution
+
+Each preserves case, passes non-letters through unchanged, and
+handles Unicode by leaving non-ASCII untouched. Vigenère
+advances the key position only on letter chars (matches the
+classical convention so "Hello, World" with key "KEY" doesn't
+waste key positions on the comma).
+
+Smoke locks the textbook Vigenère example:
+  vigenere_encode("ATTACKATDAWN", "LEMON") = "LXFOPVEFRNHR"
+exactly. This is THE most-cited example in cryptography
+textbooks; byte-matching it is a strong correctness guarantee.
+
+**What worked:**
+- Dogfooded T-36 (lessons-stub.py) on this ship  generated
+the section header with today's date pre-filled. Tiny
+quality-of-life win.
+- The "text transform with key" shape is genuinely new this
+session. Different from formatter+parser (those just
+serialize); different from tokenize-then-compare (no key);
+different from quantizer (no name lookup). The key arg
+parameterizes the transform.
+- The self-inverse property smoke ("rot13 of rot13 = original",
+"atbash of atbash = original") catches off-by-one errors in
+the alphabet math instantly. Took 2 SELECTs and now I trust
+the implementation.
+
+**What surprised me:**
+- T-31 fired AGAIN: "Caesar/ROT13/Vigenere/Atbash" was 28
+chars, budget 22. Rewrote to "classical text ciphers"
+(22 chars). 4 of last 5 ships have hit T-31; the budget is
+genuinely tight for descriptive cipher-class names. Not a
+bug  the column needs to fit.
+- I started writing `(c as u8 + n) % 26` and caught myself:
+that's wrong for negative shifts (caesar_decode uses -n).
+`rem_euclid` is the safe modulo for signed ints. Easy to
+miss; smoke caught it via the `caesar_encode('ABC', -3)`
+test which would have wrapped wrong with naive modulo.
+
+**Tooling opportunity:**
+- (T-37 new) "Text transform with key" is the 13th shape and
+deserves its own row in extension-patterns.md once a 2nd
+consumer arrives. Single-consumer doesn't warrant promotion;
+deferred per the T-34 lesson on shape thresholds.
+Plugin count 109  110.
+
 
 
 

@@ -1,0 +1,20 @@
+# Classical text ciphers: Caesar (case-preserving, mod-26 wrap),
+# ROT13 (self-inverse), Vigenere (LEMON+ATTACKATDAWN=LXFOPVEFRNHR
+# is the textbook example), Atbash (A<->Z self-inverse).
+# Non-letter chars pass through; non-letter key  <NULL>.
+DEF
+ABC
+Khoor, Zruog!
+ABC
+Hello, World!
+ABC
+Uryyb, Jbeyq!
+Hello, World!
+LXFOPVEFRNHR
+ATTACKATDAWN
+Rijvs, Uyvjn!
+<NULL>
+<NULL>
+SVOOL
+Hello, World!
+Hello

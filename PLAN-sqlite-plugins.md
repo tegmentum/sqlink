@@ -347,6 +347,7 @@ fts5/rtree, just at a different layer.
 | compass (8/16-point cardinal)   |    +5  | extensions/compass                 |
 | beaufort (Beaufort wind scale)  |    +5  | extensions/beaufort                |
 | polyline (polyline coord codec) |    +3  | extensions/polyline                |
+| cipher (classical text ciphers) |    +6  | extensions/cipher                  |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
