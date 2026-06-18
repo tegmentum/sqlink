@@ -3207,7 +3207,8 @@ That was optimistic; the format parser is real work. Going
 straight to phase 2 (FFI binding) was actually cheaper.
 
 **Tooling opportunity:**
-- (T-40, T-39 closed)
+- (T-39 closed) per-world scaffold templates landed.
+- (T-40 closed) `-- smoke-db: tempfile` marker landed.
 - (T-42 new) The changeset subcommand can't be smoke-tested
 end-to-end because generating a non-empty changeset needs
 the capture API (phase 3). When phase 3 lands, add a smoke
