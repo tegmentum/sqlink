@@ -3131,6 +3131,93 @@ Plugin count 118  119. This closes the major remaining
 ext/misc/ port  the catalog now covers every named SQLite
 extension that translates cleanly to wasm.
 
+---
+
+### 2026-06-18  T-40 / T-39 / session phase 2
+
+Closed three planning items from PLAN-tooling-and-session.md
+in one session.
+
+**T-40: `-- smoke-db: tempfile` marker**
+
+Per-extension marker in smoke.sql's first 5 lines tells the
+harness to spawn a fresh on-disk db per smoke run instead of
+the default :memory:. Unblocks spi-dependent extensions (eval,
+db-utils, template) which can't bridge :memory: between the
+host and wasm-internal sqlite3.
+
+Refactored smoke_one into _prepare_smoke / _build_argv /
+_cleanup helpers so --show-parsed and --seed-expected (which
+had duplicated subprocess calls hardcoded to :memory:) now
+honor the marker too. eval smoke ships with real outputs.
+
+**T-39: scaffold --world flag**
+
+`scaffold.py --world {collating|tabular|stateful|authorizing}`
+generates the right boilerplate per world. Four new templates
+matching the WIT-defined worlds. All four scaffold + cargo
+check clean immediately. Caught a real bug while writing the
+authorizing template: I'd named the variant `AuthResult::Allow`
+but the WIT enum is ok/deny/ignore. The build-check failure
+made the catch immediate; silent template drift would have
+been much worse.
+
+**Session phase 2: changeset subcommand**
+
+Took the C option from the plan (real architectural work)
+but scoped to the minimum viable: enable SQLITE_ENABLE_SESSION
+on libsqlite3-sys (via the `session` feature) and expose the
+connection-free changeset ops as a `sqlite-wasm-run changeset
+{invert|concat}` subcommand:
+
+  $ sqlite-wasm-run changeset invert input.cs output.cs
+  $ sqlite-wasm-run changeset concat a.cs b.cs out.cs
+
+Direct libsqlite3-sys FFI calls (sqlite3changeset_invert +
+sqlite3changeset_concat). No WIT changes  the operations
+don't need extension-level integration. Future phase 3 (apply
+to a connection, capture from a connection) needs the
+pre-update hook plumbing and is a separate effort.
+
+Verified the FFI plumbing with empty-input round-trips (0
+bytes  0 bytes for both ops). Non-empty verification needs
+a real changeset to feed in, which itself needs the capture
+API to generate  circular, so deferred to phase 3 work.
+
+**What worked:**
+- Picking C over A/B and scoping it down to "the connection-
+free part" landed something concrete in a session that would
+otherwise have produced just a tracking doc. Real outcome.
+- The libsqlite3-sys `session` feature is the only build
+configuration change needed  it sets
+SQLITE_ENABLE_SESSION + pulls in buildtime_bindgen
+automatically. No Makefile changes.
+- Skipping the WIT interface for now keeps the surface small.
+If a real wasm extension wants changeset ops, it can shell
+out to the binary (or phase 3 lands a proper interface).
+
+**What surprised me:**
+- sqlite3changeset_concat takes *mut c_void for its input
+buffers, not *const c_void like sqlite3changeset_invert.
+Different mutability for ops that BOTH don't mutate. FFI
+signature quirk; cast through.
+- The PLAN doc estimated phase 1 (pure helpers via re-
+implementing the changeset blob format in Rust) at 1-2 days.
+That was optimistic; the format parser is real work. Going
+straight to phase 2 (FFI binding) was actually cheaper.
+
+**Tooling opportunity:**
+- (T-40, T-39 closed)
+- (T-42 new) The changeset subcommand can't be smoke-tested
+end-to-end because generating a non-empty changeset needs
+the capture API (phase 3). When phase 3 lands, add a smoke
+that captures  inverts  concats  applies.
+- (T-43 new) Plan doc PLAN-sqlite-plugins.md claims session
+is "free via -DSQLITE_ENABLE_SESSION flag"  WRONG until
+just now; the flag wasn't set. Now it IS set via libsqlite3-sys
+session feature. Update the deferred section in the plan
+when phase 3 lands.
+
 
 
 

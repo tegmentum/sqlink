@@ -44,7 +44,99 @@ impl wasmtime_wasi::WasiView for State {
 
 fn usage() -> ! {
     eprintln!("usage: sqlite-wasm-run [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wasm> [-- guest-args...]");
+    eprintln!("       sqlite-wasm-run changeset {{invert|concat}} <in1> [in2] <out>");
     std::process::exit(2);
+}
+
+/// SQLite session/changeset subcommand. Operates on changeset blob
+/// files via libsqlite3-sys's FFI (SQLITE_ENABLE_SESSION enabled in
+/// core/Cargo.toml). Pure-function ops; no database connection.
+///
+/// Phase 2 of the session port plan: just the connection-free blob
+/// operations (invert + concat). Phase 3 (apply / capture) needs
+/// per-connection state and is a separate effort.
+fn run_changeset_subcommand(args: &[String]) -> Result<()> {
+    if args.len() < 2 {
+        eprintln!("usage: sqlite-wasm-run changeset invert <input.cs> <output.cs>");
+        eprintln!("       sqlite-wasm-run changeset concat <a.cs> <b.cs> <output.cs>");
+        std::process::exit(2);
+    }
+    let op = args[0].as_str();
+    match op {
+        "invert" => {
+            if args.len() != 3 {
+                anyhow::bail!("changeset invert: expects <input> <output>");
+            }
+            let input = std::fs::read(&args[1])?;
+            let output = changeset_invert(&input)?;
+            std::fs::write(&args[2], &output)?;
+            eprintln!("changeset invert: {} bytes  {} bytes", input.len(), output.len());
+            Ok(())
+        }
+        "concat" => {
+            if args.len() != 4 {
+                anyhow::bail!("changeset concat: expects <a> <b> <output>");
+            }
+            let a = std::fs::read(&args[1])?;
+            let b = std::fs::read(&args[2])?;
+            let output = changeset_concat(&a, &b)?;
+            std::fs::write(&args[3], &output)?;
+            eprintln!("changeset concat: {} + {}  {} bytes", a.len(), b.len(), output.len());
+            Ok(())
+        }
+        other => anyhow::bail!("changeset: unknown op {other:?} (expected invert|concat)"),
+    }
+}
+
+/// Wrap sqlite3changeset_invert. Returns an owned `Vec<u8>` of the
+/// inverted blob; the sqlite3-allocated output is copied out before
+/// freeing.
+fn changeset_invert(input: &[u8]) -> Result<Vec<u8>> {
+    use libsqlite3_sys::{sqlite3_free, sqlite3changeset_invert, SQLITE_OK};
+    let mut out_n: std::os::raw::c_int = 0;
+    let mut out_p: *mut std::os::raw::c_void = std::ptr::null_mut();
+    let rc = unsafe {
+        sqlite3changeset_invert(
+            input.len() as std::os::raw::c_int,
+            input.as_ptr() as *const _,
+            &mut out_n,
+            &mut out_p,
+        )
+    };
+    if rc != SQLITE_OK {
+        anyhow::bail!("sqlite3changeset_invert returned {rc}");
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(out_p as *const u8, out_n as usize) }.to_vec();
+    unsafe { sqlite3_free(out_p) };
+    Ok(bytes)
+}
+
+/// Wrap sqlite3changeset_concat. Merges two changesets into one.
+fn changeset_concat(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
+    use libsqlite3_sys::{sqlite3_free, sqlite3changeset_concat, SQLITE_OK};
+    let mut out_n: std::os::raw::c_int = 0;
+    let mut out_p: *mut std::os::raw::c_void = std::ptr::null_mut();
+    // sqlite3changeset_concat takes *mut c_void for its inputs even
+    // though the bytes aren't mutated. Cast through *const_*mut to
+    // satisfy the FFI signature.
+    let a_ptr = a.as_ptr() as *mut std::os::raw::c_void;
+    let b_ptr = b.as_ptr() as *mut std::os::raw::c_void;
+    let rc = unsafe {
+        sqlite3changeset_concat(
+            a.len() as std::os::raw::c_int,
+            a_ptr,
+            b.len() as std::os::raw::c_int,
+            b_ptr,
+            &mut out_n,
+            &mut out_p,
+        )
+    };
+    if rc != SQLITE_OK {
+        anyhow::bail!("sqlite3changeset_concat returned {rc}");
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(out_p as *const u8, out_n as usize) }.to_vec();
+    unsafe { sqlite3_free(out_p) };
+    Ok(bytes)
 }
 
 #[tokio::main]
@@ -52,6 +144,11 @@ async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 || args[1] == "-h" || args[1] == "--help" {
         usage();
+    }
+
+    // changeset subcommand short-circuits before the wasm loader path.
+    if args[1] == "changeset" {
+        return run_changeset_subcommand(&args[2..]);
     }
 
     let mut db_path = String::new();
