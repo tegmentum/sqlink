@@ -27,6 +27,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import subprocess
 import sys
@@ -149,41 +150,82 @@ def compare(actual: list[str], expected: list[str]) -> list[str]:
     return diffs
 
 
-def smoke_one(name: str, timeout: int = 30, no_cache: bool = False) -> tuple[bool, str]:
+def _detect_smoke_db_marker(raw_text: str) -> str | None:
+    """T-40: detect `-- smoke-db: <value>` marker in smoke.sql's
+    first 5 lines. Returns the value (e.g. 'tempfile' or a path)
+    or None if no marker present.
+    """
+    for line in raw_text.splitlines()[:5]:
+        s = line.strip()
+        if s.startswith("-- smoke-db:"):
+            return s.split(":", 1)[1].strip()
+    return None
+
+
+def _prepare_smoke(name: str) -> tuple[str, str | None] | str:
+    """Read + transform smoke.sql for one extension. Returns:
+        (sql_text, smoke_db_marker)  on success
+        error_string                  if smoke.sql is missing
+    """
     smoke = REPO_ROOT / "extensions" / name / "smoke.sql"
     if not smoke.exists():
-        return (False, f"no smoke.sql at {smoke.relative_to(REPO_ROOT)}")
+        return f"no smoke.sql at {smoke.relative_to(REPO_ROOT)}"
+    raw_text = smoke.read_text()
+    marker = _detect_smoke_db_marker(raw_text)
+    sql = "\n".join(
+        line for line in raw_text.splitlines()
+        if not line.lstrip().startswith("--")
+    )
+    sql = ".nullvalue <NULL>\n" + sql
+    return (sql, marker)
+
+
+def _build_argv(marker: str | None, no_cache: bool) -> tuple[list[str], str | None, str | None]:
+    """Build the sqlite-wasm-run argv. Returns (argv, tmpdir, db_tempfile)
+    where tmpdir / db_tempfile are paths to clean up (or None).
+    """
+    import tempfile
+    argv = [str(CLI_BIN)]
+    tmpdir = None
+    db_tempfile = None
+    if no_cache:
+        tmpdir = tempfile.mkdtemp(prefix="sqlite-wasm-smoke-")
+        argv += ["--cache-dir", tmpdir, "--no-component-cache"]
+    # T-40: pick db path  marker overrides default.
+    if marker == "tempfile":
+        fd, db_path = tempfile.mkstemp(prefix="sqlite-wasm-smoke-", suffix=".db")
+        os.close(fd)
+        os.unlink(db_path)  # remove empty file; sqlite creates it on open
+        db_tempfile = db_path
+        argv += [str(CLI_COMPONENT), "--db", db_path]
+    elif marker:
+        argv += [str(CLI_COMPONENT), "--db", marker]
+    else:
+        argv += [str(CLI_COMPONENT), "--db", ":memory:"]
+    return argv, tmpdir, db_tempfile
+
+
+def _cleanup(tmpdir: str | None, db_tempfile: str | None) -> None:
+    if tmpdir:
+        import shutil
+        shutil.rmtree(tmpdir, ignore_errors=True)
+    if db_tempfile and os.path.exists(db_tempfile):
+        os.unlink(db_tempfile)
+
+
+def smoke_one(name: str, timeout: int = 30, no_cache: bool = False) -> tuple[bool, str]:
     if not CLI_BIN.exists():
         return (False, f"cli runner not built: {CLI_BIN.relative_to(REPO_ROOT)} missing; "
                        f"run: cargo build --release -p sqlite-wasm-host")
     if not CLI_COMPONENT.exists():
         return (False, f"cli component not built: {CLI_COMPONENT.relative_to(REPO_ROOT)} missing")
 
-    # Strip `--` line comments. The cli's parser fuses leading
-    # `--` comments with the following dot-command and chokes
-    # on `.load`. See lessons-learned T-9.
-    sql = "\n".join(
-        line for line in smoke.read_text().splitlines()
-        if not line.lstrip().startswith("--")
-    )
-    # T-19: render NULL results as a literal sentinel so parse_results
-    # doesn't silently drop them. Test files write `<NULL>` in
-    # smoke.expected for any column that should be NULL.
-    sql = ".nullvalue <NULL>\n" + sql
+    prep = _prepare_smoke(name)
+    if isinstance(prep, str):
+        return (False, prep)
+    sql, marker = prep
 
-    # Parallel mode (no_cache=True): each subprocess gets its own
-    # cache file. The host opens cas.sqlite unconditionally even
-    # with --no-component-cache (the flag only skips USING the
-    # cache  the file is still opened, and concurrent opens
-    # contend). Per-worker --cache-dir sidesteps the contention.
-    # Cleaned up on tempdir GC; small one-shot files (<1MB).
-    import tempfile
-    argv = [str(CLI_BIN)]
-    tmpdir = None
-    if no_cache:
-        tmpdir = tempfile.mkdtemp(prefix="sqlite-wasm-smoke-")
-        argv += ["--cache-dir", tmpdir, "--no-component-cache"]
-    argv += [str(CLI_COMPONENT), "--db", ":memory:"]
+    argv, tmpdir, db_tempfile = _build_argv(marker, no_cache)
     try:
         result = subprocess.run(
             argv,
@@ -196,9 +238,7 @@ def smoke_one(name: str, timeout: int = 30, no_cache: bool = False) -> tuple[boo
     except subprocess.TimeoutExpired:
         return (False, f"timeout after {timeout}s")
     finally:
-        if tmpdir:
-            import shutil
-            shutil.rmtree(tmpdir, ignore_errors=True)
+        _cleanup(tmpdir, db_tempfile)
 
     out = result.stdout + result.stderr
 
@@ -277,17 +317,18 @@ def main() -> None:
                   file=sys.stderr)
             print("delete it first if you intend to reseed.", file=sys.stderr)
             sys.exit(1)
-        smoke = REPO_ROOT / "extensions" / name / "smoke.sql"
-        if not smoke.exists():
-            print(f"no smoke.sql at {smoke.relative_to(REPO_ROOT)}", file=sys.stderr)
+        prep = _prepare_smoke(name)
+        if isinstance(prep, str):
+            print(prep, file=sys.stderr)
             sys.exit(1)
-        sql = "\n".join(l for l in smoke.read_text().splitlines()
-                        if not l.lstrip().startswith("--"))
-        sql = ".nullvalue <NULL>\n" + sql
-        r = subprocess.run(
-            [str(CLI_BIN), str(CLI_COMPONENT), "--db", ":memory:"],
-            input=sql, capture_output=True, text=True, timeout=args.timeout,
-        )
+        sql, marker = prep
+        argv, tmpdir, db_tempfile = _build_argv(marker, False)
+        try:
+            r = subprocess.run(
+                argv, input=sql, capture_output=True, text=True, timeout=args.timeout,
+            )
+        finally:
+            _cleanup(tmpdir, db_tempfile)
         rows = parse_results(r.stdout)
         header = (
             "# AUTO-SEEDED by smoke.py --seed-expected. Review and trim:\n"
@@ -300,16 +341,20 @@ def main() -> None:
         return
 
     if args.show_parsed:
-        ok, output = smoke_one(args.show_parsed, args.timeout)
-        # Re-run only to fetch fresh stdout for parsing  smoke_one
-        # already did this but it's not exposed. Run again cheaply.
-        smoke = REPO_ROOT / "extensions" / args.show_parsed / "smoke.sql"
-        sql = "\n".join(l for l in smoke.read_text().splitlines() if not l.lstrip().startswith("--"))
-        sql = ".nullvalue <NULL>\n" + sql  # T-19, see smoke_one()
-        r = subprocess.run(
-            [str(CLI_BIN), str(CLI_COMPONENT), "--db", ":memory:"],
-            input=sql, capture_output=True, text=True, timeout=args.timeout,
-        )
+        # smoke_one's stdout isn't exposed; re-run via the shared
+        # helpers so the smoke-db marker is honored too.
+        prep = _prepare_smoke(args.show_parsed)
+        if isinstance(prep, str):
+            print(prep, file=sys.stderr)
+            sys.exit(1)
+        sql, marker = prep
+        argv, tmpdir, db_tempfile = _build_argv(marker, False)
+        try:
+            r = subprocess.run(
+                argv, input=sql, capture_output=True, text=True, timeout=args.timeout,
+            )
+        finally:
+            _cleanup(tmpdir, db_tempfile)
         for row in parse_results(r.stdout):
             print(row)
         return

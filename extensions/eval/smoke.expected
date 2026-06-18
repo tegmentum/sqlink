@@ -1,0 +1,14 @@
+# Port of SQLite ext/misc/eval.c. spi.execute runs the SQL on the
+# host's connection; cells concatenated with the (optional)
+# separator. Tempfile db per T-40. Empty result  '<empty>'
+# sentinel via T-32 coalesce.
+1
+123
+12
+1,2,3
+1|2
+a,b
+3
+1,2,3
+one two three
+<empty>
