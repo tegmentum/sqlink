@@ -1,0 +1,26 @@
+# Commas + fixed places, ordinals (incl. 11/12/13 -th override),
+# scientific, percent, pad-left, european grouping. Pad-left uses
+# non-whitespace fill because the harness's prompt-regex strips
+# leading whitespace from output lines.
+1,234,567.89
+-1,234.5
+999
+0.000
+3.14
+3
+1st
+2nd
+3rd
+11th
+21st
+112th
+0th
+1.23e3
+1.2e-4
+13.5%
+100%
+-5.00%
+00042
+..hi
+toolong
+1.234.567.89

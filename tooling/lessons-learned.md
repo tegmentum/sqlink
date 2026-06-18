@@ -1500,6 +1500,55 @@ ceremony for this. Anything more ambitious (interactive
 filters, age-of-open, frequency-of-mention) would be
 over-tooling for ~20 T-* items.
 
+---
+
+### 2026-06-17  numfmt extension
+
+**What I built:** Pure-formatter extension. Seven scalars on
+the "in: number  out: string" shape (no parser-back, no
+lookup):
+
+  numfmt_commas(n, places)       1234567.89, 2  "1,234,567.89"
+  numfmt_fixed(n, places)        3.14159, 2     "3.14"
+  numfmt_ordinal(n)              21              "21st"  (11th!)
+  numfmt_scientific(n, sig)      1234.5, 3      "1.23e3"
+  numfmt_percent(n, places)      0.135, 1       "13.5%"
+  numfmt_pad_left(s, w, fill)    "42", 5, "0"   "00042"
+  numfmt_group(n, sep)           1234567.89, '.' "1.234.567.89"
+
+The ordinal-suffix rule (11/12/13 override last-digit) is
+the kind of thing the smoke catches by enumeration: 1st, 2nd,
+3rd, 11th (NOT 11st), 21st, 112th.
+
+**What worked:**
+- T-24 seed-expected paid off again: 22 rows seeded in one
+command, just swapped the banner for a description.
+- Different shape from everything prior this session:
+formatter-only (no parser back, no lookup, no conversion).
+The closest peer is humansize but that has a parser too.
+This is the "pure output transform" shape.
+
+**What surprised me:**
+- pad_left('hi', 4, ' ') produced "  hi" but the smoke
+harness's prompt-regex (`^(sqlite>\s*|\s*\.\.\.>\s*)+`) eats
+leading whitespace as part of prompt stripping. The padded
+output was indistinguishable from non-padded in the parsed
+diff. Worked around by using '.' fill char in the smoke
+so the padding is visible.
+- This is the second harness quirk (after T-22's "integer-
+valued real prints as 21 not 21.00") that affected expected-
+file authoring. Worth a one-line note in
+tooling/cli-cheatsheet.md.
+
+**Tooling opportunity:**
+- (T-26 new) Add a "harness output limitations" subsection
+to tooling/cli-cheatsheet.md listing:
+  - integer-valued real loses ".00" trailing zeros
+  - leading whitespace is stripped by prompt regex
+  - block comments produce extra `sqlite>` prompts in stdout
+Cheap update; defer the file edit to the next batch.
+Plugin count 98  99.
+
 
 
 
