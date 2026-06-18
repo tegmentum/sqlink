@@ -1,0 +1,29 @@
+# Port of extension-functions.c string scalars (Liam Healy's
+# well-known SQLite extension pack). charindex 1-indexed; left/
+# rightstr char-aware; reverse, replicate, proper (title-case),
+# padl/padr/padc (visible '.' substitution per T-26); strfilter.
+# Empty-string outputs use <empty> sentinel (T-32).
+8
+3
+11
+0
+0
+Hello
+Hello
+<empty>
+World!
+Hello
+olleH
+<empty>
+a
+ababab
+-----
+<empty>
+Hello World
+Hello World
+A Quick Brown Fox
+...42
+42...
+.42..
+eoo
+userexamplecom

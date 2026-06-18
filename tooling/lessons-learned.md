@@ -2995,6 +2995,62 @@ that can translate to wasm: carray (pointer-based, no);
 completion (vtab; complex); nextchar (niche); fuzzer
 (test); vfslog/vfsstat (niche). Reaching the tail.
 
+---
+
+### 2026-06-18  extfns  port of extension-functions.c string scalars
+
+**What I built:** Port of the string functions from Liam Healy's
+`extension-functions.c`  the famous third-party SQLite pack
+shipped by many distros (debian's `libsqlite3-mod-spatialite`
+includes it). 11 scalars:
+
+  charindex(h, n, [start])    1-indexed substring position
+  leftstr(s, n) / rightstr    char-aware (NOT byte-aware) substr
+  reverse(s)                   reverse chars
+  replicate(s, n)              repeat n times
+  proper(s)                    title-case each word
+  padl/padr/padc(s, length)    left/right/center pad with spaces
+  strfilter(haystack, allowed) keep only chars in allowed set
+
+The math half of extension-functions.c is already covered by
+this catalog's existing `math` extension (acos/sin/cos/log/etc.).
+Only the string scalars are new here.
+
+**What worked:**
+- Names match the C original exactly  no namespace prefix.
+Callers porting from extension-functions.c can `.load` ours
+and the SQL syntax works unchanged. That's the point of a
+"port"; if the names had been `extfns_charindex` etc. it
+would have been a reimplementation, not a port.
+- Char-aware semantics matter: `leftstr('café', 4)` returns
+'café' (4 chars), not the byte slice. The smoke uses
+plain ASCII so this isn't exercised; future-T-* if a real
+caller needs unicode coverage.
+- Padding using ' ' (space) collides with T-26 (harness eats
+leading whitespace). Smoke uses `replace(padl(...), ' ', '.')`
+to make the pad visible while still testing the real
+function. Same approach as numfmt's pad_left, T-26 still
+load-bearing.
+
+**What surprised me:**
+- T-31 fired TWICE: "extension-functions.c port" (26 chars)
+ "ext-functions.c strings" (23)  "ext-functions strings"
+(22, just under budget). The dash-then-suffix style runs
+into the budget reliably; "ext-functions" loses the .c
+qualifier that signals "this is the C source name." A
+worth-it trade.
+- charindex returns 0 for an empty needle (matching the C
+implementation). I almost made it return 1 (since "empty
+matches at position 1"). The C original explicitly checks
+needle.len() > 0; documented in the smoke.
+
+**Tooling opportunity:**
+- (none new) Plugin count 117  118. Seventh pivot-back ship.
+extension-functions.c was the highest-impact third-party
+SQLite pack still missing; with the string half ported and
+the math half pre-covered, the named-extension surface is
+substantially complete.
+
 
 
 
