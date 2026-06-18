@@ -1,0 +1,18 @@
+# Port of SQLite ext/misc/zorder.c. Z-order (Morton) curve
+# bit-interleaving for spatial indexing. Hand-verified 2D values
+# 0..15 + a 4D zorder(1,2,3,4)=2149 + round-trip via unzorder.
+# Out-of-range dimension index  <NULL>.
+0
+1
+2
+3
+4
+15
+7
+2149
+5
+7
+3
+42
+17
+<NULL>

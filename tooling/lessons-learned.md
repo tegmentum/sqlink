@@ -2945,6 +2945,56 @@ LOC harness change. Defer pending a 2nd spi-dependent
 extension that needs real testing.
 Plugin count 115  116.
 
+---
+
+### 2026-06-18  zorder  port of SQLite ext/misc/zorder.c
+
+**What I built:** Z-order curve (Morton index) bit interleaving.
+Port of SQLite's zorder.c bundled extension. Five scalars:
+
+  zorder(x, y)                2D Morton index
+  zorder(x, y, z)             3D
+  zorder(x, y, z, w)          4D
+  zorder(x, y, z, w, v)       5D (arity-overloaded; same name)
+  unzorder(z, n_dims, i)      extract dimension i from N-D index
+
+Algorithm: walk bits LSB-first across all dimensions; output bit
+at position (b * N + i) comes from input bit b of dimension i.
+~25 LOC of bit-twiddling.
+
+**What worked:**
+- Hand-computed the 2D values 0..15 (zorder(3,3)=15) and the
+4D case zorder(1,2,3,4)=2149 before running the smoke. Those
+are the strongest correctness anchors  if the smoke matches
+the hand-derived constants, the implementation is right.
+- Arity overloading via multiple ScalarFunctionSpec entries
+with the same `name` works  same shape as eval(X) and
+eval(X, Y) earlier this session. SQLite dispatch matches
+on (name, arity) tuple.
+- Round-trip verification through unzorder(zorder(a, b), 2, i)
+catches any asymmetry between encode and decode for free.
+
+**What surprised me:**
+- Z-order is straightforward to write but VERY easy to get
+wrong about bit ordering (which dim's bit goes WHERE).
+Hand-computing the small cases by writing out the bits was
+worth ~5 minutes of paper-time. The reference values are now
+locked in the smoke.
+- I used `out as i64` at the end of zorder() because the bit-
+interleaving naturally produces a u64. SQLite's Integer is
+i64; the cast preserves the bit pattern but the printed
+value is reinterpret-as-signed for the high bit. Not an
+issue for the small test values; documented as a footgun
+for very large coordinates.
+
+**Tooling opportunity:**
+- (none new) Plugin count 116  117. Six pivot-back ships in
+sequence (sha3, totype, uint, eval, zorder, and counting).
+The catalog now covers most of ext/misc/'s named extensions
+that can translate to wasm: carray (pointer-based, no);
+completion (vtab; complex); nextchar (niche); fuzzer
+(test); vfslog/vfsstat (niche). Reaching the tail.
+
 
 
 

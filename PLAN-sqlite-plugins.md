@@ -370,6 +370,7 @@ cheap to add new scalar packs.
 | totype (totype.c port)          |    +2  | extensions/totype                  |
 | uint (uint.c port (collation))  |    +0  | extensions/uint                    |
 | eval (eval.c port (run SQL))    |    +2  | extensions/eval                    |
+| zorder (zorder.c port (Morton)) |    +5  | extensions/zorder                  |
 | fts5 vtab                     |   free | libsqlite3-sys bundled flag set    |
 | rtree vtab                    |   free | libsqlite3-sys bundled flag set    |
 | geopoly vtab                  |    +1  | -DSQLITE_ENABLE_GEOPOLY via        |
