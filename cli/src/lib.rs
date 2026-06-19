@@ -138,14 +138,14 @@ fn ensure_cli_conn() {
 /// after startup.
 unsafe fn apply_cli_pragmas(db: *mut libsqlite3_sys::sqlite3) {
     const PRAGMAS: &[&[u8]] = &[
-        // Negative value = KB of memory cache. -65536 = 64 MB.
+        // Negative value = KB of memory cache. -262144 = 256 MB.
         // SQLite's default is -2000 (~8 MB), tuned for desktops with
         // 16 GB RAM that need to share. Our wasm sandbox uses what
-        // we give it; 64 MB removes most page-cache misses on
-        // read-heavy workloads (read at 100k rows benched at 5.5x
-        // native overhead  most of that is wasi roundtrips that a
-        // bigger cache absorbs).
-        b"PRAGMA cache_size = -65536\0",
+        // we give it; 256 MB absorbs most working sets without
+        // physical-memory cost beyond actual cache demand (wasmtime
+        // virtual-allocates linear memory and only commits pages
+        // on first touch).
+        b"PRAGMA cache_size = -262144\0",
         // MEMORY keeps CTEs / temp indexes / sort scratch out of
         // the file system path. Default is FILE.
         b"PRAGMA temp_store = MEMORY\0",
