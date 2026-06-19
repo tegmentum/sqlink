@@ -3523,6 +3523,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "setops-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "serde_json",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3722,6 +3733,7 @@ dependencies = [
  "roman-extension",
  "semver-extension",
  "sentiment-extension",
+ "setops-extension",
  "sha3",
  "sha3-extension",
  "sqlite-embed",
