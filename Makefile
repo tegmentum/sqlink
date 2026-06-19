@@ -863,6 +863,11 @@ ext-smoke-all:
 cli-smoke-all:
 	@python3 tooling/cli-smoke.py --all
 
+# Benchmarks against native sqlite3. See PLAN-benchmarks.md.
+# Pass SIZES=... or WORKLOADS=... to narrow.
+bench:
+	@python3 tooling/bench.py $(if $(SIZES),--sizes $(SIZES)) $(if $(WORKLOADS),--workloads $(WORKLOADS))
+
 ext-check-snippets:
 	@python3 tooling/check-snippets.py
 
@@ -877,4 +882,4 @@ ext-ship:
 	@echo "=== regression check: smoke --all -j 0 ==="
 	@python3 tooling/smoke.py --all -j 0
 
-.PHONY: ext ext-list-broken ext-smoke-all cli-smoke-all ext-check-snippets ext-ship
+.PHONY: ext ext-list-broken ext-smoke-all cli-smoke-all bench ext-check-snippets ext-ship
