@@ -66,6 +66,7 @@ blake3 = { version = "1", default-features = false }
 sqlite-embed = { path = "../sqlite-embed" }
 sha3-extension = { path = "../extensions/sha3", optional = true, features = ["embed"], default-features = false }
 uuid-extension = { path = "../extensions/uuid", optional = true, features = ["embed"], default-features = false }
+crc-extension  = { path = "../extensions/crc",  optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -73,6 +74,7 @@ uuid-extension = { path = "../extensions/uuid", optional = true, features = ["em
 # build has NONE of them on  identical to the pre-embed cli.
 embed-sha3 = ["dep:sha3-extension"]
 embed-uuid = ["dep:uuid-extension"]
+embed-crc  = ["dep:crc-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

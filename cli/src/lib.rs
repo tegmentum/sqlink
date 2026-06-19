@@ -144,6 +144,13 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-uuid: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-crc")]
+    {
+        let rc = crc_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-crc: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================
