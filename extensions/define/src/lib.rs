@@ -82,6 +82,7 @@ mod wasm_export {
                     id: VTAB_ID_PLACEHOLDER,
                     name: "_define_unused".to_string(),
                     eponymous: false,
+                    mutable: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,

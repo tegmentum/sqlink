@@ -1189,6 +1189,7 @@ impl MetadataGuest for PostgisBridge {
                 id: VTAB_RASTER_POLYGON_DUMP,
                 name: "raster_polygon_dump".into(),
                 eponymous: false,
+                    mutable: false,
             }],
             has_authorizer: false,
             has_update_hook: false,

@@ -139,6 +139,15 @@ const VTABS: &[VtabSpec] = &[VtabSpec {
     next: pf_next,
     eof: pf_eof,
     column: pf_column,
+    update: None,
+    begin: None,
+    sync: None,
+    commit: None,
+    rollback: None,
+    rename: None,
+    savepoint: None,
+    release: None,
+    rollback_to: None,
     rowid: pf_rowid,
 }];
 

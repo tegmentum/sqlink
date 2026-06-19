@@ -74,6 +74,7 @@ mod wasm_export {
                     id: VTAB_ID_SERIES,
                     name: "generate_series".to_string(),
                     eponymous: true,
+                    mutable: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,

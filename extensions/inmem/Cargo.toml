@@ -1,0 +1,33 @@
+[package]
+name = "inmem-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Writable in-memory key/value table — vtab-mutating proof of
+correctness. Demonstrates the full xUpdate / xBegin / xCommit /
+xRollback / xRename surface on both the WIT and embed paths.
+
+    CREATE VIRTUAL TABLE kv USING inmem;
+    INSERT INTO kv(key, value) VALUES ('foo', 'bar'), ('baz', 1);
+    UPDATE kv SET value = 'qux' WHERE key = 'foo';
+    DELETE FROM kv WHERE key = 'baz';
+    SELECT key, value FROM kv;
+
+Per-instance state is a HashMap<i64, (String, SqlValue)> indexed
+by rowid. Transactional hooks log to a thread_local trace ring
+buffer so smoke tests can verify the lifecycle fires.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

@@ -2368,6 +2368,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a588916bfdfd92e71cacef98a63d9b1f0d74d6599980d11894290e7ddefffcf7"
 
 [[package]]
+name = "inmem-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "inventory"
 version = "0.3.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4586,6 +4596,7 @@ dependencies = [
  "ical-extension",
  "idna-extension",
  "ieee754-extension",
+ "inmem-extension",
  "ipaddr-extension",
  "isbn-extension",
  "isin-extension",

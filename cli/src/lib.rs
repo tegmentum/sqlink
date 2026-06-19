@@ -743,6 +743,11 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = vec0_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-vec0: register_into failed rc={rc}"); }
     }
+    #[cfg(feature = "embed-inmem")]
+    {
+        let rc = inmem_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-inmem: register_into failed rc={rc}"); }
+    }
 }
 
 // =========================================================================
@@ -1715,6 +1720,7 @@ fn do_load(input: &str) -> String {
                 &ext_name,
                 spec.id,
                 spec.eponymous,
+                spec.mutable,
             ) {
                 Ok(()) => {
                     v_count += 1;

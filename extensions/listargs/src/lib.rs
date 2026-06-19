@@ -60,6 +60,7 @@ mod wasm_export {
                     id: VTAB_ID_LISTARGS,
                     name: "listargs".to_string(),
                     eponymous: true,
+                    mutable: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,

@@ -79,6 +79,7 @@ mod wasm_export {
                     id: VTAB_ID_VEC_EACH,
                     name: "vec_each".to_string(),
                     eponymous: true,
+                    mutable: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,

@@ -211,4 +211,72 @@ interface dispatch {
         vtab-id: u64,
         cursor-id: u64,
     ) -> result<s64, string>;
+
+    // ── Mutating vtab dispatches ──────────────────────────────
+    //
+    // Routed to extensions that declared `vtab-spec.mutable = true`
+    // and export the `vtab-update` interface. The cli's
+    // sqlite3_module wires its xUpdate / xBegin / xSync / xCommit /
+    // xRollback / xRename / xSavepoint / xRelease / xRollbackTo
+    // slots to these; the host instantiates the loaded extension
+    // and invokes the matching `vtab-update.*` export.
+
+    vtab-update: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        args: list<sql-value>,
+    ) -> result<s64, string>;
+
+    vtab-begin: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+    ) -> result<_, string>;
+
+    vtab-sync: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+    ) -> result<_, string>;
+
+    vtab-commit: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+    ) -> result<_, string>;
+
+    vtab-rollback: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+    ) -> result<_, string>;
+
+    vtab-rename: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        new-name: string,
+    ) -> result<_, string>;
+
+    vtab-savepoint: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        savepoint: s32,
+    ) -> result<_, string>;
+
+    vtab-release: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        savepoint: s32,
+    ) -> result<_, string>;
+
+    vtab-rollback-to: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        savepoint: s32,
+    ) -> result<_, string>;
 }

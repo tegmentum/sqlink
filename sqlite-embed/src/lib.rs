@@ -560,6 +560,35 @@ pub struct VtabSpec {
     pub eof: unsafe fn(*mut ()) -> bool,
     pub column: unsafe fn(cursor: *mut (), col: i32) -> Result<SqlValueOwned, String>,
     pub rowid: unsafe fn(*mut ()) -> Result<i64, String>,
+    /// xUpdate. None = read-only (sqlite will reject INSERT/UPDATE/
+    /// DELETE against the vtab). When set, sqlite encodes the op
+    /// in args (see WIT `vtab-update.update` doc); the returned
+    /// i64 is the new rowid for INSERT (ignored for DELETE/UPDATE).
+    pub update: Option<
+        unsafe fn(
+            vtab_state: *mut (),
+            args: &[SqlValueOwned],
+        ) -> Result<i64, String>,
+    >,
+    /// xBegin. None = no per-vtab transaction notification; sqlite
+    /// still allows writes through xUpdate without xBegin if it's
+    /// null (treats writes as auto-commit per-row).
+    pub begin: Option<unsafe fn(vtab_state: *mut ()) -> Result<(), String>>,
+    pub sync: Option<unsafe fn(vtab_state: *mut ()) -> Result<(), String>>,
+    pub commit: Option<unsafe fn(vtab_state: *mut ()) -> Result<(), String>>,
+    pub rollback: Option<unsafe fn(vtab_state: *mut ()) -> Result<(), String>>,
+    /// xRename. New name is the bare identifier.
+    pub rename: Option<
+        unsafe fn(vtab_state: *mut (), new_name: &str) -> Result<(), String>,
+    >,
+    /// Nested savepoint trio. Mostly safe to leave None; sqlite
+    /// falls back to xBegin/xCommit/xRollback at the outer scope.
+    pub savepoint:
+        Option<unsafe fn(vtab_state: *mut (), savepoint: i32) -> Result<(), String>>,
+    pub release:
+        Option<unsafe fn(vtab_state: *mut (), savepoint: i32) -> Result<(), String>>,
+    pub rollback_to:
+        Option<unsafe fn(vtab_state: *mut (), savepoint: i32) -> Result<(), String>>,
 }
 
 /// Larger struct than sqlite3_vtab; sqlite only sees the first
@@ -806,13 +835,145 @@ unsafe extern "C" fn vtab_xrowid(
     }
 }
 
+// ── Mutating trampolines ─────────────────────────────────────
+// Wired in `make_module` only if the corresponding spec field is
+// Some. Each pulls the spec out of EmbedVtab and calls the
+// extension's fn pointer; None fields stay null in the module
+// struct, so sqlite won't invoke them.
+
+unsafe extern "C" fn vtab_xupdate(
+    pv: *mut ffi::sqlite3_vtab,
+    argc: c_int,
+    argv: *mut *mut ffi::sqlite3_value,
+    p_rowid: *mut ffi::sqlite3_int64,
+) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    let Some(update_fn) = spec.update else {
+        return ffi::SQLITE_READONLY;
+    };
+    let args = collect_args(argc, argv);
+    match update_fn((*v).state, &args) {
+        Ok(new_rowid) => {
+            if !p_rowid.is_null() {
+                *p_rowid = new_rowid;
+            }
+            ffi::SQLITE_OK
+        }
+        Err(e) => {
+            // Stash error in sqlite3_vtab->zErrMsg so the caller
+            // sees a useful message. SQLite frees via sqlite3_free.
+            let bytes = e.as_bytes();
+            let buf = ffi::sqlite3_malloc((bytes.len() + 1) as c_int)
+                as *mut core::ffi::c_char;
+            if !buf.is_null() {
+                core::ptr::copy_nonoverlapping(
+                    bytes.as_ptr() as *const core::ffi::c_char,
+                    buf,
+                    bytes.len(),
+                );
+                *buf.add(bytes.len()) = 0;
+                (*pv).zErrMsg = buf;
+            }
+            ffi::SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn vtab_xbegin(pv: *mut ffi::sqlite3_vtab) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    match spec.begin.map(|f| f((*v).state)) {
+        None | Some(Ok(())) => ffi::SQLITE_OK,
+        Some(Err(_)) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn vtab_xsync(pv: *mut ffi::sqlite3_vtab) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    match spec.sync.map(|f| f((*v).state)) {
+        None | Some(Ok(())) => ffi::SQLITE_OK,
+        Some(Err(_)) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn vtab_xcommit(pv: *mut ffi::sqlite3_vtab) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    match spec.commit.map(|f| f((*v).state)) {
+        None | Some(Ok(())) => ffi::SQLITE_OK,
+        Some(Err(_)) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn vtab_xrollback(pv: *mut ffi::sqlite3_vtab) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    match spec.rollback.map(|f| f((*v).state)) {
+        None | Some(Ok(())) => ffi::SQLITE_OK,
+        Some(Err(_)) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn vtab_xrename(
+    pv: *mut ffi::sqlite3_vtab,
+    z_new: *const core::ffi::c_char,
+) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    let Some(rename_fn) = spec.rename else {
+        return ffi::SQLITE_OK;
+    };
+    let new_name = if z_new.is_null() {
+        ""
+    } else {
+        let cstr = core::ffi::CStr::from_ptr(z_new);
+        cstr.to_str().unwrap_or("")
+    };
+    match rename_fn((*v).state, new_name) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn vtab_xsavepoint(pv: *mut ffi::sqlite3_vtab, sp: c_int) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    match spec.savepoint.map(|f| f((*v).state, sp)) {
+        None | Some(Ok(())) => ffi::SQLITE_OK,
+        Some(Err(_)) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn vtab_xrelease(pv: *mut ffi::sqlite3_vtab, sp: c_int) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    match spec.release.map(|f| f((*v).state, sp)) {
+        None | Some(Ok(())) => ffi::SQLITE_OK,
+        Some(Err(_)) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn vtab_xrollback_to(pv: *mut ffi::sqlite3_vtab, sp: c_int) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    match spec.rollback_to.map(|f| f((*v).state, sp)) {
+        None | Some(Ok(())) => ffi::SQLITE_OK,
+        Some(Err(_)) => ffi::SQLITE_ERROR,
+    }
+}
+
 /// One module per registered vtab. Boxed + leaked  it lives for
 /// the lifetime of the sqlite3 connection. SQLite copies the module
 /// pointer; no destroy is wired because we don't reclaim memory
 /// across vtab module unregister (none of our exts do that).
 unsafe fn make_module(spec: &'static VtabSpec) -> ffi::sqlite3_module {
     let mut m: ffi::sqlite3_module = core::mem::zeroed();
-    m.iVersion = 1;
+    // iVersion 2 unlocks the xSavepoint / xRelease / xRollbackTo
+    // slots; safe to use even for read-only vtabs (sqlite just
+    // ignores the null pointers).
+    m.iVersion = 2;
     if spec.eponymous {
         // Eponymous: no xCreate (sqlite uses xConnect on first ref).
         m.xCreate = None;
@@ -830,6 +991,33 @@ unsafe fn make_module(spec: &'static VtabSpec) -> ffi::sqlite3_module {
     m.xEof = Some(vtab_xeof);
     m.xColumn = Some(vtab_xcolumn);
     m.xRowid = Some(vtab_xrowid);
+    if spec.update.is_some() {
+        m.xUpdate = Some(vtab_xupdate);
+    }
+    if spec.begin.is_some() {
+        m.xBegin = Some(vtab_xbegin);
+    }
+    if spec.sync.is_some() {
+        m.xSync = Some(vtab_xsync);
+    }
+    if spec.commit.is_some() {
+        m.xCommit = Some(vtab_xcommit);
+    }
+    if spec.rollback.is_some() {
+        m.xRollback = Some(vtab_xrollback);
+    }
+    if spec.rename.is_some() {
+        m.xRename = Some(vtab_xrename);
+    }
+    if spec.savepoint.is_some() {
+        m.xSavepoint = Some(vtab_xsavepoint);
+    }
+    if spec.release.is_some() {
+        m.xRelease = Some(vtab_xrelease);
+    }
+    if spec.rollback_to.is_some() {
+        m.xRollbackTo = Some(vtab_xrollback_to);
+    }
     m
 }
 

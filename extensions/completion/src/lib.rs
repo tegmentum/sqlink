@@ -274,6 +274,7 @@ mod wasm_export {
                     id: VTAB_ID_COMPLETION,
                     name: "completion".to_string(),
                     eponymous: true,
+                    mutable: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,

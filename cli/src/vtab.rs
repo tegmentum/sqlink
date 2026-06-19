@@ -619,6 +619,150 @@ unsafe extern "C" fn x_find_function(
     constraint_op as c_int
 }
 
+// ─────────── Mutating trampolines ───────────
+//
+// Active only on modules registered as `mutable` (the extension's
+// vtab-spec declared `mutable: true`). Each routes into the
+// corresponding `dispatch::vtab_*` mutating method.
+
+/// Build the args list for an xUpdate dispatch from sqlite's
+/// argc + argv pair. The first element is the rowid arg (NULL for
+/// INSERT, integer for DELETE/UPDATE); the second is the new rowid
+/// (only meaningful for INSERT/UPDATE); the rest are column values
+/// in declared-schema order. We send all of them through to the
+/// extension so it can do the same case-split.
+unsafe fn argv_to_wit_values(
+    argc: c_int,
+    argv: *mut *mut ffi::sqlite3_value,
+) -> Vec<WitSqlValue> {
+    if argc <= 0 || argv.is_null() {
+        return Vec::new();
+    }
+    let slice = std::slice::from_raw_parts(argv, argc as usize);
+    slice.iter().map(|&v| sqlite3_value_to_wit(v)).collect()
+}
+
+unsafe extern "C" fn x_update(
+    p_vtab: *mut ffi::sqlite3_vtab,
+    argc: c_int,
+    argv: *mut *mut ffi::sqlite3_value,
+    p_rowid: *mut ffi::sqlite3_int64,
+) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    let args = argv_to_wit_values(argc, argv);
+    match dispatch::vtab_update(&meta.ext_name, meta.vtab_id, wv.instance_id, &args) {
+        Ok(new_rowid) => {
+            if !p_rowid.is_null() {
+                *p_rowid = new_rowid;
+            }
+            ffi::SQLITE_OK
+        }
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn x_begin(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    match dispatch::vtab_begin(&meta.ext_name, meta.vtab_id, wv.instance_id) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn x_sync(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    match dispatch::vtab_sync(&meta.ext_name, meta.vtab_id, wv.instance_id) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn x_commit(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    match dispatch::vtab_commit(&meta.ext_name, meta.vtab_id, wv.instance_id) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn x_rollback(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    match dispatch::vtab_rollback(&meta.ext_name, meta.vtab_id, wv.instance_id) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn x_rename(
+    p_vtab: *mut ffi::sqlite3_vtab,
+    z_new: *const c_char,
+) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    let new_name = if z_new.is_null() {
+        String::new()
+    } else {
+        match CStr::from_ptr(z_new).to_str() {
+            Ok(s) => s.to_string(),
+            Err(_) => return ffi::SQLITE_ERROR,
+        }
+    };
+    match dispatch::vtab_rename(&meta.ext_name, meta.vtab_id, wv.instance_id, &new_name) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn x_savepoint(p_vtab: *mut ffi::sqlite3_vtab, sp: c_int) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    match dispatch::vtab_savepoint(&meta.ext_name, meta.vtab_id, wv.instance_id, sp) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn x_release(p_vtab: *mut ffi::sqlite3_vtab, sp: c_int) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    match dispatch::vtab_release(&meta.ext_name, meta.vtab_id, wv.instance_id, sp) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn x_rollback_to(p_vtab: *mut ffi::sqlite3_vtab, sp: c_int) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    match dispatch::vtab_rollback_to(&meta.ext_name, meta.vtab_id, wv.instance_id, sp) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
 // ─────────── Module + registration ───────────
 
 const MODULE: ffi::sqlite3_module = ffi::sqlite3_module {
@@ -683,6 +827,39 @@ const MODULE_EPONYMOUS: ffi::sqlite3_module = ffi::sqlite3_module {
     xIntegrity: None,
 };
 
+/// Mutable variant. Picked when an extension's vtab-spec declares
+/// `mutable: true`; xUpdate / transactional hooks route into the
+/// extension's `vtab-update` exports via the host. iVersion bumped
+/// to 2 because xSavepoint / xRelease / xRollbackTo are slot-2
+/// members per SQLite's sqlite3_module ABI.
+const MODULE_MUTABLE: ffi::sqlite3_module = ffi::sqlite3_module {
+    iVersion: 2,
+    xCreate: Some(x_create),
+    xConnect: Some(x_connect),
+    xBestIndex: Some(x_best_index),
+    xDisconnect: Some(x_disconnect),
+    xDestroy: Some(x_destroy),
+    xOpen: Some(x_open),
+    xClose: Some(x_close),
+    xFilter: Some(x_filter),
+    xNext: Some(x_next),
+    xEof: Some(x_eof),
+    xColumn: Some(x_column),
+    xRowid: Some(x_rowid),
+    xUpdate: Some(x_update),
+    xBegin: Some(x_begin),
+    xSync: Some(x_sync),
+    xCommit: Some(x_commit),
+    xRollback: Some(x_rollback),
+    xFindFunction: Some(x_find_function),
+    xRename: Some(x_rename),
+    xSavepoint: Some(x_savepoint),
+    xRelease: Some(x_release),
+    xRollbackTo: Some(x_rollback_to),
+    xShadowName: None,
+    xIntegrity: None,
+};
+
 /// Register `name` as a vtab module on `conn`, routing every
 /// callback through the loaded extension `ext_name` / `vtab_id`.
 /// Eponymous modules can be used in SELECT without a prior
@@ -693,6 +870,7 @@ pub fn register_vtab_module(
     ext_name: &str,
     vtab_id: u64,
     eponymous: bool,
+    mutable: bool,
 ) -> Result<(), String> {
     let aux = Box::into_raw(Box::new(ModuleAux {
         ext_name: ext_name.to_string(),
@@ -700,7 +878,12 @@ pub fn register_vtab_module(
         eponymous,
     })) as *mut c_void;
     let name_c = CString::new(name).map_err(|e| format!("vtab name: {e}"))?;
-    let module_ptr: *const ffi::sqlite3_module = if eponymous {
+    // Mutable always wins over eponymous if both are flagged
+    // (eponymous mutable vtabs are not a known shape; pick the
+    // mutable template since that's the more conservative choice).
+    let module_ptr: *const ffi::sqlite3_module = if mutable {
+        &MODULE_MUTABLE
+    } else if eponymous {
         &MODULE_EPONYMOUS
     } else {
         &MODULE

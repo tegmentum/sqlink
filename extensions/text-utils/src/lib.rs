@@ -194,6 +194,7 @@ mod wasm_export {
                     id: VTAB_ID,
                     name: "prefixes".to_string(),
                     eponymous: true,
+                    mutable: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,

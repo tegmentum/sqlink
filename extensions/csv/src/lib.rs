@@ -79,6 +79,7 @@ mod wasm_export {
                     id: VTAB_ID_CSV,
                     name: "csv".to_string(),
                     eponymous: false,
+                    mutable: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,

@@ -280,6 +280,7 @@ mod wasm_export {
                     id: VTAB_ID,
                     name: "gap_fill_series".to_string(),
                     eponymous: true,
+                    mutable: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,
