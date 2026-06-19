@@ -281,12 +281,12 @@ static int wasifile_devicecharacteristics(sqlite3_file *pFile) {
  * + lock state would need to be hoisted into a global registry
  * keyed by the on-disk db path.
  *
- * NOTE: This implementation is currently UNREACHABLE. Upstream
- * sqlite3.c sets `#define SQLITE_OMIT_WAL 1` when `__wasi__` is
- * defined  the entire WAL subsystem is compiled out of the WASI
- * build. The shm methods stay here so WAL works the moment we
- * vendor an sqlite3.c that doesn't OMIT_WAL on WASI. See
- * PLAN-gaps.md item 3 for the blocker.
+ * NOTE: Until SQLite 3.46  3.53 (libsqlite3-sys 0.30  0.38)
+ * upstream sqlite3.c defined `SQLITE_OMIT_WAL` when `__wasi__`
+ * was set, with the comment "because it requires shared memory
+ * APIs". 3.53.2 dropped that defeat  the `__wasi__` block now
+ * only OMITs LOAD_EXTENSION + zeroes THREADSAFE. PRAGMA
+ * journal_mode=WAL now reaches the shm hooks below.
  */
 
 static int wasifile_shmmap(sqlite3_file *pFile, int iPg, int pgsz,

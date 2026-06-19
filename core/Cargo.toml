@@ -20,7 +20,7 @@ crate-type = ["rlib"]
 # generated bindings). Callers needing sqlite3session_* / sqlite3changeset_*
 # declare them as `extern "C"` directly  see host/src/main.rs and
 # cli/src/dot.rs.
-libsqlite3-sys = { version = "0.30", features = ["bundled"] }
+libsqlite3-sys = { version = "0.38", features = ["bundled"] }
 
 [build-dependencies]
 # Used to compile src/vfs/vfs_wasi.c on wasm32 targets so SQLite's

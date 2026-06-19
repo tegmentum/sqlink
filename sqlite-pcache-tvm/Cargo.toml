@@ -21,7 +21,7 @@ license = "MIT"
 # bundled compile lives in core, and cargo's `links =`
 # uniqueness rule forbids two crates from declaring it. This crate
 # just needs the type/binding surface, not the C compile.
-libsqlite3-sys = { version = "0.30", default-features = false }
+libsqlite3-sys = { version = "0.38", default-features = false }
 # core is what brings in the bundled sqlite3 build; transitively
 # linking it satisfies our extern symbols.
 sqlite-wasm-core = { path = "../core" }

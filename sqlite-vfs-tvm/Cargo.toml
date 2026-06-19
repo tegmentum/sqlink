@@ -25,7 +25,7 @@ license = "MIT"
 # Same libsqlite3-sys version core/cli use. NOT bundled  the
 # bundled compile lives in core; cargo's `links =` uniqueness
 # rule forbids two crates from declaring it.
-libsqlite3-sys = { version = "0.30", default-features = false }
+libsqlite3-sys = { version = "0.38", default-features = false }
 # core brings in the bundled sqlite3 build; transitively linking
 # it satisfies our extern symbols.
 sqlite-wasm-core = { path = "../core" }

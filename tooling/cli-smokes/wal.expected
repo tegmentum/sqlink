@@ -1,0 +1,16 @@
+# PRAGMA journal_mode=WAL  switched
+wal
+# PRAGMA journal_mode  still wal
+wal
+# count(*) of t
+3
+# rows
+1
+2
+3
+# wal_checkpoint(TRUNCATE)  busy=0 log=0 checkpointed=0
+0|0|0
+# PRAGMA journal_mode=DELETE  switched back
+delete
+# PRAGMA journal_mode  delete
+delete
