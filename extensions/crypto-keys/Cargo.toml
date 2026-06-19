@@ -28,10 +28,11 @@ Tier-3 cluster per PLAN-extensions-batch-2 Phase F3.
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
@@ -43,3 +44,5 @@ aes-gcm = "0.10"
 sha2 = "0.10"
 rand_core = { version = "0.6", features = ["getrandom"] }
 getrandom = "0.2"
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

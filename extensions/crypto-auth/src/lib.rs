@@ -2,6 +2,9 @@
 
 extern crate alloc;
 
+#[cfg(feature = "embed")]
+pub mod embed;
+
 use alloc::string::{String, ToString};
 
 // ───────────── JWT ─────────────
@@ -227,7 +230,7 @@ mod tests {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::format;
     use alloc::string::{String, ToString};

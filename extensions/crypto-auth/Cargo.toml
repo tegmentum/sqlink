@@ -30,14 +30,17 @@ Tier-3 cluster per PLAN-extensions-followups Phase E6.
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }
 # RFC 7519 JSON Web Token. HS256 + ES256 + RS256 etc.
 jsonwebtoken = { version = "9", default-features = false }
 # TOTP  hand-rolled over rustcrypto's HMAC + SHA-1.

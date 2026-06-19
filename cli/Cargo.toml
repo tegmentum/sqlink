@@ -138,6 +138,21 @@ country-extension     = { path = "../extensions/country",   optional = true, fea
 # std::time). embed.rs ships; can re-add when wasm-tools compose
 # learns to plumb the adapter through the compose subcommand.
 # ids-extension         = { path = "../extensions/ids",       optional = true, features = ["embed"], default-features = false }
+onnx-extension        = { path = "../extensions/onnx",      optional = true, features = ["embed"], default-features = false }
+"text-nlp-extension"  = { path = "../extensions/text-nlp",  optional = true, features = ["embed"], default-features = false }
+# avro: rust-lld SIGSEGV (heavy apache_avro/num_bigint/libflate graph). embed.rs ships.
+# avro-extension        = { path = "../extensions/avro",      optional = true, features = ["embed"], default-features = false }
+formats-extension     = { path = "../extensions/formats",   optional = true, features = ["embed"], default-features = false }
+"web-parsers-extension" = { path = "../extensions/web-parsers", optional = true, features = ["embed"], default-features = false }
+# crypto-keys: needs wasi_snapshot_preview1 adapter (random_get for keygen). embed.rs ships.
+# "crypto-keys-extension" = { path = "../extensions/crypto-keys", optional = true, features = ["embed"], default-features = false }
+extfns-extension      = { path = "../extensions/extfns",    optional = true, features = ["embed"], default-features = false }
+vec-extension         = { path = "../extensions/vec",       optional = true, features = ["embed"], default-features = false }
+time-extension        = { path = "../extensions/time",      optional = true, features = ["embed"], default-features = false }
+parsers-extension     = { path = "../extensions/parsers",   optional = true, features = ["embed"], default-features = false }
+# crypto-auth: needs wasi_snapshot_preview1 adapter (random_get for salts). embed.rs ships.
+# "crypto-auth-extension" = { path = "../extensions/crypto-auth", optional = true, features = ["embed"], default-features = false }
+geo-extension         = { path = "../extensions/geo",       optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -214,6 +229,18 @@ embed-setops     = ["dep:setops-extension"]
 "embed-phone-prefix" = ["dep:phone-prefix-extension"]
 embed-country    = ["dep:country-extension"]
 # embed-ids        = ["dep:ids-extension"]  # wasi p1 adapter required
+embed-onnx       = ["dep:onnx-extension"]
+"embed-text-nlp" = ["dep:text-nlp-extension"]
+# embed-avro       = ["dep:avro-extension"]  # rust-lld SIGSEGV
+embed-formats    = ["dep:formats-extension"]
+"embed-web-parsers" = ["dep:web-parsers-extension"]
+# "embed-crypto-keys" = ["dep:crypto-keys-extension"]  # wasi p1 adapter required
+embed-extfns     = ["dep:extfns-extension"]
+embed-vec        = ["dep:vec-extension"]
+embed-time       = ["dep:time-extension"]
+embed-parsers    = ["dep:parsers-extension"]
+# "embed-crypto-auth" = ["dep:crypto-auth-extension"]  # wasi p1 adapter required
+embed-geo        = ["dep:geo-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

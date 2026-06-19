@@ -622,6 +622,57 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
     }
     // embed-ids deferred: wasi_snapshot_preview1 adapter required
     // (ulid/nanoid use std::time). embed.rs ships in extensions/ids/.
+    #[cfg(feature = "embed-onnx")]
+    {
+        let rc = onnx_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-onnx: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-text-nlp")]
+    {
+        let rc = text_nlp_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-text-nlp: register_into failed rc={rc}"); }
+    }
+    // embed-avro deferred: rust-lld SIGSEGV (heavy apache_avro graph).
+    // embed.rs ships; same blocker as template/graphql.
+    #[cfg(feature = "embed-formats")]
+    {
+        let rc = formats_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-formats: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-web-parsers")]
+    {
+        let rc = web_parsers_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-web-parsers: register_into failed rc={rc}"); }
+    }
+    // embed-crypto-keys deferred: wasi p1 adapter required (random_get).
+    // embed.rs ships in extensions/crypto-keys/.
+    #[cfg(feature = "embed-extfns")]
+    {
+        let rc = extfns_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-extfns: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-vec")]
+    {
+        let rc = vec_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-vec: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-time")]
+    {
+        let rc = time_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-time: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-parsers")]
+    {
+        let rc = parsers_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-parsers: register_into failed rc={rc}"); }
+    }
+    // embed-crypto-auth deferred: wasi p1 adapter required (random_get for salts).
+    // embed.rs ships in extensions/crypto-auth/.
+    #[cfg(feature = "embed-geo")]
+    {
+        let rc = geo_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-geo: register_into failed rc={rc}"); }
+    }
 }
 
 // =========================================================================

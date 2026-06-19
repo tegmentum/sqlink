@@ -24,10 +24,11 @@ acceptable tradeoff for full HTML5 parsing.
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
@@ -38,3 +39,5 @@ serde_json = { version = "1", default-features = false, features = ["alloc"] }
 serde_json_path = "0.7"
 # HTML5 parsing + CSS selection.
 scraper = { version = "0.21", default-features = false }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }
