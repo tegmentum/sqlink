@@ -204,6 +204,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bigdecimal"
+version = "0.4.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d6867f1565b3aad85681f1015055b087fcfd840d6aeee6eee7f2da317603695"
+dependencies = [
+ "autocfg",
+ "libm",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -608,6 +621,17 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "count-min-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "twox-hash 1.6.3",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
 
 [[package]]
 name = "country-extension"
@@ -1065,6 +1089,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
 dependencies = [
  "uuid",
+]
+
+[[package]]
+name = "decimal-extension"
+version = "0.1.0"
+dependencies = [
+ "bigdecimal",
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]
@@ -2094,6 +2129,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "hyperloglog-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "twox-hash 1.6.3",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2936,6 +2982,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2de2bc5b451bfedaef92c90b8939a8fff5770bdcc1fafd6239d086aab8fa6b29"
 dependencies = [
  "nom 8.0.0",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.4.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a5e44f723f1133c9deac646763579fdb3ac745e418f2a7af9cd0c431da1f20b9"
+dependencies = [
+ "num-integer",
+ "num-traits",
 ]
 
 [[package]]
@@ -4338,6 +4394,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ee5873ec9cce0195efcb7a4e9507a04cd49aec9c83d0389df45b1ef7ba2e649"
 
 [[package]]
+name = "sketches-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "twox-hash 1.6.3",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4419,6 +4486,7 @@ dependencies = [
  "color-extension",
  "compress-extension",
  "container-extension",
+ "count-min-extension",
  "country-extension",
  "crc-extension",
  "creditcard-extension",
@@ -4428,6 +4496,7 @@ dependencies = [
  "currency-extension",
  "cusip-extension",
  "db-utils-extension",
+ "decimal-extension",
  "detect-extension",
  "dns-extension",
  "ean-extension",
@@ -4445,6 +4514,7 @@ dependencies = [
  "hexdump-extension",
  "http-extension",
  "humansize-extension",
+ "hyperloglog-extension",
  "iban-extension",
  "ical-extension",
  "idna-extension",
@@ -4477,6 +4547,7 @@ dependencies = [
  "setops-extension",
  "sha3",
  "sha3-extension",
+ "sketches-extension",
  "sqlite-embed",
  "sqlite-mem-tvm",
  "sqlite-pcache-tvm",

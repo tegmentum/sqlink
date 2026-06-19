@@ -153,6 +153,10 @@ parsers-extension     = { path = "../extensions/parsers",   optional = true, fea
 # crypto-auth: needs wasi_snapshot_preview1 adapter (random_get for salts). embed.rs ships.
 # "crypto-auth-extension" = { path = "../extensions/crypto-auth", optional = true, features = ["embed"], default-features = false }
 geo-extension         = { path = "../extensions/geo",       optional = true, features = ["embed"], default-features = false }
+decimal-extension     = { path = "../extensions/decimal",   optional = true, features = ["embed"], default-features = false }
+hyperloglog-extension = { path = "../extensions/hyperloglog", optional = true, features = ["embed"], default-features = false }
+count-min-extension   = { path = "../extensions/count_min", optional = true, features = ["embed"], default-features = false }
+sketches-extension    = { path = "../extensions/sketches",  optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -241,6 +245,10 @@ embed-time       = ["dep:time-extension"]
 embed-parsers    = ["dep:parsers-extension"]
 # "embed-crypto-auth" = ["dep:crypto-auth-extension"]  # wasi p1 adapter required
 embed-geo        = ["dep:geo-extension"]
+embed-decimal    = ["dep:decimal-extension"]
+embed-hyperloglog = ["dep:hyperloglog-extension"]
+embed-count-min   = ["dep:count-min-extension"]
+embed-sketches   = ["dep:sketches-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

@@ -18,7 +18,10 @@ pub fn parse(s: &str) -> Result<BigDecimal, String> {
         .map_err(|e| format!("decimal: parse '{s}': {e}"))
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "embed")]
+pub mod embed;
+
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::format;
     use alloc::string::{String, ToString};

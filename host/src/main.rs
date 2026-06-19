@@ -124,6 +124,10 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
 
     let features = embed
         .iter()
+        // Normalize underscores  hyphens to match cargo's feature
+        // name rules (cargo treats `embed-count_min` and
+        // `embed-count-min` as equivalent for declaration but
+        // requires the hyphenated form on the command line).
         .map(|n| format!("embed-{}", n.replace('_', "-")))
         .collect::<Vec<_>>()
         .join(",");

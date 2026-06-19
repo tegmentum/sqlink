@@ -673,6 +673,26 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = geo_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-geo: register_into failed rc={rc}"); }
     }
+    #[cfg(feature = "embed-decimal")]
+    {
+        let rc = decimal_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-decimal: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-hyperloglog")]
+    {
+        let rc = hyperloglog_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-hyperloglog: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-count-min")]
+    {
+        let rc = count_min_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-count-min: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-sketches")]
+    {
+        let rc = sketches_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-sketches: register_into failed rc={rc}"); }
+    }
 }
 
 // =========================================================================
