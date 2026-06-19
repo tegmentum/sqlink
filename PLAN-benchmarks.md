@@ -124,14 +124,81 @@ paid once (the cli stays running); for batch scripts that
 invoke `sqlite-wasm-run` per statement, this dominates anything
 smaller than a few thousand rows.
 
-## What this doesn't measure (yet)
+## WIT extension boundary cost  measured
 
-- **Extension call overhead**  scalar / aggregate / vtab calls
-  cross the wit-bindgen boundary on every row. The 9x ratio above
-  is sqlite3-internal work; extension-heavy queries (vec0 KNN,
-  regex over text, sha3 batch hashing) will have a different
-  curve. Want this  add a workload that loads an extension and
-  exercises it.
+The `ext-scalar` workload loads the sha3 extension and runs
+`SELECT sum(length(sha3_256(name))) FROM t`  every row crosses
+the canonical ABI. `builtin-scalar` is the same shape but with
+`length(name)`, a sqlite builtin compiled into the wasm cli with
+no inter-component crossing. The delta is the WIT cost.
+
+Measured on `.cwasm` at three sizes (median of 3 trials):
+
+| Workload | 1k | 10k | 100k |
+|---|---:|---:|---:|
+| `builtin-scalar` | 54 ms | 99 ms | 583 ms |
+| `ext-scalar` | 150 ms | 222 ms | 955 ms |
+
+Marginal per-row cost (subtract the smaller size from the larger):
+
+- Builtin scalar (`length`): 5.4 µs/row  wasm overhead vs native
+- WIT scalar (`sha3_256`): 8.1 µs/row  wasm + WIT + sha3 work
+- **Delta = ~2.7 µs per WIT boundary crossing**
+
+That number is sha3-with-empty-payload work plus the canonical
+ABI cost. The sha3 portion is fast (tens of ns); most of the
+2.7 µs is the WIT crossing: serialize args  cross-store call
+ deserialize result. For comparison, a native sqlite scalar
+dispatch is ~100 ns  the WIT crossing is **~25-30x slower per
+call** than native.
+
+What that means for real workloads:
+
+- 100k rows  ~270 ms of pure WIT overhead. Not catastrophic
+  at this scale, but it dominates for tight scalar loops.
+- The cost is FIXED PER CALL  payload size barely matters.
+- The composed-cli build would eliminate this for any extension
+  baked in at compile time, dropping that 100k workload from
+  955 ms  ~700 ms.
+
+## Page-size tuning  measured
+
+Two outcomes for two workload shapes (measured on `.cwasm`):
+
+**Bulk insert in a single BEGIN/COMMIT** (100k rows):
+
+| | native | wasm |
+|---|---:|---:|
+| page_size=4096 (default) | 138 ms | 572 ms |
+| page_size=16384 + 200MB cache | 135 ms | 548 ms |
+
+Effectively a wash. SQLite already batches writes within a
+transaction so per-page wasi calls aren't the bottleneck.
+
+**Auto-commit per row** (500 rows, no BEGIN/COMMIT):
+
+| | native | wasm |
+|---|---:|---:|
+| page_size=4096 (default) | 1.94 s | 18.6 s |
+| page_size=16384 | 1.23 s | 18.7 s |
+
+Native got **37% faster**. Wasm got nothing.
+
+The diagnosis is in the asymmetry. Native fsync per commit is
+cheap (macOS is essentially a no-op for HFS+/APFS), so the
+per-byte cost matters and bigger pages cut total bytes written.
+Wasm goes through wasmtime  wasi  host fsync per commit, and
+the per-call overhead dominates everything else  cutting bytes
+per call doesn't help. The lesson: **for our wasm runtime,
+page_size doesn't move the needle.** Tell users to batch their
+inserts in a transaction; the page_size lever is a native-side
+trick.
+
+(The `cli-smokes/page_size` smoke still ships, to prove the
+pragma reaches wasivfs end-to-end.)
+
+## What this still doesn't measure
+
 - **Cold startup**  every trial here gets a freshly-instantiated
   wasm. Wasmtime caches compiled modules to disk; repeated runs
   in the same shell are faster than these numbers suggest.
@@ -154,6 +221,8 @@ smaller than a few thousand rows.
 | `insert-wal` matches `insert` | The WAL unlock (libsqlite3-sys 0.30  0.38) doesn't add overhead for single-writer workloads  it's purely a capability addition. |
 | 100k rows in 563 ms (`.cwasm`) | Real production-size workloads complete in half a second; the wasm cli is usable, not a toy. |
 | `read` lands at 5.5-6x | The read path is the closest to native, because most of the time is in sqlite3's B-tree walk (compiled to wasm just like everything else)  the WIT call boundary doesn't dominate. |
+| **WIT boundary = ~2.7 µs/call (~25-30x native).** | This is the cost the composed-cli design would eliminate for baked-in extensions. At 100k-row tight scalar loops, it's ~270 ms of pure boundary overhead. |
+| **page_size tuning is a native trick.** | Bigger pages save 37% on native auto-commit workloads but nothing in wasm  per-wasi-call overhead dominates byte volume. Tell users to batch in transactions, not tune page_size. |
 
 ## Follow-up items
 

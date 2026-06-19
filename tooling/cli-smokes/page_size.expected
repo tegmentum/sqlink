@@ -1,0 +1,8 @@
+# PRAGMA page_size  16384 (configured before any tables)
+16384
+# PRAGMA page_count  2 pages used (sqlite_master + t)
+2
+# count(*) FROM t
+3
+# row roundtrip
+2|b|20

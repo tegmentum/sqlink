@@ -119,13 +119,90 @@ def _gen_join_sql(n: int) -> str:
     ]) + "\n"
 
 
+def _gen_smalltx_insert_sql(n: int, page_size: int = 4096) -> str:
+    """Many small auto-commit transactions. Each INSERT is its own
+    transaction, fsyncs once. This is the pattern where page_size
+    + cache_size tuning SHOULD matter: every commit triggers
+    per-page wasi fd_write calls."""
+    lines = [
+        f"PRAGMA page_size={page_size};",
+        "PRAGMA cache_size=-200000;",
+        "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, val INTEGER);",
+    ]
+    for i in range(n):
+        lines.append(f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});")
+    lines.append("SELECT count(*) FROM t;")
+    return "\n".join(lines) + "\n"
+
+
+def _gen_bigpage_insert_sql(n: int) -> str:
+    """Same as _gen_insert_sql but with PRAGMA page_size=16384 and
+    a generous cache. The point: fewer pages  fewer wasi fd_write
+    calls per same row count. SQLite locks page_size at db creation,
+    so the pragma must come before any table."""
+    lines = [
+        "PRAGMA page_size=16384;",
+        "PRAGMA cache_size=-200000;",
+        "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, val INTEGER);",
+        "BEGIN;",
+    ]
+    for i in range(n):
+        lines.append(f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});")
+    lines.append("COMMIT;")
+    lines.append("SELECT count(*) FROM t;")
+    return "\n".join(lines) + "\n"
+
+
+def _gen_builtin_scalar_sql(n: int) -> str:
+    """Per-row scalar via a sqlite built-in (in-wasm, no WIT
+    boundary). Pairs with ext-scalar  the delta isolates the
+    inter-component call cost. `length(name)` is the cheapest
+    builtin scalar that touches the row's TEXT column."""
+    rows = [f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});" for i in range(n)]
+    return "\n".join([
+        "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, val INTEGER);",
+        "BEGIN;",
+        *rows,
+        "COMMIT;",
+        "SELECT sum(length(name)) FROM t;",
+    ]) + "\n"
+
+
+def _gen_ext_scalar_sql(n: int) -> str:
+    """Per-row scalar via a loaded WIT extension. Each row crosses
+    the canonical ABI: serialize args  cross-store call  deserialize
+    result. Pair this with builtin-scalar to isolate the WIT cost.
+
+    Skipped on native by run_workload  the extension only exists
+    in our wasm cli."""
+    rows = [f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});" for i in range(n)]
+    return "\n".join([
+        ".load extensions/sha3/target/wasm32-wasip2/release/sha3_extension.component.wasm",
+        "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, val INTEGER);",
+        "BEGIN;",
+        *rows,
+        "COMMIT;",
+        "SELECT sum(length(sha3_256(name))) FROM t;",
+    ]) + "\n"
+
+
 WORKLOADS = {
     "insert":   ("Bulk insert + count (single transaction)", _gen_insert_sql),
     "insert-wal": ("Bulk insert under WAL", lambda n: _gen_insert_sql(n, "wal")),
+    "insert-bigpage": ("Bulk insert with page_size=16384 + 200MB cache", _gen_bigpage_insert_sql),
+    "smalltx-4k": ("Auto-commit per row, page_size=4096 (default)", lambda n: _gen_smalltx_insert_sql(n, 4096)),
+    "smalltx-16k": ("Auto-commit per row, page_size=16384", lambda n: _gen_smalltx_insert_sql(n, 16384)),
     "read":     ("PK index reads (N point lookups)", _gen_indexed_read_sql),
     "agg":      ("Full-scan aggregate + group-by", _gen_aggregate_sql),
     "join":     ("Hash join (N x N/100)", _gen_join_sql),
+    "builtin-scalar": ("N rows  builtin scalar (length); no WIT", _gen_builtin_scalar_sql),
+    "ext-scalar": ("N rows  WIT extension scalar (sha3_256); wasm-only", _gen_ext_scalar_sql),
 }
+
+# Workloads that don't run on native sqlite3 (use cli-only features
+# like `.load EXT.wasm`). run_workload returns (NaN, wasm_time) for
+# these and the reporter skips the ratio.
+WASM_ONLY_WORKLOADS = {"ext-scalar"}
 
 
 def time_native(db_path: str, sql: str) -> float:
@@ -142,12 +219,20 @@ def time_native(db_path: str, sql: str) -> float:
     return time.perf_counter() - t0
 
 
-def time_wasm(db_path: str, sql: str, component: Path = WASM_COMPONENT) -> float:
+def time_wasm(
+    db_path: str, sql: str, component: Path = WASM_COMPONENT,
+    cwd: str | None = None,
+) -> float:
     """Pipe SQL through sqlite-wasm-run. Returns wall-clock seconds.
     Component can be either the .wasm (parsed every invocation) or
-    the .cwasm (precompiled, loaded via deserialize_file)."""
-    cwd = os.path.dirname(db_path) or "."
-    rel_db = os.path.basename(db_path)
+    the .cwasm (precompiled, loaded via deserialize_file). When cwd
+    is set, runs from there  needed for workloads whose SQL uses
+    relative `.load EXT.wasm` paths."""
+    if cwd is None:
+        cwd = os.path.dirname(db_path) or "."
+        rel_db = os.path.basename(db_path)
+    else:
+        rel_db = db_path
     t0 = time.perf_counter()
     subprocess.run(
         [str(WASM_BIN), str(component), "--db", rel_db],
@@ -166,20 +251,28 @@ def run_workload(
     use_cwasm: bool = False,
 ) -> tuple[float, float]:
     """Return (native_median_s, wasm_median_s) for one workload+size.
-    use_cwasm=True swaps in the precompiled component."""
+    use_cwasm=True swaps in the precompiled component. For wasm-only
+    workloads native_median_s is float('nan')."""
     desc, gen = WORKLOADS[workload]
     sql = gen(size)
     component = WASM_COMPONENT_CWASM if use_cwasm else WASM_COMPONENT
+    wasm_only = workload in WASM_ONLY_WORKLOADS
     native_times: list[float] = []
     wasm_times: list[float] = []
     for _ in range(repeats):
-        with tempfile.TemporaryDirectory(prefix="bench-native-") as d:
-            db = os.path.join(d, "bench.db")
-            native_times.append(time_native(db, sql))
+        if not wasm_only:
+            with tempfile.TemporaryDirectory(prefix="bench-native-") as d:
+                db = os.path.join(d, "bench.db")
+                native_times.append(time_native(db, sql))
         with tempfile.TemporaryDirectory(prefix="bench-wasm-") as d:
             db = os.path.join(d, "bench.db")
-            wasm_times.append(time_wasm(db, sql, component))
-    return statistics.median(native_times), statistics.median(wasm_times)
+            # ext-scalar's `.load <relative>` is relative to wasi cwd.
+            # Run from REPO_ROOT so the path in the SQL resolves.
+            wasm_times.append(time_wasm(db, sql, component, cwd=str(REPO_ROOT)))
+    return (
+        float("nan") if wasm_only else statistics.median(native_times),
+        statistics.median(wasm_times),
+    )
 
 
 def fmt_secs(s: float) -> str:
@@ -235,18 +328,25 @@ def main() -> int:
         print("| Workload | Size | native | wasm | wasm/native |")
         print("|---|---:|---:|---:|---:|")
     else:
-        print(f"  {'workload':<14} {'size':>8}  {'native':>9}  {'wasm':>9}  {'ratio':>6}")
-        print(f"  {'-'*14} {'-'*8}  {'-'*9}  {'-'*9}  {'-'*6}")
+        print(f"  {'workload':<16} {'size':>8}  {'native':>9}  {'wasm':>9}  {'ratio':>6}")
+        print(f"  {'-'*16} {'-'*8}  {'-'*9}  {'-'*9}  {'-'*6}")
 
+    import math
     for w in workloads:
         desc, _ = WORKLOADS[w]
         for size in sizes:
             n_s, w_s = run_workload(w, size, args.repeats, args.cwasm)
-            ratio = w_s / n_s if n_s > 0 else float("inf")
-            if args.markdown:
-                print(f"| `{w}` | {size:,} | {fmt_secs(n_s)} | {fmt_secs(w_s)} | {ratio:.1f}x |")
+            if math.isnan(n_s):
+                native_cell = "  n/a"
+                ratio_cell = "  n/a"
             else:
-                print(f"  {w:<14} {size:>8,}  {fmt_secs(n_s):>9}  {fmt_secs(w_s):>9}  {ratio:>5.1f}x")
+                native_cell = fmt_secs(n_s)
+                ratio = w_s / n_s if n_s > 0 else float("inf")
+                ratio_cell = f"{ratio:.1f}x"
+            if args.markdown:
+                print(f"| `{w}` | {size:,} | {native_cell} | {fmt_secs(w_s)} | {ratio_cell} |")
+            else:
+                print(f"  {w:<16} {size:>8,}  {native_cell:>9}  {fmt_secs(w_s):>9}  {ratio_cell:>6}")
 
     return 0
 
