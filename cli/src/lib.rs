@@ -738,6 +738,11 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = pmtiles_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-pmtiles: register_into failed rc={rc}"); }
     }
+    #[cfg(feature = "embed-vec0")]
+    {
+        let rc = vec0_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-vec0: register_into failed rc={rc}"); }
+    }
 }
 
 // =========================================================================

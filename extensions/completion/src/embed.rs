@@ -113,6 +113,7 @@ struct CompletionCursor {
 }
 
 unsafe fn comp_make_vtab(
+    _table_name: &str,
     _args: &[&str],
     _db: *mut libsqlite3_sys::sqlite3,
 ) -> Result<*mut (), String> {

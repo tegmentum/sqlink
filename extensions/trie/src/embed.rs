@@ -82,6 +82,7 @@ fn strip_quotes(s: &str) -> &str {
 }
 
 unsafe fn tr_make_vtab(
+    _table_name: &str,
     args: &[&str],
     db: *mut libsqlite3_sys::sqlite3,
 ) -> Result<*mut (), String> {

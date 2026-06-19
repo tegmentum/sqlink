@@ -85,6 +85,7 @@ fn parse_path(args: &[&str]) -> Result<String, String> {
 }
 
 unsafe fn pm_make_vtab(
+    _table_name: &str,
     args: &[&str],
     _db: *mut libsqlite3_sys::sqlite3,
 ) -> Result<*mut (), String> {

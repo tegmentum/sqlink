@@ -70,14 +70,17 @@ the cli already supports.
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }
 # Persistent IVF / HNSW indexes (PLAN-vec-followups.md Phase
 # 2) serialize through postcard  no_std-friendly, compact
 # wire format, derive-driven Encode/Decode. Pinned at a recent

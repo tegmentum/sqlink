@@ -4637,6 +4637,7 @@ dependencies = [
  "uuid-extension",
  "vec-each-extension",
  "vec-extension",
+ "vec0-extension",
  "vin-extension",
  "web-parsers-extension",
  "wit-bindgen 0.44.0",
@@ -5780,6 +5781,18 @@ version = "0.1.0"
 dependencies = [
  "libsqlite3-sys",
  "serde_json",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
+name = "vec0-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "postcard",
+ "serde",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",

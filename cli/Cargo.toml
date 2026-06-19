@@ -166,6 +166,7 @@ text-utils-extension  = { path = "../extensions/text-utils",optional = true, fea
 time-series-extension = { path = "../extensions/time-series",optional = true, features = ["embed"], default-features = false }
 trie-extension        = { path = "../extensions/trie",      optional = true, features = ["embed"], default-features = false }
 pmtiles-extension     = { path = "../extensions/pmtiles",   optional = true, features = ["embed"], default-features = false }
+vec0-extension        = { path = "../extensions/vec0",      optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -267,6 +268,7 @@ embed-completion = ["dep:completion-extension"]
 "embed-time-series" = ["dep:time-series-extension"]
 embed-trie       = ["dep:trie-extension"]
 embed-pmtiles    = ["dep:pmtiles-extension"]
+embed-vec0       = ["dep:vec0-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

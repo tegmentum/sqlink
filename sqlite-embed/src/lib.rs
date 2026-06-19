@@ -531,12 +531,14 @@ pub struct VtabSpec {
     /// True if SELECTable without CREATE VIRTUAL TABLE.
     pub eponymous: bool,
     /// Allocate a fresh per-vtab-instance state. Receives the
+    /// declared table name (sqlite's argv[2]), the
     /// `CREATE VIRTUAL TABLE … USING name(arg1, arg2, …)` argv
-    /// (raw, as the user typed them) plus the live `sqlite3*` so
+    /// (raw, as the user typed them) and the live `sqlite3*` so
     /// instances that need to load data from the same db (trie,
     /// pmtiles, …) can issue queries before the cursor opens.
-    /// Eponymous vtabs ignore both.
+    /// Eponymous vtabs ignore all three.
     pub make_vtab: unsafe fn(
+        table_name: &str,
         args: &[&str],
         db: *mut ffi::sqlite3,
     ) -> Result<*mut (), String>,
@@ -593,20 +595,32 @@ unsafe extern "C" fn vtab_xconnect(
     }
     // sqlite hands us argv[0..3] as bookkeeping (module name, db
     // name, table name) and argv[3..] as the user's
-    // `USING name(a, b, c)` args. Strip the first 3.
+    // `USING name(a, b, c)` args. Capture argv[2] as the declared
+    // table name (vec0_refresh / vec0_delete look up instances by
+    // it), then pass argv[3..] to the per-ext make_vtab.
+    let mut table_name = String::new();
     let mut args_owned: Vec<String> = Vec::new();
-    if argc > 3 && !argv.is_null() {
+    if !argv.is_null() {
         let slice = core::slice::from_raw_parts(argv, argc as usize);
-        for &p in slice.iter().skip(3) {
-            if p.is_null() {
-                continue;
+        if argc > 2 {
+            let p = slice[2];
+            if !p.is_null() {
+                let cstr = core::ffi::CStr::from_ptr(p);
+                table_name = cstr.to_string_lossy().into_owned();
             }
-            let cstr = core::ffi::CStr::from_ptr(p);
-            args_owned.push(cstr.to_string_lossy().into_owned());
+        }
+        if argc > 3 {
+            for &p in slice.iter().skip(3) {
+                if p.is_null() {
+                    continue;
+                }
+                let cstr = core::ffi::CStr::from_ptr(p);
+                args_owned.push(cstr.to_string_lossy().into_owned());
+            }
         }
     }
     let args_refs: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
-    let state = match (spec.make_vtab)(&args_refs, db) {
+    let state = match (spec.make_vtab)(&table_name, &args_refs, db) {
         Ok(s) => s,
         Err(e) => {
             // Hand the error back to sqlite via *err_msg (it
