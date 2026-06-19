@@ -599,6 +599,20 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-setops: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-db-utils")]
+    {
+        let rc = db_utils_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-db-utils: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-phone-prefix")]
+    {
+        let rc = phone_prefix_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-phone-prefix: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

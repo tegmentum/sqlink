@@ -131,6 +131,8 @@ math-extension        = { path = "../extensions/math",      optional = true, fea
 compress-extension    = { path = "../extensions/compress",  optional = true, features = ["embed"], default-features = false }
 bloom-extension       = { path = "../extensions/bloom",     optional = true, features = ["embed"], default-features = false }
 setops-extension      = { path = "../extensions/setops",    optional = true, features = ["embed"], default-features = false }
+db-utils-extension    = { path = "../extensions/db-utils",  optional = true, features = ["embed"], default-features = false }
+"phone-prefix-extension" = { path = "../extensions/phone-prefix", optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -203,6 +205,8 @@ embed-math       = ["dep:math-extension"]
 embed-compress   = ["dep:compress-extension"]
 embed-bloom      = ["dep:bloom-extension"]
 embed-setops     = ["dep:setops-extension"]
+"embed-db-utils" = ["dep:db-utils-extension"]
+"embed-phone-prefix" = ["dep:phone-prefix-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

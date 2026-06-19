@@ -978,6 +978,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
+name = "db-utils-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "serde_json",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "debugid"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2730,6 +2741,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "phone-prefix-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "phonenumber"
 version = "0.3.9+9.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3693,6 +3714,7 @@ dependencies = [
  "csscolor-extension",
  "currency-extension",
  "cusip-extension",
+ "db-utils-extension",
  "detect-extension",
  "dns-extension",
  "ean-extension",
@@ -3727,6 +3749,7 @@ dependencies = [
  "natsort-extension",
  "numfmt-extension",
  "phone-extension",
+ "phone-prefix-extension",
  "postcode-extension",
  "radix-extension",
  "regexp-extension",
