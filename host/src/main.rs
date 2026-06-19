@@ -178,7 +178,10 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
         eprintln!("  precompile  {}", cwasm_out.display());
         let component_bytes = std::fs::read(&component_out)
             .map_err(|e| anyhow!("read {}: {e}", component_out.display()))?;
-        let engine = sqlite_wasm_host::Host::new()?.engine().clone();
+        // engine_run is the engine the runtime path will use to
+        // deserialize this .cwasm. Engines with different fuel
+        // settings produce mutually-incompatible precompiled blobs.
+        let engine = sqlite_wasm_host::Host::new()?.engine_run().clone();
         let precompiled = engine
             .precompile_component(&component_bytes)
             .map_err(|e| anyhow!("precompile: {e}"))?;
@@ -242,7 +245,11 @@ fn run_precompile_subcommand(args: &[String]) -> Result<()> {
     let out_path = std::path::Path::new(&args[1]);
     let bytes = std::fs::read(in_path)
         .map_err(|e| anyhow!("read {}: {e}", in_path.display()))?;
-    let engine = sqlite_wasm_host::Host::new()?.engine().clone();
+    // Precompile against engine_run (fuel disabled). That's the
+    // engine run_wasm uses to load the cli .cwasm; precompiling
+    // against the extension engine would produce a blob the loader
+    // refuses.
+    let engine = sqlite_wasm_host::Host::new()?.engine_run().clone();
     let precompiled = engine
         .precompile_component(&bytes)
         .map_err(|e| anyhow!("precompile: {e}"))?;
@@ -674,7 +681,14 @@ async fn main() -> Result<()> {
         );
     }
 
-    let engine = host.engine().clone();
+    // engine_run = the trusted-tier engine with fuel disabled. The
+    // cli component is the runtime here, not an extension, so it
+    // doesn't need fuel-metering on every backedge. Loading the
+    // precompiled .cwasm against engine_run matches the engine
+    // `sqlite-wasm-run precompile` uses to write it; the .cwasm
+    // is bound to its compile-time engine config and would refuse
+    // to load against any other.
+    let engine = host.engine_run().clone();
 
     // .cwasm = precompiled by `sqlite-wasm-run precompile`. Loading
     // it via Component::deserialize_file skips parse+validate+compile.
@@ -770,7 +784,8 @@ async fn main() -> Result<()> {
     };
 
     let mut store = Store::new(&engine, state);
-    store.set_fuel(u64::MAX / 2)?;
+    // Skip set_fuel  fuel is disabled on engine_run; the call
+    // would error.
     store.set_epoch_deadline(1_000_000_000_000);
 
     let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(

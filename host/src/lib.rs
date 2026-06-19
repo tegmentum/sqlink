@@ -1870,10 +1870,24 @@ pub struct VtabEntry {
     pub mutable: bool,
 }
 
-/// The wasmtime engine + the registry of loaded extensions.
+/// The wasmtime engines + the registry of loaded extensions.
+///
+/// Two engines, two trust tiers:
+///   * `engine`  fuel + epoch. Used for every `.load`'d extension.
+///     The fuel-metering instructions sqlite/cranelift bakes into
+///     compiled code are the enforcement layer that stops a
+///     runaway extension from hanging the cli  load-bearing.
+///   * `engine_run`  epoch only. Used for the cli component itself
+///     (and any other runnable the host runs as trusted code).
+///     Fuel is dead weight there because the cli IS the runtime;
+///     it just needs epoch for ^C handling. Disabling fuel in the
+///     emitted code removes a backedge decrement on every loop
+///     iteration of sqlite's hot paths (B-tree walks, varint
+///     decode, value comparison)  5-10% in tight loops.
 #[derive(Clone)]
 pub struct Host {
     engine: Engine,
+    engine_run: Engine,
     components: Arc<RwLock<HashMap<String, Arc<LoadedExtension>>>>,
     /// Database path the cli is using. Loaded extensions' spi.execute
     /// opens its own core::db::Connection to this path. Empty string
@@ -2163,7 +2177,20 @@ impl Host {
         config.cranelift_nan_canonicalization(false);
 
         let engine = Engine::new(&config).map_err(|e| anyhow!("create wasmtime engine: {e}"))?;
+
+        // engine_run: same config minus consume_fuel. Used to compile
+        // + run trusted-tier components (the cli itself, runnables
+        // installed by the operator). Re-deriving from the same
+        // Config base keeps every other setting (memory layout,
+        // SIMD, async, opt level) identical so the only delta in
+        // emitted code is the absence of fuel-decrement instructions.
+        let mut run_config = config.clone();
+        run_config.consume_fuel(false);
+        let engine_run = Engine::new(&run_config)
+            .map_err(|e| anyhow!("create wasmtime run-engine: {e}"))?;
+
         spawn_epoch_bumper(engine.clone());
+        spawn_epoch_bumper(engine_run.clone());
 
         let signature_verifier = Arc::new(OpenSslVerifier::new(engine.clone()));
         // Component-cache cap is intentionally tiny: parsed
@@ -2177,6 +2204,7 @@ impl Host {
             .unwrap_or(4);
         Ok(Self {
             engine,
+            engine_run,
             components: Arc::new(RwLock::new(HashMap::new())),
             db_path: Arc::new(RwLock::new(String::new())),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
@@ -2645,6 +2673,14 @@ impl Host {
 
     pub fn engine(&self) -> &Engine {
         &self.engine
+    }
+
+    /// The fuel-disabled engine used to compile + run the cli
+    /// component and other trusted-tier runnables. precompile and
+    /// run_wasm both route through here so their compiled outputs
+    /// match the engine config at load time.
+    pub fn engine_run(&self) -> &Engine {
+        &self.engine_run
     }
 
     /// Load an extension component from a host path, apply the policy,
@@ -4333,9 +4369,14 @@ impl Host {
         tenant: &str,
     ) -> Result<String> {
         let bytes = std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))?;
-        let component = Component::from_binary(&self.engine, &bytes)
+        // Trust-tier run: engine_run has fuel disabled, so the
+        // compiled output skips the per-backedge decrement that the
+        // extension engine has to emit. set_fuel is a no-op (and
+        // would actually error) on this engine; just set the epoch
+        // deadline.
+        let component = Component::from_binary(&self.engine_run, &bytes)
             .map_err(|e| anyhow!("compile {}: {e}", path.display()))?;
-        let linker = make_run_linker(&self.engine)?;
+        let linker = make_run_linker(&self.engine_run)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
         let state = RunState {
@@ -4345,10 +4386,7 @@ impl Host {
             active_tenant: tenant.to_string(),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
-        let mut store = wasmtime::Store::new(&self.engine, state);
-        store
-            .set_fuel(u64::MAX / 2)
-            .map_err(|e| anyhow!("set_fuel: {e}"))?;
+        let mut store = wasmtime::Store::new(&self.engine_run, state);
         store.set_epoch_deadline(1_000_000_000_000);
         let instance = run::Runnable::instantiate_async(&mut store, &component, &linker)
             .await
