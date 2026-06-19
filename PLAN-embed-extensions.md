@@ -198,9 +198,9 @@ sketches, sha2, base64, crypto, regex.
 
 | Category | Count | Status |
 |---|---:|---|
-| Embedded + working | **65** | Compose with `--embed name1,name2,...`; `--list` enumerates 67 (includes the 2 LLD-blocked which have embed.rs but aren't wired) |
-| LLD-blocked | 2 | `template`, `graphql`. embed.rs/Cargo.toml shipped; rust-lld SIGSEGV on link when wired into cli. Drop back in once a wasi-sdk / rustc bump fixes the lld crash. |
-| Scalar-only, not yet ported | 16 | Smallest first: country, db-utils, avro, phone-prefix, web-parsers, extfns, ids, time, crypto-auth, parsers, geo, vec, crypto-keys, formats, onnx, text-nlp. Many remaining need table-hoisting (country, phone-prefix) or have large dep graphs (text-nlp, formats). |
+| Embedded + cli-wired + working | **68** | Compose with `--embed name1,name2,...` |
+| embed.rs ships, blocked from cli wiring | 3 | `template` / `graphql` (rust-lld SIGSEGV); `ids` (needs wasi_snapshot_preview1 adapter for ulid/nanoid's std::time) |
+| Scalar-only, not yet ported | 12 | Larger / dep-graph-heavy: avro, web-parsers, extfns, time, crypto-auth, parsers, geo, vec, crypto-keys, formats, onnx, text-nlp |
 | Aggregate (needs contract extension) | 6 | hyperloglog, count_min, sketches, decimal, stats, postgis-bridge. Need `register_aggregates` helper in `sqlite-embed` using `sqlite3_create_aggregate_function_v2`. |
 | Vtab (needs contract extension) | 18 | arrow, closure, completion, csv, define, excel, listargs, parquet, pmtiles, postgis-bridge, series, spellfix1, text-utils, time-series, trie, vec_each, vec0, zipfile. Need `register_vtabs` helper using `sqlite3_create_module_v2`. |
 | Collation (needs contract extension) | 1 | uint. Need `register_collations` helper using `sqlite3_create_collation_v2`. |
