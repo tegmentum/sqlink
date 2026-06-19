@@ -438,6 +438,76 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-mac: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-fileio")]
+    {
+        let rc = fileio_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-fileio: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-bpe")]
+    {
+        let rc = bpe_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-bpe: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-geo-distance")]
+    {
+        let rc = geo_distance_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-geo-distance: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-http")]
+    {
+        let rc = http_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-http: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-bencode")]
+    {
+        let rc = bencode_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-bencode: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-sqlparse")]
+    {
+        let rc = sqlparse_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-sqlparse: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-semver")]
+    {
+        let rc = semver_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-semver: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-container")]
+    {
+        let rc = container_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-container: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-currency")]
+    {
+        let rc = currency_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-currency: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-codecs")]
+    {
+        let rc = codecs_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-codecs: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

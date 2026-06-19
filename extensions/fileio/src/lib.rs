@@ -3,7 +3,13 @@
 
 extern crate alloc;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "embed")]
+pub mod embed;
+
+// wasm_export is gated off in embed builds  the WIT export
+// symbols would collide with any other embedded extension's.
+// See PLAN-embed-extensions.md.
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::format;
     use alloc::string::{String, ToString};

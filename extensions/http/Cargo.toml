@@ -25,11 +25,24 @@ Phase E9.
 license = "MIT"
 publish = false
 
-[workspace]
+# NOTE: [workspace] removed so the cli's embed-http path dep can
+# reach this crate from the parent workspace. See
+# PLAN-embed-extensions.md.
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# Enables src/embed.rs + the libsqlite3-sys + sqlite-embed deps so
+# the cli can compile http's scalars in directly via
+# sqlite3_create_function_v2. The embed path does NOT have host
+# http  the scalars return an error directing the user to load
+# the wasi component with --grant=http. WIT component build is
+# unaffected; default-off.
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

@@ -108,6 +108,16 @@ graphql-extension    = { path = "../extensions/graphql",    optional = true, fea
 eval-extension       = { path = "../extensions/eval",       optional = true, features = ["embed"], default-features = false }
 roman-extension      = { path = "../extensions/roman",      optional = true, features = ["embed"], default-features = false }
 mac-extension        = { path = "../extensions/mac",        optional = true, features = ["embed"], default-features = false }
+fileio-extension       = { path = "../extensions/fileio",       optional = true, features = ["embed"], default-features = false }
+bpe-extension          = { path = "../extensions/bpe",          optional = true, features = ["embed"], default-features = false }
+geo-distance-extension = { path = "../extensions/geo-distance", optional = true, features = ["embed"], default-features = false }
+http-extension         = { path = "../extensions/http",         optional = true, features = ["embed"], default-features = false }
+bencode-extension      = { path = "../extensions/bencode",      optional = true, features = ["embed"], default-features = false }
+sqlparse-extension     = { path = "../extensions/sqlparse",     optional = true, features = ["embed"], default-features = false }
+semver-extension       = { path = "../extensions/semver",       optional = true, features = ["embed"], default-features = false }
+container-extension    = { path = "../extensions/container",    optional = true, features = ["embed"], default-features = false }
+currency-extension     = { path = "../extensions/currency",     optional = true, features = ["embed"], default-features = false }
+codecs-extension       = { path = "../extensions/codecs",       optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -157,6 +167,16 @@ embed-graphql    = ["dep:graphql-extension"]
 embed-eval       = ["dep:eval-extension"]
 embed-roman      = ["dep:roman-extension"]
 embed-mac        = ["dep:mac-extension"]
+embed-fileio       = ["dep:fileio-extension"]
+embed-bpe          = ["dep:bpe-extension"]
+"embed-geo-distance" = ["dep:geo-distance-extension"]
+embed-http         = ["dep:http-extension"]
+embed-bencode      = ["dep:bencode-extension"]
+embed-sqlparse     = ["dep:sqlparse-extension"]
+embed-semver       = ["dep:semver-extension"]
+embed-container    = ["dep:container-extension"]
+embed-currency     = ["dep:currency-extension"]
+embed-codecs       = ["dep:codecs-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run
