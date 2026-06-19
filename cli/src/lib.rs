@@ -620,6 +620,8 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-country: register_into failed rc={rc}");
         }
     }
+    // embed-ids deferred: wasi_snapshot_preview1 adapter required
+    // (ulid/nanoid use std::time). embed.rs ships in extensions/ids/.
 }
 
 // =========================================================================

@@ -134,6 +134,10 @@ setops-extension      = { path = "../extensions/setops",    optional = true, fea
 db-utils-extension    = { path = "../extensions/db-utils",  optional = true, features = ["embed"], default-features = false }
 "phone-prefix-extension" = { path = "../extensions/phone-prefix", optional = true, features = ["embed"], default-features = false }
 country-extension     = { path = "../extensions/country",   optional = true, features = ["embed"], default-features = false }
+# ids: needs wasi_snapshot_preview1 adapter (ulid/nanoid pull in
+# std::time). embed.rs ships; can re-add when wasm-tools compose
+# learns to plumb the adapter through the compose subcommand.
+# ids-extension         = { path = "../extensions/ids",       optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -209,6 +213,7 @@ embed-setops     = ["dep:setops-extension"]
 "embed-db-utils" = ["dep:db-utils-extension"]
 "embed-phone-prefix" = ["dep:phone-prefix-extension"]
 embed-country    = ["dep:country-extension"]
+# embed-ids        = ["dep:ids-extension"]  # wasi p1 adapter required
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run
