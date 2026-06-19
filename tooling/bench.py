@@ -47,6 +47,10 @@ WASM_COMPONENT = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cl
 # via Component::deserialize_file instead of Component::from_binary,
 # saving ~360 ms of startup per invocation.
 WASM_COMPONENT_CWASM = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.cwasm"
+# Baked variant produced by `compose-cli.py --bake ... [--precompile]`.
+# Used by BAKED_WORKLOADS.
+WASM_COMPONENT_BAKED = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_baked.component.wasm"
+WASM_COMPONENT_BAKED_CWASM = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_baked.component.cwasm"
 NATIVE_BIN = "sqlite3"
 REPEATS = 5
 DEFAULT_SIZES = [1_000, 10_000, 100_000]
@@ -186,6 +190,24 @@ def _gen_ext_scalar_sql(n: int) -> str:
     ]) + "\n"
 
 
+def _gen_baked_scalar_sql(n: int) -> str:
+    """Same workload as ext-scalar but assumes sha3 is BAKED IN
+    via `compose-cli.py --bake sha3`. No `.load`  the scalar is
+    registered at cli startup via sqlite3_create_function. Pairs
+    with ext-scalar  the delta IS the WIT boundary cost.
+
+    Use with --bake-component=PATH or the bench picks the default
+    sqlite_cli_baked.component.{wasm,cwasm}."""
+    rows = [f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});" for i in range(n)]
+    return "\n".join([
+        "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, val INTEGER);",
+        "BEGIN;",
+        *rows,
+        "COMMIT;",
+        "SELECT sum(length(sha3_256(name))) FROM t;",
+    ]) + "\n"
+
+
 WORKLOADS = {
     "insert":   ("Bulk insert + count (single transaction)", _gen_insert_sql),
     "insert-wal": ("Bulk insert under WAL", lambda n: _gen_insert_sql(n, "wal")),
@@ -197,12 +219,17 @@ WORKLOADS = {
     "join":     ("Hash join (N x N/100)", _gen_join_sql),
     "builtin-scalar": ("N rows  builtin scalar (length); no WIT", _gen_builtin_scalar_sql),
     "ext-scalar": ("N rows  WIT extension scalar (sha3_256); wasm-only", _gen_ext_scalar_sql),
+    "baked-scalar": ("N rows  BAKED sha3_256 (sqlite3_create_function); wasm-only", _gen_baked_scalar_sql),
 }
 
 # Workloads that don't run on native sqlite3 (use cli-only features
 # like `.load EXT.wasm`). run_workload returns (NaN, wasm_time) for
 # these and the reporter skips the ratio.
-WASM_ONLY_WORKLOADS = {"ext-scalar"}
+WASM_ONLY_WORKLOADS = {"ext-scalar", "baked-scalar"}
+
+# Workloads that REQUIRE the baked cli (sqlite_cli_baked.component.*).
+# When one of these runs, the wasm side swaps to the baked component.
+BAKED_WORKLOADS = {"baked-scalar"}
 
 
 def time_native(db_path: str, sql: str) -> float:
@@ -251,11 +278,15 @@ def run_workload(
     use_cwasm: bool = False,
 ) -> tuple[float, float]:
     """Return (native_median_s, wasm_median_s) for one workload+size.
-    use_cwasm=True swaps in the precompiled component. For wasm-only
-    workloads native_median_s is float('nan')."""
+    use_cwasm=True swaps in the precompiled component. Baked workloads
+    swap in the bake-compiled component (sqlite_cli_baked.component).
+    For wasm-only workloads native_median_s is float('nan')."""
     desc, gen = WORKLOADS[workload]
     sql = gen(size)
-    component = WASM_COMPONENT_CWASM if use_cwasm else WASM_COMPONENT
+    if workload in BAKED_WORKLOADS:
+        component = WASM_COMPONENT_BAKED_CWASM if use_cwasm else WASM_COMPONENT_BAKED
+    else:
+        component = WASM_COMPONENT_CWASM if use_cwasm else WASM_COMPONENT
     wasm_only = workload in WASM_ONLY_WORKLOADS
     native_times: list[float] = []
     wasm_times: list[float] = []

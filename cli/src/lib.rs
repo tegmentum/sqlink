@@ -107,13 +107,36 @@ fn ensure_cli_conn() {
         let mut g = c.borrow_mut();
         if g.is_none() {
             let path = DB_PATH.with(|p| p.borrow().clone());
-            *g = if path.is_empty() || path == ":memory:" {
+            let opened = if path.is_empty() || path == ":memory:" {
                 db::Connection::open_in_memory().ok()
             } else {
                 db::Connection::open(&path, db::OpenFlags::DEFAULT).ok()
             };
+            // Run baked-in extension registrations RIGHT AFTER the
+            // connection opens, before any user statement runs. Each
+            // `bake-*` cargo feature pulls in the ext as a Rust dep
+            // and wires its `register_into(db)` here. No WIT boundary
+            // on the hot path for these scalars.
+            if let Some(ref conn) = opened {
+                unsafe { register_baked_extensions(conn.raw_handle()) };
+            }
+            *g = opened;
         }
     });
+}
+
+/// Called once per cli connection open. Each `bake-<name>` cargo
+/// feature compiles in one block below. The body is intentionally
+/// trivial  pile every bakeable extension in here; the feature
+/// gate decides what reaches the binary.
+unsafe fn register_baked_extensions(_db: *mut libsqlite3_sys::sqlite3) {
+    #[cfg(feature = "bake-sha3")]
+    {
+        let rc = sha3_extension::bake::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("bake-sha3: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

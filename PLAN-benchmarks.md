@@ -157,9 +157,11 @@ What that means for real workloads:
 - 100k rows  ~270 ms of pure WIT overhead. Not catastrophic
   at this scale, but it dominates for tight scalar loops.
 - The cost is FIXED PER CALL  payload size barely matters.
-- The composed-cli build would eliminate this for any extension
-  baked in at compile time, dropping that 100k workload from
-  955 ms  ~700 ms.
+- The bake-in path eliminates this for any extension compiled
+  in at build time: a 100k-row `SELECT sha3_256(name)` drops
+  from 951 ms (WIT) to 679 ms (baked)  exactly the 272 ms
+  predicted. See PLAN-bake-in.md for the user-facing tool
+  (`tooling/compose-cli.py --bake NAME[,NAME...]`).
 
 ## Page-size tuning  measured
 

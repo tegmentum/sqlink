@@ -1,6 +1,38 @@
-//! SHA-3 (NIST FIPS 202) port of SQLite shathree
+//! SHA-3 (NIST FIPS 202) port of SQLite shathree.
+//!
+//! Two consumers, one codebase:
+//!
+//!   * the `wasm_export` module produces a wasi-p2 component
+//!     loadable at runtime via `.load <ext.wasm>`.
+//!   * the `bake` module exposes a `register_into(db)` entry
+//!     that registers the same scalars directly via
+//!     `sqlite3_create_function_v2`. The cli optionally
+//!     `dep:sha3-extension` + calls this at startup to bake the
+//!     ext in at build time, eliminating the WIT boundary cost
+//!     measured in PLAN-benchmarks.md (~2.7 us/call).
 
 extern crate alloc;
+
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+
+/// Core algorithm  reuseable by both the WIT export and the
+/// native-register bake path. Hash `data` with SHA-3 at `bits`
+/// output size; raw bytes; None on unsupported bit size. Matches
+/// the size selection in SQLite's shathree.c: 224, 256, 384, 512.
+pub fn sha3_bytes(data: &[u8], bits: u32) -> Option<Vec<u8>> {
+    use sha3::{Digest, Sha3_224, Sha3_256, Sha3_384, Sha3_512};
+    match bits {
+        224 => Some(Sha3_224::digest(data).to_vec()),
+        256 => Some(Sha3_256::digest(data).to_vec()),
+        384 => Some(Sha3_384::digest(data).to_vec()),
+        512 => Some(Sha3_512::digest(data).to_vec()),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "bake")]
+pub mod bake;
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_export {
@@ -31,22 +63,10 @@ mod wasm_export {
 
     struct Ext;
 
-    use sha3::{Digest, Sha3_224, Sha3_256, Sha3_384, Sha3_512};
-
-    /// Hash `data` with SHA-3 at `bits` output size. Returns
-    /// raw bytes; caller decides hex / Blob output. None on
-    /// unsupported bit size.
-    /// Matches the size selection in SQLite's shathree.c:
-    /// 224, 256, 384, 512.
-    fn sha3_bytes(data: &[u8], bits: u32) -> Option<Vec<u8>> {
-        match bits {
-            224 => Some(Sha3_224::digest(data).to_vec()),
-            256 => Some(Sha3_256::digest(data).to_vec()),
-            384 => Some(Sha3_384::digest(data).to_vec()),
-            512 => Some(Sha3_512::digest(data).to_vec()),
-            _ => None,
-        }
-    }
+    // Reuses crate-level sha3_bytes  same algorithm path the
+    // bake-in registration uses, so a baked sha3() can't drift
+    // from the .load'd sha3().
+    use super::sha3_bytes;
 
     /// Treat the SqlValue as bytes for hashing. Matches shathree.c's
     /// behavior: TEXT becomes its UTF-8 bytes, BLOB as-is, INTEGER

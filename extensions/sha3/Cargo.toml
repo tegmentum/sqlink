@@ -8,13 +8,27 @@ SHA-3 (NIST FIPS 202) port of SQLite shathree
 license = "MIT"
 publish = false
 
-[workspace]
+# NOTE: this crate used to declare [workspace] to stay standalone,
+# but the cli's bake-sha3 path dep needs it inside the parent
+# workspace. The wasi component build (`make ext NAME=sha3`) still
+# works because it just runs `cargo build` from extensions/sha3
+# with --manifest-path; cargo picks the parent workspace and
+# builds this crate fine inside it.
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+# Enable the bake module: exposes `register_into(db: *mut sqlite3)`
+# for the cli to call at startup when this extension is compiled
+# in as a Rust dep instead of loaded as a wasi component.
+bake = ["dep:libsqlite3-sys"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 sha3 = { version = "0.10", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
+# Only pulled in when `bake` feature is on  the WIT-only build path
+# never touches libsqlite3-sys.
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
