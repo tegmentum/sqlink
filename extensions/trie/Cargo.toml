@@ -13,21 +13,24 @@ that lives for the cli session.
     SELECT word FROM words WHERE prefix='auto';
 
 Schema (declared by xConnect):
-  word    TEXT  visible
-  prefix  TEXT  HIDDEN  (required EQ at query time)
+  word    TEXT — visible
+  prefix  TEXT — HIDDEN (required EQ at query time)
 
-Pure-Rust hash-map trie  no crate dep. Tier-1 vtab port per
+Pure-Rust hash-map trie — no crate dep. Tier-1 vtab port per
 PLAN-extensions-followups Phase E1. Requires a file-backed db
 (spi can't read :memory:).
 """
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

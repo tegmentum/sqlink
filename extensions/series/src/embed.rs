@@ -32,8 +32,11 @@ struct SeriesCursor {
     done: bool,
 }
 
-unsafe fn series_make_vtab() -> *mut () {
-    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(SeriesVtab)) as *mut ()
+unsafe fn series_make_vtab(
+    _args: &[&str],
+    _db: *mut libsqlite3_sys::sqlite3,
+) -> Result<*mut (), String> {
+    Ok(alloc::boxed::Box::into_raw(alloc::boxed::Box::new(SeriesVtab)) as *mut ())
 }
 
 unsafe fn series_destroy_vtab(state: *mut ()) {
@@ -73,7 +76,7 @@ unsafe fn series_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result
     Ok(())
 }
 
-unsafe fn series_make_cursor(_vtab_state: *mut ()) -> *mut () {
+unsafe fn series_make_cursor(_vtab_state: *mut (), _db: *mut libsqlite3_sys::sqlite3) -> *mut () {
     alloc::boxed::Box::into_raw(alloc::boxed::Box::new(SeriesCursor {
         current: 0,
         stop: 0,

@@ -3,10 +3,10 @@ name = "text-utils-extension"
 version = "0.1.0"
 edition = "2021"
 description = """
-Text utilities  two small extras bundled into one .wasm:
+Text utilities — two small extras bundled into one .wasm:
 
 Scalar:
-  sql_normalize(sql)  TEXT  literals replaced with '?', keywords
+  sql_normalize(sql) → TEXT — literals replaced with '?', keywords
                               lowercased, whitespace collapsed.
                               Useful for query-plan caching by shape.
 
@@ -19,11 +19,14 @@ Tier-1 utilities per PLAN-extensions-followups Phase E3.
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

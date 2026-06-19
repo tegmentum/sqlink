@@ -17,30 +17,33 @@ Schema (fixed for v1):
     y        INTEGER    -- tile row
     data     BLOB       -- raw (compressed) tile payload
 
-Tile payload is returned raw  the archive's compression
+Tile payload is returned raw — the archive's compression
 (gzip/brotli/zstd) is preserved. Caller can decompress
 via the `compress` / `codecs` extensions; in-vtab
 decompression is a follow-on once we enable the upstream
 crate's `compression` feature (pulls in oxiarc-archive
 and is heavier than what the v1 vtab needs).
 
-Also exposes `pmtiles_metadata(path)`  TEXT (JSON) for
+Also exposes `pmtiles_metadata(path)` → TEXT (JSON) for
 the archive's metadata blob.
 
 Whole file is read into a `Vec<u8>` (oxigdal-pmtiles
 takes ownership of bytes); xFilter walks the directory
 via `enumerate_tiles` and grabs each payload by offset.
-Memory peak  file size in bytes.
+Memory peak ≈ file size in bytes.
 """
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 oxigdal-pmtiles = { version = "0.1", default-features = false }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

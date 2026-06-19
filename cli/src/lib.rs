@@ -698,6 +698,46 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = series_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-series: register_into failed rc={rc}"); }
     }
+    #[cfg(feature = "embed-listargs")]
+    {
+        let rc = listargs_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-listargs: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-define")]
+    {
+        let rc = define_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-define: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-completion")]
+    {
+        let rc = completion_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-completion: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-vec-each")]
+    {
+        let rc = vec_each_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-vec-each: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-text-utils")]
+    {
+        let rc = text_utils_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-text-utils: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-time-series")]
+    {
+        let rc = time_series_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-time-series: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-trie")]
+    {
+        let rc = trie_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-trie: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-pmtiles")]
+    {
+        let rc = pmtiles_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-pmtiles: register_into failed rc={rc}"); }
+    }
 }
 
 // =========================================================================

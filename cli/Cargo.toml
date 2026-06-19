@@ -158,6 +158,14 @@ hyperloglog-extension = { path = "../extensions/hyperloglog", optional = true, f
 count-min-extension   = { path = "../extensions/count_min", optional = true, features = ["embed"], default-features = false }
 sketches-extension    = { path = "../extensions/sketches",  optional = true, features = ["embed"], default-features = false }
 series-extension      = { path = "../extensions/series",    optional = true, features = ["embed"], default-features = false }
+listargs-extension    = { path = "../extensions/listargs",  optional = true, features = ["embed"], default-features = false }
+define-extension      = { path = "../extensions/define",    optional = true, features = ["embed"], default-features = false }
+completion-extension  = { path = "../extensions/completion", optional = true, features = ["embed"], default-features = false }
+vec-each-extension    = { path = "../extensions/vec_each",  optional = true, features = ["embed"], default-features = false }
+text-utils-extension  = { path = "../extensions/text-utils",optional = true, features = ["embed"], default-features = false }
+time-series-extension = { path = "../extensions/time-series",optional = true, features = ["embed"], default-features = false }
+trie-extension        = { path = "../extensions/trie",      optional = true, features = ["embed"], default-features = false }
+pmtiles-extension     = { path = "../extensions/pmtiles",   optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -251,6 +259,14 @@ embed-hyperloglog = ["dep:hyperloglog-extension"]
 embed-count-min   = ["dep:count-min-extension"]
 embed-sketches   = ["dep:sketches-extension"]
 embed-series     = ["dep:series-extension"]
+embed-listargs   = ["dep:listargs-extension"]
+embed-define     = ["dep:define-extension"]
+embed-completion = ["dep:completion-extension"]
+"embed-vec-each" = ["dep:vec-each-extension"]
+"embed-text-utils" = ["dep:text-utils-extension"]
+"embed-time-series" = ["dep:time-series-extension"]
+embed-trie       = ["dep:trie-extension"]
+embed-pmtiles    = ["dep:pmtiles-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

@@ -8,7 +8,7 @@ extension. Adds bucketing + gap-fill primitives for
 observability/analytics workloads.
 
 Functions:
-  time_bucket(ts, interval)   TEXT
+  time_bucket(ts, interval) → TEXT
                               `interval` is '5 min', '1 hour',
                               '1 day' (Postgres-style) OR
                               integer seconds.
@@ -24,12 +24,15 @@ Tier-2 helpers per PLAN-extensions-batch-2 Phase F4.
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 chrono = { version = "0.4", default-features = false, features = ["alloc"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

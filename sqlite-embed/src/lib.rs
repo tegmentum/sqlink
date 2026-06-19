@@ -179,6 +179,82 @@ unsafe fn set_error(ctx: *mut ffi::sqlite3_context, msg: &str) {
     );
 }
 
+/// Function signature for db-aware scalars  receives the live
+/// `sqlite3*` so the implementation can prepare/exec sub-SQL
+/// inside the same connection (define, vec0 read-paths, etc).
+pub type CallFnWithDb = fn(
+    db: *mut ffi::sqlite3,
+    func_id: u64,
+    args: Vec<SqlValueOwned>,
+) -> Result<SqlValueOwned, String>;
+
+struct DbDispatchCtx {
+    call_fn: CallFnWithDb,
+    func_id: u64,
+}
+
+unsafe extern "C" fn destroy_db_dispatch_ctx(p: *mut c_void) {
+    drop(alloc::boxed::Box::from_raw(p as *mut DbDispatchCtx));
+}
+
+unsafe extern "C" fn db_aware_thunk(
+    ctx: *mut ffi::sqlite3_context,
+    argc: c_int,
+    argv: *mut *mut ffi::sqlite3_value,
+) {
+    let disp = ffi::sqlite3_user_data(ctx) as *const DbDispatchCtx;
+    if disp.is_null() {
+        ffi::sqlite3_result_null(ctx);
+        return;
+    }
+    let call_fn = (*disp).call_fn;
+    let func_id = (*disp).func_id;
+    let db = ffi::sqlite3_context_db_handle(ctx);
+    let args = collect_args(argc, argv);
+    match call_fn(db, func_id, args) {
+        Ok(v) => set_result(ctx, v),
+        Err(e) => set_error(ctx, &e),
+    }
+}
+
+/// Same shape as `register_scalars` but threads the live `sqlite3*`
+/// into each call. Used by extensions whose scalar bodies need to
+/// prepare/exec sub-SQL (define's _define_funcs lookups, vec0 read
+/// paths that pull from shadow rows, etc).
+pub unsafe fn register_scalars_with_db(
+    db: *mut ffi::sqlite3,
+    specs: &[ScalarSpec],
+    call_fn: CallFnWithDb,
+) -> c_int {
+    for spec in specs {
+        let ctx = alloc::boxed::Box::into_raw(alloc::boxed::Box::new(DbDispatchCtx {
+            call_fn,
+            func_id: spec.func_id,
+        }));
+        let flags = SQLITE_UTF8
+            | if spec.deterministic {
+                SQLITE_DETERMINISTIC
+            } else {
+                0
+            };
+        let rc = ffi::sqlite3_create_function_v2(
+            db,
+            spec.name.as_ptr() as *const _,
+            spec.num_args,
+            flags,
+            ctx as *mut c_void,
+            Some(db_aware_thunk),
+            None,
+            None,
+            Some(destroy_db_dispatch_ctx),
+        );
+        if rc != ffi::SQLITE_OK {
+            return rc;
+        }
+    }
+    ffi::SQLITE_OK
+}
+
 /// Register every scalar in `specs` against `db`, with each
 /// dispatch routed through `call_fn`. Returns SQLITE_OK or the
 /// first non-OK code.
@@ -454,10 +530,23 @@ pub struct VtabSpec {
     pub schema: &'static [u8],
     /// True if SELECTable without CREATE VIRTUAL TABLE.
     pub eponymous: bool,
-    pub make_vtab: unsafe fn() -> *mut (),
+    /// Allocate a fresh per-vtab-instance state. Receives the
+    /// `CREATE VIRTUAL TABLE … USING name(arg1, arg2, …)` argv
+    /// (raw, as the user typed them) plus the live `sqlite3*` so
+    /// instances that need to load data from the same db (trie,
+    /// pmtiles, …) can issue queries before the cursor opens.
+    /// Eponymous vtabs ignore both.
+    pub make_vtab: unsafe fn(
+        args: &[&str],
+        db: *mut ffi::sqlite3,
+    ) -> Result<*mut (), String>,
     pub destroy_vtab: unsafe fn(*mut ()),
     pub best_index: unsafe fn(*mut (), &mut BestIndexInfo) -> Result<(), String>,
-    pub make_cursor: unsafe fn(*mut ()) -> *mut (),
+    /// Allocate a fresh per-cursor state. Receives the live
+    /// `sqlite3*` so cursors that need to issue sub-queries (e.g.
+    /// completion's phase 5-7 schema enumeration) can stash it
+    /// without an extra context plumbing.
+    pub make_cursor: unsafe fn(vtab_state: *mut (), db: *mut ffi::sqlite3) -> *mut (),
     pub destroy_cursor: unsafe fn(*mut ()),
     pub filter: unsafe fn(
         cursor: *mut (),
@@ -478,6 +567,7 @@ struct EmbedVtab {
     base: ffi::sqlite3_vtab,
     state: *mut (),
     spec: &'static VtabSpec,
+    db: *mut ffi::sqlite3,
 }
 
 #[repr(C)]
@@ -490,10 +580,10 @@ struct EmbedCursor {
 unsafe extern "C" fn vtab_xconnect(
     db: *mut ffi::sqlite3,
     paux: *mut c_void,
-    _argc: c_int,
-    _argv: *const *const core::ffi::c_char,
+    argc: c_int,
+    argv: *const *const core::ffi::c_char,
     pp_vtab: *mut *mut ffi::sqlite3_vtab,
-    _err_msg: *mut *mut core::ffi::c_char,
+    err_msg: *mut *mut core::ffi::c_char,
 ) -> c_int {
     let spec = &*(paux as *const VtabSpec);
     // declare_vtab needs a nul-terminated SQL string.
@@ -501,11 +591,45 @@ unsafe extern "C" fn vtab_xconnect(
     if rc != ffi::SQLITE_OK {
         return rc;
     }
-    let state = (spec.make_vtab)();
+    // sqlite hands us argv[0..3] as bookkeeping (module name, db
+    // name, table name) and argv[3..] as the user's
+    // `USING name(a, b, c)` args. Strip the first 3.
+    let mut args_owned: Vec<String> = Vec::new();
+    if argc > 3 && !argv.is_null() {
+        let slice = core::slice::from_raw_parts(argv, argc as usize);
+        for &p in slice.iter().skip(3) {
+            if p.is_null() {
+                continue;
+            }
+            let cstr = core::ffi::CStr::from_ptr(p);
+            args_owned.push(cstr.to_string_lossy().into_owned());
+        }
+    }
+    let args_refs: Vec<&str> = args_owned.iter().map(|s| s.as_str()).collect();
+    let state = match (spec.make_vtab)(&args_refs, db) {
+        Ok(s) => s,
+        Err(e) => {
+            // Hand the error back to sqlite via *err_msg (it
+            // expects a sqlite-allocated cstring it will free).
+            let bytes = e.as_bytes();
+            let buf = ffi::sqlite3_malloc((bytes.len() + 1) as c_int) as *mut core::ffi::c_char;
+            if !buf.is_null() {
+                core::ptr::copy_nonoverlapping(
+                    bytes.as_ptr() as *const core::ffi::c_char,
+                    buf,
+                    bytes.len(),
+                );
+                *buf.add(bytes.len()) = 0;
+                *err_msg = buf;
+            }
+            return ffi::SQLITE_ERROR;
+        }
+    };
     let vtab = alloc::boxed::Box::into_raw(alloc::boxed::Box::new(EmbedVtab {
         base: core::mem::zeroed(),
         state,
         spec,
+        db,
     }));
     *pp_vtab = vtab as *mut ffi::sqlite3_vtab;
     ffi::SQLITE_OK
@@ -579,7 +703,7 @@ unsafe extern "C" fn vtab_xopen(
 ) -> c_int {
     let v = pv as *mut EmbedVtab;
     let spec = (*v).spec;
-    let cursor_state = (spec.make_cursor)((*v).state);
+    let cursor_state = (spec.make_cursor)((*v).state, (*v).db);
     let c = alloc::boxed::Box::into_raw(alloc::boxed::Box::new(EmbedCursor {
         base: core::mem::zeroed(),
         state: cursor_state,
@@ -731,4 +855,164 @@ pub unsafe fn register_vtabs(
 /// `use sqlite_embed::ffi::sqlite3;` suffices.)
 pub mod ffi_reexport {
     pub use libsqlite3_sys::sqlite3;
+}
+
+// ---------------------------------------------------------------
+// In-process SPI emulation  used by db-aware scalars (define,
+// vec0 read paths, ...) so embed.rs files don't have to redo the
+// prepare/bind/step/finalize dance for every helper. Roughly
+// mirrors the WIT `spi::execute` / `spi::execute_batch` surface
+// but talks straight to libsqlite3-sys.
+// ---------------------------------------------------------------
+
+unsafe fn bind_value(
+    stmt: *mut ffi::sqlite3_stmt,
+    idx: c_int,
+    v: &SqlValueOwned,
+) -> c_int {
+    match v {
+        SqlValueOwned::Null => ffi::sqlite3_bind_null(stmt, idx),
+        SqlValueOwned::Integer(n) => ffi::sqlite3_bind_int64(stmt, idx, *n),
+        SqlValueOwned::Real(r) => ffi::sqlite3_bind_double(stmt, idx, *r),
+        SqlValueOwned::Text(s) => ffi::sqlite3_bind_text(
+            stmt,
+            idx,
+            s.as_ptr() as *const _,
+            s.len() as c_int,
+            ffi::SQLITE_TRANSIENT(),
+        ),
+        SqlValueOwned::Blob(b) => ffi::sqlite3_bind_blob(
+            stmt,
+            idx,
+            b.as_ptr() as *const _,
+            b.len() as c_int,
+            ffi::SQLITE_TRANSIENT(),
+        ),
+    }
+}
+
+unsafe fn column_to_owned(stmt: *mut ffi::sqlite3_stmt, col: c_int) -> SqlValueOwned {
+    match ffi::sqlite3_column_type(stmt, col) {
+        ffi::SQLITE_NULL => SqlValueOwned::Null,
+        ffi::SQLITE_INTEGER => SqlValueOwned::Integer(ffi::sqlite3_column_int64(stmt, col)),
+        ffi::SQLITE_FLOAT => SqlValueOwned::Real(ffi::sqlite3_column_double(stmt, col)),
+        ffi::SQLITE_TEXT => {
+            let p = ffi::sqlite3_column_text(stmt, col);
+            if p.is_null() {
+                return SqlValueOwned::Text(String::new());
+            }
+            let n = ffi::sqlite3_column_bytes(stmt, col) as usize;
+            let bytes = core::slice::from_raw_parts(p, n);
+            match core::str::from_utf8(bytes) {
+                Ok(s) => SqlValueOwned::Text(s.into()),
+                Err(_) => SqlValueOwned::Text(String::new()),
+            }
+        }
+        ffi::SQLITE_BLOB => {
+            let p = ffi::sqlite3_column_blob(stmt, col) as *const u8;
+            if p.is_null() {
+                return SqlValueOwned::Blob(Vec::new());
+            }
+            let n = ffi::sqlite3_column_bytes(stmt, col) as usize;
+            SqlValueOwned::Blob(core::slice::from_raw_parts(p, n).to_vec())
+        }
+        _ => SqlValueOwned::Null,
+    }
+}
+
+unsafe fn last_error(db: *mut ffi::sqlite3) -> String {
+    let p = ffi::sqlite3_errmsg(db);
+    if p.is_null() {
+        return String::new();
+    }
+    let mut len = 0usize;
+    while *p.add(len) != 0 {
+        len += 1;
+    }
+    let bytes = core::slice::from_raw_parts(p as *const u8, len);
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+/// Run a SQL string with no parameters and no result rows
+/// (statements like CREATE/INSERT/DELETE). Equivalent to the WIT
+/// `spi::execute_batch`.
+///
+/// Safety: `db` must be a live `sqlite3*`.
+pub unsafe fn exec_batch(db: *mut ffi::sqlite3, sql: &str) -> Result<(), String> {
+    let mut cstr: Vec<u8> = Vec::with_capacity(sql.len() + 1);
+    cstr.extend_from_slice(sql.as_bytes());
+    cstr.push(0);
+    let mut err: *mut core::ffi::c_char = core::ptr::null_mut();
+    let rc = ffi::sqlite3_exec(
+        db,
+        cstr.as_ptr() as *const _,
+        None,
+        core::ptr::null_mut(),
+        &mut err,
+    );
+    if rc != ffi::SQLITE_OK {
+        let msg = if err.is_null() {
+            last_error(db)
+        } else {
+            let cstr = core::ffi::CStr::from_ptr(err);
+            let s = cstr.to_string_lossy().into_owned();
+            ffi::sqlite3_free(err as *mut c_void);
+            s
+        };
+        return Err(msg);
+    }
+    Ok(())
+}
+
+/// Prepare + bind + step a parameterized SQL statement, returning
+/// all rows. Equivalent to the WIT `spi::execute`.
+///
+/// Safety: `db` must be a live `sqlite3*`.
+pub unsafe fn exec_query(
+    db: *mut ffi::sqlite3,
+    sql: &str,
+    params: &[SqlValueOwned],
+) -> Result<Vec<Vec<SqlValueOwned>>, String> {
+    let mut cstr: Vec<u8> = Vec::with_capacity(sql.len() + 1);
+    cstr.extend_from_slice(sql.as_bytes());
+    cstr.push(0);
+    let mut stmt: *mut ffi::sqlite3_stmt = core::ptr::null_mut();
+    let rc = ffi::sqlite3_prepare_v2(
+        db,
+        cstr.as_ptr() as *const _,
+        -1,
+        &mut stmt,
+        core::ptr::null_mut(),
+    );
+    if rc != ffi::SQLITE_OK {
+        return Err(last_error(db));
+    }
+    for (i, p) in params.iter().enumerate() {
+        let rc = bind_value(stmt, (i + 1) as c_int, p);
+        if rc != ffi::SQLITE_OK {
+            let msg = last_error(db);
+            ffi::sqlite3_finalize(stmt);
+            return Err(msg);
+        }
+    }
+    let mut rows: Vec<Vec<SqlValueOwned>> = Vec::new();
+    loop {
+        let rc = ffi::sqlite3_step(stmt);
+        if rc == ffi::SQLITE_DONE {
+            break;
+        }
+        if rc != ffi::SQLITE_ROW {
+            let msg = last_error(db);
+            ffi::sqlite3_finalize(stmt);
+            return Err(msg);
+        }
+        let n = ffi::sqlite3_column_count(stmt);
+        let mut row = Vec::with_capacity(n as usize);
+        for c in 0..n {
+            row.push(column_to_owned(stmt, c));
+        }
+        rows.push(row);
+    }
+    ffi::sqlite3_finalize(stmt);
+    Ok(rows)
 }
