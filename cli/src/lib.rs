@@ -312,6 +312,48 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-isin: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-dns")]
+    {
+        let rc = dns_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-dns: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-detect")]
+    {
+        let rc = detect_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-detect: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-ical")]
+    {
+        let rc = ical_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-ical: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-zorder")]
+    {
+        let rc = zorder_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-zorder: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-postcode")]
+    {
+        let rc = postcode_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-postcode: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-totype")]
+    {
+        let rc = totype_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-totype: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

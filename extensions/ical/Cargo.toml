@@ -36,13 +36,24 @@ not surfaced as scalars.
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+# See PLAN-embed-extensions.md  enables src/embed.rs and a
+# libsqlite3-sys dep so the cli can compile this extension's
+# scalars in directly, registered via sqlite3_create_function_v2
+# at startup. WIT component build is unaffected; default-off.
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 icalendar = { version = "0.17", default-features = false, features = ["parser"] }
 serde_json = "1"
+# Pulled in only when `embed` is on. default-features = false
+# avoids pkg-config/vcpkg probes and the links = "sqlite3" conflict
+# with the cli's bundled compile (which already provides the symbols).
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+# Shared FFI glue for the embed path.
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

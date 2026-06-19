@@ -90,6 +90,12 @@ bic-extension        = { path = "../extensions/bic",        optional = true, fea
 cusip-extension      = { path = "../extensions/cusip",      optional = true, features = ["embed"], default-features = false }
 creditcard-extension = { path = "../extensions/creditcard", optional = true, features = ["embed"], default-features = false }
 isin-extension       = { path = "../extensions/isin",       optional = true, features = ["embed"], default-features = false }
+dns-extension        = { path = "../extensions/dns",        optional = true, features = ["embed"], default-features = false }
+detect-extension     = { path = "../extensions/detect",     optional = true, features = ["embed"], default-features = false }
+ical-extension       = { path = "../extensions/ical",       optional = true, features = ["embed"], default-features = false }
+zorder-extension     = { path = "../extensions/zorder",     optional = true, features = ["embed"], default-features = false }
+postcode-extension   = { path = "../extensions/postcode",   optional = true, features = ["embed"], default-features = false }
+totype-extension     = { path = "../extensions/totype",     optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -121,6 +127,12 @@ embed-bic        = ["dep:bic-extension"]
 embed-cusip      = ["dep:cusip-extension"]
 embed-creditcard = ["dep:creditcard-extension"]
 embed-isin       = ["dep:isin-extension"]
+embed-dns        = ["dep:dns-extension"]
+embed-detect     = ["dep:detect-extension"]
+embed-ical       = ["dep:ical-extension"]
+embed-zorder     = ["dep:zorder-extension"]
+embed-postcode   = ["dep:postcode-extension"]
+embed-totype     = ["dep:totype-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run
