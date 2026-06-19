@@ -193,3 +193,72 @@ manifest to maintain.
 
 Good candidates (popular, scalar-heavy): hyperloglog, count_min,
 sketches, sha2, base64, crypto, regex.
+
+## Catalog rollout status (as of June 2026)
+
+| Category | Count | Status |
+|---|---:|---|
+| Embedded + working | **60** | Compose with `--embed name1,name2,...`; `--list` enumerates |
+| LLD-blocked | 2 | `template`, `graphql`. embed.rs/Cargo.toml shipped; rust-lld SIGSEGV on link when wired into cli. Drop back in once a wasi-sdk / rustc bump fixes the lld crash. |
+| Scalar-only, not yet ported | 21 | Smallest first: db-utils, setops, avro, humansize, phone-prefix, math, country, web-parsers, compress, bloom, extfns, ids, time, crypto-auth, parsers, geo, vec, crypto-keys, formats, text-nlp, onnx |
+| Aggregate (needs contract extension) | 6 | hyperloglog, count_min, sketches, decimal, stats, postgis-bridge. Need `register_aggregates` helper in `sqlite-embed` using `sqlite3_create_aggregate_function_v2`. |
+| Vtab (needs contract extension) | 18 | arrow, closure, completion, csv, define, excel, listargs, parquet, pmtiles, postgis-bridge, series, spellfix1, text-utils, time-series, trie, vec_each, vec0, zipfile. Need `register_vtabs` helper using `sqlite3_create_module_v2`. |
+| Collation (needs contract extension) | 1 | uint. Need `register_collations` helper using `sqlite3_create_collation_v2`. |
+
+### The 60 embedded extensions
+
+```
+aba           color         eval          isin          regexp
+baseN         color         faker         iso           roman
+bencode       cron          fileio        json1         semver
+bic           crypto        geo-distance  latlon        sentiment
+bpe           csscolor      hexdump       lorem         sha3
+case          cusip         http          mac           sqlparse
+codecs        currency      iban          mailto        ssn
+color         dns           ical          morse         template
+container     ean           idna          natsort       totype
+creditcard    email         ieee754       numfmt        unitconv
+crc           emoji         iban          phone         url
+              escape        ipaddr        postcode      uuid
+                                          radix         vin
+                                                        zorder
+```
+
+### How the bulk port ran (June 2026)
+
+- Reference ports written by hand: sha3 (with hoisting), uuid, crc.
+- Centralized helpers built: `sqlite-embed` crate with `SqlValueOwned` +
+  `ScalarSpec` + `register_scalars`, dispatching through ONE generic
+  `sqlite3_user_data`-threaded thunk. Per-extension boilerplate
+  dropped from ~150 lines to ~30-90.
+- Parallel agents ported in batches: 6/12/12/10/10/8 per batch.
+  Around 95% of ports landed clean. Cli wiring is the only
+  step that needs serialization across a batch  trivial central merge.
+- Two ports hit rust-lld SIGSEGV when their full graph entered the
+  cli link (template, graphql). embed.rs files shipped so the moment
+  lld grows up they're a one-line drop-back.
+- Agent session limit ended batch 9 mid-run; finished the partial
+  6 by sed-scripting the Cargo.toml + lib.rs gates (the embed.rs
+  files the agents had already written were complete on disk).
+
+### Extending the contract for non-scalar surfaces
+
+Pattern is identical, just a different `sqlite3_create_*` API:
+
+  * **Aggregates**: `sqlite3_create_aggregate_function_v2(db, name, narg,
+    flags, ctx, xStep, xFinal, xDestroy)`. The shared crate gains
+    `AggregateSpec { fid, name, narg, det }` and `register_aggregates`.
+    Per-extension: a `step_scalar`/`final_scalar` pair that takes
+    `&mut state` (per-aggregation context) and `args`.
+  * **Collations**: `sqlite3_create_collation_v2(db, name, eTextRep, ctx,
+    xCompare, xDestroy)`. The shared crate gains
+    `CollationSpec { name }` and `register_collations`. Per-extension:
+    a `compare(a: &str, b: &str) -> Ordering` fn.
+  * **Vtabs**: `sqlite3_create_module_v2(db, name, &module, ctx,
+    xDestroy)`. Most complex  the module has 19+ callbacks. Likely
+    needs its own crate (`sqlite-embed-vtab`) rather than bolted on
+    here.
+
+Each surface roughly doubles the helper crate size but the per-
+extension ports stay the same shape (algorithm + spec table +
+one register call).
