@@ -279,4 +279,23 @@ interface dispatch {
         instance-id: u64,
         savepoint: s32,
     ) -> result<_, string>;
+
+    /// xShadowName — module-level. SQLite asks via the cli's
+    /// `xShadowName` slot; the cli routes here. Returns true if
+    /// `name` is a shadow table owned by this vtab module.
+    vtab-is-shadow-name: func(
+        ext-name: string,
+        vtab-id: u64,
+        name: string,
+    ) -> bool;
+
+    /// xIntegrity — per-instance integrity check.
+    vtab-integrity: func(
+        ext-name: string,
+        vtab-id: u64,
+        instance-id: u64,
+        schema: string,
+        table-name: string,
+        mode-flags: u32,
+    ) -> result<_, string>;
 }

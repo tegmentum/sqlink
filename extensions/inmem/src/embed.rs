@@ -240,6 +240,27 @@ unsafe fn inmem_rename(_state: *mut (), _new_name: &str) -> Result<(), String> {
     Ok(())
 }
 
+unsafe fn inmem_shadow_name(name: &str) -> bool {
+    name.starts_with("_inmem_")
+}
+
+unsafe fn inmem_integrity(
+    state: *mut (),
+    _schema: &str,
+    _table_name: &str,
+    _mode_flags: u32,
+) -> Result<(), String> {
+    let v = &*(state as *const InmemVtab);
+    let rows = v.rows.borrow();
+    let next = *v.next_rowid.borrow();
+    for &rid in rows.keys() {
+        if rid >= next {
+            return Err(format!("inmem: rowid {rid} >= next_rowid {next}"));
+        }
+    }
+    Ok(())
+}
+
 const VTABS: &[VtabSpec] = &[VtabSpec {
     name: b"inmem\0",
     schema: b"CREATE TABLE x(key TEXT, value)\0",
@@ -263,6 +284,9 @@ const VTABS: &[VtabSpec] = &[VtabSpec {
     savepoint: None,
     release: None,
     rollback_to: None,
+    shadow_name: Some(inmem_shadow_name),
+    integrity: Some(inmem_integrity),
+    find_function: None,
 }];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

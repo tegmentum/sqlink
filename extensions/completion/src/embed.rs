@@ -327,6 +327,9 @@ const VTABS: &[VtabSpec] = &[VtabSpec {
     rename: None,
     savepoint: None,
     release: None,
+    shadow_name: None,
+    integrity: None,
+    find_function: None,
     rollback_to: None,
     rowid: comp_rowid,
 }];

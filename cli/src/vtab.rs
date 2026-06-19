@@ -90,6 +90,17 @@ fn alloc_instance_id(meta: InstanceMeta) -> u64 {
     id
 }
 
+thread_local! {
+    /// xShadowName context  see x_shadow_name for the rationale.
+    /// `register_vtab_module` sets this immediately before the
+    /// sqlite3_create_module_v2 call. Stays set; sqlite calls
+    /// xShadowName lazily and infrequently (mostly during PRAGMA
+    /// writable_schema / integrity_check), so the last-writer-wins
+    /// caveat is acceptable for v1.
+    static SHADOW_NAME_OWNER: core::cell::RefCell<Option<(String, u64)>> =
+        const { core::cell::RefCell::new(None) };
+}
+
 fn alloc_cursor_id(meta: CursorMeta) -> u64 {
     let mut r = registry().lock().unwrap();
     let id = r.next_cursor.fetch_add(1, Ordering::Relaxed);
@@ -763,6 +774,90 @@ unsafe extern "C" fn x_rollback_to(p_vtab: *mut ffi::sqlite3_vtab, sp: c_int) ->
     }
 }
 
+/// xShadowName is unusual: it sits on the module, not on an
+/// instance. SQLite hands us only the candidate name. The aux ptr
+/// (sqlite3_user_data on the module) carries the (ext_name,
+/// vtab_id) so the dispatch can route. We pull it from a
+/// thread_local registry keyed by module pointer  see
+/// `register_vtab_module` where the entry is installed.
+unsafe extern "C" fn x_shadow_name(z_name: *const c_char) -> c_int {
+    if z_name.is_null() {
+        return 0;
+    }
+    let name = match CStr::from_ptr(z_name).to_str() {
+        Ok(s) => s.to_string(),
+        Err(_) => return 0,
+    };
+    // SQLite's xShadowName has no way to pass a context to us, so
+    // we look up the active module via a thread_local. The cli
+    // serializes vtab registration; only one module is "current"
+    // during the brief window sqlite calls xShadowName, which is
+    // not part of the standard hot path. v1 caveat: if two
+    // modules are registered with conflicting shadow-name sets,
+    // only the most-recently-registered wins for ambiguous names.
+    SHADOW_NAME_OWNER.with(|cell| {
+        let owner = cell.borrow().clone();
+        let Some((ext_name, vtab_id)) = owner else {
+            return 0;
+        };
+        if dispatch::vtab_is_shadow_name(&ext_name, vtab_id, &name) {
+            1
+        } else {
+            0
+        }
+    })
+}
+
+unsafe extern "C" fn x_integrity(
+    p_vtab: *mut ffi::sqlite3_vtab,
+    z_schema: *const c_char,
+    z_tab_name: *const c_char,
+    m_flags: c_int,
+    pz_err: *mut *mut c_char,
+) -> c_int {
+    let wv = &*(p_vtab as *const WasmVtab);
+    let Some(meta) = instance_meta(wv.instance_id) else {
+        return ffi::SQLITE_ERROR;
+    };
+    let schema = if z_schema.is_null() {
+        String::new()
+    } else {
+        CStr::from_ptr(z_schema).to_string_lossy().into_owned()
+    };
+    let table_name = if z_tab_name.is_null() {
+        String::new()
+    } else {
+        CStr::from_ptr(z_tab_name).to_string_lossy().into_owned()
+    };
+    match dispatch::vtab_integrity(
+        &meta.ext_name,
+        meta.vtab_id,
+        wv.instance_id,
+        &schema,
+        &table_name,
+        m_flags as u32,
+    ) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(e) => {
+            if !pz_err.is_null() {
+                if let Ok(c) = CString::new(e) {
+                    // sqlite frees this with sqlite3_free
+                    let buf = ffi::sqlite3_malloc((c.as_bytes().len() + 1) as c_int) as *mut c_char;
+                    if !buf.is_null() {
+                        std::ptr::copy_nonoverlapping(
+                            c.as_ptr(),
+                            buf,
+                            c.as_bytes().len() + 1,
+                        );
+                        *pz_err = buf;
+                    }
+                }
+            }
+            ffi::SQLITE_ERROR
+        }
+    }
+}
+
 // ─────────── Module + registration ───────────
 
 const MODULE: ffi::sqlite3_module = ffi::sqlite3_module {
@@ -856,8 +951,8 @@ const MODULE_MUTABLE: ffi::sqlite3_module = ffi::sqlite3_module {
     xSavepoint: Some(x_savepoint),
     xRelease: Some(x_release),
     xRollbackTo: Some(x_rollback_to),
-    xShadowName: None,
-    xIntegrity: None,
+    xShadowName: Some(x_shadow_name),
+    xIntegrity: Some(x_integrity),
 };
 
 /// Register `name` as a vtab module on `conn`, routing every
@@ -882,6 +977,12 @@ pub fn register_vtab_module(
     // (eponymous mutable vtabs are not a known shape; pick the
     // mutable template since that's the more conservative choice).
     let module_ptr: *const ffi::sqlite3_module = if mutable {
+        // xShadowName has no per-call context  stash the active
+        // (ext, vtab_id) so the trampoline can route. See the
+        // SHADOW_NAME_OWNER doc-comment for the caveat.
+        SHADOW_NAME_OWNER.with(|cell| {
+            *cell.borrow_mut() = Some((ext_name.to_string(), vtab_id));
+        });
         &MODULE_MUTABLE
     } else if eponymous {
         &MODULE_EPONYMOUS

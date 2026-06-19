@@ -589,6 +589,30 @@ pub struct VtabSpec {
         Option<unsafe fn(vtab_state: *mut (), savepoint: i32) -> Result<(), String>>,
     pub rollback_to:
         Option<unsafe fn(vtab_state: *mut (), savepoint: i32) -> Result<(), String>>,
+    /// xShadowName  module-level. Receives just the candidate
+    /// name; returns true if the vtab owns it as a shadow table.
+    /// Default-none = "this vtab owns no shadow tables".
+    pub shadow_name: Option<unsafe fn(name: &str) -> bool>,
+    /// xIntegrity  per-instance integrity check. `mode_flags` mirrors
+    /// sqlite's `mFlags`: bit 0 set = quick check.
+    pub integrity: Option<
+        unsafe fn(
+            vtab_state: *mut (),
+            schema: &str,
+            table_name: &str,
+            mode_flags: u32,
+        ) -> Result<(), String>,
+    >,
+    /// xFindFunction  override sqlite's operator-to-function
+    /// mapping for this vtab. Called with `(name, n_arg)`; returns
+    /// the constraint-op code sqlite should emit to xBestIndex.
+    /// 0 = "we don't claim this name". Default-none =
+    /// MATCH/GLOB/REGEXP/LIKE are claimed automatically (parity with
+    /// the cli's `x_find_function`); set Some to override or
+    /// extend.
+    pub find_function: Option<
+        unsafe fn(name: &str, n_arg: i32) -> i32,
+    >,
 }
 
 /// Larger struct than sqlite3_vtab; sqlite only sees the first
@@ -964,6 +988,157 @@ unsafe extern "C" fn vtab_xrollback_to(pv: *mut ffi::sqlite3_vtab, sp: c_int) ->
     }
 }
 
+/// xShadowName lives on the module, not on an instance. sqlite
+/// passes only the candidate name; we need to find which `VtabSpec`
+/// to consult. The embed contract registers ONE VtabSpec per
+/// module so we keep a per-module thread_local that
+/// `register_vtabs` populates per-name.
+///
+/// no_std target: skip thread_local (single-thread wasm), use a
+/// plain static cell with unsafe interior. Safe because the cli
+/// is single-threaded.
+struct ShadowOwnerCell {
+    spec: core::cell::UnsafeCell<Option<&'static VtabSpec>>,
+}
+unsafe impl Sync for ShadowOwnerCell {}
+static SHADOW_OWNER: ShadowOwnerCell = ShadowOwnerCell {
+    spec: core::cell::UnsafeCell::new(None),
+};
+
+unsafe extern "C" fn vtab_xshadow_name(z_name: *const core::ffi::c_char) -> c_int {
+    if z_name.is_null() {
+        return 0;
+    }
+    let spec_opt = *SHADOW_OWNER.spec.get();
+    let Some(spec) = spec_opt else {
+        return 0;
+    };
+    let Some(check) = spec.shadow_name else {
+        return 0;
+    };
+    let cstr = core::ffi::CStr::from_ptr(z_name);
+    let Ok(name) = cstr.to_str() else {
+        return 0;
+    };
+    if check(name) {
+        1
+    } else {
+        0
+    }
+}
+
+unsafe extern "C" fn vtab_xintegrity(
+    pv: *mut ffi::sqlite3_vtab,
+    z_schema: *const core::ffi::c_char,
+    z_table_name: *const core::ffi::c_char,
+    m_flags: c_int,
+    pz_err: *mut *mut core::ffi::c_char,
+) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    let Some(check) = spec.integrity else {
+        return ffi::SQLITE_OK;
+    };
+    let schema = if z_schema.is_null() {
+        ""
+    } else {
+        core::ffi::CStr::from_ptr(z_schema).to_str().unwrap_or("")
+    };
+    let table_name = if z_table_name.is_null() {
+        ""
+    } else {
+        core::ffi::CStr::from_ptr(z_table_name)
+            .to_str()
+            .unwrap_or("")
+    };
+    match check((*v).state, schema, table_name, m_flags as u32) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(e) => {
+            if !pz_err.is_null() {
+                let bytes = e.as_bytes();
+                let buf = ffi::sqlite3_malloc((bytes.len() + 1) as c_int)
+                    as *mut core::ffi::c_char;
+                if !buf.is_null() {
+                    core::ptr::copy_nonoverlapping(
+                        bytes.as_ptr() as *const core::ffi::c_char,
+                        buf,
+                        bytes.len(),
+                    );
+                    *buf.add(bytes.len()) = 0;
+                    *pz_err = buf;
+                }
+            }
+            ffi::SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn vtab_xfind_function(
+    pv: *mut ffi::sqlite3_vtab,
+    n_arg: c_int,
+    z_name: *const core::ffi::c_char,
+    px_func: *mut Option<
+        unsafe extern "C" fn(*mut ffi::sqlite3_context, c_int, *mut *mut ffi::sqlite3_value),
+    >,
+    pp_arg: *mut *mut c_void,
+) -> c_int {
+    if z_name.is_null() {
+        return 0;
+    }
+    let cstr = core::ffi::CStr::from_ptr(z_name);
+    let Ok(name) = cstr.to_str() else {
+        return 0;
+    };
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    // Built-in fallback parity with the cli's x_find_function:
+    // claim MATCH/GLOB/REGEXP/LIKE so vtabs can declare those
+    // constraints in best_index without needing to wire find_function
+    // explicitly.
+    let lower: alloc::string::String = name
+        .chars()
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    let op = match lower.as_str() {
+        "match" => 64, // SQLITE_INDEX_CONSTRAINT_MATCH
+        "glob" => 66,  // SQLITE_INDEX_CONSTRAINT_GLOB
+        "regexp" => 67, // SQLITE_INDEX_CONSTRAINT_REGEXP
+        "like" => 65,  // SQLITE_INDEX_CONSTRAINT_LIKE
+        _ => 0,
+    };
+    let op = if let Some(custom) = spec.find_function {
+        let custom_op = custom(&lower, n_arg);
+        if custom_op != 0 {
+            custom_op
+        } else {
+            op
+        }
+    } else {
+        op
+    };
+    if op == 0 {
+        return 0;
+    }
+    if !px_func.is_null() {
+        // Sqlite needs a function pointer even when xFindFunction
+        // returns a constraint-op code. The pointer is never
+        // called because best_index consumes the constraint.
+        *px_func = Some(vtab_xfind_function_stub);
+    }
+    if !pp_arg.is_null() {
+        *pp_arg = core::ptr::null_mut();
+    }
+    op
+}
+
+unsafe extern "C" fn vtab_xfind_function_stub(
+    ctx: *mut ffi::sqlite3_context,
+    _argc: c_int,
+    _argv: *mut *mut ffi::sqlite3_value,
+) {
+    set_error(ctx, "vtab operator stub called  best_index should have consumed it");
+}
+
 /// One module per registered vtab. Boxed + leaked  it lives for
 /// the lifetime of the sqlite3 connection. SQLite copies the module
 /// pointer; no destroy is wired because we don't reclaim memory
@@ -1018,6 +1193,20 @@ unsafe fn make_module(spec: &'static VtabSpec) -> ffi::sqlite3_module {
     if spec.rollback_to.is_some() {
         m.xRollbackTo = Some(vtab_xrollback_to);
     }
+    if spec.shadow_name.is_some() {
+        m.xShadowName = Some(vtab_xshadow_name);
+    }
+    if spec.integrity.is_some() {
+        m.xIntegrity = Some(vtab_xintegrity);
+    }
+    // xFindFunction has a sensible default (MATCH/GLOB/REGEXP/LIKE),
+    // so wire it unconditionally  vtabs can opt out by returning 0
+    // from a custom find_function. iVersion 3 is required to expose
+    // xIntegrity; bump.
+    m.xFindFunction = Some(vtab_xfind_function);
+    if spec.integrity.is_some() {
+        m.iVersion = 3;
+    }
     m
 }
 
@@ -1046,6 +1235,12 @@ pub unsafe fn register_vtabs(
         );
         if rc != ffi::SQLITE_OK {
             return rc;
+        }
+        // xShadowName has no context, so the trampoline reads
+        // the active spec from a single-writer cell. Last writer
+        // wins  v1 caveat documented in `SHADOW_OWNER`.
+        if spec.shadow_name.is_some() {
+            *SHADOW_OWNER.spec.get() = Some(spec);
         }
     }
     ffi::SQLITE_OK

@@ -3916,6 +3916,50 @@ impl Host {
         Ok(r)
     }
 
+    pub async fn dispatch_vtab_is_shadow_name(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        name: &str,
+    ) -> Result<bool> {
+        let mut guard = self.tabular_mutating_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_is_shadow_name(&mut cached.store, vtab_id, name)
+            .await
+            .map_err(|e| anyhow!("vtab-update.is_shadow_name: {e}"))?;
+        Ok(r)
+    }
+
+    pub async fn dispatch_vtab_integrity(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        instance_id: u64,
+        schema: &str,
+        table_name: &str,
+        mode_flags: u32,
+    ) -> Result<std::result::Result<(), String>> {
+        let mut guard = self.tabular_mutating_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        let r = cached
+            .instance
+            .sqlite_extension_vtab_update()
+            .call_integrity(
+                &mut cached.store,
+                vtab_id,
+                instance_id,
+                schema,
+                table_name,
+                mode_flags,
+            )
+            .await
+            .map_err(|e| anyhow!("vtab-update.integrity: {e}"))?;
+        Ok(r)
+    }
+
     /// Shared helper: look up the extension and return a locked
     /// guard over its cached `minimal`-world Store + Instance.
     /// Mirrors `tabular_locked` / `stateful_locked` — lazy first
@@ -5460,6 +5504,47 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         match self
             .host
             .dispatch_vtab_rollback_to(&ext_name, vtab_id, instance_id, savepoint)
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_is_shadow_name(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        name: String,
+    ) -> bool {
+        match self.host.dispatch_vtab_is_shadow_name(&ext_name, vtab_id, &name).await {
+            Ok(b) => b,
+            Err(e) => {
+                tracing::error!("vtab_is_shadow_name {ext_name}/{vtab_id}: {e}");
+                false
+            }
+        }
+    }
+
+    async fn vtab_integrity(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        instance_id: u64,
+        schema: String,
+        table_name: String,
+        mode_flags: u32,
+    ) -> std::result::Result<(), String> {
+        match self
+            .host
+            .dispatch_vtab_integrity(
+                &ext_name,
+                vtab_id,
+                instance_id,
+                &schema,
+                &table_name,
+                mode_flags,
+            )
             .await
         {
             Ok(r) => r,

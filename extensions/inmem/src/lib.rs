@@ -340,6 +340,29 @@ mod wasm_export {
         fn savepoint(_: u64, _: u64, _: i32) -> Result<(), String> { Ok(()) }
         fn release(_: u64, _: u64, _: i32) -> Result<(), String> { Ok(()) }
         fn rollback_to(_: u64, _: u64, _: i32) -> Result<(), String> { Ok(()) }
+        fn is_shadow_name(_: u64, name: String) -> bool {
+            // Demonstration: claim `_inmem_*` as shadow tables.
+            name.starts_with("_inmem_")
+        }
+        fn integrity(
+            _: u64,
+            instance_id: u64,
+            _: String,
+            _: String,
+            _: u32,
+        ) -> Result<(), String> {
+            // Self-check: every rowid in `rows` must be < next_rowid.
+            INSTANCES.with(|m| {
+                let inst = m.borrow();
+                let Some(i) = inst.get(&instance_id) else { return Ok(()); };
+                for &rid in i.rows.keys() {
+                    if rid >= i.next_rowid {
+                        return Err(format!("inmem: rowid {rid} >= next_rowid {}", i.next_rowid));
+                    }
+                }
+                Ok(())
+            })
+        }
     }
 
     bindings::export!(Inmem with_types_in bindings);
