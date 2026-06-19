@@ -1,7 +1,7 @@
-//! Bake-in path: register the uuid scalars directly via
+//! Embed path: register the uuid scalars directly via
 //! `sqlite3_create_function_v2` against the host sqlite3 conn.
 //! Same scalar surface as the `.load`'d WIT variant; no canonical
-//! ABI on the per-call hot path. See PLAN-bake-in.md.
+//! ABI on the per-call hot path. See PLAN-embed-extensions.md.
 
 use alloc::string::ToString;
 use alloc::vec::Vec;

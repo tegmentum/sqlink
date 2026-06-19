@@ -1,4 +1,4 @@
-//! Bake-in path: register the sha3 scalars directly via
+//! Embed path: register the sha3 scalars directly via
 //! `sqlite3_create_function_v2` against a host sqlite3 connection.
 //! Used when this extension is compiled into the cli as a Rust
 //! dep rather than loaded as a wasi component  no wit-bindgen,

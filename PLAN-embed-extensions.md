@@ -1,7 +1,7 @@
-# Plan: user-selectable bake-in extensions
+# Plan: user-selectable embed extensions
 
 > **Status: contract + tooling shipped, sha3 reference port shipped.**
-> Bake-in saves ~2.7 us per scalar call vs `.load`'d WIT equivalent.
+> Embed saves ~2.7 us per scalar call vs `.load`'d WIT equivalent.
 
 ## Motivation
 
@@ -12,22 +12,22 @@ sqlite scalar dispatch (~100 ns). For tight scalar loops it
 dominates: `SELECT sha3(name) FROM t` over 100k rows = ~270 ms
 of pure boundary overhead.
 
-The bake-in path lets a user pick extensions at build time and
+The embed path lets a user pick extensions at build time and
 compile them DIRECTLY into the cli's wasm component, registered
 via `sqlite3_create_function_v2` at startup instead of via the
 wasi component model at runtime.
 
-## Bench: WIT vs baked
+## Bench: WIT vs embedded
 
 Same workload, 100k rows, 5 trials, median, `.cwasm`
 (precompiled). Two extensions, same pattern:
 
-| Workload | WIT `.load` | Baked | Saved |
+| Workload | WIT `.load` | Embedded | Saved |
 |---|---:|---:|---:|
 | `SELECT sum(length(sha3_256(name))) FROM t` | 951 ms | 679 ms | 272 ms (29%) |
 | `SELECT sum(length(uuidv4())) FROM t` | 833 ms | 612 ms | 221 ms (26%) |
 
-Bake-in saves **~2.5-2.7 us per call** at steady state. For a
+Embed saves **~2.5-2.7 us per call** at steady state. For a
 100k-row loop, that's a few hundred ms recovered. The numbers
 hold across two unrelated extensions (hash function vs UUID
 generator), so the win is on the dispatch path, not the work
@@ -44,22 +44,22 @@ $ sqlite-wasm-run compose --list
 sha3
 uuid
 
-$ sqlite-wasm-run compose --bake sha3,uuid --precompile
+$ sqlite-wasm-run compose --embed sha3,uuid --precompile
 Baking: sha3, uuid
-  cargo build --release -p sqlite-cli --target wasm32-wasip2 --features bake-sha3,bake-uuid
-  wasm-tools component new  sqlite_cli_baked.component.wasm
-wrote target/wasm32-wasip2/release/sqlite_cli_baked.component.wasm
-  precompile  sqlite_cli_baked.component.cwasm
-wrote target/wasm32-wasip2/release/sqlite_cli_baked.component.cwasm
+  cargo build --release -p sqlite-cli --target wasm32-wasip2 --features embed-sha3,embed-uuid
+  wasm-tools component new  sqlite_cli_embedded.component.wasm
+wrote target/wasm32-wasip2/release/sqlite_cli_embedded.component.wasm
+  precompile  sqlite_cli_embedded.component.cwasm
+wrote target/wasm32-wasip2/release/sqlite_cli_embedded.component.cwasm
 
-$ sqlite-wasm-run sqlite_cli_baked.component.cwasm --db x.db
+$ sqlite-wasm-run sqlite_cli_embedded.component.cwasm --db x.db
 sqlite> SELECT sha3_256(uuidv4());
 efe1a2e33d99e1c6d4d8f31946243569b0d17cc9a1379e054dbd29660596c7b1
 ```
 
-No `.load` needed; the baked scalars are registered at cli
+No `.load` needed; the embedded scalars are registered at cli
 startup. **`.load` still works alongside** for anything not
-baked  the bake path doesn't disable the WIT loader:
+embedded  the embed path doesn't disable the WIT loader:
 
 ```
 sqlite> .load extensions/eval/target/wasm32-wasip2/release/eval_extension.component.wasm
@@ -70,28 +70,28 @@ sqlite> SELECT length(eval('SELECT ''' || sha3_256('x') || '''')) = 64;
 1
 ```
 
-Baked + dynamic-load composition is regression-guarded by
-`tooling/cli-smokes/baked_plus_load.{sql,expected}`.
+Embedded + dynamic-load composition is regression-guarded by
+`tooling/cli-smokes/embedded_plus_load.{sql,expected}`.
 
-Default cli (no bake) keeps working as before; `.load` is the
+Default cli (no embed) keeps working as before; `.load` is the
 only path to scalars there.
 
 Run from the repo root, or pass `--repo-root PATH`. The
 subcommand shells out to `cargo` + `wasm-tools` (both available
 to anyone who built the cli in the first place).
 
-## Bakeable-extension contract
+## Embeddable-extension contract
 
 An extension opts in by:
 
 1. **Hoisting its algorithm to crate-level** (not just inside the
    `#[cfg(target_arch="wasm32")] mod wasm_export`). Both the WIT
-   build and the bake build reuse it  guarantees they can't drift.
+   build and the embed build reuse it  guarantees they can't drift.
 
-2. **Adding a `bake` cargo feature** in its `Cargo.toml`:
+2. **Adding a `embed` cargo feature** in its `Cargo.toml`:
    ```
    [features]
-   bake = ["dep:libsqlite3-sys"]
+   embed = ["dep:libsqlite3-sys"]
 
    [dependencies]
    libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
@@ -100,7 +100,7 @@ An extension opts in by:
    brings in bundled sqlite3 via `core`, and a second source would
    trip cargo's `links =` uniqueness rule.
 
-3. **Implementing `src/bake.rs`** with:
+3. **Implementing `src/embed.rs`** with:
    ```rust
    pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int
    ```
@@ -114,29 +114,29 @@ An extension opts in by:
    dep needs the ext inside the parent workspace.
 
 That's it. The wasi component build path keeps working unchanged
-because the `bake` feature is off by default; `make ext NAME=ext`
+because the `embed` feature is off by default; `make ext NAME=ext`
 produces the same `.component.wasm` as before.
 
 ## How the cli wires it
 
-A single cargo feature per bakeable extension under
+A single cargo feature per embeddable extension under
 `[features]` in `cli/Cargo.toml`:
 ```
-bake-sha3 = ["dep:sha3-extension"]
+embed-sha3 = ["dep:sha3-extension"]
 ```
 
-The cli's `ensure_cli_conn` calls a `register_baked_extensions(db)`
-function which is just a stack of `#[cfg(feature = "bake-X")]`
+The cli's `ensure_cli_conn` calls a `register_embedded_extensions(db)`
+function which is just a stack of `#[cfg(feature = "embed-X")]`
 blocks calling each extension's `register_into`. The body is
 trivial; the gating decides what reaches the binary.
 
 ```rust
-unsafe fn register_baked_extensions(_db: *mut libsqlite3_sys::sqlite3) {
-    #[cfg(feature = "bake-sha3")]
+unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
+    #[cfg(feature = "embed-sha3")]
     {
-        let rc = sha3_extension::bake::register_into(_db);
+        let rc = sha3_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("bake-sha3: register_into failed rc={rc}");
+            eprintln!("embed-sha3: register_into failed rc={rc}");
         }
     }
 }
@@ -144,20 +144,20 @@ unsafe fn register_baked_extensions(_db: *mut libsqlite3_sys::sqlite3) {
 
 ## Trade-offs
 
-| | WIT (`.load`) | Bake-in |
+| | WIT (`.load`) | Embed |
 |---|---|---|
 | Per-call overhead | ~2.7 us | ~100 ns |
 | Hot-reload (`.unload` + re-`.load`) | yes | no |
 | Binary size impact | none (separate .wasm) | grows per extension |
 | Same .wasm for everyone | yes | no  user-specific |
 | Build complexity | runtime `.load` | extra cargo feature per ext |
-| Capability sandboxing | yes (`--grant`) | no  baked = trusted |
+| Capability sandboxing | yes (`--grant`) | no  embedded = trusted |
 
-Bake-in is best for extensions a deployment ALWAYS wants. For
+Embed is best for extensions a deployment ALWAYS wants. For
 exploratory / occasional use, stay on `.load`  the WIT cost is
 real but doesn't matter unless you're in a tight scalar loop.
 
-## Currently bakeable
+## Currently embeddable
 
 - `sha3`  reference implementation
 - `uuid`  second port; confirmed the pattern generalizes
@@ -165,30 +165,30 @@ real but doesn't matter unless you're in a tight scalar loop.
 ## Adopting more
 
 The mechanical work per extension is small (~30 min). uuid was
-~20  the bake.rs is mostly typing.
+~20  the embed.rs is mostly typing.
 
 1. Hoist algorithm out of the `wasm_export` module if it's there
    (sha3 needed this; uuid didn't because its algorithm IS the
    `uuid` crate).
-2. Add `bake` feature + `libsqlite3-sys` optional dep to Cargo.toml.
-3. **Gate `mod wasm_export` with `#[cfg(all(target_arch="wasm32", not(feature="bake")))]`.**
-   Critical: two baked extensions both compile `bindings::export!`
+2. Add `embed` feature + `libsqlite3-sys` optional dep to Cargo.toml.
+3. **Gate `mod wasm_export` with `#[cfg(all(target_arch="wasm32", not(feature="embed")))]`.**
+   Critical: two embedded extensions both compile `bindings::export!`
    which declares the same `sqlite:extension/metadata#describe`
-   symbol  the linker rejects the duplicate. The bake path
+   symbol  the linker rejects the duplicate. The embed path
    doesn't need the WIT exports anyway.
-4. Write `src/bake.rs` with `register_into`. The shape is stamped:
+4. Write `src/embed.rs` with `register_into`. The shape is stamped:
    `value_text_bytes`/`value_int` to extract args,
    `result_text`/`result_blob` for output, one `unsafe extern "C"`
    thunk per scalar. Avoid per-call `format!()`  use `hex::encode`
    for hex output (10x faster on the hot path).
    Aggregates need `_aggregate_function_v2`  not yet ported here.
 5. Drop any `[workspace]` declaration so the cli's path dep works.
-6. Add a `bake-<name>` feature + optional dep entry to
+6. Add a `embed-<name>` feature + optional dep entry to
    `cli/Cargo.toml`, mirror the registration call in
-   `register_baked_extensions`.
+   `register_embedded_extensions`.
 
 `sqlite-wasm-run compose --list` auto-discovers any extension
-with a `bake` feature in its Cargo.toml + a `src/bake.rs`  no
+with a `embed` feature in its Cargo.toml + a `src/embed.rs`  no
 manifest to maintain.
 
 Good candidates (popular, scalar-heavy): hyperloglog, count_min,

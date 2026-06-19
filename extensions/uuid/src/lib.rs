@@ -3,20 +3,21 @@
 //! Two consumers, one codebase. Same pattern as sha3-extension:
 //!
 //!   * `wasm_export`  wasi-p2 component loadable via `.load`.
-//!   * `bake`  `register_into(db)` for cli compile-time bake-in
-//!     (see PLAN-bake-in.md). Algorithm lives in the `uuid` crate
-//!     so there's nothing to hoist; both paths just call it.
+//!   * `embed`  `register_into(db)` for cli compile-time embedding
+//!     (see PLAN-embed-extensions.md). Algorithm lives in the
+//!     `uuid` crate so there's nothing to hoist; both paths just
+//!     call it.
 
 extern crate alloc;
 
-#[cfg(feature = "bake")]
-pub mod bake;
+#[cfg(feature = "embed")]
+pub mod embed;
 
-// See sha3-extension's lib.rs for why we gate this off when `bake`
-// is on  the WIT exports would collide with any other baked
-// extension. The component-build path (`make ext NAME=uuid`)
-// runs without `bake`, so wasm_export is included.
-#[cfg(all(target_arch = "wasm32", not(feature = "bake")))]
+// See sha3-extension's lib.rs for why we gate this off when `embed`
+// is on  the WIT exports would collide with any other embedded
+// extension. The component-build path (`make ext NAME=uuid`) runs
+// without `embed`, so wasm_export is included.
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::format;
     use alloc::string::{String, ToString};

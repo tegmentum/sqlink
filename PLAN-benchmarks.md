@@ -157,11 +157,11 @@ What that means for real workloads:
 - 100k rows  ~270 ms of pure WIT overhead. Not catastrophic
   at this scale, but it dominates for tight scalar loops.
 - The cost is FIXED PER CALL  payload size barely matters.
-- The bake-in path eliminates this for any extension compiled
+- The embed path eliminates this for any extension compiled
   in at build time: a 100k-row `SELECT sha3_256(name)` drops
-  from 951 ms (WIT) to 679 ms (baked)  exactly the 272 ms
-  predicted. See PLAN-bake-in.md for the user-facing tool
-  (`tooling/compose-cli.py --bake NAME[,NAME...]`).
+  from 951 ms (WIT) to 679 ms (embedded)  exactly the 272 ms
+  predicted. See PLAN-embed-extensions.md for the user-facing
+  tool (`sqlite-wasm-run compose --embed NAME[,NAME...]`).
 
 ## Page-size tuning  measured
 
@@ -223,7 +223,7 @@ pragma reaches wasivfs end-to-end.)
 | `insert-wal` matches `insert` | The WAL unlock (libsqlite3-sys 0.30  0.38) doesn't add overhead for single-writer workloads  it's purely a capability addition. |
 | 100k rows in 563 ms (`.cwasm`) | Real production-size workloads complete in half a second; the wasm cli is usable, not a toy. |
 | `read` lands at 5.5-6x | The read path is the closest to native, because most of the time is in sqlite3's B-tree walk (compiled to wasm just like everything else)  the WIT call boundary doesn't dominate. |
-| **WIT boundary = ~2.7 µs/call (~25-30x native).** | This is the cost the composed-cli design would eliminate for baked-in extensions. At 100k-row tight scalar loops, it's ~270 ms of pure boundary overhead. |
+| **WIT boundary = ~2.7 µs/call (~25-30x native).** | This is the cost the composed-cli design would eliminate for embedded extensions. At 100k-row tight scalar loops, it's ~270 ms of pure boundary overhead. |
 | **page_size tuning is a native trick.** | Bigger pages save 37% on native auto-commit workloads but nothing in wasm  per-wasi-call overhead dominates byte volume. Tell users to batch in transactions, not tune page_size. |
 
 ## Follow-up items

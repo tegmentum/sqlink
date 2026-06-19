@@ -14,7 +14,7 @@ getrandom uses by default.
 license = "MIT"
 publish = false
 
-# NOTE: this crate used to be standalone but the cli's bake-uuid
+# NOTE: this crate used to be standalone but the cli's embed-uuid
 # path dep needs it inside the parent workspace (cargo refuses
 # nested workspaces). Same pattern as sha3-extension. `make ext
 # NAME=uuid` still builds the wasi component fine.
@@ -23,18 +23,18 @@ publish = false
 crate-type = ["cdylib", "rlib"]
 
 [features]
-# See PLAN-bake-in.md  enables src/bake.rs and a libsqlite3-sys
-# dep so the cli can compile this extension's scalars in directly,
-# registered via sqlite3_create_function_v2 at startup. WIT
-# component build is unaffected; default-off.
-bake = ["dep:libsqlite3-sys"]
+# See PLAN-embed-extensions.md  enables src/embed.rs and a
+# libsqlite3-sys dep so the cli can compile this extension's
+# scalars in directly, registered via sqlite3_create_function_v2
+# at startup. WIT component build is unaffected; default-off.
+embed = ["dep:libsqlite3-sys"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 uuid = { version = "1.10", features = ["v4", "v7"] }
 getrandom = { version = "0.2", default-features = false, features = ["js"] }
-# Pulled in only when `bake` is on. default-features = false avoids
-# pkg-config/vcpkg probes and the links = "sqlite3" conflict with
-# the cli's bundled compile (which already provides the symbols).
+# Pulled in only when `embed` is on. default-features = false
+# avoids pkg-config/vcpkg probes and the links = "sqlite3" conflict
+# with the cli's bundled compile (which already provides the symbols).
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }

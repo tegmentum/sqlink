@@ -52,21 +52,21 @@ miniz_oxide = { version = "0.8", default-features = false, features = ["with-all
 # pinning by blake3 digest of the extension bytes. Pure-Rust,
 # wasm32-wasip2 clean.
 blake3 = { version = "1", default-features = false }
-# Bake-in extensions  optional; off by default. When a `bake-*`
+# Embedded extensions  optional; off by default. When an `embed-*`
 # feature is on, the cli depends on the extension's rlib crate
-# (not the wasi component) and calls its `bake::register_into(db)`
+# (not the wasi component) and calls its `embed::register_into(db)`
 # at startup. Same scalar surface; no WIT boundary on the hot path.
-# Add a new bake-* feature alongside its dep when adopting more
-# extensions. See PLAN-bake-in.md for the contract.
-sha3-extension = { path = "../extensions/sha3", optional = true, features = ["bake"], default-features = false }
-uuid-extension = { path = "../extensions/uuid", optional = true, features = ["bake"], default-features = false }
+# Add a new embed-* feature alongside its dep when adopting more
+# extensions. See PLAN-embed-extensions.md for the contract.
+sha3-extension = { path = "../extensions/sha3", optional = true, features = ["embed"], default-features = false }
+uuid-extension = { path = "../extensions/uuid", optional = true, features = ["embed"], default-features = false }
 
 [features]
-# Family-of-features layout: each bakeable extension gets its own
+# Family-of-features layout: each embeddable extension gets its own
 # feature flag so users can compose exactly what they want. Default
-# build has NONE of them on  identical to the pre-bake-in cli.
-bake-sha3 = ["dep:sha3-extension"]
-bake-uuid = ["dep:uuid-extension"]
+# build has NONE of them on  identical to the pre-embed cli.
+embed-sha3 = ["dep:sha3-extension"]
+embed-uuid = ["dep:uuid-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

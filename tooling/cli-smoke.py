@@ -29,8 +29,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CLI_BIN = REPO_ROOT / "target" / "release" / "sqlite-wasm-run"
 CLI_COMPONENT = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.wasm"
-# Bake-built variant. Smokes opt in with `-- cli: baked` at top.
-CLI_COMPONENT_BAKED = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_baked.component.wasm"
+# Embed-built variant. Smokes opt in with `-- cli: embedded` at top.
+CLI_COMPONENT_EMBEDDED = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_embedded.component.wasm"
 SMOKES_DIR = REPO_ROOT / "tooling" / "cli-smokes"
 
 PROMPT_RE = re.compile(r"^(sqlite>\s*|\s*\.\.\.>\s*)+")
@@ -81,9 +81,10 @@ def diff_results(actual: list[str], expected: list[str]) -> str | None:
 
 
 def _detect_cli_marker(raw_text: str) -> str | None:
-    """Look for `-- cli: baked` in the first 5 lines (mirrors the
-    `-- smoke-db:` pattern in tooling/smoke.py). Returns "baked"
-    to opt into the bake-built cli component, None otherwise."""
+    """Look for `-- cli: embedded` in the first 5 lines (mirrors
+    the `-- smoke-db:` pattern in tooling/smoke.py). Returns
+    "embedded" to opt into the embed-built cli component, None
+    otherwise."""
     for line in raw_text.splitlines()[:5]:
         s = line.strip()
         if s.startswith("-- cli:"):
@@ -100,11 +101,11 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
         return False, f"no smoke at {sql_path}"
     raw_text = sql_path.read_text()
     cli_marker = _detect_cli_marker(raw_text)
-    if cli_marker == "baked":
-        component = CLI_COMPONENT_BAKED
+    if cli_marker == "embedded":
+        component = CLI_COMPONENT_EMBEDDED
         if not component.exists():
-            return False, (f"baked cli not built: {component.relative_to(REPO_ROOT)}; "
-                           f"run `sqlite-wasm-run compose --bake sha3,uuid`")
+            return False, (f"embedded cli not built: {component.relative_to(REPO_ROOT)}; "
+                           f"run `sqlite-wasm-run compose --embed sha3,uuid`")
     else:
         component = CLI_COMPONENT
         if not component.exists():

@@ -49,20 +49,20 @@ fn usage() -> ! {
     eprintln!("       sqlite-wasm-run changeset apply --db PATH --input FILE");
     eprintln!("       sqlite-wasm-run precompile <in.wasm> <out.cwasm>");
     eprintln!("       sqlite-wasm-run compose --list");
-    eprintln!("       sqlite-wasm-run compose --bake NAME[,NAME...] [--output PATH] [--precompile] [--repo-root DIR]");
+    eprintln!("       sqlite-wasm-run compose --embed NAME[,NAME...] [--output PATH] [--precompile] [--repo-root DIR]");
     std::process::exit(2);
 }
 
 /// `compose`  build a custom cli wasm with selected extensions
-/// baked in at compile time. Discovers bakeable extensions by
-/// scanning `<repo-root>/extensions/*` for crates that declare a
-/// `bake` cargo feature in their Cargo.toml and ship a
-/// `src/bake.rs`. Shells out to cargo + wasm-tools; having the
+/// embedded at compile time. Discovers embeddable extensions by
+/// scanning `<repo-root>/extensions/*` for crates that declare an
+/// `embed` cargo feature in their Cargo.toml and ship a
+/// `src/embed.rs`. Shells out to cargo + wasm-tools; having the
 /// orchestration inside the main binary keeps SQLite's single-
 /// executable spirit  one sqlite-wasm-run, every workflow.
 fn run_compose_subcommand(args: &[String]) -> Result<()> {
     let mut list = false;
-    let mut bake: Vec<String> = Vec::new();
+    let mut embed: Vec<String> = Vec::new();
     let mut output: Option<String> = None;
     let mut precompile_after = false;
     let mut repo_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -71,12 +71,12 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
     while i < args.len() {
         match args[i].as_str() {
             "--list" => list = true,
-            "--bake" => {
+            "--embed" => {
                 i += 1;
                 if i >= args.len() {
-                    return Err(anyhow!("--bake expects a comma-separated list"));
+                    return Err(anyhow!("--embed expects a comma-separated list"));
                 }
-                bake = args[i].split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                embed = args[i].split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
             }
             "--output" => {
                 i += 1;
@@ -98,36 +98,36 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
         i += 1;
     }
 
-    let bakeable = discover_bakeable_extensions(&repo_root)?;
+    let embeddable = discover_embeddable_extensions(&repo_root)?;
     if list {
-        if bakeable.is_empty() {
-            eprintln!("(no extensions currently expose a `bake` feature)");
+        if embeddable.is_empty() {
+            eprintln!("(no extensions currently expose an `embed` feature)");
             return Ok(());
         }
-        for name in &bakeable {
+        for name in &embeddable {
             println!("{name}");
         }
         return Ok(());
     }
 
-    if bake.is_empty() {
-        return Err(anyhow!("compose: pass --bake NAME[,...] or --list"));
+    if embed.is_empty() {
+        return Err(anyhow!("compose: pass --embed NAME[,...] or --list"));
     }
-    let missing: Vec<&String> = bake.iter().filter(|n| !bakeable.contains(n)).collect();
+    let missing: Vec<&String> = embed.iter().filter(|n| !embeddable.contains(n)).collect();
     if !missing.is_empty() {
         return Err(anyhow!(
-            "compose: not bakeable: {}\n  Bakeable here: {}",
+            "compose: not embeddable: {}\n  Embeddable here: {}",
             missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
-            bakeable.join(", "),
+            embeddable.join(", "),
         ));
     }
 
-    let features = bake
+    let features = embed
         .iter()
-        .map(|n| format!("bake-{}", n.replace('_', "-")))
+        .map(|n| format!("embed-{}", n.replace('_', "-")))
         .collect::<Vec<_>>()
         .join(",");
-    eprintln!("Baking: {}", bake.join(", "));
+    eprintln!("Embedding: {}", embed.join(", "));
     eprintln!("  cargo build --release -p sqlite-cli --target wasm32-wasip2 --features {features}");
 
     let status = std::process::Command::new("cargo")
@@ -147,7 +147,7 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
     let component_out = output
         .map(PathBuf::from)
         .unwrap_or_else(|| {
-            repo_root.join("target/wasm32-wasip2/release/sqlite_cli_baked.component.wasm")
+            repo_root.join("target/wasm32-wasip2/release/sqlite_cli_embedded.component.wasm")
         });
 
     if let Some(parent) = component_out.parent() {
@@ -185,11 +185,11 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// Discover bakeable extensions by scanning `<repo-root>/extensions/`
-/// for crates whose Cargo.toml has a `bake = [...]` line under
-/// `[features]` AND a `src/bake.rs` file present. Same contract
-/// documented in PLAN-bake-in.md.
-fn discover_bakeable_extensions(repo_root: &std::path::Path) -> Result<Vec<String>> {
+/// Discover embeddable extensions by scanning `<repo-root>/extensions/`
+/// for crates whose Cargo.toml has an `embed = [...]` line under
+/// `[features]` AND a `src/embed.rs` file present. Same contract
+/// documented in PLAN-embed-extensions.md.
+fn discover_embeddable_extensions(repo_root: &std::path::Path) -> Result<Vec<String>> {
     let ext_root = repo_root.join("extensions");
     if !ext_root.exists() {
         return Err(anyhow!(
@@ -205,15 +205,15 @@ fn discover_bakeable_extensions(repo_root: &std::path::Path) -> Result<Vec<Strin
         }
         let dir = entry.path();
         let cargo_toml = dir.join("Cargo.toml");
-        let bake_rs = dir.join("src/bake.rs");
-        if !cargo_toml.exists() || !bake_rs.exists() {
+        let embed_rs = dir.join("src/embed.rs");
+        if !cargo_toml.exists() || !embed_rs.exists() {
             continue;
         }
         let cargo_text = match std::fs::read_to_string(&cargo_toml) {
             Ok(s) => s,
             Err(_) => continue,
         };
-        if cargo_text.contains("\nbake = ") {
+        if cargo_text.contains("\nembed = ") {
             if let Some(name) = dir.file_name().and_then(|s| s.to_str()) {
                 out.push(name.to_string());
             }
@@ -597,7 +597,7 @@ async fn main() -> Result<()> {
         return run_precompile_subcommand(&args[2..]);
     }
     // compose: builds a custom cli wasm with selected extensions
-    // baked in. Same single-executable spirit as sqlite itself.
+    // embedded. Same single-executable spirit as sqlite itself.
     if args[1] == "compose" {
         return run_compose_subcommand(&args[2..]);
     }

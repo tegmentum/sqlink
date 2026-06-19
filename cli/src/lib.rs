@@ -112,36 +112,36 @@ fn ensure_cli_conn() {
             } else {
                 db::Connection::open(&path, db::OpenFlags::DEFAULT).ok()
             };
-            // Run baked-in extension registrations RIGHT AFTER the
+            // Run embedded-extension registrations RIGHT AFTER the
             // connection opens, before any user statement runs. Each
-            // `bake-*` cargo feature pulls in the ext as a Rust dep
+            // `embed-*` cargo feature pulls in the ext as a Rust dep
             // and wires its `register_into(db)` here. No WIT boundary
             // on the hot path for these scalars.
             if let Some(ref conn) = opened {
-                unsafe { register_baked_extensions(conn.raw_handle()) };
+                unsafe { register_embedded_extensions(conn.raw_handle()) };
             }
             *g = opened;
         }
     });
 }
 
-/// Called once per cli connection open. Each `bake-<name>` cargo
+/// Called once per cli connection open. Each `embed-<name>` cargo
 /// feature compiles in one block below. The body is intentionally
-/// trivial  pile every bakeable extension in here; the feature
+/// trivial  pile every embeddable extension in here; the feature
 /// gate decides what reaches the binary.
-unsafe fn register_baked_extensions(_db: *mut libsqlite3_sys::sqlite3) {
-    #[cfg(feature = "bake-sha3")]
+unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
+    #[cfg(feature = "embed-sha3")]
     {
-        let rc = sha3_extension::bake::register_into(_db);
+        let rc = sha3_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("bake-sha3: register_into failed rc={rc}");
+            eprintln!("embed-sha3: register_into failed rc={rc}");
         }
     }
-    #[cfg(feature = "bake-uuid")]
+    #[cfg(feature = "embed-uuid")]
     {
-        let rc = uuid_extension::bake::register_into(_db);
+        let rc = uuid_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("bake-uuid: register_into failed rc={rc}");
+            eprintln!("embed-uuid: register_into failed rc={rc}");
         }
     }
 }

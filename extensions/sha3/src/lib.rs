@@ -4,11 +4,11 @@
 //!
 //!   * the `wasm_export` module produces a wasi-p2 component
 //!     loadable at runtime via `.load <ext.wasm>`.
-//!   * the `bake` module exposes a `register_into(db)` entry
+//!   * the `embed` module exposes a `register_into(db)` entry
 //!     that registers the same scalars directly via
 //!     `sqlite3_create_function_v2`. The cli optionally
-//!     `dep:sha3-extension` + calls this at startup to bake the
-//!     ext in at build time, eliminating the WIT boundary cost
+//!     `dep:sha3-extension` + calls this at startup to embed the
+//!     ext at build time, eliminating the WIT boundary cost
 //!     measured in PLAN-benchmarks.md (~2.7 us/call).
 
 extern crate alloc;
@@ -17,7 +17,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 /// Core algorithm  reuseable by both the WIT export and the
-/// native-register bake path. Hash `data` with SHA-3 at `bits`
+/// native-register embed path. Hash `data` with SHA-3 at `bits`
 /// output size; raw bytes; None on unsupported bit size. Matches
 /// the size selection in SQLite's shathree.c: 224, 256, 384, 512.
 pub fn sha3_bytes(data: &[u8], bits: u32) -> Option<Vec<u8>> {
@@ -31,17 +31,17 @@ pub fn sha3_bytes(data: &[u8], bits: u32) -> Option<Vec<u8>> {
     }
 }
 
-#[cfg(feature = "bake")]
-pub mod bake;
+#[cfg(feature = "embed")]
+pub mod embed;
 
 // `wasm_export` is the WIT-component build path: defines
 // `bindings::export!` which lowers to `sqlite:extension/metadata`
 // + `scalar-function` exports. When the cli pulls this in for
-// bake-in, those exports collide with any other baked extension's
-// (they all advertise the same WIT interface). Gate it off in
-// the bake build  the algorithm reaches the cli via `pub mod bake`
-// instead.
-#[cfg(all(target_arch = "wasm32", not(feature = "bake")))]
+// embedding, those exports collide with any other embedded
+// extension's (they all advertise the same WIT interface). Gate
+// it off in the embed build  the algorithm reaches the cli via
+// `pub mod embed` instead.
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::format;
     use alloc::string::{String, ToString};
@@ -71,7 +71,7 @@ mod wasm_export {
     struct Ext;
 
     // Reuses crate-level sha3_bytes  same algorithm path the
-    // bake-in registration uses, so a baked sha3() can't drift
+    // embed registration uses, so an embedded sha3() can't drift
     // from the .load'd sha3().
     use super::sha3_bytes;
 

@@ -47,10 +47,10 @@ WASM_COMPONENT = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cl
 # via Component::deserialize_file instead of Component::from_binary,
 # saving ~360 ms of startup per invocation.
 WASM_COMPONENT_CWASM = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.cwasm"
-# Baked variant produced by `compose-cli.py --bake ... [--precompile]`.
-# Used by BAKED_WORKLOADS.
-WASM_COMPONENT_BAKED = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_baked.component.wasm"
-WASM_COMPONENT_BAKED_CWASM = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_baked.component.cwasm"
+# Embedded variant produced by `sqlite-wasm-run compose --embed
+# ... [--precompile]`. Used by EMBEDDED_WORKLOADS.
+WASM_COMPONENT_EMBEDDED = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_embedded.component.wasm"
+WASM_COMPONENT_EMBEDDED_CWASM = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_embedded.component.cwasm"
 NATIVE_BIN = "sqlite3"
 REPEATS = 5
 DEFAULT_SIZES = [1_000, 10_000, 100_000]
@@ -193,7 +193,7 @@ def _gen_ext_scalar_sql(n: int) -> str:
 def _gen_ext_uuid_sql(n: int) -> str:
     """Same shape as ext-scalar but exercises uuid scalars instead
     of sha3. `uuidv4` is non-deterministic + no input  pure dispatch
-    cost. Pair with `baked-uuid-scalar`."""
+    cost. Pair with `embedded-uuid-scalar`."""
     rows = [f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});" for i in range(n)]
     return "\n".join([
         ".load extensions/uuid/target/wasm32-wasip2/release/uuid_extension.component.wasm",
@@ -205,9 +205,9 @@ def _gen_ext_uuid_sql(n: int) -> str:
     ]) + "\n"
 
 
-def _gen_baked_uuid_sql(n: int) -> str:
-    """Same workload as ext-uuid-scalar but uses the baked variant.
-    Pair them to read the uuid bake-in delta."""
+def _gen_embedded_uuid_sql(n: int) -> str:
+    """Same workload as ext-uuid-scalar but uses the embedded variant.
+    Pair them to read the uuid embed delta."""
     rows = [f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});" for i in range(n)]
     return "\n".join([
         "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, val INTEGER);",
@@ -218,14 +218,14 @@ def _gen_baked_uuid_sql(n: int) -> str:
     ]) + "\n"
 
 
-def _gen_baked_scalar_sql(n: int) -> str:
-    """Same workload as ext-scalar but assumes sha3 is BAKED IN
-    via `compose-cli.py --bake sha3`. No `.load`  the scalar is
-    registered at cli startup via sqlite3_create_function. Pairs
-    with ext-scalar  the delta IS the WIT boundary cost.
+def _gen_embedded_scalar_sql(n: int) -> str:
+    """Same workload as ext-scalar but assumes sha3 is EMBEDDED at
+    build time via `sqlite-wasm-run compose --embed sha3`. No
+    `.load`  the scalar is registered at cli startup via
+    sqlite3_create_function. Pairs with ext-scalar  the delta IS
+    the WIT boundary cost.
 
-    Use with --bake-component=PATH or the bench picks the default
-    sqlite_cli_baked.component.{wasm,cwasm}."""
+    The bench picks sqlite_cli_embedded.component.{wasm,cwasm}."""
     rows = [f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});" for i in range(n)]
     return "\n".join([
         "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, val INTEGER);",
@@ -247,19 +247,20 @@ WORKLOADS = {
     "join":     ("Hash join (N x N/100)", _gen_join_sql),
     "builtin-scalar": ("N rows  builtin scalar (length); no WIT", _gen_builtin_scalar_sql),
     "ext-scalar": ("N rows  WIT extension scalar (sha3_256); wasm-only", _gen_ext_scalar_sql),
-    "baked-scalar": ("N rows  BAKED sha3_256 (sqlite3_create_function); wasm-only", _gen_baked_scalar_sql),
+    "embedded-scalar": ("N rows  EMBEDDED sha3_256 (sqlite3_create_function); wasm-only", _gen_embedded_scalar_sql),
     "ext-uuid-scalar": ("N rows  WIT uuidv4; wasm-only", _gen_ext_uuid_sql),
-    "baked-uuid-scalar": ("N rows  BAKED uuidv4; wasm-only", _gen_baked_uuid_sql),
+    "embedded-uuid-scalar": ("N rows  EMBEDDED uuidv4; wasm-only", _gen_embedded_uuid_sql),
 }
 
 # Workloads that don't run on native sqlite3 (use cli-only features
 # like `.load EXT.wasm`). run_workload returns (NaN, wasm_time) for
 # these and the reporter skips the ratio.
-WASM_ONLY_WORKLOADS = {"ext-scalar", "baked-scalar", "ext-uuid-scalar", "baked-uuid-scalar"}
+WASM_ONLY_WORKLOADS = {"ext-scalar", "embedded-scalar", "ext-uuid-scalar", "embedded-uuid-scalar"}
 
-# Workloads that REQUIRE the baked cli (sqlite_cli_baked.component.*).
-# When one of these runs, the wasm side swaps to the baked component.
-BAKED_WORKLOADS = {"baked-scalar", "baked-uuid-scalar"}
+# Workloads that REQUIRE the embedded cli
+# (sqlite_cli_embedded.component.*). When one of these runs, the
+# wasm side swaps to the embedded component.
+EMBEDDED_WORKLOADS = {"embedded-scalar", "embedded-uuid-scalar"}
 
 
 def time_native(db_path: str, sql: str) -> float:
@@ -308,13 +309,14 @@ def run_workload(
     use_cwasm: bool = False,
 ) -> tuple[float, float]:
     """Return (native_median_s, wasm_median_s) for one workload+size.
-    use_cwasm=True swaps in the precompiled component. Baked workloads
-    swap in the bake-compiled component (sqlite_cli_baked.component).
+    use_cwasm=True swaps in the precompiled component. Embedded
+    workloads swap in the embed-compiled component
+    (sqlite_cli_embedded.component).
     For wasm-only workloads native_median_s is float('nan')."""
     desc, gen = WORKLOADS[workload]
     sql = gen(size)
-    if workload in BAKED_WORKLOADS:
-        component = WASM_COMPONENT_BAKED_CWASM if use_cwasm else WASM_COMPONENT_BAKED
+    if workload in EMBEDDED_WORKLOADS:
+        component = WASM_COMPONENT_EMBEDDED_CWASM if use_cwasm else WASM_COMPONENT_EMBEDDED
     else:
         component = WASM_COMPONENT_CWASM if use_cwasm else WASM_COMPONENT
     wasm_only = workload in WASM_ONLY_WORKLOADS

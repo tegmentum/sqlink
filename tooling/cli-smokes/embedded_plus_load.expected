@@ -1,12 +1,12 @@
-# baked sha3_256: hash hex length is 64
+# embedded sha3_256: hash hex length is 64
 1
-# baked uuid_validate(uuidv4()) = 1
+# embedded uuid_validate(uuidv4()) = 1
 1
-# baked composition: length(sha3_256(uuidv4())) = 64
+# embedded composition: length(sha3_256(uuidv4())) = 64
 1
 # .load eval reports a load banner; harness keeps it in the stream
 Loaded extension: eval 0.1.0 from extensions/eval/target/wasm32-wasip2/release/eval_extension.component.wasm (2 registered: 2 scalar)
 # .load'd eval returns its scalar result
 7
-# baked + .load'd composed: length(eval('SELECT ''sha3hex''')) = 64
+# embedded + .load'd composed: length(eval('SELECT ''sha3hex''')) = 64
 1
