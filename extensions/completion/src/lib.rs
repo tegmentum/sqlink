@@ -8,9 +8,10 @@
 //!
 //! Source completion.c categorizes by phase (1-7) covering keywords,
 //! pragmas, functions, collations, attached databases, tables, and
-//! columns. This port covers phases 1-4 (the hardcoded ones); phases
-//! 5-7 (databases/tables/columns) would need schema introspection
-//! via spi  deferred per T-41.
+//! columns. Phases 1-4 are hardcoded; phases 5-7 query the host
+//! db via spi (T-41 phases 5-7). spi failures are absorbed silently
+//! so phases 1-4 always work even on a fresh extension load
+//! (e.g. before any table exists).
 
 extern crate alloc;
 
@@ -37,6 +38,7 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::vtab::{
         ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
     };
+    use bindings::sqlite::extension::spi;
     use bindings::sqlite::extension::types::SqlValue;
 
     const VTAB_ID_COMPLETION: u64 = 1;
@@ -153,6 +155,79 @@ mod wasm_export {
     /// Built-in collations (phase 4).
     const COLLATIONS: &[&str] = &["BINARY", "NOCASE", "RTRIM"];
 
+    /// Run a single-column SELECT, push every row's column-0 TEXT into
+    /// `out` tagged with `phase`. Silently absorbs spi errors  the
+    /// schema may be inaccessible (e.g. spi capability denied, or
+    /// :memory: db with no host bridge) and phases 5-7 should
+    /// degrade quietly to "no candidates from this phase".
+    fn push_spi_rows(out: &mut Vec<(String, i64)>, sql: &str, phase: i64) {
+        if let Ok(result) = spi::execute(sql, &[]) {
+            for row in &result.rows {
+                if let Some(SqlValue::Text(s)) = row.first() {
+                    out.push((s.clone(), phase));
+                }
+            }
+        }
+    }
+
+    /// Phase 5: attached database names (main, temp, + ATTACH'd).
+    fn gather_databases(out: &mut Vec<(String, i64)>) {
+        push_spi_rows(out, "SELECT name FROM pragma_database_list", 5);
+    }
+
+    /// Phase 6: table names across main + temp.
+    fn gather_tables(out: &mut Vec<(String, i64)>) {
+        push_spi_rows(
+            out,
+            "SELECT name FROM sqlite_master WHERE type='table' \
+             UNION ALL \
+             SELECT name FROM sqlite_temp_master WHERE type='table'",
+            6,
+        );
+    }
+
+    /// Phase 7: column names from every table in main + temp.
+    /// pragma_table_info is queryable as a vtab via the eponymous
+    /// `pragma_table_info('<tbl>')` form. One spi call per table.
+    fn gather_columns(out: &mut Vec<(String, i64)>) {
+        let mut tables: Vec<String> = Vec::new();
+        if let Ok(result) = spi::execute(
+            "SELECT name FROM sqlite_master WHERE type='table' \
+             UNION ALL \
+             SELECT name FROM sqlite_temp_master WHERE type='table'",
+            &[],
+        ) {
+            for row in &result.rows {
+                if let Some(SqlValue::Text(s)) = row.first() {
+                    tables.push(s.clone());
+                }
+            }
+        }
+        for t in tables {
+            let sql = format!(
+                "SELECT name FROM pragma_table_info({})",
+                quote_sql_string(&t),
+            );
+            push_spi_rows(out, &sql, 7);
+        }
+    }
+
+    /// Wrap a string for safe inclusion as a SQL literal: '' escapes
+    /// single quotes inside. Used to feed table names into
+    /// pragma_table_info without dynamic SQL injection risk
+    /// (table names come from sqlite_master so are technically
+    /// trusted, but no-cost paranoia).
+    fn quote_sql_string(s: &str) -> String {
+        let mut out = String::with_capacity(s.len() + 2);
+        out.push('\'');
+        for ch in s.chars() {
+            if ch == '\'' { out.push('\''); }
+            out.push(ch);
+        }
+        out.push('\'');
+        out
+    }
+
     fn all_candidates() -> Vec<(String, i64)> {
         let mut out = Vec::with_capacity(
             KEYWORDS.len() + PRAGMAS.len() + FUNCTIONS.len() + COLLATIONS.len()
@@ -161,6 +236,9 @@ mod wasm_export {
         for p in PRAGMAS  { out.push((p.to_string(), 2)); }
         for f in FUNCTIONS { out.push((f.to_string(), 3)); }
         for c in COLLATIONS { out.push((c.to_string(), 4)); }
+        gather_databases(&mut out);
+        gather_tables(&mut out);
+        gather_columns(&mut out);
         out
     }
 

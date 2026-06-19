@@ -1,8 +1,7 @@
-# Port of SQLite ext/misc/completion.c vtab. Phases 1-4 (keyword,
-# pragma, function, collation) covered; phases 5-7 (database, table,
-# column) would need schema introspection via spi (deferred T-41).
-# Total candidate count = 148 keywords + 60 pragmas + 88 functions
-# + 3 collations = 299. Prefix filter is case-insensitive.
+# Port of SQLite ext/misc/completion.c vtab.
+# Phases 1-4 (keyword, pragma, function, collation) hardcoded;
+# phases 5-7 (database, table, column) via spi (T-41).
+# Phase 1-4 total = 148 + 60 + 88 + 3 = 299.
 299
 SELECT
 SELECT
@@ -18,3 +17,11 @@ NOCASE|4
 2|4
 3|2
 0
+# Phase 5: attached database names
+main|5
+temp|5
+# Phase 6: table we just created
+customer_order|6
+# Phase 7: columns
+customer_name|7
+total|7

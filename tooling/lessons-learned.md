@@ -3127,6 +3127,16 @@ spi::execute against `pragma_table_list` / `pragma_table_info`
 columns, and registered collations. Deferred until a real
 caller asks; the spi dependency means the smoke would hit
 the same :memory: constraint as eval (T-40).
+- (T-41 closed) Shipped phases 5-7. Uses spi::execute against
+pragma_database_list, sqlite_master + sqlite_temp_master, and
+pragma_table_info for each known table. spi.execute errors are
+absorbed silently  on :memory: dbs the spi call fails
+(host/cli connections aren't shared) and phases 5-7 contribute
+zero, which is the right degrade-quietly behavior. Smoke now
+uses `-- smoke-db: tempfile` and asserts phase-5 main/temp,
+phase-6 table name, and phase-7 column names against a
+seeded customer_order table. Code: ~60 LOC of helpers
+(gather_databases / gather_tables / gather_columns).
 Plugin count 118  119. This closes the major remaining
 ext/misc/ port  the catalog now covers every named SQLite
 extension that translates cleanly to wasm.
