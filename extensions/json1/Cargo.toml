@@ -36,6 +36,13 @@ publish = false
 # can drive the pure-Rust funcs / path modules natively.
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# Enables src/embed.rs + the libsqlite3-sys + sqlite-embed deps so
+# the cli can compile json1's scalars in directly via
+# sqlite3_create_function_v2. WIT component build is unaffected;
+# default-off.
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
 [dependencies]
 # Same wit-bindgen pair the cli + sqlite-pcache-tvm use. The
 # generate! macro lives in src/lib.rs against world="minimal" in
@@ -46,3 +53,5 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 # alloc-only so the wasi-p2 binary stays lean and we don't depend
 # on the std-only `IndexMap` path.
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

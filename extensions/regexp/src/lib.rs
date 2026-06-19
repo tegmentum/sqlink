@@ -8,7 +8,10 @@
 
 extern crate alloc;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "embed")]
+pub mod embed;
+
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::string::{String, ToString};
     use alloc::vec::Vec;

@@ -6,6 +6,9 @@
 
 extern crate alloc;
 
+#[cfg(feature = "embed")]
+pub mod embed;
+
 pub mod funcs;
 pub mod path;
 
@@ -13,7 +16,10 @@ pub mod path;
 // macros emit `extern` symbols that don't link on the native
 // `cargo test` build. The pure funcs / path modules stay native-
 // reachable so unit tests can drive them without a runtime.
-#[cfg(target_arch = "wasm32")]
+// Gated off when `embed` is on so two embedded extensions don't
+// both export the duplicate `sqlite:extension/metadata#describe`
+// symbol via `bindings::export!`  see PLAN-embed-extensions.md.
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::vec::Vec;
 

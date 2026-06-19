@@ -29,10 +29,20 @@ rather than raising so SQL composition stays clean.
 license = "MIT"
 publish = false
 
-[workspace]
+# NOTE: [workspace] removed so the cli's embed-idna path dep can
+# reach this crate from the parent workspace; same pattern as
+# sha3-extension. `make ext NAME=idna` still builds the wasi
+# component fine. See PLAN-embed-extensions.md.
 
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+# Enables src/embed.rs + the libsqlite3-sys + sqlite-embed deps so
+# the cli can compile idna's scalars in directly via
+# sqlite3_create_function_v2. WIT component build is unaffected;
+# default-off.
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
@@ -43,3 +53,5 @@ idna = { version = "1", default-features = false, features = [
     "compiled_data",
     "alloc",
 ] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

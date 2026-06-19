@@ -39,10 +39,11 @@ Use cases:
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
@@ -50,3 +51,5 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 cron = { version = "0.16", default-features = false }
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 serde_json = "1"
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

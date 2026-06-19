@@ -193,6 +193,48 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-hexdump: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-idna")]
+    {
+        let rc = idna_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-idna: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-faker")]
+    {
+        let rc = faker_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-faker: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-regexp")]
+    {
+        let rc = regexp_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-regexp: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-sentiment")]
+    {
+        let rc = sentiment_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-sentiment: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-json1")]
+    {
+        let rc = json1_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-json1: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-cron")]
+    {
+        let rc = cron_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-cron: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

@@ -72,21 +72,33 @@ color-extension = { path = "../extensions/color", optional = true, features = ["
 ean-extension     = { path = "../extensions/ean",     optional = true, features = ["embed"], default-features = false }
 emoji-extension   = { path = "../extensions/emoji",   optional = true, features = ["embed"], default-features = false }
 morse-extension   = { path = "../extensions/morse",   optional = true, features = ["embed"], default-features = false }
-hexdump-extension = { path = "../extensions/hexdump", optional = true, features = ["embed"], default-features = false }
+hexdump-extension   = { path = "../extensions/hexdump",   optional = true, features = ["embed"], default-features = false }
+idna-extension      = { path = "../extensions/idna",      optional = true, features = ["embed"], default-features = false }
+faker-extension     = { path = "../extensions/faker",     optional = true, features = ["embed"], default-features = false }
+regexp-extension    = { path = "../extensions/regexp",    optional = true, features = ["embed"], default-features = false }
+sentiment-extension = { path = "../extensions/sentiment", optional = true, features = ["embed"], default-features = false }
+json1-extension     = { path = "../extensions/json1",     optional = true, features = ["embed"], default-features = false }
+cron-extension      = { path = "../extensions/cron",      optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
 # feature flag so users can compose exactly what they want. Default
 # build has NONE of them on  identical to the pre-embed cli.
-embed-sha3    = ["dep:sha3-extension"]
-embed-uuid    = ["dep:uuid-extension"]
-embed-crc     = ["dep:crc-extension"]
-embed-baseN   = ["dep:baseN-extension"]
-embed-color   = ["dep:color-extension"]
-embed-ean     = ["dep:ean-extension"]
-embed-emoji   = ["dep:emoji-extension"]
-embed-morse   = ["dep:morse-extension"]
-embed-hexdump = ["dep:hexdump-extension"]
+embed-sha3      = ["dep:sha3-extension"]
+embed-uuid      = ["dep:uuid-extension"]
+embed-crc       = ["dep:crc-extension"]
+embed-baseN     = ["dep:baseN-extension"]
+embed-color     = ["dep:color-extension"]
+embed-ean       = ["dep:ean-extension"]
+embed-emoji     = ["dep:emoji-extension"]
+embed-morse     = ["dep:morse-extension"]
+embed-hexdump   = ["dep:hexdump-extension"]
+embed-idna      = ["dep:idna-extension"]
+embed-faker     = ["dep:faker-extension"]
+embed-regexp    = ["dep:regexp-extension"]
+embed-sentiment = ["dep:sentiment-extension"]
+embed-json1     = ["dep:json1-extension"]
+embed-cron      = ["dep:cron-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run
