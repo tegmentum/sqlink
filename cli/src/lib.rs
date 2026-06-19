@@ -508,6 +508,62 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-codecs: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-radix")]
+    {
+        let rc = radix_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-radix: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-natsort")]
+    {
+        let rc = natsort_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-natsort: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-unitconv")]
+    {
+        let rc = unitconv_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-unitconv: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-latlon")]
+    {
+        let rc = latlon_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-latlon: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-vin")]
+    {
+        let rc = vin_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-vin: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-ieee754")]
+    {
+        let rc = ieee754_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-ieee754: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-escape")]
+    {
+        let rc = escape_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-escape: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-iban")]
+    {
+        let rc = iban_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-iban: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

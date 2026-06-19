@@ -118,6 +118,14 @@ semver-extension       = { path = "../extensions/semver",       optional = true,
 container-extension    = { path = "../extensions/container",    optional = true, features = ["embed"], default-features = false }
 currency-extension     = { path = "../extensions/currency",     optional = true, features = ["embed"], default-features = false }
 codecs-extension       = { path = "../extensions/codecs",       optional = true, features = ["embed"], default-features = false }
+radix-extension       = { path = "../extensions/radix",     optional = true, features = ["embed"], default-features = false }
+natsort-extension     = { path = "../extensions/natsort",   optional = true, features = ["embed"], default-features = false }
+unitconv-extension    = { path = "../extensions/unitconv",  optional = true, features = ["embed"], default-features = false }
+latlon-extension      = { path = "../extensions/latlon",    optional = true, features = ["embed"], default-features = false }
+vin-extension         = { path = "../extensions/vin",       optional = true, features = ["embed"], default-features = false }
+ieee754-extension     = { path = "../extensions/ieee754",   optional = true, features = ["embed"], default-features = false }
+escape-extension      = { path = "../extensions/escape",    optional = true, features = ["embed"], default-features = false }
+iban-extension        = { path = "../extensions/iban",      optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -177,6 +185,14 @@ embed-semver       = ["dep:semver-extension"]
 embed-container    = ["dep:container-extension"]
 embed-currency     = ["dep:currency-extension"]
 embed-codecs       = ["dep:codecs-extension"]
+embed-radix      = ["dep:radix-extension"]
+embed-natsort    = ["dep:natsort-extension"]
+embed-unitconv   = ["dep:unitconv-extension"]
+embed-latlon     = ["dep:latlon-extension"]
+embed-vin        = ["dep:vin-extension"]
+embed-ieee754    = ["dep:ieee754-extension"]
+embed-escape     = ["dep:escape-extension"]
+embed-iban       = ["dep:iban-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

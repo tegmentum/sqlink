@@ -1159,6 +1159,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "escape-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "eval-extension"
 version = "0.1.0"
 dependencies = [
@@ -1738,6 +1748,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "iban-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "ical-extension"
 version = "0.1.0"
 dependencies = [
@@ -1880,6 +1900,16 @@ checksum = "cb68373c0d6620ef8105e855e7745e18b0d00d3bdb07fb532e434244cdb9a714"
 dependencies = [
  "icu_normalizer",
  "icu_properties",
+]
+
+[[package]]
+name = "ieee754-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]
@@ -2114,6 +2144,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cb26cec98cce3a3d96cbb7bced3c4b16e3d13f27ec56dbd62cbc8f39cfb9d653"
 dependencies = [
  "cpufeatures 0.2.17",
+]
+
+[[package]]
+name = "latlon-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]
@@ -2358,6 +2398,16 @@ dependencies = [
 
 [[package]]
 name = "morse-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
+name = "natsort-extension"
 version = "0.1.0"
 dependencies = [
  "libsqlite3-sys",
@@ -2826,6 +2876,16 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "radix-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
 
 [[package]]
 name = "rand"
@@ -3523,6 +3583,7 @@ dependencies = [
  "ean-extension",
  "email-extension",
  "emoji-extension",
+ "escape-extension",
  "eval-extension",
  "faker-extension",
  "fileio-extension",
@@ -3530,22 +3591,27 @@ dependencies = [
  "graphql-extension",
  "hexdump-extension",
  "http-extension",
+ "iban-extension",
  "ical-extension",
  "idna-extension",
+ "ieee754-extension",
  "ipaddr-extension",
  "isbn-extension",
  "isin-extension",
  "iso-extension",
  "json1-extension",
+ "latlon-extension",
  "libsqlite3-sys",
  "lorem-extension",
  "mac-extension",
  "mailto-extension",
  "miniz_oxide",
  "morse-extension",
+ "natsort-extension",
  "numfmt-extension",
  "phone-extension",
  "postcode-extension",
+ "radix-extension",
  "regexp-extension",
  "roman-extension",
  "semver-extension",
@@ -3561,8 +3627,10 @@ dependencies = [
  "ssn-extension",
  "template-extension",
  "totype-extension",
+ "unitconv-extension",
  "url-extension",
  "uuid-extension",
+ "vin-extension",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",
  "zorder-extension",
@@ -4156,6 +4224,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
+name = "unitconv-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "unsafe-libyaml"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4242,6 +4320,16 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vin-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
 
 [[package]]
 name = "want"

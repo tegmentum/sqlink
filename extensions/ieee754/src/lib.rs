@@ -12,6 +12,9 @@
 
 extern crate alloc;
 
+#[cfg(feature = "embed")]
+pub mod embed;
+
 pub fn split(r: f64) -> (i64, i64) {
     if !r.is_finite() || r == 0.0 {
         return (0, 0);
@@ -117,7 +120,7 @@ mod tests {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::string::{String, ToString};
     use alloc::vec::Vec;
