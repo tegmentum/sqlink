@@ -1,0 +1,10 @@
+# decimal_add('1.5','2.5')
+4.0
+# decimal_sub('10.00','3.25')
+6.75
+# decimal_mul('2.5','4')
+10.0
+# decimal_cmp('1.10','1.1')
+0
+# decimal_sum(0.1+0.2+0.3) exact
+0.6

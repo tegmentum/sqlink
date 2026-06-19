@@ -1,0 +1,14 @@
+# var_pop(1..5)
+2
+# var_samp(1..5)
+2.5
+# median(1..5)
+3
+# stddev_pop(1..5) = sqrt(2)
+1.414214
+# regr_slope y=2x
+2
+# regr_intercept y=2x
+0
+# regr_r2 y=2x
+1

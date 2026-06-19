@@ -135,22 +135,39 @@ Update after each commit.
        D/E architecture work was "don't ship speculative
        contracts."
 
-## Item 4 follow-up: aggregate-extension load bug
+## Item 4 follow-up: aggregate-extension load bug  RESOLVED
 
 Surfaced while stress-testing hot-reload across worlds. Loading
 any extension that uses the `stateful` world for aggregates
-fails with:
+failed with:
 
   Error loading <path>: instantiate loaded ext:
   failed to convert function to given type (code 1)
 
-Affects: hyperloglog, count_min, sketches (verified). decimal /
-stats build into workspace target paths so weren't tested here.
+Affected: hyperloglog, count_min, sketches, decimal, stats  all
+5 stateful-world extensions.
 
-This is wasmtime-level type-mismatch on one of the aggregate
-WIT functions  it predates this session's work and isn't a
-hot-reload-specific issue. Worth investigating in its own pass
-because the catalog claims aggregate support; ~half a day.
+Root cause: stale component artifacts. Commit a25be4d
+(Jun 16 2026) added `capability::dns` to `policy.capability`,
+changing the variant from 11 to 12 cases. The 5 affected
+extensions were last touched Jun 17 in b2dd18b (cute-name
+rename) which didn't trigger a rebuild. The on-disk components
+still carried the 11-variant variant; the host bindgen now
+expects 12 cases. wasmtime's component instantiation conversion
+walks every type in every export's signature  `metadata.describe`
+returns a Manifest with `list<capability>`, so the variant
+shape was on the conversion hot path  instantiation rejected.
+
+Fix: rebuild the 5 extensions against current WIT. All 5 load
+cleanly post-rebuild and aggregate end-to-end as designed
+(hll cardinality, CMS estimate, t-digest quantile, decimal_sum,
+regr_r2 all verified). Wrote smoke.sql + smoke.expected for
+each  the regression class (stale build vs evolving WIT) was
+silent specifically because these 5 had no smoke tests. With
+smokes in place a future variant change that drops the rebuild
+is now an explicit FAIL in `make ext-smoke-all`.
+
+Total catalog smokes: 40  45.
 
 ## Item 3 detail: WAL on WASI
 

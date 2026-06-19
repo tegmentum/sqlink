@@ -1,0 +1,8 @@
+# version probe
+1
+# t-digest p50 of 1..100 within 5 of 50
+1
+# t-digest count of 100 rows
+100
+# minhash self-jaccard = 1.0
+1
