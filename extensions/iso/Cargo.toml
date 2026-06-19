@@ -35,10 +35,11 @@ language" pipelines and `phone.phone_region` for
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
@@ -46,3 +47,5 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 rust_iso3166 = "0.1"
 iso_currency = "0.5"
 isolang = "2"
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

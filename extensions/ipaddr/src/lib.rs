@@ -2,6 +2,9 @@
 
 extern crate alloc;
 
+#[cfg(feature = "embed")]
+pub mod embed;
+
 use alloc::string::{String, ToString};
 use core::net::IpAddr;
 use core::str::FromStr;
@@ -83,7 +86,7 @@ mod tests {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::format;
     use alloc::string::{String, ToString};

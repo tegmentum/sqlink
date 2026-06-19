@@ -79,6 +79,12 @@ regexp-extension    = { path = "../extensions/regexp",    optional = true, featu
 sentiment-extension = { path = "../extensions/sentiment", optional = true, features = ["embed"], default-features = false }
 json1-extension     = { path = "../extensions/json1",     optional = true, features = ["embed"], default-features = false }
 cron-extension      = { path = "../extensions/cron",      optional = true, features = ["embed"], default-features = false }
+crypto-extension    = { path = "../extensions/crypto",    optional = true, features = ["embed"], default-features = false }
+mailto-extension    = { path = "../extensions/mailto",    optional = true, features = ["embed"], default-features = false }
+iso-extension       = { path = "../extensions/iso",       optional = true, features = ["embed"], default-features = false }
+ssn-extension       = { path = "../extensions/ssn",       optional = true, features = ["embed"], default-features = false }
+numfmt-extension    = { path = "../extensions/numfmt",    optional = true, features = ["embed"], default-features = false }
+ipaddr-extension    = { path = "../extensions/ipaddr",    optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -99,6 +105,12 @@ embed-regexp    = ["dep:regexp-extension"]
 embed-sentiment = ["dep:sentiment-extension"]
 embed-json1     = ["dep:json1-extension"]
 embed-cron      = ["dep:cron-extension"]
+embed-crypto    = ["dep:crypto-extension"]
+embed-mailto    = ["dep:mailto-extension"]
+embed-iso       = ["dep:iso-extension"]
+embed-ssn       = ["dep:ssn-extension"]
+embed-numfmt    = ["dep:numfmt-extension"]
+embed-ipaddr    = ["dep:ipaddr-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

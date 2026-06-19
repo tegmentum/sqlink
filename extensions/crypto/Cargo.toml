@@ -18,6 +18,9 @@ publish = false
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
@@ -26,3 +29,5 @@ sha2 = { version = "0.10", default-features = false }
 md-5 = { version = "0.10", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
 base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }
