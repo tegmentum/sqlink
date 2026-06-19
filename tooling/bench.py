@@ -190,6 +190,34 @@ def _gen_ext_scalar_sql(n: int) -> str:
     ]) + "\n"
 
 
+def _gen_ext_uuid_sql(n: int) -> str:
+    """Same shape as ext-scalar but exercises uuid scalars instead
+    of sha3. `uuidv4` is non-deterministic + no input  pure dispatch
+    cost. Pair with `baked-uuid-scalar`."""
+    rows = [f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});" for i in range(n)]
+    return "\n".join([
+        ".load extensions/uuid/target/wasm32-wasip2/release/uuid_extension.component.wasm",
+        "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, val INTEGER);",
+        "BEGIN;",
+        *rows,
+        "COMMIT;",
+        "SELECT sum(length(uuidv4())) FROM t;",
+    ]) + "\n"
+
+
+def _gen_baked_uuid_sql(n: int) -> str:
+    """Same workload as ext-uuid-scalar but uses the baked variant.
+    Pair them to read the uuid bake-in delta."""
+    rows = [f"INSERT INTO t VALUES({i}, 'row-{i}', {i * 7});" for i in range(n)]
+    return "\n".join([
+        "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT, val INTEGER);",
+        "BEGIN;",
+        *rows,
+        "COMMIT;",
+        "SELECT sum(length(uuidv4())) FROM t;",
+    ]) + "\n"
+
+
 def _gen_baked_scalar_sql(n: int) -> str:
     """Same workload as ext-scalar but assumes sha3 is BAKED IN
     via `compose-cli.py --bake sha3`. No `.load`  the scalar is
@@ -220,16 +248,18 @@ WORKLOADS = {
     "builtin-scalar": ("N rows  builtin scalar (length); no WIT", _gen_builtin_scalar_sql),
     "ext-scalar": ("N rows  WIT extension scalar (sha3_256); wasm-only", _gen_ext_scalar_sql),
     "baked-scalar": ("N rows  BAKED sha3_256 (sqlite3_create_function); wasm-only", _gen_baked_scalar_sql),
+    "ext-uuid-scalar": ("N rows  WIT uuidv4; wasm-only", _gen_ext_uuid_sql),
+    "baked-uuid-scalar": ("N rows  BAKED uuidv4; wasm-only", _gen_baked_uuid_sql),
 }
 
 # Workloads that don't run on native sqlite3 (use cli-only features
 # like `.load EXT.wasm`). run_workload returns (NaN, wasm_time) for
 # these and the reporter skips the ratio.
-WASM_ONLY_WORKLOADS = {"ext-scalar", "baked-scalar"}
+WASM_ONLY_WORKLOADS = {"ext-scalar", "baked-scalar", "ext-uuid-scalar", "baked-uuid-scalar"}
 
 # Workloads that REQUIRE the baked cli (sqlite_cli_baked.component.*).
 # When one of these runs, the wasm side swaps to the baked component.
-BAKED_WORKLOADS = {"baked-scalar"}
+BAKED_WORKLOADS = {"baked-scalar", "baked-uuid-scalar"}
 
 
 def time_native(db_path: str, sql: str) -> float:

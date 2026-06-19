@@ -19,17 +19,19 @@ wasi component model at runtime.
 
 ## Bench: WIT vs baked
 
-Same workload (`SELECT sum(length(sha3_256(name))) FROM t`),
-100k rows, 5 trials, median, `.cwasm` (precompiled):
+Same workload, 100k rows, 5 trials, median, `.cwasm`
+(precompiled). Two extensions, same pattern:
 
-| Path | wasm | per-row marginal |
-|---|---:|---:|
-| `ext-scalar`  via `.load EXT.wasm` (WIT) | 951 ms | 9.5 us |
-| `baked-scalar`  baked at compile time | 679 ms | 6.8 us |
+| Workload | WIT `.load` | Baked | Saved |
+|---|---:|---:|---:|
+| `SELECT sum(length(sha3_256(name))) FROM t` | 951 ms | 679 ms | 272 ms (29%) |
+| `SELECT sum(length(uuidv4())) FROM t` | 833 ms | 612 ms | 221 ms (26%) |
 
-Bake-in saves **2.7 us per call** at steady state. For a 100k-row
-loop, that's 270 ms. Matches the WIT boundary estimate to within
-noise.
+Bake-in saves **~2.5-2.7 us per call** at steady state. For a
+100k-row loop, that's a few hundred ms recovered. The numbers
+hold across two unrelated extensions (hash function vs UUID
+generator), so the win is on the dispatch path, not the work
+itself.
 
 ## User-facing UX
 
@@ -132,20 +134,36 @@ real but doesn't matter unless you're in a tight scalar loop.
 ## Currently bakeable
 
 - `sha3`  reference implementation
+- `uuid`  second port; confirmed the pattern generalizes
 
 ## Adopting more
 
-The mechanical work per extension is small (~30 min):
-1. Hoist algorithm out of the `wasm_export` module.
+The mechanical work per extension is small (~30 min). uuid was
+~20  the bake.rs is mostly typing.
+
+1. Hoist algorithm out of the `wasm_export` module if it's there
+   (sha3 needed this; uuid didn't because its algorithm IS the
+   `uuid` crate).
 2. Add `bake` feature + `libsqlite3-sys` optional dep to Cargo.toml.
-3. Write `src/bake.rs` with `register_into`. The shape is
-   stamped: `value_bytes`/`value_int` to extract args,
+3. **Gate `mod wasm_export` with `#[cfg(all(target_arch="wasm32", not(feature="bake")))]`.**
+   Critical: two baked extensions both compile `bindings::export!`
+   which declares the same `sqlite:extension/metadata#describe`
+   symbol  the linker rejects the duplicate. The bake path
+   doesn't need the WIT exports anyway.
+4. Write `src/bake.rs` with `register_into`. The shape is stamped:
+   `value_text_bytes`/`value_int` to extract args,
    `result_text`/`result_blob` for output, one `unsafe extern "C"`
-   thunk per scalar. Aggregates need `_aggregate_function_v2` 
-   not yet ported here.
-4. Add a `bake-<name>` feature + optional dep entry to
+   thunk per scalar. Avoid per-call `format!()`  use `hex::encode`
+   for hex output (10x faster on the hot path).
+   Aggregates need `_aggregate_function_v2`  not yet ported here.
+5. Drop any `[workspace]` declaration so the cli's path dep works.
+6. Add a `bake-<name>` feature + optional dep entry to
    `cli/Cargo.toml`, mirror the registration call in
    `register_baked_extensions`.
 
+`tooling/compose-cli.py --list` auto-discovers any extension with
+a `bake` feature in its Cargo.toml + a `src/bake.rs`  no
+manifest to maintain.
+
 Good candidates (popular, scalar-heavy): hyperloglog, count_min,
-sketches, uuid, sha3, sha2, base64, crypto, regex.
+sketches, sha2, base64, crypto, regex.

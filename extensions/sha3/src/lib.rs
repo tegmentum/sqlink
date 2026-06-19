@@ -34,7 +34,14 @@ pub fn sha3_bytes(data: &[u8], bits: u32) -> Option<Vec<u8>> {
 #[cfg(feature = "bake")]
 pub mod bake;
 
-#[cfg(target_arch = "wasm32")]
+// `wasm_export` is the WIT-component build path: defines
+// `bindings::export!` which lowers to `sqlite:extension/metadata`
+// + `scalar-function` exports. When the cli pulls this in for
+// bake-in, those exports collide with any other baked extension's
+// (they all advertise the same WIT interface). Gate it off in
+// the bake build  the algorithm reaches the cli via `pub mod bake`
+// instead.
+#[cfg(all(target_arch = "wasm32", not(feature = "bake")))]
 mod wasm_export {
     use alloc::format;
     use alloc::string::{String, ToString};

@@ -59,12 +59,14 @@ blake3 = { version = "1", default-features = false }
 # Add a new bake-* feature alongside its dep when adopting more
 # extensions. See PLAN-bake-in.md for the contract.
 sha3-extension = { path = "../extensions/sha3", optional = true, features = ["bake"], default-features = false }
+uuid-extension = { path = "../extensions/uuid", optional = true, features = ["bake"], default-features = false }
 
 [features]
 # Family-of-features layout: each bakeable extension gets its own
 # feature flag so users can compose exactly what they want. Default
 # build has NONE of them on  identical to the pre-bake-in cli.
 bake-sha3 = ["dep:sha3-extension"]
+bake-uuid = ["dep:uuid-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

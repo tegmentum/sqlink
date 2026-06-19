@@ -1,8 +1,22 @@
 //! UUID generation + parse/extract scalar functions.
+//!
+//! Two consumers, one codebase. Same pattern as sha3-extension:
+//!
+//!   * `wasm_export`  wasi-p2 component loadable via `.load`.
+//!   * `bake`  `register_into(db)` for cli compile-time bake-in
+//!     (see PLAN-bake-in.md). Algorithm lives in the `uuid` crate
+//!     so there's nothing to hoist; both paths just call it.
 
 extern crate alloc;
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(feature = "bake")]
+pub mod bake;
+
+// See sha3-extension's lib.rs for why we gate this off when `bake`
+// is on  the WIT exports would collide with any other baked
+// extension. The component-build path (`make ext NAME=uuid`)
+// runs without `bake`, so wasm_export is included.
+#[cfg(all(target_arch = "wasm32", not(feature = "bake")))]
 mod wasm_export {
     use alloc::format;
     use alloc::string::{String, ToString};

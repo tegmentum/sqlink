@@ -137,6 +137,13 @@ unsafe fn register_baked_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("bake-sha3: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "bake-uuid")]
+    {
+        let rc = uuid_extension::bake::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("bake-uuid: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================
