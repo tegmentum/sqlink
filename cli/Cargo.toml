@@ -64,17 +64,23 @@ blake3 = { version = "1", default-features = false }
 # it on a feature would force every embed-* feature to also
 # list it.
 sqlite-embed = { path = "../sqlite-embed" }
-sha3-extension = { path = "../extensions/sha3", optional = true, features = ["embed"], default-features = false }
-uuid-extension = { path = "../extensions/uuid", optional = true, features = ["embed"], default-features = false }
-crc-extension  = { path = "../extensions/crc",  optional = true, features = ["embed"], default-features = false }
+sha3-extension  = { path = "../extensions/sha3",  optional = true, features = ["embed"], default-features = false }
+uuid-extension  = { path = "../extensions/uuid",  optional = true, features = ["embed"], default-features = false }
+crc-extension   = { path = "../extensions/crc",   optional = true, features = ["embed"], default-features = false }
+baseN-extension = { path = "../extensions/baseN", optional = true, features = ["embed"], default-features = false }
+color-extension = { path = "../extensions/color", optional = true, features = ["embed"], default-features = false }
+ean-extension   = { path = "../extensions/ean",   optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
 # feature flag so users can compose exactly what they want. Default
 # build has NONE of them on  identical to the pre-embed cli.
-embed-sha3 = ["dep:sha3-extension"]
-embed-uuid = ["dep:uuid-extension"]
-embed-crc  = ["dep:crc-extension"]
+embed-sha3  = ["dep:sha3-extension"]
+embed-uuid  = ["dep:uuid-extension"]
+embed-crc   = ["dep:crc-extension"]
+embed-baseN = ["dep:baseN-extension"]
+embed-color = ["dep:color-extension"]
+embed-ean   = ["dep:ean-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

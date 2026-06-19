@@ -151,6 +151,27 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-crc: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-baseN")]
+    {
+        let rc = baseN_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-baseN: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-color")]
+    {
+        let rc = color_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-color: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-ean")]
+    {
+        let rc = ean_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-ean: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

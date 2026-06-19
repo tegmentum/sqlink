@@ -24,6 +24,7 @@ members = [
     "extensions/regexp",
     "extensions/stats",
     "extensions/postgis-bridge",
+    "extensions/color",
     "examples/rust/runnable-sqlite-demo",
 ]
 

@@ -89,6 +89,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 
 [[package]]
+name = "base32"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "022dfe9eb35f19ebbcb51e0b40a5ab759f46ad60cadf7297e0bd085afb50e076"
+
+[[package]]
 name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -99,6 +105,18 @@ name = "base64ct"
 version = "1.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
+
+[[package]]
+name = "baseN-extension"
+version = "0.1.0"
+dependencies = [
+ "base32",
+ "bs58",
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
 
 [[package]]
 name = "bitflags"
@@ -127,6 +145,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
  "generic-array",
+]
+
+[[package]]
+name = "bs58"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf88ba1141d185c399bee5288d850d63b8369520c1eafc32a0430b5b6c287bf4"
+dependencies = [
+ "tinyvec",
 ]
 
 [[package]]
@@ -281,6 +308,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0fa961b519f0b462e3a3b4a34b64d119eeaca1d59af726fe450bbba07a9fc0a1"
 dependencies = [
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "color-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]
@@ -659,6 +696,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "ean-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]
@@ -2330,8 +2377,11 @@ dependencies = [
 name = "sqlite-cli"
 version = "0.1.0"
 dependencies = [
+ "baseN-extension",
  "blake3",
+ "color-extension",
  "crc-extension",
+ "ean-extension",
  "libsqlite3-sys",
  "miniz_oxide",
  "sha3",
