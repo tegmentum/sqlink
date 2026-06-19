@@ -748,6 +748,11 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = inmem_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-inmem: register_into failed rc={rc}"); }
     }
+    #[cfg(feature = "embed-changeset")]
+    {
+        let rc = changeset_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-changeset: register_into failed rc={rc}"); }
+    }
 }
 
 // =========================================================================

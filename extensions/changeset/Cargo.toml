@@ -1,0 +1,42 @@
+[package]
+name = "changeset-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Pure-function changeset helpers — Phase 1 of the
+session/changeset deferred work. Five scalars expose
+sqlite's connection-free changeset operations as SQL:
+
+    SELECT changeset_invert(blob);             -- swap INSERT/DELETE
+    SELECT changeset_concat(a, b);             -- merge two changesets
+    SELECT changeset_count(blob);              -- number of ops
+    SELECT changeset_tables(blob);             -- JSON list of tables
+    SELECT changeset_decode(blob);             -- JSON dump
+
+Capture (sqlite3session_*) and apply (sqlite3changeset_apply)
+are NOT in this extension; the cli already exposes them via the
+`.session` dot-command and `sqlite-wasm-run changeset` CLI
+subcommands. Phase 2/3 of PLAN-tooling-and-session.md cover
+WIT-level capture/apply only when a concrete consumer needs
+them at the SQL layer.
+
+Embed-only by design: routes through the cli's own sqlite3
+(which already has SESSION + PREUPDATE_HOOK compiled in via
+LIBSQLITE3_FLAGS). A WIT-path port would have to bundle its
+own sqlite3 — wasteful for an extension whose hot path is
+~50 bytes of FFI per call.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

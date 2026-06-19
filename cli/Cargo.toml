@@ -167,6 +167,7 @@ time-series-extension = { path = "../extensions/time-series",optional = true, fe
 trie-extension        = { path = "../extensions/trie",      optional = true, features = ["embed"], default-features = false }
 pmtiles-extension     = { path = "../extensions/pmtiles",   optional = true, features = ["embed"], default-features = false }
 inmem-extension       = { path = "../extensions/inmem",     optional = true, features = ["embed"], default-features = false }
+changeset-extension   = { path = "../extensions/changeset", optional = true, features = ["embed"], default-features = false }
 vec0-extension        = { path = "../extensions/vec0",      optional = true, features = ["embed"], default-features = false }
 
 [features]
@@ -270,6 +271,7 @@ embed-completion = ["dep:completion-extension"]
 embed-trie       = ["dep:trie-extension"]
 embed-pmtiles    = ["dep:pmtiles-extension"]
 embed-inmem      = ["dep:inmem-extension"]
+embed-changeset  = ["dep:changeset-extension"]
 embed-vec0       = ["dep:vec0-extension"]
 
 # Component packaging: after `cargo build --release --target
