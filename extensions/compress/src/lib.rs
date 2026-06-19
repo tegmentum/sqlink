@@ -14,6 +14,9 @@ use compression_multiplexer::providers::{
     algorithm_description, get_provider, supported_algorithms, Algorithm,
 };
 
+#[cfg(feature = "embed")]
+pub mod embed;
+
 /// 1-byte tag mapping; mirrors the Algorithm enum but as a u8
 /// so it fits in the blob header. Compatible with future
 /// expansion (we'd add new variants here and bump
@@ -153,7 +156,7 @@ mod tests {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
     use alloc::format;
     use alloc::string::{String, ToString};

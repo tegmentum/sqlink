@@ -32,10 +32,11 @@ BLOBs.
 license = "MIT"
 publish = false
 
-[workspace]
-
 [lib]
 crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
@@ -44,3 +45,5 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 # plain Rust  no WAC composition needed. The crate's wasm
 # zstd feature is off; we just get Store/Deflate/Bzip2/Lzma/Lz4.
 compression-multiplexer = { path = "../../../compression-multiplexer", default-features = false }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

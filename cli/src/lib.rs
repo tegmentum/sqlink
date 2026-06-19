@@ -578,6 +578,13 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-math: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-compress")]
+    {
+        let rc = compress_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-compress: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

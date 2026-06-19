@@ -128,6 +128,7 @@ escape-extension      = { path = "../extensions/escape",    optional = true, fea
 iban-extension        = { path = "../extensions/iban",      optional = true, features = ["embed"], default-features = false }
 humansize-extension   = { path = "../extensions/humansize", optional = true, features = ["embed"], default-features = false }
 math-extension        = { path = "../extensions/math",      optional = true, features = ["embed"], default-features = false }
+compress-extension    = { path = "../extensions/compress",  optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -197,6 +198,7 @@ embed-escape     = ["dep:escape-extension"]
 embed-iban       = ["dep:iban-extension"]
 embed-humansize  = ["dep:humansize-extension"]
 embed-math       = ["dep:math-extension"]
+embed-compress   = ["dep:compress-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run
