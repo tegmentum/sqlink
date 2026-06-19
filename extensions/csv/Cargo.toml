@@ -3,10 +3,16 @@ name = "csv-extension"
 version = "0.1.0"
 edition = "2021"
 description = """
-Port of SQLite's csv vtab as a wasm32-wasip2 component. Read-only
-v1: every column comes back as TEXT, no type sniffing, no
-header-detection knobs beyond a "header" arg. Targets the
-`sqlite:extension/tabular` world.
+Port of SQLite's csv vtab as a wasm32-wasip2 component.
+
+WIT path: read-only. Every column comes back as TEXT, no type
+sniffing, no header-detection knobs beyond a `header` arg.
+
+Embed path (feature = embed): READ + WRITE. INSERT / UPDATE /
+DELETE buffer in memory; xCommit writes the file atomically
+(temp + rename); xRollback re-reads the original file. Auto-
+commit (single statement with no explicit BEGIN) works the same
+way — sqlite drives xBegin / xUpdate / xCommit around each.
 
 CREATE VIRTUAL TABLE call shape:
 
@@ -19,8 +25,9 @@ CREATE VIRTUAL TABLE call shape:
 Either `header=true` or an explicit `schema=...` is required so
 the vtab can name its columns. The `filename` arg is required.
 
-Reference port for PLAN-sqlite-plugins.md tier 3. Smallest scope
-that exercises every callback in the vtab interface end-to-end.
+Reference port for PLAN-sqlite-plugins.md tier 3. The embed
+path is also the first non-toy consumer of the vtab-mutating
+v2 contract (xUpdate + xBegin/xCommit/xRollback).
 """
 license = "MIT"
 publish = false
@@ -28,6 +35,11 @@ publish = false
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

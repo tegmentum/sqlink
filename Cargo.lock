@@ -1034,6 +1034,8 @@ dependencies = [
 name = "csv-extension"
 version = "0.1.0"
 dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",
 ]
@@ -4580,6 +4582,7 @@ dependencies = [
  "cron-extension",
  "crypto-extension",
  "csscolor-extension",
+ "csv-extension",
  "currency-extension",
  "cusip-extension",
  "db-utils-extension",
