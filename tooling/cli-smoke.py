@@ -29,6 +29,8 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CLI_BIN = REPO_ROOT / "target" / "release" / "sqlite-wasm-run"
 CLI_COMPONENT = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.wasm"
+# Bake-built variant. Smokes opt in with `-- cli: baked` at top.
+CLI_COMPONENT_BAKED = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_baked.component.wasm"
 SMOKES_DIR = REPO_ROOT / "tooling" / "cli-smokes"
 
 PROMPT_RE = re.compile(r"^(sqlite>\s*|\s*\.\.\.>\s*)+")
@@ -78,16 +80,35 @@ def diff_results(actual: list[str], expected: list[str]) -> str | None:
     return None
 
 
+def _detect_cli_marker(raw_text: str) -> str | None:
+    """Look for `-- cli: baked` in the first 5 lines (mirrors the
+    `-- smoke-db:` pattern in tooling/smoke.py). Returns "baked"
+    to opt into the bake-built cli component, None otherwise."""
+    for line in raw_text.splitlines()[:5]:
+        s = line.strip()
+        if s.startswith("-- cli:"):
+            return s.split(":", 1)[1].strip()
+    return None
+
+
 def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
     if not CLI_BIN.exists():
         return False, f"cli runner not built: run cargo build --release -p sqlite-wasm-host"
-    if not CLI_COMPONENT.exists():
-        return False, f"cli component not built"
     sql_path = SMOKES_DIR / f"{name}.sql"
     expected_path = SMOKES_DIR / f"{name}.expected"
     if not sql_path.exists():
         return False, f"no smoke at {sql_path}"
     raw_text = sql_path.read_text()
+    cli_marker = _detect_cli_marker(raw_text)
+    if cli_marker == "baked":
+        component = CLI_COMPONENT_BAKED
+        if not component.exists():
+            return False, (f"baked cli not built: {component.relative_to(REPO_ROOT)}; "
+                           f"run `sqlite-wasm-run compose --bake sha3,uuid`")
+    else:
+        component = CLI_COMPONENT
+        if not component.exists():
+            return False, f"cli component not built: {component.relative_to(REPO_ROOT)}"
     # Strip `--` line comments before piping  the cli's input parser
     # fuses leading `--` with the following dot-command, same wart as
     # extension smoke.py works around (T-9).
@@ -98,11 +119,22 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
     sql = ".nullvalue <NULL>\n" + sql
     tmpdir = tempfile.mkdtemp(prefix="sqlite-wasm-cli-smoke-")
     try:
+        # Smokes that `.load extensions/<NAME>/...` expect that
+        # relative path to resolve. The cli's wasi preopens only
+        # cover --db's parent (host/src/main.rs:510), which here
+        # is the tmpdir. Symlink the repo's extensions/ tree into
+        # the tmpdir so `.load extensions/foo/foo.component.wasm`
+        # works from the smoke's perspective. Cheap (one symlink),
+        # sandbox-safe (no writes leak to the repo).
+        try:
+            os.symlink(REPO_ROOT / "extensions", os.path.join(tmpdir, "extensions"))
+        except OSError:
+            pass
         # Pass --db as a relative path so the cli's wasi preopen
         # resolves under cwd. Absolute --db preopens an unrelated
         # /var/folders/... path and breaks relative file writes
         # (e.g. .session changeset out.cs).
-        argv = [str(CLI_BIN), str(CLI_COMPONENT), "--db", "smoke.db"]
+        argv = [str(CLI_BIN), str(component), "--db", "smoke.db"]
         try:
             result = subprocess.run(
                 argv,

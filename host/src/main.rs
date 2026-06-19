@@ -48,7 +48,179 @@ fn usage() -> ! {
     eprintln!("       sqlite-wasm-run changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
     eprintln!("       sqlite-wasm-run changeset apply --db PATH --input FILE");
     eprintln!("       sqlite-wasm-run precompile <in.wasm> <out.cwasm>");
+    eprintln!("       sqlite-wasm-run compose --list");
+    eprintln!("       sqlite-wasm-run compose --bake NAME[,NAME...] [--output PATH] [--precompile] [--repo-root DIR]");
     std::process::exit(2);
+}
+
+/// `compose`  build a custom cli wasm with selected extensions
+/// baked in at compile time. Discovers bakeable extensions by
+/// scanning `<repo-root>/extensions/*` for crates that declare a
+/// `bake` cargo feature in their Cargo.toml and ship a
+/// `src/bake.rs`. Shells out to cargo + wasm-tools; having the
+/// orchestration inside the main binary keeps SQLite's single-
+/// executable spirit  one sqlite-wasm-run, every workflow.
+fn run_compose_subcommand(args: &[String]) -> Result<()> {
+    let mut list = false;
+    let mut bake: Vec<String> = Vec::new();
+    let mut output: Option<String> = None;
+    let mut precompile_after = false;
+    let mut repo_root = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--list" => list = true,
+            "--bake" => {
+                i += 1;
+                if i >= args.len() {
+                    return Err(anyhow!("--bake expects a comma-separated list"));
+                }
+                bake = args[i].split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            }
+            "--output" => {
+                i += 1;
+                if i >= args.len() {
+                    return Err(anyhow!("--output expects a path"));
+                }
+                output = Some(args[i].clone());
+            }
+            "--precompile" => precompile_after = true,
+            "--repo-root" => {
+                i += 1;
+                if i >= args.len() {
+                    return Err(anyhow!("--repo-root expects a path"));
+                }
+                repo_root = PathBuf::from(&args[i]);
+            }
+            other => return Err(anyhow!("compose: unknown arg {other:?}")),
+        }
+        i += 1;
+    }
+
+    let bakeable = discover_bakeable_extensions(&repo_root)?;
+    if list {
+        if bakeable.is_empty() {
+            eprintln!("(no extensions currently expose a `bake` feature)");
+            return Ok(());
+        }
+        for name in &bakeable {
+            println!("{name}");
+        }
+        return Ok(());
+    }
+
+    if bake.is_empty() {
+        return Err(anyhow!("compose: pass --bake NAME[,...] or --list"));
+    }
+    let missing: Vec<&String> = bake.iter().filter(|n| !bakeable.contains(n)).collect();
+    if !missing.is_empty() {
+        return Err(anyhow!(
+            "compose: not bakeable: {}\n  Bakeable here: {}",
+            missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+            bakeable.join(", "),
+        ));
+    }
+
+    let features = bake
+        .iter()
+        .map(|n| format!("bake-{}", n.replace('_', "-")))
+        .collect::<Vec<_>>()
+        .join(",");
+    eprintln!("Baking: {}", bake.join(", "));
+    eprintln!("  cargo build --release -p sqlite-cli --target wasm32-wasip2 --features {features}");
+
+    let status = std::process::Command::new("cargo")
+        .args([
+            "build", "--release", "-p", "sqlite-cli", "--target", "wasm32-wasip2",
+            "--features", &features,
+        ])
+        .current_dir(&repo_root)
+        .status()
+        .map_err(|e| anyhow!("spawn cargo: {e}"))?;
+    if !status.success() {
+        return Err(anyhow!("cargo build failed"));
+    }
+
+    let core_wasm = repo_root
+        .join("target/wasm32-wasip2/release/sqlite_cli.wasm");
+    let component_out = output
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            repo_root.join("target/wasm32-wasip2/release/sqlite_cli_baked.component.wasm")
+        });
+
+    if let Some(parent) = component_out.parent() {
+        std::fs::create_dir_all(parent).ok();
+    }
+
+    eprintln!("  wasm-tools component new  {}", component_out.display());
+    let status = std::process::Command::new("wasm-tools")
+        .args(["component", "new"])
+        .arg(&core_wasm)
+        .arg("-o")
+        .arg(&component_out)
+        .current_dir(&repo_root)
+        .status()
+        .map_err(|e| anyhow!("spawn wasm-tools: {e} (install with `cargo install wasm-tools`)"))?;
+    if !status.success() {
+        return Err(anyhow!("wasm-tools component new failed"));
+    }
+
+    eprintln!("wrote {}", component_out.display());
+
+    if precompile_after {
+        let cwasm_out = component_out.with_extension("cwasm");
+        eprintln!("  precompile  {}", cwasm_out.display());
+        let component_bytes = std::fs::read(&component_out)
+            .map_err(|e| anyhow!("read {}: {e}", component_out.display()))?;
+        let engine = sqlite_wasm_host::Host::new()?.engine().clone();
+        let precompiled = engine
+            .precompile_component(&component_bytes)
+            .map_err(|e| anyhow!("precompile: {e}"))?;
+        std::fs::write(&cwasm_out, &precompiled)
+            .map_err(|e| anyhow!("write {}: {e}", cwasm_out.display()))?;
+        eprintln!("wrote {}", cwasm_out.display());
+    }
+    Ok(())
+}
+
+/// Discover bakeable extensions by scanning `<repo-root>/extensions/`
+/// for crates whose Cargo.toml has a `bake = [...]` line under
+/// `[features]` AND a `src/bake.rs` file present. Same contract
+/// documented in PLAN-bake-in.md.
+fn discover_bakeable_extensions(repo_root: &std::path::Path) -> Result<Vec<String>> {
+    let ext_root = repo_root.join("extensions");
+    if !ext_root.exists() {
+        return Err(anyhow!(
+            "compose: no extensions/ directory under {} (pass --repo-root)",
+            repo_root.display()
+        ));
+    }
+    let mut out: Vec<String> = Vec::new();
+    for entry in std::fs::read_dir(&ext_root).map_err(|e| anyhow!("read {}: {e}", ext_root.display()))? {
+        let entry = entry.map_err(|e| anyhow!("entry: {e}"))?;
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let dir = entry.path();
+        let cargo_toml = dir.join("Cargo.toml");
+        let bake_rs = dir.join("src/bake.rs");
+        if !cargo_toml.exists() || !bake_rs.exists() {
+            continue;
+        }
+        let cargo_text = match std::fs::read_to_string(&cargo_toml) {
+            Ok(s) => s,
+            Err(_) => continue,
+        };
+        if cargo_text.contains("\nbake = ") {
+            if let Some(name) = dir.file_name().and_then(|s| s.to_str()) {
+                out.push(name.to_string());
+            }
+        }
+    }
+    out.sort();
+    Ok(out)
 }
 
 /// Engine::precompile_component  AOT-compile a component to a
@@ -423,6 +595,11 @@ async fn main() -> Result<()> {
     // precompile subcommand likewise  no db, no cli component load.
     if args[1] == "precompile" {
         return run_precompile_subcommand(&args[2..]);
+    }
+    // compose: builds a custom cli wasm with selected extensions
+    // baked in. Same single-executable spirit as sqlite itself.
+    if args[1] == "compose" {
+        return run_compose_subcommand(&args[2..]);
     }
 
     let mut db_path = String::new();

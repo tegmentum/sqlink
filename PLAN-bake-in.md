@@ -35,24 +35,50 @@ itself.
 
 ## User-facing UX
 
-```
-$ tooling/compose-cli.py --list
-sha3
+Compose is a subcommand of the main `sqlite-wasm-run` binary 
+SQLite's single-executable spirit. No separate Python tool to
+install.
 
-$ tooling/compose-cli.py --bake sha3 --precompile
-Baking: sha3
-  cargo build --release -p sqlite-cli --target wasm32-wasip2 --features bake-sha3
+```
+$ sqlite-wasm-run compose --list
+sha3
+uuid
+
+$ sqlite-wasm-run compose --bake sha3,uuid --precompile
+Baking: sha3, uuid
+  cargo build --release -p sqlite-cli --target wasm32-wasip2 --features bake-sha3,bake-uuid
   wasm-tools component new  sqlite_cli_baked.component.wasm
-  precompile  sqlite_cli_baked.component.cwasm
 wrote target/wasm32-wasip2/release/sqlite_cli_baked.component.wasm
+  precompile  sqlite_cli_baked.component.cwasm
 wrote target/wasm32-wasip2/release/sqlite_cli_baked.component.cwasm
 
 $ sqlite-wasm-run sqlite_cli_baked.component.cwasm --db x.db
-sqlite> SELECT sha3_256('hello');
-2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824
+sqlite> SELECT sha3_256(uuidv4());
+efe1a2e33d99e1c6d4d8f31946243569b0d17cc9a1379e054dbd29660596c7b1
 ```
 
-No `.load` needed; `sha3_256()` is registered at cli startup.
+No `.load` needed; the baked scalars are registered at cli
+startup. **`.load` still works alongside** for anything not
+baked  the bake path doesn't disable the WIT loader:
+
+```
+sqlite> .load extensions/eval/target/wasm32-wasip2/release/eval_extension.component.wasm
+Loaded extension: eval 0.1.0 ... (2 registered: 2 scalar)
+sqlite> SELECT eval('SELECT 7');
+7
+sqlite> SELECT length(eval('SELECT ''' || sha3_256('x') || '''')) = 64;
+1
+```
+
+Baked + dynamic-load composition is regression-guarded by
+`tooling/cli-smokes/baked_plus_load.{sql,expected}`.
+
+Default cli (no bake) keeps working as before; `.load` is the
+only path to scalars there.
+
+Run from the repo root, or pass `--repo-root PATH`. The
+subcommand shells out to `cargo` + `wasm-tools` (both available
+to anyone who built the cli in the first place).
 
 ## Bakeable-extension contract
 
@@ -161,8 +187,8 @@ The mechanical work per extension is small (~30 min). uuid was
    `cli/Cargo.toml`, mirror the registration call in
    `register_baked_extensions`.
 
-`tooling/compose-cli.py --list` auto-discovers any extension with
-a `bake` feature in its Cargo.toml + a `src/bake.rs`  no
+`sqlite-wasm-run compose --list` auto-discovers any extension
+with a `bake` feature in its Cargo.toml + a `src/bake.rs`  no
 manifest to maintain.
 
 Good candidates (popular, scalar-heavy): hyperloglog, count_min,
