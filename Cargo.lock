@@ -1665,6 +1665,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87"
 
 [[package]]
+name = "humansize-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "hyper"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2319,6 +2329,8 @@ name = "math-extension"
 version = "0.1.0"
 dependencies = [
  "libm",
+ "libsqlite3-sys",
+ "sqlite-embed",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",
 ]
@@ -3591,6 +3603,7 @@ dependencies = [
  "graphql-extension",
  "hexdump-extension",
  "http-extension",
+ "humansize-extension",
  "iban-extension",
  "ical-extension",
  "idna-extension",
@@ -3605,6 +3618,7 @@ dependencies = [
  "lorem-extension",
  "mac-extension",
  "mailto-extension",
+ "math-extension",
  "miniz_oxide",
  "morse-extension",
  "natsort-extension",

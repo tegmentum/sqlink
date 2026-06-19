@@ -564,6 +564,20 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-iban: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-humansize")]
+    {
+        let rc = humansize_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-humansize: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-math")]
+    {
+        let rc = math_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-math: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================
