@@ -385,6 +385,346 @@ pub unsafe fn register_aggregates(
     ffi::SQLITE_OK
 }
 
+// ---------------------------------------------------------------
+// Virtual tables  Track 3 of PLAN-embed-remaining.md.
+// ---------------------------------------------------------------
+//
+// Read-only eponymous vtab contract. v1 covers what `series`,
+// `define`, `completion`, `text-utils`, `vec_each`, `pmtiles`,
+// `time-series`, `vec0`-read-path need. NOT covered yet:
+// xUpdate (writes), xBegin/xCommit/xRollback (transactions),
+// xRename, shadow tables, xFindFunction. Those stay on the
+// WIT loader.
+//
+// Lifecycle per vtab instance:
+//   xConnect    -> allocate EmbedVtab { base, state }
+//   xBestIndex  -> plan
+//   xOpen       -> allocate EmbedCursor { base, state }
+//   xFilter     -> set up cursor for a query
+//   xNext/Eof/Column/Rowid (loop)
+//   xClose      -> free cursor
+//   xDisconnect -> free vtab
+//
+// State is type-erased through *mut () the same way aggregates
+// thread state through sqlite3_aggregate_context.
+
+/// One usable constraint sqlite passes to xBestIndex.
+pub struct VtabConstraint {
+    /// Column number in the declared schema (0-based).
+    pub column: i32,
+    /// Operator: SQLITE_INDEX_CONSTRAINT_EQ (2), GT (4), LE (8),
+    /// LT (16), GE (32), MATCH (64), LIKE (65), GLOB (66),
+    /// REGEXP (67), NE (68), ISNOT (69), ISNOTNULL (70),
+    /// ISNULL (71), IS (72). Caller treats unknown values as
+    /// "skip".
+    pub op: u8,
+    /// True if the planner can deliver this constraint to filter().
+    pub usable: bool,
+}
+
+/// How best_index claims a constraint. Parallel to the input
+/// constraints array.
+#[derive(Default, Clone)]
+pub struct VtabConstraintUsage {
+    /// 1-based position in xFilter's argv[]. 0 = don't deliver.
+    pub argv_index: i32,
+    /// True if SQLite can skip re-checking the constraint after
+    /// xFilter (because we'll always satisfy it).
+    pub omit: bool,
+}
+
+/// Input + output to xBestIndex. The extension reads constraints,
+/// writes usage + idx_num + estimates.
+pub struct BestIndexInfo<'a> {
+    pub constraints: &'a [VtabConstraint],
+    pub usage: &'a mut [VtabConstraintUsage],
+    /// Opaque planner key passed to xFilter so it knows which
+    /// constraints got bound.
+    pub idx_num: i32,
+    pub estimated_cost: f64,
+    pub estimated_rows: i64,
+    pub order_by_consumed: bool,
+}
+
+/// Per-vtab declaration. `name` and `schema` are nul-terminated.
+pub struct VtabSpec {
+    pub name: &'static [u8],
+    /// Argument to sqlite3_declare_vtab. Typically
+    /// `b"CREATE TABLE x(col HIDDEN, ...)\0"`.
+    pub schema: &'static [u8],
+    /// True if SELECTable without CREATE VIRTUAL TABLE.
+    pub eponymous: bool,
+    pub make_vtab: unsafe fn() -> *mut (),
+    pub destroy_vtab: unsafe fn(*mut ()),
+    pub best_index: unsafe fn(*mut (), &mut BestIndexInfo) -> Result<(), String>,
+    pub make_cursor: unsafe fn(*mut ()) -> *mut (),
+    pub destroy_cursor: unsafe fn(*mut ()),
+    pub filter: unsafe fn(
+        cursor: *mut (),
+        idx_num: i32,
+        idx_str: Option<&str>,
+        args: &[SqlValueOwned],
+    ) -> Result<(), String>,
+    pub next: unsafe fn(*mut ()) -> Result<(), String>,
+    pub eof: unsafe fn(*mut ()) -> bool,
+    pub column: unsafe fn(cursor: *mut (), col: i32) -> Result<SqlValueOwned, String>,
+    pub rowid: unsafe fn(*mut ()) -> Result<i64, String>,
+}
+
+/// Larger struct than sqlite3_vtab; sqlite only sees the first
+/// `base` field by C-aliasing rules but Rust holds the extra state.
+#[repr(C)]
+struct EmbedVtab {
+    base: ffi::sqlite3_vtab,
+    state: *mut (),
+    spec: &'static VtabSpec,
+}
+
+#[repr(C)]
+struct EmbedCursor {
+    base: ffi::sqlite3_vtab_cursor,
+    state: *mut (),
+    spec: &'static VtabSpec,
+}
+
+unsafe extern "C" fn vtab_xconnect(
+    db: *mut ffi::sqlite3,
+    paux: *mut c_void,
+    _argc: c_int,
+    _argv: *const *const core::ffi::c_char,
+    pp_vtab: *mut *mut ffi::sqlite3_vtab,
+    _err_msg: *mut *mut core::ffi::c_char,
+) -> c_int {
+    let spec = &*(paux as *const VtabSpec);
+    // declare_vtab needs a nul-terminated SQL string.
+    let rc = ffi::sqlite3_declare_vtab(db, spec.schema.as_ptr() as *const _);
+    if rc != ffi::SQLITE_OK {
+        return rc;
+    }
+    let state = (spec.make_vtab)();
+    let vtab = alloc::boxed::Box::into_raw(alloc::boxed::Box::new(EmbedVtab {
+        base: core::mem::zeroed(),
+        state,
+        spec,
+    }));
+    *pp_vtab = vtab as *mut ffi::sqlite3_vtab;
+    ffi::SQLITE_OK
+}
+
+unsafe extern "C" fn vtab_xdisconnect(pv: *mut ffi::sqlite3_vtab) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    (spec.destroy_vtab)((*v).state);
+    drop(alloc::boxed::Box::from_raw(v));
+    ffi::SQLITE_OK
+}
+
+unsafe extern "C" fn vtab_xbest_index(
+    pv: *mut ffi::sqlite3_vtab,
+    info: *mut ffi::sqlite3_index_info,
+) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    let n = (*info).nConstraint as usize;
+    // Materialize constraints. The aConstraint array is sqlite-owned;
+    // we read it into our types and pass a slice.
+    let mut constraints: alloc::vec::Vec<VtabConstraint> = alloc::vec::Vec::with_capacity(n);
+    let c_arr = (*info).aConstraint;
+    for i in 0..n {
+        let c = &*c_arr.add(i);
+        constraints.push(VtabConstraint {
+            column: c.iColumn,
+            op: c.op,
+            usable: c.usable != 0,
+        });
+    }
+    let mut usage: alloc::vec::Vec<VtabConstraintUsage> = alloc::vec![VtabConstraintUsage::default(); n];
+    // Split-borrow: BestIndexInfo holds &constraints + &mut usage.
+    let (idx_num, estimated_cost, estimated_rows, order_by_consumed);
+    {
+        let mut bi = BestIndexInfo {
+            constraints: &constraints,
+            usage: &mut usage,
+            idx_num: 0,
+            estimated_cost: 1.0e9,
+            estimated_rows: 1,
+            order_by_consumed: false,
+        };
+        match (spec.best_index)((*v).state, &mut bi) {
+            Ok(()) => {}
+            Err(_) => return ffi::SQLITE_ERROR,
+        }
+        idx_num = bi.idx_num;
+        estimated_cost = bi.estimated_cost;
+        estimated_rows = bi.estimated_rows;
+        order_by_consumed = bi.order_by_consumed;
+    }
+    // Copy usage back into sqlite's array.
+    let u_arr = (*info).aConstraintUsage;
+    for (i, u) in usage.iter().enumerate() {
+        let dst = u_arr.add(i);
+        (*dst).argvIndex = u.argv_index;
+        (*dst).omit = if u.omit { 1 } else { 0 };
+    }
+    (*info).idxNum = idx_num;
+    (*info).estimatedCost = estimated_cost;
+    (*info).estimatedRows = estimated_rows;
+    (*info).orderByConsumed = if order_by_consumed { 1 } else { 0 };
+    ffi::SQLITE_OK
+}
+
+unsafe extern "C" fn vtab_xopen(
+    pv: *mut ffi::sqlite3_vtab,
+    pp_cursor: *mut *mut ffi::sqlite3_vtab_cursor,
+) -> c_int {
+    let v = pv as *mut EmbedVtab;
+    let spec = (*v).spec;
+    let cursor_state = (spec.make_cursor)((*v).state);
+    let c = alloc::boxed::Box::into_raw(alloc::boxed::Box::new(EmbedCursor {
+        base: core::mem::zeroed(),
+        state: cursor_state,
+        spec,
+    }));
+    *pp_cursor = c as *mut ffi::sqlite3_vtab_cursor;
+    ffi::SQLITE_OK
+}
+
+unsafe extern "C" fn vtab_xclose(pc: *mut ffi::sqlite3_vtab_cursor) -> c_int {
+    let c = pc as *mut EmbedCursor;
+    let spec = (*c).spec;
+    (spec.destroy_cursor)((*c).state);
+    drop(alloc::boxed::Box::from_raw(c));
+    ffi::SQLITE_OK
+}
+
+unsafe extern "C" fn vtab_xfilter(
+    pc: *mut ffi::sqlite3_vtab_cursor,
+    idx_num: c_int,
+    idx_str: *const core::ffi::c_char,
+    argc: c_int,
+    argv: *mut *mut ffi::sqlite3_value,
+) -> c_int {
+    let c = pc as *mut EmbedCursor;
+    let spec = (*c).spec;
+    let idx_str_opt = if idx_str.is_null() {
+        None
+    } else {
+        let cstr = core::ffi::CStr::from_ptr(idx_str);
+        cstr.to_str().ok()
+    };
+    let args = collect_args(argc, argv);
+    match (spec.filter)((*c).state, idx_num, idx_str_opt, &args) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn vtab_xnext(pc: *mut ffi::sqlite3_vtab_cursor) -> c_int {
+    let c = pc as *mut EmbedCursor;
+    let spec = (*c).spec;
+    match (spec.next)((*c).state) {
+        Ok(()) => ffi::SQLITE_OK,
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+unsafe extern "C" fn vtab_xeof(pc: *mut ffi::sqlite3_vtab_cursor) -> c_int {
+    let c = pc as *mut EmbedCursor;
+    let spec = (*c).spec;
+    if (spec.eof)((*c).state) { 1 } else { 0 }
+}
+
+unsafe extern "C" fn vtab_xcolumn(
+    pc: *mut ffi::sqlite3_vtab_cursor,
+    ctx: *mut ffi::sqlite3_context,
+    col: c_int,
+) -> c_int {
+    let c = pc as *mut EmbedCursor;
+    let spec = (*c).spec;
+    match (spec.column)((*c).state, col) {
+        Ok(v) => {
+            set_result(ctx, v);
+            ffi::SQLITE_OK
+        }
+        Err(e) => {
+            set_error(ctx, &e);
+            ffi::SQLITE_ERROR
+        }
+    }
+}
+
+unsafe extern "C" fn vtab_xrowid(
+    pc: *mut ffi::sqlite3_vtab_cursor,
+    rowid: *mut ffi::sqlite3_int64,
+) -> c_int {
+    let c = pc as *mut EmbedCursor;
+    let spec = (*c).spec;
+    match (spec.rowid)((*c).state) {
+        Ok(v) => {
+            *rowid = v;
+            ffi::SQLITE_OK
+        }
+        Err(_) => ffi::SQLITE_ERROR,
+    }
+}
+
+/// One module per registered vtab. Boxed + leaked  it lives for
+/// the lifetime of the sqlite3 connection. SQLite copies the module
+/// pointer; no destroy is wired because we don't reclaim memory
+/// across vtab module unregister (none of our exts do that).
+unsafe fn make_module(spec: &'static VtabSpec) -> ffi::sqlite3_module {
+    let mut m: ffi::sqlite3_module = core::mem::zeroed();
+    m.iVersion = 1;
+    if spec.eponymous {
+        // Eponymous: no xCreate (sqlite uses xConnect on first ref).
+        m.xCreate = None;
+    } else {
+        m.xCreate = Some(vtab_xconnect);
+    }
+    m.xConnect = Some(vtab_xconnect);
+    m.xBestIndex = Some(vtab_xbest_index);
+    m.xDisconnect = Some(vtab_xdisconnect);
+    m.xDestroy = Some(vtab_xdisconnect);
+    m.xOpen = Some(vtab_xopen);
+    m.xClose = Some(vtab_xclose);
+    m.xFilter = Some(vtab_xfilter);
+    m.xNext = Some(vtab_xnext);
+    m.xEof = Some(vtab_xeof);
+    m.xColumn = Some(vtab_xcolumn);
+    m.xRowid = Some(vtab_xrowid);
+    m
+}
+
+/// Register every vtab in `specs` against `db`. Returns SQLITE_OK
+/// or the first non-OK code. Each module + its aux pointer live for
+/// the lifetime of the connection (leaked Box; sqlite never calls
+/// the destroy callback on the aux because we use the v1 module
+/// registration, not v2).
+///
+/// Safety: `db` must be a live `sqlite3*` and not yet closed.
+pub unsafe fn register_vtabs(
+    db: *mut ffi::sqlite3,
+    specs: &'static [VtabSpec],
+) -> c_int {
+    for spec in specs {
+        // Leak the module struct  sqlite holds the pointer for
+        // the connection's lifetime.
+        let module = alloc::boxed::Box::into_raw(alloc::boxed::Box::new(make_module(spec)));
+        let name_bytes = spec.name;
+        let rc = ffi::sqlite3_create_module_v2(
+            db,
+            name_bytes.as_ptr() as *const _,
+            module,
+            spec as *const VtabSpec as *mut c_void,
+            None,
+        );
+        if rc != ffi::SQLITE_OK {
+            return rc;
+        }
+    }
+    ffi::SQLITE_OK
+}
+
 /// Re-export `sqlite3` so extension embed.rs files don't need a
 /// direct libsqlite3-sys dep on top of sqlite-embed. (They CAN
 /// declare one if they need other ffi symbols, but for most a

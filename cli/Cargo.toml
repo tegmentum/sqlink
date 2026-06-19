@@ -157,6 +157,7 @@ decimal-extension     = { path = "../extensions/decimal",   optional = true, fea
 hyperloglog-extension = { path = "../extensions/hyperloglog", optional = true, features = ["embed"], default-features = false }
 count-min-extension   = { path = "../extensions/count_min", optional = true, features = ["embed"], default-features = false }
 sketches-extension    = { path = "../extensions/sketches",  optional = true, features = ["embed"], default-features = false }
+series-extension      = { path = "../extensions/series",    optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -249,6 +250,7 @@ embed-decimal    = ["dep:decimal-extension"]
 embed-hyperloglog = ["dep:hyperloglog-extension"]
 embed-count-min   = ["dep:count-min-extension"]
 embed-sketches   = ["dep:sketches-extension"]
+embed-series     = ["dep:series-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

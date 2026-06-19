@@ -693,6 +693,11 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = sketches_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-sketches: register_into failed rc={rc}"); }
     }
+    #[cfg(feature = "embed-series")]
+    {
+        let rc = series_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-series: register_into failed rc={rc}"); }
+    }
 }
 
 // =========================================================================

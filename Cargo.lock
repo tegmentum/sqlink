@@ -4297,6 +4297,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "series-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "servo_arc"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4544,6 +4554,7 @@ dependencies = [
  "roman-extension",
  "semver-extension",
  "sentiment-extension",
+ "series-extension",
  "setops-extension",
  "sha3",
  "sha3-extension",
