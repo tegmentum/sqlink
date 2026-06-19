@@ -49,22 +49,114 @@ mod kernels {
         Some(s)
     }
 
+    /// L2 distance — `sqrt(sum (a[i] - b[i])^2)`. Hand-vectorized
+    /// for wasm32 SIMD: 4 f32 lanes per v128 op. For typical 256-/
+    /// 384-/768-dim embedding vectors this is 4x fewer fp ops than
+    /// the scalar loop. The accumulator stays in f32 lanes through
+    /// the inner sum; promotion to f64 happens once at the end so
+    /// numerical behavior matches the scalar version to within
+    /// ~1 ulp per element.
     pub fn l2(a: &[f32], b: &[f32]) -> Option<f64> {
         if a.len() != b.len() {
             return None;
         }
+        Some(l2_squared(a, b).sqrt())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn l2_squared(a: &[f32], b: &[f32]) -> f64 {
+        use core::arch::wasm32::*;
+        let mut acc = f32x4_splat(0.0);
+        let n = a.len();
+        let chunks = n / 4;
+        let mut i = 0;
+        unsafe {
+            for _ in 0..chunks {
+                let va = v128_load(a.as_ptr().add(i) as *const v128);
+                let vb = v128_load(b.as_ptr().add(i) as *const v128);
+                let d = f32x4_sub(va, vb);
+                acc = f32x4_add(acc, f32x4_mul(d, d));
+                i += 4;
+            }
+        }
+        let mut s = f32x4_extract_lane::<0>(acc)
+            + f32x4_extract_lane::<1>(acc)
+            + f32x4_extract_lane::<2>(acc)
+            + f32x4_extract_lane::<3>(acc);
+        while i < n {
+            let d = a[i] - b[i];
+            s += d * d;
+            i += 1;
+        }
+        s as f64
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn l2_squared(a: &[f32], b: &[f32]) -> f64 {
         let mut s = 0.0f64;
         for i in 0..a.len() {
             let d = a[i] as f64 - b[i] as f64;
             s += d * d;
         }
-        Some(s.sqrt())
+        s
     }
 
+    /// Cosine distance — `1 - dot(a,b) / (|a| * |b|)`. Same SIMD
+    /// shape as l2: three parallel f32x4 accumulators (dot, |a|^2,
+    /// |b|^2) processed 4 lanes at a time, horizontal-summed at
+    /// the end.
     pub fn cosine(a: &[f32], b: &[f32]) -> Option<f64> {
         if a.len() != b.len() {
             return None;
         }
+        let (dot, na, nb) = cosine_components(a, b);
+        if na == 0.0 || nb == 0.0 {
+            return Some(f64::NAN);
+        }
+        Some(1.0 - dot / (na.sqrt() * nb.sqrt()))
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn cosine_components(a: &[f32], b: &[f32]) -> (f64, f64, f64) {
+        use core::arch::wasm32::*;
+        let mut acc_dot = f32x4_splat(0.0);
+        let mut acc_na = f32x4_splat(0.0);
+        let mut acc_nb = f32x4_splat(0.0);
+        let n = a.len();
+        let chunks = n / 4;
+        let mut i = 0;
+        unsafe {
+            for _ in 0..chunks {
+                let va = v128_load(a.as_ptr().add(i) as *const v128);
+                let vb = v128_load(b.as_ptr().add(i) as *const v128);
+                acc_dot = f32x4_add(acc_dot, f32x4_mul(va, vb));
+                acc_na = f32x4_add(acc_na, f32x4_mul(va, va));
+                acc_nb = f32x4_add(acc_nb, f32x4_mul(vb, vb));
+                i += 4;
+            }
+        }
+        let hsum = |v: v128| -> f32 {
+            f32x4_extract_lane::<0>(v)
+                + f32x4_extract_lane::<1>(v)
+                + f32x4_extract_lane::<2>(v)
+                + f32x4_extract_lane::<3>(v)
+        };
+        let mut dot = hsum(acc_dot);
+        let mut na = hsum(acc_na);
+        let mut nb = hsum(acc_nb);
+        while i < n {
+            let x = a[i];
+            let y = b[i];
+            dot += x * y;
+            na += x * x;
+            nb += y * y;
+            i += 1;
+        }
+        (dot as f64, na as f64, nb as f64)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn cosine_components(a: &[f32], b: &[f32]) -> (f64, f64, f64) {
         let mut dot = 0.0f64;
         let mut na = 0.0f64;
         let mut nb = 0.0f64;
@@ -75,10 +167,7 @@ mod kernels {
             na += x * x;
             nb += y * y;
         }
-        if na == 0.0 || nb == 0.0 {
-            return Some(f64::NAN);
-        }
-        Some(1.0 - dot / (na.sqrt() * nb.sqrt()))
+        (dot, na, nb)
     }
 }
 

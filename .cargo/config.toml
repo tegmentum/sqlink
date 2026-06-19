@@ -13,7 +13,12 @@
 [env]
 CC_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/clang"
 AR_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/ar"
-CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysroot -target wasm32-wasip2"
+# -msimd128 enables WebAssembly SIMD (v128 ops) for clang-compiled C
+# code  bundled sqlite3.c (libsqlite3-sys), wasivfs, embed extensions
+# that link C. SIMD is a wasmtime baseline feature; emitting it costs
+# nothing at runtime and lets clang's auto-vectorizer hit memcpy /
+# memcmp / strlen / hash inner loops.
+CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysroot -target wasm32-wasip2 -msimd128"
 # Extra defines threaded into libsqlite3-sys's bundled compile.
 # libsqlite3-sys 0.30.1's build.rs honors LIBSQLITE3_FLAGS for
 # extra -D/-U flags. The bundled flag set covers FTS5 + RTREE +
@@ -43,4 +48,10 @@ LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE
 
 [target.wasm32-wasip2]
 linker = "rust-lld"
-rustflags = ["-C", "link-arg=--no-entry"]
+# +simd128 lets rustc emit WebAssembly SIMD v128 ops (auto-
+# vectorized iter loops, std::simd, manual std::arch::wasm32
+# intrinsics in vec0 kernels, etc). Cost: zero  wasmtime supports
+# SIMD as a baseline feature; emitting it doesn't break older
+# runtimes that lack support either because we already target
+# wasm32-wasip2 which mandates the post-1.0 wasm feature set.
+rustflags = ["-C", "link-arg=--no-entry", "-C", "target-feature=+simd128"]

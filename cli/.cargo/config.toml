@@ -3,9 +3,9 @@ target = "wasm32-wasip2"
 
 [target.wasm32-wasip2]
 linker = "rust-lld"
-rustflags = ["-C", "link-arg=--no-entry"]
+rustflags = ["-C", "link-arg=--no-entry", "-C", "target-feature=+simd128"]
 
 [env]
 CC_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/clang"
 AR_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/ar"
-CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysroot -target wasm32-wasip2"
+CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysroot -target wasm32-wasip2 -msimd128"
