@@ -884,6 +884,43 @@ int32_t exports_sqlite_wasm_high_level_version_number(void) {
     return sqlite3_libversion_number();
 }
 
+// Singleton tracker for the high-level `default-connection` getter.
+// Per WIT contract (wit/sqlite-high-level.wit): "The default connection
+// is created on first call and lives for the lifetime of the component
+// instance." This is the SPI-side shared connection that backs both
+// SPI and the high-level handle.
+static exports_sqlite_wasm_high_level_connection_t *g_default_connection = NULL;
+
+bool exports_sqlite_wasm_high_level_default_connection(
+    exports_sqlite_wasm_high_level_own_connection_t *ret,
+    exports_sqlite_wasm_high_level_database_error_t *err
+) {
+    if (g_default_connection == NULL) {
+        g_default_connection = (exports_sqlite_wasm_high_level_connection_t *)
+            malloc(sizeof(*g_default_connection));
+        if (!g_default_connection) {
+            fill_error(err, SQLITE_NOMEM, SQLITE_NOMEM, "Out of memory");
+            return false;
+        }
+        memset(g_default_connection, 0, sizeof(*g_default_connection));
+        int rc = sqlite3_open_v2(":memory:", &g_default_connection->db,
+                                  SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE
+                                      | SQLITE_OPEN_MEMORY,
+                                  NULL);
+        if (rc != SQLITE_OK) {
+            set_connection_error(g_default_connection);
+            fill_error_from_conn(err, g_default_connection);
+            // Don't run the destructor — we want the singleton to retry
+            // next call. Free the unopened struct directly.
+            free(g_default_connection);
+            g_default_connection = NULL;
+            return false;
+        }
+    }
+    *ret = exports_sqlite_wasm_high_level_connection_new(g_default_connection);
+    return true;
+}
+
 bool exports_sqlite_wasm_high_level_open_memory(
     exports_sqlite_wasm_high_level_own_connection_t *ret,
     exports_sqlite_wasm_high_level_database_error_t *err

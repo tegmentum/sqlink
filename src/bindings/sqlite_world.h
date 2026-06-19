@@ -301,6 +301,7 @@ void exports_sqlite_wasm_high_level_version(sqlite_world_string_t *ret);
 int32_t exports_sqlite_wasm_high_level_version_number(void);
 bool exports_sqlite_wasm_high_level_open_memory(exports_sqlite_wasm_high_level_own_connection_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
 bool exports_sqlite_wasm_high_level_open_file(sqlite_world_string_t *path, exports_sqlite_wasm_high_level_own_connection_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
+bool exports_sqlite_wasm_high_level_default_connection(exports_sqlite_wasm_high_level_own_connection_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
 
 // Helper Functions
 

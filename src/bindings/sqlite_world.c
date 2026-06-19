@@ -621,6 +621,21 @@ void __wasm_export_exports_sqlite_wasm_high_level_open_file_post_return(uint8_t 
   }
 }
 
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#default-connection")))
+void __wasm_export_exports_sqlite_wasm_high_level_default_connection_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
 // Canonical ABI intrinsics
 
 __attribute__((__weak__, __export_name__("cabi_realloc")))
@@ -1677,6 +1692,32 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_open_file(uint8_t * arg, 
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload2).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload2).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload2).message).ptr;
+  } else {
+    const exports_sqlite_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#default-connection")))
+uint8_t * __wasm_export_exports_sqlite_wasm_high_level_default_connection(void) {
+  exports_sqlite_wasm_high_level_result_own_connection_database_error_t ret;
+  exports_sqlite_wasm_high_level_own_connection_t ok;
+  exports_sqlite_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlite_wasm_high_level_default_connection(&ok, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  if (!ret.is_err) {
+    ret.val.ok = ok;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload0).message).ptr;
   } else {
     const exports_sqlite_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
