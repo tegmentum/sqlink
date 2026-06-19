@@ -277,6 +277,41 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-ipaddr: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-aba")]
+    {
+        let rc = aba_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-aba: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-bic")]
+    {
+        let rc = bic_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-bic: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-cusip")]
+    {
+        let rc = cusip_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-cusip: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-creditcard")]
+    {
+        let rc = creditcard_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-creditcard: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-isin")]
+    {
+        let rc = isin_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-isin: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

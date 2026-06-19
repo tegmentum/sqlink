@@ -3,6 +3,16 @@
 version = 4
 
 [[package]]
+name = "aba-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "addr2line"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -118,6 +128,16 @@ version = "0.1.0"
 dependencies = [
  "base32",
  "bs58",
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
+name = "bic-extension"
+version = "0.1.0"
+dependencies = [
  "libsqlite3-sys",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
@@ -560,6 +580,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "creditcard-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
+]
+
+[[package]]
 name = "cron"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -694,6 +724,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "cusip-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]
@@ -1567,6 +1607,16 @@ dependencies = [
  "hermit-abi",
  "libc",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "isin-extension"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
+ "wit-bindgen 0.44.0",
+ "wit-bindgen-rt",
 ]
 
 [[package]]
@@ -2760,18 +2810,23 @@ dependencies = [
 name = "sqlite-cli"
 version = "0.1.0"
 dependencies = [
+ "aba-extension",
  "baseN-extension",
+ "bic-extension",
  "blake3",
  "color-extension",
  "crc-extension",
+ "creditcard-extension",
  "cron-extension",
  "crypto-extension",
+ "cusip-extension",
  "ean-extension",
  "emoji-extension",
  "faker-extension",
  "hexdump-extension",
  "idna-extension",
  "ipaddr-extension",
+ "isin-extension",
  "iso-extension",
  "json1-extension",
  "libsqlite3-sys",
