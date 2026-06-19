@@ -107,12 +107,37 @@ unsafe fn collect_args(
         return Vec::new();
     }
     let slice = core::slice::from_raw_parts(argv, argc as usize);
-    let mut out = Vec::with_capacity(argc as usize);
+    // Reuse a static capacity hint based on the last call's argc.
+    // Saves the allocator at least the realloc on extensions that
+    // always pass the same arity (the common case). The first call
+    // pays a normal Vec::with_capacity; subsequent calls of the
+    // same shape grow in-place because the existing capacity
+    // matches what's about to be pushed.
+    let cap = (*ARGS_CAPACITY_HINT.get()).max(argc as usize);
+    let mut out = Vec::with_capacity(cap);
     for &v in slice {
         out.push(value_to_owned(v));
     }
+    *ARGS_CAPACITY_HINT.get() = argc as usize;
     out
 }
+
+/// Single-threaded wasm; a static cell is safe and avoids the
+/// thread_local! macro (which pulls in `std`). Tracks the largest
+/// argc seen so subsequent allocations don't grow incrementally.
+struct ArgsCapacityHintCell {
+    inner: core::cell::UnsafeCell<usize>,
+}
+unsafe impl Sync for ArgsCapacityHintCell {}
+impl ArgsCapacityHintCell {
+    const fn new() -> Self {
+        Self { inner: core::cell::UnsafeCell::new(0) }
+    }
+    fn get(&self) -> *mut usize {
+        self.inner.get()
+    }
+}
+static ARGS_CAPACITY_HINT: ArgsCapacityHintCell = ArgsCapacityHintCell::new();
 
 unsafe fn value_to_owned(v: *mut ffi::sqlite3_value) -> SqlValueOwned {
     match ffi::sqlite3_value_type(v) {

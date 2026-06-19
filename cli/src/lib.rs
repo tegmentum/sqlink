@@ -119,10 +119,59 @@ fn ensure_cli_conn() {
             // on the hot path for these scalars.
             if let Some(ref conn) = opened {
                 unsafe { register_embedded_extensions(conn.raw_handle()) };
+                unsafe { apply_cli_pragmas(conn.raw_handle()) };
             }
             *g = opened;
         }
     });
+}
+
+/// Pragmas set on every cli connection. The defaults sqlite ships
+/// with are sized for desktop/server processes with multi-GB heap
+/// budgets and a fast fsync path. Our wasm runtime has the opposite
+/// shape  cheap in-process memory, expensive wasi-call fsync
+/// so we lean toward larger page cache (less wasi roundtripping)
+/// and NORMAL sync (one less fsync per commit). temp_store=MEMORY
+/// keeps temp tables off-disk entirely.
+///
+/// Users can override any of these by issuing the matching PRAGMA
+/// after startup.
+unsafe fn apply_cli_pragmas(db: *mut libsqlite3_sys::sqlite3) {
+    const PRAGMAS: &[&[u8]] = &[
+        // Negative value = KB of memory cache. -65536 = 64 MB.
+        // SQLite's default is -2000 (~8 MB), tuned for desktops with
+        // 16 GB RAM that need to share. Our wasm sandbox uses what
+        // we give it; 64 MB removes most page-cache misses on
+        // read-heavy workloads (read at 100k rows benched at 5.5x
+        // native overhead  most of that is wasi roundtrips that a
+        // bigger cache absorbs).
+        b"PRAGMA cache_size = -65536\0",
+        // MEMORY keeps CTEs / temp indexes / sort scratch out of
+        // the file system path. Default is FILE.
+        b"PRAGMA temp_store = MEMORY\0",
+        // NORMAL writes the rollback journal + does ONE fsync per
+        // commit; default FULL does an extra fsync at the start of
+        // commit. The extra fsync exists to defend against power
+        // loss DURING commit  for a wasm cli that's not a realistic
+        // failure mode for the workloads we target.
+        b"PRAGMA synchronous = NORMAL\0",
+    ];
+    for sql in PRAGMAS {
+        let rc = libsqlite3_sys::sqlite3_exec(
+            db,
+            sql.as_ptr() as *const _,
+            None,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+        if rc != libsqlite3_sys::SQLITE_OK {
+            // Non-fatal  if a PRAGMA fails (e.g. read-only db),
+            // continue with sqlite's defaults for that knob.
+            let name = std::ffi::CStr::from_ptr(sql.as_ptr() as *const _)
+                .to_string_lossy();
+            eprintln!("cli pragma {name}: rc={rc}");
+        }
+    }
 }
 
 /// Called once per cli connection open. Each `embed-<name>` cargo

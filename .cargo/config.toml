@@ -30,7 +30,16 @@ CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysr
 #   SESSION /      changeset/patchset primitives
 #   PREUPDATE_HOOK (sqlite3_session_*, requires the preupdate
 #                  hook to capture pre-image rows)
-LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_DESERIALIZE"
+#
+# Perf knobs (PLAN-perf-defaults):
+#   DEFAULT_MEMSTATUS=0     skip per-alloc hit counter; cli never reads
+#                           sqlite3_status()
+#   THREADSAFE=0            single-threaded wasm; skip mutex machinery
+#   LIKE_DOESNT_MATCH_BLOBS skip the BLOB-LIKE branch on every LIKE eval
+#   MAX_EXPR_DEPTH=0        skip per-expression recursion-depth tracking
+#   (OMIT_DECLTYPE is incompatible with the COLUMN_METADATA libsqlite3-sys
+#    bakes in; dropped)
+LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_DEFAULT_MEMSTATUS=0 -DSQLITE_THREADSAFE=0 -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=0"
 
 [target.wasm32-wasip2]
 linker = "rust-lld"
