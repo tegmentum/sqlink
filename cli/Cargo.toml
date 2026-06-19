@@ -69,18 +69,24 @@ uuid-extension  = { path = "../extensions/uuid",  optional = true, features = ["
 crc-extension   = { path = "../extensions/crc",   optional = true, features = ["embed"], default-features = false }
 baseN-extension = { path = "../extensions/baseN", optional = true, features = ["embed"], default-features = false }
 color-extension = { path = "../extensions/color", optional = true, features = ["embed"], default-features = false }
-ean-extension   = { path = "../extensions/ean",   optional = true, features = ["embed"], default-features = false }
+ean-extension     = { path = "../extensions/ean",     optional = true, features = ["embed"], default-features = false }
+emoji-extension   = { path = "../extensions/emoji",   optional = true, features = ["embed"], default-features = false }
+morse-extension   = { path = "../extensions/morse",   optional = true, features = ["embed"], default-features = false }
+hexdump-extension = { path = "../extensions/hexdump", optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
 # feature flag so users can compose exactly what they want. Default
 # build has NONE of them on  identical to the pre-embed cli.
-embed-sha3  = ["dep:sha3-extension"]
-embed-uuid  = ["dep:uuid-extension"]
-embed-crc   = ["dep:crc-extension"]
-embed-baseN = ["dep:baseN-extension"]
-embed-color = ["dep:color-extension"]
-embed-ean   = ["dep:ean-extension"]
+embed-sha3    = ["dep:sha3-extension"]
+embed-uuid    = ["dep:uuid-extension"]
+embed-crc     = ["dep:crc-extension"]
+embed-baseN   = ["dep:baseN-extension"]
+embed-color   = ["dep:color-extension"]
+embed-ean     = ["dep:ean-extension"]
+embed-emoji   = ["dep:emoji-extension"]
+embed-morse   = ["dep:morse-extension"]
+embed-hexdump = ["dep:hexdump-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

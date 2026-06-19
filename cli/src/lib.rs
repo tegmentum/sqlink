@@ -172,6 +172,27 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-ean: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-emoji")]
+    {
+        let rc = emoji_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-emoji: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-morse")]
+    {
+        let rc = morse_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-morse: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-hexdump")]
+    {
+        let rc = hexdump_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-hexdump: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================
