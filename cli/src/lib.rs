@@ -354,6 +354,90 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-totype: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-template")]
+    {
+        let rc = template_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-template: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-email")]
+    {
+        let rc = email_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-email: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-case")]
+    {
+        let rc = case_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-case: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-phone")]
+    {
+        let rc = phone_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-phone: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-csscolor")]
+    {
+        let rc = csscolor_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-csscolor: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-isbn")]
+    {
+        let rc = isbn_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-isbn: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-lorem")]
+    {
+        let rc = lorem_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-lorem: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-url")]
+    {
+        let rc = url_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-url: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-graphql")]
+    {
+        let rc = graphql_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-graphql: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-eval")]
+    {
+        let rc = eval_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-eval: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-roman")]
+    {
+        let rc = roman_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-roman: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-mac")]
+    {
+        let rc = mac_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-mac: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================

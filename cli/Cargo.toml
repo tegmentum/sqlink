@@ -96,6 +96,18 @@ ical-extension       = { path = "../extensions/ical",       optional = true, fea
 zorder-extension     = { path = "../extensions/zorder",     optional = true, features = ["embed"], default-features = false }
 postcode-extension   = { path = "../extensions/postcode",   optional = true, features = ["embed"], default-features = false }
 totype-extension     = { path = "../extensions/totype",     optional = true, features = ["embed"], default-features = false }
+template-extension   = { path = "../extensions/template",   optional = true, features = ["embed"], default-features = false }
+email-extension      = { path = "../extensions/email",      optional = true, features = ["embed"], default-features = false }
+case-extension       = { path = "../extensions/case",       optional = true, features = ["embed"], default-features = false }
+phone-extension      = { path = "../extensions/phone",      optional = true, features = ["embed"], default-features = false }
+csscolor-extension   = { path = "../extensions/csscolor",   optional = true, features = ["embed"], default-features = false }
+isbn-extension       = { path = "../extensions/isbn",       optional = true, features = ["embed"], default-features = false }
+lorem-extension      = { path = "../extensions/lorem",      optional = true, features = ["embed"], default-features = false }
+url-extension        = { path = "../extensions/url",        optional = true, features = ["embed"], default-features = false }
+graphql-extension    = { path = "../extensions/graphql",    optional = true, features = ["embed"], default-features = false }
+eval-extension       = { path = "../extensions/eval",       optional = true, features = ["embed"], default-features = false }
+roman-extension      = { path = "../extensions/roman",      optional = true, features = ["embed"], default-features = false }
+mac-extension        = { path = "../extensions/mac",        optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -133,6 +145,18 @@ embed-ical       = ["dep:ical-extension"]
 embed-zorder     = ["dep:zorder-extension"]
 embed-postcode   = ["dep:postcode-extension"]
 embed-totype     = ["dep:totype-extension"]
+embed-template   = ["dep:template-extension"]
+embed-email      = ["dep:email-extension"]
+embed-case       = ["dep:case-extension"]
+embed-phone      = ["dep:phone-extension"]
+embed-csscolor   = ["dep:csscolor-extension"]
+embed-isbn       = ["dep:isbn-extension"]
+embed-lorem      = ["dep:lorem-extension"]
+embed-url        = ["dep:url-extension"]
+embed-graphql    = ["dep:graphql-extension"]
+embed-eval       = ["dep:eval-extension"]
+embed-roman      = ["dep:roman-extension"]
+embed-mac        = ["dep:mac-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run
