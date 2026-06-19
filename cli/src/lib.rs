@@ -613,6 +613,13 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-phone-prefix: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-country")]
+    {
+        let rc = country_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-country: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================
