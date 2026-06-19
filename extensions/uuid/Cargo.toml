@@ -27,7 +27,7 @@ crate-type = ["cdylib", "rlib"]
 # libsqlite3-sys dep so the cli can compile this extension's
 # scalars in directly, registered via sqlite3_create_function_v2
 # at startup. WIT component build is unaffected; default-off.
-embed = ["dep:libsqlite3-sys"]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
@@ -38,3 +38,5 @@ getrandom = { version = "0.2", default-features = false, features = ["js"] }
 # avoids pkg-config/vcpkg probes and the links = "sqlite3" conflict
 # with the cli's bundled compile (which already provides the symbols).
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+# Shared FFI glue. See sha3-extension's Cargo.toml.
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

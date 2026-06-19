@@ -58,6 +58,12 @@ blake3 = { version = "1", default-features = false }
 # at startup. Same scalar surface; no WIT boundary on the hot path.
 # Add a new embed-* feature alongside its dep when adopting more
 # extensions. See PLAN-embed-extensions.md for the contract.
+# Shared embed helpers. Carried unconditionally so cli code can
+# reference its types in shared bodies; the dep is cheap (no
+# bundled compile, just the FFI thunks + value glue) and gating
+# it on a feature would force every embed-* feature to also
+# list it.
+sqlite-embed = { path = "../sqlite-embed" }
 sha3-extension = { path = "../extensions/sha3", optional = true, features = ["embed"], default-features = false }
 uuid-extension = { path = "../extensions/uuid", optional = true, features = ["embed"], default-features = false }
 

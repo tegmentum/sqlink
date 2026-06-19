@@ -2233,6 +2233,7 @@ dependencies = [
  "hex",
  "libsqlite3-sys",
  "sha3",
+ "sqlite-embed",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",
 ]
@@ -2308,6 +2309,7 @@ dependencies = [
  "miniz_oxide",
  "sha3",
  "sha3-extension",
+ "sqlite-embed",
  "sqlite-mem-tvm",
  "sqlite-pcache-tvm",
  "sqlite-vfs-tvm",
@@ -2315,6 +2317,13 @@ dependencies = [
  "uuid-extension",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",
+]
+
+[[package]]
+name = "sqlite-embed"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
 ]
 
 [[package]]
@@ -2785,6 +2794,7 @@ version = "0.1.0"
 dependencies = [
  "getrandom 0.2.17",
  "libsqlite3-sys",
+ "sqlite-embed",
  "uuid",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",

@@ -15,6 +15,7 @@ members = [
     "sqlite-vfs-tvm",
     "sqlite-tvm-bindings",
     "sqlite-cas-cache",
+    "sqlite-embed",
     "extensions/json1",
     "extensions/csv",
     "extensions/math",
