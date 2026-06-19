@@ -3407,6 +3407,15 @@ need libsqlite3-sys's session feature, just manual extern decls.
 need `-- smoke-db: tempfile` (the wasi sandbox can't reach
 :memory: for spi but session works on the wasm-internal cli
 sqlite3 which is the same connection running the SQL).
+- (T-44 closed) Shipped tooling/cli-smoke.py + cli-smokes/session.{sql,expected}
+covering create, attach, isempty, changeset, patchset, enable,
+indirect, delete, list. Discovery: passing --db as a RELATIVE
+path (not absolute) is required so the wasi preopen resolves
+under cwd; absolute --db preopens its parent dir under its full
+path and the cli's wasi cwd-relative `out.cs` write misses the
+preopen. The runner sets a fresh tempdir as cwd + uses --db smoke.db
+(relative) so the smoke can write changeset files in the same
+dir. Make target `cli-smoke-all` mirrors `ext-smoke-all`.
 - Phase 2's "T-43 plan doc claim wrong" entry stays as-is
 historically  but the actual phase 2/3 work could have used
 manual extern decls from the start and avoided the

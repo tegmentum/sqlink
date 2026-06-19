@@ -858,6 +858,11 @@ ext-list-broken:
 ext-smoke-all:
 	@python3 tooling/smoke.py --all -j 0   # T-17: parallel; -j N to override
 
+# T-44: cli-level smokes  one .sql per dot command suite
+# (.session, .serialize, ...) under tooling/cli-smokes/.
+cli-smoke-all:
+	@python3 tooling/cli-smoke.py --all
+
 ext-check-snippets:
 	@python3 tooling/check-snippets.py
 
@@ -872,4 +877,4 @@ ext-ship:
 	@echo "=== regression check: smoke --all -j 0 ==="
 	@python3 tooling/smoke.py --all -j 0
 
-.PHONY: ext ext-list-broken ext-smoke-all ext-check-snippets ext-ship
+.PHONY: ext ext-list-broken ext-smoke-all cli-smoke-all ext-check-snippets ext-ship

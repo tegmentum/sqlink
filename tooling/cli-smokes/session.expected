@@ -1,0 +1,16 @@
+# initial .session list  empty
+(no active sessions)
+# after create  one session named s1
+s1
+# isempty=1 before any writes
+1
+# isempty=0 after inserting 3 rows
+0
+# changeset extracted to out.cs
+wrote 48 bytes to out.cs
+# patchset extracted to out.ps
+wrote 48 bytes to out.ps
+# still 0 (has changes) after enable off + another insert
+0
+# final list  s1 was deleted
+(no active sessions)

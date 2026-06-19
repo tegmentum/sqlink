@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="sqlink_logo.png" alt="SQLink" width="320">
+</p>
+
 # sqlite-wasm
 
 SQLite + an extension ecosystem, distributed as
