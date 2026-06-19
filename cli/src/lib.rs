@@ -585,6 +585,13 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-compress: register_into failed rc={rc}");
         }
     }
+    #[cfg(feature = "embed-bloom")]
+    {
+        let rc = bloom_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-bloom: register_into failed rc={rc}");
+        }
+    }
 }
 
 // =========================================================================
