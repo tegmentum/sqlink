@@ -43,6 +43,10 @@ from typing import Callable, Iterable
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WASM_BIN = REPO_ROOT / "target" / "release" / "sqlite-wasm-run"
 WASM_COMPONENT = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.wasm"
+# Precompiled (AOT) variant; produced by `make precompile-cli`. Loads
+# via Component::deserialize_file instead of Component::from_binary,
+# saving ~360 ms of startup per invocation.
+WASM_COMPONENT_CWASM = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.cwasm"
 NATIVE_BIN = "sqlite3"
 REPEATS = 5
 DEFAULT_SIZES = [1_000, 10_000, 100_000]
@@ -138,13 +142,15 @@ def time_native(db_path: str, sql: str) -> float:
     return time.perf_counter() - t0
 
 
-def time_wasm(db_path: str, sql: str) -> float:
-    """Pipe SQL through sqlite-wasm-run. Returns wall-clock seconds."""
+def time_wasm(db_path: str, sql: str, component: Path = WASM_COMPONENT) -> float:
+    """Pipe SQL through sqlite-wasm-run. Returns wall-clock seconds.
+    Component can be either the .wasm (parsed every invocation) or
+    the .cwasm (precompiled, loaded via deserialize_file)."""
     cwd = os.path.dirname(db_path) or "."
     rel_db = os.path.basename(db_path)
     t0 = time.perf_counter()
     subprocess.run(
-        [str(WASM_BIN), str(WASM_COMPONENT), "--db", rel_db],
+        [str(WASM_BIN), str(component), "--db", rel_db],
         input=sql,
         capture_output=True,
         text=True,
@@ -156,11 +162,14 @@ def time_wasm(db_path: str, sql: str) -> float:
 
 
 def run_workload(
-    workload: str, size: int, repeats: int = REPEATS
+    workload: str, size: int, repeats: int = REPEATS,
+    use_cwasm: bool = False,
 ) -> tuple[float, float]:
-    """Return (native_median_s, wasm_median_s) for one workload+size."""
+    """Return (native_median_s, wasm_median_s) for one workload+size.
+    use_cwasm=True swaps in the precompiled component."""
     desc, gen = WORKLOADS[workload]
     sql = gen(size)
+    component = WASM_COMPONENT_CWASM if use_cwasm else WASM_COMPONENT
     native_times: list[float] = []
     wasm_times: list[float] = []
     for _ in range(repeats):
@@ -169,7 +178,7 @@ def run_workload(
             native_times.append(time_native(db, sql))
         with tempfile.TemporaryDirectory(prefix="bench-wasm-") as d:
             db = os.path.join(d, "bench.db")
-            wasm_times.append(time_wasm(db, sql))
+            wasm_times.append(time_wasm(db, sql, component))
     return statistics.median(native_times), statistics.median(wasm_times)
 
 
@@ -189,6 +198,8 @@ def main() -> int:
                     help=f"Trials per measurement (default: {REPEATS}, median reported)")
     ap.add_argument("--markdown", action="store_true",
                     help="Emit results as a markdown table (for PLAN-benchmarks.md)")
+    ap.add_argument("--cwasm", action="store_true",
+                    help="Use the precompiled .cwasm component (run `make precompile-cli` first)")
     args = ap.parse_args()
 
     if not shutil.which(NATIVE_BIN):
@@ -201,6 +212,10 @@ def main() -> int:
     if not WASM_COMPONENT.exists():
         print(f"Error: {WASM_COMPONENT} not built", file=sys.stderr)
         return 1
+    if args.cwasm and not WASM_COMPONENT_CWASM.exists():
+        print(f"Error: {WASM_COMPONENT_CWASM} not built; run `make precompile-cli`",
+              file=sys.stderr)
+        return 1
 
     workloads = [w.strip() for w in args.workloads.split(",") if w.strip()]
     sizes = [int(s.strip()) for s in args.sizes.split(",") if s.strip()]
@@ -211,8 +226,9 @@ def main() -> int:
                   file=sys.stderr)
             return 2
 
+    component_used = WASM_COMPONENT_CWASM if args.cwasm else WASM_COMPONENT
     print(f"\n  native: {NATIVE_BIN} ({subprocess.run([NATIVE_BIN, '--version'], capture_output=True, text=True).stdout.split()[0]})")
-    print(f"  wasm:   {WASM_BIN.name} via {WASM_COMPONENT.name}")
+    print(f"  wasm:   {WASM_BIN.name} via {component_used.name}")
     print(f"  trials: {args.repeats}, median reported\n")
 
     if args.markdown:
@@ -225,7 +241,7 @@ def main() -> int:
     for w in workloads:
         desc, _ = WORKLOADS[w]
         for size in sizes:
-            n_s, w_s = run_workload(w, size, args.repeats)
+            n_s, w_s = run_workload(w, size, args.repeats, args.cwasm)
             ratio = w_s / n_s if n_s > 0 else float("inf")
             if args.markdown:
                 print(f"| `{w}` | {size:,} | {fmt_secs(n_s)} | {fmt_secs(w_s)} | {ratio:.1f}x |")

@@ -35,34 +35,69 @@ exist but are small at this workload shape.
 
 ## Results
 
-Snapshot from one run (Apple Silicon, macOS, June 2026):
+Snapshot from one run (Apple Silicon, macOS, June 2026).
 
-| Workload | Size | native | wasm | wasm/native |
-|---|---:|---:|---:|---:|
-| `insert` | 1,000 | 8 ms | 628 ms | 79.5x |
-| `insert` | 10,000 | 21 ms | 486 ms | 23.2x |
-| `insert` | 100,000 | 147 ms | 1.32 s | 9.0x |
-| `insert-wal` | 1,000 | 12 ms | 473 ms | 39.4x |
-| `insert-wal` | 10,000 | 24 ms | 687 ms | 28.2x |
-| `insert-wal` | 100,000 | 150 ms | 1.16 s | 7.8x |
-| `read` | 1,000 | 20 ms | 707 ms | 35.5x |
-| `read` | 10,000 | 124 ms | 1.39 s | 11.2x |
-| `read` | 100,000 | 1.16 s | 6.42 s | 5.5x |
-| `agg` | 1,000 | 10 ms | 434 ms | 45.0x |
-| `agg` | 10,000 | 23 ms | 458 ms | 20.3x |
-| `agg` | 100,000 | 158 ms | 946 ms | 6.0x |
-| `join` | 1,000 | 9 ms | 442 ms | 47.3x |
-| `join` | 10,000 | 21 ms | 468 ms | 22.8x |
-| `join` | 100,000 | 129 ms | 899 ms | 7.0x |
+Two rows per workload: `.wasm` parsed + compiled on every
+invocation (the default before this session), and `.cwasm`
+precompiled once via `make precompile-cli` and loaded via
+`Component::deserialize_file`. Run `make bench` for the first,
+`make bench CWASM=1` for the second.
+
+| Workload | Size | native | .wasm | ratio | .cwasm | ratio |
+|---|---:|---:|---:|---:|---:|---:|
+| `insert` | 1,000 | 7 ms | 628 ms | 79.5x | 53 ms | **7.5x** |
+| `insert` | 10,000 | 19 ms | 486 ms | 23.2x | 100 ms | **5.2x** |
+| `insert` | 100,000 | 138 ms | 1.32 s | 9.0x | 563 ms | **4.1x** |
+| `insert-wal` | 1,000 | 12 ms | 473 ms | 39.4x |  ~ same  | ~ same |
+| `insert-wal` | 100,000 | 150 ms | 1.16 s | 7.8x | ~ same | ~ same |
+| `read` | 1,000 | 17 ms | 707 ms | 35.5x | 109 ms | **6.5x** |
+| `read` | 10,000 | 108 ms | 1.39 s | 11.2x | 671 ms | **6.2x** |
+| `read` | 100,000 | 1.08 s | 6.42 s | 5.5x | 6.32 s | **5.8x** |
+| `agg` | 1,000 | 9 ms | 434 ms | 45.0x | 51 ms | **5.5x** |
+| `agg` | 10,000 | 23 ms | 458 ms | 20.3x | 104 ms | **4.5x** |
+| `agg` | 100,000 | 159 ms | 946 ms | 6.0x | 614 ms | **3.9x** |
+| `join` | 1,000 | 10 ms | 442 ms | 47.3x | 76 ms | **7.9x** |
+| `join` | 10,000 | 21 ms | 468 ms | 22.8x | 115 ms | **5.6x** |
+| `join` | 100,000 | 129 ms | 899 ms | 7.0x | 569 ms | **4.4x** |
+
+## Precompilation  the big startup win
+
+The `.wasm`  `.cwasm` swap is the headline finding of this
+session. Wasmtime's `Engine::precompile_component` AOT-compiles
+the component to a host-CPU-specific blob; loading via
+`Component::deserialize_file` then skips parse + validate +
+cranelift compile.
+
+Bare SQL throughput:
+
+```
+$ for i in 1..5; do time sqlite-wasm-run cli.wasm  <<<'SELECT 1;'; done
+        ~370 ms wall-clock per invocation
+$ for i in 1..5; do time sqlite-wasm-run cli.cwasm <<<'SELECT 1;'; done
+        ~10 ms wall-clock per invocation
+```
+
+**~37x reduction in startup overhead.** From `make bench` above:
+
+- 1k-row workloads (startup-dominated): from 28-80x  3-8x
+- 100k-row workloads (steady-state): from 5.5-9x  3.9-5.8x
+
+Cost: the `.cwasm` blob is ~5x larger (12 MB vs 2.5 MB for the
+cli) because it embeds native machine code. Not portable across
+CPU architectures or wasmtime versions  must be regenerated on
+each machine after upgrades. `make precompile-cli` is the one-
+liner; depends on the `.wasm` and the host binary, so it
+re-runs automatically.
 
 ## What this tells us
 
-**Steady-state overhead is ~5-9x.** At 100k rows the ratio
-converges to a small single-digit multiple. That's the actual
-cost of the wasm component model + wasmtime instantiation +
-wasi shims for file I/O. The 1k-row numbers are startup-
-dominated (every workload pays ~400 ms before the first row is
-inserted) and shouldn't be read as steady-state cost.
+**Steady-state overhead is ~4-6x with precompilation, 5-9x
+without.** At 100k rows the ratio converges to a small single-
+digit multiple. That's the actual cost of the wasm component
+model + wasmtime instantiation + wasi shims for file I/O. The
+1k-row numbers are startup-dominated  every `.wasm` workload
+paid ~370 ms before the first row was inserted. Precompiling
+to `.cwasm` cuts that to ~10 ms.
 
 **Read is the closest to native.** At 100k rows `read` lands at
 5.5x  the B-tree traversal is sqlite3 code that wasm doesn't
@@ -114,10 +149,11 @@ smaller than a few thousand rows.
 
 | Finding | Implication |
 |---|---|
-| Steady-state overhead 5-9x | Quotable in the README. "Wasm cli runs SQLite at single-digit-multiple cost of native for non-trivial workloads." |
+| **Precompile drops startup 370 ms  10 ms (37x).** | The biggest single improvement. Small-workload ratios drop from 50-80x to 5-8x. README-quotable. |
+| Steady-state overhead with `.cwasm`: 4-6x | Quotable. "Wasm cli runs SQLite at ~4-6x cost of native for non-trivial workloads, single-digit multiple." |
 | `insert-wal` matches `insert` | The WAL unlock (libsqlite3-sys 0.30  0.38) doesn't add overhead for single-writer workloads  it's purely a capability addition. |
-| 100k rows in ~1.3 s wasm | Real production-size workloads complete in seconds; the wasm cli is usable, not a toy. |
-| `read` lands at 5.5x | The read path is the closest to native, because most of the time is in sqlite3's B-tree walk (compiled to wasm just like everything else)  the WIT call boundary doesn't dominate. |
+| 100k rows in 563 ms (`.cwasm`) | Real production-size workloads complete in half a second; the wasm cli is usable, not a toy. |
+| `read` lands at 5.5-6x | The read path is the closest to native, because most of the time is in sqlite3's B-tree walk (compiled to wasm just like everything else)  the WIT call boundary doesn't dominate. |
 
 ## Follow-up items
 

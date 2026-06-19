@@ -864,9 +864,21 @@ cli-smoke-all:
 	@python3 tooling/cli-smoke.py --all
 
 # Benchmarks against native sqlite3. See PLAN-benchmarks.md.
-# Pass SIZES=... or WORKLOADS=... to narrow.
+# Pass SIZES=... or WORKLOADS=... to narrow; CWASM=1 to use the
+# precompiled cli component (cuts ~360 ms startup per invocation).
 bench:
-	@python3 tooling/bench.py $(if $(SIZES),--sizes $(SIZES)) $(if $(WORKLOADS),--workloads $(WORKLOADS))
+	@python3 tooling/bench.py $(if $(SIZES),--sizes $(SIZES)) $(if $(WORKLOADS),--workloads $(WORKLOADS)) $(if $(CWASM),--cwasm)
+
+# AOT-compile sqlite_cli.component.wasm to .cwasm. Loading the
+# precompiled blob via Component::deserialize_file skips wasmtime's
+# parse + validate + cranelift compile, dropping cli startup from
+# ~370 ms to ~10 ms. Output is host-CPU-specific  not portable.
+PRECOMPILE_IN := target/wasm32-wasip2/release/sqlite_cli.component.wasm
+PRECOMPILE_OUT := target/wasm32-wasip2/release/sqlite_cli.component.cwasm
+precompile-cli: $(PRECOMPILE_OUT)
+
+$(PRECOMPILE_OUT): $(PRECOMPILE_IN) target/release/sqlite-wasm-run
+	@./target/release/sqlite-wasm-run precompile $(PRECOMPILE_IN) $(PRECOMPILE_OUT)
 
 ext-check-snippets:
 	@python3 tooling/check-snippets.py
@@ -882,4 +894,4 @@ ext-ship:
 	@echo "=== regression check: smoke --all -j 0 ==="
 	@python3 tooling/smoke.py --all -j 0
 
-.PHONY: ext ext-list-broken ext-smoke-all cli-smoke-all bench ext-check-snippets ext-ship
+.PHONY: ext ext-list-broken ext-smoke-all cli-smoke-all bench precompile-cli ext-check-snippets ext-ship

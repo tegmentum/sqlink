@@ -43,11 +43,42 @@ impl wasmtime_wasi::WasiView for State {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: sqlite-wasm-run [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wasm> [-- guest-args...]");
+    eprintln!("usage: sqlite-wasm-run [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wasm|.cwasm> [-- guest-args...]");
     eprintln!("       sqlite-wasm-run changeset {{invert|concat}} <in1> [in2] <out>");
     eprintln!("       sqlite-wasm-run changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
     eprintln!("       sqlite-wasm-run changeset apply --db PATH --input FILE");
+    eprintln!("       sqlite-wasm-run precompile <in.wasm> <out.cwasm>");
     std::process::exit(2);
+}
+
+/// Engine::precompile_component  AOT-compile a component to a
+/// host-specific `.cwasm` blob. Loading that blob via
+/// Component::deserialize_file skips the parse+validate+compile
+/// step on every invocation, cutting the ~400 ms startup cost
+/// to under 100 ms. Output is cranelift-specific and not portable
+/// across host CPUs; regenerate on each machine.
+fn run_precompile_subcommand(args: &[String]) -> Result<()> {
+    if args.len() != 2 {
+        eprintln!("usage: sqlite-wasm-run precompile <in.wasm> <out.cwasm>");
+        std::process::exit(2);
+    }
+    let in_path = std::path::Path::new(&args[0]);
+    let out_path = std::path::Path::new(&args[1]);
+    let bytes = std::fs::read(in_path)
+        .map_err(|e| anyhow!("read {}: {e}", in_path.display()))?;
+    let engine = sqlite_wasm_host::Host::new()?.engine().clone();
+    let precompiled = engine
+        .precompile_component(&bytes)
+        .map_err(|e| anyhow!("precompile: {e}"))?;
+    std::fs::write(out_path, &precompiled)
+        .map_err(|e| anyhow!("write {}: {e}", out_path.display()))?;
+    eprintln!(
+        "wrote {} ({} bytes  {} bytes)",
+        out_path.display(),
+        bytes.len(),
+        precompiled.len(),
+    );
+    Ok(())
 }
 
 /// SQLite session/changeset subcommand. Operates on changeset blob
@@ -389,6 +420,10 @@ async fn main() -> Result<()> {
     if args[1] == "changeset" {
         return run_changeset_subcommand(&args[2..]);
     }
+    // precompile subcommand likewise  no db, no cli component load.
+    if args[1] == "precompile" {
+        return run_precompile_subcommand(&args[2..]);
+    }
 
     let mut db_path = String::new();
     let mut cache_dir: Option<String> = None;
@@ -460,10 +495,23 @@ async fn main() -> Result<()> {
 
     let engine = host.engine().clone();
 
-    let component_bytes = std::fs::read(&component_path)
-        .map_err(|e| anyhow!("read {}: {e}", component_path.display()))?;
-    let component = Component::from_binary(&engine, &component_bytes)
-        .map_err(|e| anyhow!("compile component: {e}"))?;
+    // .cwasm = precompiled by `sqlite-wasm-run precompile`. Loading
+    // it via Component::deserialize_file skips parse+validate+compile.
+    // unsafe is the API contract  caller asserts the file is a
+    // trusted artifact from this exact wasmtime + host CPU.
+    let component = if component_path
+        .extension()
+        .and_then(|s| s.to_str())
+        == Some("cwasm")
+    {
+        unsafe { Component::deserialize_file(&engine, &component_path) }
+            .map_err(|e| anyhow!("deserialize precompiled: {e}"))?
+    } else {
+        let component_bytes = std::fs::read(&component_path)
+            .map_err(|e| anyhow!("read {}: {e}", component_path.display()))?;
+        Component::from_binary(&engine, &component_bytes)
+            .map_err(|e| anyhow!("compile component: {e}"))?
+    };
 
     let mut linker: Linker<State> = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(|e| anyhow!("wire WASI: {e}"))?;
