@@ -140,15 +140,14 @@ static int wasifile_close(sqlite3_file *pFile) {
 static int wasifile_read(sqlite3_file *pFile, void *buf, int amt, sqlite3_int64 offset) {
     WasiFile *file = (WasiFile*)pFile;
 
-    /* Seek to position */
-    off_t pos = lseek(file->fd, (off_t)offset, SEEK_SET);
-    if (pos == (off_t)-1) {
-        g_last_errno = errno;
-        return SQLITE_IOERR_SEEK;
-    }
-
-    /* Read data */
-    ssize_t got = read(file->fd, buf, amt);
+    /* pread combines seek + read in a single wasi call (fd_pread)
+       instead of fd_seek + fd_read. SQLite reads pages at known
+       offsets, so positional I/O is the right primitive. The
+       offset->kernel cursor side-effect of lseek+read also means
+       the file cursor stays at 0; sqlite never reads sequentially
+       through the cursor, so nothing to preserve. Saves one wasi
+       roundtrip per page read. */
+    ssize_t got = pread(file->fd, buf, amt, (off_t)offset);
     if (got < 0) {
         g_last_errno = errno;
         return SQLITE_IOERR_READ;
@@ -166,15 +165,9 @@ static int wasifile_read(sqlite3_file *pFile, void *buf, int amt, sqlite3_int64 
 static int wasifile_write(sqlite3_file *pFile, const void *buf, int amt, sqlite3_int64 offset) {
     WasiFile *file = (WasiFile*)pFile;
 
-    /* Seek to position */
-    off_t pos = lseek(file->fd, (off_t)offset, SEEK_SET);
-    if (pos == (off_t)-1) {
-        g_last_errno = errno;
-        return SQLITE_IOERR_SEEK;
-    }
-
-    /* Write data */
-    ssize_t written = write(file->fd, buf, amt);
+    /* pwrite, same idea as pread above: single wasi call instead
+       of fd_seek + fd_write per page. */
+    ssize_t written = pwrite(file->fd, buf, amt, (off_t)offset);
     if (written != amt) {
         g_last_errno = errno;
         return SQLITE_IOERR_WRITE;

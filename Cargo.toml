@@ -38,3 +38,15 @@ members = [
 #   cd cli && cargo build --release           # uses per-crate .cargo/config.toml
 #   cargo build -p sqlite-cli --target wasm32-wasip2  # from root
 default-members = ["core", "host"]
+
+# Workspace-level release-profile tuning. LTO collapses sqlite3 +
+# rust glue + extension thunks across crate boundaries; codegen-units=1
+# unlocks more aggressive inlining at the cost of build parallelism
+# (~30 s slower clean builds, but the cli's hot loop is sqlite3
+# internal code where every fold helps).
+[profile.release]
+lto = "fat"
+codegen-units = 1
+opt-level = 3
+debug = false
+strip = true

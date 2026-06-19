@@ -2134,6 +2134,33 @@ impl Host {
         config.consume_fuel(true);
         config.epoch_interruption(true);
         config.cranelift_opt_level(wasmtime::OptLevel::Speed);
+        // Performance knobs: every backedge in the wasm module pays
+        // an epoch check + (optionally) a fuel decrement. Keeping
+        // both enabled at the Engine level is mandatory for
+        // extension safety, but we tune the bound-check + memory
+        // layout to make the rest of the hot path cheaper.
+        //
+        // static_memory_maximum_size: preallocate 4 GiB of guard
+        // pages so loads/stores can omit bounds checks against
+        // memory.size  every linear-memory access becomes a
+        // straight `mov` + signal-handler-handled guard rather
+        // than a compare + conditional jump. Wasmtime catches the
+        // guard hit and traps with OOB; behavior identical.
+        //
+        // The pages are address-space only (no physical commit
+        // until faulted) so this is "free" beyond reserving
+        // virtual address space. macOS 11+ and Linux handle this
+        // pattern natively; older 32-bit hosts would need a
+        // smaller value, but we're targeting 64-bit hosts.
+        config.memory_reservation(4 * 1024 * 1024 * 1024);
+        config.memory_guard_size(2 * 1024 * 1024 * 1024);
+        // Don't canonicalize NaN bit patterns on every f64/f32
+        // op  the canonicalization is for determinism across
+        // hosts (we don't run wasm in lockstep) at the cost of
+        // a few cycles per fp op. Default is already false, set
+        // explicit for clarity + to defend against wasmtime
+        // version changes.
+        config.cranelift_nan_canonicalization(false);
 
         let engine = Engine::new(&config).map_err(|e| anyhow!("create wasmtime engine: {e}"))?;
         spawn_epoch_bumper(engine.clone());
