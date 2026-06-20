@@ -212,6 +212,21 @@ interface dispatch {
         cursor-id: u64,
     ) -> result<s64, string>;
 
+    /// One row carried by a batched vtab fetch.
+    record vtab-row {
+        rowid: s64,
+        columns: list<sql-value>,
+    }
+
+    /// Batched vtab fetch. The cli's trampoline calls this once per
+    /// block instead of looping xColumn/xRowid/xNext per row.
+    vtab-fetch-batch: func(
+        ext-name: string,
+        vtab-id: u64,
+        cursor-id: u64,
+        max-rows: u32,
+    ) -> result<list<vtab-row>, string>;
+
     // ── Mutating vtab dispatches ──────────────────────────────
     //
     // Routed to extensions that declared `vtab-spec.mutable = true`

@@ -763,6 +763,7 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
                 name: v.name.clone(),
                 eponymous: v.eponymous,
                 mutable: v.mutable,
+                batched: v.batched,
             })
             .collect(),
         has_authorizer: ext.has_authorizer,
@@ -1868,6 +1869,11 @@ pub struct VtabEntry {
     /// transactional hooks wired to the host's dispatch_vtab_update
     /// family. See `vtab-spec.mutable` in the WIT.
     pub mutable: bool,
+    /// True if the extension implements `vtab.fetch-batch` for
+    /// this vtab. The cli's xColumn / xNext / xRowid / xEof
+    /// trampolines short-circuit to a local cache instead of
+    /// crossing into the extension per row.
+    pub batched: bool,
 }
 
 /// The wasmtime engines + the registry of loaded extensions.
@@ -3064,6 +3070,7 @@ impl Host {
                 name: v.name.clone(),
                 eponymous: v.eponymous,
                 mutable: v.mutable,
+                batched: v.batched,
             })
             .collect();
         self.components.write().insert(
@@ -3810,6 +3817,58 @@ impl Host {
             }
         }
         .map_err(|e| anyhow!("vtab.rowid: {e}"))?;
+        Ok(r)
+    }
+
+    /// Batched vtab fetch. Returns up to `max_rows` rows starting
+    /// at the cursor's current position. The cli trampoline calls
+    /// this once per block and serves xColumn / xRowid / xNext /
+    /// xEof from a local cache  one WIT crossing per ~64 rows
+    /// instead of one per cell.
+    pub async fn dispatch_vtab_fetch_batch(
+        &self,
+        ext_name: &str,
+        vtab_id: u64,
+        cursor_id: u64,
+        max_rows: u32,
+    ) -> Result<std::result::Result<
+        Vec<loaded_tabular::exports::sqlite::extension::vtab::VtabRow>,
+        String,
+    >> {
+        let mut g = self.tabular_guard(ext_name).await?;
+        let r = match &mut g {
+            TabularGuard::ReadOnly(guard) => {
+                let cached = guard.as_mut().unwrap();
+                cached
+                    .instance
+                    .sqlite_extension_vtab()
+                    .call_fetch_batch(&mut cached.store, vtab_id, cursor_id, max_rows)
+                    .await
+            }
+            TabularGuard::Mutating(guard) => {
+                let cached = guard.as_mut().unwrap();
+                let rs = cached
+                    .instance
+                    .sqlite_extension_vtab()
+                    .call_fetch_batch(&mut cached.store, vtab_id, cursor_id, max_rows)
+                    .await;
+                // Translate mutating-world rows  read-only-world rows.
+                // The two bindgens are independent type universes;
+                // sql-value is shared via `with:` but vtab-row is
+                // emitted per-world.
+                rs.map(|res| {
+                    res.map(|rows| {
+                        rows.into_iter()
+                            .map(|r| loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
+                                rowid: r.rowid,
+                                columns: r.columns,
+                            })
+                            .collect()
+                    })
+                })
+            }
+        }
+        .map_err(|e| anyhow!("vtab.fetch_batch: {e}"))?;
         Ok(r)
     }
 
@@ -5437,6 +5496,37 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
     ) -> std::result::Result<i64, String> {
         match self.host.dispatch_vtab_rowid(&ext_name, vtab_id, cursor_id).await {
             Ok(r) => r,
+            Err(e) => Err(e.to_string()),
+        }
+    }
+
+    async fn vtab_fetch_batch(
+        &mut self,
+        ext_name: String,
+        vtab_id: u64,
+        cursor_id: u64,
+        max_rows: u32,
+    ) -> std::result::Result<
+        Vec<bindings::sqlite::wasm::dispatch::VtabRow>,
+        String,
+    > {
+        let res = self
+            .host
+            .dispatch_vtab_fetch_batch(&ext_name, vtab_id, cursor_id, max_rows)
+            .await;
+        match res {
+            Ok(Ok(rows)) => Ok(rows
+                .into_iter()
+                .map(|r| bindings::sqlite::wasm::dispatch::VtabRow {
+                    rowid: r.rowid,
+                    columns: r
+                        .columns
+                        .into_iter()
+                        .map(convert_sql_value_from_loaded)
+                        .collect(),
+                })
+                .collect()),
+            Ok(Err(e)) => Err(e),
             Err(e) => Err(e.to_string()),
         }
     }

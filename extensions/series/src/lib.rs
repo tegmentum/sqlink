@@ -36,7 +36,7 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
         ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    };
+    VtabRow};
     use bindings::sqlite::extension::types::SqlValue;
 
     const VTAB_ID_SERIES: u64 = 1;
@@ -75,6 +75,7 @@ mod wasm_export {
                     name: "generate_series".to_string(),
                     eponymous: true,
                     mutable: false,
+                    batched: true,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,
@@ -315,7 +316,52 @@ mod wasm_export {
                     .ok_or_else(|| "generate_series: cursor not open".to_string())
             })
         }
-    }
+    
+        fn fetch_batch(
+            _vtab_id: u64,
+            cursor_id: u64,
+            max_rows: u32,
+        ) -> Result<Vec<VtabRow>, String> {
+            // generate_series is the cleanest possible batched-fetch:
+            // every "row" is just (rowid, current_value) and advance
+            // is integer arithmetic. We pull up to max_rows worth in
+            // one pass, advance the cursor's internal state, then
+            // hand back the block. Done = empty list  signals EOF
+            // to the host cache.
+            CURSORS.with(|m| {
+                let mut cursors = m.borrow_mut();
+                let Some(c) = cursors.get_mut(&cursor_id) else {
+                    return Err("generate_series: cursor not open".to_string());
+                };
+                let mut out: Vec<VtabRow> = Vec::with_capacity(max_rows as usize);
+                let mut produced = 0u32;
+                while !c.done && produced < max_rows {
+                    out.push(VtabRow {
+                        rowid: c.rowid,
+                        columns: alloc::vec![
+                            SqlValue::Integer(c.current), // value
+                            SqlValue::Integer(c.current), // start (HIDDEN)
+                            SqlValue::Integer(c.stop),    // stop (HIDDEN)
+                            SqlValue::Integer(c.step),    // step (HIDDEN)
+                        ],
+                    });
+                    produced += 1;
+                    let (next, overflow) = c.current.overflowing_add(c.step);
+                    if overflow {
+                        c.done = true;
+                    } else if (c.step > 0 && next > c.stop)
+                        || (c.step < 0 && next < c.stop)
+                    {
+                        c.done = true;
+                    } else {
+                        c.current = next;
+                        c.rowid += 1;
+                    }
+                }
+                Ok(out)
+            })
+        }
+}
 
     bindings::export!(Series with_types_in bindings);
 }

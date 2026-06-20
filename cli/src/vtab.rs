@@ -34,6 +34,7 @@ struct ModuleAux {
     ext_name: String,
     vtab_id: u64,
     eponymous: bool,
+    batched: bool,
 }
 
 /// Instance handle stored alongside `sqlite3_vtab`'s base. Lets
@@ -56,12 +57,78 @@ struct WasmVtabCursor {
 struct InstanceMeta {
     ext_name: String,
     vtab_id: u64,
+    batched: bool,
 }
 
 #[derive(Clone)]
 struct CursorMeta {
     ext_name: String,
     vtab_id: u64,
+    /// True if the vtab declared `batched: true` in its manifest.
+    /// xFilter pre-fetches a block of rows; xNext / xEof / xColumn
+    /// / xRowid serve from the cache and only re-cross when the
+    /// block runs out.
+    batched: bool,
+}
+
+/// Per-cursor row cache for batched vtabs. Populated by xFilter and
+/// refilled by xNext when the cache is consumed. `idx` is the
+/// position within `rows` we're currently serving; `eof_seen` is
+/// true once an empty fetch was returned (no more rows in the
+/// vtab).
+#[derive(Default)]
+struct BatchCache {
+    rows: Vec<dispatch::VtabRow>,
+    idx: usize,
+    eof_seen: bool,
+}
+
+fn batch_cache() -> &'static Mutex<HashMap<u64, BatchCache>> {
+    static BC: OnceLock<Mutex<HashMap<u64, BatchCache>>> = OnceLock::new();
+    BC.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Default batch size for batched-vtab fetches. Tuned to amortize
+/// the WIT crossing cost (~2.7us / call) across enough rows that
+/// the per-row marginal stays well under that; 64 is a safe
+/// middle ground (cache footprint ~64 * #cols * SqlValue size,
+/// which is on the order of KB).
+const BATCH_SIZE: u32 = 64;
+
+/// Drain the batch cache for `cursor_id`. Called from xClose.
+fn drop_batch_cache(cursor_id: u64) {
+    batch_cache().lock().unwrap().remove(&cursor_id);
+}
+
+/// Try to pull a fresh batch into the cache. Returns true if a
+/// non-empty batch landed; false if EOF / error.
+fn refill_batch(meta: &CursorMeta, cursor_id: u64) -> bool {
+    let rows = match dispatch::vtab_fetch_batch(
+        &meta.ext_name,
+        meta.vtab_id,
+        cursor_id,
+        BATCH_SIZE,
+    ) {
+        Ok(r) => r,
+        Err(_) => {
+            // Treat error as EOF. The host already logged it.
+            let mut cache = batch_cache().lock().unwrap();
+            let entry = cache.entry(cursor_id).or_default();
+            entry.eof_seen = true;
+            return false;
+        }
+    };
+    let mut cache = batch_cache().lock().unwrap();
+    let entry = cache.entry(cursor_id).or_default();
+    entry.idx = 0;
+    if rows.is_empty() {
+        entry.rows.clear();
+        entry.eof_seen = true;
+        false
+    } else {
+        entry.rows = rows;
+        true
+    }
 }
 
 struct Registry {
@@ -272,6 +339,7 @@ unsafe fn create_or_connect(
     let instance_id = alloc_instance_id(InstanceMeta {
         ext_name: aux.ext_name.clone(),
         vtab_id: aux.vtab_id,
+        batched: aux.batched,
     });
 
     let result = if is_connect || aux.eponymous {
@@ -438,6 +506,7 @@ unsafe extern "C" fn x_open(
     let cursor_id = alloc_cursor_id(CursorMeta {
         ext_name: meta.ext_name.clone(),
         vtab_id: meta.vtab_id,
+        batched: meta.batched,
     });
     if let Err(e) = dispatch::vtab_open(&meta.ext_name, meta.vtab_id, wv.instance_id, cursor_id) {
         drop_cursor(cursor_id);
@@ -457,6 +526,7 @@ unsafe extern "C" fn x_close(p_cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int {
     if let Some(meta) = cursor_meta(c.cursor_id) {
         let _ = dispatch::vtab_close(&meta.ext_name, meta.vtab_id, c.cursor_id);
     }
+    drop_batch_cache(c.cursor_id);
     drop_cursor(c.cursor_id);
     ffi::SQLITE_OK
 }
@@ -490,7 +560,22 @@ unsafe extern "C" fn x_filter(
         idx_str_owned.as_deref(),
         &args,
     ) {
-        Ok(()) => ffi::SQLITE_OK,
+        Ok(()) => {
+            // For batched vtabs, pre-fetch the first block right
+            // after filter so xEof / xColumn / xRowid serve from
+            // the cache without an extra round-trip.
+            if meta.batched {
+                {
+                    let mut bc = batch_cache().lock().unwrap();
+                    let entry = bc.entry(c.cursor_id).or_default();
+                    entry.rows.clear();
+                    entry.idx = 0;
+                    entry.eof_seen = false;
+                }
+                let _ = refill_batch(&meta, c.cursor_id);
+            }
+            ffi::SQLITE_OK
+        }
         Err(_) => ffi::SQLITE_ERROR,
     }
 }
@@ -501,6 +586,21 @@ unsafe extern "C" fn x_next(p_cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int {
         Some(m) => m,
         None => return ffi::SQLITE_INTERNAL,
     };
+    if meta.batched {
+        let need_refill = {
+            let mut bc = batch_cache().lock().unwrap();
+            let entry = bc.entry(c.cursor_id).or_default();
+            entry.idx += 1;
+            entry.idx >= entry.rows.len() && !entry.eof_seen
+        };
+        if need_refill {
+            // Cache exhausted: pull next block. If empty, EOF will
+            // be reflected on the next xEof. If error, the host
+            // already set eof_seen.
+            let _ = refill_batch(&meta, c.cursor_id);
+        }
+        return ffi::SQLITE_OK;
+    }
     match dispatch::vtab_next(&meta.ext_name, meta.vtab_id, c.cursor_id) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
@@ -513,6 +613,25 @@ unsafe extern "C" fn x_eof(p_cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int {
         Some(m) => m,
         None => return 1,
     };
+    if meta.batched {
+        let bc = batch_cache().lock().unwrap();
+        let entry = match bc.get(&c.cursor_id) {
+            Some(e) => e,
+            None => return 1,
+        };
+        if entry.idx < entry.rows.len() {
+            return 0;
+        }
+        if entry.eof_seen {
+            return 1;
+        }
+        // Cache exhausted but EOF not seen yet  EOF will resolve
+        // when xNext refills. Returning 1 here would terminate the
+        // scan prematurely, so we conservatively report not-EOF
+        // and let the next xColumn / xRowid use the (already-
+        // refilled) cache; xFilter primed the first block.
+        return 0;
+    }
     if dispatch::vtab_eof(&meta.ext_name, meta.vtab_id, c.cursor_id) {
         1
     } else {
@@ -530,6 +649,23 @@ unsafe extern "C" fn x_column(
         Some(m) => m,
         None => return ffi::SQLITE_INTERNAL,
     };
+    if meta.batched {
+        let bc = batch_cache().lock().unwrap();
+        if let Some(entry) = bc.get(&c.cursor_id) {
+            if let Some(row) = entry.rows.get(entry.idx) {
+                if let Some(v) = row.columns.get(col as usize) {
+                    wit_to_sqlite3_result(ctx, v.clone());
+                    return ffi::SQLITE_OK;
+                }
+                // Out-of-range column  return NULL, matching
+                // sqlite's behavior for HIDDEN columns past the
+                // explicit schema.
+                ffi::sqlite3_result_null(ctx);
+                return ffi::SQLITE_OK;
+            }
+        }
+        return ffi::SQLITE_ERROR;
+    }
     match dispatch::vtab_column(&meta.ext_name, meta.vtab_id, c.cursor_id, col) {
         Ok(v) => {
             wit_to_sqlite3_result(ctx, v);
@@ -548,6 +684,16 @@ unsafe extern "C" fn x_rowid(
         Some(m) => m,
         None => return ffi::SQLITE_INTERNAL,
     };
+    if meta.batched {
+        let bc = batch_cache().lock().unwrap();
+        if let Some(entry) = bc.get(&c.cursor_id) {
+            if let Some(row) = entry.rows.get(entry.idx) {
+                *p_rowid = row.rowid;
+                return ffi::SQLITE_OK;
+            }
+        }
+        return ffi::SQLITE_ERROR;
+    }
     match dispatch::vtab_rowid(&meta.ext_name, meta.vtab_id, c.cursor_id) {
         Ok(r) => {
             *p_rowid = r;
@@ -966,11 +1112,13 @@ pub fn register_vtab_module(
     vtab_id: u64,
     eponymous: bool,
     mutable: bool,
+    batched: bool,
 ) -> Result<(), String> {
     let aux = Box::into_raw(Box::new(ModuleAux {
         ext_name: ext_name.to_string(),
         vtab_id,
         eponymous,
+        batched,
     })) as *mut c_void;
     let name_c = CString::new(name).map_err(|e| format!("vtab name: {e}"))?;
     // Mutable always wins over eponymous if both are flagged

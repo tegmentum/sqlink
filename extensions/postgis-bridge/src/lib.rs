@@ -32,7 +32,7 @@ use bindings::exports::sqlite::extension::metadata::{
 use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
 use bindings::exports::sqlite::extension::vtab::{
     ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-};
+VtabRow};
 use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
 use bindings::postgis::wasm::postgis_accessors as pg_acc;
@@ -1190,6 +1190,7 @@ impl MetadataGuest for PostgisBridge {
                 name: "raster_polygon_dump".into(),
                 eponymous: false,
                     mutable: false,
+                    batched: false,
             }],
             has_authorizer: false,
             has_update_hook: false,
@@ -4055,6 +4056,14 @@ impl VtabGuest for PostgisBridge {
             Ok((cursor.row_idx + 1) as i64)
         })
     }
+
+        fn fetch_batch(
+            _vtab_id: u64,
+            _cursor_id: u64,
+            _max_rows: u32,
+        ) -> Result<Vec<VtabRow>, String> {
+            Err("fetch_batch: not implemented; host falls back to per-row".to_string())
+        }
 }
 
 bindings::export!(PostgisBridge with_types_in bindings);

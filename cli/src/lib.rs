@@ -1780,6 +1780,7 @@ fn do_load(input: &str) -> String {
                 spec.id,
                 spec.eponymous,
                 spec.mutable,
+                spec.batched,
             ) {
                 Ok(()) => {
                     v_count += 1;

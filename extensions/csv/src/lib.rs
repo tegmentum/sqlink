@@ -40,7 +40,7 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
         ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    };
+    VtabRow};
     use bindings::sqlite::extension::types::SqlValue;
 
     use crate::parser;
@@ -83,6 +83,7 @@ mod wasm_export {
                     name: "csv".to_string(),
                     eponymous: false,
                     mutable: false,
+                    batched: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,
@@ -254,7 +255,15 @@ mod wasm_export {
                 Ok((cursor.row_idx + 1) as i64)
             })
         }
-    }
+    
+        fn fetch_batch(
+            _vtab_id: u64,
+            _cursor_id: u64,
+            _max_rows: u32,
+        ) -> Result<Vec<VtabRow>, String> {
+            Err("fetch_batch: not implemented; host falls back to per-row".to_string())
+        }
+}
 
     fn connect_impl(instance_id: u64, args: &[String]) -> Result<String, String> {
         let parsed = parse_args(args)?;

@@ -31,7 +31,7 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
         ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    };
+    VtabRow};
     use bindings::exports::sqlite::extension::vtab_update::Guest as VtabUpdateGuest;
     use bindings::sqlite::extension::types::SqlValue;
 
@@ -90,6 +90,7 @@ mod wasm_export {
                     name: "inmem".to_string(),
                     eponymous: false,
                     mutable: true,
+                    batched: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,
@@ -236,7 +237,15 @@ mod wasm_export {
                 c.snapshot.get(c.idx).copied().ok_or_else(|| "inmem: past EOF".to_string())
             })
         }
-    }
+    
+        fn fetch_batch(
+            _vtab_id: u64,
+            _cursor_id: u64,
+            _max_rows: u32,
+        ) -> Result<Vec<VtabRow>, String> {
+            Err("fetch_batch: not implemented; host falls back to per-row".to_string())
+        }
+}
 
     impl VtabUpdateGuest for Inmem {
         fn update(

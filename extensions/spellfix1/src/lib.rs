@@ -113,7 +113,7 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
         ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    };
+    VtabRow};
     use bindings::sqlite::extension::spi;
     use bindings::sqlite::extension::types::SqlValue;
 
@@ -193,6 +193,7 @@ mod wasm_export {
                     name: "spellfix1".to_string(),
                     eponymous: false,
                     mutable: false,
+                    batched: false,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,
@@ -432,7 +433,15 @@ mod wasm_export {
                     .ok_or_else(|| "spellfix1: cursor not open".to_string())
             })
         }
-    }
+    
+        fn fetch_batch(
+            _vtab_id: u64,
+            _cursor_id: u64,
+            _max_rows: u32,
+        ) -> Result<Vec<VtabRow>, String> {
+            Err("fetch_batch: not implemented; host falls back to per-row".to_string())
+        }
+}
 
     bindings::export!(Ext with_types_in bindings);
 }
