@@ -80,17 +80,26 @@ impl WasmDispatcher for HostDispatcher {
     fn dispatch(&self, name: &str, request_data: &[u8]) -> Result<WasmResponse> {
         let source =
             std::str::from_utf8(request_data).map_err(|e| anyhow!("request json: {e}"))?;
-        // The runtime's execute() is async (it lives behind
-        // wasmtime's component-model-async). Block on the
-        // current tokio runtime so the WasmDispatcher trait can
-        // stay sync  the router callsite already runs inside
-        // a hyper request handler that has a runtime handle.
+        // The runtime's execute() is async (component-model-async
+        // path on wasmtime). The router calls dispatch() from
+        // inside hyper's async request handler  calling
+        // Handle::block_on directly here would panic with
+        // "Cannot start a runtime from within a runtime."
+        //
+        // block_in_place tells the multi-threaded runtime to
+        // promote a replacement worker; the current thread is
+        // then free to drive the future to completion. Requires
+        // a multi-threaded runtime, which sqlite-wasm-httpd is
+        // (#[tokio::main] without specifying flavor).
         let host = self.host.clone();
         let name = name.to_string();
         let source_name = "request.json".to_string();
         let source = source.to_string();
-        let result = self.rt.block_on(async move {
-            host.invoke_runtime("http", &name, &source_name, &source).await
+        let rt = self.rt.clone();
+        let result = tokio::task::block_in_place(move || {
+            rt.block_on(async move {
+                host.invoke_runtime("http", &name, &source_name, &source).await
+            })
         })?;
 
         // The component returned a string. Try parsing it as a
