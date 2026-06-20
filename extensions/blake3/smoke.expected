@@ -1,0 +1,23 @@
+# BLAKE3 reference vectors (computed against the upstream blake3 crate):
+#   blake3('')    = af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262
+#   blake3('abc') = 6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85
+#   blake3_keyed('whats the Elvish word for friend', 'BLAKE3')
+#                 = d3e0b855aa94409046308318bb8b01e396b80ac206327cd7f09576e3849d639a
+#   blake3_derive_key('example context', 'key material')
+#                 = 75ed2b8a9dbd2683d91a40c3a8d54bb1edd99784eae65c61ea8fd62d7d7a5dab
+af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262
+6437b3ac38465133ffb63b75273a8db548c558465d79db03fd359c6cd5bd9d85
+32
+1
+1
+64
+d3e0b855aa94409046308318bb8b01e396b80ac206327cd7f09576e3849d639a
+32
+32
+1
+1
+1
+1
+1
+1
+1

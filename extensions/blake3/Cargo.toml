@@ -1,0 +1,33 @@
+[package]
+name = "blake3-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+BLAKE3 hash extension for SQLite: hash + keyed-hash + KDF (derive-key)
+modes, exposed as scalar functions. Pairs with sha3 (FIPS 202) and
+hashes-fast (xxhash / murmur3) -- where sha3 covers
+collision-resistance with the NIST seal, BLAKE3 is the modern
+choice: faster on commodity hardware, native parallelism, built-in
+keyed-hash + KDF.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps this crate out of the parent workspace
+# build (PLAN hard rule 2). The wasi component build
+# (`make ext NAME=blake3`) still works because the Makefile invokes
+# `cargo build` with --manifest-path against this crate's own
+# workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust BLAKE3 implementation. Default features are fine for
+# wasm32-wasip2; SIMD acceleration kicks in transparently when the
+# target supports it.
+blake3 = { version = "1", default-features = false }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
