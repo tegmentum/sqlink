@@ -1,0 +1,71 @@
+# Expected output for the `id3` smoke harness.
+#
+# v2.4 fixture: Title=Test Title, Artist=Test Artist, Album=Test Album,
+#   AlbumArtist=Test AArt, Year=2024, Genre=Synthwave, Track=5/10,
+#   Disc=1/2, Composer=Test Composer, Comment="Hello" (eng).
+# v2.3 fixture: Title=Title v23, Artist=Artist v23, Album=Album v23,
+#   Year=2020 (UTF-16 encoded text).
+# v1 fixture: Title=V1 Title, Artist=V1 Artist, Album=V1 Album,
+#   Year=1999, Comment=V1 Comment, Track=7, GenreId=18=Techno.
+
+# ---- Acceptance 1: ID3v2.4 named fields ----
+Test Title
+Test Artist
+Test Album
+2024
+Synthwave
+5
+1
+Hello
+Test AArt
+Test Composer
+ID3v2.4
+
+# ---- Acceptance 2: id3_all JSON spot-check ----
+Test Title
+ID3v2.4
+
+# ---- Acceptance 3: ID3v2.3 fixture ----
+Title v23
+Artist v23
+Album v23
+2020
+ID3v2.3
+
+# ---- Acceptance 4: ID3v1 basics ----
+V1 Title
+V1 Artist
+V1 Album
+1999
+V1 Comment
+7
+Techno
+ID3v1
+# v2-only fields -> NULL on a v1 tag
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 5: random bytes -> NULL ----
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 6: NULL input -> NULL ----
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 7: id3_meta_version non-empty ----
+1

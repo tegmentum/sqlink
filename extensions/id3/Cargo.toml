@@ -1,0 +1,19 @@
+[package]
+name = "id3-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ID3 tag parsing (v1, v2.3, v2.4) for MP3 blobs via the id3 1.x pure-rust crate.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+id3 = { version = "1.17", default-features = false }
