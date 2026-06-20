@@ -1,0 +1,39 @@
+[package]
+name = "sqlite-wasm-httpd"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Native HTTP/HTTPS server that executes SQL against a sqlite database and returns JSON. Sibling to sqlite-wasm-run; talks the same `--db PATH` contract and links libsqlite3-sys directly (no wasm runtime in the hot path)."
+
+[[bin]]
+name = "sqlite-wasm-httpd"
+path = "src/main.rs"
+
+[dependencies]
+# Async runtime — already in tree via host.
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "io-util", "signal"] }
+# Hyper 1.x is the modern split-out version. Use server-side primitives.
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto"] }
+http-body-util = "0.1"
+bytes = "1"
+# TLS via rustls + tokio adapter, matches host's reqwest stack.
+rustls = { version = "0.23", features = ["ring"] }
+tokio-rustls = "0.26"
+rustls-pemfile = "2"
+# Self-signed cert generation for the `--tls-self-signed` mode.
+rcgen = "0.13"
+# Database surface — go straight to libsqlite3-sys. Bundled compile
+# matches the cli's config so user-facing SQL behaviour stays the
+# same: same defines, same default pragmas (applied at connect).
+libsqlite3-sys = { version = "0.38", features = ["bundled"] }
+# Serialization for JSON output + the URL query parser.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+urlencoding = "2"
+anyhow = "1"
+# argv parser  small, stable.
+clap = { version = "4", features = ["derive"] }
+# tracing for structured logs (matches host).
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
