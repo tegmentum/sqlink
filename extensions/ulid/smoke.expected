@@ -1,0 +1,14 @@
+# ULID smoke. ulid()/ulid_blob() are nondeterministic across
+# runs (timestamp+random), but their LENGTHS and round-trip
+# properties are stable. ulid_from(ms) pins the timestamp half
+# so ulid_timestamp(ulid_from(ms)) == ms always.
+26
+16
+1700000000000
+0
+1
+10
+<NULL>
+<NULL>
+1469922850259
+1

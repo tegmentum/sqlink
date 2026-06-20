@@ -1,0 +1,32 @@
+[package]
+name = "ulid-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ULID (Universally Unique Lexicographically Sortable Identifier) scalar
+functions. 128-bit IDs with a 48-bit ms-epoch timestamp prefix + 80
+bits of randomness, encoded in Crockford base32 (26 chars). Sortable
+by creation time  ideal for primary keys you also want to range-scan
+by recency.
+
+PLAN-extensions-and-handlers.md item 3.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: the parent workspace builds for native; this
+# crate builds for wasm32-wasip2 only. `make ext NAME=ulid` walks up
+# to .cargo/config.toml for the wasi-sdk CC/AR vars, so the bundled
+# rand_chacha (no C deps anyway) and the rest cross-compile cleanly.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# ulid 1.2 cross-compiles cleanly to wasm32-wasip2 against the
+# wasi-sdk clang  pure rust, std-only deps (rand, rand_chacha,
+# zerocopy). Verified by a tmp probe build before commit.
+ulid = "1.2"
