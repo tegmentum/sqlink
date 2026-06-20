@@ -25,6 +25,13 @@ wasmtime = { version = "45.0.1", features = [
     "cranelift",
     "parallel-compilation",
     "async",
+    # On-disk compilation cache. Wasmtime hashes each module + the
+    # compiler config and stores the compiled artifact under the
+    # configured directory; subsequent `Engine::precompile_component`
+    # / `Component::new` calls hit the cache. See Host::new for the
+    # directory wiring (env `SQLITE_WASM_COMPILE_CACHE` or default
+    # `~/.cache/sqlite-wasm/compile-cache`).
+    "cache",
 ] }
 wasmtime-wasi = "45.0.1"
 parking_lot = "0.12"

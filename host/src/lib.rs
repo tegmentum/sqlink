@@ -39,7 +39,7 @@ use std::time::Duration;
 use anyhow::{anyhow, Result};
 use parking_lot::{Mutex, RwLock};
 use wasmtime::component::{Component, Linker};
-use wasmtime::{Config, Engine};
+use wasmtime::{Cache, CacheConfig, Config, Engine};
 
 pub use policy::{Capability, DnsPolicy, HttpPolicy, Policy};
 
@@ -2133,6 +2133,53 @@ impl TrustPolicy {
     }
 }
 
+/// Resolve the directory backing the wasmtime compilation cache.
+///
+/// Priority:
+///   1. `SQLITE_WASM_COMPILE_CACHE` env var (absolute path)
+///   2. `$XDG_CACHE_HOME/sqlite-wasm/compile-cache`
+///   3. `$HOME/.cache/sqlite-wasm/compile-cache`
+///
+/// Returns `None` when neither HOME nor XDG_CACHE_HOME is set
+/// (e.g. minimal CI containers), which disables the cache rather
+/// than failing engine construction.
+fn compile_cache_dir() -> Option<std::path::PathBuf> {
+    if let Ok(p) = std::env::var("SQLITE_WASM_COMPILE_CACHE") {
+        if !p.is_empty() {
+            return Some(std::path::PathBuf::from(p));
+        }
+    }
+    if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
+        if !xdg.is_empty() {
+            return Some(std::path::PathBuf::from(xdg).join("sqlite-wasm/compile-cache"));
+        }
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.is_empty() {
+            return Some(std::path::PathBuf::from(home).join(".cache/sqlite-wasm/compile-cache"));
+        }
+    }
+    None
+}
+
+/// Build a wasmtime compilation cache rooted at [`compile_cache_dir`].
+/// Creates the directory if missing. Errors propagate out so the
+/// caller can degrade gracefully (cache disabled, host still works).
+fn build_compile_cache() -> Result<Cache> {
+    let dir = compile_cache_dir().ok_or_else(|| {
+        anyhow!("no cache directory available (HOME / XDG_CACHE_HOME unset and SQLITE_WASM_COMPILE_CACHE not set)")
+    })?;
+    if let Err(e) = std::fs::create_dir_all(&dir) {
+        return Err(anyhow!(
+            "create cache directory {}: {e}",
+            dir.display()
+        ));
+    }
+    let mut cfg = CacheConfig::new();
+    cfg.with_directory(&dir);
+    Cache::new(cfg).map_err(|e| anyhow!("init wasmtime cache at {}: {e}", dir.display()))
+}
+
 impl Host {
     /// Build a Host with sensible default Engine config (fuel, epoch,
     /// component-model, pooling). Spawns the epoch-bumper thread.
@@ -2181,6 +2228,35 @@ impl Host {
         // explicit for clarity + to defend against wasmtime
         // version changes.
         config.cranelift_nan_canonicalization(false);
+
+        // On-disk compilation cache. Wasmtime hashes (module bytes,
+        // compiler config, wasmtime version) and stashes the
+        // compiled artifact under the cache directory; subsequent
+        // `Component::new` / `Engine::precompile_component_file`
+        // calls hit the cache instead of re-running cranelift.
+        //
+        // Orthogonal to the .cwasm precompile path (which is an
+        // explicit precompile-to-disk for the cli component): cwasm
+        // wins when the same artifact is shipped to many hosts; this
+        // cache wins for any other component the host compiles on
+        // demand. They coexist  cwasm load skips compilation
+        // entirely, but Component::new for embedded / loaded
+        // extensions and cli embeds still pays a compile cost the
+        // first time.
+        //
+        // Failure to build the cache is non-fatal: extension load
+        // still works without the cache, just slower. We log a
+        // warning so an operator notices a misconfigured cache dir.
+        let cache = match build_compile_cache() {
+            Ok(c) => Some(c),
+            Err(e) => {
+                tracing::warn!("wasmtime compile cache disabled: {e}");
+                None
+            }
+        };
+        if let Some(ref cache) = cache {
+            config.cache(Some(cache.clone()));
+        }
 
         let engine = Engine::new(&config).map_err(|e| anyhow!("create wasmtime engine: {e}"))?;
 
