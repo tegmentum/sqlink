@@ -25,8 +25,15 @@ members = [
     "extensions/regexp",
     "extensions/stats",
     "extensions/postgis-bridge",
-    "extensions/color",
     "examples/rust/runnable-sqlite-demo",
+]
+exclude = [
+    # extensions/* with their own [workspace] are intentionally
+    # standalone  see the dedupe + survey commits. Keep this list
+    # in sync as new standalone crates land.
+    "extensions/color",
+    "extensions/formats",
+    "extensions/iban",
 ]
 
 # `cargo build` / `cargo test` at the workspace root operate on

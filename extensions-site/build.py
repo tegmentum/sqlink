@@ -26,6 +26,7 @@ Then serve locally:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import sqlite3
@@ -117,6 +118,55 @@ def install_routes(conn: sqlite3.Connection) -> None:
         """
     )
     conn.execute("DELETE FROM routes")
+
+
+def install_assets_table(conn: sqlite3.Connection, repo: Path) -> tuple[int, int]:
+    """Build the content-addressed asset store. Walks every extension's
+    `target/wasm32-wasip2/release/<name>_extension.component.wasm` and
+    inserts it as a BLOB keyed by extension name. The /asset/<name>
+    route serves these directly via the httpd's `blob` route kind
+    no R2, no external storage, no DNS, no egress fees.
+
+    Returns (asset_count, total_bytes) for the build-time summary."""
+    conn.execute(
+        """
+        CREATE TABLE assets (
+            name         TEXT PRIMARY KEY,
+            blob         BLOB NOT NULL,
+            size_bytes   INTEGER NOT NULL,
+            sha256       TEXT NOT NULL,
+            content_type TEXT NOT NULL DEFAULT 'application/wasm',
+            version      TEXT
+        )
+        """
+    )
+    count = 0
+    total = 0
+    artifacts = sorted(
+        (repo / "extensions").glob(
+            "*/target/wasm32-wasip2/release/*_extension.component.wasm"
+        )
+    )
+    for art in artifacts:
+        name = art.parts[-5]  # extensions/<name>/target/wasm32-wasip2/release/...
+        # Read version from Cargo.toml for the metadata column.
+        cargo = repo / "extensions" / name / "Cargo.toml"
+        version = "0.1.0"
+        if cargo.exists():
+            for line in cargo.read_text().splitlines():
+                if line.strip().startswith("version") and "=" in line:
+                    version = line.split("=", 1)[1].strip().strip('"').strip("'")
+                    break
+        blob = art.read_bytes()
+        sha = hashlib.sha256(blob).hexdigest()
+        conn.execute(
+            "INSERT INTO assets (name, blob, size_bytes, sha256, content_type, version) "
+            "VALUES (?, ?, ?, ?, 'application/wasm', ?)",
+            (name, blob, len(blob), sha, version),
+        )
+        count += 1
+        total += len(blob)
+    return count, total
 
 
 def install_extensions_table(
@@ -401,6 +451,47 @@ def api_one_handler() -> str:
     ).strip()
 
 
+def asset_handler() -> str:
+    """SQL that returns ONE blob value  the .component.wasm bytes
+    for the requested extension. The httpd's `blob` route kind
+    serves the result raw, bypassing the Value-type roundtrip
+    that hex-encodes BLOBs in the `sql` kind."""
+    return (
+        "SELECT blob FROM assets "
+        "WHERE name = substr(:path, length('/asset/') + 1)"
+    )
+
+
+def asset_info_handler() -> str:
+    """JSON metadata for an artifact  size, sha256, content-type,
+    version. Pairs with the binary served by /asset/<name>."""
+    return textwrap.dedent(
+        """
+        WITH req AS (
+            SELECT substr(:path, length('/asset-info/') + 1) AS ext_name
+        ),
+        a AS (
+            SELECT * FROM assets WHERE name = (SELECT ext_name FROM req)
+        )
+        SELECT
+          CASE WHEN (SELECT COUNT(*) FROM a) = 0
+            THEN '{"error":"not found","name":' || json_quote((SELECT ext_name FROM req)) || '}'
+            ELSE
+              (SELECT json_object(
+                'name', name,
+                'size_bytes', size_bytes,
+                'sha256', sha256,
+                'content_type', content_type,
+                'version', version,
+                'url', '/asset/' || name
+              ) FROM a)
+          END AS body,
+          CASE WHEN (SELECT COUNT(*) FROM a) = 0 THEN 404 ELSE 200 END AS status,
+          'application/json' AS ctype
+        """
+    ).strip()
+
+
 def install_route_rows(conn: sqlite3.Connection, cards: list[dict]) -> None:
     style = (TEMPLATES / "style.css").read_text()
     index = (TEMPLATES / "index.html").read_text()
@@ -413,6 +504,11 @@ def install_route_rows(conn: sqlite3.Connection, cards: list[dict]) -> None:
         ("GET", "/ext/*", detail_handler(ext, style), "sql", 200, None, 10),
         ("GET", "/api/extensions.json", api_list_handler(), "sql", 200, None, 10),
         ("GET", "/api/ext/*", api_one_handler(), "sql", 200, None, 10),
+        # /asset/<name>  raw .component.wasm bytes from the in-DB CAS.
+        # The `blob` kind bypasses Value-type hex encoding; httpd
+        # adds Cache-Control: immutable + ACAO: * automatically.
+        ("GET", "/asset/*", asset_handler(), "blob", 200, "application/wasm", 10),
+        ("GET", "/asset-info/*", asset_info_handler(), "sql", 200, None, 10),
         ("GET", "/health", "ok", "static", 200, "text/plain", 100),
         (
             "GET",
@@ -448,16 +544,19 @@ def main() -> int:
     conn.execute("PRAGMA journal_mode = DELETE")
     install_routes(conn)
     install_extensions_table(conn, cards, shipped, candidates)
+    asset_count, asset_bytes = install_assets_table(conn, REPO_ROOT)
     install_route_rows(conn, cards)
 
     # Sanity index for the per-extension lookup path.
     conn.execute("CREATE UNIQUE INDEX extensions_name ON extensions(name)")
     conn.commit()
+    conn.close()
 
     size = out_path.stat().st_size
     print(
         f"wrote {out_path.relative_to(REPO_ROOT)}  "
-        f"{len(cards)} extensions, {size:,} bytes"
+        f"{len(cards)} extensions, {asset_count} CAS artifacts "
+        f"({asset_bytes:,} bytes binary), {size:,} bytes total DB"
     )
     return 0
 

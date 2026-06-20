@@ -32,25 +32,23 @@ COPY .cargo ./.cargo
 RUN cargo build --release -p sqlite-wasm-httpd
 
 # ----- Stage 2: build the registry DB ----------------------------
-# Run the build script against the existing registry/index.json +
-# candidates.json. The host registry data is captured at image-
-# build time and frozen in the resulting registry.db blob.
+# Walks every extension's target/wasm32-wasip2/release/*.component.wasm
+# and bakes it into the assets table of registry.db. The httpd's
+# `blob` route kind serves /asset/<name> directly out of that table
+# no external storage, no egress fees, no DNS to configure.
 #
-# SQLITE_WASM_ARTIFACT_BASE controls the artifact_url field per
-# extension (where the .component.wasm files live, typically a
-# Cloudflare R2 public domain). Override via --build-arg.
+# Expects extensions to be pre-built on the host before `docker build`
+# either via `make ext NAME=<name>` per extension or the workspace
+# Makefile. The Docker build copies the .component.wasm artifacts
+# from the host tree.
 FROM python:3.12-slim AS db-builder
-ARG SQLITE_WASM_ARTIFACT_BASE=https://pub-changeme.r2.dev
-ENV SQLITE_WASM_ARTIFACT_BASE=${SQLITE_WASM_ARTIFACT_BASE}
 WORKDIR /src
+COPY extensions /src/extensions
 COPY extensions-site /src/extensions-site
 COPY registry /src/registry
 COPY provenance /src/provenance
-# Regenerate the registry.json under the configured artifact base
-# so the registry.db carries the right artifact URLs.
-RUN python3 /src/provenance/build_registry.py \
-        --artifact-base "${SQLITE_WASM_ARTIFACT_BASE}" \
- && python3 /src/extensions-site/build.py
+RUN python3 /src/provenance/build_registry.py && \
+    python3 /src/extensions-site/build.py
 
 # ----- Stage 3: slim runtime layer -------------------------------
 # Just the httpd binary + the registry.db.
@@ -68,6 +66,13 @@ COPY --from=db-builder /src/extensions-site/registry.db /var/lib/registry/regist
 
 # Cloud Run sets $PORT  honor it. Default 8080 for local docker.
 ENV PORT=8080
+
+# Image size accounting (approx, current catalog):
+#   debian:bookworm-slim base   75 MB
+#   sqlite-wasm-httpd binary   21 MB
+#   registry.db (200+ exts + 88 MB CAS)   90 MB
+#   total                     186 MB
+# Well within Cloud Run's 8 GiB image limit.
 
 # Bind on all interfaces. The registry DB is mounted readonly-ish
 # (the httpd opens it RW for SQLite's session machinery but never

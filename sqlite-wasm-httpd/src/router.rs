@@ -71,6 +71,12 @@ pub enum RouteKind {
     Sql,
     Static,
     Wasm,
+    /// SQL handler that returns ONE blob value (first column of
+    /// first row). The dispatcher emits it as the raw response
+    /// body without the Value-type roundtrip that hex-encodes
+    /// BLOBs in the Sql kind. Use for binary artifact serving
+    /// the in-DB CAS pattern.
+    Blob,
 }
 
 impl RouteKind {
@@ -78,6 +84,7 @@ impl RouteKind {
         match s.to_ascii_lowercase().as_str() {
             "static" => Self::Static,
             "wasm" => Self::Wasm,
+            "blob" => Self::Blob,
             _ => Self::Sql,
         }
     }
@@ -195,7 +202,69 @@ pub fn execute(
         RouteKind::Static => execute_static(matched),
         RouteKind::Wasm => execute_wasm(matched, method, path, query, body, peer, headers, wasm),
         RouteKind::Sql => execute_sql(conn, matched, method, path, query, body, peer),
+        RouteKind::Blob => execute_blob(conn, matched, method, path, query, body, peer),
     }
+}
+
+fn execute_blob(
+    conn: &SharedConn,
+    matched: &RouteMatch,
+    method: &str,
+    path: &str,
+    query: Option<&str>,
+    body: &[u8],
+    peer: SocketAddr,
+) -> Response<Full<Bytes>> {
+    let body_text = std::str::from_utf8(body).ok().map(|s| s.to_string());
+    let params: Vec<(&str, Value)> = vec![
+        ("method", Value::String(method.to_string())),
+        ("path", Value::String(path.to_string())),
+        (
+            "query",
+            query.map(|s| Value::String(s.to_string())).unwrap_or(Value::Null),
+        ),
+        (
+            "body",
+            body_text.map(Value::String).unwrap_or(Value::Null),
+        ),
+        ("remote", Value::String(peer.to_string())),
+    ];
+    let guard = match conn.lock() {
+        Ok(g) => g,
+        Err(_) => return text(StatusCode::INTERNAL_SERVER_ERROR, "conn poisoned"),
+    };
+    let result = guard.query_blob_named(&matched.handler, &params);
+    drop(guard);
+    let bytes = match result {
+        Ok(Some(b)) => b,
+        Ok(None) => {
+            return Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .header(CONTENT_TYPE, "text/plain")
+                .body(Full::new(Bytes::from_static(b"not found")))
+                .unwrap_or_else(|_| text(StatusCode::INTERNAL_SERVER_ERROR, "build resp"));
+        }
+        Err(e) => {
+            return json(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                &serde_json::json!({"error": e.to_string()}),
+                None,
+            );
+        }
+    };
+    let status =
+        StatusCode::from_u16(matched.status as u16).unwrap_or(StatusCode::OK);
+    let ctype = matched
+        .ctype
+        .as_deref()
+        .unwrap_or("application/octet-stream");
+    Response::builder()
+        .status(status)
+        .header(CONTENT_TYPE, ctype)
+        .header("access-control-allow-origin", "*")
+        .header("cache-control", "public, max-age=31536000, immutable")
+        .body(Full::new(Bytes::from(bytes)))
+        .unwrap_or_else(|_| text(StatusCode::INTERNAL_SERVER_ERROR, "build resp"))
 }
 
 /// Trait the binary's wasm dispatcher implements. Kept as a trait

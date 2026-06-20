@@ -35,13 +35,14 @@ REGISTRY_URL = (
 )
 MIN_SQLITE_VERSION = "3.39.0"
 
-# Default artifact base. Cloudflare R2 is the production target;
-# override via --artifact-base or $SQLITE_WASM_ARTIFACT_BASE.
-# Typical R2 public domains look like
-#   https://r2.example.com
-#   https://pub-XXXXXXXX.r2.dev      (the auto-provisioned dev domain)
-# Either form works  the script just appends /extensions/<name>/<name>-<version>.component.wasm.
-DEFAULT_ARTIFACT_BASE = "https://pub-changeme.r2.dev"
+# Default artifact base. The artifact is served from the in-database
+# CAS table baked into extensions-site/registry.db  the route
+# /asset/<name> returns the raw .component.wasm bytes via the
+# httpd's `blob` route kind. The empty base means artifact_url is
+# emitted as a relative path; consumers that need an absolute URL
+# (the cli's `tools/sqlite-wasm-ext` installer, programmatic clients)
+# override with --artifact-base https://extensions.example.com.
+DEFAULT_ARTIFACT_BASE = ""
 
 
 def commit_sha(repo: Path) -> str | None:
@@ -336,12 +337,15 @@ def trim_description(description: str | None, max_chars: int = 280) -> str:
 
 
 def artifact_url(base: str, name: str, version: str) -> str:
-    """Compose the R2 (or any HTTPS) URL where the built
-    `.component.wasm` lives. Keyed by name + version so we can
-    serve multiple versions side-by-side; the sync-r2.sh script
-    uploads to the same path."""
+    """Compose the URL where the built `.component.wasm` lives.
+
+    Resolves to /asset/<name>  the route served by the in-DB CAS
+    in extensions-site/registry.db. Empty `base` keeps the URL
+    relative so the page works regardless of deployed hostname;
+    set `base` (an absolute https URL) when generating an installer-
+    facing index.json that needs absolute URLs."""
     base = base.rstrip("/")
-    return f"{base}/extensions/{name}/{name}-{version}.component.wasm"
+    return f"{base}/asset/{name}"
 
 
 def build_entry(

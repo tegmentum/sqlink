@@ -140,98 +140,89 @@ own `replace()` or `json_object()`  it's already escaped for the
 output context. The `:path` parameter is a bound parameter, not
 string-concatenated.
 
-## Artifact distribution: Cloudflare R2
+## Artifact distribution: in-database CAS
 
-The `.component.wasm` binaries themselves don't live in the SQL
-DB. They're served from Cloudflare R2  S3-compatible object
-storage with zero egress fees, perfect for a public registry.
+The `.component.wasm` binaries live alongside the metadata in the
+same `registry.db`  a content-addressed `assets` table baked into
+the image at build time. The httpd's `blob` route kind serves
+them directly with no Value-type roundtrip:
 
-### URL layout
+    GET /asset/<name>        -> raw .component.wasm bytes
+    GET /asset-info/<name>   -> { name, size_bytes, sha256, content_type, version, url }
 
-Each extension's `artifact_url` is composed by
-`provenance/build_registry.py` as:
+The whole catalog at the time of this writing is **191 artifacts,
+~88 MB binary**  small enough that the SQLite file fits
+comfortably inside a single container layer (final image ~186 MB
+including the debian base + httpd binary). One image rebuild
+ships a versioned catalog snapshot; no separate object store, no
+egress fees, no out-of-band DNS or sync to coordinate.
 
-    {R2_PUBLIC_BASE}/extensions/<name>/<name>-<version>.component.wasm
+### Schema
 
-`R2_PUBLIC_BASE` defaults to a placeholder; override via
-`--artifact-base` or `$SQLITE_WASM_ARTIFACT_BASE`.
-
-### R2 bucket setup (one-time)
-
-1. **Create the bucket** in Cloudflare  R2: `sqlite-wasm-extensions`
-   (or any name; pass via `$R2_BUCKET`).
-2. **Bind a public URL** either:
-   - Enable the auto-generated `pub-<hash>.r2.dev` URL on the
-     bucket  fast, no DNS work.
-   - Or attach a custom domain (e.g. `r2.sqlite-wasm.dev`) under
-     bucket settings  Custom Domains. Cloudflare provisions TLS
-     automatically.
-3. **Create an API token** under My Profile  R2 Tokens with
-   Object Read + Write on the bucket. Save the access key ID +
-   secret + your account ID (visible in the dashboard URL).
-
-### Sync
-
-```bash
-# Build every extension first (191 artifacts ~ 88 MB)
-for d in extensions/*/; do
-    name=$(basename "$d")
-    [ -f "$d/Cargo.toml" ] && make ext NAME="$name"
-done
-
-# Push to R2
-export R2_BUCKET=sqlite-wasm-extensions
-export R2_ACCOUNT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-export R2_ACCESS_KEY_ID=xxxxxxxxxxxxxxxxxxxxx
-export R2_SECRET_ACCESS_KEY=yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
-export R2_PUBLIC_BASE=https://r2.sqlite-wasm.dev   # only for log output
-
-extensions-site/sync-r2.sh
+```sql
+CREATE TABLE assets (
+    name         TEXT PRIMARY KEY,
+    blob         BLOB NOT NULL,
+    size_bytes   INTEGER NOT NULL,
+    sha256       TEXT NOT NULL,
+    content_type TEXT NOT NULL DEFAULT 'application/wasm',
+    version      TEXT
+);
 ```
 
-The script is idempotent: each object's `sha256` metadata is
-compared server-side before re-upload. Re-runs after no catalog
-change upload zero bytes.
+Populated by `extensions-site/build.py` walking
+`extensions/*/target/wasm32-wasip2/release/*_extension.component.wasm`
+and inserting one row per artifact. Pre-requisite: every
+extension built locally before `extensions-site/build.py` (or
+before `docker build`). `make ext NAME=<name>` produces one
+artifact; loop over the catalog in CI to build the full set.
 
-Dry-run:
-```bash
-DRY_RUN=1 extensions-site/sync-r2.sh
-# DRY:  s3://sqlite-wasm-extensions/extensions/aba/aba-0.1.0.component.wasm  (68971 bytes, sha256:6618f3...)
-# ...
-# Summary: total artifacts: 191, total size: 88MB
+### How the `blob` route kind works
+
+`sqlite-wasm-httpd`'s router supports four kinds (sql, static,
+wasm, blob). The blob kind takes a SQL handler that returns ONE
+blob value (first column of first row) and streams it back as
+the response body without going through the Value-type conversion
+that hex-encodes BLOBs in the `sql` kind. The handler text for
+the asset route:
+
+```sql
+SELECT blob FROM assets
+ WHERE name = substr(:path, length('/asset/') + 1)
 ```
 
-Upload object metadata applied to every artifact:
-- `Content-Type: application/wasm`
-- `Cache-Control: public, max-age=31536000, immutable`  the URLs
-  are version-keyed, so aggressive caching is safe; rebuilding a
-  new version of the same extension produces a new URL.
-- `x-amz-meta-sha256: <hex>`  content-addressed verification.
-- `x-amz-meta-size: <bytes>`
+Response headers:
+- `Content-Type: application/wasm` (from the row's `ctype` column;
+  could be derived from `assets.content_type` if we want different
+  types per file)
+- `Cache-Control: public, max-age=31536000, immutable`  the URL
+  is identity-keyed; rebuilding the catalog re-deploys to a fresh
+  Cloud Run revision with a fresh URL identity at the same path
+- `Access-Control-Allow-Origin: *`
 
-### Pointing the site at R2
+Verified end-to-end: the SHA-256 of `curl /asset/jwt` matches
+`SELECT sha256 FROM assets WHERE name='jwt'` byte-exact (CAS
+integrity check).
 
-After sync, regenerate `registry/index.json` with the matching
-base URL, rebuild the site DB, redeploy:
+### Updating the catalog
 
-```bash
-SQLITE_WASM_ARTIFACT_BASE=https://r2.sqlite-wasm.dev \
-    python3 provenance/build_registry.py
-python3 extensions-site/build.py
-gcloud builds submit --config=extensions-site/cloudbuild.yaml \
-    --substitutions=_ARTIFACT_BASE=https://r2.sqlite-wasm.dev
-```
-
-The next image rebuild bakes the R2 URLs into the registry.db,
-and the per-extension page's "Download artifact" button points
-directly at R2.
+Re-run `provenance/scan.py` + `provenance/build_registry.py` +
+`extensions-site/build.py`, then `gcloud builds submit`. The image
+rebuild bakes the fresh assets table; Cloud Run rolls forward
+with zero downtime (new revision serves traffic while the old
+finishes existing requests).
 
 ### Cost model
 
-R2 charges:
-- $0.015/GB-month storage  88 MB total = $0.0013/month.
-- $0  egress. Unlimited downloads at no cost.
-- $4.50 per million Class A operations (writes). The full sync
-  is 191 writes = ~$0.00086 per full re-sync.
+The whole thing runs entirely on GCP:
+- **Cloud Run** charges per request-second after the free tier
+  (2M requests/month free, ~180k vCPU-seconds free, ~360k GiB-seconds
+  free). Realistic registry traffic stays in the free tier.
+- **Artifact Registry** charges ~$0.10/GB-month for the image.
+  Image is ~186 MB so ~$0.018/month.
+- **No egress charges** for traffic into GCP, and Cloud Run egress
+  is bundled into the same pricing  no separate bill for serving
+  88 MB downloads.
 
-Effective cost: dollars per *year*, regardless of download volume.
+Effective cost: pennies per month at modest traffic; only scales
+with the request count, not data volume.

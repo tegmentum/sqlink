@@ -139,6 +139,94 @@ impl Connection {
         Ok((columns, rows))
     }
 
+    /// Execute `sql` with bound params and return the FIRST COLUMN
+    /// of the first row as a raw byte vector  no Value-type
+    /// conversion. The Value-typed query_named path hex-encodes
+    /// BLOBs into strings (since the canonical row representation
+    /// is serde_json::Value and there's no JSON BLOB type); this
+    /// path is for binary serving where we need the actual bytes
+    /// untouched.
+    ///
+    /// Treats TEXT columns as their utf-8 bytes (so a SQL handler
+    /// can switch between blob and text payload without changing
+    /// the route kind). Returns None when there are zero rows
+    /// callers turn that into a 404. Multiple rows: only the first
+    /// is consumed.
+    pub fn query_blob_named(
+        &self,
+        sql: &str,
+        params: &[(&str, Value)],
+    ) -> Result<Option<Vec<u8>>> {
+        let sql_c = CString::new(sql)?;
+        let mut stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
+        let rc = unsafe {
+            ffi::sqlite3_prepare_v2(self.raw, sql_c.as_ptr(), -1, &mut stmt, ptr::null_mut())
+        };
+        if rc != ffi::SQLITE_OK {
+            bail!("{}", last_error(self.raw));
+        }
+        for (name, val) in params {
+            let key = CString::new(format!(":{}", name))?;
+            let idx = unsafe { ffi::sqlite3_bind_parameter_index(stmt, key.as_ptr()) };
+            if idx == 0 {
+                continue;
+            }
+            let rc = unsafe { bind_value(stmt, idx, val) };
+            if rc != ffi::SQLITE_OK {
+                let msg = last_error(self.raw);
+                unsafe { ffi::sqlite3_finalize(stmt) };
+                bail!("bind {name}: {msg}");
+            }
+        }
+
+        let rc = unsafe { ffi::sqlite3_step(stmt) };
+        if rc == ffi::SQLITE_DONE {
+            unsafe { ffi::sqlite3_finalize(stmt) };
+            return Ok(None);
+        }
+        if rc != ffi::SQLITE_ROW {
+            let msg = last_error(self.raw);
+            unsafe { ffi::sqlite3_finalize(stmt) };
+            bail!("{msg}");
+        }
+
+        let bytes = unsafe {
+            let col_type = ffi::sqlite3_column_type(stmt, 0);
+            let n = ffi::sqlite3_column_bytes(stmt, 0) as usize;
+            match col_type {
+                ffi::SQLITE_NULL => Vec::new(),
+                ffi::SQLITE_BLOB => {
+                    let p = ffi::sqlite3_column_blob(stmt, 0) as *const u8;
+                    if p.is_null() || n == 0 {
+                        Vec::new()
+                    } else {
+                        std::slice::from_raw_parts(p, n).to_vec()
+                    }
+                }
+                ffi::SQLITE_TEXT => {
+                    let p = ffi::sqlite3_column_text(stmt, 0);
+                    if p.is_null() || n == 0 {
+                        Vec::new()
+                    } else {
+                        std::slice::from_raw_parts(p, n).to_vec()
+                    }
+                }
+                _ => {
+                    // INTEGER / REAL: stringify via column_text per
+                    // sqlite's standard conversion rules.
+                    let p = ffi::sqlite3_column_text(stmt, 0);
+                    if p.is_null() {
+                        Vec::new()
+                    } else {
+                        std::slice::from_raw_parts(p, n).to_vec()
+                    }
+                }
+            }
+        };
+        unsafe { ffi::sqlite3_finalize(stmt) };
+        Ok(Some(bytes))
+    }
+
     /// Execute `sql` and return (columns, rows).
     ///
     /// Each cell is a serde_json::Value typed per sqlite's value
