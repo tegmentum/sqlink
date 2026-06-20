@@ -178,6 +178,11 @@ unsafe fn set_result(ctx: *mut ffi::sqlite3_context, v: SqlValueOwned) {
         SqlValueOwned::Real(r) => ffi::sqlite3_result_double(ctx, r),
         SqlValueOwned::Text(s) => {
             // SQLITE_TRANSIENT copies the bytes  the String can drop.
+            // (We tried a custom-destructor zero-copy variant; sqlite
+            // hands the destructor the data ptr, not the String
+            // struct ptr, so reconstructing Box<String> would be UB.
+            // The transient copy is one memcpy through sqlite3_malloc
+            // which is already going through our pcache allocator.)
             ffi::sqlite3_result_text(
                 ctx,
                 s.as_ptr() as *const _,

@@ -44,7 +44,19 @@ CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysr
 #   MAX_EXPR_DEPTH=0        skip per-expression recursion-depth tracking
 #   (OMIT_DECLTYPE is incompatible with the COLUMN_METADATA libsqlite3-sys
 #    bakes in; dropped)
-LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_DEFAULT_MEMSTATUS=0 -DSQLITE_THREADSAFE=0 -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=0"
+# Round-2 perf knobs (added 2026-06):
+#   OMIT_DEPRECATED         skip the deprecated-API stubs (compile-time
+#                           win; no runtime impact unless an extension
+#                           actually called one of them, which none do)
+#   DEFAULT_AUTOMATIC_INDEX=0 skip the planner's auto-index decision
+#                           on every join; users can still PRAGMA
+#                           automatic_index=ON for the rare case
+#   USE_ALLOCA              put small temporaries on the wasm stack
+#                           instead of through sqlite3_malloc; saves
+#                           allocator traffic in the parser hot loop
+#   (OMIT_TRACE looked like a win but the cli uses sqlite3_trace_v2 for
+#    its statement-trace dot-command  dropped)
+LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_DEFAULT_MEMSTATUS=0 -DSQLITE_THREADSAFE=0 -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=0 -DSQLITE_OMIT_DEPRECATED -DSQLITE_DEFAULT_AUTOMATIC_INDEX=0 -DSQLITE_USE_ALLOCA"
 
 [target.wasm32-wasip2]
 linker = "rust-lld"

@@ -55,12 +55,11 @@ pub fn cardinality(state: &[u8]) -> u64 {
     }
     let m = M as f64;
     let alpha = 0.7213 / (1.0 + 1.079 / m);
-    let mut zeros: usize = 0;
+    let zeros = count_zeros(state);
+    // Harmonic sum can't easily SIMD (2^-reg needs per-lane fp
+    // ops with variable shift); keep the scalar loop.
     let mut harmonic: f64 = 0.0;
     for &reg in state {
-        if reg == 0 {
-            zeros += 1;
-        }
         harmonic += 2f64.powi(-(reg as i32));
     }
     let raw_estimate = alpha * m * m / harmonic;
@@ -75,15 +74,78 @@ pub fn cardinality(state: &[u8]) -> u64 {
     estimate.round() as u64
 }
 
+/// Count the number of zero bytes in `state`. SIMD: 16 bytes per
+/// op via `i8x16_eq(splat 0)` + horizontal popcount on the mask.
+#[cfg(target_arch = "wasm32")]
+fn count_zeros(state: &[u8]) -> usize {
+    use core::arch::wasm32::*;
+    let mut zeros: usize = 0;
+    let zero_v = i8x16_splat(0);
+    let chunks = state.len() / 16;
+    let mut i = 0;
+    unsafe {
+        for _ in 0..chunks {
+            let v = v128_load(state.as_ptr().add(i) as *const v128);
+            let cmp = i8x16_eq(v, zero_v);
+            // i8x16_bitmask packs the high bit of each lane into a
+            // 16-bit value; popcount gives the lane count.
+            let m = i8x16_bitmask(cmp);
+            zeros += (m as u16).count_ones() as usize;
+            i += 16;
+        }
+    }
+    while i < state.len() {
+        if state[i] == 0 {
+            zeros += 1;
+        }
+        i += 1;
+    }
+    zeros
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn count_zeros(state: &[u8]) -> usize {
+    state.iter().filter(|&&r| r == 0).count()
+}
+
 pub fn merge(a: &[u8], b: &[u8]) -> Result<Vec<u8>, String> {
     if a.len() != M || b.len() != M {
         return Err("hll: state length wrong".into());
     }
     let mut out = alloc::vec![0u8; M];
-    for i in 0..M {
+    merge_into(&mut out, a, b);
+    Ok(out)
+}
+
+/// Element-wise max(a, b) into `out`. SIMD: 16 u8 lanes per op
+/// via `u8x16_max`. For the 16384-byte HLL bank this is 1024
+/// v128 ops vs the scalar version's 16384 byte ops.
+#[cfg(target_arch = "wasm32")]
+fn merge_into(out: &mut [u8], a: &[u8], b: &[u8]) {
+    use core::arch::wasm32::*;
+    let n = out.len();
+    let chunks = n / 16;
+    let mut i = 0;
+    unsafe {
+        for _ in 0..chunks {
+            let va = v128_load(a.as_ptr().add(i) as *const v128);
+            let vb = v128_load(b.as_ptr().add(i) as *const v128);
+            let vm = u8x16_max(va, vb);
+            v128_store(out.as_mut_ptr().add(i) as *mut v128, vm);
+            i += 16;
+        }
+    }
+    while i < n {
+        out[i] = a[i].max(b[i]);
+        i += 1;
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn merge_into(out: &mut [u8], a: &[u8], b: &[u8]) {
+    for i in 0..out.len() {
         out[i] = a[i].max(b[i]);
     }
-    Ok(out)
 }
 
 #[cfg(test)]
