@@ -1,0 +1,31 @@
+[package]
+name = "number-theory-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Number-theory primitives for SQLite: primality, factorization,
+modular arithmetic, totient, Jacobi / Legendre symbols, gcd / lcm
+and the extended Euclidean algorithm. The fast i64 companion to
+the bignum extension -- bignum handles values past i64 range,
+this extension keeps the textbook operations native-fast for the
+values that fit in 64 bits.
+
+Implementation is roll-own (Miller-Rabin deterministic witnesses
+for n < 3.3e24 which comfortably covers the entire i64 range, plus
+Pollard's rho with Brent's cycle-finding for factorization).
+No external number-theory crate dependency.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps this crate out of the
+# parent workspace so its wasm32-wasip2 build doesn't bleed into the
+# workspace's native sqlite build.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

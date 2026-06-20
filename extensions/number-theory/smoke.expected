@@ -1,0 +1,56 @@
+# Number-theory smoke expectations. One row per SELECT in smoke.sql.
+
+# primality: nt_is_prime(2,4,1,0,2147483647), exact(97,100),
+#            largest u63 prime, 2^63 - 2 (even).
+1
+0
+0
+0
+1
+1
+0
+1
+0
+
+# next / prev prime
+11
+17
+7
+11
+<NULL>
+
+# factorize(12), factorize(360), factorize(97)
+[{"prime":2,"power":2},{"prime":3,"power":1}]
+[{"prime":2,"power":3},{"prime":3,"power":2},{"prime":5,"power":1}]
+[{"prime":97,"power":1}]
+
+# divisors(12) and divisor_count(360)
+[1,2,3,4,6,12]
+24
+
+# totient(12), totient(1), totient(97)
+4
+1
+96
+
+# modpow(2,10,1000); modpow(7,0,13); modinv(3,11); modinv(6,9) NULL
+24
+1
+4
+<NULL>
+
+# jacobi(2,7), jacobi(5,21); legendre(2,7), legendre(3,11)
+1
+1
+1
+1
+
+# gcd(12,18), gcd(-12,18), lcm(4,6), lcm(0,5), ext_gcd(240,46)
+6
+6
+12
+0
+{"g":2,"x":-9,"y":47}
+
+# version is non-empty
+1
