@@ -1,0 +1,25 @@
+[package]
+name = "wasm-markdown-handler"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Markdown -> HTML wasm handler. POST the markdown source as the body, get back GitHub-Flavored Markdown rendered as HTML. Raw HTML pass-through is OFF by default (XSS-safe); the ?safe=false query param turns it on for trusted callers."
+
+# Standalone workspace: parent workspace builds for native; this
+# crate builds for wasm32-wasip2 only. Same pattern as the echo,
+# sql, and auth handlers.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# pulldown-cmark is the de-facto rust markdown renderer  pure
+# rust, no_std-friendly, ships in mdbook + cargo-doc + many other
+# tools. GFM extensions (tables, footnotes, strikethrough, task
+# lists, autolinks) are gated behind feature flags we enable
+# explicitly in the parser options; the crate is small enough that
+# bundling all of them is cheaper than a feature gate.
+pulldown-cmark = { version = "0.12", default-features = false, features = ["html"] }
