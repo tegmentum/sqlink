@@ -1,0 +1,58 @@
+[package]
+name = "totp-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+TOTP (RFC 6238) + HOTP (RFC 4226) scalars. The second-factor half
+of the in-catalog auth surface (jwt = first factor, pwhash =
+password, aead = vault encryption).
+
+Function surface (PLAN-more-extensions-2.md  1):
+  totp_generate(secret_b32, [period_s], [digits], [algorithm]) -> text
+  totp_verify(code, secret_b32, [period_s], [digits], [algorithm], [window]) -> integer 0/1
+  hotp_generate(secret_b32, counter, [digits], [algorithm]) -> text
+  hotp_verify(code, secret_b32, counter, [digits], [algorithm]) -> integer 0/1
+  totp_url(label, secret_b32, [issuer], [period_s], [digits], [algorithm]) -> text
+  totp_secret([byte_len]) -> text (base32, default 20 bytes / 160 bits)
+  totp_now() -> integer (current epoch seconds)
+  totp_version() -> text
+
+Defaults: period_s=30, digits=6, algorithm='SHA1', window=1 (matches
+the RFC 6238 baseline and what Google Authenticator / Authy assume).
+
+The crate is rolled from `hmac` + `sha1`/`sha2` + `base32`  the
+RFC 4226 dynamic-truncation step is ~20 lines, the otpauth:// URL
+builder is another ~20, and dragging in `totp-rs` (which pulls
+`qrcode`, `urlencoding`, etc.) for those was not worth the binary
+size hit. Same pattern as the `jwt` extension's roll-your-own
+JOSE compact serialization.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# HMAC + the three SHA variants RFC 6238 calls out. sha1 is its own
+# crate (RustCrypto split SHA-1 from sha2 when SHA-1 was deprecated
+# for collision resistance  HMAC-SHA1 is still safe and is the
+# RFC 6238 default for compatibility).
+hmac = { version = "0.12", default-features = false }
+sha1 = { version = "0.10", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+# base32 0.5 cross-compiles cleanly to wasm32-wasip2 (no_std-capable,
+# pure rust). Same crate the baseN extension uses.
+base32 = { version = "0.5", default-features = false }
+# `getrandom` v0.2 auto-routes to WASI's `random_get` on
+# `target_os = "wasi"` (which wasm32-wasip2 sets); the WASI
+# reactor adapter wires that to `wasi:random/random` on the host.
+# Used only by `totp_secret()`.
+getrandom = "0.2"

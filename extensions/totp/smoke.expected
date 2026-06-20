@@ -1,0 +1,47 @@
+# HOTP RFC 4226 Appendix D vectors (sha1, 6 digits)
+# counter=0 (the published acceptance criterion)
+755224
+# counter=1
+287082
+# counter=5
+254676
+# counter=9
+520489
+# Explicit defaults form
+755224
+# Case-insensitive alg
+755224
+# verify: right code passes
+1
+# verify: wrong code fails
+0
+# verify: right code wrong counter fails
+0
+# verify: bad base32 returns 0 (no error)
+0
+# TOTP RFC 6238 Appendix B T=59 (counter=1) 8-digit SHA1
+94287082
+# T=59 8-digit SHA256
+46119246
+# T=59 8-digit SHA512
+90693936
+# TOTP round-trip with default args
+1
+# Wrong code never matches
+0
+# otpauth:// URL with issuer
+otpauth://totp/Acme:alice@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Acme&algorithm=SHA1&digits=6&period=30
+# otpauth:// URL with explicit args
+otpauth://totp/Acme:alice@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Acme&algorithm=SHA256&digits=8&period=60
+# otpauth:// URL without issuer
+otpauth://totp/alice@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&algorithm=SHA1&digits=6&period=30
+# totp_secret() default = 20 bytes -> 32 base32 chars
+32
+# totp_secret(16) -> 26 base32 chars (no pad)
+26
+# totp_secret(32) -> 52 base32 chars (no pad)
+52
+# totp_now() returns a real-ish epoch second
+1
+# version non-empty
+1
