@@ -1,0 +1,35 @@
+[package]
+name = "iso-codes-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ISO codes triad: 3166-1 country (249), 4217 currency (~180), 639
+language (~180). Each surface is name + alpha-2/alpha-3 inter-
+conversion + numeric/minor-units + validation, with NULL on unknown
+codes for clean SQL composition.
+
+Sister to the (older) `iso` extension and to `country` / `currency`,
+but exposes the per-ISO function-name surface drafted in
+PLAN-more-extensions-3.md  2: iso3166_*, iso4217_*, iso639_*. Pairs
+with `iban` (ISO 13616), `bic` (ISO 9362), and `phone-prefix`
+(ITU-T E.164) for i18n workflows.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules; does not affect `make ext`.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Country (ISO 3166-1): pure-rust, static tables, ~50 KB.
+rust_iso3166 = "0.1"
+# Currency (ISO 4217): pure-rust, static tables; provides name,
+# symbol, numeric, minor-units exponent.
+iso_currency = "0.5"
+# Language (ISO 639-1 / 639-3): pure-rust, static tables.
+isolang = "2"

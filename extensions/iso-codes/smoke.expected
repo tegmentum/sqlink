@@ -1,0 +1,33 @@
+# iso-codes (PLAN-more-extensions-3.md  2): ISO 3166 country
+# + ISO 4217 currency + ISO 639 language lookups. Names come
+# straight from the underlying crates -- rust_iso3166 returns
+# "United States of America" (the ISO short form), iso_currency
+# returns "United States dollar" (lowercase 'd', the ISO 4217
+# table form), isolang returns "English".
+United States of America
+United States of America
+USA
+DE
+840
+276
+1
+0
+United States of America
+<NULL>
+<NULL>
+United States dollar
+2
+0
+3
+1
+0
+United States dollar
+<NULL>
+English
+English
+eng
+en
+1
+0
+English
+<NULL>
