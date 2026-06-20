@@ -8,6 +8,7 @@ mod db;
 mod router;
 mod routes;
 mod tls;
+mod wasm;
 
 use anyhow::{anyhow, Context, Result};
 use clap::Parser;
@@ -70,6 +71,15 @@ struct Args {
     /// pass repeatedly (idempotent).
     #[arg(long)]
     init_routes: bool,
+
+    /// Pre-load a wasm component as a named handler. Format:
+    /// `NAME=PATH` (or just `PATH`  the file stem becomes the
+    /// name). Routes with `kind='wasm'` and `handler=NAME`
+    /// dispatch to this component. Repeatable: `--load
+    /// a=x.wasm --load b=y.wasm` loads both. Components must
+    /// target the `sqlite:wasm/language-runtime` WIT world.
+    #[arg(long = "load", value_name = "NAME=PATH")]
+    loads: Vec<String>,
 }
 
 #[tokio::main]
@@ -121,13 +131,19 @@ async fn main() -> Result<()> {
 
     let acceptor = tls_config.as_ref().map(|c| tokio_rustls::TlsAcceptor::from(c.clone()));
 
-    // The wasm dispatcher is hoisted to a None-typed Option for v1
-    // the static + sql kinds light up the routes table; the wasm
-    // kind returns a structured error until the host integration
-    // is wired in the next commit. Pulling the Option through
-    // serve_one now means that wiring drops in without re-touching
-    // the request path.
-    let wasm: Option<Arc<dyn router::WasmDispatcher>> = None;
+    // Wasm dispatcher  None until --load wires something up.
+    // Each --load NAME=PATH (or just PATH; stem becomes name)
+    // pre-compiles the component via the embedded sqlite-wasm-
+    // host's compile cache. Per-request dispatch goes through
+    // wasm::HostDispatcher (see src/wasm.rs).
+    let wasm: Option<Arc<dyn router::WasmDispatcher>> = if !args.loads.is_empty() {
+        let parsed = parse_loads(&args.loads)?;
+        let rt = tokio::runtime::Handle::current();
+        let dispatcher = wasm::HostDispatcher::new(rt, parsed).await?;
+        Some(Arc::new(dispatcher) as Arc<dyn router::WasmDispatcher>)
+    } else {
+        None
+    };
 
     loop {
         let (stream, peer) = match listener.accept().await {
@@ -147,6 +163,43 @@ async fn main() -> Result<()> {
             }
         });
     }
+}
+
+/// Parse `--load` strings into `(name, path)` pairs.
+///
+/// Accepts `NAME=PATH` or just `PATH`; for the latter the file
+/// stem becomes the name (so `--load /opt/x.wasm` registers a
+/// handler named `x`). Duplicate names are rejected up-front
+/// rather than silently overwriting.
+fn parse_loads(raw: &[String]) -> Result<Vec<(String, PathBuf)>> {
+    let mut out = Vec::with_capacity(raw.len());
+    let mut seen = std::collections::HashSet::new();
+    for entry in raw {
+        let (name, path) = match entry.find('=') {
+            Some(i) => {
+                let name = entry[..i].to_string();
+                let path = PathBuf::from(&entry[i + 1..]);
+                (name, path)
+            }
+            None => {
+                let path = PathBuf::from(entry);
+                let stem = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .ok_or_else(|| anyhow!("--load {entry}: no file stem to derive name"))?
+                    .to_string();
+                (stem, path)
+            }
+        };
+        if !path.is_file() {
+            return Err(anyhow!("--load {entry}: not a file: {}", path.display()));
+        }
+        if !seen.insert(name.clone()) {
+            return Err(anyhow!("--load {entry}: handler name `{name}` already registered"));
+        }
+        out.push((name, path));
+    }
+    Ok(out)
 }
 
 async fn serve_one(

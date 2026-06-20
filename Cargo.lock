@@ -5047,6 +5047,8 @@ dependencies = [
  "rustls-pemfile",
  "serde",
  "serde_json",
+ "sqlite-extension-policy",
+ "sqlite-wasm-host",
  "tokio",
  "tokio-rustls",
  "tracing",

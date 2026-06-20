@@ -4605,6 +4605,64 @@ impl Host {
         out
     }
 
+    /// Invoke a registered language-runtime by `(ext, variant)`
+    /// directly, with the source provided in-memory rather than
+    /// read from a file. Mirrors `run_source` end-to-end (same
+    /// Store construction, fuel/epoch policy, bindgen path)  the
+    /// only delta is where `source` and `source_name` come from.
+    ///
+    /// Used by callers (e.g. `sqlite-wasm-httpd`'s wasm route
+    /// dispatcher) that already have the request data in RAM and
+    /// don't want to round-trip through the filesystem just to
+    /// reuse the runtime plumbing.
+    pub async fn invoke_runtime(
+        &self,
+        ext: &str,
+        variant: &str,
+        source_name: &str,
+        source: &str,
+    ) -> Result<String> {
+        let key = (ext.to_string(), variant.to_string());
+        let runtime = {
+            let g = self.runtimes.read();
+            g.get(&key).cloned().ok_or_else(|| {
+                anyhow!(
+                    "no runtime registered for ext={ext:?} variant={variant:?}"
+                )
+            })?
+        };
+        let linker = make_run_linker(&self.engine)?;
+        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
+        builder.inherit_stdio();
+        let state = RunState {
+            wasi: builder.build(),
+            resources: wasmtime_wasi::ResourceTable::new(),
+            compose_providers: self.compose_providers.clone(),
+            active_tenant: DEFAULT_TENANT.to_string(),
+            tvm: tvm_wasmtime::TvmHost::new(),
+        };
+        let mut store = wasmtime::Store::new(&self.engine, state);
+        store
+            .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
+            .map_err(|e| anyhow!("set_fuel: {e}"))?;
+        store.set_epoch_deadline(
+            runtime.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000),
+        );
+        let instance = language_runtime::LanguageRuntime::instantiate_async(
+            &mut store,
+            &runtime.component,
+            &linker,
+        )
+        .await
+        .map_err(|e| anyhow!("instantiate runtime plugin: {e}"))?;
+        let r = instance
+            .sqlite_wasm_runtime()
+            .call_execute(&mut store, source_name, source)
+            .await
+            .map_err(|e| anyhow!("runtime.execute trap: {e}"))?;
+        r.map_err(|e| anyhow!("runtime.execute returned error: {e}"))
+    }
+
     /// Read `path`, look up the runtime for `(extension-of-path,
     /// flavor)`, instantiate it in a fresh Store, call
     /// `runtime.execute(file-name, source)`. Empty `flavor` uses
