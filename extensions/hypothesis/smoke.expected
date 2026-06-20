@@ -1,0 +1,68 @@
+# Reference values (scipy.stats; tolerances at 3 decimal places):
+#   1samp [5.1,5.2,5.0,4.9,5.0] vs mu0=5.0   t=0.784465, p=0.476621
+#   Welch identical samples                  t=0.0, p=1.0
+#   Welch [1..5] vs [3..7]                   t=-2.000, p=0.0805
+#   Student-pooled [1..5] vs [3..7]          t=-2.000, df=8
+#   Paired [1,2,3,4] vs [1.4,2.5,3.1,3.9]    t=-1.634, df=3, p=0.201
+#   GOF identical                            chi2=0, df=3, p=1
+#   GOF [12,8,11,9] vs [10,10,10,10]         chi2=1.0, p=0.801
+#   Indep 2x2 [[10,20],[20,10]]              chi2=6.667, df=1, p=0.010
+#       (scipy default applies Yates correction; we don't  textbook
+#        Pearson chi-sq is 6.667 / p=0.01, scipy with correction is
+#        5.4 / p=0.02. Both are correct; ours matches scipy
+#        chi2_contingency(..., correction=False).)
+#   ANOVA identical                          F=0, p=1
+#   ANOVA [[1,2,3],[4,5,6],[7,8,9]]          F=27.0, df_b=2, df_w=6, p=0.001
+#   MWU [1,2,3,4] vs [5,6,7,8]               U=0, p_asymp=0.03 (scipy exact 0.029)
+#   KS identical                             D=0, p=1
+#   KS [1..5] vs [6..10]                     D=1.0, p_asymp=0.004 (<0.01;
+#       scipy exact 0.008; documented divergence in small n)
+#   Shapiro near-uniform [1..10]              W=0.99, p>0.5
+#   Shapiro [1,1,1,1,1,1,2,100,100,100]      W=0.62, p<0.01
+0.784
+4
+0.477
+0
+1
+-2
+0.081
+-2
+8
+-1.634
+3
+0.201
+0
+3
+1
+1
+0.801
+6.667
+1
+0.01
+0
+1
+27
+2
+6
+0.001
+0
+0.03
+0
+1
+1
+1
+0.99
+1
+0.62
+1
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+1

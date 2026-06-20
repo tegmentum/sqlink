@@ -1,0 +1,47 @@
+[package]
+name = "hypothesis-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Statistical hypothesis tests for SQL. Companion to `dist` (which gives
+PDF / CDF / inverse-CDF for the standard distribution families)  this
+extension consumes those same distributions to produce p-values for the
+textbook tests:
+
+  t_test_1samp       one-sample t (location vs known mean)
+  t_test_2samp       two-sample t (Welch's by default; pooled opt-in)
+  t_test_paired      paired t-test (matched samples)
+  chi_sq_gof         chi-squared goodness-of-fit
+  chi_sq_independence  chi-squared test of independence (contingency)
+  anova_f            one-way ANOVA F-test
+  mann_whitney       Mann-Whitney U (Wilcoxon rank-sum) two-sided
+  ks_2samp           two-sample Kolmogorov-Smirnov
+  shapiro_wilk       small-sample Shapiro-Wilk normality (n  50)
+
+Test statistics are hand-rolled to textbook formulas; p-values defer to
+`statrs` for the distribution CDFs. Two-sided p-values are returned
+unless documented otherwise.
+
+Results are JSON objects so `json_extract(result, '$.p')` works for
+downstream SQL; NULL inputs / out-of-domain inputs return NULL.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps this crate out of the
+# parent workspace so its (statrs) wasm32-wasip2 build doesn't bleed
+# into the workspace's native sqlite build.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Distribution CDFs. statrs has the proven wasm32-wasip2 build path
+# (already used by `dist`); we use Normal, StudentsT, ChiSquared,
+# FisherSnedecor for the test p-values.
+statrs = { version = "0.17", default-features = false }
+# JSON in/out  inputs arrive as TEXT JSON arrays, outputs are objects.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
