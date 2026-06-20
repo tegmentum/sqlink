@@ -850,6 +850,7 @@ ext:
 		-o "$$COMPONENT_OUT"; \
 	echo "wrote $$COMPONENT_OUT"
 	@python3 provenance/scan.py 2>&1 | tail -3
+	@python3 provenance/build_registry.py 2>&1 | tail -1
 	@python3 tooling/smoke.py $(NAME) || true
 
 ext-list-broken:
