@@ -4621,6 +4621,7 @@ impl Host {
         variant: &str,
         source_name: &str,
         source: &str,
+        env: &[(String, String)],
     ) -> Result<String> {
         let key = (ext.to_string(), variant.to_string());
         let runtime = {
@@ -4634,6 +4635,14 @@ impl Host {
         let linker = make_run_linker(&self.engine)?;
         let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
         builder.inherit_stdio();
+        // Operator-supplied env vars  the caller picks which keys
+        // to surface (no implicit inherit_env() so the host process
+        // env doesn't leak unconditionally). Empty slice = no env;
+        // the component sees std::env::var(_) return Err for any
+        // key not in this list.
+        for (k, v) in env {
+            builder.env(k, v);
+        }
         let state = RunState {
             wasi: builder.build(),
             resources: wasmtime_wasi::ResourceTable::new(),

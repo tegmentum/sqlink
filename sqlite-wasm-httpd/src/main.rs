@@ -80,6 +80,16 @@ struct Args {
     /// target the `sqlite:wasm/language-runtime` WIT world.
     #[arg(long = "load", value_name = "NAME=PATH")]
     loads: Vec<String>,
+
+    /// Forward an env var into every wasm handler invocation.
+    /// Format: `KEY=VALUE` to set explicitly, or just `KEY` to
+    /// inherit the matching value from the httpd process env
+    /// (errors at startup if unset). Repeatable. No env is
+    /// exposed by default  the operator picks which keys to
+    /// surface. Common use: `--env JWT_SECRET` to let an auth
+    /// handler read its signing key from systemd/docker env.
+    #[arg(long = "env", value_name = "KEY[=VALUE]")]
+    envs: Vec<String>,
 }
 
 #[tokio::main]
@@ -138,10 +148,14 @@ async fn main() -> Result<()> {
     // wasm::HostDispatcher (see src/wasm.rs).
     let wasm: Option<Arc<dyn router::WasmDispatcher>> = if !args.loads.is_empty() {
         let parsed = parse_loads(&args.loads)?;
+        let env = parse_envs(&args.envs)?;
         let rt = tokio::runtime::Handle::current();
-        let dispatcher = wasm::HostDispatcher::new(rt, parsed).await?;
+        let dispatcher = wasm::HostDispatcher::new(rt, parsed, env).await?;
         Some(Arc::new(dispatcher) as Arc<dyn router::WasmDispatcher>)
     } else {
+        if !args.envs.is_empty() {
+            tracing::warn!("--env supplied but no --load; env will be ignored");
+        }
         None
     };
 
@@ -198,6 +212,31 @@ fn parse_loads(raw: &[String]) -> Result<Vec<(String, PathBuf)>> {
             return Err(anyhow!("--load {entry}: handler name `{name}` already registered"));
         }
         out.push((name, path));
+    }
+    Ok(out)
+}
+
+/// Parse `--env` strings into `(name, value)` pairs.
+///
+/// Accepts `KEY=VALUE` (explicit) or `KEY` (inherit from process
+/// env; fail if unset). Empty values are allowed for explicit
+/// `KEY=` form; bare `KEY` requires the var to be set.
+fn parse_envs(raw: &[String]) -> Result<Vec<(String, String)>> {
+    let mut out = Vec::with_capacity(raw.len());
+    for entry in raw {
+        let (k, v) = match entry.find('=') {
+            Some(i) => (entry[..i].to_string(), entry[i + 1..].to_string()),
+            None => {
+                let val = std::env::var(entry).map_err(|_| {
+                    anyhow!("--env {entry}: variable not set in process env")
+                })?;
+                (entry.clone(), val)
+            }
+        };
+        if k.is_empty() {
+            return Err(anyhow!("--env {entry}: empty key"));
+        }
+        out.push((k, v));
     }
     Ok(out)
 }

@@ -5,21 +5,16 @@
 //!   - returns 401 with `{"error": "..."}` on missing / invalid / expired
 //!   - returns 200 with the decoded claims JSON as the response body
 //!
-//! Token source priority (the dispatcher contract currently does
-//! NOT pipe HTTP headers through to wasm components, so the
-//! handler accepts the token from any of these positions):
+//! Token source priority:
 //!
-//!   1. body.text starts with `Bearer <token>`  the token is what
+//!   1. `headers.authorization` (or any case variant) starts with
+//!      `Bearer <token>`  use what follows. The dispatcher now
+//!      forwards request headers, so this is the canonical path.
+//!   2. body.text starts with `Bearer <token>`  the token is what
 //!      follows. Caller pattern: `curl -d "Bearer eyJ..."`.
-//!   2. body.text looks like a bare JWT (three dot-separated
+//!   3. body.text looks like a bare JWT (three dot-separated
 //!      base64url segments)  use it directly.
-//!   3. query string has `token=<urlencoded>` or `bearer=<urlencoded>`.
-//!
-//! Once the router contract grows headers into the request JSON
-//! (see PLAN-extensions-and-handlers.md section 10), this handler
-//! will also pull `Authorization: Bearer <token>` from the
-//! `headers` field  the existing source-priority chain handles
-//! that as a fourth fallback without breaking the others.
+//!   4. query string has `token=<urlencoded>` or `bearer=<urlencoded>`.
 //!
 //! Secret source: WASI env var `JWT_SECRET`, falling back to the
 //! literal `"secret"` when unset. That fallback is acceptable for
@@ -68,8 +63,14 @@ impl Guest for AuthHandler {
         // handlers use  keeps the component small.
         let body_text = pick_body_text(&source).unwrap_or_default();
         let query = pick_string(&source, "query").unwrap_or_default();
+        // Header lookup is case-insensitive by HTTP convention; the
+        // dispatcher already lowercases on the way in but we still
+        // try a couple of common spellings for safety.
+        let auth_header = pick_header(&source, "authorization")
+            .or_else(|| pick_header(&source, "Authorization"))
+            .unwrap_or_default();
 
-        let token = match extract_token(&body_text, &query) {
+        let token = match extract_token(&auth_header, &body_text, &query) {
             Some(t) => t,
             None => return Ok(error_response(401, "missing token")),
         };
@@ -97,8 +98,16 @@ fn secret_from_env() -> String {
     std::env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string())
 }
 
-/// Pull the JWT out of body or query per the documented priority.
-fn extract_token(body: &str, query: &str) -> Option<String> {
+/// Pull the JWT out of Authorization header, body, or query.
+/// Priority: header > body Bearer > body bare JWT > query token.
+fn extract_token(auth_header: &str, body: &str, query: &str) -> Option<String> {
+    let hdr = auth_header.trim();
+    if let Some(rest) = hdr.strip_prefix("Bearer ").or_else(|| hdr.strip_prefix("bearer ")) {
+        let t = rest.trim();
+        if looks_like_jwt(t) {
+            return Some(t.to_string());
+        }
+    }
     let trimmed = body.trim();
     if let Some(rest) = trimmed.strip_prefix("Bearer ") {
         let t = rest.trim();
@@ -120,6 +129,21 @@ fn extract_token(body: &str, query: &str) -> Option<String> {
         }
     }
     None
+}
+
+/// Pull a header value out of the request JSON. The dispatcher
+/// emits `"headers": { "name": "value", ... }`; we want the value
+/// for a specific name. Returns None if the headers object is
+/// absent or the key is missing.
+fn pick_header(s: &str, name: &str) -> Option<String> {
+    let i = s.find("\"headers\"")?;
+    let after = &s[i + "\"headers\"".len()..];
+    let after = after.trim_start().strip_prefix(':')?;
+    let after = after.trim_start();
+    if !after.starts_with('{') {
+        return None;
+    }
+    pick_string(after, name)
 }
 
 fn looks_like_jwt(s: &str) -> bool {

@@ -49,6 +49,12 @@ use crate::router::{WasmDispatcher, WasmResponse};
 pub struct HostDispatcher {
     host: Arc<Host>,
     rt: Handle,
+    /// Env vars passed through to every wasm handler invocation
+    /// (Operator-supplied via the `--env KEY[=VAL]` CLI flag).
+    /// Cloned per call into the WasiCtxBuilder.env() chain so a
+    /// component's `std::env::var()` resolves for these keys; no
+    /// other env from the httpd process is visible to handlers.
+    env: Vec<(String, String)>,
 }
 
 impl HostDispatcher {
@@ -60,7 +66,17 @@ impl HostDispatcher {
     /// `loads` is `(name, path)` pairs as parsed from --load. Each
     /// component is registered under `("http", name)` so per-
     /// request dispatch can look it up by name alone.
-    pub async fn new(rt: Handle, loads: Vec<(String, PathBuf)>) -> Result<Self> {
+    ///
+    /// `env` is the explicit set of env-var pairs forwarded to
+    /// every handler call. Empty = no env exposed. The host's
+    /// WasiCtxBuilder does NOT inherit_env() unconditionally
+    /// the operator picks which keys to surface, fail-closed by
+    /// default.
+    pub async fn new(
+        rt: Handle,
+        loads: Vec<(String, PathBuf)>,
+        env: Vec<(String, String)>,
+    ) -> Result<Self> {
         let host = Arc::new(Host::new()?);
         for (name, path) in loads {
             // Component verification is delegated to wasmtime
@@ -72,7 +88,7 @@ impl HostDispatcher {
                 .map_err(|e| anyhow!("--load {name}={}: {e}", path.display()))?;
             tracing::info!("loaded wasm handler `{name}` from {}", path.display());
         }
-        Ok(Self { host, rt })
+        Ok(Self { host, rt, env })
     }
 }
 
@@ -96,9 +112,10 @@ impl WasmDispatcher for HostDispatcher {
         let source_name = "request.json".to_string();
         let source = source.to_string();
         let rt = self.rt.clone();
+        let env = self.env.clone();
         let result = tokio::task::block_in_place(move || {
             rt.block_on(async move {
-                host.invoke_runtime("http", &name, &source_name, &source).await
+                host.invoke_runtime("http", &name, &source_name, &source, &env).await
             })
         })?;
 
