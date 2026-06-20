@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T15:46:38Z",
-  "commit_sha": "05623b6467cec3e4c188541be2db19f44995db13",
+  "updated": "2026-06-20T17:07:33Z",
+  "commit_sha": "8787700906399356864d7482d0a6a7e89652ffd8",
   "candidates": [
     {
       "name": "iso-639-5",
@@ -46,17 +46,6 @@
       "reason": null,
       "proposed_crate": "flatbuffers 24",
       "notes": "Same schema problem as protobuf."
-    },
-    {
-      "name": "json5",
-      "source": "session-2026-06",
-      "description": "Relaxed JSON parser (JSON5 spec).",
-      "upstream_url": "https://json5.org/",
-      "track": "codec",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "json5 0.4",
-      "notes": "Tolerant of comments, trailing commas, unquoted keys."
     },
     {
       "name": "protobuf",
@@ -136,17 +125,6 @@
       "notes": "CBOR-shaped JOSE alternative; used by WebAuthn / FIDO2."
     },
     {
-      "name": "ed25519",
-      "source": "session-2026-06",
-      "description": "Standalone Ed25519 sign/verify scalars (separate from jwt).",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc8032",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "ed25519-dalek 2",
-      "notes": "jwt has Ed25519 internally; exposing it as plain scalars is its own item."
-    },
-    {
       "name": "hpke",
       "source": "session-2026-06",
       "description": "Hybrid Public Key Encryption (RFC 9180).",
@@ -156,17 +134,6 @@
       "reason": null,
       "proposed_crate": "hpke 0.13",
       "notes": "Modern asymmetric encryption suite; pairs with aead + hkdf."
-    },
-    {
-      "name": "oauth-pkce",
-      "source": "session-2026-06",
-      "description": "OAuth 2.0 PKCE verifier/challenge generation (RFC 7636).",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc7636",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "pkce 0.2 (or roll-own)",
-      "notes": "Tiny surface; could fold into a future auth-helpers ext."
     },
     {
       "name": "pgp",
@@ -191,17 +158,6 @@
       "notes": "jwt currently lacks RS256 (deferred to v2); this would close that loop."
     },
     {
-      "name": "sha1",
-      "source": "session-2026-06",
-      "description": "Standalone SHA-1 hash (legacy / git interop).",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc3174",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "sha1 0.10",
-      "notes": "sha3 + blake3 + hashes-fast already in tree; sha1 still needed for git/legacy."
-    },
-    {
       "name": "webauthn",
       "source": "session-2026-06",
       "description": "WebAuthn registration + authentication verification.",
@@ -211,17 +167,6 @@
       "reason": null,
       "proposed_crate": "webauthn-rs 0.5",
       "notes": "Heavy spec; needs handler-side surface as well as SQL."
-    },
-    {
-      "name": "x25519",
-      "source": "session-2026-06",
-      "description": "X25519 elliptic curve Diffie-Hellman key exchange (RFC 7748).",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc7748",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "x25519-dalek 2",
-      "notes": "Standalone curve for ECDH; ed25519-dalek is already pulled in by jwt. Sister to existing secp256k1."
     },
     {
       "name": "lru-cache",
@@ -268,17 +213,6 @@
       "notes": "Niche; specialized for scientific document workflows."
     },
     {
-      "name": "geohash",
-      "source": "session-2026-06",
-      "description": "Geohash encode/decode (Gustavo Niemeyer 2008).",
-      "upstream_url": "https://en.wikipedia.org/wiki/Geohash",
-      "track": "geo",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "geohash 0.13",
-      "notes": "h3 + s2 + mgrs in catalog; geohash is the popular short-string scheme."
-    },
-    {
       "name": "polyline-simplify",
       "source": "session-2026-06",
       "description": "Douglas-Peucker polyline simplification.",
@@ -299,17 +233,6 @@
       "reason": null,
       "proposed_crate": "proj 0.27 (C dep)",
       "notes": "Heavy C dependency; defer until needed."
-    },
-    {
-      "name": "utm",
-      "source": "session-2026-06",
-      "description": "UTM (Universal Transverse Mercator) coordinate conversions.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Universal_Transverse_Mercator_coordinate_system",
-      "track": "geo",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "utm 0.2",
-      "notes": "mgrs uses utm internally; standalone surface would also be useful."
     },
     {
       "name": "rsa-bignum",
@@ -431,17 +354,6 @@
       "reason": null,
       "proposed_crate": "nmea 0.6",
       "notes": "GPS receiver output parsing."
-    },
-    {
-      "name": "robotstxt",
-      "source": "session-2026-06",
-      "description": "robots.txt parsing + matching.",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc9309",
-      "track": "network",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "robotstxt 0.3",
-      "notes": "Web crawling staple; small."
     },
     {
       "name": "sitemap-xml",

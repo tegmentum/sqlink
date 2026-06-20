@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T15:46:38Z",
+  "updated": "2026-06-20T17:07:33Z",
   "registry_url": "https://raw.githubusercontent.com/user/sqlite-wasm-extensions/main/registry/index.json",
-  "commit_sha": "05623b6467cec3e4c188541be2db19f44995db13",
+  "commit_sha": "8787700906399356864d7482d0a6a7e89652ffd8",
   "extensions": [
     {
       "name": "extension-manager",
@@ -1940,6 +1940,43 @@
       "dependencies": []
     },
     {
+      "name": "ed25519",
+      "version": "0.1.0",
+      "description": "Standalone Ed25519 sign/verify scalars (RFC 8032 / 8410). The `jwt` extension already has Ed25519 internally for the EdDSA JWS alg, but exposing the raw primitive as plain SQL scalars is its own surface: SSH key handling, Tor onion-service descriptors, Signal/Matrix identity keys",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/ed25519",
+      "keywords": [
+        "ed25519",
+        "standalone",
+        "signverify",
+        "scalars",
+        "rfc"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/ed25519-0.1.0/ed25519-0.1.0.tar.gz",
+      "checksum": "sha256:522ade5096424448b4b9b818a3b68835807fe2f334358ea9aee6c76d07010f19",
+      "size_bytes": 146788,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "ed25519_keypair",
+        "ed25519_pub_from_priv",
+        "ed25519_sign",
+        "ed25519_verify",
+        "ed25519_version"
+      ],
+      "dependencies": [
+        "ed25519-dalek@2",
+        "getrandom@0.2"
+      ]
+    },
+    {
       "name": "email",
       "version": "0.1.0",
       "description": "Email address validation + decomposition via the `email_address` crate (RFC 5321 / 5322 conformant).",
@@ -2507,6 +2544,42 @@
         "within_radius"
       ],
       "dependencies": []
+    },
+    {
+      "name": "geohash",
+      "version": "0.1.0",
+      "description": "Geohash (Gustavo Niemeyer 2008) extension for SQLite: encode WGS84 lat/lng to a short alphanumeric string, decode a geohash back to a lat/lng pair, and enumerate the 8 neighboring cells of a hash.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/geohash",
+      "keywords": [
+        "geohash",
+        "gustavo",
+        "niemeyer",
+        "encode",
+        "wgs",
+        "latlng"
+      ],
+      "categories": [
+        "geo"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/geohash-0.1.0/geohash-0.1.0.tar.gz",
+      "checksum": "sha256:f43590a3a9a15b2542f935e2dbc118daa4bcebdab4b333bc87c82e805f67d217",
+      "size_bytes": 113672,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "geohash_decode",
+        "geohash_encode",
+        "geohash_neighbors",
+        "geohash_version"
+      ],
+      "dependencies": [
+        "geohash@0.13"
+      ]
     },
     {
       "name": "geopoly",
@@ -3494,6 +3567,41 @@
       ]
     },
     {
+      "name": "json5",
+      "version": "0.1.0",
+      "description": "JSON5 -> canonical JSON codec scalars.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/json5",
+      "keywords": [
+        "json5",
+        "json",
+        "canonical",
+        "codec",
+        "scalars"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/json5-0.1.0/json5-0.1.0.tar.gz",
+      "checksum": "sha256:0689044f96e631d26e56b37ba3cdc168ed7c05a833ba1662b2ce6d8c1df8f683",
+      "size_bytes": 323040,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "json5_is_valid",
+        "json5_parse",
+        "json5_version"
+      ],
+      "dependencies": [
+        "json5@0.4",
+        "serde_json@1"
+      ]
+    },
+    {
       "name": "jwt",
       "version": "0.1.0",
       "description": "JSON Web Tokens (RFC 7519) for SQL.",
@@ -4268,6 +4376,39 @@
         "numfmt_scientific"
       ],
       "dependencies": []
+    },
+    {
+      "name": "oauth-pkce",
+      "version": "0.1.0",
+      "description": "OAuth 2.0 PKCE (Proof Key for Code Exchange, RFC 7636) helpers for SQLite. The auth-helpers family: paired with `jwt` (token verifier), `totp` (second factor), and `pwhash` (password storage); PKCE is what public clients (mobile / SPA / CLI) use to bind an authorization-code exch",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/oauth-pkce",
+      "keywords": [
+        "oauth-pkce",
+        "oauth"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/oauth-pkce-0.1.0/oauth-pkce-0.1.0.tar.gz",
+      "checksum": "sha256:371a693036ed08f06f6641a3abd38ffa0ff20d8b03c02496da36d50023fd930e",
+      "size_bytes": 97618,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "pkce_challenge_plain",
+        "pkce_challenge_s256",
+        "pkce_verifier",
+        "pkce_version"
+      ],
+      "dependencies": [
+        "getrandom@0.2",
+        "sha2@0.10"
+      ]
     },
     {
       "name": "onnx",
@@ -5300,6 +5441,38 @@
       ]
     },
     {
+      "name": "robotstxt",
+      "version": "0.1.0",
+      "description": "robots.txt parsing + matching for SQLite. Wraps the `robotstxt` crate (Folyd) -- a native Rust port of Google's reference C++ robots.txt parser and matcher (the parser Googlebot actually uses).",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/robotstxt",
+      "keywords": [
+        "robotstxt",
+        "robots"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/robotstxt-0.1.0/robotstxt-0.1.0.tar.gz",
+      "checksum": "sha256:edbdf4dae76546be04779075d8db0887484b6dee5a21940af739e2ce18fe869d",
+      "size_bytes": 145983,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "robots_crawl_delay",
+        "robots_is_allowed",
+        "robots_sitemaps",
+        "robotstxt_version"
+      ],
+      "dependencies": [
+        "robotstxt@0.3"
+      ]
+    },
+    {
       "name": "roman",
       "version": "0.1.0",
       "description": "Roman numeral encode/decode scalars. Hand-rolled (no crate dep, ~30 LOC).",
@@ -5598,6 +5771,41 @@
       ],
       "dependencies": [
         "serde_json@1"
+      ]
+    },
+    {
+      "name": "sha1",
+      "version": "0.1.0",
+      "description": "Standalone SHA-1 hash extension for SQLite (legacy / git interop).",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/sha1",
+      "keywords": [
+        "sha1",
+        "standalone",
+        "sha",
+        "hash",
+        "legacy",
+        "git"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/sha1-0.1.0/sha1-0.1.0.tar.gz",
+      "checksum": "sha256:1aad31b4190be4d914ce5143ce8dd5a8df77dd8806e6df34c5ae075c8122559f",
+      "size_bytes": 111049,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "sha1_hash",
+        "sha1_hex"
+      ],
+      "dependencies": [
+        "hex@0.4",
+        "sha1@0.10"
       ]
     },
     {
@@ -6538,6 +6746,43 @@
       ]
     },
     {
+      "name": "utm",
+      "version": "0.1.0",
+      "description": "Universal Transverse Mercator (UTM) coordinate extension for SQLite: convert between WGS84 lat/lng and UTM (zone + hemisphere + easting + northing).",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/utm",
+      "keywords": [
+        "utm",
+        "universal",
+        "transverse",
+        "mercator",
+        "coordinate",
+        "convert"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/utm-0.1.0/utm-0.1.0.tar.gz",
+      "checksum": "sha256:f94f5f9b68dea750360045a52d16111ccd623f2933a4a933fae4c2fcccd6d2b8",
+      "size_bytes": 127385,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "utm_from_latlng",
+        "utm_to_latlng",
+        "utm_version",
+        "utm_zone_letter",
+        "utm_zone_number"
+      ],
+      "dependencies": [
+        "utm@0.1"
+      ]
+    },
+    {
       "name": "uuid",
       "version": "0.1.0",
       "description": "UUID scalars: `uuid()` (= `uuidv4`), `uuidv4()`, `uuidv7()`. Returns the canonical hyphenated form as SQL TEXT.",
@@ -6881,6 +7126,43 @@
         "scraper@0.21",
         "serde_json@1",
         "serde_json_path@0.7"
+      ]
+    },
+    {
+      "name": "x25519",
+      "version": "0.1.0",
+      "description": "X25519 elliptic-curve Diffie-Hellman key exchange (RFC 7748) for SQL. Sister to `secp256k1` (Bitcoin / Ethereum curve) and `jwt` (which already pulls Ed25519 via ed25519-dalek).",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/x25519",
+      "keywords": [
+        "x25519",
+        "ellipticcurve",
+        "diffiehellman",
+        "key",
+        "exchange",
+        "rfc"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/x25519-0.1.0/x25519-0.1.0.tar.gz",
+      "checksum": "sha256:225df01b5dacbced86ffaa7d4b675c2bceb5b276b120c4b5ad9e116d422aeb65",
+      "size_bytes": 106208,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "x25519_keypair",
+        "x25519_pub_from_priv",
+        "x25519_shared_secret",
+        "x25519_version"
+      ],
+      "dependencies": [
+        "getrandom@0.2",
+        "x25519-dalek@2"
       ]
     },
     {
