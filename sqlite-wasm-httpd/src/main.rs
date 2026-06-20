@@ -121,6 +121,14 @@ async fn main() -> Result<()> {
 
     let acceptor = tls_config.as_ref().map(|c| tokio_rustls::TlsAcceptor::from(c.clone()));
 
+    // The wasm dispatcher is hoisted to a None-typed Option for v1
+    // the static + sql kinds light up the routes table; the wasm
+    // kind returns a structured error until the host integration
+    // is wired in the next commit. Pulling the Option through
+    // serve_one now means that wiring drops in without re-touching
+    // the request path.
+    let wasm: Option<Arc<dyn router::WasmDispatcher>> = None;
+
     loop {
         let (stream, peer) = match listener.accept().await {
             Ok(s) => s,
@@ -132,8 +140,9 @@ async fn main() -> Result<()> {
         let conn = shared.clone();
         let routes_table = routes_table.clone();
         let acceptor = acceptor.clone();
+        let wasm = wasm.clone();
         tokio::spawn(async move {
-            if let Err(e) = serve_one(stream, acceptor.as_ref(), peer, conn, routes_table).await {
+            if let Err(e) = serve_one(stream, acceptor.as_ref(), peer, conn, routes_table, wasm).await {
                 tracing::debug!("conn {peer}: {e}");
             }
         });
@@ -146,11 +155,13 @@ async fn serve_one(
     peer: SocketAddr,
     conn: Arc<SharedConn>,
     routes_table: Arc<String>,
+    wasm: Option<Arc<dyn router::WasmDispatcher>>,
 ) -> Result<()> {
     let svc = service_fn(move |req| {
         let conn = conn.clone();
         let routes_table = routes_table.clone();
-        async move { routes::handle(req, conn, routes_table, peer).await }
+        let wasm = wasm.clone();
+        async move { routes::handle(req, conn, routes_table, peer, wasm).await }
     });
     let builder = ConnBuilder::new(hyper_util::rt::TokioExecutor::new());
     match acceptor {

@@ -41,6 +41,7 @@ pub async fn handle(
     conn: Arc<SharedConn>,
     routes_table: Arc<String>,
     peer: SocketAddr,
+    wasm: Option<Arc<dyn router::WasmDispatcher>>,
 ) -> Result<Resp, hyper::Error> {
     let method = req.method().clone();
     let path = req.uri().path().to_string();
@@ -89,6 +90,7 @@ pub async fn handle(
                 query.as_deref(),
                 &body_bytes,
                 peer,
+                wasm.as_deref().map(|d| d as &dyn router::WasmDispatcher),
             ));
         }
     }
