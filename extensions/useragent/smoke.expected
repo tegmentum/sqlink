@@ -1,0 +1,39 @@
+# Chrome on Linux: browser + version + os + bot
+Chrome
+120.0.0.0
+Linux
+0
+# Safari on iOS: browser, os, os_version, device, bot
+Safari
+iPhone
+17.0
+iPhone
+0
+# Firefox on macOS: browser, version, os, os_version, bot
+Firefox
+120.0
+Mac OSX
+10.15
+0
+# googlebot: is_bot=1, browser name resolves
+1
+Googlebot
+# ua_parse JSON, Chrome on Linux
+{"browser":"Chrome","browser_version":"120.0.0.0","category":"pc","device":"Linux","is_bot":false,"os":"Linux","os_version":null,"vendor":"Google"}
+# ua_parse JSON, googlebot (crawler shape)
+{"browser":"Googlebot","browser_version":null,"category":"crawler","device":null,"is_bot":true,"os":null,"os_version":null,"vendor":null}
+# NULL passthrough on every parser scalar
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# Empty UA: NULL for browser/os/device, 0 for is_bot
+<NULL>
+<NULL>
+<NULL>
+0
+# Garbage UA: NULL browser, 0 is_bot
+<NULL>
+0
+# useragent_version() is non-empty
+1

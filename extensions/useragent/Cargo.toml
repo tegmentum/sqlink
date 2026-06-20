@@ -1,0 +1,25 @@
+[package]
+name = "useragent-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+User-Agent parsing via woothee. Extract browser, OS, device, and bot-detection.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust UA classifier with a small (~140 KB) embedded ruleset.
+# We deliberately avoid `user-agent-parser`, which loads a 1+ MB
+# YAML rules file.
+woothee = "0.13"
+# ua_parse(...) returns a JSON object; serde_json is the lingua
+# franca for JSON output across this catalog (cf. jwt, geo).
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
