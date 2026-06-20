@@ -1,0 +1,40 @@
+[package]
+name = "tar-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+tar archive parsing as SQL scalars. Wraps `tar` 0.4 so SQL
+callers can introspect a tar archive that lives in a BLOB
+column.
+
+Functions:
+  tar_entry_names(blob)        -> TEXT (JSON array of strings)
+  tar_entry_count(blob)        -> INTEGER
+  tar_entry_size(blob, name)   -> INTEGER  bytes in the body
+  tar_entry_data(blob, name)   -> BLOB     entry body verbatim
+  tar_entry_mtime(blob, name)  -> INTEGER  epoch seconds
+  tar_entry_mode(blob, name)   -> INTEGER  unix permission bits
+  tar_is_valid(blob)           -> INTEGER  1 = parses, 0 = no
+  tar_version()                -> TEXT
+
+Bad blob / absent entry  NULL (never errors); `tar_is_valid`
+returns 0 instead of NULL so callers can branch.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules; keeps the parent
+# workspace from trying to native-build this crate.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust tar reader/writer. We disable the default `xattr`
+# feature  it pulls a C-stub on unix that doesn't cross-compile
+# to wasm32-wasip2 cleanly, and we don't need to apply xattrs
+# from inside the wasm sandbox.
+tar = { version = "0.4", default-features = false }

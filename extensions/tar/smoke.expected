@@ -1,0 +1,33 @@
+# tar_is_valid: clean 3072-byte ustar archive parses
+1
+# tar_entry_count: 2 entries (hello.txt + subdir/world.txt)
+2
+# tar_entry_names: JSON array, declaration order preserved
+["hello.txt","subdir/world.txt"]
+# tar_entry_size: body byte count per entry
+10
+6
+# tar_entry_data: raw body bytes (hex-encoded)
+#   "hello tar\n" == 0x68656C6C6F207461720A
+#   "world\n"     == 0x776F726C640A
+68656C6C6F207461720A
+776F726C640A
+# tar_entry_mtime: 1700000000 (set when fixture was hand-built)
+1700000000
+1700000000
+# tar_entry_mode: 0644 == decimal 420
+420
+420
+# tar_version: non-empty
+1
+# tar_is_valid on random garbage → 0
+0
+# NULL blob: count + names → NULL, is_valid → 0
+<NULL>
+<NULL>
+0
+# Missing entry name → NULL on every entry scalar
+<NULL>
+<NULL>
+<NULL>
+<NULL>
