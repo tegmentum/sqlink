@@ -30,11 +30,7 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
-    const FID_VALIDATE: u64 = 1;
     const FID_NAME: u64 = 2;
-    const FID_HEX: u64 = 3;
-    const FID_RGB: u64 = 4;
-    const FID_HSL: u64 = 5;
     const FID_RED: u64 = 6;
     const FID_GREEN: u64 = 7;
     const FID_BLUE: u64 = 8;
@@ -66,11 +62,7 @@ mod wasm_export {
                 name: "csscolor".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
-                    s(FID_VALIDATE, "color_validate", 1),
                     s(FID_NAME, "color_name", 1),
-                    s(FID_HEX, "color_hex", 1),
-                    s(FID_RGB, "color_rgb", 1),
-                    s(FID_HSL, "color_hsl", 1),
                     s(FID_RED, "color_red", 1),
                     s(FID_GREEN, "color_green", 1),
                     s(FID_BLUE, "color_blue", 1),
@@ -93,20 +85,10 @@ mod wasm_export {
             let parsed = parse_or_null(&css);
 
             match func_id {
-                FID_VALIDATE => Ok(SqlValue::Integer(parsed.is_some() as i64)),
                 FID_NAME => Ok(parsed
                     .as_ref()
                     .and_then(|c| c.name())
                     .map(|n| SqlValue::Text(n.to_string()))
-                    .unwrap_or(SqlValue::Null)),
-                FID_HEX => Ok(parsed
-                    .map(|c| SqlValue::Text(c.to_css_hex()))
-                    .unwrap_or(SqlValue::Null)),
-                FID_RGB => Ok(parsed
-                    .map(|c| SqlValue::Text(c.to_css_rgb()))
-                    .unwrap_or(SqlValue::Null)),
-                FID_HSL => Ok(parsed
-                    .map(|c| SqlValue::Text(c.to_css_hsl()))
                     .unwrap_or(SqlValue::Null)),
                 FID_RED => Ok(parsed
                     .map(|c| SqlValue::Integer(c.to_rgba8()[0] as i64))

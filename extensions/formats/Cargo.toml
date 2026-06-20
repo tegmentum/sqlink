@@ -3,14 +3,12 @@ name = "formats-extension"
 version = "0.1.0"
 edition = "2021"
 description = """
-Lighter data-format codecs bundled together: TOML, INI, and
-XML/XPath. Bigger formats (Arrow, Parquet, Excel, Avro) get
-their own extensions because their crates pull substantial
-deps.
+Lighter data-format codecs bundled together: INI and XML/XPath.
+Bigger formats (Arrow, Parquet, Excel, Avro) get their own
+extensions because their crates pull substantial deps. TOML
+codecs live in extensions/toml.
 
 Functions:
-  toml_to_json(text)            TEXT
-  json_to_toml(text)            TEXT
   ini_to_json(text)             TEXT
   json_to_ini(text)             TEXT
   xml_extract(doc, xpath_lite)  TEXT  concatenated matched text
@@ -19,6 +17,11 @@ Functions:
 """
 license = "MIT"
 publish = false
+
+# Standalone workspace so cargo doesn't try to resolve the parent
+# repo's workspace (which transitively references other extensions
+# that may be in flux during refactors).
+[workspace]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -30,7 +33,6 @@ embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 serde_json = { version = "1", default-features = false, features = ["alloc"] }
-toml = "0.8"
 serde = { version = "1", features = ["derive"] }
 quick-xml = { version = "0.36", features = ["serialize"] }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }

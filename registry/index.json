@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T15:27:37Z",
+  "updated": "2026-06-20T15:30:52Z",
   "registry_url": "https://raw.githubusercontent.com/user/sqlite-wasm-extensions/main/registry/index.json",
-  "commit_sha": "324c057fa16471f0f13f0d407c4ee87189e262e6",
+  "commit_sha": "fb7484b14bce866bb6ffad893e60a9414a9028d8",
   "extensions": [
     {
       "name": "extension-manager",

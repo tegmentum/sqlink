@@ -298,13 +298,6 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-mailto: register_into failed rc={rc}");
         }
     }
-    #[cfg(feature = "embed-iso")]
-    {
-        let rc = iso_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-iso: register_into failed rc={rc}");
-        }
-    }
     #[cfg(feature = "embed-ssn")]
     {
         let rc = ssn_extension::embed::register_into(_db);
@@ -436,13 +429,6 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = csscolor_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK {
             eprintln!("embed-csscolor: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-isbn")]
-    {
-        let rc = isbn_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-isbn: register_into failed rc={rc}");
         }
     }
     #[cfg(feature = "embed-lorem")]

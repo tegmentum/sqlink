@@ -8,11 +8,7 @@ use core::ffi::c_int;
 use csscolorparser::Color;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_VALIDATE: u64 = 1;
 const FID_NAME:     u64 = 2;
-const FID_HEX:      u64 = 3;
-const FID_RGB:      u64 = 4;
-const FID_HSL:      u64 = 5;
 const FID_RED:      u64 = 6;
 const FID_GREEN:    u64 = 7;
 const FID_BLUE:     u64 = 8;
@@ -37,20 +33,10 @@ pub fn call_scalar(
     let parsed = parse_or_null(&css);
 
     match func_id {
-        FID_VALIDATE => Ok(SqlValueOwned::Integer(parsed.is_some() as i64)),
         FID_NAME => Ok(parsed
             .as_ref()
             .and_then(|c| c.name())
             .map(|n| SqlValueOwned::Text(n.to_string()))
-            .unwrap_or(SqlValueOwned::Null)),
-        FID_HEX => Ok(parsed
-            .map(|c| SqlValueOwned::Text(c.to_css_hex()))
-            .unwrap_or(SqlValueOwned::Null)),
-        FID_RGB => Ok(parsed
-            .map(|c| SqlValueOwned::Text(c.to_css_rgb()))
-            .unwrap_or(SqlValueOwned::Null)),
-        FID_HSL => Ok(parsed
-            .map(|c| SqlValueOwned::Text(c.to_css_hsl()))
             .unwrap_or(SqlValueOwned::Null)),
         FID_RED => Ok(parsed
             .map(|c| SqlValueOwned::Integer(c.to_rgba8()[0] as i64))
@@ -69,11 +55,7 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE, name: b"color_validate\0", num_args: 1, deterministic: true },
     ScalarSpec { func_id: FID_NAME,     name: b"color_name\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_HEX,      name: b"color_hex\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_RGB,      name: b"color_rgb\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_HSL,      name: b"color_hsl\0",      num_args: 1, deterministic: true },
     ScalarSpec { func_id: FID_RED,      name: b"color_red\0",      num_args: 1, deterministic: true },
     ScalarSpec { func_id: FID_GREEN,    name: b"color_green\0",    num_args: 1, deterministic: true },
     ScalarSpec { func_id: FID_BLUE,     name: b"color_blue\0",     num_args: 1, deterministic: true },

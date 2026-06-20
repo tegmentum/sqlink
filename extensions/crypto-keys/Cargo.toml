@@ -3,10 +3,10 @@ name = "crypto-keys-extension"
 version = "0.1.0"
 edition = "2021"
 description = """
-Key-based crypto: ed25519 sign/verify, x25519 ECDH, AEAD
-ciphers (ChaCha20-Poly1305 + AES-GCM), and merkle-tree
-helpers. Complements crypto-auth (which does passwords +
-JWT).
+Key-based crypto: ed25519 sign/verify, x25519 ECDH,
+ChaCha20-Poly1305 AEAD, and merkle-tree helpers.
+Complements crypto-auth (passwords + JWT) and the focused
+aead extension (which owns aes_gcm_*).
 
 Functions:
   ed25519_keygen()              BLOB  32-byte seed
@@ -18,8 +18,6 @@ Functions:
   x25519_shared(mine, theirs)   BLOB  32-byte shared secret
   chacha20poly1305_encrypt(key, nonce, ad, plaintext)  BLOB
   chacha20poly1305_decrypt(key, nonce, ad, ciphertext) BLOB
-  aes_gcm_encrypt(key, nonce, ad, plaintext)  BLOB
-  aes_gcm_decrypt(key, nonce, ad, ciphertext) BLOB
   merkle_root(leaves_blob)      BLOB  sha-256
   merkle_proof_verify(root, leaf, proof) INTEGER
 
@@ -40,7 +38,6 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 ed25519-dalek = "2"
 x25519-dalek = { version = "2", features = ["static_secrets"] }
 chacha20poly1305 = "0.10"
-aes-gcm = "0.10"
 sha2 = "0.10"
 rand_core = { version = "0.6", features = ["getrandom"] }
 getrandom = "0.2"

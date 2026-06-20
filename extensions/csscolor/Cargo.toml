@@ -3,33 +3,21 @@ name = "csscolor-extension"
 version = "0.1.0"
 edition = "2021"
 description = """
-CSS-conformant color parsing + canonicalization via
-`csscolorparser` 0.8. Handles the full Web Colors set:
-hex, rgb()/rgba(), hsl()/hsla(), hwb(), lab(), oklch(),
-named colors (X11 + CSS4), `transparent`.
+CSS-conformant color parsing via `csscolorparser` 0.8.
+Handles the full Web Colors set: hex, rgb()/rgba(),
+hsl()/hsla(), hwb(), lab(), oklch(), named colors
+(X11 + CSS4), `transparent`.
 
-    color_validate(css)      INTEGER  1 if parses
     color_name(css)          TEXT     "red" / NULL if not a named color
-    color_hex(css)           TEXT     "#FF0000"
-    color_rgb(css)           TEXT     "rgb(255, 0, 0)"
-    color_hsl(css)           TEXT     "hsl(0, 100%, 50%)"
     color_red(css)           INTEGER  0..255
     color_green(css)         INTEGER  0..255
     color_blue(css)          INTEGER  0..255
     color_alpha(css)         REAL     0..1
 
-Use cases:
-  * Normalize user-submitted color columns to a single
-    form (e.g. always store as hex)
-  * Map named colors to their hex equivalent for
-    rendering pipelines that can't display names
-  * Compute averaged RGB from a column of CSS strings:
-        SELECT avg(color_red(c)) FROM palette;
-  * Filter rows by hue band via color_hsl()
-
-Pair with `parsers.hex_to_rgb` / `parsers.rgb_to_hsl`
-for the lower-level numeric conversion API; the CSS
-extension is the "accepts any CSS string" front door.
+Note: the canonical color extension owns color_to_hex /
+color_to_rgb / color_parse / rgb_to_hsl. This crate keeps
+only the CSS-string-accepting channel extractors plus the
+reverse hex->name lookup that `color` does not provide.
 """
 license = "MIT"
 publish = false

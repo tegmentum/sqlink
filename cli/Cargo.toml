@@ -81,7 +81,6 @@ json1-extension     = { path = "../extensions/json1",     optional = true, featu
 cron-extension      = { path = "../extensions/cron",      optional = true, features = ["embed"], default-features = false }
 crypto-extension    = { path = "../extensions/crypto",    optional = true, features = ["embed"], default-features = false }
 mailto-extension    = { path = "../extensions/mailto",    optional = true, features = ["embed"], default-features = false }
-iso-extension       = { path = "../extensions/iso",       optional = true, features = ["embed"], default-features = false }
 ssn-extension       = { path = "../extensions/ssn",       optional = true, features = ["embed"], default-features = false }
 numfmt-extension    = { path = "../extensions/numfmt",    optional = true, features = ["embed"], default-features = false }
 ipaddr-extension    = { path = "../extensions/ipaddr",    optional = true, features = ["embed"], default-features = false }
@@ -101,7 +100,6 @@ email-extension      = { path = "../extensions/email",      optional = true, fea
 case-extension       = { path = "../extensions/case",       optional = true, features = ["embed"], default-features = false }
 phone-extension      = { path = "../extensions/phone",      optional = true, features = ["embed"], default-features = false }
 csscolor-extension   = { path = "../extensions/csscolor",   optional = true, features = ["embed"], default-features = false }
-isbn-extension       = { path = "../extensions/isbn",       optional = true, features = ["embed"], default-features = false }
 lorem-extension      = { path = "../extensions/lorem",      optional = true, features = ["embed"], default-features = false }
 url-extension        = { path = "../extensions/url",        optional = true, features = ["embed"], default-features = false }
 graphql-extension    = { path = "../extensions/graphql",    optional = true, features = ["embed"], default-features = false }
@@ -193,7 +191,6 @@ embed-json1     = ["dep:json1-extension"]
 embed-cron      = ["dep:cron-extension"]
 embed-crypto    = ["dep:crypto-extension"]
 embed-mailto    = ["dep:mailto-extension"]
-embed-iso       = ["dep:iso-extension"]
 embed-ssn       = ["dep:ssn-extension"]
 embed-numfmt    = ["dep:numfmt-extension"]
 embed-ipaddr    = ["dep:ipaddr-extension"]
@@ -213,7 +210,6 @@ embed-email      = ["dep:email-extension"]
 embed-case       = ["dep:case-extension"]
 embed-phone      = ["dep:phone-extension"]
 embed-csscolor   = ["dep:csscolor-extension"]
-embed-isbn       = ["dep:isbn-extension"]
 embed-lorem      = ["dep:lorem-extension"]
 embed-url        = ["dep:url-extension"]
 embed-graphql    = ["dep:graphql-extension"]

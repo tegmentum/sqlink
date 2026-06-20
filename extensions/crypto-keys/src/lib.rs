@@ -132,40 +132,6 @@ pub fn chacha20poly1305_decrypt(
         .map_err(|e| alloc::format!("chacha20poly1305_decrypt: {e}"))
 }
 
-pub fn aes_gcm_encrypt(
-    key: &[u8],
-    nonce: &[u8],
-    ad: &[u8],
-    plaintext: &[u8],
-) -> Result<Vec<u8>, String> {
-    use aes_gcm::aead::{Aead, KeyInit, Payload};
-    use aes_gcm::Aes256Gcm;
-    if key.len() != 32 || nonce.len() != 12 {
-        return Err("aes_gcm: requires 32-byte key + 12-byte nonce".into());
-    }
-    let cipher = Aes256Gcm::new(key.into());
-    cipher
-        .encrypt(nonce.into(), Payload { msg: plaintext, aad: ad })
-        .map_err(|e| alloc::format!("aes_gcm_encrypt: {e}"))
-}
-
-pub fn aes_gcm_decrypt(
-    key: &[u8],
-    nonce: &[u8],
-    ad: &[u8],
-    ciphertext: &[u8],
-) -> Result<Vec<u8>, String> {
-    use aes_gcm::aead::{Aead, KeyInit, Payload};
-    use aes_gcm::Aes256Gcm;
-    if key.len() != 32 || nonce.len() != 12 {
-        return Err("aes_gcm: requires 32-byte key + 12-byte nonce".into());
-    }
-    let cipher = Aes256Gcm::new(key.into());
-    cipher
-        .decrypt(nonce.into(), Payload { msg: ciphertext, aad: ad })
-        .map_err(|e| alloc::format!("aes_gcm_decrypt: {e}"))
-}
-
 // ── merkle ──────────────────────────────────────────────────
 
 fn sha256(data: &[u8]) -> [u8; 32] {
@@ -282,16 +248,6 @@ mod tests {
     }
 
     #[test]
-    fn aes_gcm_round_trip() {
-        let key = [0xCCu8; 32];
-        let nonce = [0xDDu8; 12];
-        let pt = b"hi mom";
-        let ct = aes_gcm_encrypt(&key, &nonce, b"", pt).unwrap();
-        let back = aes_gcm_decrypt(&key, &nonce, b"", &ct).unwrap();
-        assert_eq!(back, pt);
-    }
-
-    #[test]
     fn merkle_root_two_leaves() {
         let a = sha256(b"a");
         let b = sha256(b"b");
@@ -353,8 +309,6 @@ mod wasm_export {
     const FID_X_SHARED: u64 = 7;
     const FID_CHACHA_ENC: u64 = 8;
     const FID_CHACHA_DEC: u64 = 9;
-    const FID_AES_ENC: u64 = 10;
-    const FID_AES_DEC: u64 = 11;
     const FID_MERKLE_ROOT: u64 = 12;
     const FID_MERKLE_VERIFY: u64 = 13;
 
@@ -383,8 +337,6 @@ mod wasm_export {
                     s(FID_X_SHARED, "x25519_shared", 2, det),
                     s(FID_CHACHA_ENC, "chacha20poly1305_encrypt", 4, det),
                     s(FID_CHACHA_DEC, "chacha20poly1305_decrypt", 4, det),
-                    s(FID_AES_ENC, "aes_gcm_encrypt", 4, det),
-                    s(FID_AES_DEC, "aes_gcm_decrypt", 4, det),
                     s(FID_MERKLE_ROOT, "merkle_root", 2, det),
                     s(FID_MERKLE_VERIFY, "merkle_proof_verify", 3, det),
                 ],
@@ -451,20 +403,6 @@ mod wasm_export {
                     arg_blob(&args, 1, "chacha20poly1305_decrypt")?,
                     arg_blob(&args, 2, "chacha20poly1305_decrypt")?,
                     arg_blob(&args, 3, "chacha20poly1305_decrypt")?,
-                )
-                .map(SqlValue::Blob),
-                FID_AES_ENC => super::aes_gcm_encrypt(
-                    arg_blob(&args, 0, "aes_gcm_encrypt")?,
-                    arg_blob(&args, 1, "aes_gcm_encrypt")?,
-                    arg_blob(&args, 2, "aes_gcm_encrypt")?,
-                    arg_blob(&args, 3, "aes_gcm_encrypt")?,
-                )
-                .map(SqlValue::Blob),
-                FID_AES_DEC => super::aes_gcm_decrypt(
-                    arg_blob(&args, 0, "aes_gcm_decrypt")?,
-                    arg_blob(&args, 1, "aes_gcm_decrypt")?,
-                    arg_blob(&args, 2, "aes_gcm_decrypt")?,
-                    arg_blob(&args, 3, "aes_gcm_decrypt")?,
                 )
                 .map(SqlValue::Blob),
                 FID_MERKLE_ROOT => {

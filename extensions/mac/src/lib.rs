@@ -1,4 +1,13 @@
-//! MAC address (EUI-48) parsing + canonicalization, hand-rolled
+//! MAC address (EUI-48) helper scalars not provided by `mac-oui`.
+//!
+//! After the duplicate-surface trim, this umbrella only exposes
+//! the three helpers `mac-oui` does not:
+//!   mac_is_local(s)     -> INTEGER bit 1 of octet 0
+//!   mac_is_multicast(s) -> INTEGER bit 0 of octet 0
+//!   mac_nic(s)          -> TEXT    "DDEEFF" (last 3 octets, uppercase)
+//!
+//! Validation / normalization / formatting / OUI extraction now live
+//! in `extensions/mac-oui` (which also adds IEEE vendor lookup).
 
 extern crate alloc;
 
@@ -25,13 +34,9 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
-    const FID_VALIDATE: u64 = 1;
-    const FID_NORMALIZE: u64 = 2;
-    const FID_OUI: u64 = 3;
     const FID_NIC: u64 = 4;
     const FID_IS_MULTICAST: u64 = 5;
     const FID_IS_LOCAL: u64 = 6;
-    const FID_FORMAT: u64 = 7;
 
     struct Ext;
 
@@ -56,43 +61,10 @@ mod wasm_export {
         Some(out)
     }
 
-    fn format_mac(bytes: &[u8; 6], sep: char) -> String {
-        let mut out = String::with_capacity(17);
-        for (i, b) in bytes.iter().enumerate() {
-            if i > 0 {
-                out.push(sep);
-            }
-            out.push_str(&alloc::format!("{:02X}", b));
-        }
-        out
-    }
-
-    // ---- Arg helpers ----
-    // The Big Three; copy-pasted into every extension. The
-    // scaffold ships them so you delete what you don't need.
-
-    #[allow(dead_code)]
     fn arg_text(args: &[SqlValue], i: usize, fname: &str) -> Result<String, String> {
         match args.get(i) {
             Some(SqlValue::Text(s)) => Ok(s.clone()),
             _ => Err(format!("{fname}: TEXT arg at {i}")),
-        }
-    }
-
-    #[allow(dead_code)]
-    fn arg_int(args: &[SqlValue], i: usize, fname: &str) -> Result<i64, String> {
-        match args.get(i) {
-            Some(SqlValue::Integer(n)) => Ok(*n),
-            _ => Err(format!("{fname}: INTEGER arg at {i}")),
-        }
-    }
-
-    #[allow(dead_code)]
-    fn arg_blob(args: &[SqlValue], i: usize, fname: &str) -> Result<Vec<u8>, String> {
-        match args.get(i) {
-            Some(SqlValue::Blob(b)) => Ok(b.clone()),
-            Some(SqlValue::Text(s)) => Ok(s.as_bytes().to_vec()),
-            _ => Err(format!("{fname}: BLOB arg at {i}")),
         }
     }
 
@@ -109,13 +81,9 @@ mod wasm_export {
                 name: "mac".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
-                    s(FID_VALIDATE, "mac_validate", 1),
-                    s(FID_NORMALIZE, "mac_normalize", 1),
-                    s(FID_OUI, "mac_oui", 1),
                     s(FID_NIC, "mac_nic", 1),
                     s(FID_IS_MULTICAST, "mac_is_multicast", 1),
                     s(FID_IS_LOCAL, "mac_is_local", 1),
-                    s(FID_FORMAT, "mac_format", 2),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -134,15 +102,6 @@ mod wasm_export {
             let parsed = parse_mac(&raw);
 
             match func_id {
-                FID_VALIDATE => Ok(SqlValue::Integer(parsed.is_some() as i64)),
-                FID_NORMALIZE => Ok(parsed
-                    .map(|b| SqlValue::Text(format_mac(&b, ':')))
-                    .unwrap_or(SqlValue::Null)),
-                FID_OUI => Ok(parsed
-                    .map(|b| SqlValue::Text(alloc::format!(
-                        "{:02X}{:02X}{:02X}", b[0], b[1], b[2]
-                    )))
-                    .unwrap_or(SqlValue::Null)),
                 FID_NIC => Ok(parsed
                     .map(|b| SqlValue::Text(alloc::format!(
                         "{:02X}{:02X}{:02X}", b[3], b[4], b[5]
@@ -154,13 +113,6 @@ mod wasm_export {
                 FID_IS_LOCAL => Ok(parsed
                     .map(|b| SqlValue::Integer(((b[0] >> 1) & 0x01) as i64))
                     .unwrap_or(SqlValue::Null)),
-                FID_FORMAT => {
-                    let sep_arg = arg_text(&args, 1, "mac_format")?;
-                    let sep = sep_arg.chars().next().unwrap_or(':');
-                    Ok(parsed
-                        .map(|b| SqlValue::Text(format_mac(&b, sep)))
-                        .unwrap_or(SqlValue::Null))
-                }
                 other => Err(format!("mac: unknown func id {other}")),
             }
         }

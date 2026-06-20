@@ -3,26 +3,14 @@ name = "crypto-auth-extension"
 version = "0.1.0"
 edition = "2021"
 description = """
-Authentication / verification primitives  JWT, TOTP, Argon2,
-bcrypt  bundled into one extension. All verify-only and
-stateless; no key storage in v1. Pure-Rust deps from
-rustcrypto and friends.
+Authentication / verification primitives — Argon2 password
+hashing. Historically this umbrella also exposed JWT, TOTP, and
+bcrypt; those have been split out into focused extensions
+(extensions/jwt, extensions/totp, extensions/pwhash).
 
 Functions:
-  jwt_verify(token, secret)            INTEGER  HS256 only
-                                                  in v1; non-zero
-                                                  for signature OK
-                                                  and not expired
-  jwt_decode_header(token)             TEXT     JSON header
-  jwt_decode_payload(token)            TEXT     JSON payload
-  totp(secret_b32, unix_ts)            TEXT     6-digit code
-                                                  (period=30, sha1)
-  totp_verify(secret_b32, code, ts, w) INTEGER  1 if code matches
-                                                  within +/- w steps
   argon2_hash(password)                TEXT     PHC-format hash
   argon2_verify(hash, password)        INTEGER  0/1
-  bcrypt_hash(password, cost)          TEXT     cost in 4..31
-  bcrypt_verify(hash, password)        INTEGER  0/1
   crypto_auth_version()                TEXT
 
 Tier-3 cluster per PLAN-extensions-followups Phase E6.
@@ -41,22 +29,6 @@ wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
 sqlite-embed = { path = "../../sqlite-embed", optional = true }
-# RFC 7519 JSON Web Token. HS256 + ES256 + RS256 etc.
-jsonwebtoken = { version = "9", default-features = false }
-# TOTP  hand-rolled over rustcrypto's HMAC + SHA-1.
-hmac = "0.12"
-sha1 = "0.10"
-base32 = "0.5"
 # Password hashing.
 argon2 = "0.5"
-bcrypt = { version = "0.15", default-features = false, features = ["std", "alloc"] }
 password-hash = { version = "0.5", features = ["getrandom"] }
-# Direct base64 dep for JWT payload decode  jsonwebtoken
-# pulls one in transitively but isn't re-exporting it.
-base64 = "0.22"
-# JSON for decoded payloads/headers.
-serde_json = { version = "1", default-features = false, features = ["alloc"] }
-serde = { version = "1", features = ["derive"] }
-# JWT validation needs a clock; jsonwebtoken pulls chrono
-# transitively but we use the same alloc-only feature shape
-# as the time extension for size.

@@ -15,8 +15,6 @@ const FID_X_PUBLIC: u64 = 6;
 const FID_X_SHARED: u64 = 7;
 const FID_CHACHA_ENC: u64 = 8;
 const FID_CHACHA_DEC: u64 = 9;
-const FID_AES_ENC: u64 = 10;
-const FID_AES_DEC: u64 = 11;
 const FID_MERKLE_ROOT: u64 = 12;
 const FID_MERKLE_VERIFY: u64 = 13;
 
@@ -73,20 +71,6 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
             arg_blob(&args, 3, "chacha20poly1305_decrypt")?,
         )
         .map(SqlValueOwned::Blob),
-        FID_AES_ENC => crate::aes_gcm_encrypt(
-            arg_blob(&args, 0, "aes_gcm_encrypt")?,
-            arg_blob(&args, 1, "aes_gcm_encrypt")?,
-            arg_blob(&args, 2, "aes_gcm_encrypt")?,
-            arg_blob(&args, 3, "aes_gcm_encrypt")?,
-        )
-        .map(SqlValueOwned::Blob),
-        FID_AES_DEC => crate::aes_gcm_decrypt(
-            arg_blob(&args, 0, "aes_gcm_decrypt")?,
-            arg_blob(&args, 1, "aes_gcm_decrypt")?,
-            arg_blob(&args, 2, "aes_gcm_decrypt")?,
-            arg_blob(&args, 3, "aes_gcm_decrypt")?,
-        )
-        .map(SqlValueOwned::Blob),
         FID_MERKLE_ROOT => {
             let leaves = arg_blob(&args, 0, "merkle_root")?;
             let lsz = arg_int(&args, 1, "merkle_root")? as usize;
@@ -111,8 +95,6 @@ const SCALARS: &[ScalarSpec] = &[
     ScalarSpec { func_id: FID_X_SHARED,      name: b"x25519_shared\0",             num_args: 2, deterministic: true },
     ScalarSpec { func_id: FID_CHACHA_ENC,    name: b"chacha20poly1305_encrypt\0",  num_args: 4, deterministic: true },
     ScalarSpec { func_id: FID_CHACHA_DEC,    name: b"chacha20poly1305_decrypt\0",  num_args: 4, deterministic: true },
-    ScalarSpec { func_id: FID_AES_ENC,       name: b"aes_gcm_encrypt\0",           num_args: 4, deterministic: true },
-    ScalarSpec { func_id: FID_AES_DEC,       name: b"aes_gcm_decrypt\0",           num_args: 4, deterministic: true },
     ScalarSpec { func_id: FID_MERKLE_ROOT,   name: b"merkle_root\0",               num_args: 2, deterministic: true },
     ScalarSpec { func_id: FID_MERKLE_VERIFY, name: b"merkle_proof_verify\0",       num_args: 3, deterministic: true },
 ];

@@ -6,8 +6,6 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_TOML_TO_JSON: u64 = 1;
-const FID_JSON_TO_TOML: u64 = 2;
 const FID_INI_TO_JSON: u64 = 3;
 const FID_JSON_TO_INI: u64 = 4;
 const FID_XML_EXTRACT: u64 = 5;
@@ -23,10 +21,6 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
 
 pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
-        FID_TOML_TO_JSON => crate::toml_to_json(&arg_text(&args, 0, "toml_to_json")?)
-            .map(SqlValueOwned::Text),
-        FID_JSON_TO_TOML => crate::json_to_toml(&arg_text(&args, 0, "json_to_toml")?)
-            .map(SqlValueOwned::Text),
         FID_INI_TO_JSON => Ok(SqlValueOwned::Text(crate::ini_to_json(&arg_text(
             &args,
             0,
@@ -52,8 +46,6 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_TOML_TO_JSON, name: b"toml_to_json\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_TO_TOML, name: b"json_to_toml\0", num_args: 1, deterministic: true },
     ScalarSpec { func_id: FID_INI_TO_JSON,  name: b"ini_to_json\0",  num_args: 1, deterministic: true },
     ScalarSpec { func_id: FID_JSON_TO_INI,  name: b"json_to_ini\0",  num_args: 1, deterministic: true },
     ScalarSpec { func_id: FID_XML_EXTRACT,  name: b"xml_extract\0",  num_args: 2, deterministic: true },

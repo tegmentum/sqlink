@@ -1,4 +1,4 @@
-//! TOML / INI / XML codecs.
+//! INI / XML codecs. (TOML codecs moved to extensions/toml.)
 
 extern crate alloc;
 
@@ -7,20 +7,6 @@ pub mod embed;
 
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-
-// ── TOML ───────────────────────────────────────────────────
-
-pub fn toml_to_json(text: &str) -> Result<String, String> {
-    let v: toml::Value = toml::from_str(text).map_err(|e| alloc::format!("toml_to_json: {e}"))?;
-    let j = serde_json::to_value(v).map_err(|e| alloc::format!("toml_to_json: {e}"))?;
-    Ok(j.to_string())
-}
-
-pub fn json_to_toml(text: &str) -> Result<String, String> {
-    let v: serde_json::Value =
-        serde_json::from_str(text).map_err(|e| alloc::format!("json_to_toml: {e}"))?;
-    toml::to_string(&v).map_err(|e| alloc::format!("json_to_toml: {e}"))
-}
 
 // ── INI ────────────────────────────────────────────────────
 //
@@ -349,19 +335,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn toml_round_trip() {
-        let t = r#"
-[user]
-name = "alice"
-age = 30
-"#;
-        let j = toml_to_json(t).unwrap();
-        let v: serde_json::Value = serde_json::from_str(&j).unwrap();
-        assert_eq!(v["user"]["name"], "alice");
-        assert_eq!(v["user"]["age"], 30);
-    }
-
-    #[test]
     fn ini_basic() {
         let ini = "global=42\n\n[server]\nport=8080\nhost=localhost\n";
         let j = ini_to_json(ini);
@@ -410,8 +383,6 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
-    const FID_TOML_TO_JSON: u64 = 1;
-    const FID_JSON_TO_TOML: u64 = 2;
     const FID_INI_TO_JSON: u64 = 3;
     const FID_JSON_TO_INI: u64 = 4;
     const FID_XML_EXTRACT: u64 = 5;
@@ -433,8 +404,6 @@ mod wasm_export {
                 name: "formats".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
-                    s(FID_TOML_TO_JSON, "toml_to_json", 1),
-                    s(FID_JSON_TO_TOML, "json_to_toml", 1),
                     s(FID_INI_TO_JSON, "ini_to_json", 1),
                     s(FID_JSON_TO_INI, "json_to_ini", 1),
                     s(FID_XML_EXTRACT, "xml_extract", 2),
@@ -462,10 +431,6 @@ mod wasm_export {
     impl ScalarFunctionGuest for Ext {
         fn call(func_id: u64, args: Vec<SqlValue>) -> Result<SqlValue, String> {
             match func_id {
-                FID_TOML_TO_JSON => super::toml_to_json(&arg_text(&args, 0, "toml_to_json")?)
-                    .map(SqlValue::Text),
-                FID_JSON_TO_TOML => super::json_to_toml(&arg_text(&args, 0, "json_to_toml")?)
-                    .map(SqlValue::Text),
                 FID_INI_TO_JSON => Ok(SqlValue::Text(super::ini_to_json(&arg_text(
                     &args,
                     0,
