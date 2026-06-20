@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{NAME}}  sqlite-wasm extensions</title>
+<meta name="description" content="{{DESC_META}}">
+<style>{{STYLE}}</style>
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1><a href="/">sqlite-wasm extensions</a></h1>
+    <div class="subtitle"><a href="/" style="color:#666;text-decoration:none;"> back to all</a></div>
+  </div>
+</header>
+
+<main class="container detail">
+  <span class="badge {{STATE}}">{{STATE}}</span>
+  <h2>{{NAME}}</h2>
+  <p class="lede">{{DESCRIPTION}}</p>
+
+  {{ACTIONS}}
+
+  <div class="section">
+    <h3>Details</h3>
+    <dl class="detail-grid">{{DETAIL_ROWS}}</dl>
+  </div>
+
+  {{EXPORTS_SECTION}}
+
+  {{DEPS_SECTION}}
+
+  {{REASON_SECTION}}
+</main>
+
+<footer class="container">
+  <a href="/">All extensions</a>
+  <a href="/api/ext/{{NAME}}.json">JSON</a>
+</footer>
+</body>
+</html>

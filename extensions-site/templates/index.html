@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sqlite-wasm extensions registry</title>
+<meta name="description" content="Browse {{TOTAL_COUNT}} SQLite extensions compiled to WebAssembly  loadable via .load EXT.wasm.">
+<style>{{STYLE}}</style>
+</head>
+<body>
+<header>
+  <div class="container">
+    <h1><a href="/">sqlite-wasm extensions</a></h1>
+    <div class="subtitle">{{TOTAL_COUNT}} extensions  {{SHIPPED_COUNT}} shipped, {{PLANNED_COUNT}} in the wishlist</div>
+  </div>
+</header>
+
+<main class="container">
+  <input type="search" class="search-bar" id="q" placeholder="Search by name, description, or category" autofocus>
+
+  <div class="filter-row" id="filters">
+    <span class="chip active" data-state="all">All</span>
+    <span class="chip" data-state="shipped">Shipped</span>
+    <span class="chip" data-state="planned">Planned</span>
+    <span class="chip" data-state="deferred">Deferred</span>
+    <span class="chip" data-state="blocked">Blocked</span>
+  </div>
+
+  <div class="stats" id="stats">{{TOTAL_COUNT}} extensions</div>
+
+  <div class="grid" id="results"></div>
+</main>
+
+<footer class="container">
+  Generated from <code>provenance/extensions.db</code> + <code>registry/index.json</code> at build time.<br>
+  Source: <a href="https://github.com/anthropics/sqlite-wasm">github.com/anthropics/sqlite-wasm</a>
+</footer>
+
+<script id="data" type="application/json">{{DATA_JSON}}</script>
+<script>
+(function() {
+  const data = JSON.parse(document.getElementById('data').textContent);
+  const q     = document.getElementById('q');
+  const grid  = document.getElementById('results');
+  const stats = document.getElementById('stats');
+  const chips = document.querySelectorAll('.filter-row .chip');
+  let stateFilter = 'all';
+
+  function badge(s) {
+    return '<span class="badge ' + s + '">' + s + '</span>';
+  }
+  function card(e) {
+    const desc = (e.description || '').slice(0, 200);
+    const meta = e.state === 'shipped'
+      ? (e.exports_count + ' fns  v' + (e.version || ''))
+      : (e.track || '') + (e.proposed_crate ? '  crate: ' + e.proposed_crate : '');
+    return '<a class="card" href="/ext/' + encodeURIComponent(e.name) + '">' +
+      '<h3>' + badge(e.state) + e.name + '</h3>' +
+      '<p class="desc">' + escapeHtml(desc) + '</p>' +
+      '<div class="meta">' + escapeHtml(meta) + '</div>' +
+      '</a>';
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]);
+  }
+  function matches(e, query) {
+    if (!query) return true;
+    const blob = (e.name + ' ' + (e.description||'') + ' ' + (e.track||'') + ' ' +
+                  (e.categories || []).join(' ') + ' ' +
+                  (e.keywords || []).join(' ')).toLowerCase();
+    return blob.includes(query);
+  }
+  function render() {
+    const query = q.value.trim().toLowerCase();
+    const filtered = data.filter(e =>
+      (stateFilter === 'all' || e.state === stateFilter) &&
+      matches(e, query)
+    );
+    grid.innerHTML = filtered.map(card).join('');
+    stats.textContent = filtered.length + ' of ' + data.length + ' extensions' +
+      (query ? '  matching "' + query + '"' : '') +
+      (stateFilter !== 'all' ? '  state=' + stateFilter : '');
+    if (filtered.length === 0) {
+      grid.innerHTML = '<div class="empty">No matches.</div>';
+    }
+  }
+
+  q.addEventListener('input', render);
+  chips.forEach(c => c.addEventListener('click', () => {
+    stateFilter = c.dataset.state;
+    chips.forEach(x => x.classList.toggle('active', x === c));
+    render();
+  }));
+  render();
+})();
+</script>
+</body>
+</html>
