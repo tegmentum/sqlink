@@ -1,0 +1,19 @@
+[package]
+name = "exif-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+EXIF metadata extraction from JPEG/TIFF/PNG/HEIF/WebP blobs via kamadak-exif 0.6
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+kamadak-exif = "0.6"

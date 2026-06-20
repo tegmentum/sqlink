@@ -1,0 +1,70 @@
+# Expected output for the `exif` smoke harness.
+#
+# Fixture: a synthesized JPEG with TIFF EXIF carrying Make=TestCam,
+# Model=X100, DateTimeOriginal=2024-01-15 10:30:45, Orientation=1,
+# PhotographicSensitivity=400, FNumber=2.8, ExposureTime=1/250,
+# FocalLength=50, GPSLatitude=37 N, GPSLongitude=122 W.
+#
+# Notes on the display-value rows (`exif_field` + `exif_all` keys):
+#   exif_field returns the raw kamadak-exif `display_value()` text,
+#   which surrounds ASCII tag values with quotation marks per the
+#   library convention. `"TestCam"` (including the quotes) is the
+#   intentional output.
+
+# ---- Acceptance 1: camera / datetime / orientation ----
+TestCam
+X100
+TestCam X100
+2024-01-15T10:30:45
+1
+
+# ---- Acceptance 2: capture settings ----
+400
+2.8
+1/250
+50
+
+# ---- Acceptance 3: GPS ----
+37.7749
+-122.4211
+1
+
+# ---- Acceptance 4: orientation in 1..=8 ----
+1
+
+# ---- Acceptance 5: exif_field accessor ----
+"TestCam"
+<NULL>
+
+# ---- Acceptance 6: exif_all JSON ----
+"TestCam"
+
+# ---- Acceptance 7: PNG no-EXIF -> NULL on every fn ----
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 8: random bytes -> NULL on every fn ----
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 9: NULL input -> NULL on every fn ----
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 10: version is non-empty ----
+1
