@@ -1,0 +1,32 @@
+[package]
+name = "hashes-fast-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Fast non-cryptographic hashes for SQLite: xxh3 (64 + 128), xxh64,
+xxh32, murmur3_32, murmur3_128. Companion to the sha3 extension --
+where sha3 covers integrity / collision-resistance, these cover the
+sub-nanosecond regime used by bloom filters, sharding, consistent
+hashing, and hash-join keys.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps this crate out of the parent workspace
+# build (per PLAN-extensions-and-handlers hard rule 2). The wasi
+# component build (`make ext NAME=hashes-fast`) still works because
+# the Makefile invokes `cargo build` with --manifest-path against
+# this crate's own workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust, no_std, fast xxhash family. Covers xxh3, xxh64, xxh32.
+xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "xxh64", "xxh32"] }
+# Pure-rust murmur3 (32 + 128 bit). API is hasher-style over a Read
+# impl; we use std::io::Cursor over &[u8].
+murmur3 = "0.5"
