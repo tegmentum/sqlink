@@ -1,0 +1,42 @@
+[package]
+name = "stemmer-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Snowball stemmer for SQL. Wraps the pure-rust `rust-stemmers`
+crate so FTS5 / text-search rankings can normalize tokens to
+their stems.
+
+Functions:
+  stem(word, [lang])    -> text   (lang defaults to 'english')
+  stem_languages()      -> text   (comma-separated list of supported langs)
+  stemmer_version()     -> text
+
+Supported languages (per rust-stemmers 1.2):
+  arabic, danish, dutch, english, finnish, french, german, greek,
+  hungarian, italian, norwegian, portuguese, romanian, russian,
+  spanish, swedish, tamil, turkish.
+
+Unknown lang errors with a clear message. NULL word / lang
+propagates to NULL.
+
+See PLAN-more-extensions.md  4.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust Snowball stemmer impl. Ships all 18 language stem fns
+# in one crate; small (~80 KB of generated code per language) and
+# no runtime data files.
+rust-stemmers = "1.2"

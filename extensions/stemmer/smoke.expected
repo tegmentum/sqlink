@@ -1,0 +1,25 @@
+# PLAN  4: english (default) — running, better, histories
+run
+better
+histori
+# Porter2 worked examples (fruitlessly, CONSIGNED, consigning, consignment)
+fruitless
+consign
+consign
+consign
+# explicit english + ISO code "EN" both stem like default
+run
+run
+# german "laufen" -> "lauf" (PLAN ); ISO "de" alias same
+lauf
+lauf
+# french "manger" -> "mang"
+mang
+# NULL propagation: word=NULL, lang=NULL, lang=NULL with word
+<NULL>
+<NULL>
+<NULL>
+# stem_languages() canonical alphabetised list
+arabic,danish,dutch,english,finnish,french,german,greek,hungarian,italian,norwegian,portuguese,romanian,russian,spanish,swedish,tamil,turkish
+# stemmer_version() non-empty
+1
