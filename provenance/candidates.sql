@@ -20,10 +20,6 @@ DELETE FROM plugin_candidate;
 -- ====== Crypto + wire-format gaps ======
 INSERT INTO plugin_candidate (name, source, description, upstream_url, track, proposed_crate, added_at, notes)
 VALUES
-('webauthn',         'session-2026-06', 'WebAuthn registration + authentication verification.',
-                     'https://www.w3.org/TR/webauthn-2/',
-                     'crypto', 'webauthn-rs 0.5', unixepoch(),
-                     'Heavy spec; needs handler-side surface as well as SQL.'),
 
 -- ====== Codec gaps ======
 ('protobuf',         'session-2026-06', 'Protocol Buffers encode/decode (given schema).',
@@ -54,10 +50,6 @@ VALUES
 -- ====== Text / NLP ======
 
 -- ====== Network / web ======
-('http-signature',   'session-2026-06', 'HTTP Message Signatures (RFC 9421).',
-                     'https://datatracker.ietf.org/doc/html/rfc9421',
-                     'network', 'no canonical crate yet  hand-roll', unixepoch(),
-                     'Used by ActivityPub / Mastodon and the SSF working group.'),
 
 -- ====== Bibliographic / identifiers ======
 
@@ -70,16 +62,8 @@ VALUES
                      'bignum has modpow; this would add a key-gen surface specifically.'),
 
 -- ====== Sqlean items not covered by our catalog ======
-('sqlean-vsv',       'sqlean',          'Virtual CSV view (vsv).',
-                     'https://github.com/nalgeon/sqlean/blob/main/docs/vsv.md',
-                     'vtab', 'port from sqlean C', unixepoch(),
-                     'csv extension exists but vsv has different shape  worth comparing.'),
 
 -- ====== Specialty / niche ======
-('dicom',            'session-2026-06', 'DICOM medical imaging metadata.',
-                     'https://www.dicomstandard.org/',
-                     'media', 'dicom-rs 0.7', unixepoch(),
-                     'Medical / healthcare context.'),
 ('mathml',           'session-2026-06', 'MathML parsing.',
                      'https://www.w3.org/Math/',
                      'document', 'mathml-rs 0.1', unixepoch(),

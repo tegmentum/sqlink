@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T20:14:18Z",
-  "commit_sha": "75dff5fd82dd9fddb8eb4006531b69d39b6e743d",
+  "updated": "2026-06-20T20:28:35Z",
+  "commit_sha": "65eae2539f70c7cb4f0e973004094ff6dbad8afd",
   "candidates": [
     {
       "name": "flatbuffers",
@@ -37,17 +37,6 @@
       "notes": "Schema problem; less common than protobuf."
     },
     {
-      "name": "webauthn",
-      "source": "session-2026-06",
-      "description": "WebAuthn registration + authentication verification.",
-      "upstream_url": "https://www.w3.org/TR/webauthn-2/",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "webauthn-rs 0.5",
-      "notes": "Heavy spec; needs handler-side surface as well as SQL."
-    },
-    {
       "name": "mathml",
       "source": "session-2026-06",
       "description": "MathML parsing.",
@@ -81,17 +70,6 @@
       "notes": "bignum has modpow; this would add a key-gen surface specifically."
     },
     {
-      "name": "dicom",
-      "source": "session-2026-06",
-      "description": "DICOM medical imaging metadata.",
-      "upstream_url": "https://www.dicomstandard.org/",
-      "track": "media",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "dicom-rs 0.7",
-      "notes": "Medical / healthcare context."
-    },
-    {
       "name": "djvu",
       "source": "session-2026-06",
       "description": "DjVu document metadata.",
@@ -101,28 +79,6 @@
       "reason": "No actively-maintained pure-rust DjVu crate. The historical option is to port djvulibre header parsing  out of scope without a consumer.",
       "proposed_crate": "no crate yet  port djvulibre header",
       "notes": "Niche; defer until a consumer asks."
-    },
-    {
-      "name": "http-signature",
-      "source": "session-2026-06",
-      "description": "HTTP Message Signatures (RFC 9421).",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc9421",
-      "track": "network",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "no canonical crate yet  hand-roll",
-      "notes": "Used by ActivityPub / Mastodon and the SSF working group."
-    },
-    {
-      "name": "sqlean-vsv",
-      "source": "sqlean",
-      "description": "Virtual CSV view (vsv).",
-      "upstream_url": "https://github.com/nalgeon/sqlean/blob/main/docs/vsv.md",
-      "track": "vtab",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "port from sqlean C",
-      "notes": "csv extension exists but vsv has different shape  worth comparing."
     }
   ]
 }

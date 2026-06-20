@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T20:14:18Z",
+  "updated": "2026-06-20T20:28:35Z",
   "registry_url": "https://raw.githubusercontent.com/user/sqlite-wasm-extensions/main/registry/index.json",
-  "commit_sha": "75dff5fd82dd9fddb8eb4006531b69d39b6e743d",
+  "commit_sha": "65eae2539f70c7cb4f0e973004094ff6dbad8afd",
   "extensions": [
     {
       "name": "extension-manager",
@@ -1894,6 +1894,47 @@
       ]
     },
     {
+      "name": "dicom",
+      "version": "0.1.0",
+      "description": "DICOM (Digital Imaging and Communications in Medicine) metadata extraction from medical-imaging blobs. Pulls Patient Name / ID, Study Date, Modality, Manufacturer, image dimensions, Transfer Syntax UID, and arbitrary (group, element) tag values out of DICOM Part 10 files.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/dicom",
+      "keywords": [
+        "dicom",
+        "digital",
+        "imaging",
+        "communications",
+        "medicine",
+        "metadata"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/dicom-0.1.0/dicom-0.1.0.tar.gz",
+      "checksum": "sha256:7fa181d5f0c631f363f4be125178147043bd3e8b42647a9ef302ff283140c344",
+      "size_bytes": 141215,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "dicom_dimensions",
+        "dicom_is_valid",
+        "dicom_manufacturer",
+        "dicom_metadata",
+        "dicom_modality",
+        "dicom_patient_id",
+        "dicom_patient_name",
+        "dicom_study_date",
+        "dicom_tag",
+        "dicom_transfer_syntax",
+        "dicom_version"
+      ],
+      "dependencies": []
+    },
+    {
       "name": "dist",
       "version": "0.1.0",
       "description": "Statistical distributions for SQL: PDF / CDF / inverse-CDF for the common families Normal, Poisson, Binomial, Exponential, Chi-squared, Beta, Gamma, Student-t.",
@@ -3162,6 +3203,48 @@
         "http_status"
       ],
       "dependencies": []
+    },
+    {
+      "name": "http-signature",
+      "version": "0.1.0",
+      "description": "HTTP Message Signatures (RFC 9421) for SQL.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/http-signature",
+      "keywords": [
+        "http-signature",
+        "http",
+        "message",
+        "signatures",
+        "rfc"
+      ],
+      "categories": [
+        "network"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/http-signature-0.1.0/http-signature-0.1.0.tar.gz",
+      "checksum": "sha256:f76af0ac49895d82bbe4382a3b7094deeef0af0fd0c304f6f4ef36704805b33a",
+      "size_bytes": 292477,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "http_sig_base",
+        "http_sig_input",
+        "http_sig_sign_ed25519",
+        "http_sig_sign_hmac",
+        "http_sig_verify_ed25519",
+        "http_sig_verify_hmac",
+        "http_sig_version"
+      ],
+      "dependencies": [
+        "base64@0.22",
+        "ed25519-dalek@2",
+        "hmac@0.12",
+        "serde_json@1",
+        "sha2@0.10"
+      ]
     },
     {
       "name": "humansize",
@@ -6933,6 +7016,39 @@
       "dependencies": []
     },
     {
+      "name": "sqlean-vsv",
+      "version": "0.1.0",
+      "description": "Virtual CSV view port of sqlean's `vsv` vtab module.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/sqlean-vsv",
+      "keywords": [
+        "sqlean-vsv",
+        "virtual",
+        "csv",
+        "view",
+        "port",
+        "sqleans"
+      ],
+      "categories": [
+        "codec"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/sqlean-vsv-0.1.0/sqlean-vsv-0.1.0.tar.gz",
+      "checksum": "sha256:93f5e67cc2db719a18f2fcadf385ed81c73c92edcaaddc539753a9c9cc072c08",
+      "size_bytes": 224168,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "sqlean_vsv",
+        "vsv",
+        "vsv_parse"
+      ],
+      "dependencies": []
+    },
+    {
       "name": "sqlparse",
       "version": "0.1.0",
       "description": "SQL parsing scalars over the `sqlparser` crate (ANSI SQL:2011 dialect with extensions). Returns shape and table-touching information about a SQL string without executing it.",
@@ -8297,6 +8413,52 @@
         "scraper@0.21",
         "serde_json@1",
         "serde_json_path@0.7"
+      ]
+    },
+    {
+      "name": "webauthn",
+      "version": "0.1.0",
+      "description": "WebAuthn Level 2/3 registration + authentication verification for SQL.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/webauthn",
+      "keywords": [
+        "webauthn",
+        "level",
+        "registration",
+        "authentication",
+        "verification"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/webauthn-0.1.0/webauthn-0.1.0.tar.gz",
+      "checksum": "sha256:e0c177134e3a2ea32ba38dd6ec06ed9cb024a72a6d6a81b8f2178c60c3d7bad5",
+      "size_bytes": 514942,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "webauthn_auth_options",
+        "webauthn_placeholder",
+        "webauthn_register_options",
+        "webauthn_verify_authentication",
+        "webauthn_verify_registration",
+        "webauthn_version"
+      ],
+      "dependencies": [
+        "base64@0.22",
+        "ciborium@0.2",
+        "ciborium-io@0.2",
+        "ed25519-dalek@2",
+        "getrandom@0.2",
+        "hex@0.4",
+        "p256@0.13",
+        "rsa@0.9",
+        "serde_json@1",
+        "sha2@0.10"
       ]
     },
     {
