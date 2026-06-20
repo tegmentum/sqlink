@@ -1,0 +1,24 @@
+# Validity
+1
+0
+0
+# toml_to_json basic
+{"server":{"host":"localhost","port":8080}}
+# toml_get: dotted path returns JSON-encoded value
+8080
+"localhost"
+<NULL>
+# toml_keys: root then nested
+["server"]
+["host","port"]
+# Round-trip TOML→JSON→TOML still parses
+1
+# json_to_toml on a bare scalar wraps to value = …
+1
+# NULL in → NULL out
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# version non-empty
+1

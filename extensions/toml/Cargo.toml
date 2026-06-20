@@ -1,0 +1,39 @@
+[package]
+name = "toml-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+TOML ↔ JSON codec scalars. Round-trip configuration text through SQL
+and pluck individual values from a TOML document by dotted key path.
+Sister codec to binary-codecs (msgpack/cbor); json1 covers the JSON
+side of the conversion.
+
+Functions:
+  toml_to_json(s)              -> TEXT (JSON-encoded)
+  json_to_toml(json_text)      -> TEXT (TOML)
+  toml_get(s, key_path)        -> TEXT (extract a single value as JSON)
+  toml_keys(s, [key_path])     -> TEXT (JSON array of keys at the path)
+  toml_is_valid(s)             -> INTEGER (0/1)
+  toml_version()               -> TEXT
+
+`key_path` is dotted (`server.port`) and supports the standard TOML
+table nesting. Missing keys → NULL.
+
+Per PLAN-more-extensions-2.md #5.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+toml = { version = "0.8", default-features = false, features = ["parse", "display"] }
