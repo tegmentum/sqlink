@@ -1,0 +1,28 @@
+# PLAN-more-extensions-3.md section 8 acceptance grid.
+# Strings < 3 chars -> NULL (short-string guard).
+# lang_detect_script(text) -> Script::name() with Mandarin -> Han.
+eng
+en
+fra
+fr
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+Cyrillic
+Han
+Latin
+Arabic
+Latin
+1
+1
+3
+eng
+array
+1
+70
+afr
+1

@@ -1,0 +1,40 @@
+[package]
+name = "lang-detect-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Language detection from text via the `whatlang` n-gram detector.
+Exposes ISO 639-3 / 639-1 codes, script names, confidence scores,
+and a top-3 candidate JSON dump. Pairs with `stemmer` (Snowball)
+for multi-language text pipelines.
+
+Functions:
+  lang_detect(text)             -> text   (ISO 639-3 code, NULL if unknown)
+  lang_detect_alpha2(text)      -> text   (ISO 639-1 code, NULL if no alpha-2)
+  lang_detect_confidence(text)  -> real   (0..1)
+  lang_detect_script(text)      -> text   ('Latin' | 'Cyrillic' | 'Han' | ...)
+  lang_detect_all(text)         -> text   (JSON array, top-3 with confidence)
+  lang_supported()              -> text   (JSON array of ISO 639-3 codes)
+  lang_detect_version()         -> text
+
+CAVEAT: short strings (< ~20 chars) are unreliable by nature;
+mixed-script text returns the dominant script. Not a tokenizer.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project hard rule 2: keeps the parent
+# workspace from picking up this crate during a normal `cargo build`.
+# `make ext NAME=lang-detect` still works because it invokes
+# cargo with --manifest-path against this crate's own workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust n-gram language detector. Covers ~70 ISO 639-3 codes
+# and 25 scripts; no runtime data files, no_std friendly.
+whatlang = "0.18"
