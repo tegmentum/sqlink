@@ -35,13 +35,22 @@ RUN cargo build --release -p sqlite-wasm-httpd
 # Run the build script against the existing registry/index.json +
 # candidates.json. The host registry data is captured at image-
 # build time and frozen in the resulting registry.db blob.
-
+#
+# SQLITE_WASM_ARTIFACT_BASE controls the artifact_url field per
+# extension (where the .component.wasm files live, typically a
+# Cloudflare R2 public domain). Override via --build-arg.
 FROM python:3.12-slim AS db-builder
+ARG SQLITE_WASM_ARTIFACT_BASE=https://pub-changeme.r2.dev
+ENV SQLITE_WASM_ARTIFACT_BASE=${SQLITE_WASM_ARTIFACT_BASE}
 WORKDIR /src
 COPY extensions-site /src/extensions-site
 COPY registry /src/registry
 COPY provenance /src/provenance
-RUN python3 /src/extensions-site/build.py
+# Regenerate the registry.json under the configured artifact base
+# so the registry.db carries the right artifact URLs.
+RUN python3 /src/provenance/build_registry.py \
+        --artifact-base "${SQLITE_WASM_ARTIFACT_BASE}" \
+ && python3 /src/extensions-site/build.py
 
 # ----- Stage 3: slim runtime layer -------------------------------
 # Just the httpd binary + the registry.db.

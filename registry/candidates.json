@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T20:28:35Z",
-  "commit_sha": "65eae2539f70c7cb4f0e973004094ff6dbad8afd",
+  "updated": "2026-06-20T21:00:59Z",
+  "commit_sha": "627ce42ba1f19a67d4d24aef335746356c8b2ea5",
   "candidates": [
     {
       "name": "flatbuffers",

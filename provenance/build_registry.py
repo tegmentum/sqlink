@@ -35,6 +35,14 @@ REGISTRY_URL = (
 )
 MIN_SQLITE_VERSION = "3.39.0"
 
+# Default artifact base. Cloudflare R2 is the production target;
+# override via --artifact-base or $SQLITE_WASM_ARTIFACT_BASE.
+# Typical R2 public domains look like
+#   https://r2.example.com
+#   https://pub-XXXXXXXX.r2.dev      (the auto-provisioned dev domain)
+# Either form works  the script just appends /extensions/<name>/<name>-<version>.component.wasm.
+DEFAULT_ARTIFACT_BASE = "https://pub-changeme.r2.dev"
+
 
 def commit_sha(repo: Path) -> str | None:
     try:
@@ -327,7 +335,21 @@ def trim_description(description: str | None, max_chars: int = 280) -> str:
     return para
 
 
-def build_entry(conn: sqlite3.Connection, plugin_row: sqlite3.Row, repo: Path) -> dict:
+def artifact_url(base: str, name: str, version: str) -> str:
+    """Compose the R2 (or any HTTPS) URL where the built
+    `.component.wasm` lives. Keyed by name + version so we can
+    serve multiple versions side-by-side; the sync-r2.sh script
+    uploads to the same path."""
+    base = base.rstrip("/")
+    return f"{base}/extensions/{name}/{name}-{version}.component.wasm"
+
+
+def build_entry(
+    conn: sqlite3.Connection,
+    plugin_row: sqlite3.Row,
+    repo: Path,
+    artifact_base: str,
+) -> dict:
     """Build a single registry entry from a `plugin_latest` row."""
     name = plugin_row["plugin"]
     version = plugin_row["version"] or "0.1.0"
@@ -396,10 +418,7 @@ def build_entry(conn: sqlite3.Connection, plugin_row: sqlite3.Row, repo: Path) -
         "keywords": derive_keywords(name, description),
         "categories": categorize(name, plugin_row["declared_world"]),
         "source": "builtin",
-        "artifact_url": (
-            f"https://github.com/anthropics/sqlite-wasm/releases/download/"
-            f"{name}-{version}/{name}-{version}.tar.gz"
-        ),
+        "artifact_url": artifact_url(artifact_base, name, version),
         "checksum": checksum,
         "size_bytes": size_bytes,
         "min_sqlite_version": MIN_SQLITE_VERSION,
@@ -408,7 +427,7 @@ def build_entry(conn: sqlite3.Connection, plugin_row: sqlite3.Row, repo: Path) -
     }
 
 
-def build_registry(db_path: Path, repo: Path) -> dict:
+def build_registry(db_path: Path, repo: Path, artifact_base: str) -> dict:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
@@ -452,7 +471,7 @@ def build_registry(db_path: Path, repo: Path) -> dict:
     ]
 
     for row in rows:
-        entries.append(build_entry(conn, row, repo))
+        entries.append(build_entry(conn, row, repo, artifact_base))
 
     sha = commit_sha(repo)
     return {
@@ -509,10 +528,23 @@ def build_candidates(db_path: Path, repo: Path) -> dict:
 
 
 def main() -> int:
+    import os
+
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--db", default="provenance/extensions.db")
     ap.add_argument("--out", default="registry/index.json")
     ap.add_argument("--candidates-out", default="registry/candidates.json")
+    ap.add_argument(
+        "--artifact-base",
+        default=os.environ.get("SQLITE_WASM_ARTIFACT_BASE", DEFAULT_ARTIFACT_BASE),
+        help=(
+            "Base URL for `.component.wasm` artifacts. "
+            "Composed into artifact_url as "
+            "<base>/extensions/<name>/<name>-<version>.component.wasm. "
+            "Override with $SQLITE_WASM_ARTIFACT_BASE in CI. "
+            f"Default: {DEFAULT_ARTIFACT_BASE}"
+        ),
+    )
     args = ap.parse_args()
 
     here = Path(__file__).resolve().parent
@@ -533,7 +565,7 @@ def main() -> int:
         )
         return 1
 
-    payload = build_registry(db_path, repo)
+    payload = build_registry(db_path, repo, args.artifact_base)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(payload, indent=2) + "\n")
     print(

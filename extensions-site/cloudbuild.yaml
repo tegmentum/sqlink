@@ -12,6 +12,12 @@ substitutions:
   _SERVICE: extensions-site
   _REPO: extensions  # Artifact Registry repo (create once: gcloud artifacts repositories create extensions ...)
   _PROJECT: ${PROJECT_ID}
+  # Base URL for the .component.wasm artifacts in Cloudflare R2.
+  # Override on submit:
+  #   --substitutions=_ARTIFACT_BASE=https://r2.sqlite-wasm.dev
+  # This flows through Docker as a build arg and ultimately into
+  # registry/index.json's artifact_url field.
+  _ARTIFACT_BASE: https://pub-changeme.r2.dev
 
 steps:
   # ----- Build the image -----
@@ -19,6 +25,8 @@ steps:
     id: build
     args:
       - build
+      - --build-arg
+      - SQLITE_WASM_ARTIFACT_BASE=${_ARTIFACT_BASE}
       - -f
       - extensions-site/Dockerfile
       - -t

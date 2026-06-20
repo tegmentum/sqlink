@@ -139,3 +139,99 @@ No SQL injection: every dynamic value flows through SQLite's
 own `replace()` or `json_object()`  it's already escaped for the
 output context. The `:path` parameter is a bound parameter, not
 string-concatenated.
+
+## Artifact distribution: Cloudflare R2
+
+The `.component.wasm` binaries themselves don't live in the SQL
+DB. They're served from Cloudflare R2  S3-compatible object
+storage with zero egress fees, perfect for a public registry.
+
+### URL layout
+
+Each extension's `artifact_url` is composed by
+`provenance/build_registry.py` as:
+
+    {R2_PUBLIC_BASE}/extensions/<name>/<name>-<version>.component.wasm
+
+`R2_PUBLIC_BASE` defaults to a placeholder; override via
+`--artifact-base` or `$SQLITE_WASM_ARTIFACT_BASE`.
+
+### R2 bucket setup (one-time)
+
+1. **Create the bucket** in Cloudflare  R2: `sqlite-wasm-extensions`
+   (or any name; pass via `$R2_BUCKET`).
+2. **Bind a public URL** either:
+   - Enable the auto-generated `pub-<hash>.r2.dev` URL on the
+     bucket  fast, no DNS work.
+   - Or attach a custom domain (e.g. `r2.sqlite-wasm.dev`) under
+     bucket settings  Custom Domains. Cloudflare provisions TLS
+     automatically.
+3. **Create an API token** under My Profile  R2 Tokens with
+   Object Read + Write on the bucket. Save the access key ID +
+   secret + your account ID (visible in the dashboard URL).
+
+### Sync
+
+```bash
+# Build every extension first (191 artifacts ~ 88 MB)
+for d in extensions/*/; do
+    name=$(basename "$d")
+    [ -f "$d/Cargo.toml" ] && make ext NAME="$name"
+done
+
+# Push to R2
+export R2_BUCKET=sqlite-wasm-extensions
+export R2_ACCOUNT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+export R2_ACCESS_KEY_ID=xxxxxxxxxxxxxxxxxxxxx
+export R2_SECRET_ACCESS_KEY=yyyyyyyyyyyyyyyyyyyyyyyyyyyyyy
+export R2_PUBLIC_BASE=https://r2.sqlite-wasm.dev   # only for log output
+
+extensions-site/sync-r2.sh
+```
+
+The script is idempotent: each object's `sha256` metadata is
+compared server-side before re-upload. Re-runs after no catalog
+change upload zero bytes.
+
+Dry-run:
+```bash
+DRY_RUN=1 extensions-site/sync-r2.sh
+# DRY:  s3://sqlite-wasm-extensions/extensions/aba/aba-0.1.0.component.wasm  (68971 bytes, sha256:6618f3...)
+# ...
+# Summary: total artifacts: 191, total size: 88MB
+```
+
+Upload object metadata applied to every artifact:
+- `Content-Type: application/wasm`
+- `Cache-Control: public, max-age=31536000, immutable`  the URLs
+  are version-keyed, so aggressive caching is safe; rebuilding a
+  new version of the same extension produces a new URL.
+- `x-amz-meta-sha256: <hex>`  content-addressed verification.
+- `x-amz-meta-size: <bytes>`
+
+### Pointing the site at R2
+
+After sync, regenerate `registry/index.json` with the matching
+base URL, rebuild the site DB, redeploy:
+
+```bash
+SQLITE_WASM_ARTIFACT_BASE=https://r2.sqlite-wasm.dev \
+    python3 provenance/build_registry.py
+python3 extensions-site/build.py
+gcloud builds submit --config=extensions-site/cloudbuild.yaml \
+    --substitutions=_ARTIFACT_BASE=https://r2.sqlite-wasm.dev
+```
+
+The next image rebuild bakes the R2 URLs into the registry.db,
+and the per-extension page's "Download artifact" button points
+directly at R2.
+
+### Cost model
+
+R2 charges:
+- $0.015/GB-month storage  88 MB total = $0.0013/month.
+- $0  egress. Unlimited downloads at no cost.
+- $4.50 per million Class A operations (writes). The full sync
+  is 191 writes = ~$0.00086 per full re-sync.
+
+Effective cost: dollars per *year*, regardless of download volume.
