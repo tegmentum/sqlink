@@ -1,0 +1,61 @@
+[package]
+name = "x25519-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+X25519 elliptic-curve Diffie-Hellman key exchange (RFC 7748) for SQL.
+Sister to `secp256k1` (Bitcoin / Ethereum curve) and `jwt` (which
+already pulls Ed25519 via ed25519-dalek). X25519 is the Montgomery-form
+companion to Ed25519 -- same underlying field, different point shape --
+and is the curve TLS 1.3 / Noise / Signal / Wireguard pick for ECDH.
+
+Function surface:
+  x25519_keypair()                       -> blob (64 bytes: 32 priv || 32 pub)
+  x25519_pub_from_priv(priv_blob)        -> blob (32-byte public key)
+  x25519_shared_secret(priv, pub_blob)   -> blob (32-byte shared secret)
+  x25519_version()                       -> text
+
+NULL -> NULL. Wrong-length / malformed keys -> NULL (not error), so the
+functions compose inside CASE / WHERE without try-catch shenanigans.
+
+x25519 has no on-curve validation beyond the length check: every 32-byte
+value is a valid Montgomery u-coordinate after clamping. The crate's
+`x25519` function applies the RFC 7748 clamping internally so callers
+can hand in raw 32-byte private blobs without pre-processing.
+
+Note on low-order points: RFC 7748 § 6.1 lists 12 "small-order" public
+keys whose ECDH output is always the all-zero shared secret. We do NOT
+reject these inputs -- the function computes and returns the all-zero
+blob, faithful to the bare x25519 spec. Callers who need contributory
+key exchange (Noise, etc.) should check `length(...) > 0` AND that the
+output is not 32 zero bytes; the smoke vector below exercises this.
+
+Backed by `x25519-dalek` 2.0. Randomness via `getrandom` -> WASI random.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 1: keeps the parent workspace
+# from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# x25519-dalek 2.0: pure-Rust ECDH on Curve25519. `static_secrets`
+# gives us the long-lived `StaticSecret` type with a `From<[u8;32]>`
+# round-trip, which is what we need to derive a public key from a
+# user-supplied private blob deterministically. We do NOT enable
+# `getrandom` here -- the crate's keygen routes through OsRng which
+# requires a feature flag combo that doesn't compose cleanly with
+# wasm32-wasip2; we generate the 32-byte secret ourselves via the
+# `getrandom` crate (which auto-routes to wasi:random/random on the
+# wasi target) and feed it via `StaticSecret::from`.
+x25519-dalek = { version = "2", default-features = false, features = ["static_secrets"] }
+# 0.2 auto-routes to WASI's `random_get` on target_os = "wasi" (which
+# wasm32-wasip2 sets); the WASI reactor adapter wires that to
+# wasi:random/random. No feature flag needed in 0.2.
+getrandom = "0.2"

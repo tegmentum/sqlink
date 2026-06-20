@@ -1,0 +1,51 @@
+[package]
+name = "robotstxt-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+robots.txt parsing + matching for SQLite. Wraps the `robotstxt`
+crate (Folyd) -- a native Rust port of Google's reference C++
+robots.txt parser and matcher (the parser Googlebot actually uses).
+Aligns with RFC 9309 (the Robots Exclusion Protocol) plus the de
+facto Google extensions (Sitemap:, Crawl-delay:) that REP-Internet-
+Draft section 2.2.4 calls out as "other records".
+
+Function surface:
+  robots_is_allowed(robots_txt, user_agent, url)  -> integer (0 / 1)
+  robots_crawl_delay(robots_txt, user_agent)      -> real (seconds; NULL if absent)
+  robots_sitemaps(robots_txt)                     -> text (JSON array of sitemap URLs)
+  robotstxt_version()                             -> text
+
+`is_allowed` defers to the Google matcher (longest-match strategy
+with Allow over Disallow tiebreak when priorities are equal).
+`crawl_delay` + `sitemaps` are derived locally via the
+`RobotsParseHandler` callback API the crate exposes for parser-
+walked, non-matcher records.
+
+UA matching for crawl-delay follows the same case-insensitive prefix
+rule the matcher uses internally: the requested UA token is matched
+against each `User-agent:` line (case-insensitive identity); if no
+specific group matches, the `*` group is consulted.
+
+NULL inputs surface NULL; an empty/garbage robots body parses as
+"empty rules" -> is_allowed = 1, crawl_delay = NULL, sitemaps = [].
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 1: keeps the parent
+# workspace from trying to build this crate natively (it's a
+# wasm32-wasip2 cdylib).
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Folyd/robotstxt 0.3: Google's reference robots.txt parser /
+# matcher, ported to Rust. Zero deps. Passes 100% of Google's
+# original C++ test suite. The `DefaultMatcher` + `parse_robotstxt`
+# entry points cover both halves of the surface.
+robotstxt = "0.3"

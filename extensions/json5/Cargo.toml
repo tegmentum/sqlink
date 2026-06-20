@@ -1,0 +1,39 @@
+[package]
+name = "json5-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+JSON5 -> canonical JSON codec scalars.
+
+JSON5 (https://json5.org/) is a relaxed superset of JSON: comments,
+trailing commas, unquoted object keys, single-quoted strings, hex /
+leading-decimal numbers, multi-line strings via line continuations,
+and a couple of extra literals (Infinity, NaN). This extension lets
+SQL parse user-provided config text that's "JSON-ish but not strict
+JSON" and surface it as canonical strict JSON so the rest of the
+catalog (json1, toml, etc) can keep operating on it.
+
+Functions:
+  json5_parse(s)    -> TEXT     (canonical strict-JSON encoding)
+  json5_is_valid(s) -> INTEGER  (0/1, NULL -> 0)
+  json5_version()   -> TEXT
+
+NULL in -> NULL out for json5_parse. Parse errors return an SQL
+error message describing where the parse went wrong (json5 0.4
+gives line+column).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+json5 = { version = "0.4", default-features = false }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

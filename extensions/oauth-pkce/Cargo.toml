@@ -1,0 +1,57 @@
+[package]
+name = "oauth-pkce-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+OAuth 2.0 PKCE (Proof Key for Code Exchange, RFC 7636) helpers for
+SQLite. The auth-helpers family: paired with `jwt` (token verifier),
+`totp` (second factor), and `pwhash` (password storage); PKCE is what
+public clients (mobile / SPA / CLI) use to bind an authorization-code
+exchange to the same caller that started the flow, defeating the
+class of attacks where a malicious app intercepts the redirect URI
+and races for the token endpoint.
+
+Function surface (PLAN-more-extensions, RFC 7636 §4):
+  pkce_verifier([byte_len])      -> TEXT (43..128 chars, base64url-no-pad)
+  pkce_challenge_s256(verifier)  -> TEXT (base64url-no-pad of SHA-256(verifier))
+  pkce_challenge_plain(verifier) -> TEXT (the verifier itself, RFC 7636 §4.2)
+  pkce_version()                 -> TEXT
+
+`pkce_verifier` defaults to 32 random bytes  43 base64url chars,
+the RFC 7636 §4.1 recommended length (>= 256 bits of entropy, well
+above the 128-bit floor). `byte_len` is clamped 32..=96; the upper
+end maps to 128 base64url chars (the RFC 7636 §4.1 maximum).
+
+Acceptance vector: RFC 7636 §4.6 / Appendix B
+  verifier  = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+  challenge = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"  (S256)
+
+Hand-rolled per the project rule  ~30 lines for the verifier /
+challenge / base64url-no-pad pipeline, no point dragging in a
+crate. Same trade-off as the `totp` extension's hand-rolled RFC
+4226 dynamic truncation.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2: keeps the parent
+# workspace from trying to build this crate natively. The
+# `make ext NAME=oauth-pkce` build path invokes cargo with
+# --manifest-path against this crate's own workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# SHA-256 for the S256 challenge transform. Default features off
+# keeps the component lean (no_std-capable, pure Rust). Same crate
+# pinning as `hkdf`, `totp`, `secp256k1`.
+sha2 = { version = "0.10", default-features = false }
+# `getrandom` 0.2 auto-routes to WASI's `random_get` on
+# target_os = "wasi" (which wasm32-wasip2 sets); the WASI reactor
+# adapter wires that to `wasi:random/random` on the host. Used
+# only by `pkce_verifier`.
+getrandom = "0.2"

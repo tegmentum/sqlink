@@ -1,0 +1,38 @@
+[package]
+name = "utm-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Universal Transverse Mercator (UTM) coordinate extension for SQLite:
+convert between WGS84 lat/lng and UTM (zone + hemisphere + easting +
+northing). UTM is the projected-meter coordinate system the DoD MGRS
+grid is built on, but exposed here as raw numeric output for callers
+that want metric easting / northing directly (cadastral, surveying,
+GIS pipelines) without the MGRS string formatting.
+
+Valid latitude range is -80..84 (the polar regions use UPS, which is
+out of scope for this surface -- use the `mgrs` extension for polar
+work). Functions return NULL on out-of-range / non-coercible input
+so SQL pipelines can `COALESCE` instead of catching errors.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps this crate out of the parent workspace
+# build (PLAN-more-extensions hard rule 1). The wasi-component build
+# (`make ext NAME=utm`) still works because the Makefile invokes
+# cargo build with --manifest-path against this crate's own workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust micro-library for WGS84 lat/lng <-> UTM conversion. The
+# brief proposed `utm 0.2` but only 0.1.6 is published on crates.io;
+# the API surface we need (to_utm_wgs84_no_zone, wsg84_utm_to_lat_lon,
+# lat_to_zone_letter, lat_lon_to_zone_number) is stable in 0.1.6 and
+# cross-compiles cleanly to wasm32-wasip2.
+utm = "0.1"

@@ -1,0 +1,40 @@
+# RFC 8032 § 7.1 TEST 2 (1-byte message 0x72)
+3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c
+92a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00
+1
+# RFC 8032 § 7.1 TEST 3 (2-byte message 0xaf82)
+fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025
+6291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a
+1
+# RFC 8032 § 7.1 TEST 1 partial: pubkey derivation (message path skipped)
+d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a
+# Tamper detection: TEST 2 sig with last byte flipped -> 0
+0
+# Tampered message byte -> 0
+0
+# Wrong pubkey for valid (msg, sig) -> 0
+0
+# Round-trip with 'hello world' message -> 1
+1
+# 64-byte expanded secret produces same sig as 32-byte seed -> 1
+1
+# Wrong-length 2-byte key for pub_from_priv -> NULL
+<NULL>
+# Wrong-length 2-byte key for sign -> NULL
+<NULL>
+# NULL key -> NULL
+<NULL>
+# NULL key for sign -> NULL
+<NULL>
+# NULL msg for sign -> NULL
+<NULL>
+# Bad pubkey for verify -> 0
+0
+# NULL pubkey for verify -> NULL
+<NULL>
+# Keypair length: 32 seed + 32 pub = 64 bytes
+64
+# Pubkey derived from keypair seed half is a 32-byte blob
+32
+# Version is non-empty
+1

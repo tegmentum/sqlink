@@ -1,0 +1,50 @@
+# FooBot full-deny: every URL disallowed -> 0.
+0
+# Different UA, no '*' group -> default allow -> 1.
+1
+# '*' group denies /private/ for a generic bot.
+0
+# '*' group leaves /public/ allowed.
+1
+# Specific Googlebot group wins (allow); '*' group denies others.
+1
+# Other UA falls into '*' group -> denied.
+0
+# Longest-match Allow over Disallow: /private/public/foo.html allowed.
+1
+# Same body, but /private/secret.html is only covered by Disallow.
+0
+# Empty robots body -> all allowed.
+1
+# Crawl-delay 5 in '*' group, any UA picks it up.
+5
+# Bingbot-specific 1.0 wins over '*' 10.0.
+1
+# Other UA falls back to '*' group's 10.0.
+10
+# No crawl-delay record present -> NULL.
+<NULL>
+# Fractional crawl-delay parses as real.
+0.5
+# Single sitemap at top of file -> JSON array of one URL.
+["https://example.com/sitemap.xml"]
+# Multiple sitemaps in document order.
+["https://example.com/sitemap-1.xml","https://example.com/sitemap-2.xml"]
+# No sitemaps -> empty JSON array.
+[]
+# Empty body -> empty JSON array.
+[]
+# NULL robots_txt arg -> NULL.
+<NULL>
+# NULL user_agent arg -> NULL.
+<NULL>
+# NULL url arg -> NULL.
+<NULL>
+# NULL robots_txt -> NULL crawl delay.
+<NULL>
+# NULL user_agent -> NULL crawl delay.
+<NULL>
+# NULL body -> NULL sitemaps.
+<NULL>
+# Version string is non-empty.
+1

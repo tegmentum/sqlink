@@ -1,0 +1,36 @@
+# Geohash reference values (geohash crate 0.13.2):
+#   (37.8324, 112.5584) precision 9  -> 'ww8p1r4t8'  (Niemeyer / Wikipedia)
+#   (35.3003, -120.6623) precision 5 -> '9q60y'       (geohash crate doctest)
+#   'ezs42'  -> approx (42.605, -5.603)               (Wikipedia)
+#   neighbor('9q60y60rhs', N) -> '9q60y60rht'         (geohash crate doctest)
+ww8p1r4t8
+1
+5
+9
+12
+9q60y
+42.605
+-5.603
+1
+1
+2
+array
+object
+8
+9
+9
+9q60y60rht
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1

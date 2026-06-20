@@ -1,0 +1,34 @@
+[package]
+name = "sha1-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Standalone SHA-1 hash extension for SQLite (legacy / git interop).
+
+Pairs with sha3 (FIPS 202) + blake3 + hashes-fast: SHA-1 is
+deprecated for collision-resistance but still ubiquitous in the
+wild -- git object IDs, legacy HMACs, Subversion, TLS certificate
+fingerprints, OAuth 1.0 signatures. Surface is intentionally
+narrow: one blob form + one hex form, no streaming / aggregate.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps this crate out of the parent
+# workspace build (PLAN hard rule 2). The wasi component build
+# (`make ext NAME=sha1`) still works because the Makefile invokes
+# `cargo build` with --manifest-path against this crate's own
+# workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust SHA-1 implementation from the RustCrypto hashes
+# collection. default-features disables std + asm so the build
+# stays clean on wasm32-wasip2.
+sha1 = { version = "0.10", default-features = false }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }

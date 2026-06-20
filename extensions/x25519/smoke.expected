@@ -1,0 +1,26 @@
+# RFC 7748 § 5.2 single-step x25519(scalar, u) test vector.
+c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552
+# RFC 7748 § 6.1 Alice pub from Alice priv.
+8520f0098930a754748b7ddcb43ef75a0dbf3a0d26381af4eba4a98eaa9b4e6a
+# RFC 7748 § 6.1 Bob pub from Bob priv.
+de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f
+# RFC 7748 § 6.1 shared secret K.
+4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742
+# Alice's K == Bob's K (ECDH round-trip).
+1
+# Low-order (zero) pubkey -> all-zero shared secret.
+0000000000000000000000000000000000000000000000000000000000000000
+# Keypair shape: 32 priv || 32 pub = 64 bytes.
+64
+# pub_from_priv of the generated priv matches the embedded pub.
+1
+# NULL -> NULL.
+<NULL>
+# Wrong-length priv -> NULL.
+<NULL>
+# NULL priv -> NULL.
+<NULL>
+# Wrong-length pub (and priv) -> NULL.
+<NULL>
+# Version non-empty.
+1

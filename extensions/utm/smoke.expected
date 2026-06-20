@@ -1,0 +1,40 @@
+# UTM reference values (utm 0.1.6, WGS84):
+#   NYC      (40.7128, -74.0060) -> zone 18N e=583959.372 n=4507350.998
+#   Sydney   (-33.8688, 151.2093) -> zone 56S e=334368.634 n=6250948.345
+# Zone letter at lat NYC (40.7128) is 'T' -> matches the brief
+# acceptance hint "zone 18T". The from-latlng output is the JSON
+# {zone, hemisphere, easting, northing}; hemisphere = N/S (not band).
+{"zone":18,"hemisphere":"N","easting":583959.372,"northing":4507350.998}
+{"zone":56,"hemisphere":"S","easting":334368.634,"northing":6250948.345}
+[40.7128
+[-33.86
+1
+T
+N
+H
+1
+1
+18
+56
+31
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1
+1

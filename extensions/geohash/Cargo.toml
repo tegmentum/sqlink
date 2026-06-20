@@ -1,0 +1,38 @@
+[package]
+name = "geohash-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Geohash (Gustavo Niemeyer 2008) extension for SQLite: encode WGS84
+lat/lng to a short alphanumeric string, decode a geohash back to a
+lat/lng pair, and enumerate the 8 neighboring cells of a hash.
+
+Geohash uses Z-order curve interleaving of latitude / longitude bits
+mapped onto base-32 characters; longer strings = finer cells. Default
+precision is 9 (~5 m). Pairs with the `h3`, `s2`, and `mgrs`
+discrete-grid extensions: where h3 / s2 quantize the globe into
+hex / quadrilateral cells and MGRS uses UTM rectangular grids,
+geohash is the short, web-friendly string scheme used by Geohash.org,
+Elastic / Lucene, MongoDB and many spatial JSON APIs.
+
+Functions return NULL on parse failure / out-of-domain input rather
+than erroring so SQL pipelines can `COALESCE` instead of catching.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps this crate out of the parent workspace
+# build (PLAN hard rule 2). The wasi-component build
+# (`make ext NAME=geohash`) still works because the Makefile invokes
+# cargo build with --manifest-path against this crate's own workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust geohash encode/decode + neighbor. Cross-compiles cleanly
+# to wasm32-wasip2; depends only on geo-types (no_std friendly).
+geohash = { version = "0.13", default-features = false }

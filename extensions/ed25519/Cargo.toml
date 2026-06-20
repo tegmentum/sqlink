@@ -1,0 +1,60 @@
+[package]
+name = "ed25519-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Standalone Ed25519 sign/verify scalars (RFC 8032 / 8410). The `jwt`
+extension already has Ed25519 internally for the EdDSA JWS alg, but
+exposing the raw primitive as plain SQL scalars is its own surface:
+SSH key handling, Tor onion-service descriptors, Signal/Matrix
+identity keys, Solana addresses, etc. all want raw Ed25519 outside
+the JOSE envelope.
+
+Function surface:
+  ed25519_keypair()                        -> blob   (64 bytes: 32 priv seed || 32 pub)
+  ed25519_pub_from_priv(priv_blob)         -> blob   (32-byte pub key)
+  ed25519_sign(priv_blob, message)         -> blob   (64-byte sig)
+  ed25519_verify(pub_blob, msg, sig_blob)  -> integer 0/1
+  ed25519_version()                        -> text
+
+`priv_blob` is a 32-byte raw seed; for compatibility with libraries
+that hand out a "64-byte expanded secret" (seed || pubkey), we also
+accept 64-byte blobs and use the first 32 bytes as the seed -- this
+matches the convention the `jwt` extension uses.
+
+`message` is the raw bytes to sign, NOT a pre-computed hash --
+Ed25519 hashes internally as part of the algorithm (RFC 8032 § 5.1.6).
+This differs from secp256k1 where the caller hashes first.
+
+NULL passes through as NULL on every fn. Wrong-length / malformed
+keys + signatures -> NULL (verify -> 0) so the functions compose
+inside CASE / WHERE without try/catch.
+
+Backed by `ed25519-dalek` 2 (the established RustCrypto Ed25519
+impl; pure Rust). Random keypair generation routes through
+`getrandom` -> `wasi:random/random` on the host.
+
+RFC 8032 Section 7 test vectors are the acceptance check in
+smoke.sql.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# ed25519-dalek 2: pure-rust Ed25519, RustCrypto. `alloc` is the only
+# feature we need; `default-features = false` drops std + rand (we
+# wire rng manually via getrandom for ed25519_keypair).
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
+# `getrandom` v0.2 auto-routes to WASI's `random_get` on
+# target_os = "wasi" (which wasm32-wasip2 sets); the WASI reactor
+# adapter wires that to wasi:random/random. Used only by
+# ed25519_keypair().
+getrandom = "0.2"
