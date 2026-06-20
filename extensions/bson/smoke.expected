@@ -1,0 +1,44 @@
+# empty BSON doc: byte-exact 5-byte canonical form
+0500000000
+# is_valid: valid / malformed / garbage
+1
+0
+0
+# round-trip structured JSON
+{"a":1,"b":[2,3]}
+# string round-trip
+{"k":"hello"}
+# nested object round-trip
+{"x":{"y":{"z":42}}}
+# extract: nested object path
+42
+# extract: array index
+20
+# extract: missing path  NULL
+<NULL>
+# extract: top-level
+"alice"
+# ObjectId: 24 chars, all hex
+24
+1
+# Embedded timestamp recovers an epoch ms; here just bound-check
+1
+# Known OID: 0x5e000000 = 1577058304 seconds  1577058304000 ms
+1577058304000
+# Malformed OID  NULL
+<NULL>
+<NULL>
+# Malformed BSON  NULL on decode
+<NULL>
+# Non-object top-level JSON  NULL on encode (array, scalar)
+<NULL>
+<NULL>
+# NULL in  NULL out (encode / decode / extract / oid_to_ts)
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# is_valid on NULL  0
+0
+# version is non-empty
+1

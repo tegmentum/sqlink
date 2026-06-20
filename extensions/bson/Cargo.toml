@@ -1,0 +1,66 @@
+[package]
+name = "bson-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+BSON (Binary JSON, MongoDB wire format) codec scalars for SQL.
+
+The official MongoDB rust BSON crate (`bson` 2.x) underneath; the
+extension is the SQL-shaped surface on top. BSON 1.1 spec  the
+distinguishing feature over MessagePack / CBOR (already shipped via
+`binary-codecs`) is the native ObjectId, Date, Regex and Decimal128
+types that round-trip cleanly through MongoDB-shaped systems.
+
+Functions:
+  bson_encode(json_text)       -> BLOB    encode a JSON document
+  bson_decode(blob)            -> TEXT    canonical Extended JSON
+  bson_extract(blob, path)     -> TEXT    pull a field by dotted path
+  bson_object_id()             -> TEXT    new 24-hex-char ObjectId
+  bson_object_id_to_ts(oid)    -> INTEGER ms epoch from the OID timestamp
+  bson_is_valid(blob)          -> INTEGER 0/1
+  bson_version()               -> TEXT
+
+`bson_encode` accepts only a top-level JSON object (BSON's wire
+shape is document = object). Other JSON shapes (array, scalar)
+NULL.
+
+`bson_decode` emits Extended JSON v2 (Relaxed) so ObjectId/Date/etc.
+survive: e.g. `{"_id": {"$oid": "..."}}`. This matches `mongoexport`.
+
+`bson_extract` accepts a dotted path ("a.b.c"); each segment is
+either an object key or a base-10 array index. Returns the matched
+value as JSON text (so a sub-document round-trips through json()).
+Missing path  NULL.
+
+ObjectId generation uses `wasi:random/random` via `getrandom`
+(same path as `aead` / `ulid` from earlier rounds).
+
+NULL  NULL. Invalid BSON  NULL on decode/extract; `bson_is_valid`
+returns 0.
+
+Per PLAN-more-extensions-5.md  8.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent workspace
+# from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Official MongoDB rust BSON crate. 2.x is the maintained line.
+# Default features pull in chrono/uuid/serde_with which we don't
+# need; restrict to the core encoder/decoder.
+bson = { version = "2", default-features = false }
+serde_json = "1"
+# wasi:random/random comes through getrandom on wasm32-wasip2
+# automatically; pinned here so bson's own RNG-needing paths (it
+# uses getrandom internally for ObjectId in its default impl, but
+# we generate ObjectIds by hand to keep the dep surface minimal)
+# also see a wasi-routed source.
+getrandom = "0.2"
