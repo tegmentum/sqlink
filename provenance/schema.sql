@@ -155,4 +155,69 @@ FROM plugin p
 JOIN plugin_version pv ON pv.plugin_id = p.id
 JOIN sql_function f    ON f.plugin_version_id = pv.id;
 
+-- Survey table: SQLite extensions identified as worth porting to
+-- this catalog but not yet implemented as wasm components. The
+-- shipped catalog lives in `plugin` above; this is the wishlist
+-- companion so we can answer "what's the state of the ecosystem,
+-- including what we haven't done yet" from one query.
+--
+-- Entries land here when an extension is mentioned in a PLAN doc
+-- or session recommendation but doesn't yet have an
+-- extensions/<name>/ directory. They graduate out (DELETE) once
+-- the corresponding plugin row exists.
+CREATE TABLE IF NOT EXISTS plugin_candidate (
+    id              INTEGER PRIMARY KEY,
+    name            TEXT NOT NULL UNIQUE,    -- e.g. 'x25519', 'protobuf'
+    source          TEXT,                    -- where the idea came from:
+                                             -- 'sqlean' | 'upstream-sqlite'
+                                             -- | 'session-2026-06' | etc.
+    description     TEXT,                    -- one-line summary of what it would do
+    upstream_url    TEXT,                    -- canonical reference (RFC / crate / spec)
+    track           TEXT,                    -- 'crypto' | 'codec' | 'media' | ...
+    status          TEXT NOT NULL            -- 'planned' (default) | 'in-progress'
+                    DEFAULT 'planned',       -- | 'blocked' | 'deferred' | 'skipped'
+    reason          TEXT,                    -- only set for status=blocked|deferred|skipped
+    proposed_crate  TEXT,                    -- the rust crate we would lean on
+    added_at        INTEGER NOT NULL,        -- unix epoch when first surveyed
+    notes           TEXT
+);
+
+CREATE VIEW IF NOT EXISTS candidate_summary AS
+SELECT track,
+       status,
+       COUNT(*) AS count
+FROM plugin_candidate
+GROUP BY track, status
+ORDER BY track, status;
+
+-- Joined view of the whole ecosystem: shipped + candidate together,
+-- with a `state` column distinguishing them.
+CREATE VIEW IF NOT EXISTS plugin_ecosystem AS
+SELECT p.name                       AS name,
+       'shipped'                    AS state,
+       NULL                         AS source,
+       p.description,
+       p.upstream_url,
+       NULL                         AS track,
+       NULL                         AS reason,
+       NULL                         AS proposed_crate,
+       pv.scanned_at                AS added_at
+FROM plugin p
+JOIN plugin_version pv ON pv.plugin_id = p.id
+WHERE pv.id = (
+    SELECT id FROM plugin_version WHERE plugin_id = p.id ORDER BY scanned_at DESC LIMIT 1
+)
+UNION ALL
+SELECT name,
+       status                       AS state,
+       source,
+       description,
+       upstream_url,
+       track,
+       reason,
+       proposed_crate,
+       added_at
+FROM plugin_candidate;
+
 INSERT OR IGNORE INTO schema_version(version, applied_at) VALUES (1, unixepoch());
+INSERT OR IGNORE INTO schema_version(version, applied_at) VALUES (2, unixepoch());

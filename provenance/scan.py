@@ -359,6 +359,18 @@ def init_db(db_path: pathlib.Path) -> sqlite3.Connection:
     conn = sqlite3.connect(str(db_path))
     schema = (REPO_ROOT / "provenance" / "schema.sql").read_text()
     conn.executescript(schema)
+    # Re-seed the candidate survey on every scan so the SQL file
+    # in candidates.sql is the source of truth. Drop-and-replace
+    # idempotent  candidate edits land in candidates.sql, scan.py
+    # picks them up. Safe to run on every `make ext`.
+    candidates_path = REPO_ROOT / "provenance" / "candidates.sql"
+    if candidates_path.exists():
+        try:
+            conn.executescript(candidates_path.read_text())
+        except sqlite3.Error as e:
+            # Don't let a malformed candidates.sql tank the
+            # build  surface a warning and move on.
+            print(f"warning: candidates.sql failed to apply: {e}", file=sys.stderr)
     return conn
 
 
