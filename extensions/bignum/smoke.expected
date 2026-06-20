@@ -1,0 +1,54 @@
+# bignum smoke expected outputs.
+# Storage: signed two's-complement big-endian blob.
+# Round-trip a 30-digit decimal.
+123456789012345678901234567890
+-123456789012345678901234567890
+0
+42
+-42
+# bn_to_int boundaries.
+9223372036854775807
+-9223372036854775808
+<NULL>
+# Arithmetic.
+1000000000000
+999999999999
+121932631112635269
+14
+2
+# Div / mod by zero -> NULL.
+<NULL>
+<NULL>
+# 2^100 = 1267650600228229401496703205376 (31 digits).
+1267650600228229401496703205376
+31
+# Modular exponentiation: 7^3 mod 13 = 5; Fermat: 5^12 mod 13 = 1.
+5
+1
+# gcd(48,18) = 6; gcd(0,7) = 7.
+6
+7
+# Comparison + sign + abs + bits.
+-1
+1
+0
+-1
+0
+1
+12345
+0
+1
+101
+# NULL propagation.
+<NULL>
+<NULL>
+# Two's-complement big-endian byte patterns.
+01
+FF
+7F
+0080
+80
+FF7F
+00
+# Version is non-empty.
+1

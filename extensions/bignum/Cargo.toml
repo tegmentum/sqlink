@@ -1,0 +1,54 @@
+[package]
+name = "bignum-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Arbitrary-precision signed integer arithmetic for SQLite, exposed as
+scalar functions. Pairs with the small-integer extensions (`numtheory`
+etc.) for cases where i64 overflows: cryptographic modular exponentiation
+(RSA-sized numbers), financial precision (sums across millions of
+invoice rows), and combinatorics (factorials / binomial coefficients).
+
+Storage format: signed two's-complement big-endian blob -- the
+length-implicit representation used by Java BigInteger and Go
+big.Int. See src/lib.rs for the encoder + decoder.
+
+Functions:
+  bn_from_int(integer)           -> blob
+  bn_from_text(decimal_text)     -> blob
+  bn_to_text(blob)               -> text
+  bn_to_int(blob)                -> integer (NULL on overflow)
+  bn_add(a, b)                   -> blob
+  bn_sub(a, b)                   -> blob
+  bn_mul(a, b)                   -> blob
+  bn_div(a, b)                   -> blob  (integer division; NULL on b==0)
+  bn_mod(a, b)                   -> blob  (remainder;          NULL on b==0)
+  bn_pow(a, exp_int)             -> blob
+  bn_modpow(base, exp, modulus)  -> blob
+  bn_gcd(a, b)                   -> blob
+  bn_cmp(a, b)                   -> integer (-1 / 0 / 1)
+  bn_sign(blob)                  -> integer (-1 / 0 / 1)
+  bn_abs(blob)                   -> blob
+  bn_bits(blob)                  -> integer (minimal bit length of |n|)
+  bn_version()                   -> text
+
+See PLAN-more-extensions-5.md  4.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent workspace
+# from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust arbitrary-precision integers. The established choice; no
+# C deps, builds cleanly for wasm32-wasip2.
+num-bigint = { version = "0.4", default-features = false }
+num-traits = { version = "0.2", default-features = false }
+num-integer = { version = "0.1", default-features = false }
