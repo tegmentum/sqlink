@@ -1,0 +1,34 @@
+[package]
+name = "dist-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Statistical distributions for SQL: PDF / CDF / inverse-CDF for the
+common families  Normal, Poisson, Binomial, Exponential,
+Chi-squared, Beta, Gamma, Student-t. Pairs with the `stats`
+extension (which covers aggregates over data); this extension
+covers the analytical distributions used for hypothesis tests,
+Bayesian priors, and Monte Carlo synthesis.
+
+NULL on any out-of-domain input (negative variance, negative k,
+p < 0 / p > 1, etc) rather than NaN  callers can guard with
+`COALESCE` instead of catching errors.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps this crate out of the parent workspace
+# build (PLAN hard rule 2).
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust statistics library. Implements the standard PDF/CDF/
+# inverse-CDF traits over every distribution family in the function
+# surface; uses the standard analytic / series approximations
+# (Wichura AS 241 for normal-inv, Lanczos for log-gamma, etc).
+statrs = { version = "0.17", default-features = false }

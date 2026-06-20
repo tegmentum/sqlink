@@ -1,0 +1,62 @@
+# PDF / CDF / inverse-CDF tolerances: 4 decimal places against the
+# canonical textbook values (statrs uses Wichura AS 241 for normal
+# inverse, regularized incomplete gamma for chi-squared / gamma,
+# regularized incomplete beta for beta / binomial / Student-t).
+# 1/√(2π) = 0.39894228...
+# Φ(1.96) = 0.97500210...; Φ⁻¹(0.975) = 1.95996398...
+# Pois(0; λ=1) = 1/e = 0.36787944...
+# Pois(2; λ=3) = 9/2·e⁻³ = 0.22404180...
+# B(5;10,0.5) = 252/1024 = 0.24609375
+# Exp(1)cdf(1) = 1 - 1/e = 0.63212055...
+# χ²cdf(3.841; 1) = erf(√(3.841/2)) = 0.94999957... rounded to 0.95
+# t-pdf(0; df=10) = Γ(5.5)/(√(10π)·Γ(5)) = 0.38910837...
+# Out-of-domain values  NULL.
+0.3989
+0.5
+0
+0.975
+1.96
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+0.3679
+0.224
+1
+<NULL>
+<NULL>
+<NULL>
+0.2461
+1
+0.001
+<NULL>
+<NULL>
+0.6321
+2
+<NULL>
+<NULL>
+0.95
+0
+<NULL>
+<NULL>
+1.5
+0.5
+0
+1
+<NULL>
+<NULL>
+0.6321
+1
+0.3679
+<NULL>
+<NULL>
+0.5
+0.5
+0.3891
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+1
