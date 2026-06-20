@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T17:25:09Z",
+  "updated": "2026-06-20T17:34:32Z",
   "registry_url": "https://raw.githubusercontent.com/user/sqlite-wasm-extensions/main/registry/index.json",
-  "commit_sha": "dcf52e6dae7ebbe8c0f1853666bc345d1357999b",
+  "commit_sha": "f08ac38b19d3bfecd08ef60cac543dc2b64b4500",
   "extensions": [
     {
       "name": "extension-manager",
@@ -3793,6 +3793,73 @@
       "dependencies": []
     },
     {
+      "name": "lei",
+      "version": "0.1.0",
+      "description": "LEI ISO 17442 Legal Entity Identifier validation (mod-97 / ISO 7064)",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/lei",
+      "keywords": [
+        "lei",
+        "iso",
+        "legal",
+        "entity",
+        "identifier",
+        "validation"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/lei-0.1.0/lei-0.1.0.tar.gz",
+      "checksum": "sha256:634aeb3726bbddf06bbbede5f97382ca9ccbb751528f15ef16859fe0e6859ac2",
+      "size_bytes": 90231,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "lei_check_digits",
+        "lei_is_valid",
+        "lei_normalize",
+        "lei_version"
+      ],
+      "dependencies": []
+    },
+    {
+      "name": "lemmatize",
+      "version": "0.1.0",
+      "description": "Dictionary-based lemmatization for SQL. Ships a curated, in-binary WordNet-flavoured exception table covering irregular nouns/verbs/ adjectives/adverbs plus a few regular forms; falls through to the Snowball stemmer (rust-stemmers) when nothing in the dictionary matches.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/lemmatize",
+      "keywords": [
+        "lemmatize",
+        "dictionarybased",
+        "lemmatization"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/lemmatize-0.1.0/lemmatize-0.1.0.tar.gz",
+      "checksum": "sha256:3aa6b563553d4232e41b247d1715cf39a48379160ee068e7c353eba7f743f88f",
+      "size_bytes": 332539,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "lemmatize",
+        "lemmatize_languages",
+        "lemmatize_pos",
+        "lemmatize_version"
+      ],
+      "dependencies": [
+        "rust-stemmers@1.2"
+      ]
+    },
+    {
       "name": "linalg",
       "version": "0.1.0",
       "description": "Dense linear algebra primitives for SQL: matrix multiply, transpose, determinant, inverse, linear-system solve, eigenvalues, rank, trace, norm.",
@@ -4440,6 +4507,50 @@
         "ngrams_word"
       ],
       "dependencies": [
+        "serde_json@1"
+      ]
+    },
+    {
+      "name": "nmea",
+      "version": "0.1.0",
+      "description": "NMEA 0183 GPS sentence parsing.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/nmea",
+      "keywords": [
+        "nmea",
+        "gps",
+        "sentence",
+        "parsing"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/nmea-0.1.0/nmea-0.1.0.tar.gz",
+      "checksum": "sha256:b4c691cc580f9b07db731601d3f898bfd09948b31eb2e3f478083dd039f290a9",
+      "size_bytes": 330230,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "nmea_checksum_ok",
+        "nmea_course",
+        "nmea_fix_quality",
+        "nmea_lat",
+        "nmea_lng",
+        "nmea_parse",
+        "nmea_placeholder",
+        "nmea_satellites",
+        "nmea_sentence_type",
+        "nmea_speed_knots",
+        "nmea_timestamp",
+        "nmea_version"
+      ],
+      "dependencies": [
+        "chrono@0.4",
+        "nmea@0.6",
         "serde_json@1"
       ]
     },
@@ -5979,6 +6090,40 @@
       ]
     },
     {
+      "name": "sentence-split",
+      "version": "0.1.0",
+      "description": "Sentence boundary detection for SQL.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/sentence-split",
+      "keywords": [
+        "sentence-split",
+        "sentence",
+        "boundary",
+        "detection"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/sentence-split-0.1.0/sentence-split-0.1.0.tar.gz",
+      "checksum": "sha256:9542c568c4d3da97784940c99e69ddc6825f540303e846df579a39f338b816b4",
+      "size_bytes": 95193,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "sentence_count",
+        "sentence_split_version",
+        "split_sentences",
+        "split_sentences_with_indices"
+      ],
+      "dependencies": [
+        "serde_json@1"
+      ]
+    },
+    {
       "name": "sentiment",
       "version": "0.1.0",
       "description": "Text sentiment scoring via VADER (Valence Aware Dictionary and sEntiment Reasoner), a rule-based lexical analyzer especially calibrated for social- media-style short text.",
@@ -6158,6 +6303,40 @@
       "dependencies": [
         "hex@0.4",
         "sha3@0.10"
+      ]
+    },
+    {
+      "name": "sitemap-xml",
+      "version": "0.1.0",
+      "description": "sitemap.xml + sitemap-index parsers for SQLite. Reads the sitemaps.org protocol (https://www.sitemaps.org/protocol.html) shapes -- a `<urlset>` document of `<url>` records, or a `<sitemapindex>` document of `<sitemap>` records -- and surfaces the contents to SQL as JSON.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/sitemap-xml",
+      "keywords": [
+        "sitemap-xml",
+        "sitemap"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/sitemap-xml-0.1.0/sitemap-xml-0.1.0.tar.gz",
+      "checksum": "sha256:73413725fc4d83de3a3605cd53b3c5019d321c322153bb4642e506f8e0e0a9f8",
+      "size_bytes": 137102,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "sitemap_count",
+        "sitemap_full",
+        "sitemap_index_locs",
+        "sitemap_is_valid",
+        "sitemap_urls",
+        "sitemap_version"
+      ],
+      "dependencies": [
+        "quick-xml@0.36"
       ]
     },
     {
@@ -6651,6 +6830,44 @@
       ]
     },
     {
+      "name": "tld-list",
+      "version": "0.1.0",
+      "description": "IANA gold-source root zone TLD list scalars.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/tld-list",
+      "keywords": [
+        "tld-list",
+        "iana",
+        "goldsource",
+        "root",
+        "zone",
+        "tld"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/tld-list-0.1.0/tld-list-0.1.0.tar.gz",
+      "checksum": "sha256:f73a319714e1fa31834d47e5607e38a1ecec9c2142091af942f6ca3a6a45e871",
+      "size_bytes": 111191,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "tld_country",
+        "tld_extract",
+        "tld_is_valid",
+        "tld_list",
+        "tld_list_placeholder",
+        "tld_list_version",
+        "tld_punycode",
+        "tld_type"
+      ],
+      "dependencies": []
+    },
+    {
       "name": "tls-cert",
       "version": "0.1.0",
       "description": "X.509 v3 certificate parsing for SQL (RFC 5280).",
@@ -7137,6 +7354,42 @@
       ]
     },
     {
+      "name": "vat",
+      "version": "0.1.0",
+      "description": "EU + common non-EU VAT identification number validation.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/vat",
+      "keywords": [
+        "vat",
+        "common",
+        "noneu",
+        "identification",
+        "number",
+        "validation"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/vat-0.1.0/vat-0.1.0.tar.gz",
+      "checksum": "sha256:0741378358a4a2929fdd9c7cb5c1d857b8ff1311dda94fbb8efbdcf7f3384b19",
+      "size_bytes": 102059,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "vat_country",
+        "vat_country_supported",
+        "vat_is_valid",
+        "vat_normalize",
+        "vat_supported_countries",
+        "vat_version"
+      ],
+      "dependencies": []
+    },
+    {
       "name": "vcard",
       "version": "0.1.0",
       "description": "vCard parsing scalars (RFC 6350 / RFC 2426) via the `vcard4` crate. Sister to the existing `ical` extension \u2014 vcards are the contact-list parallel to iCalendar's events.",
@@ -7543,6 +7796,45 @@
         "xor_raw"
       ],
       "dependencies": []
+    },
+    {
+      "name": "yaml",
+      "version": "0.1.0",
+      "description": "YAML <-> JSON codec scalars + dotted-path lookup.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/yaml",
+      "keywords": [
+        "yaml",
+        "json",
+        "codec",
+        "scalars",
+        "dottedpath",
+        "lookup"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/yaml-0.1.0/yaml-0.1.0.tar.gz",
+      "checksum": "sha256:b76dd6da78536aa93ff048a3cd8d06cdbd2b5ac327b99f497de2e6764c6f3a42",
+      "size_bytes": 454153,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "json_to_yaml",
+        "yaml_get",
+        "yaml_is_valid",
+        "yaml_keys",
+        "yaml_to_json",
+        "yaml_version"
+      ],
+      "dependencies": [
+        "serde_json@1",
+        "serde_yaml@0.9"
+      ]
     },
     {
       "name": "zipfile",

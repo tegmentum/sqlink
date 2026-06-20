@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T17:25:09Z",
-  "commit_sha": "dcf52e6dae7ebbe8c0f1853666bc345d1357999b",
+  "updated": "2026-06-20T17:34:32Z",
+  "commit_sha": "f08ac38b19d3bfecd08ef60cac543dc2b64b4500",
   "candidates": [
     {
       "name": "iso-639-5",
@@ -13,28 +13,6 @@
       "reason": null,
       "proposed_crate": "iso_639 0.4",
       "notes": "iso-codes covers 639-1/639-2/639-3; this is the family bucket."
-    },
-    {
-      "name": "lei",
-      "source": "session-2026-06",
-      "description": "Legal Entity Identifier validation (ISO 17442).",
-      "upstream_url": "https://www.iso.org/standard/75998.html",
-      "track": "bibliographic",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "no crate yet  hand-roll",
-      "notes": "20 alphanumeric chars + mod-97 check; small."
-    },
-    {
-      "name": "vat",
-      "source": "session-2026-06",
-      "description": "VAT number validation (EU + common non-EU formats).",
-      "upstream_url": "https://ec.europa.eu/taxation_customs/vies/",
-      "track": "bibliographic",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "vatable 0.2 OR roll-own",
-      "notes": "Per-country checksum rules; tedious but well-defined."
     },
     {
       "name": "flatbuffers",
@@ -90,17 +68,6 @@
       "reason": null,
       "proposed_crate": "wasmparser 0.215",
       "notes": "Meta: query the catalog's own components via SQL."
-    },
-    {
-      "name": "yaml",
-      "source": "session-2026-06",
-      "description": "YAML parse/serialize as scalars (yaml-to-json handler exists; this is SQL-side).",
-      "upstream_url": "https://yaml.org/spec/1.2.2/",
-      "track": "codec",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "serde_yaml 0.9",
-      "notes": "handlers/yaml-to-json covers the httpd side; SQL scalar form is missing."
     },
     {
       "name": "cose",
@@ -290,39 +257,6 @@
       "notes": "IoT message parsing."
     },
     {
-      "name": "nmea",
-      "source": "session-2026-06",
-      "description": "NMEA 0183 GPS sentence parsing.",
-      "upstream_url": "https://www.nmea.org/Assets/0183-2015-1-1.pdf",
-      "track": "network",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "nmea 0.6",
-      "notes": "GPS receiver output parsing."
-    },
-    {
-      "name": "sitemap-xml",
-      "source": "session-2026-06",
-      "description": "sitemap.xml + sitemap-index parsing.",
-      "upstream_url": "https://www.sitemaps.org/protocol.html",
-      "track": "network",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "sitemap 0.4",
-      "notes": "Pairs with robotstxt for crawler use cases."
-    },
-    {
-      "name": "tld-list",
-      "source": "session-2026-06",
-      "description": "Comprehensive TLD list with metadata (gtld vs cctld, etc).",
-      "upstream_url": "https://www.iana.org/domains/root/db",
-      "track": "network",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "iana-tld 0.3",
-      "notes": "publicsuffix covers the PSL; this is the IANA gold-source root zone."
-    },
-    {
       "name": "whois-parse",
       "source": "session-2026-06",
       "description": "Parse WHOIS response text (not lookup).",
@@ -334,17 +268,6 @@
       "notes": "Many response formats; pick the common ARIN/RIPE shapes."
     },
     {
-      "name": "lemmatize",
-      "source": "session-2026-06",
-      "description": "Dictionary-based lemmatization (vs stemmers morphological reduction).",
-      "upstream_url": "https://en.wikipedia.org/wiki/Lemmatisation",
-      "track": "text",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "lemmatizer 0.1",
-      "notes": "stemmer (Snowball) is morphological; lemma uses a lookup table."
-    },
-    {
       "name": "pinyin",
       "source": "session-2026-06",
       "description": "Chinese pinyin transliteration.",
@@ -354,17 +277,6 @@
       "reason": null,
       "proposed_crate": "pinyin 0.10",
       "notes": "Mainland-China-specific; useful for CN-language pipelines."
-    },
-    {
-      "name": "sentence-split",
-      "source": "session-2026-06",
-      "description": "Sentence boundary detection for arbitrary text.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Sentence_boundary_disambiguation",
-      "track": "text",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "pragmatic-segmenter 0.2",
-      "notes": "Common preprocessing step; non-trivial for non-English."
     },
     {
       "name": "mbox",
