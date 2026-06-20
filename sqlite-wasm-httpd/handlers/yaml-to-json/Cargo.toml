@@ -1,0 +1,24 @@
+[package]
+name = "wasm-yaml-to-json-handler"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Bidirectional YAML <-> JSON converter handler for sqlite-wasm-httpd. Two endpoints in one component: POST /yaml2json parses YAML and emits JSON, POST /json2yaml parses JSON and emits YAML. The endpoint is chosen by the request path passed in the dispatcher's request JSON."
+
+# Standalone workspace: parent workspace builds for native; this
+# crate builds for wasm32-wasip2 only.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# serde_yaml 0.9 is the spec-mandated YAML lib; pinned because
+# the crate is archived upstream and we want a stable artifact.
+# serde_json drives both directions  the YAML side parses into
+# serde_json::Value and re-emits, which keeps the conversion
+# lossless for the JSON-representable subset of YAML.
+serde_yaml = "0.9"
+serde_json = "1"
