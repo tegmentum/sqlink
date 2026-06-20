@@ -1,0 +1,31 @@
+[package]
+name = "iso-639-5-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ISO 639-5 language family / collection codes (~115 entries). The
+sister `iso-codes` extension covers individual languages (639-1 / -2
+/ -3) but stops short of family roll-ups: it can tell you that 'fr'
+is French, not that French is in `roa` (Romance) which is in `itc`
+(Italic) which is in `ine` (Indo-European). 639-5 fills that gap and
+is the right key for any analytics surface that wants "group by
+language family" without hauling in Glottolog.
+
+Hand-rolled static table: the list is small enough to inline, has
+zero forward-compat churn (ISO has not added a code since 2013), and
+keeping it self-contained avoids dragging an upstream crate just for
+~115 rows. Function surface follows the same pattern as `iso-codes`
+so the two compose cleanly in joins.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules; does not affect `make ext`.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

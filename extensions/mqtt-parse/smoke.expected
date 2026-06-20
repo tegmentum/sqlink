@@ -1,0 +1,32 @@
+# mqtt-parse smoke: MQTT v3.1.1 + v5.0 control packet decoding.
+# Hex literals in smoke.sql are pre-built valid frames covering
+# PUBLISH (QoS0 / QoS1+retain+pid), CONNECT (v3.1.1), PINGREQ,
+# SUBSCRIBE, plus a few sad-path cases (garbage bytes -> 0/NULL,
+# NULL input -> NULL). Last row asserts mqtt_version() prefix.
+PUBLISH
+a/b
+0
+0
+<NULL>
+hi
+1
+PUBLISH
+1
+1
+4660
+hello
+CONNECT
+1
+PINGREQ
+1
+SUBSCRIBE
+1
+<NULL>
+0
+<NULL>
+<NULL>
+PUBLISH
+a/b
+0
+hi
+1

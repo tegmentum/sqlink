@@ -1,0 +1,24 @@
+# Acceptance 1: solid red 4x4 PNG
+#ff0000
+#ff0000
+["#ff0000"]
+# Acceptance 2: half-red/half-blue PNG -> mean RGB lands at #7f007f
+#7f007f
+2
+# Acceptance 3: white 1x1 PNG
+#ffffff
+#ffffff
+# Acceptance 4: unparseable blob -> NULL on every fn
+<NULL>
+<NULL>
+<NULL>
+# Acceptance 5: NULL passthrough
+<NULL>
+<NULL>
+<NULL>
+# Acceptance 6: invalid k -> NULL even on valid blob
+<NULL>
+<NULL>
+<NULL>
+# Acceptance 7: version matches Cargo.toml
+0.1.0

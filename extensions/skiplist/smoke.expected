@@ -1,0 +1,49 @@
+# version
+1
+# empty: first / last / contains / size
+<NULL>
+<NULL>
+0
+0
+# insert running size (4th is dup -> still 3)
+1
+2
+3
+3
+# size + first/last (lex order)
+3
+apple
+cherry
+# contains hit + miss
+1
+0
+# ranges
+["apple","banana","cherry"]
+["apple","banana"]
+["banana","cherry"]
+["apple","banana"]
+["banana"]
+[]
+# remove: 1 then 0; size + range after removal
+1
+0
+2
+["apple","cherry"]
+# named sets are independent
+1
+1
+1
+1
+one
+two
+# clear returns prior size; then empty
+1
+2
+2
+0
+<NULL>
+# JSON escape: quote survives range
+1
+["he said \"hi\""]
+# range on never-touched set
+[]

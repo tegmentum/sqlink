@@ -1,0 +1,42 @@
+[package]
+name = "signal-processing-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+DSP primitives extension for SQLite. Sits next to `fft` and gives
+SQL a time-domain signal-processing surface: biquad IIR filters
+(low-pass / high-pass / band-pass), autocorrelation, full linear
+convolution, moving average, peak detection, and RMS energy.
+
+Function surface:
+
+  filter_lowpass(samples_json,  cutoff_hz, sample_rate_hz)  -> JSON array
+  filter_highpass(samples_json, cutoff_hz, sample_rate_hz)  -> JSON array
+  filter_bandpass(samples_json, low_hz, high_hz, sample_rate)-> JSON array
+  autocorrelation(samples_json)                              -> JSON array
+  convolve(a_json, b_json)                                   -> JSON array (full)
+  moving_average(samples_json, window)                       -> JSON array
+  peak_detect(samples_json, min_prominence)                  -> JSON array of indices
+  rms(samples_json)                                          -> real
+  signal_processing_version()                                -> text
+
+Samples are real f64 arrays (JSON). Empty input is handled cleanly.
+NULL or non-JSON / malformed input -> NULL. Filters use textbook
+RBJ biquad coefficients (the Robert Bristow-Johnson Audio EQ
+Cookbook design) implemented in-crate; no `biquad` dep is needed
+because the math is short and pure.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

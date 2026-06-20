@@ -1,0 +1,41 @@
+[package]
+name = "pinyin-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Chinese hanzi -> pinyin transliteration for SQL. Wraps the pure-rust
+`pinyin` crate (mozillazg) so callers can normalize Han characters
+into latin pinyin for search, sort, indexing, or display.
+
+Scalars:
+  pinyin(s)                  -> text     (default plain style, no tones; e.g. '中国' -> 'zhong guo')
+  pinyin_with_tone(s)        -> text     (numeric tones inside the syllable; e.g. '中国' -> 'zho1ng guo2')
+  pinyin_with_diacritic(s)   -> text     (Unicode diacritics; e.g. '中国' -> 'zhōng guó')
+  pinyin_first_letter(s)     -> text     (initials; e.g. '中文' -> 'z w')
+  pinyin_split(s)            -> text     (JSON array of per-char pinyin strings; non-Han chars pass through)
+  pinyin_is_chinese(s)       -> integer  (1 if at least one CJK Unified Ideograph is present, else 0)
+  pinyin_version()           -> text
+
+Non-Chinese characters (ASCII letters, digits, punctuation) are passed
+through verbatim in the joined-string forms; pinyin_split emits the raw
+codepoint as the array element for non-Han chars so callers can stitch
+the array back together losslessly. NULL input -> NULL output.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent workspace
+# from trying to build this crate natively. wasm32-wasip2 only.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust hanzi -> pinyin lookup. Default features pull in plain,
+# with_tone, with_tone_num, with_tone_num_end, and heteronym; we use
+# plain / with_tone / with_tone_num so the defaults are exactly the
+# right set.
+pinyin = "0.10"

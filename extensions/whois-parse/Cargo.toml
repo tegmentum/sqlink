@@ -1,0 +1,44 @@
+[package]
+name = "whois-parse-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Parse WHOIS response TEXT (not network lookup). Hand-rolled parser
+tolerates the three common WHOIS line shapes seen across ARIN,
+RIPE, APNIC, LACNIC, AFRINIC, and most registrar formats:
+
+  key: value
+  key = value
+  key   value          (whitespace-separated)
+
+Surface:
+  whois_field(text, name)      -> text    (case-insensitive lookup)
+  whois_registrar(text)        -> text
+  whois_creation_date(text)    -> text    (ISO 8601 if parseable)
+  whois_expiration_date(text)  -> text    (ISO 8601 if parseable)
+  whois_name_servers(text)     -> JSON array of TLD-lowercased NS
+  whois_parse(text)            -> JSON object of key:value pairs
+  whois_version()              -> text
+
+Date parsing is best-effort: a handful of common WHOIS formats
+(YYYY-MM-DD, DD-Mon-YYYY, YYYY.MM.DD, RFC-3339-ish with optional
+time/zone) are normalised to a YYYY-MM-DD string. Unparseable
+dates fall through as the raw value verbatim so callers can still
+diff them.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules; keeps the parent workspace
+# from trying to natively build this wasm-targeted crate.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# JSON output for whois_parse / whois_name_servers. Pulled minimally:
+# no preserve_order, no raw_value  just the standard map builder.
+serde_json = "1"

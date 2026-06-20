@@ -1,0 +1,40 @@
+# pinyin(): plain pinyin, no tones
+zhong guo
+zhong guo ren
+zhong wen
+pin yin
+ni hao
+han yu
+# pinyin_with_tone(): numeric tone after the vowel
+zho1ng guo2
+ni3 ha3o
+ha4n yu3
+# pinyin_with_diacritic(): unicode tone marks
+zhōng guó
+nǐ hǎo
+hàn yǔ
+# pinyin_first_letter(): initials
+z w
+z g r
+p y
+# pinyin_split(): JSON array of per-char pinyin
+["zhong","guo"]
+["ni","hao"]
+["pin","yin"]
+# pinyin_is_chinese(): 1 if any CJK char, 0 otherwise
+1
+1
+0
+0
+# mixed: ASCII passes through; pre-existing space not doubled
+ni hao world
+hello
+# NULL propagation across the full surface
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# pinyin_version() is non-empty
+1

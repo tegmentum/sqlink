@@ -1,0 +1,22 @@
+# iso-639-5: ISO 639-5 language family codes. Hand-rolled
+# static table of 115 codes (alphabetically first is `aav`,
+# Austro-Asiatic; `afa` is second). The standard hasn't been
+# updated since 2013.
+Afro-Asiatic languages
+Slavic languages
+Indo-European languages
+Romance languages
+Slavic languages
+Slavic languages
+<NULL>
+<NULL>
+<NULL>
+1
+1
+0
+0
+115
+aav
+afa
+Afro-Asiatic languages
+1

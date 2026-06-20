@@ -1,0 +1,36 @@
+[package]
+name = "color-palette-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Dominant color palette extraction from image blobs (PNG/JPEG) via kmeans_colors 0.6 + image 0.25 + palette 0.7. Returns JSON hex arrays and dominant/average hex colors.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# kmeans_colors 0.6: pure-rust k-means. default features include `app`
+# (binary deps: image + structopt). Disable + pull just the
+# `palette_color` feature so we get the Lab/Rgb Calculate impls
+# without dragging in structopt.
+kmeans_colors = { version = "0.6", default-features = false, features = [
+    "palette_color",
+] }
+# image 0.25: blob decode. default-features = false drops every codec
+# except the ones we list. PNG + JPEG cover the practical majority of
+# in-the-wild image blobs; HEIF/AVIF/WebP are deferred (codecs would
+# add several MB to the wasm bundle for marginal coverage gain).
+image = { version = "0.25", default-features = false, features = [
+    "png",
+    "jpeg",
+] }
+# palette 0.7: Lab/Srgb color types kmeans_colors operates on.
+# Pulled transitively but listed explicitly for clarity in source.
+palette = { version = "0.7", default-features = false, features = ["std"] }

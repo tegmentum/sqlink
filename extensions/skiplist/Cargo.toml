@@ -1,0 +1,38 @@
+[package]
+name = "skiplist-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Named sorted-set ordered containers with thread-local state.
+
+Scalars:
+  sl_insert(name, value)            INTEGER  new size after insert (no-op if dup)
+  sl_remove(name, value)            INTEGER  1 if removed, 0 if absent
+  sl_contains(name, value)          INTEGER  1 / 0
+  sl_size(name)                     INTEGER  current set size
+  sl_range(name, min, max)          TEXT     JSON array, inclusive bounds; NULL = open
+  sl_first(name)                    TEXT     smallest value or NULL
+  sl_last(name)                     TEXT     largest value or NULL
+  sl_clear(name)                    INTEGER  number of elements cleared
+  sl_version()                      TEXT     crate version
+
+Backing structure: std::collections::BTreeSet<String>. The brief
+allowed "skiplist 0.5 OR roll-own" -- BTreeSet gives the same
+ordered-set surface (O(log n) insert/remove/contains, ordered
+range/first/last) with zero extra dependencies and works cleanly on
+wasm32-wasip2. Values are stored as TEXT; ordering is the natural
+lexicographic ordering on UTF-8 byte sequences (i.e. String::cmp).
+Set identity is the `name` TEXT arg, mapped through a thread-local
+HashMap; state lives for the life of the extension instance.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

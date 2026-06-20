@@ -1,0 +1,36 @@
+# Verisign-style key:value: registrar, creation, expiration, NS
+ICANN ACME REGISTRAR
+1995-08-14
+2026-08-13
+["ns1.example.com","ns2.example.com"]
+# whois_field case-insensitive lookup
+ICANN ACME REGISTRAR
+# date normalisations: DD-Mon-YYYY, YYYY.MM.DD, DD.MM.YYYY, fall-through
+2023-04-15
+2024-06-01
+2020-11-03
+not-a-date-at-all
+# shape tolerance: key=value, whitespace-separated, RIPE %-comments,
+# APNIC sponsoring-registrar synonym
+Older Registrar Inc
+ACME Network Services
+EXAMPLE-NET
+APNIC Hostmaster
+# empty / no-match: NULL on missing registrar field + missing field lookup
+<NULL>
+<NULL>
+# empty name servers -> []
+[]
+# whois_parse round-trip via json_extract
+ACME
+# NULL propagation across all 7 scalars (field a,b; registrar; creation;
+# expiration; name_servers; parse)
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# whois_version() non-empty
+1

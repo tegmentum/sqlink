@@ -1,0 +1,44 @@
+[package]
+name = "mqtt-parse-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+MQTT control packet parsing (NOT a client). Decodes MQTT v3.1.1
+and v5.0 wire-format packets from BLOBs into SQL scalars.
+
+Surface:
+    mqtt_packet_type(blob)   TEXT     CONNECT|PUBLISH|SUBSCRIBE|...
+    mqtt_packet_id(blob)     INTEGER  packet identifier (NULL if absent)
+    mqtt_topic(blob)         TEXT     PUBLISH topic (NULL if !PUBLISH)
+    mqtt_payload(blob)       BLOB     PUBLISH payload (NULL if !PUBLISH)
+    mqtt_qos(blob)           INTEGER  PUBLISH QoS 0/1/2 (NULL if !PUBLISH)
+    mqtt_retain(blob)        INTEGER  PUBLISH retain flag (0/1)
+    mqtt_parse(blob)         TEXT     JSON object of all fields
+    mqtt_is_valid(blob)      INTEGER  1 if packet parses cleanly
+    mqtt_version()           TEXT     extension version banner
+
+Both MQTT 3.1.1 (a.k.a. protocol level 4) and MQTT 5.0 (level 5)
+fixed-header + PUBLISH layouts are handled. v5 PUBLISH packets
+include a properties block which is skipped over (length prefix is
+parsed) so topic/payload extraction still works. CONNECT carries
+the protocol level byte and is the primary place v3 vs v5 is
+distinguished; other packet types are version-agnostic at the
+fixed-header level.
+
+NULL is returned on any parse failure  matches the rest of the
+catalog's "lossy decode, never raise" convention for blob scalars
+(see image-meta, exif, parquet).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules; does not affect `make ext`.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = "1"
