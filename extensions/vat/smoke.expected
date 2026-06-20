@@ -1,0 +1,53 @@
+# vat_normalize: upper + strip ws/punct
+DE123456789
+FR40303265045
+<NULL>
+<NULL>
+# vat_country: alpha-2
+DE
+IT
+<NULL>
+# AT BMF doc example
+1
+0
+# BE mod-97
+1
+# DE BMF ISO 7064 worked example
+1
+0
+# FR EU VIES doc example
+1
+# IT Luhn doc example
+1
+0
+# NL mod-11
+1
+# GB mod-97
+1
+0
+# Norwegian Brønnøysund test number
+1
+1
+# mixed-case + punctuation
+1
+# unsupported prefix
+0
+# vat_country_supported
+1
+1
+0
+0
+1
+1
+# vat_supported_countries
+1
+1
+1
+1
+# NULL -> NULL
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# version non-empty
+1

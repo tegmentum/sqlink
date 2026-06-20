@@ -1,0 +1,44 @@
+# tld_type: classify a TLD
+gtld
+cctld
+sponsored
+infrastructure
+reserved
+# case-insensitivity + leading-dot stripping
+gtld
+gtld
+cctld
+# tld_is_valid: 1 known, 0 unknown
+1
+0
+# tld_country: ISO 3166 alpha-2 for cctld
+GB
+JP
+DE
+<NULL>
+<NULL>
+# tld_punycode: same string for ASCII, xn-- for IDN Unicode
+com
+xn--p1ai
+xn--p1ai
+# tld_extract: last label of a domain, lowercased
+com
+uk
+org
+singlelabel
+com
+# tld_list: JSON array, non-empty, starts with '['
+[
+1
+# tld_list_version: non-empty
+1
+# NULL input -> NULL output
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# empty / garbage input -> NULL
+<NULL>
+<NULL>
+<NULL>

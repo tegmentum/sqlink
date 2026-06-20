@@ -1,0 +1,45 @@
+[package]
+name = "yaml-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+YAML <-> JSON codec scalars + dotted-path lookup.
+
+Sister extension to `toml` and `json5`: parse YAML config text in SQL
+and pluck nested values without leaving the engine. Pivots through a
+`serde_json::Value` so every walk (encode, decode, get, keys) is one
+shape. The httpd handler in the wider repo already does YAML->JSON;
+this is the SQL-side surface.
+
+Functions:
+  yaml_to_json(s)            -> TEXT     (JSON-encoded)
+  json_to_yaml(s)            -> TEXT     (YAML)
+  yaml_get(s, dotted_path)   -> TEXT     (JSON-encoded leaf value)
+  yaml_is_valid(s)           -> INTEGER  (0/1)
+  yaml_keys(s, [dotted_path]) -> TEXT    (JSON array of keys)
+  yaml_version()             -> TEXT
+
+Caveats:
+  * YAML "any-type" scalars (timestamps, !!binary tags, custom tags)
+    collapse to strings or their tagged-string form in JSON. The
+    YAML->JSON->YAML round-trip is lossy for those; for plain
+    mappings / sequences / scalars it's stable.
+  * yaml_to_json reads the FIRST document of a multi-document stream.
+    serde_yaml 0.9 returns the first; downstream multi-doc handling
+    is a separate feature.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent workspace
+# from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+serde_yaml = "0.9"

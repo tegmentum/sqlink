@@ -1,0 +1,41 @@
+[package]
+name = "sentence-split-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Sentence boundary detection for SQL.
+
+The pragmatic-segmenter crate (0.1.x, pySBD port) is upstream
+but stagnant; the brief suggested rolling our own with a regex
+over period/!/? plus a common abbreviation list (Mr., Dr.,
+U.S.A., etc). That's what this extension does — no large data
+files, predictable behavior across short inputs, byte-stable
+offsets for split_sentences_with_indices.
+
+Functions:
+  split_sentences(text, [lang])              -> TEXT  JSON array of sentence strings
+  sentence_count(text, [lang])               -> INTEGER
+  split_sentences_with_indices(text, [lang]) -> TEXT  JSON array of {sentence, start, end}
+  sentence_split_version()                   -> TEXT
+
+`lang` defaults to 'en'. Unknown languages currently fall back
+to the English abbreviation list — most western-European
+punctuation conventions are close enough that the boundary
+detection still works; 'en' / 'english' is the only label that
+gets explicit treatment so smoke output stays stable.
+
+NULL input -> NULL output (NULL propagation).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = "1"

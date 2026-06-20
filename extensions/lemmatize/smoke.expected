@@ -1,0 +1,34 @@
+# brief acceptance: running, better, was/v, better/adj, running/v
+run
+good
+be
+good
+run
+# POS aliases: n, noun -> child
+child
+child
+# regular inflection: walks, walked, countries, dogs
+walk
+walk
+country
+dog
+# better/adv -> well
+well
+# mixed case still hits the lowercased table
+run
+be
+# default lang en
+be
+# non-english fall-through: laufen -> lauf, manger -> mang
+lauf
+mang
+# lemmatize_languages JSON + version non-empty
+["en","ar","da","nl","fi","fr","de","el","hu","it","no","pt","ro","ru","es","sv","ta","tr"]
+1
+# NULL propagation
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>

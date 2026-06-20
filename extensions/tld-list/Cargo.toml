@@ -1,0 +1,44 @@
+[package]
+name = "tld-list-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+IANA gold-source root zone TLD list scalars.
+
+We do NOT depend on an `iana-tld` crate (no such crate exists on
+crates.io at the version asked for in the spec); instead we bundle a
+snapshot of the IANA root-zone Type list directly in Rust source. The
+list distinguishes the IANA categories:
+
+  * gTLD          generic, sponsorless (com, net, info, app, ...)
+  * cctld         country-code (2-letter, ISO 3166-1 alpha-2,
+                  plus IDN cctld punycode aliases)
+  * sponsored     ICANN-sponsored gTLDs (gov, edu, museum, ...)
+  * infrastructure  exactly one: `arpa`
+  * reserved      RFC-reserved (test, example, invalid, localhost)
+
+Function surface:
+  tld_type(tld)         -> text
+  tld_is_valid(tld)     -> integer (0/1)
+  tld_country(cctld)    -> text  (ISO 3166-1 alpha-2; NULL for non-cc)
+  tld_punycode(tld)     -> text  (xn-- form for IDN; same string else)
+  tld_extract(domain)   -> text  (last label, lowercased)
+  tld_list()            -> text  (JSON array of all known TLDs)
+  tld_list_version()    -> text
+
+NULL input  NULL output. Inputs are case-insensitive and may include
+a leading dot, which is stripped before lookup.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules  keeps the parent workspace
+# from trying to build this crate for the host target.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

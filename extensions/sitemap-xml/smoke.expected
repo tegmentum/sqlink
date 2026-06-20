@@ -1,0 +1,40 @@
+# Basic urlset -> JSON array of <loc> strings.
+["https://example.com/a","https://example.com/b"]
+# Full per-URL detail with all four optional fields populated.
+[{"loc":"https://example.com/a","lastmod":"2024-01-15","changefreq":"weekly","priority":"0.8"}]
+# Full per-URL detail with optional fields absent -> null.
+[{"loc":"https://example.com/c","lastmod":null,"changefreq":null,"priority":null}]
+# sitemap-index <loc>s in document order.
+["https://example.com/sitemap-1.xml","https://example.com/sitemap-2.xml"]
+# Urlset asked for index locs -> empty array.
+[]
+# Sitemap-index asked for urls -> empty array.
+[]
+# Count of <url> records in a urlset.
+3
+# Count of <sitemap> records in a sitemap-index.
+2
+# Empty urlset -> 0.
+0
+# Well-formed urlset validates.
+1
+# Well-formed sitemap-index validates.
+1
+# RSS root rejected.
+0
+# Junk text rejected.
+0
+# Empty string rejected.
+0
+# Namespace-prefixed root + descendants parse via local-name match.
+["https://example.com/ns"]
+# NULL input -> NULL output for the JSON-returning shapes.
+<NULL>
+<NULL>
+<NULL>
+# NULL input -> NULL for the count probe (callers distinguish "no input" vs 0).
+<NULL>
+# NULL input -> 0 for the validity probe (NULL is not a valid sitemap).
+0
+# Version string is non-empty.
+1

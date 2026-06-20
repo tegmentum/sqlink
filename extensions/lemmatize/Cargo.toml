@@ -1,0 +1,40 @@
+[package]
+name = "lemmatize-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Dictionary-based lemmatization for SQL. Ships a curated, in-binary
+WordNet-flavoured exception table covering irregular nouns/verbs/
+adjectives/adverbs plus a few regular forms; falls through to the
+Snowball stemmer (rust-stemmers) when nothing in the dictionary
+matches.
+
+Functions:
+  lemmatize(word, [lang])           -> text   (lemma; stem fallback)
+  lemmatize_pos(word, pos, [lang])  -> text   (pos = n|v|adj|adv)
+  lemmatize_languages()             -> text   (JSON array)
+  lemmatize_version()               -> text
+
+Default lang is 'en'. NULL word / pos / lang propagate to NULL.
+
+Brief acceptance:
+  running  -> run         (verb rule)
+  better   -> good        (adjective exception)
+  was      -> be          (verb exception)
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules — keeps the root workspace
+# from trying to compile this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Snowball stemmer used as the no-entry fall-through; same crate
+# the `stemmer` extension uses, so behaviour is consistent.
+rust-stemmers = "1.2"

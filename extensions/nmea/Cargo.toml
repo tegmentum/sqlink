@@ -1,0 +1,27 @@
+[package]
+name = "nmea-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+NMEA 0183 GPS sentence parsing.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Default features include `std` + `all-sentences`, so every
+# message_id parser we route to (GGA/RMC/VTG/GLL/GNS/GSA) is in.
+nmea = "0.6"
+# nmea_parse(...) emits a JSON object. serde_json is the canonical
+# JSON serializer across this catalog.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+# `nmea` re-exports chrono::NaiveTime in its public API; we need it
+# in scope to format the ISO 8601 timestamps.
+chrono = { version = "0.4", default-features = false }

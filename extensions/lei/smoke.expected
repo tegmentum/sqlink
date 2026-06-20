@@ -1,0 +1,24 @@
+# LEI ISO 17442: 20-char alphanumeric + ISO 7064 mod-97 check.
+# Four published GLEIF LEIs validate. Normalize strips spaces +
+# hyphens and uppercases; is_valid accepts display forms. Tampered
+# check digit / tampered body char / wrong-length / non-alnum all
+# fail clean. NULL -> NULL. lei_version() = crate version.
+1
+1
+1
+1
+529900T8BM49AURSDO55
+1
+1
+55
+12
+0
+0
+0
+0
+0
+0
+<NULL>
+<NULL>
+<NULL>
+0.1.0

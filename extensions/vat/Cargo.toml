@@ -1,0 +1,52 @@
+[package]
+name = "vat-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+EU + common non-EU VAT identification number validation.
+
+Validates VAT numbers per the published country-specific format and
+checksum rules. Covers all EU-27 member states plus the most-asked
+non-EU ones (UK, CH, NO).
+
+Functions:
+  vat_is_valid(s)             -> integer
+                                 Accepts "DE123456789" or just
+                                 "123456789" if the prefix has been
+                                 stripped; the surface here REQUIRES
+                                 the ISO 3166 alpha-2 prefix so the
+                                 country-specific rule can be chosen.
+  vat_country(s)              -> text
+                                 Returns the alpha-2 country code
+                                 prefix; NULL on bad shape.
+  vat_normalize(s)            -> text
+                                 Uppercases + strips whitespace and
+                                 punctuation. Returns NULL on inputs
+                                 that have no country prefix.
+  vat_country_supported(cc)   -> integer
+                                 1 if the alpha-2 code has a built-in
+                                 validator, 0 otherwise.
+  vat_supported_countries()   -> text (JSON array)
+  vat_version()               -> text
+
+Hand-rolled per-country algorithms so the wasm component stays slim
+and has no transitive crate surface. References:
+  EU VIES validation specs (publically documented)
+  HMRC VAT number checksum (UK)
+  Swiss UID (CH) - mod 11 over weighted MwSt body
+  Norwegian organisasjonsnummer (NO) - mod 11
+
+NULL -> NULL on every scalar.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

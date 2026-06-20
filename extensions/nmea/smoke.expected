@@ -1,0 +1,49 @@
+# GGA happy path: sentence_type + lat + lng + fix_quality + sats + timestamp + checksum
+GGA
+53.36134
+-6.50562
+1
+8
+09:27:50
+1
+# RMC happy path: lat/lng/speed/course/timestamp with date + checksum
+RMC
+49.27417
+-123.18533
+0.5
+54.7
+1994-11-19T22:54:46.330
+1
+# VTG (track + speed) happy path: type + speed_knots + course + checksum
+VTG
+5.5
+54.7
+1
+# GLL happy path: type + lat + lng + time-only timestamp
+GLL
+49.27417
+-123.18533
+22:54:44
+# nmea_parse JSON: sentence_type / fix_quality / satellites / checksum_ok / talker_id
+GGA
+1
+8
+1
+GP
+# Corrupted-checksum: checksum_ok=0, lat=NULL
+0
+<NULL>
+# Garbage input: sentence_type NULL, lat NULL, checksum_ok 0
+<NULL>
+<NULL>
+0
+# Unsupported sentence body (HDT): sentence_type still resolves, lat NULL
+HDT
+<NULL>
+# NULL passthrough on every parser scalar
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# nmea_version is non-empty
+1

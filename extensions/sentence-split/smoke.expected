@@ -1,0 +1,31 @@
+# basic split: two simple sentences
+["Hello world.","How are you?"]
+2
+# abbreviation guard: "Mr." doesn't split — 2 sentences, not 3
+2
+# initialism guard: "U.S.A." doesn't split mid-sentence
+2
+# decimal guard: "3.14" doesn't split
+2
+# quoted terminator absorbed: `"go!"` -> 3 sentences, with the `!"`
+# ending sentence 1 (not splitting mid-quote).
+3
+# multi-terminator run: "?!" counts as one boundary
+2
+# trailing sentence without terminator still counted
+2
+# explicit lang arg works the same as default
+2
+2
+# split_sentences_with_indices: JSON of {sentence,start,end}
+[{"sentence":"Hi.","start":0,"end":3},{"sentence":"Bye.","start":4,"end":8}]
+# NULL propagation
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# empty input
+[]
+0
+# version non-empty
+1

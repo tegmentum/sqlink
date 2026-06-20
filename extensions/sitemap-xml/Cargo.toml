@@ -1,0 +1,53 @@
+[package]
+name = "sitemap-xml-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+sitemap.xml + sitemap-index parsers for SQLite. Reads the
+sitemaps.org protocol (https://www.sitemaps.org/protocol.html) shapes
+-- a `<urlset>` document of `<url>` records, or a `<sitemapindex>`
+document of `<sitemap>` records -- and surfaces the contents to SQL
+as JSON.
+
+Function surface:
+  sitemap_urls(xml)        -> TEXT     JSON array of <loc> strings (urlset)
+  sitemap_full(xml)        -> TEXT     JSON array of {loc, lastmod,
+                                       changefreq, priority} objects
+  sitemap_index_locs(xml)  -> TEXT     JSON array of <loc> strings
+                                       (sitemap-index documents)
+  sitemap_count(xml)       -> INTEGER  count of <url> in urlset,
+                                       <sitemap> in sitemap-index
+  sitemap_is_valid(xml)    -> INTEGER  1 if XML parses and the root
+                                       element is `urlset` or
+                                       `sitemapindex`, else 0
+  sitemap_version()        -> TEXT
+
+Implementation: rolled atop `quick-xml` 0.36 -- the sitemaps.org
+grammar is small enough that a hand-written pull-parser is simpler
+(and more forgiving of namespace prefixes / stray whitespace / BOM
+markers) than reaching for the abandoned `sitemap` 0.4 crate. We
+match the local-name of elements regardless of XML namespace prefix
+so common variants like `<sm:urlset xmlns:sm="...">` still parse.
+
+NULL in -> NULL out for the JSON-returning shapes. NULL in for
+sitemap_is_valid returns 0 (NULL is "not a valid sitemap"). NULL for
+sitemap_count returns NULL so callers can distinguish "empty
+sitemap" (0) from "no input" (NULL).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 1 -- keeps the parent
+# workspace from trying to build this crate natively (it's a
+# wasm32-wasip2 cdylib).
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# quick-xml 0.36 is the same dep `formats` uses for XPath-ish lookup;
+# pull-parser API, no_std-friendly, alloc-only.
+quick-xml = "0.36"

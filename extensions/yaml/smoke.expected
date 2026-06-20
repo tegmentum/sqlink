@@ -1,0 +1,34 @@
+# Validity
+1
+0
+0
+# yaml_to_json: simple mapping (serde_json sorts keys: age before name)
+{"age":30,"name":"Alice"}
+# yaml_to_json: nested mapping with sequence
+{"server":{"hosts":["a","b"],"port":8080}}
+# yaml_get: scalar lookup
+"Alice"
+30
+# yaml_get: nested + sequence index
+8080
+"b"
+# yaml_get: missing key -> NULL
+<NULL>
+# yaml_keys: root + nested
+["server"]
+["hosts","port"]
+# yaml_keys on a sequence -> NULL
+<NULL>
+# Round-trip through YAML stays valid YAML
+1
+# json_to_yaml on a bare scalar
+1
+# json1 round-trip on yaml_to_json output
+20
+# NULL in -> NULL out
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# version non-empty
+1
