@@ -1,0 +1,55 @@
+[package]
+name = "aead-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Authenticated encryption with associated data for SQL.
+
+Algorithms:
+  AES-GCM-256        (32-byte key, 12-byte nonce, 16-byte tag)
+  ChaCha20-Poly1305  (32-byte key, 12-byte nonce, 16-byte tag)
+
+Functions:
+  aes_gcm_encrypt(key, plaintext, nonce, [aad])              -> blob
+  aes_gcm_decrypt(key, ciphertext, nonce, [aad])             -> blob | NULL
+  chacha20_poly1305_encrypt(key, plaintext, nonce, [aad])    -> blob
+  chacha20_poly1305_decrypt(key, ciphertext, nonce, [aad])   -> blob | NULL
+  aead_random_key_256()   -> blob (32 bytes, from wasi:random/random)
+  aead_random_nonce_96()  -> blob (12 bytes, from wasi:random/random)
+  aead_version()          -> text
+
+Ciphertext is in combined form: ciphertext || 16-byte Poly1305 / GCM
+tag. Decrypt returns NULL on any verification failure (wrong key,
+tampered ciphertext, wrong nonce, wrong aad)  no error  so the
+SQL contract is "did this decrypt cleanly, yes or no".
+
+Random sources flow from wasi:random/random via the WASI reactor
+adapter; `getrandom` with the `wasi` feature is what wires them.
+
+See PLAN-more-extensions.md  2.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# RustCrypto AEAD implementations. aes-gcm 0.10 and chacha20poly1305
+# 0.10 share the `aead` 0.5 trait surface so the encrypt/decrypt code
+# paths are symmetric  cipher.encrypt(nonce, Payload{ msg, aad }).
+aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+# `getrandom` v0.2 auto-routes to WASI's `random_get` on
+# `target_os = "wasi"` (which wasm32-wasip2 sets); the WASI
+# reactor adapter wires that to `wasi:random/random` on the host.
+# No feature flag needed in 0.2  the WASI path is unconditional
+# for the wasm32-wasi* family of targets.
+getrandom = "0.2"

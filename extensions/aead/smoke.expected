@@ -1,0 +1,37 @@
+# ChaCha20-Poly1305 byte-exact vector from RFC 7539 §2.8.2:
+# encrypt the canonical "Ladies and Gentlemen" plaintext under the
+# RFC's key/nonce/aad and confirm ciphertext||tag matches the
+# published bytes. Locks in correctness against the published vector.
+D31A8D34648E60DB7B86AFBC53EF7EC2A4ADED51296E08FEA9E2B5A736EE62D63DBEA45E8CA9671282FAFB69DA92728B1A71DE0A9E060B2905D6A5B67ECD3B3692DDBD7F2D778B8C9803AEE328091B58FAB324E4FAD675945585808B4831D7BC3FF4DEF08E4B7A9DE576D26586CEC64B61161AE10B594F09E26A7E902ECBD0600691
+# RFC 7539 decrypt round-trip yields plaintext.
+Ladies and Gentlemen of the class of '99: If I could offer you only one tip for the future, sunscreen would be it.
+# AES-GCM-256 NIST CAVS gcmEncryptExtIV256.rsp count-0:
+# encrypt under the published key/IV/PT and confirm CT||TAG matches.
+FA4362189661D163FCD6A56D8BF0405AD636AC1BBEDD5CC3EE727DC2AB4A9489
+# AES-GCM-256 NIST CAVS decrypt round-trip yields plaintext.
+2DB5168E932556F8089A0622981D017D
+# Caller-chosen-key round trips: encrypt then decrypt back to text.
+hello aes-gcm round trip
+hello chacha round trip
+# Decrypt failure modes: each must collapse to NULL (no error).
+#   wrong key  NULL
+<NULL>
+#   wrong nonce  NULL
+<NULL>
+#   wrong AAD  NULL
+<NULL>
+#   tampered tag (flip last byte of valid ct||tag)  NULL
+<NULL>
+#   wrong ChaCha key  NULL
+<NULL>
+# Random helpers return fixed byte lengths (32-byte key, 12-byte nonce).
+32
+12
+# Two successive random keys are not equal (entropy check). `=`
+# yields 0 when the BLOBs differ.
+0
+# aead_version is a non-empty string  length > 0  1.
+1
+# Decrypt with a malformed key (1 byte instead of 32) collapses to
+# NULL, same SQL contract as any other auth failure  no error.
+<NULL>
