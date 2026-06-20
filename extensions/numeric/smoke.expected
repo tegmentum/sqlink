@@ -1,0 +1,44 @@
+# Reference values for `numeric` smoke. Tolerances are documented per
+# row; round() in smoke.sql keeps output stable across platforms.
+#
+# Plan acceptance:
+#   - root_brent(sin samples, 0) near pi → pi within 1e-6
+#   - integrate_simpson(samples of x on [0,1]) → 0.5
+#   - derive(samples of x², 1.0) → 2.0 (central diff at sample point)
+#   - interp_linear at a sample point → exact y
+#   - fit_polynomial(degree 2, parabola samples) → coefficients to 1e-10
+#
+# Cubic-spline interp on x² with natural boundary conditions: at x=0.75
+# the spline value is ~0.558, vs the true 0.5625. The error comes from
+# the natural-BC y''(0)=y''(2)=0 boundary mismatch (true y''=2 everywhere)
+# — documented divergence, not a bug. For exact polynomial recovery,
+# use num_fit_polynomial + num_eval_polynomial.
+3.141593
+0.5
+0.5
+2.666667
+2
+3
+2
+1
+<NULL>
+1
+0.558
+1
+2
+3
+17
+1
+1
+0
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+1

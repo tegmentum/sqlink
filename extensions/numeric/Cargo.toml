@@ -1,0 +1,33 @@
+[package]
+name = "numeric-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Numerical methods extension for SQLite: univariate root finding (Brent),
+numerical integration (Simpson + Gauss-Legendre 5-node), central-difference
+differentiation, linear and natural-cubic-spline interpolation, polynomial
+least-squares fitting (Vandermonde + normal equations), polynomial evaluation
+(Horner), and 1-D minimization (Brent).
+
+Sample-based interface throughout: each function takes a JSON array of
+[x, y] pairs sorted ascending by x (mismatched/unsorted inputs → NULL).
+For "pass a SQL expression as a function" workflows, pair this with the
+`eval` extension to sample first, then feed numeric.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps this crate out of the parent workspace
+# so the wasm32-wasip2 build doesn't disturb the workspace's sqlite
+# native build.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# JSON in/out — samples arrive as TEXT JSON arrays, fit coefficients
+# come back as JSON arrays, min point comes back as a JSON object.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
