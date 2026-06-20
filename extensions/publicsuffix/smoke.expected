@@ -1,0 +1,33 @@
+# psl_tld: extract the public suffix (eTLD)
+co.uk
+com
+org
+# psl_etld1: extract the registrable (eTLD+1) domain
+example.co.uk
+example.com
+example.com
+# psl_is_public: 1 if input == its own public suffix
+1
+1
+0
+0
+# psl_subdomain: labels left of eTLD+1, '|...|' delimited
+|www|
+||
+|a.b|
+|deep.nested.subdomain|
+# case folding (PSL is case-insensitive)
+example.com
+# trailing-dot (FQDN form) tolerated
+example.com
+com
+# NULL in -> NULL out
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# empty / all-dots input -> NULL
+<NULL>
+<NULL>
+# version is non-empty
+1

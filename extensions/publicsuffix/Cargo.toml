@@ -1,0 +1,47 @@
+[package]
+name = "publicsuffix-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Public Suffix List (Mozilla PSL) scalars for SQL. Backed by the
+`psl` 2 crate (pure-Rust, no_std, statically embeds the PSL
+revision as native Rust  no async / lookup-table at runtime, no
+network fetch).
+
+Functions:
+  psl_tld(domain)        -> text  e.g. "co.uk" for "www.example.co.uk"
+  psl_etld1(domain)      -> text  registrable domain, e.g. "example.co.uk"
+  psl_is_public(domain)  -> integer  1 if the input equals its own
+                                     public suffix (a TLD or eTLD)
+  psl_subdomain(domain)  -> text  the labels left of eTLD+1 ("" if none)
+  publicsuffix_version() -> text  this crate's version + psl crate version
+
+NULL input  NULL output. Empty / invalid / "all dots" input
+returns NULL on each lookup. Trailing dot in input is preserved by
+the lookup (psl's Suffix tracks fqdn) but trimmed on output  the
+SQL contract is a domain string without trailing-dot ceremony.
+
+The `psl` crate embeds the static PSL data as generated Rust code;
+the resulting component is ~1 MB. Acceptable for an opt-in `.load`.
+
+Per PLAN-more-extensions.md  6.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules  keeps the parent
+# workspace from trying to build this crate for the host target.
+# Embed-path wiring into sqlite-cli-embedded is a separate
+# follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# `psl` is no_std + pure-Rust, statically embeds the Mozilla PSL.
+# Default `helpers` feature enables the `suffix_str` / `domain_str`
+# convenience fns we use below.
+psl = "2"
