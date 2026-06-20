@@ -1,0 +1,36 @@
+# Expected output for qrcode smoke. Covers:
+#   - qr_svg starts with `<svg ` (XML prolog stripped) and is deterministic
+#   - qr_unicode renders non-empty utf-8 with block characters
+#   - qr_size('hello') = 21 (Version 1, 21x21 modules)
+#   - qr_size monotone vs ECC (L <= H)
+#   - qr_version_for('hello') = 1, in [1,40], monotone vs length
+#   - qr_modules is a 21x21 JSON 0/1 grid with dark (1) at (0,0)
+#   - ECC arg: case-insensitive, NULL = default, bad label -> hard error
+#   - NULL input propagates NULL across every variant
+#   - INTEGER input coerced as its TEXT form
+#   - otpauth:// URI (pairs with totp.totp_url) renders cleanly
+<svg
+1
+1
+1
+21
+1
+1
+1
+1
+1
+21
+21
+1
+1
+1
+1
+Error: qr_size: ecc must be one of L/M/Q/H (got "X")
+1
+1
+1
+1
+1
+1
+<svg
+1

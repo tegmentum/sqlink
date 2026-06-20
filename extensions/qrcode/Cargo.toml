@@ -1,0 +1,24 @@
+[package]
+name = "qrcode-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+QR code generation: SVG + unicode block + JSON 0/1 grid + size + version. ISO/IEC 18004.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust QR encoder. Default features pull in `image` (raster
+# output) which depends on a stack of native-codec crates that don't
+# build clean for wasm32-wasip2. We only need the SVG + unicode +
+# raw-color surfaces, so disable defaults and re-enable just `svg`.
+# (Unicode + raw colors require no feature flag.)
+qrcode = { version = "0.14", default-features = false, features = ["svg"] }
