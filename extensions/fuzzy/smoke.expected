@@ -1,0 +1,62 @@
+# Jaro / Jaro-Winkler MARTHA/MARHTA (Winkler 1990)
+0.9444
+0.9611
+# abs(jw - 0.961) < 0.001 → true
+1
+# DIXON / DICKSONX
+0.8133
+# identical / disjoint — sqlite renders 1.0 / 0.0 as 1 / 0
+1
+0
+# CA vs ABC: DL=2 (acceptance), plain Levenshtein=3
+2
+3
+# ab vs ba: DL collapses to 1, Levenshtein 2
+1
+2
+# Classic Levenshtein vectors
+3
+3
+# equal strings → 0
+0
+0
+# Soundex: US Census 1880 examples
+R163
+R163
+T522
+H555
+# Robert / Rupert collide
+1
+# Metaphone (rphonetic / commons-codec port)
+PTSB
+0MPS
+SM0
+# Double Metaphone — Smith
+SM0
+XMT
+# Double Metaphone — Schmidt
+XMT
+SMT
+# Caverphone 2.0 (10 chars, '1'-padded)
+TMPSN11111
+SMT1111111
+PTSPA11111
+# Empty string per encoder (bracketed for visibility)
+[]
+[]
+[]
+[]
+1111111111
+# NULL propagation
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# version non-empty
+1

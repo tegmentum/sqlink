@@ -1,0 +1,55 @@
+[package]
+name = "fuzzy-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+String distance + phonetic codes for SQL — dedup, near-match, and
+typo-tolerant search. The sqlean `fuzzy` equivalent: covers the
+four classic distance metrics (jaro / jaro_winkler /
+damerau_levenshtein / levenshtein) and the four widely used
+phonetic encodings (soundex / metaphone / double_metaphone /
+caverphone).
+
+Functions:
+  jaro(a, b)                    -> real   (0..1)
+  jaro_winkler(a, b)            -> real   (0..1)
+  damerau_levenshtein(a, b)     -> integer
+  levenshtein(a, b)             -> integer
+  soundex(s)                    -> text   (4 chars, US Census 1880)
+  metaphone(s)                  -> text
+  double_metaphone_primary(s)   -> text
+  double_metaphone_secondary(s) -> text   (may be empty)
+  caverphone(s)                 -> text   (Caverphone 2, 10 chars)
+  fuzzy_version()               -> text
+
+NULL inputs propagate to NULL output on every scalar. Empty input
+is treated as a valid empty string (each encoder produces its own
+empty/padded form — see smoke.expected).
+
+Per PLAN-more-extensions.md section 3.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps the parent workspace from trying to
+# build this crate for the host target. The component build still
+# works because the Makefile invokes cargo with this crate's own
+# manifest path.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-Rust string distance metrics: jaro, jaro_winkler,
+# damerau_levenshtein, levenshtein. No allocations beyond the dp
+# table; no_std friendly.
+strsim = "0.11"
+# Pure-Rust port of Apache commons-codec phonetic algorithms.
+# Covers Soundex, Metaphone, DoubleMetaphone, Caverphone1/2 in a
+# single crate — no need to bundle multiple phonetic crates or
+# roll any algorithm by hand. Default features only (no embedded
+# Beider-Morse / Daitch-Mokotoff data — saves ~300 KB).
+rphonetic = { version = "3", default-features = false }
