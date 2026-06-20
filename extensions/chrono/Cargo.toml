@@ -1,0 +1,47 @@
+[package]
+name = "chrono-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Powered datetime scalars: timezone conversion, business-day math,
+ISO 8601 round-trip, duration parsing/formatting. Complements
+SQLite's built-in date/datetime/strftime and the existing `time`
+extension by adding the missing tz + duration surface.
+
+Function surface (PLAN-more-extensions-2.md §3):
+  date_parse(s, [format])           -> TEXT (canonical ISO 8601 UTC)
+  date_format(s, format)            -> TEXT
+  date_add(s, amount, unit)         -> TEXT
+  date_diff(a, b, unit)             -> INTEGER
+  date_tz_convert(s, from_tz, to_tz)-> TEXT
+  date_now_tz(tz)                   -> TEXT (current time in tz)
+  date_is_business_day(s)           -> INTEGER (Mon-Fri => 1)
+  date_business_days_between(a, b)  -> INTEGER
+  date_iso_week(s)                  -> INTEGER
+  date_iso_year(s)                  -> INTEGER
+  duration_parse(s)                 -> INTEGER (seconds)
+  duration_format(seconds, [precision]) -> TEXT
+  chrono_version()                  -> TEXT
+
+Time-of-day `unit` accepts: years, months, days, hours, mins/minutes,
+secs/seconds, weeks. Format strings follow chrono's strftime spec.
+
+The chrono-tz IANA bundle ships ~200 KB of data — acceptable for
+opt-in `.load`.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# chrono 0.4 with serde-free + alloc support; we need std for
+# chrono-tz interop (the IANA db generator relies on std::sync).
+chrono = { version = "0.4", default-features = false, features = ["alloc", "std", "clock"] }
+chrono-tz = { version = "0.10", default-features = false, features = ["std"] }

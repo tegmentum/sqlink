@@ -1,0 +1,42 @@
+# ISO 8601 parse round-trip
+2025-06-20T15:30:00Z
+# strftime format
+2025/06/20
+# add 5 days
+2025-06-25T00:00:00Z
+# add 1 month (Jan 31 → Feb 28, calendar-aware)
+2025-02-28T00:00:00Z
+# diff in days (a − b = 5)
+5
+# tz convert: 12:00 UTC June → 08:00 EDT
+2025-06-20T08:00:00-04:00
+# ISO 8601 week of 2024-01-01
+1
+# ISO 8601 year of 2024-12-30 (week 1 of 2025)
+2025
+# Saturday is not a business day
+0
+# Friday is a business day
+1
+# 5 weekdays from Mon to following Mon (exclusive)
+5
+# 1d 3h = 97200 s
+97200
+# plain int → seconds
+90
+# ISO PT1H30M = 5400 s
+5400
+# 1.5h = 5400 s
+5400
+# 3600 → 1h
+1h
+# 97200 → 1d 3h
+1d 3h
+# 0 → 0s
+0s
+# negative
+-1h
+# precision-2 cap on 1d 1h 1m 1s
+1d 1h
+# version non-empty
+1
