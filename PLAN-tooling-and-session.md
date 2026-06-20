@@ -1,5 +1,19 @@
 # Plan: T-39, T-40, and session/changeset
 
+> **Status (post-perf-push 2026-06):**
+> - **T-40 (smoke harness --db override):** shipped. See
+>   `tooling/smoke.py::_detect_smoke_db_marker` + `_build_argv`.
+> - **T-39 (scaffold --world flag):** shipped. See
+>   `tooling/scaffold.py` + the per-world templates under
+>   `tooling/templates/`.
+> - **Session Phase 1 (pure-function changeset helpers):**
+>   shipped commit `05b69ce` as `extensions/changeset` 
+>   `changeset_invert/concat/count/tables/decode` scalars on the
+>   embed path.
+> - **Session Phase 2/3 (apply / capture via WIT host plumbing):**
+>   still deferred per the same "ONLY if a concrete consumer
+>   materializes" guidance below.
+
 Three deferred items, ordered smallest-to-largest. Each section
 has the same shape: goal, approach, cost, tradeoffs, open
 questions. Pick one or three; they're independent.

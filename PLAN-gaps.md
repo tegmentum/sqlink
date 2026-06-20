@@ -1,5 +1,22 @@
 # Plan: gaps audit + sequencing
 
+> **Status update (post-perf-push 2026-06):**
+> - "In-place updates from vtab xUpdate" (listed below as out of
+>   scope) shipped as the vtab-mutating contract in commit
+>   `b334c43`. v2 vtab slots (xShadowName / xIntegrity /
+>   xFindFunction) added in `978190e`.
+> - WIT vtab `fetch_batch` (the per-row WIT crossing cost this
+>   doc didn't yet count) shipped in `6773484`, rolled out
+>   across the catalog in `5c64add`. ~7x scan speedup on
+>   `.load`'d vtabs.
+> - In-memory VFS (`4f83e82`) lands the lever this doc didn't
+>   call out  flat on macOS bench (OS file cache absorbs the
+>   wasi cost) but available opt-in via `SQLITE_WASM_MEMVFS=1`.
+> - Bench numbers in the "Sequencing decision" table predate
+>   the perf push; `PLAN-benchmarks.md` carries the updated
+>   ratios.
+
+
 Comprehensive accounting of what's NOT in the codebase today,
 grouped by category, with honest assessment of whether each gap
 is worth filling.

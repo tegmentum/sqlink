@@ -222,6 +222,78 @@ mistakes:
   inline. The wasm component overhead vanishes; the dependency
   tax does not.
 
+## Vtab fetch_batch (perf-critical scans)
+
+The WIT `vtab.fetch-batch` method (shipped commit `6773484`)
+collapses N WIT crossings into one per ~64 rows for read-heavy
+table-scan workloads against `.load`'d vtab extensions. Any
+read-only vtab whose cursor has the full result set in memory
+at `xFilter` time should opt in  the gain is typically
+5-10x on scans, and the cost is ~20 LOC.
+
+### When to enable
+
+Set `batched: true` in the vtab's `VtabSpec` if **all** of:
+- The cursor is fully materialized when `xFilter` returns (or
+  shortly after  the buffer can keep filling). `generate_series`
+  builds rows on demand and `vec0` pre-computes the kNN result;
+  both qualify.
+- Rows aren't lazily computed across xNext calls (don't enable
+  for vtabs that stream from a slow source).
+- The schema's column count is bounded (every fetched row
+  carries every column; HIDDEN columns use `SqlValue::Null`).
+
+Leave `batched: false` (the default) if the vtab's row
+production is genuinely streaming  the host transparently falls
+back to the per-row `xNext/xColumn/xRowid` path.
+
+### Implementation shape
+
+The host's cli trampoline calls `fetch_batch(vtab_id, cursor_id,
+max_rows)` once per block; the extension reads up to `max_rows`
+rows from its cursor buffer and returns a `Vec<VtabRow>` (one
+entry per row, carrying `rowid` plus every column in declared-
+schema order). Returning Ok(empty) signals EOF.
+
+Canonical template (lifted from `series`):
+
+```rust
+fn fetch_batch(
+    _vtab_id: u64,
+    cursor_id: u64,
+    max_rows: u32,
+) -> Result<Vec<VtabRow>, String> {
+    CURSORS.with(|m| {
+        let mut cursors = m.borrow_mut();
+        let Some(c) = cursors.get_mut(&cursor_id) else {
+            return Err("<vtab>: cursor not open".to_string());
+        };
+        let mut out: Vec<VtabRow> = Vec::with_capacity(max_rows as usize);
+        while out.len() < max_rows as usize && c.idx < c.values.len() {
+            out.push(VtabRow {
+                rowid: (c.idx + 1) as i64,
+                columns: alloc::vec![
+                    // …columns in declared-schema order…
+                ],
+            });
+            c.idx += 1;
+        }
+        Ok(out)
+    })
+}
+```
+
+### Don'ts
+
+- Don't fetch from a slow source inside fetch_batch  the host
+  expects N rows to materialize in roughly N memcpy worth of
+  time. If the data takes per-row work, leave batched off.
+- Don't return more than `max_rows` rows  the host doesn't
+  truncate; sqlite will see the extras as part of the next
+  position-advance.
+- Don't bypass the schema's column order; sqlite addresses
+  cells by index.
+
 ## Adding to this catalog
 
 When a new ship doesn't fit any shape, write a new entry HERE

@@ -43,6 +43,8 @@ precompiled once via `make precompile-cli` and loaded via
 `Component::deserialize_file`. Run `make bench` for the first,
 `make bench CWASM=1` for the second.
 
+### Original snapshot (pre-perf-push, kept for context)
+
 | Workload | Size | native | .wasm | ratio | .cwasm | ratio |
 |---|---:|---:|---:|---:|---:|---:|
 | `insert` | 1,000 | 7 ms | 628 ms | 79.5x | 53 ms | **7.5x** |
@@ -59,6 +61,62 @@ precompiled once via `make precompile-cli` and loaded via
 | `join` | 1,000 | 10 ms | 442 ms | 47.3x | 76 ms | **7.9x** |
 | `join` | 10,000 | 21 ms | 468 ms | 22.8x | 115 ms | **5.6x** |
 | `join` | 100,000 | 129 ms | 899 ms | 7.0x | 569 ms | **4.4x** |
+
+### Post-perf-push snapshot (current; .cwasm only)
+
+After the six perf rounds shipped in commits `21c941d` (pragma
+defaults + sqlite flags), `14a0baf` (pread + LTO + memory_reservation),
+`026f350` (256 MB page cache), `1325026` (SIMD + vec0 kernels),
+`d62ef61` (fuel-disabled engine for the cli), and `6773484`
+(WIT vtab `fetch_batch`):
+
+| Workload | Size | native | wasm | ratio | drop vs pre-push |
+|---|---:|---:|---:|---:|---:|
+| `insert` | 1,000 | 7 ms | 41 ms | **6.2x** | 7.5x → 6.2x |
+| `insert` | 10,000 | 18 ms | 72 ms | **3.9x** | 5.2x → 3.9x |
+| `insert` | 100,000 | 135 ms | 396 ms | **2.9x** | 4.1x → 2.9x |
+| `read` | 1,000 | 15 ms | 86 ms | **5.6x** | 6.5x → 5.6x |
+| `read` | 10,000 | 105 ms | 517 ms | **4.9x** | 6.2x → 4.9x |
+| `read` | 100,000 | 1.06 s | 4.89 s | **4.6x** | 5.8x → 4.6x |
+| `agg` | 1,000 | 8 ms | 38 ms | **5.0x** | 5.5x → 5.0x |
+| `agg` | 10,000 | 21 ms | 74 ms | **3.6x** | 4.5x → 3.6x |
+| `agg` | 100,000 | 153 ms | 415 ms | **2.7x** | 3.9x → 2.7x |
+| `join` | 1,000 | 9 ms | 51 ms | **5.7x** | 7.9x → 5.7x |
+| `join` | 10,000 | 19 ms | 79 ms | **4.1x** | 5.6x → 4.1x |
+| `join` | 100,000 | 125 ms | 377 ms | **3.0x** | 4.4x → 3.0x |
+
+### Batched vtab scan (new column)
+
+The WIT vtab `fetch_batch` path (shipped `6773484`) collapses N
+WIT crossings to N/batch_size crossings. For series (the
+canonical proof port) at 100k rows:
+
+| Path | Time |
+|---|---:|
+| per-row WIT (xColumn + xRowid + xNext + xEof per row × N rows) | 367 ms |
+| `fetch_batch` (one crossing per 64 rows) | **49 ms** |
+
+→ **7.3x speedup** on the WIT-loaded vtab scan; embed-path vtabs
+were already this fast.
+
+Phase A of `PLAN-perf-rollout.md` rolled this across 8 more
+read-only vtabs (`listargs`, `vec_each`, `completion`,
+`text-utils`, `time-series`, `trie`, `pmtiles`, `vec0`); the
+proof bench (`prefixes` over a 10000-char input) showed 238 →
+210 ms (~12%) where the workload's group_concat aggregation
+dominates the total time.
+
+### Best ratios this run hit
+
+- `agg` 100k at **2.7x** native — closest the catalog has gotten
+- `insert` 100k at **2.9x**
+- `join` 100k at **3.0x**
+- `read` 100k at **4.6x** — bottleneck is now sqlite-compiled-to-
+  wasm vs sqlite-native plus the wasi shim cost per page; the
+  memvfs experiment (commit `4f83e82`) confirmed those calls are
+  already absorbed by the OS file cache on macOS, so further
+  read-side wins need either lower-level wasmtime changes or a
+  workload that pushes past the OS cache.
 
 ## Precompilation  the big startup win
 

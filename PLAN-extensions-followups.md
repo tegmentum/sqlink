@@ -1,5 +1,20 @@
 # Plan: extension catalog follow-ups
 
+> **Cross-cut status (post-perf-push 2026-06):**
+> Every phase E1-E10 was already marked shipped below. The
+> perf-rollout adds:
+> - Vtab-mutating contract (`b334c43`) covers what this doc
+>   listed as "out of scope" under in-place updates.
+> - v2 vtab slots (xShadowName / xIntegrity / xFindFunction
+>   via `978190e`).
+> - WIT vtab `fetch_batch` (`6773484`) + rollout to 8 read-only
+>   vtabs (`5c64add`).
+> - Stats embed port  the 14-aggregate batch deferred in
+>   earlier phases now ships in commit `049aafc`.
+> Everything in the body remains accurate; the perf-push items
+> are documented in `PLAN-perf-rollout.md` and `PLAN-benchmarks.md`.
+
+
 > **Phase E1 status: shipped.** bloom + hyperloglog +
 > count_min + closure (graph) + trie (prefix) all delivered.
 > 11 native unit tests pass; end-to-end smoke verifies each

@@ -1,5 +1,17 @@
 # Plan: vector-search follow-ups for vec0
 
+> **Status update (post-perf-push 2026-06):**
+> - Phases 1-3 marked shipped below; Phase 4 shipped 3 of 4
+>   (wal2 dropped). The perf-rollout adds:
+>   - SIMD kernels for L2 + cosine (commit `1325026`) using
+>     `core::arch::wasm32::f32x4_*` intrinsics; 20k × dim-384
+>     brute-kNN lands at ~37 ms steady-state.
+>   - `vec0` `fetch_batch` (commit `5c64add`)  one WIT
+>     crossing per ~64 scored rows on the read path.
+>   - Embed-path port (commit `a4ce989`) for compile-time-pinned
+>     kNN.
+> Body of this doc remains as the historical record.
+
 > **Phase 1 status: shipped.** Polling-based online insert
 > wired into both IVF and HNSW backends; vec0_refresh /
 > vec0_delete scalars exposed; host scalar dispatch now routes
