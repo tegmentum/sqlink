@@ -1,0 +1,36 @@
+[package]
+name = "nanoid-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+URL-safe short IDs. Lighter than UUID for ID columns that just
+need uniqueness, not 128-bit collision resistance.
+
+Functions:
+  nanoid()                  TEXT  21 chars, URL-safe alphabet
+  nanoid_n(len)             TEXT  custom length, default alphabet
+  nanoid_alpha(len, alpha)  TEXT  custom alphabet
+
+PLAN-extensions-and-handlers.md #4.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: the parent workspace does not try to
+# build this crate natively. The cli embed-bundle wiring is a
+# separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# The `nanoid` crate uses a non-runtime alphabet API (literal-only
+# macro arg for size). We use the function form for runtime size +
+# do alphabet sampling ourselves through `getrandom` for the custom
+# variant. The `getrandom` `js` feature is harmless on wasi-p2
+# (defaults to wasi_snapshot_preview1::random_get).
+nanoid = "0.4"
+getrandom = { version = "0.2", default-features = false, features = ["js"] }

@@ -1,0 +1,14 @@
+# nanoid extension smoke. Generators are nondet  pin the format
+# (length + alphabet), not the bytes. Single-char alphabet (`'a'`)
+# IS deterministic; the error row is the empty-alphabet rejection.
+1
+1
+1
+1
+1
+1
+1
+1
+aaaaa
+Error: nanoid_alpha: alphabet must be non-empty
+1000
