@@ -1,0 +1,27 @@
+# Argon2id round-trip: correct password verifies
+1
+# Wrong password rejects
+0
+# PHC prefix
+$argon2id$
+# bcrypt round-trip: correct
+1
+# Wrong rejects
+0
+# bcrypt cost=4 prefix
+$2b$04$
+# PBKDF2-SHA256: password / salt / 4096 / 32 widely-cross-checked vector
+C5E478D59288C841AA530DB6845C4C8D962893A001CE4E11A4963873AA98134A
+# pbkdf2_sha512 returned the requested length (64 bytes)
+64
+# scrypt round-trip
+1
+0
+# scrypt PHC prefix
+$scrypt$
+# bad-PHC verify returns 0 (no error)
+0
+0
+0
+# version non-empty
+1

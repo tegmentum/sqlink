@@ -1,0 +1,63 @@
+[package]
+name = "pwhash-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Password hashing scalars: Argon2id, bcrypt, PBKDF2-HMAC-SHA256/512,
+and scrypt. Pairs with the `jwt` extension and the auth wasm
+handler  jwt can verify a signed token, this can verify a user's
+password against a stored hash.
+
+Function surface (PLAN-more-extensions.md  1):
+  argon2_hash(password, [params_json])    -> text (PHC string)
+  argon2_verify(password, phc)            -> integer (0/1)
+  bcrypt_hash(password, [cost])           -> text  (cost default 12)
+  bcrypt_verify(password, hash)           -> integer (0/1)
+  pbkdf2_sha256(password, salt, iter, dklen) -> blob
+  pbkdf2_sha512(password, salt, iter, dklen) -> blob
+  scrypt_hash(password, [params_json])    -> text (PHC string)
+  scrypt_verify(password, phc)            -> integer (0/1)
+  pwhash_version()                        -> text
+
+`params_json` is `{"m":..,"t":..,"p":..}` for Argon2 and
+`{"ln":..,"r":..,"p":..,"len":..}` for scrypt. Unspecified fields
+fall back to OWASP-recommended defaults.
+
+PBKDF2 returns the raw derived key as a BLOB (no PHC envelope)
+PBKDF2 is the only one of the four with a stable raw-bytes contract
+(RFC 6070 test vectors). Storing it is the caller's call (salt +
+iter must travel alongside).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Argon2id PHC hashing. password-hash 0.5 is the PHC-string envelope
+# shared by argon2 + scrypt.
+argon2 = { version = "0.5", default-features = false, features = ["alloc", "password-hash"] }
+scrypt = { version = "0.11", default-features = false, features = ["simple"] }
+# `getrandom` (transitively `rand_core/getrandom + os` is what
+# exposes `password_hash::rand_core::OsRng`, which we use to
+# generate the per-hash salts. Enables wasi:random under the
+# preview1 adapter for wasm32-wasip2.
+password-hash = { version = "0.5", default-features = false, features = ["alloc", "rand_core", "getrandom"] }
+# bcrypt 0.5 PHC envelope is custom; bcrypt 0.16 owns its
+# format helpers so we don't need password-hash for it.
+bcrypt = { version = "0.16", default-features = false, features = ["std"] }
+# PBKDF2 raw-bytes derivation. We use the lower-level
+# `pbkdf2_hmac` function (no PHC envelope) because the plan asks
+# for a BLOB matching RFC 6070's published bytes.
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+sha2 = { version = "0.10", default-features = false }
+hmac = "0.12"
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
