@@ -1,0 +1,54 @@
+[package]
+name = "asn1-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ASN.1 / DER encode + decode scalars for SQL.
+
+The wire format underneath X.509 certs, PKCS keys, S/MIME, LDAP,
+SNMP. Pairs with the soon-to-land `tls-cert` extension (which
+decodes specific DER structures) and with the existing `jwt`
+extension (RS256 keys are PKCS#1 / PKCS#8 = DER inside).
+
+Functions:
+  asn1_decode(der_blob)            -> text  (JSON tree representation)
+  asn1_encode(json_tree)           -> blob  (DER-encoded)
+  asn1_oid_name(oid_dotted)        -> text  (curated lookup)
+  asn1_oid_for(name)               -> text  (reverse lookup)
+  asn1_is_valid_der(blob)          -> integer
+  asn1_type_tag(der_blob)          -> integer (first byte)
+  asn1_pretty(der_blob)            -> text   (indented JSON)
+  asn1_version()                   -> text
+
+JSON tree shape: each node is a `{type, value?, children?, tag?,
+class?, constructed?}` object. SEQUENCE / SET use `children`;
+primitives use `value`. DER only (no BER / CER).
+
+See PLAN-more-extensions-4.md  7.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust DER encoder/decoder. Pulls in num-bigint + time but
+# both compile cleanly for wasm32-wasip2.
+simple_asn1 = "0.6"
+# JSON tree representation is serde_json::Value.
+serde_json = "1"
+# Hex output for opaque primitive bytes (BIT STRING / OCTET STRING
+# / UNKNOWN content). Avoids spilling binary into JSON strings.
+hex = "0.4"
+# simple_asn1 surfaces time::PrimitiveDateTime in UTCTime /
+# GeneralizedTime variants; we re-encode dates without pulling in
+# its parsing features (saves a chunk of binary).
+time = { version = "0.3", default-features = false }
+
