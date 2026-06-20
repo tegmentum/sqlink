@@ -1,0 +1,57 @@
+[package]
+name = "s2-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Google S2 geometry library, exposed as i64 cell ids. Different
+(and historically older) discrete global grid than H3 — S2 is the
+go-to for region queries + large-scale coverings; H3 is the
+go-to for hexagonal aggregation / neighbor lookups.
+
+Scalars:
+  s2_latlng_to_cell(lat, lng, level)  -> INTEGER (S2CellId as i64)
+  s2_cell_to_latlng(cell)             -> TEXT 'lat,lng'
+  s2_cell_to_token(cell)              -> TEXT (hex token, trailing 0s stripped)
+  s2_token_to_cell(token)             -> INTEGER
+  s2_cell_level(cell)                 -> INTEGER (0-30)
+  s2_cell_parent(cell, level)         -> INTEGER
+  s2_cell_children(cell)              -> TEXT (JSON list of 4 cells)
+  s2_cell_is_valid(cell)              -> INTEGER (0 or 1)
+  s2_covering(json_rect, max_cells)   -> TEXT (JSON list of cells)
+
+Backed by the `s2` crate (yjh0502/rust-s2, Apache-2.0) — the
+most-maintained pure-rust port; no C deps, clean wasm32-wasip2
+build.
+
+S2 cell ids fit in u64. The face occupies the top 3 bits
+[61..63], so faces 4 and 5 set the sign bit when reinterpreted
+as i64 — meaning some valid cells render as negative integers
+in SQL. The bitcast is lossless either way; if a caller needs an
+unsigned representation, round-trip through the hex token.
+
+Polygon-shaped coverings are deferred: the s2 crate's loop/polygon
+types are pending. v1 ships rect coverings — accept either
+{lat_lo, lng_lo, lat_hi, lng_hi} or a list of {lat, lng} points
+whose bounding box defines the covering region.
+
+Per PLAN-extensions-and-handlers.md #9.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace so the parent workspace does not try to
+# build this crate natively. The parent workspace builds for the
+# host triple; this crate is wasm-only.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# `s2` pulls bigdecimal + num-bigint for arbitrary-precision math
+# behind a default feature; we don't need them for cell math, so
+# default-features = false drops ~200 KB of dead code.
+s2 = { version = "0.0.13", default-features = false }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

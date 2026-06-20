@@ -1,0 +1,25 @@
+# Acceptance #1: level-12 cell for SF (37.7749, -122.4194) and
+# its level round-trip. The cell's i64 bit pattern is a
+# deterministic function of the S2 cube projection; the sign bit
+# is set here because face=4 lands in bits [61..63] (so this
+# face's cells render as negative i64 — see Cargo.toml).
+-9185794508988612608
+12
+# is_valid for a real cell is 1; zero is invalid.
+1
+0
+# Token round-trip: cell -> token -> cell preserves the bit pattern.
+-9185794508988612608
+1
+# Acceptance #2: cell_children returns 4 cells; children are at
+# parent's level + 1.
+4
+13
+# Parent at level 5 has level 5.
+5
+# Acceptance #3: covering of ~1 km box returns <= max_cells. The
+# RegionCoverer is allowed to return fewer cells when the region
+# fits in one. Both rect-object and point-list inputs honor the
+# cap.
+1
+1
