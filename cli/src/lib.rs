@@ -853,6 +853,21 @@ impl RunGuest for CliCommand {
             Err(e) => eprintln!("init_wasivfs failed: {} ({})", e.message, e.code),
         }
 
+        // Register memvfs alongside. SQLITE_WASM_MEMVFS=1 in env
+        // makes it the DEFAULT (every NULL-vfs open routes through
+        // RAM-backed I/O); unset / 0 leaves memvfs available by
+        // name only so callers can opt in via `vfs=memvfs` in the
+        // URI without changing the default-VFS contract for
+        // existing tests.
+        let memvfs_default = std::env::var("SQLITE_WASM_MEMVFS")
+            .ok()
+            .map(|s| s == "1" || s.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        match db::init_memvfs(memvfs_default) {
+            Ok(()) => {}
+            Err(e) => eprintln!("init_memvfs failed: {} ({})", e.message, e.code),
+        }
+
         // VFS register can happen after initialize  it's not
         // boot-order-constrained the way CONFIG_* are. Registered
         // under the name "tvm-mem", NOT as default, so existing

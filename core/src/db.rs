@@ -237,6 +237,35 @@ pub fn init_wasivfs() -> Result<(), Error> {
     Ok(())
 }
 
+/// Register the in-memory VFS ("memvfs"). The whole file lives in
+/// linear memory; xRead / xWrite are memcpy; xSync flushes the
+/// buffer back to the underlying fd. Single wasi call per file
+/// lifetime instead of per page.
+///
+/// `make_default = 1` makes every subsequent sqlite3_open_v2 NULL-
+/// vfs use memvfs. `0` registers it without changing the default
+/// so callers can opt in via the vfs= arg.
+///
+/// v1 limitation: WAL mode not supported (no xShm* methods).
+/// Connections that need WAL should explicitly open against
+/// "wasivfs".
+#[cfg(target_arch = "wasm32")]
+pub fn init_memvfs(make_default: bool) -> Result<(), Error> {
+    extern "C" {
+        fn sqlite3_memvfs_register(make_default: c_int) -> c_int;
+    }
+    let rc = unsafe { sqlite3_memvfs_register(if make_default { 1 } else { 0 }) };
+    if rc != ffi::SQLITE_OK {
+        return Err(standalone_error(rc, "sqlite3_memvfs_register"));
+    }
+    Ok(())
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn init_memvfs(_make_default: bool) -> Result<(), Error> {
+    Ok(())
+}
+
 /// C trampoline invoked by sqlite3_trace_v2 for `set_stmt_trace`.
 /// Decodes the boxed FnMut from `ctx` and the expanded SQL from `p`.
 unsafe extern "C" fn stmt_trace_trampoline(

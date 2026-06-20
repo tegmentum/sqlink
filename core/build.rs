@@ -28,12 +28,15 @@ fn main() {
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let workspace_root = manifest_dir.parent().expect("core has a parent dir");
     let vfs_src = workspace_root.join("src/vfs/vfs_wasi.c");
+    let memvfs_src = workspace_root.join("src/vfs/vfs_memvfs.c");
 
     println!("cargo:rerun-if-changed={}", vfs_src.display());
+    println!("cargo:rerun-if-changed={}", memvfs_src.display());
 
     let mut build = cc::Build::new();
     build
         .file(&vfs_src)
+        .file(&memvfs_src)
         // suppress unused-function warnings on the bundled file
         .flag_if_supported("-Wno-unused-function")
         .flag_if_supported("-Wno-unused-variable")
