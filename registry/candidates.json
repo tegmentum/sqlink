@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T18:58:41Z",
-  "commit_sha": "90f703fe73f0d3d79d1f67d64e9834f907569da2",
+  "updated": "2026-06-20T20:14:18Z",
+  "commit_sha": "75dff5fd82dd9fddb8eb4006531b69d39b6e743d",
   "candidates": [
     {
       "name": "flatbuffers",
@@ -9,8 +9,8 @@
       "description": "FlatBuffers binary codec (Google).",
       "upstream_url": "https://flatbuffers.dev/",
       "track": "codec",
-      "status": "planned",
-      "reason": null,
+      "status": "deferred",
+      "reason": "Schema-driven codec; SQL surface design requires a real consumer to pin the right shape (per-message generated table? generic JSON pivot? schema-as-SQL-blob?). Defer until ask.",
       "proposed_crate": "flatbuffers 24",
       "notes": "Same schema problem as protobuf."
     },
@@ -20,8 +20,8 @@
       "description": "Protocol Buffers encode/decode (given schema).",
       "upstream_url": "https://protobuf.dev/programming-guides/encoding/",
       "track": "codec",
-      "status": "planned",
-      "reason": null,
+      "status": "deferred",
+      "reason": "Schema-driven codec; SQL surface design requires a real consumer to pin the right shape (per-message generated table? generic JSON pivot? schema-as-SQL-blob?). Defer until ask.",
       "proposed_crate": "prost 0.13",
       "notes": "Schema interface is the hard part; flatbuffers + thrift have the same shape."
     },
@@ -31,8 +31,8 @@
       "description": "Apache Thrift binary codec.",
       "upstream_url": "https://thrift.apache.org/",
       "track": "codec",
-      "status": "planned",
-      "reason": null,
+      "status": "deferred",
+      "reason": "Schema-driven codec; SQL surface design requires a real consumer to pin the right shape (per-message generated table? generic JSON pivot? schema-as-SQL-blob?). Defer until ask.",
       "proposed_crate": "thrift 0.17",
       "notes": "Schema problem; less common than protobuf."
     },
@@ -53,8 +53,8 @@
       "description": "MathML parsing.",
       "upstream_url": "https://www.w3.org/Math/",
       "track": "document",
-      "status": "planned",
-      "reason": null,
+      "status": "blocked",
+      "reason": "mathml-rs 0.1 does not exist on crates.io. MathML parsing via roll-our-own quick-xml is doable but niche  defer until a consumer asks.",
       "proposed_crate": "mathml-rs 0.1",
       "notes": "Niche; specialized for scientific document workflows."
     },
@@ -64,8 +64,8 @@
       "description": "PROJ-style coordinate reference system transformations.",
       "upstream_url": "https://proj.org/",
       "track": "geo",
-      "status": "planned",
-      "reason": null,
+      "status": "blocked",
+      "reason": "proj 0.27 wraps the PROJ C library. PROJ does not cross-compile cleanly to wasm32-wasip2 via the wasi-sdk clang  defer until a pure-rust reprojection library covers the workflow.",
       "proposed_crate": "proj 0.27 (C dep)",
       "notes": "Heavy C dependency; defer until needed."
     },
@@ -75,8 +75,8 @@
       "description": "Standalone RSA-style bignum modexp + key gen (separate from `rsa` crate).",
       "upstream_url": "https://datatracker.ietf.org/doc/html/rfc8017",
       "track": "math",
-      "status": "planned",
-      "reason": null,
+      "status": "skipped",
+      "reason": "Defunct: the rsa extension (rsa 0.9 via num-bigint internally) shipped in round 2, covering key generation + sign/verify/encrypt/decrypt. A separate bignum-backed implementation no longer adds capability.",
       "proposed_crate": "num-bigint 0.4 + custom",
       "notes": "bignum has modpow; this would add a key-gen surface specifically."
     },
@@ -97,8 +97,8 @@
       "description": "DjVu document metadata.",
       "upstream_url": "http://djvu.org/",
       "track": "media",
-      "status": "planned",
-      "reason": null,
+      "status": "blocked",
+      "reason": "No actively-maintained pure-rust DjVu crate. The historical option is to port djvulibre header parsing  out of scope without a consumer.",
       "proposed_crate": "no crate yet  port djvulibre header",
       "notes": "Niche; defer until a consumer asks."
     },

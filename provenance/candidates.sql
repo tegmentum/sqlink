@@ -85,7 +85,32 @@ VALUES
                      'document', 'mathml-rs 0.1', unixepoch(),
                      'Niche; specialized for scientific document workflows.');
 
+-- ====== Survey decisions (2026-06-20) ======
+-- Items the user explicitly declined to pursue, with reasons.
+-- Future sessions can clear status='blocked' + reason if the
+-- ecosystem changes or a consumer surfaces.
+
+UPDATE plugin_candidate SET status = 'deferred',
+       reason = 'Schema-driven codec; SQL surface design requires a real consumer to pin the right shape (per-message generated table? generic JSON pivot? schema-as-SQL-blob?). Defer until ask.'
+ WHERE name IN ('protobuf', 'flatbuffers', 'thrift');
+
+UPDATE plugin_candidate SET status = 'blocked',
+       reason = 'proj 0.27 wraps the PROJ C library. PROJ does not cross-compile cleanly to wasm32-wasip2 via the wasi-sdk clang  defer until a pure-rust reprojection library covers the workflow.'
+ WHERE name = 'proj';
+
+UPDATE plugin_candidate SET status = 'blocked',
+       reason = 'No actively-maintained pure-rust DjVu crate. The historical option is to port djvulibre header parsing  out of scope without a consumer.'
+ WHERE name = 'djvu';
+
+UPDATE plugin_candidate SET status = 'blocked',
+       reason = 'mathml-rs 0.1 does not exist on crates.io. MathML parsing via roll-our-own quick-xml is doable but niche  defer until a consumer asks.'
+ WHERE name = 'mathml';
+
+UPDATE plugin_candidate SET status = 'skipped',
+       reason = 'Defunct: the rsa extension (rsa 0.9 via num-bigint internally) shipped in round 2, covering key generation + sign/verify/encrypt/decrypt. A separate bignum-backed implementation no longer adds capability.'
+ WHERE name = 'rsa-bignum';
+
 COMMIT;
 
 SELECT 'seeded ' || COUNT(*) || ' candidates' FROM plugin_candidate;
-SELECT track, COUNT(*) FROM plugin_candidate GROUP BY track ORDER BY track;
+SELECT track, status, COUNT(*) FROM plugin_candidate GROUP BY track, status ORDER BY track, status;
