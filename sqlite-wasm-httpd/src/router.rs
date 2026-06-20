@@ -188,11 +188,12 @@ pub fn execute(
     query: Option<&str>,
     body: &[u8],
     peer: SocketAddr,
+    headers: &[(String, String)],
     wasm: Option<&dyn WasmDispatcher>,
 ) -> Response<Full<Bytes>> {
     match matched.kind {
         RouteKind::Static => execute_static(matched),
-        RouteKind::Wasm => execute_wasm(matched, method, path, query, body, peer, wasm),
+        RouteKind::Wasm => execute_wasm(matched, method, path, query, body, peer, headers, wasm),
         RouteKind::Sql => execute_sql(conn, matched, method, path, query, body, peer),
     }
 }
@@ -233,6 +234,7 @@ fn execute_wasm(
     query: Option<&str>,
     body: &[u8],
     peer: SocketAddr,
+    headers: &[(String, String)],
     wasm: Option<&dyn WasmDispatcher>,
 ) -> Response<Full<Bytes>> {
     let Some(dispatcher) = wasm else {
@@ -254,11 +256,16 @@ fn execute_wasm(
         Ok(s) => serde_json::json!({ "text": s }),
         Err(_) => serde_json::json!({ "bytes_hex": hex_of(body) }),
     };
+    let mut headers_obj = serde_json::Map::with_capacity(headers.len());
+    for (k, v) in headers {
+        headers_obj.insert(k.clone(), serde_json::Value::String(v.clone()));
+    }
     let req = serde_json::json!({
         "method": method,
         "path": path,
         "query": query,
         "remote": peer.to_string(),
+        "headers": serde_json::Value::Object(headers_obj),
         "body": body_field,
     });
     let payload = req.to_string().into_bytes();

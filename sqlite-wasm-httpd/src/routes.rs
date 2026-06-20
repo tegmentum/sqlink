@@ -78,6 +78,20 @@ pub async fn handle(
             }
         };
         if let Some(m) = matched {
+            // Snapshot the headers BEFORE read_body consumes the
+            // request. Lowercase keys (HTTP/2 wire convention);
+            // multi-value headers keep their last occurrence  the
+            // common case for Authorization / Content-Type / etc.
+            // Array-valued shape (e.g. Set-Cookie) is rare on the
+            // request side; v1 documents last-wins, callers needing
+            // all values can use the SQL route or hit the dispatcher
+            // upgrade in a future revision.
+            let mut headers = Vec::with_capacity(req.headers().len());
+            for (k, v) in req.headers() {
+                if let Ok(s) = v.to_str() {
+                    headers.push((k.as_str().to_string(), s.to_string()));
+                }
+            }
             let body_bytes = match read_body(req).await {
                 Ok(b) => b,
                 Err(e) => return Ok(err_response(StatusCode::BAD_REQUEST, &e.to_string())),
@@ -90,6 +104,7 @@ pub async fn handle(
                 query.as_deref(),
                 &body_bytes,
                 peer,
+                &headers,
                 wasm.as_deref().map(|d| d as &dyn router::WasmDispatcher),
             ));
         }
