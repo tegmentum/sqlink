@@ -1,0 +1,38 @@
+# mac_is_valid across formats
+1
+1
+1
+1
+0
+0
+0
+# mac_normalize: lowercase colon
+aa:bb:cc:dd:ee:ff
+aa:bb:cc:dd:ee:ff
+aa:bb:cc:dd:ee:ff
+<NULL>
+# mac_format styles
+aa:bb:cc:dd:ee:ff
+AA-BB-CC-DD-EE-FF
+aabb.ccdd.eeff
+aabbccddeeff
+aa:bb:cc:dd:ee:ff
+# mac_oui (uppercase, no separator)
+AABBCC
+00000C
+# mac_vendor: Cisco for OUI 00:00:0C, NULL for unassigned
+Cisco Systems, Inc
+<NULL>
+# I/G + U/L bit checks
+1
+0
+1
+1
+0
+1
+# mac_random: each call independent, always valid + LAA unicast
+1
+0
+1
+# version stamp non-empty
+1

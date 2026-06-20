@@ -1,0 +1,46 @@
+[package]
+name = "mac-oui-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+MAC address parsing + IEEE OUI vendor lookup.
+
+Common need for any network-analytics SQL workload. The vendor side
+of this hits the bundled MA-L slice of the IEEE OUI registry
+(~30K vendors, fetched from https://standards-oui.ieee.org/oui/oui.csv
+and compressed by build.rs into a sorted `PREFIX|VENDOR\n` table).
+The raw CSV is ~3.7 MB; the compressed in-binary table is ~1 MB
+once vendor strings are trimmed of trailing whitespace and the
+"Registry,Assignment" columns are dropped.
+
+Function surface (PLAN-more-extensions-2.md - 8):
+  mac_is_valid(s)         -> INTEGER   1 if `s` parses as 6 hex octets
+  mac_normalize(s)        -> TEXT      lowercase colon-separated
+  mac_format(s, [style])  -> TEXT      style: 'colon' (default), 'dash', 'dot', 'bare'
+  mac_oui(s)              -> TEXT      "AABBCC" (3-octet uppercase, no separator)
+  mac_vendor(s)           -> TEXT      vendor from IEEE OUI db, NULL if unknown
+  mac_is_unicast(s)       -> INTEGER   1 when bit 0 of octet 0 is 0 (I/G bit)
+  mac_is_universal(s)     -> INTEGER   1 when bit 1 of octet 0 is 0 (U/L bit)
+  mac_random()            -> TEXT      random LAA address (U/L=1, I/G=0)
+  mac_oui_version()       -> TEXT      crate version + bundled OUI source
+
+Parse path is shared with the legacy `mac` extension: filter
+ASCII hex digits from the input, require exactly 12 of them,
+decode to a [u8;6]. Accepts colon, dash, Cisco-dot, and bare-hex
+formats interchangeably.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# `getrandom` exposes wasi:random under the preview1 adapter for
+# wasm32-wasip2. We use it for mac_random()'s LAA bytes.
+getrandom = { version = "0.2", features = ["js"] }
