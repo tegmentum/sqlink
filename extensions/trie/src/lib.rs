@@ -145,7 +145,7 @@ mod wasm_export {
                     name: "trie".to_string(),
                     eponymous: false,
                     mutable: false,
-                    batched: false,
+                    batched: true,
                 }],
                 has_authorizer: false,
                 has_update_hook: false,
@@ -347,10 +347,28 @@ mod wasm_export {
     
         fn fetch_batch(
             _vtab_id: u64,
-            _cursor_id: u64,
-            _max_rows: u32,
+            cursor_id: u64,
+            max_rows: u32,
         ) -> Result<Vec<VtabRow>, String> {
-            Err("fetch_batch: not implemented; host falls back to per-row".to_string())
+            CURSORS.with(|m| {
+                let mut cursors = m.borrow_mut();
+                let Some(c) = cursors.get_mut(&cursor_id) else {
+                    return Err("trie: cursor not open".to_string());
+                };
+                let mut out: Vec<VtabRow> = Vec::with_capacity(max_rows as usize);
+                while out.len() < max_rows as usize && c.idx < c.matches.len() {
+                    let w = c.matches[c.idx].clone();
+                    out.push(VtabRow {
+                        rowid: (c.idx + 1) as i64,
+                        columns: alloc::vec![
+                            SqlValue::Text(w), // COL_WORD
+                            SqlValue::Null,    // COL_PREFIX (HIDDEN)
+                        ],
+                    });
+                    c.idx += 1;
+                }
+                Ok(out)
+            })
         }
 }
 
