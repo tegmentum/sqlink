@@ -1,0 +1,32 @@
+# Bitcoin wiki test vector: compressed pubkey from private key.
+0250863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B2352
+# Canonical P2PKH base58check address for that pubkey.
+1PMycacnJaSqwwJqjawXBErnLsZ7RkXUAs
+# Uncompressed expansion (0x04 || x || y); the wiki publishes both.
+0450863AD64A87AE8A2FE83C1AF1A8403CB53F53E486D8511DAD8A04887E5B23522CD470243453A299FA9E77237716103ABC11A1DF38855ED6F2EE187E9C582BA6
+# RFC 6979 deterministic ECDSA  bit-exact signature for SHA-256("Hello, world!").
+2C1F0800DD2832327703C54BB3F7F43CDE02D7CEC59DBB8E7732CE99C47E2EE6659770005308E5F4F87D90C90329FE1A0E448B4B257BC9C5107514CF4054CA87
+# Verify round-trip: pub + msg + sig -> 1.
+1
+# Tampered message: same sig, different msg -> 0.
+0
+# Wrong pubkey: different signer's pub against original msg/sig -> 0.
+0
+# Recovery round-trip: recover(msg, sign_rec(priv, msg)) == pub_from_priv(priv).
+1
+# Recoverable signature length: 64 (r||s) + 1 (recid) = 65 bytes.
+65
+# EIP-155 worked example: priv = 0x46*32 -> 0x9d8a62f656a8d1615c1294fd71e9cfb3e4855a4f.
+0x9d8a62f656a8d1615c1294fd71e9cfb3e4855a4f
+# Wrong-length key  NULL (not error).
+<NULL>
+# 1-byte pubkey  NULL.
+<NULL>
+# 1-byte pubkey for P2PKH  NULL.
+<NULL>
+# NULL  NULL.
+<NULL>
+# Keypair shape: 32 priv || 33 compressed pub = 65 bytes.
+65
+# Version is non-empty.
+1

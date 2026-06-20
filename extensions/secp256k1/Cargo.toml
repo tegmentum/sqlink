@@ -1,0 +1,90 @@
+[package]
+name = "secp256k1-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+secp256k1 ECDSA + signature recovery for SQL  the Bitcoin /
+Ethereum key curve, SECG SEC 2 (also called K-256). Sister to
+`jwt` (which has HMAC + EdDSA / Ed25519) and `tls-cert` (which
+has nistp / RSA via x509-parser). The differentiating feature
+relative to those is *signature recovery*: recover the signer's
+public key from a (message, signature) pair, the property the
+Ethereum transaction format relies on.
+
+Function surface (PLAN-more-extensions-5.md #1):
+  secp256k1_keypair()                          -> blob   (64 bytes: 32 priv || 32 pub-x-compressed-prefix-stripped-NO; see lib.rs)
+  secp256k1_pub_from_priv(priv_blob)           -> blob   (33-byte compressed)
+  secp256k1_pub_uncompressed(pub_blob)         -> blob   (65-byte uncompressed)
+  secp256k1_sign(priv_blob, message)           -> blob   (64-byte compact r||s)
+  secp256k1_sign_recoverable(priv_blob, msg)   -> blob   (65-byte r||s||recid)
+  secp256k1_verify(pub_blob, msg, sig_blob)    -> integer 0/1
+  secp256k1_recover(msg, sig_recoverable)      -> blob   (33-byte compressed pub)
+  secp256k1_eth_address(pub_blob)              -> text   (0x-prefixed; last 20 bytes of keccak256(uncompressed[1..]))
+  secp256k1_btc_address_p2pkh(pub_blob)        -> text   (base58check P2PKH)
+  secp256k1_version()                          -> text
+
+`message` is a pre-computed 32-byte hash blob (SHA-256 / keccak256).
+The extension does NOT hash for callers  the caller picks the
+right hash per the ecosystem convention.
+
+NULL  NULL on every fn. Wrong-length / malformed keys + signatures
+ NULL (not an error), so the functions compose inside CASE / WHERE
+without needing try/catch shenanigans.
+
+Backed by `k256` 0.13 (the established RustCrypto secp256k1
+implementation; pure Rust, supports recovery + compressed /
+uncompressed SEC1 encoding). Keccak256 (Ethereum address) via
+`sha3` 0.10. RIPEMD-160 + SHA-256 + base58check (Bitcoin
+P2PKH) via `ripemd` 0.1, `sha2` 0.10, `base58` 0.2. Random
+keypair generation routes through `getrandom`  the WASI
+reactor adapter wires that to `wasi:random/random` on the host.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# k256 0.13: pure-rust secp256k1. Pull `ecdsa` (signing +
+# verification) + `arithmetic` (point ops needed for SEC1
+# encoding + recover) + `alloc` (the wasm32-wasip2 environment
+# is no_std-friendly but we need `Vec` everywhere). `std` is
+# enabled because the dependency tree of ecdsa-core uses
+# `std::error::Error` impls; the wasi-p2 target sets
+# `target_os = "wasi"` which is in the `std` family in rustc's
+# view. `precomputed-tables` accelerates scalar mul (the hot
+# path of sign / verify) at a modest binary-size cost.
+k256 = { version = "0.13", features = ["ecdsa", "arithmetic", "alloc", "std", "precomputed-tables"] }
+# Re-export the rand_core RNG trait k256's `random` constructor
+# expects. Aligned with k256 0.13's pinned signature-crate
+# version.
+rand_core = { version = "0.6", features = ["getrandom"] }
+# Keccak256 for Ethereum addresses. The Ethereum convention is
+# 'last 20 bytes of keccak256(uncompressed_pub_xy)'  i.e. drop
+# the 0x04 SEC1 prefix byte first.
+sha3 = { version = "0.10", default-features = false }
+# SHA-256 (the first half of the Bitcoin P2PKH HASH160 pipeline:
+# RIPEMD-160(SHA-256(pubkey))) + the SHA-256 of base58check
+# checksum.
+sha2 = { version = "0.10", default-features = false }
+# RIPEMD-160 for the second half of HASH160.
+ripemd = { version = "0.1", default-features = false }
+# Bitcoin base58check (version byte || payload || 4-byte
+# double-SHA-256 checksum, then base58).
+base58 = "0.2"
+# Lowercase hex output for the Ethereum address.
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+# `getrandom` v0.2 auto-routes to WASI's `random_get` on
+# target_os = "wasi" (which wasm32-wasip2 sets); the WASI
+# reactor adapter wires that to wasi:random/random. No feature
+# flag needed in 0.2  the WASI path is unconditional for the
+# wasm32-wasi* family of targets.
+getrandom = "0.2"
