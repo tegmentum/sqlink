@@ -466,10 +466,53 @@ def build_registry(db_path: Path, repo: Path) -> dict:
     }
 
 
+def build_candidates(db_path: Path, repo: Path) -> dict:
+    """Build the sibling candidates.json from plugin_candidate.
+
+    Same wrapper shape as the registry  version + updated +
+    candidates list  so the registry-serving handler can treat
+    both files identically.
+    """
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    rows = conn.execute(
+        """
+        SELECT name, source, description, upstream_url, track, status,
+               reason, proposed_crate, added_at, notes
+        FROM plugin_candidate
+        ORDER BY track, name
+        """
+    ).fetchall()
+    candidates = []
+    for r in rows:
+        candidates.append(
+            {
+                "name": r["name"],
+                "source": r["source"],
+                "description": r["description"],
+                "upstream_url": r["upstream_url"],
+                "track": r["track"],
+                "status": r["status"],
+                "reason": r["reason"],
+                "proposed_crate": r["proposed_crate"],
+                "notes": r["notes"],
+            }
+        )
+    return {
+        "version": REGISTRY_VERSION,
+        "updated": datetime.datetime.now(datetime.timezone.utc)
+        .replace(microsecond=0)
+        .strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "commit_sha": commit_sha(repo),
+        "candidates": candidates,
+    }
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--db", default="provenance/extensions.db")
     ap.add_argument("--out", default="registry/index.json")
+    ap.add_argument("--candidates-out", default="registry/candidates.json")
     args = ap.parse_args()
 
     here = Path(__file__).resolve().parent
@@ -477,6 +520,11 @@ def main() -> int:
 
     db_path = (repo / args.db) if not Path(args.db).is_absolute() else Path(args.db)
     out_path = (repo / args.out) if not Path(args.out).is_absolute() else Path(args.out)
+    cand_path = (
+        (repo / args.candidates_out)
+        if not Path(args.candidates_out).is_absolute()
+        else Path(args.candidates_out)
+    )
 
     if not db_path.exists():
         print(
@@ -490,6 +538,13 @@ def main() -> int:
     out_path.write_text(json.dumps(payload, indent=2) + "\n")
     print(
         f"wrote {out_path.relative_to(repo)}  {len(payload['extensions'])} extensions"
+    )
+
+    cand_payload = build_candidates(db_path, repo)
+    cand_path.parent.mkdir(parents=True, exist_ok=True)
+    cand_path.write_text(json.dumps(cand_payload, indent=2) + "\n")
+    print(
+        f"wrote {cand_path.relative_to(repo)}  {len(cand_payload['candidates'])} candidates"
     )
     return 0
 
