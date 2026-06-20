@@ -1,0 +1,22 @@
+# uuid extension smoke. Generators are nondet  test the format,
+# not the bytes. Parser surface (validate / version / variant /
+# timestamp) is deterministic and pinned.
+1
+1
+1
+00000000-0000-0000-0000-000000000000
+1
+0
+4
+rfc4122
+4
+7
+1
+<NULL>
+# PLAN #5 v7 surface
+1
+7
+16
+1
+1
+<NULL>

@@ -47,6 +47,12 @@ mod wasm_export {
     const FID_NIL: u64 = 6;
     const FID_TIMESTAMP_MS: u64 = 7;
     const FID_VARIANT: u64 = 8;
+    // PLAN #5: explicit v7 surface  uuid_v7 (alias of uuidv7),
+    // uuid_v7_blob (16-byte binary form), and uuid_v7_timestamp
+    // (extract embedded ms epoch; accepts TEXT or 16-byte BLOB).
+    const FID_UUID_V7: u64 = 9;
+    const FID_UUID_V7_BLOB: u64 = 10;
+    const FID_UUID_V7_TIMESTAMP: u64 = 11;
 
     struct UuidExtension;
 
@@ -54,6 +60,20 @@ mod wasm_export {
         match args.get(i) {
             Some(SqlValue::Text(s)) => Ok(s.clone()),
             _ => Err(format!("{fname}: TEXT arg at {i}")),
+        }
+    }
+
+    /// uuid_v7_timestamp accepts either TEXT (hyphenated) or BLOB (16
+    /// raw bytes). Returns the embedded ms epoch or None on parse fail.
+    fn parse_uuid_arg(args: &[SqlValue], i: usize) -> Option<Uuid> {
+        match args.get(i) {
+            Some(SqlValue::Text(s)) => Uuid::parse_str(s).ok(),
+            Some(SqlValue::Blob(b)) if b.len() == 16 => {
+                let mut buf = [0u8; 16];
+                buf.copy_from_slice(b);
+                Some(Uuid::from_bytes(buf))
+            }
+            _ => None,
         }
     }
 
@@ -79,6 +99,10 @@ mod wasm_export {
                     s(FID_NIL, "uuid_nil", 0, det),
                     s(FID_TIMESTAMP_MS, "uuid_timestamp_ms", 1, det),
                     s(FID_VARIANT, "uuid_variant", 1, det),
+                    // PLAN #5 v7 surface
+                    s(FID_UUID_V7, "uuid_v7", 0, nd),
+                    s(FID_UUID_V7_BLOB, "uuid_v7_blob", 0, nd),
+                    s(FID_UUID_V7_TIMESTAMP, "uuid_v7_timestamp", 1, det),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -95,7 +119,15 @@ mod wasm_export {
         fn call(func_id: u64, args: Vec<SqlValue>) -> Result<SqlValue, String> {
             match func_id {
                 FID_UUID | FID_UUIDV4 => Ok(SqlValue::Text(Uuid::new_v4().to_string())),
-                FID_UUIDV7 => Ok(SqlValue::Text(Uuid::now_v7().to_string())),
+                FID_UUIDV7 | FID_UUID_V7 => Ok(SqlValue::Text(Uuid::now_v7().to_string())),
+                FID_UUID_V7_BLOB => Ok(SqlValue::Blob(Uuid::now_v7().as_bytes().to_vec())),
+                FID_UUID_V7_TIMESTAMP => Ok(parse_uuid_arg(&args, 0)
+                    .and_then(|u| u.get_timestamp())
+                    .map(|ts| {
+                        let (secs, nanos) = ts.to_unix();
+                        SqlValue::Integer((secs as i64) * 1000 + (nanos as i64) / 1_000_000)
+                    })
+                    .unwrap_or(SqlValue::Null)),
                 FID_NIL => Ok(SqlValue::Text(Uuid::nil().to_string())),
                 FID_VALIDATE => {
                     let t = arg_text(&args, 0, "uuid_validate")?;
