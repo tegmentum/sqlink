@@ -1,0 +1,34 @@
+[package]
+name = "hkdf-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+HKDF (HMAC-based Extract-and-Expand Key Derivation Function, RFC 5869)
+for SQLite. SHA-256 + SHA-512 variants, exposed as scalar functions
+covering the single-call form plus the explicit extract / expand
+two-step. Pairs with `aead` (which consumes derived symmetric keys)
+and `jwt` (which already pins hmac + sha2).
+
+See PLAN-more-extensions-5.md #2.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent workspace
+# from trying to build this crate natively. The wasi component build
+# (`make ext NAME=hkdf`) still works because the Makefile invokes
+# `cargo build` with --manifest-path against this crate's own
+# workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# RFC 5869 reference impl, RustCrypto. Default features off keeps the
+# component lean (no std). `hkdf` re-exports `hmac` + works against
+# any `digest::OutputSizeUser`.
+hkdf = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
