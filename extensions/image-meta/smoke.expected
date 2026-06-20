@@ -1,0 +1,33 @@
+# Acceptance 1: PNG signature + IHDR -> width/height
+PNG
+123
+321
+# Acceptance 2: JPEG SOI + APP0 + SOF0 -> 'JPEG' + dims
+JPEG
+100
+200
+# Acceptance 3: truncated JPEG -> 'JPEG', dims NULL
+JPEG
+<NULL>
+<NULL>
+# Acceptance 4: random bytes -> all NULL
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# Acceptance 5: img_dimensions JSON parseable by json_extract
+{"width":123,"height":321,"format":"PNG"}
+123
+321
+PNG
+# img_byte_size convenience
+33
+2
+# NULL passthrough
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# img_version (matches Cargo.toml version)
+0.1.0

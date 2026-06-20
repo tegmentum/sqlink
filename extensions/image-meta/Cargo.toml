@@ -1,0 +1,19 @@
+[package]
+name = "image-meta-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Image header metadata: format/width/height/dimensions from blob headers via the imagesize 0.13 pure-rust header-only decoder. NULL/unrecognized -> NULL on every fn.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+imagesize = "0.13"
