@@ -1,0 +1,29 @@
+# HS256 canonical jwt.io worked example: encode round-trip + verify
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
+1
+# wrong secret
+0
+# tampered payload
+0
+# header alg != requested alg
+0
+# decode returns combined header+payload JSON
+{"header":{"alg":"HS256","typ":"JWT"},"payload":{"iat":1516239022,"name":"John Doe","sub":"1234567890"}}
+# header / payload alone
+{"alg":"HS256","typ":"JWT"}
+{"iat":1516239022,"name":"John Doe","sub":"1234567890"}
+# HS384 / HS512 byte-exact tokens
+eyJhbGciOiJIUzM4NCIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhYmMifQ.c9kwQ6e7FU0Gv4g2oI4g09gFyIgsUY269E-7fXBAbZWcyxoHKnLKI7VXfPSwO28I
+eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhYmMifQ.0sL-4Qz4EM25BvMa8l2LIo8g8aKx9Idu8dAMc1GYgYnivhF7TQpuFf3yMkrng0JuNWU6f_tdSwFia_HUP4jH3A
+# EdDSA encode with RFC 8037 private key
+eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJyZmM4MDM3In0.rK6Mme2iDl64FDIWQmXk5qB-8khASVQRYqSHTvexcEC1lh9-wzo_Y6prk1pQCnMhGEu33qu2R2hcb4h4qwjaAQ
+# EdDSA verify with RFC 8037 public key
+1
+# wrong pubkey
+0
+# tampered signature
+0
+# unknown alg => 0
+0
+# version is non-empty
+1

@@ -1,0 +1,46 @@
+[package]
+name = "jwt-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+JSON Web Tokens (RFC 7519) for SQL.
+
+Algorithms (v1): HS256/384/512 (HMAC-SHA2) and EdDSA (Ed25519
+per RFC 8037). RS256/384/512 deferred to v2 (the `rsa` crate is
+expensive on binary size).
+
+Functions:
+  jwt_encode(header_json, payload_json, key, alg) -> text
+  jwt_decode(token)                                -> json {header,payload}
+  jwt_verify(token, key, alg)                      -> integer 0/1
+  jwt_payload(token)                               -> json (no verify)
+  jwt_header(token)                                -> json (no verify)
+  jwt_version()                                    -> text
+
+`key` is TEXT (passphrase) for HS* and BLOB (32-byte raw private
+key OR 64-byte expanded secret) for EdDSA when signing; BLOB
+public key (32 bytes) when verifying EdDSA. `alg` is the JOSE
+identifier: HS256, HS384, HS512, EdDSA. The signing alg and the
+token's `alg` header must match on verify.
+
+See PLAN-extensions-and-handlers.md  1.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+hmac = "0.12"
+sha2 = { version = "0.10", default-features = false }
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
