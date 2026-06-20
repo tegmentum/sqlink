@@ -1,19 +1,8 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T17:34:32Z",
-  "commit_sha": "f08ac38b19d3bfecd08ef60cac543dc2b64b4500",
+  "updated": "2026-06-20T18:39:51Z",
+  "commit_sha": "becd0446c7fa3da3cc9da3b4c95b43ec5be87202",
   "candidates": [
-    {
-      "name": "iso-639-5",
-      "source": "session-2026-06",
-      "description": "ISO 639-5 (language families) on top of existing iso-codes.",
-      "upstream_url": "https://www.iso.org/standard/39536.html",
-      "track": "bibliographic",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "iso_639 0.4",
-      "notes": "iso-codes covers 639-1/639-2/639-3; this is the family bucket."
-    },
     {
       "name": "flatbuffers",
       "source": "session-2026-06",
@@ -35,17 +24,6 @@
       "reason": null,
       "proposed_crate": "prost 0.13",
       "notes": "Schema interface is the hard part; flatbuffers + thrift have the same shape."
-    },
-    {
-      "name": "tar",
-      "source": "session-2026-06",
-      "description": "tar archive parsing as vtab.",
-      "upstream_url": "https://www.gnu.org/software/tar/manual/html_node/Standard.html",
-      "track": "codec",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "tar 0.4",
-      "notes": "zipfile exists; tar is the unix analog."
     },
     {
       "name": "thrift",
@@ -114,17 +92,6 @@
       "notes": "Heavy spec; needs handler-side surface as well as SQL."
     },
     {
-      "name": "skiplist",
-      "source": "session-2026-06",
-      "description": "Skip list as a vtab.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Skip_list",
-      "track": "data-structures",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "skiplist 0.5",
-      "notes": "roaring covers exact set; skiplist is sorted-set."
-    },
-    {
       "name": "mathml",
       "source": "session-2026-06",
       "description": "MathML parsing.",
@@ -156,28 +123,6 @@
       "reason": null,
       "proposed_crate": "num-bigint 0.4 + custom",
       "notes": "bignum has modpow; this would add a key-gen surface specifically."
-    },
-    {
-      "name": "signal-processing",
-      "source": "session-2026-06",
-      "description": "FIR/IIR filters, autocorrelation, convolution beyond fft.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Digital_signal_processing",
-      "track": "math",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "biquad 0.4 + dsp 0.1",
-      "notes": "fft covers transform; this is the filtering surface."
-    },
-    {
-      "name": "color-palette",
-      "source": "session-2026-06",
-      "description": "Extract dominant color palette from image blobs.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Color_quantization",
-      "track": "media",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "kmeans-colors 0.6",
-      "notes": "Pairs with color + image-meta."
     },
     {
       "name": "dicom",
@@ -244,39 +189,6 @@
       "reason": null,
       "proposed_crate": "no canonical crate yet  hand-roll",
       "notes": "Used by ActivityPub / Mastodon and the SSF working group."
-    },
-    {
-      "name": "mqtt-parse",
-      "source": "session-2026-06",
-      "description": "MQTT message parsing (control packets).",
-      "upstream_url": "https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html",
-      "track": "network",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "mqtt-codec 0.7",
-      "notes": "IoT message parsing."
-    },
-    {
-      "name": "whois-parse",
-      "source": "session-2026-06",
-      "description": "Parse WHOIS response text (not lookup).",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc3912",
-      "track": "network",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "whois-rust 1",
-      "notes": "Many response formats; pick the common ARIN/RIPE shapes."
-    },
-    {
-      "name": "pinyin",
-      "source": "session-2026-06",
-      "description": "Chinese pinyin transliteration.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Pinyin",
-      "track": "text",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "pinyin 0.10",
-      "notes": "Mainland-China-specific; useful for CN-language pipelines."
     },
     {
       "name": "mbox",

@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T17:34:32Z",
+  "updated": "2026-06-20T18:39:51Z",
   "registry_url": "https://raw.githubusercontent.com/user/sqlite-wasm-extensions/main/registry/index.json",
-  "commit_sha": "f08ac38b19d3bfecd08ef60cac543dc2b64b4500",
+  "commit_sha": "becd0446c7fa3da3cc9da3b4c95b43ec5be87202",
   "extensions": [
     {
       "name": "extension-manager",
@@ -1027,6 +1027,45 @@
       ],
       "dependencies": [
         "csscolorparser@0.8"
+      ]
+    },
+    {
+      "name": "color-palette",
+      "version": "0.1.0",
+      "description": "Dominant color palette extraction from image blobs (PNG/JPEG) via kmeans_colors 0.6 + image 0.25 + palette 0.7. Returns JSON hex arrays and dominant/average hex colors.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/color-palette",
+      "keywords": [
+        "color-palette",
+        "dominant",
+        "color",
+        "palette",
+        "extraction",
+        "image"
+      ],
+      "categories": [
+        "media"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/color-palette-0.1.0/color-palette-0.1.0.tar.gz",
+      "checksum": "sha256:6d5cdce8868a4f2ab5d48dc56fd1f5562343cdda2d79a5eecc3370e6160ddfab",
+      "size_bytes": 640894,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "color_palette_placeholder",
+        "palette_average_color",
+        "palette_dominant",
+        "palette_extract",
+        "palette_version"
+      ],
+      "dependencies": [
+        "image@0.25",
+        "kmeans_colors@0.6",
+        "palette@0.7"
       ]
     },
     {
@@ -3549,6 +3588,40 @@
       ]
     },
     {
+      "name": "iso-639-5",
+      "version": "0.1.0",
+      "description": "ISO 639-5 language family / collection codes (~115 entries). The sister `iso-codes` extension covers individual languages (639-1 / -2 / -3) but stops short of family roll-ups: it can tell you that 'fr' is French, not that French is in `roa` (Romance) which is in `itc` (Italic) wh",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/iso-639-5",
+      "keywords": [
+        "iso-639-5",
+        "iso",
+        "language",
+        "family",
+        "collection",
+        "codes"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/iso-639-5-0.1.0/iso-639-5-0.1.0.tar.gz",
+      "checksum": "sha256:712fda533aa18870b7446401158995c20686472f7919fba17a9d114ffd20c45b",
+      "size_bytes": 84734,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "iso639_5_is_valid",
+        "iso639_5_list",
+        "iso639_5_name",
+        "iso639_5_version"
+      ],
+      "dependencies": []
+    },
+    {
       "name": "iso-codes",
       "version": "0.1.0",
       "description": "ISO codes triad: 3166-1 country (249), 4217 currency (~180), 639 language (~180). Each surface is name + alpha-2/alpha-3 inter- conversion + numeric/minor-units + validation, with NULL on unknown codes for clean SQL composition.",
@@ -4306,6 +4379,47 @@
       "dependencies": []
     },
     {
+      "name": "mqtt-parse",
+      "version": "0.1.0",
+      "description": "MQTT control packet parsing (NOT a client). Decodes MQTT v3.1.1 and v5.0 wire-format packets from BLOBs into SQL scalars.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/mqtt-parse",
+      "keywords": [
+        "mqtt-parse",
+        "mqtt",
+        "control",
+        "packet",
+        "parsing",
+        "client"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/mqtt-parse-0.1.0/mqtt-parse-0.1.0.tar.gz",
+      "checksum": "sha256:fe1a31a2c18a4b6c46192777a2746b1b67e9b61b0f1b3f78d9541bcf3f3fd211",
+      "size_bytes": 147970,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "mqtt_is_valid",
+        "mqtt_packet_id",
+        "mqtt_packet_type",
+        "mqtt_parse",
+        "mqtt_payload",
+        "mqtt_qos",
+        "mqtt_retain",
+        "mqtt_topic",
+        "mqtt_version"
+      ],
+      "dependencies": [
+        "serde_json@1"
+      ]
+    },
+    {
       "name": "multi-comparison",
       "version": "0.1.0",
       "description": "Multiple comparison corrections for SQL p-value arrays. Companion to `hypothesis` the obvious follow-up once you start computing more than one p-value at a time. Hand-rolled (no external statistics dependency):",
@@ -4939,6 +5053,43 @@
         "phone_prefix_region"
       ],
       "dependencies": []
+    },
+    {
+      "name": "pinyin",
+      "version": "0.1.0",
+      "description": "Chinese hanzi -> pinyin transliteration for SQL. Wraps the pure-rust `pinyin` crate (mozillazg) so callers can normalize Han characters into latin pinyin for search, sort, indexing, or display.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/pinyin",
+      "keywords": [
+        "pinyin",
+        "chinese",
+        "hanzi",
+        "transliteration"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/pinyin-0.1.0/pinyin-0.1.0.tar.gz",
+      "checksum": "sha256:0196416f9f3146168eeee979718187d3f69dc07ac8f565f11c449c0a7e6fbd42",
+      "size_bytes": 493981,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "pinyin",
+        "pinyin_first_letter",
+        "pinyin_is_chinese",
+        "pinyin_split",
+        "pinyin_version",
+        "pinyin_with_diacritic",
+        "pinyin_with_tone"
+      ],
+      "dependencies": [
+        "pinyin@0.10"
+      ]
     },
     {
       "name": "pmtiles",
@@ -6306,6 +6457,44 @@
       ]
     },
     {
+      "name": "signal-processing",
+      "version": "0.1.0",
+      "description": "DSP primitives extension for SQLite. Sits next to `fft` and gives SQL a time-domain signal-processing surface: biquad IIR filters (low-pass / high-pass / band-pass), autocorrelation, full linear convolution, moving average, peak detection, and RMS energy.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/signal-processing",
+      "keywords": [
+        "signal-processing",
+        "dsp",
+        "primitives"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/signal-processing-0.1.0/signal-processing-0.1.0.tar.gz",
+      "checksum": "sha256:26d6f4c81f10f2fdcffa3874622573e1b0b93b5687db152a8075d184b2ebd52b",
+      "size_bytes": 168071,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "autocorrelation",
+        "convolve",
+        "filter_bandpass",
+        "filter_highpass",
+        "filter_lowpass",
+        "moving_average",
+        "peak_detect",
+        "rms",
+        "signal_processing_version"
+      ],
+      "dependencies": [
+        "serde_json@1"
+      ]
+    },
+    {
       "name": "sitemap-xml",
       "version": "0.1.0",
       "description": "sitemap.xml + sitemap-index parsers for SQLite. Reads the sitemaps.org protocol (https://www.sitemaps.org/protocol.html) shapes -- a `<urlset>` document of `<url>` records, or a `<sitemapindex>` document of `<sitemap>` records -- and surfaces the contents to SQL as JSON.",
@@ -6376,6 +6565,45 @@
       "dependencies": [
         "twox-hash@1"
       ]
+    },
+    {
+      "name": "skiplist",
+      "version": "0.1.0",
+      "description": "Named sorted-set ordered containers with thread-local state.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/skiplist",
+      "keywords": [
+        "skiplist",
+        "named",
+        "sortedset",
+        "ordered",
+        "containers",
+        "threadlocal"
+      ],
+      "categories": [
+        "data-structures"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/skiplist-0.1.0/skiplist-0.1.0.tar.gz",
+      "checksum": "sha256:49552169a66851076928ee9f86d534ce8b9f6ad25deb35b9886ab9076eaa31a2",
+      "size_bytes": 110907,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "sl_clear",
+        "sl_contains",
+        "sl_first",
+        "sl_insert",
+        "sl_last",
+        "sl_range",
+        "sl_remove",
+        "sl_size",
+        "sl_version"
+      ],
+      "dependencies": []
     },
     {
       "name": "spellfix1",
@@ -6601,6 +6829,46 @@
       ],
       "dependencies": [
         "rust-stemmers@1.2"
+      ]
+    },
+    {
+      "name": "tar",
+      "version": "0.1.0",
+      "description": "tar archive parsing as SQL scalars. Wraps `tar` 0.4 so SQL callers can introspect a tar archive that lives in a BLOB column.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/tar",
+      "keywords": [
+        "tar",
+        "archive",
+        "parsing",
+        "scalars"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/tar-0.1.0/tar-0.1.0.tar.gz",
+      "checksum": "sha256:a6a47db49f9bbee309f3f5f16e5b8af49fe8ea94f3665d27f2e7ccd84813f869",
+      "size_bytes": 149200,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "tar_entry_count",
+        "tar_entry_data",
+        "tar_entry_mode",
+        "tar_entry_mtime",
+        "tar_entry_names",
+        "tar_entry_size",
+        "tar_is_valid",
+        "tar_placeholder",
+        "tar_version"
+      ],
+      "dependencies": [
+        "tar@*",
+        "tar@0.4"
       ]
     },
     {
@@ -7692,6 +7960,46 @@
         "scraper@0.21",
         "serde_json@1",
         "serde_json_path@0.7"
+      ]
+    },
+    {
+      "name": "whois-parse",
+      "version": "0.1.0",
+      "description": "Parse WHOIS response TEXT (not network lookup). Hand-rolled parser tolerates the three common WHOIS line shapes seen across ARIN, RIPE, APNIC, LACNIC, AFRINIC, and most registrar formats:",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/whois-parse",
+      "keywords": [
+        "whois-parse",
+        "parse",
+        "whois",
+        "response",
+        "text",
+        "network"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/whois-parse-0.1.0/whois-parse-0.1.0.tar.gz",
+      "checksum": "sha256:ea001c20a7cfb2dbec2b260f233cd0da630c4ba11b87dbaceb4db4acde11a919",
+      "size_bytes": 139373,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "whois_creation_date",
+        "whois_expiration_date",
+        "whois_field",
+        "whois_name_servers",
+        "whois_parse",
+        "whois_parse_placeholder",
+        "whois_registrar",
+        "whois_version"
+      ],
+      "dependencies": [
+        "serde_json@1"
       ]
     },
     {

@@ -68,10 +68,6 @@ VALUES
                      'https://en.wikipedia.org/wiki/Perceptual_hashing',
                      'media', 'img_hash 3', unixepoch(),
                      'Needs the image crate for pixel decode  bigger wasm bundle than image-meta.'),
-('color-palette',    'session-2026-06', 'Extract dominant color palette from image blobs.',
-                     'https://en.wikipedia.org/wiki/Color_quantization',
-                     'media', 'kmeans-colors 0.6', unixepoch(),
-                     'Pairs with color + image-meta.'),
 
 -- ====== Geo coordinate systems ======
 ('proj',             'session-2026-06', 'PROJ-style coordinate reference system transformations.',
@@ -80,42 +76,22 @@ VALUES
                      'Heavy C dependency; defer until needed.'),
 
 -- ====== Text / NLP ======
-('pinyin',           'session-2026-06', 'Chinese pinyin transliteration.',
-                     'https://en.wikipedia.org/wiki/Pinyin',
-                     'text', 'pinyin 0.10', unixepoch(),
-                     'Mainland-China-specific; useful for CN-language pipelines.'),
 
 -- ====== Network / web ======
 ('http-signature',   'session-2026-06', 'HTTP Message Signatures (RFC 9421).',
                      'https://datatracker.ietf.org/doc/html/rfc9421',
                      'network', 'no canonical crate yet  hand-roll', unixepoch(),
                      'Used by ActivityPub / Mastodon and the SSF working group.'),
-('whois-parse',      'session-2026-06', 'Parse WHOIS response text (not lookup).',
-                     'https://datatracker.ietf.org/doc/html/rfc3912',
-                     'network', 'whois-rust 1', unixepoch(),
-                     'Many response formats; pick the common ARIN/RIPE shapes.'),
 
 -- ====== Bibliographic / identifiers ======
-('iso-639-5',        'session-2026-06', 'ISO 639-5 (language families) on top of existing iso-codes.',
-                     'https://www.iso.org/standard/39536.html',
-                     'bibliographic', 'iso_639 0.4', unixepoch(),
-                     'iso-codes covers 639-1/639-2/639-3; this is the family bucket.'),
 
 -- ====== Data structures ======
-('skiplist',         'session-2026-06', 'Skip list as a vtab.',
-                     'https://en.wikipedia.org/wiki/Skip_list',
-                     'data-structures', 'skiplist 0.5', unixepoch(),
-                     'roaring covers exact set; skiplist is sorted-set.'),
 
 -- ====== Math / scientific ======
 ('rsa-bignum',       'session-2026-06', 'Standalone RSA-style bignum modexp + key gen (separate from `rsa` crate).',
                      'https://datatracker.ietf.org/doc/html/rfc8017',
                      'math', 'num-bigint 0.4 + custom', unixepoch(),
                      'bignum has modpow; this would add a key-gen surface specifically.'),
-('signal-processing','session-2026-06', 'FIR/IIR filters, autocorrelation, convolution beyond fft.',
-                     'https://en.wikipedia.org/wiki/Digital_signal_processing',
-                     'math', 'biquad 0.4 + dsp 0.1', unixepoch(),
-                     'fft covers transform; this is the filtering surface.'),
 
 -- ====== Sqlean items not covered by our catalog ======
 ('sqlean-vsv',       'sqlean',          'Virtual CSV view (vsv).',
@@ -124,18 +100,10 @@ VALUES
                      'csv extension exists but vsv has different shape  worth comparing.'),
 
 -- ====== Specialty / niche ======
-('mqtt-parse',       'session-2026-06', 'MQTT message parsing (control packets).',
-                     'https://docs.oasis-open.org/mqtt/mqtt/v5.0/mqtt-v5.0.html',
-                     'network', 'mqtt-codec 0.7', unixepoch(),
-                     'IoT message parsing.'),
 ('mbox',             'session-2026-06', 'mbox + maildir email format parsing as vtab.',
                      'https://datatracker.ietf.org/doc/html/rfc4155',
                      'vtab', 'mbox-reader 0.2', unixepoch(),
                      'Useful for email-database use cases.'),
-('tar',              'session-2026-06', 'tar archive parsing as vtab.',
-                     'https://www.gnu.org/software/tar/manual/html_node/Standard.html',
-                     'codec', 'tar 0.4', unixepoch(),
-                     'zipfile exists; tar is the unix analog.'),
 ('dicom',            'session-2026-06', 'DICOM medical imaging metadata.',
                      'https://www.dicomstandard.org/',
                      'media', 'dicom-rs 0.7', unixepoch(),
