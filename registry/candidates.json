@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T17:07:33Z",
-  "commit_sha": "8787700906399356864d7482d0a6a7e89652ffd8",
+  "updated": "2026-06-20T17:25:09Z",
+  "commit_sha": "dcf52e6dae7ebbe8c0f1853666bc345d1357999b",
   "candidates": [
     {
       "name": "iso-639-5",
@@ -103,17 +103,6 @@
       "notes": "handlers/yaml-to-json covers the httpd side; SQL scalar form is missing."
     },
     {
-      "name": "aes-modes",
-      "source": "session-2026-06",
-      "description": "AES-CBC + AES-CTR + AES-SIV non-AEAD modes.",
-      "upstream_url": "https://csrc.nist.gov/pubs/sp/800/38/a/final",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "aes 0.8 + cbc 0.1 + ctr 0.9",
-      "notes": "aead covers GCM + ChaCha20-Poly1305; CBC/CTR/SIV for legacy + deterministic AEAD."
-    },
-    {
       "name": "cose",
       "source": "session-2026-06",
       "description": "CBOR Object Signing and Encryption (RFC 8152).",
@@ -147,17 +136,6 @@
       "notes": "sequoia-openpgp is too heavy; pgp crate is the lighter choice."
     },
     {
-      "name": "rsa",
-      "source": "session-2026-06",
-      "description": "RSA sign/verify/encrypt/decrypt with PKCS#1 + OAEP padding.",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc8017",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "rsa 0.9",
-      "notes": "jwt currently lacks RS256 (deferred to v2); this would close that loop."
-    },
-    {
       "name": "webauthn",
       "source": "session-2026-06",
       "description": "WebAuthn registration + authentication verification.",
@@ -167,28 +145,6 @@
       "reason": null,
       "proposed_crate": "webauthn-rs 0.5",
       "notes": "Heavy spec; needs handler-side surface as well as SQL."
-    },
-    {
-      "name": "lru-cache",
-      "source": "session-2026-06",
-      "description": "LRU cache as a vtab + scalars.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_recently_used",
-      "track": "data-structures",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "lru 0.12",
-      "notes": "Useful for materializing expensive computed columns."
-    },
-    {
-      "name": "priority-queue",
-      "source": "session-2026-06",
-      "description": "Heap-backed priority queue as a vtab.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Priority_queue",
-      "track": "data-structures",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "priority-queue 2",
-      "notes": "Generic; might fold into a future data-structures family."
     },
     {
       "name": "skiplist",
@@ -211,17 +167,6 @@
       "reason": null,
       "proposed_crate": "mathml-rs 0.1",
       "notes": "Niche; specialized for scientific document workflows."
-    },
-    {
-      "name": "polyline-simplify",
-      "source": "session-2026-06",
-      "description": "Douglas-Peucker polyline simplification.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm",
-      "track": "geo",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "geo 0.30",
-      "notes": "Pairs with google-polyline + h3/s2."
     },
     {
       "name": "proj",
@@ -389,28 +334,6 @@
       "notes": "Many response formats; pick the common ARIN/RIPE shapes."
     },
     {
-      "name": "multi-comparison",
-      "source": "session-2026-06",
-      "description": "Multiple comparison corrections (Bonferroni / Holm / Benjamini-Hochberg FDR).",
-      "upstream_url": "https://en.wikipedia.org/wiki/Multiple_comparisons_problem",
-      "track": "statistics",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "roll-own; ~50 lines",
-      "notes": "Pairs with hypothesis  obvious followup."
-    },
-    {
-      "name": "hyphenation",
-      "source": "session-2026-06",
-      "description": "Liang/Knuth-Plass hyphenation patterns.",
-      "upstream_url": "https://www.tug.org/docs/liang/",
-      "track": "text",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "hyphenation 0.8",
-      "notes": "Multi-language; ~50 KB per language pattern file."
-    },
-    {
       "name": "lemmatize",
       "source": "session-2026-06",
       "description": "Dictionary-based lemmatization (vs stemmers morphological reduction).",
@@ -420,17 +343,6 @@
       "reason": null,
       "proposed_crate": "lemmatizer 0.1",
       "notes": "stemmer (Snowball) is morphological; lemma uses a lookup table."
-    },
-    {
-      "name": "ngrams",
-      "source": "session-2026-06",
-      "description": "N-gram tokenization (char + word).",
-      "upstream_url": "https://en.wikipedia.org/wiki/N-gram",
-      "track": "text",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "ngrams 3",
-      "notes": "Pairs with stemmer + fuzzy + lang-detect."
     },
     {
       "name": "pinyin",

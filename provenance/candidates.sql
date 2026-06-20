@@ -20,10 +20,6 @@ DELETE FROM plugin_candidate;
 -- ====== Crypto + wire-format gaps ======
 INSERT INTO plugin_candidate (name, source, description, upstream_url, track, proposed_crate, added_at, notes)
 VALUES
-('rsa',              'session-2026-06', 'RSA sign/verify/encrypt/decrypt with PKCS#1 + OAEP padding.',
-                     'https://datatracker.ietf.org/doc/html/rfc8017',
-                     'crypto', 'rsa 0.9', unixepoch(),
-                     'jwt currently lacks RS256 (deferred to v2); this would close that loop.'),
 ('hpke',             'session-2026-06', 'Hybrid Public Key Encryption (RFC 9180).',
                      'https://datatracker.ietf.org/doc/html/rfc9180',
                      'crypto', 'hpke 0.13', unixepoch(),
@@ -40,10 +36,6 @@ VALUES
                      'https://datatracker.ietf.org/doc/html/rfc4880',
                      'crypto', 'pgp 0.13', unixepoch(),
                      'sequoia-openpgp is too heavy; pgp crate is the lighter choice.'),
-('aes-modes',        'session-2026-06', 'AES-CBC + AES-CTR + AES-SIV non-AEAD modes.',
-                     'https://csrc.nist.gov/pubs/sp/800/38/a/final',
-                     'crypto', 'aes 0.8 + cbc 0.1 + ctr 0.9', unixepoch(),
-                     'aead covers GCM + ChaCha20-Poly1305; CBC/CTR/SIV for legacy + deterministic AEAD.'),
 
 -- ====== Codec gaps ======
 ('protobuf',         'session-2026-06', 'Protocol Buffers encode/decode (given schema).',
@@ -90,10 +82,6 @@ VALUES
                      'https://proj.org/',
                      'geo', 'proj 0.27 (C dep)', unixepoch(),
                      'Heavy C dependency; defer until needed.'),
-('polyline-simplify','session-2026-06', 'Douglas-Peucker polyline simplification.',
-                     'https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm',
-                     'geo', 'geo 0.30', unixepoch(),
-                     'Pairs with google-polyline + h3/s2.'),
 
 -- ====== Text / NLP ======
 ('lemmatize',        'session-2026-06', 'Dictionary-based lemmatization (vs stemmers morphological reduction).',
@@ -104,14 +92,6 @@ VALUES
                      'https://en.wikipedia.org/wiki/Sentence_boundary_disambiguation',
                      'text', 'pragmatic-segmenter 0.2', unixepoch(),
                      'Common preprocessing step; non-trivial for non-English.'),
-('ngrams',           'session-2026-06', 'N-gram tokenization (char + word).',
-                     'https://en.wikipedia.org/wiki/N-gram',
-                     'text', 'ngrams 3', unixepoch(),
-                     'Pairs with stemmer + fuzzy + lang-detect.'),
-('hyphenation',      'session-2026-06', 'Liang/Knuth-Plass hyphenation patterns.',
-                     'https://www.tug.org/docs/liang/',
-                     'text', 'hyphenation 0.8', unixepoch(),
-                     'Multi-language; ~50 KB per language pattern file.'),
 ('pinyin',           'session-2026-06', 'Chinese pinyin transliteration.',
                      'https://en.wikipedia.org/wiki/Pinyin',
                      'text', 'pinyin 0.10', unixepoch(),
@@ -154,14 +134,6 @@ VALUES
                      'https://en.wikipedia.org/wiki/Skip_list',
                      'data-structures', 'skiplist 0.5', unixepoch(),
                      'roaring covers exact set; skiplist is sorted-set.'),
-('lru-cache',        'session-2026-06', 'LRU cache as a vtab + scalars.',
-                     'https://en.wikipedia.org/wiki/Cache_replacement_policies#Least_recently_used',
-                     'data-structures', 'lru 0.12', unixepoch(),
-                     'Useful for materializing expensive computed columns.'),
-('priority-queue',   'session-2026-06', 'Heap-backed priority queue as a vtab.',
-                     'https://en.wikipedia.org/wiki/Priority_queue',
-                     'data-structures', 'priority-queue 2', unixepoch(),
-                     'Generic; might fold into a future data-structures family.'),
 
 -- ====== Math / scientific ======
 ('rsa-bignum',       'session-2026-06', 'Standalone RSA-style bignum modexp + key gen (separate from `rsa` crate).',
@@ -172,10 +144,6 @@ VALUES
                      'https://en.wikipedia.org/wiki/Digital_signal_processing',
                      'math', 'biquad 0.4 + dsp 0.1', unixepoch(),
                      'fft covers transform; this is the filtering surface.'),
-('multi-comparison', 'session-2026-06', 'Multiple comparison corrections (Bonferroni / Holm / Benjamini-Hochberg FDR).',
-                     'https://en.wikipedia.org/wiki/Multiple_comparisons_problem',
-                     'statistics', 'roll-own; ~50 lines', unixepoch(),
-                     'Pairs with hypothesis  obvious followup.'),
 
 -- ====== Sqlean items not covered by our catalog ======
 ('sqlean-vsv',       'sqlean',          'Virtual CSV view (vsv).',

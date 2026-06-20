@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T17:07:33Z",
+  "updated": "2026-06-20T17:25:09Z",
   "registry_url": "https://raw.githubusercontent.com/user/sqlite-wasm-extensions/main/registry/index.json",
-  "commit_sha": "8787700906399356864d7482d0a6a7e89652ffd8",
+  "commit_sha": "dcf52e6dae7ebbe8c0f1853666bc345d1357999b",
   "extensions": [
     {
       "name": "extension-manager",
@@ -112,6 +112,48 @@
         "aes-gcm@0.10",
         "chacha20poly1305@0.10",
         "getrandom@0.2"
+      ]
+    },
+    {
+      "name": "aes-modes",
+      "version": "0.1.0",
+      "description": "AES non-AEAD modes for SQL: CBC, CTR, and deterministic SIV.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/aes-modes",
+      "keywords": [
+        "aes-modes",
+        "aes",
+        "nonaead",
+        "modes",
+        "cbc",
+        "ctr"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/aes-modes-0.1.0/aes-modes-0.1.0.tar.gz",
+      "checksum": "sha256:530c08b68246108a5974c5c72c818beaba7beeec9e2e0166b140fe930c548dd2",
+      "size_bytes": 169527,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "aes_cbc_decrypt",
+        "aes_cbc_encrypt",
+        "aes_ctr_decrypt",
+        "aes_ctr_encrypt",
+        "aes_modes_version",
+        "aes_siv_decrypt",
+        "aes_siv_encrypt"
+      ],
+      "dependencies": [
+        "aes@0.8",
+        "aes-siv@0.7",
+        "cbc@0.1",
+        "ctr@0.9"
       ]
     },
     {
@@ -2976,6 +3018,40 @@
       ]
     },
     {
+      "name": "hyphenation",
+      "version": "0.1.0",
+      "description": "Liang/Knuth-Plass hyphenation for SQL \u2014 backed by the `hyphenation` 0.8 crate (Tex-style patterns). The classic Liang algorithm computes valid word-break opportunities; the Knuth-Plass typesetter then chooses where to actually break a line.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/hyphenation",
+      "keywords": [
+        "hyphenation",
+        "liangknuthplass",
+        "backed"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/hyphenation-0.1.0/hyphenation-0.1.0.tar.gz",
+      "checksum": "sha256:796414df8ff6fb32d61e5705e093368b0f031eb26c97f1e5232345598bf9ea14",
+      "size_bytes": 322890,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "hyphenate",
+        "hyphenate_positions",
+        "hyphenation_languages",
+        "hyphenation_version"
+      ],
+      "dependencies": [
+        "hyphenation@0.8",
+        "serde_json@1"
+      ]
+    },
+    {
       "name": "hypothesis",
       "version": "0.1.0",
       "description": "Statistical hypothesis tests for SQL. Companion to `dist` (which gives PDF / CDF / inverse-CDF for the standard distribution families) this extension consumes those same distributions to produce p-values for the textbook tests:",
@@ -3838,6 +3914,46 @@
       ]
     },
     {
+      "name": "lru-cache",
+      "version": "0.1.0",
+      "description": "LRU cache as in-process scalars. Per-connection (per host VM), in-memory only \u2014 values do not persist across CLI runs. Backed by lru 0.12.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/lru-cache",
+      "keywords": [
+        "lru-cache",
+        "lru",
+        "cache",
+        "inprocess",
+        "scalars"
+      ],
+      "categories": [
+        "data-structures"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/lru-cache-0.1.0/lru-cache-0.1.0.tar.gz",
+      "checksum": "sha256:65a2ee0153df4f299f8eb201cce44b60f34237bf1e3c2f8e2faf5b8f770bae90",
+      "size_bytes": 96352,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "lru_cache_placeholder",
+        "lru_capacity",
+        "lru_capacity_set",
+        "lru_clear",
+        "lru_get",
+        "lru_put",
+        "lru_remove",
+        "lru_size",
+        "lru_version"
+      ],
+      "dependencies": [
+        "lru@0.12"
+      ]
+    },
+    {
       "name": "lz4",
       "version": "0.1.0",
       "description": "LZ4 compression scalars. Backed by `lz4_flex` (pure-Rust, no C deps, ~100 KB of code). Two operating modes:",
@@ -4123,6 +4239,43 @@
       "dependencies": []
     },
     {
+      "name": "multi-comparison",
+      "version": "0.1.0",
+      "description": "Multiple comparison corrections for SQL p-value arrays. Companion to `hypothesis` the obvious follow-up once you start computing more than one p-value at a time. Hand-rolled (no external statistics dependency):",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/multi-comparison",
+      "keywords": [
+        "multi-comparison",
+        "multiple",
+        "comparison",
+        "corrections",
+        "pvalue",
+        "arrays"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/multi-comparison-0.1.0/multi-comparison-0.1.0.tar.gz",
+      "checksum": "sha256:211634a4765df6472ce1043f46e4d4bd2b748b7007d4df6cd6a493885376e41f",
+      "size_bytes": 151398,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "mc_bh_fdr",
+        "mc_bonferroni",
+        "mc_by_fdr",
+        "mc_holm",
+        "multi_comparison_version"
+      ],
+      "dependencies": [
+        "serde_json@1"
+      ]
+    },
+    {
       "name": "nanoid",
       "version": "0.1.0",
       "description": "URL-safe short IDs. Lighter than UUID for ID columns that just need uniqueness, not 128-bit collision resistance.",
@@ -4252,6 +4405,43 @@
         "natsort_less"
       ],
       "dependencies": []
+    },
+    {
+      "name": "ngrams",
+      "version": "0.1.0",
+      "description": "N-gram tokenization scalars (character + word) for SQL.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/ngrams",
+      "keywords": [
+        "ngrams",
+        "ngram",
+        "tokenization",
+        "scalars",
+        "character",
+        "word"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/ngrams-0.1.0/ngrams-0.1.0.tar.gz",
+      "checksum": "sha256:0a5c49609829186fb3ffbeea017e8a31351dec806cbdc54fad2e8aa5cece87dc",
+      "size_bytes": 112951,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "ngrams_char",
+        "ngrams_count_char",
+        "ngrams_count_word",
+        "ngrams_version",
+        "ngrams_word"
+      ],
+      "dependencies": [
+        "serde_json@1"
+      ]
     },
     {
       "name": "number-theory",
@@ -4703,6 +4893,43 @@
         "polyline_length"
       ],
       "dependencies": [
+        "serde_json@1"
+      ]
+    },
+    {
+      "name": "polyline-simplify",
+      "version": "0.1.0",
+      "description": "Douglas-Peucker (Ramer-Douglas-Peucker) and Visvalingam-Whyatt polyline simplification for SQL. Wraps `geo` 0.30's `Simplify` and `SimplifyVw` traits.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/polyline-simplify",
+      "keywords": [
+        "polyline-simplify",
+        "douglaspeucker",
+        "ramerdouglaspeucker",
+        "visvalingamwhyatt",
+        "polyline",
+        "simplification"
+      ],
+      "categories": [
+        "geo"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/polyline-simplify-0.1.0/polyline-simplify-0.1.0.tar.gz",
+      "checksum": "sha256:5605e1aed4e348de887daee6451e5113a8af938ea034bdc85dea3feebc1697eb",
+      "size_bytes": 163235,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "polyline_simplify_dp",
+        "polyline_simplify_placeholder",
+        "polyline_simplify_version",
+        "polyline_simplify_vw"
+      ],
+      "dependencies": [
+        "geo@0.30",
         "serde_json@1"
       ]
     },
@@ -5196,6 +5423,45 @@
       ]
     },
     {
+      "name": "priority-queue",
+      "version": "0.1.0",
+      "description": "Named heap-backed priority queues with thread-local state.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/priority-queue",
+      "keywords": [
+        "priority-queue",
+        "named",
+        "heapbacked",
+        "priority",
+        "queues",
+        "threadlocal"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/priority-queue-0.1.0/priority-queue-0.1.0.tar.gz",
+      "checksum": "sha256:fd51640d2b4622c746e3e163697a5929d8f2b8922c1cd8ebe869b6bd60a24453",
+      "size_bytes": 103081,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "pq_clear",
+        "pq_drain",
+        "pq_peek",
+        "pq_pop",
+        "pq_push",
+        "pq_size",
+        "pq_version"
+      ],
+      "dependencies": [
+        "priority-queue@2"
+      ]
+    },
+    {
       "name": "publicsuffix",
       "version": "0.1.0",
       "description": "Public Suffix List (Mozilla PSL) scalars for SQL. Backed by the `psl` 2 crate (pure-Rust, no_std, statically embeds the PSL revision as native Rust no async / lookup-table at runtime, no network fetch).",
@@ -5502,6 +5768,53 @@
         "roman_validate"
       ],
       "dependencies": []
+    },
+    {
+      "name": "rsa",
+      "version": "0.1.0",
+      "description": "RSA signing, verification, encryption and decryption for SQL.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/rsa",
+      "keywords": [
+        "rsa",
+        "signing",
+        "verification",
+        "encryption",
+        "decryption"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/rsa-0.1.0/rsa-0.1.0.tar.gz",
+      "checksum": "sha256:47bae9825b8f918b5ad766e023667b61cb5db32df4015e5d7f7db529f9f77011",
+      "size_bytes": 545107,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "rsa_decrypt_oaep",
+        "rsa_encrypt_oaep",
+        "rsa_generate",
+        "rsa_placeholder",
+        "rsa_pub_from_priv",
+        "rsa_sign_pkcs1v15",
+        "rsa_sign_pss",
+        "rsa_verify_pkcs1v15",
+        "rsa_verify_pss",
+        "rsa_version"
+      ],
+      "dependencies": [
+        "getrandom@0.2",
+        "pkcs1@0.7",
+        "pkcs8@0.10",
+        "rand_chacha@0.3",
+        "rand_core@0.6",
+        "rsa@0.9",
+        "sha2@0.10"
+      ]
     },
     {
       "name": "rtree",
