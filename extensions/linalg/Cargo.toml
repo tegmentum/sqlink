@@ -1,0 +1,42 @@
+[package]
+name = "linalg-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Dense linear algebra primitives for SQL: matrix multiply, transpose,
+determinant, inverse, linear-system solve, eigenvalues, rank, trace,
+norm. Companion to `vec0` (which gives 1D vectors) and `stats` /
+`dist` / `hypothesis` (which give scalar statistics over data) -- this
+extension provides the textbook 2D linear-algebra ops backing them.
+
+Matrices flow as JSON 2D arrays (`'[[1,2],[3,4]]'`) so they round-trip
+through standard SQL TEXT columns and the json1 surface. Restricted to
+the dense f64 path -- no symbolic, no sparse, no complex elements
+(eigenvalue results carry both real + imaginary parts since real
+matrices can produce complex eigenvalues).
+
+NULL inputs, malformed JSON, ragged/non-rectangular matrices, shape
+mismatches (mul/add/sub/solve), and singular inverses all return NULL
+rather than erroring -- callers can `COALESCE`.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps this crate out of the
+# parent workspace so its (nalgebra) wasm32-wasip2 build doesn't bleed
+# into the workspace's native sqlite build.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust dense linear algebra. We use only the dense f64 path
+# (DMatrix / DVector) -- no sparse / symbolic. `matrixmultiply` is
+# pulled in transitively via std for SGEMM/DGEMM fast paths, which
+# works fine under wasm32-wasip2.
+nalgebra = { version = "0.33", default-features = false, features = ["std"] }
+# JSON 2D-array codec for matrix in/out.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

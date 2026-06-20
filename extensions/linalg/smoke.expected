@@ -1,0 +1,57 @@
+# Reference values:
+#   la_eye(2)                                    -> [[1,0],[0,1]] (PLAN acceptance)
+#   la_mul([[1,2],[3,4]],[[5,6],[7,8]])          -> [[19,22],[43,50]] (PLAN acceptance)
+#   la_det([[1,2],[3,4]])                        -> -2 (PLAN acceptance)
+#   la_inverse([[1,0],[0,1]])                    -> [[1,0],[0,1]] (PLAN acceptance)
+#   la_solve(eye, [1,2])                         -> [1,2] (PLAN acceptance)
+#   la_trace([[1,2],[3,4]])                      -> 5 (PLAN acceptance)
+#   la_norm([[3,4]], 'fro')                      -> 5 (PLAN acceptance)
+# Note: integer-valued cells render without a decimal point so smoke
+# stays human-readable (fmt_num collapses 5.0 to "5"). Eigenvalue order
+# is nalgebra's Schur natural order; diag([2,3]) yields [2,3] for the
+# small case here (smaller leading-principal block first).
+[[0,0,0],[0,0,0]]
+[[1,0],[0,1]]
+[[1,0,0],[0,1,0],[0,0,1]]
+[2,3]
+[[1,4],[2,5],[3,6]]
+[[11,22],[33,44]]
+[[9,18],[27,36]]
+[[19,22],[43,50]]
+[[58,64],[139,154]]
+[[2,4],[6,8]]
+[[0.5,1],[1.5,2]]
+-2
+1
+24
+[[1,0],[0,1]]
+[[0.5,0],[0,0.25]]
+<NULL>
+[1,2]
+[1,2]
+[[1],[2]]
+2
+1
+0
+5
+6
+5
+5
+6
+7
+[{"re":2,"im":0},{"re":3,"im":0}]
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+1
