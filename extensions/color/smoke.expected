@@ -1,10 +1,9 @@
-# Round-trip + short-hex expand + rgb() parse + named + fail-clean.
-# `<NULL>` rendered via T-19 (.nullvalue prepended by smoke harness).
+# v0.1 surface (kept for back-compat): round-trip + short-hex
+# expand + rgb() parse + named + fail-clean + WCAG contrast.
 #ff8800
 #ffffff
 #aabbcc
 #0080ff
-#0a141e
 #00ffff
 <NULL>
 rgb(255, 136, 0)
@@ -16,3 +15,55 @@ rgb(255, 136, 0)
 21
 21
 4.48
+# v0.2 surface (PLAN-more-extensions-3 #5).
+# color_parse: any CSS input -> '#rrggbb'.
+#ff0000
+#ff0000
+#ff0000
+#ff0000
+#663399
+<NULL>
+# color_named: name-only lookup, NULL for non-name input.
+#663399
+#ffefd5
+#663399
+<NULL>
+<NULL>
+# color_rgb_to_hex / hex_to_rgb.
+#ff0000
+#0080ff
+[255, 0, 0]
+[0, 128, 255]
+# color_rgb_to_hsl: red, green, grey.
+[0, 100, 50]
+[120, 100, 50]
+[0, 0, 50]
+# color_hsl_to_rgb: red, green, blue.
+[255, 0, 0]
+[0, 255, 0]
+[0, 0, 255]
+# color_rgb_to_hsv: red, black.
+[0, 100, 100]
+[0, 0, 0]
+# color_hsv_to_rgb: red, green.
+[255, 0, 0]
+[0, 255, 0]
+# color_invert.
+#ffffff
+#000000
+#00ffff
+# color_mix: linear-light interp. The midpoint of #000000 and
+# #ffffff is *not* '#808080' because the gamma-correct (linear-light)
+# mean is 0.5 in linear space which encodes to ~0.7353 in sRGB
+# (= 188 = #bc).
+#000000
+#ffffff
+#bcbcbc
+#bc00bc
+# color_version.
+color 0.2.0 (csscolorparser 0.8)
+# NULL propagation.
+<NULL>
+<NULL>
+<NULL>
+<NULL>

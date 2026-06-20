@@ -1,12 +1,49 @@
 [package]
 name = "color-extension"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = """
-Color conversion + WCAG luminance / contrast ratio
+Color extension for SQLite.
+
+Surface (PLAN-more-extensions-3.md #5):
+
+  Parsing / canonicalization:
+    color_parse(s)              -> '#rrggbb' (any hex / rgb() / hsl() / name)
+    color_named(name)           -> '#rrggbb' (CSS named color, NULL if unknown)
+
+  Conversions:
+    color_rgb_to_hex(r,g,b)     -> '#rrggbb'
+    color_hex_to_rgb(hex)       -> '[r,g,b]'
+    color_rgb_to_hsl(r,g,b)     -> '[h,s,l]'  (h 0..360, s/l 0..100)
+    color_hsl_to_rgb(h,s,l)     -> '[r,g,b]'
+    color_rgb_to_hsv(r,g,b)     -> '[h,s,v]'  (h 0..360, s/v 0..100)
+    color_hsv_to_rgb(h,s,v)     -> '[r,g,b]'
+
+  WCAG accessibility:
+    color_luminance(color)      -> real      (WCAG 2.x relative luminance 0..1)
+    color_contrast_ratio(a,b)   -> real      (WCAG 2.x contrast ratio 1..21)
+
+  Manipulation:
+    color_mix(a, b, t)          -> '#rrggbb' (linear-light RGB interpolation; t in 0..1)
+    color_invert(color)         -> '#rrggbb' (per-channel 255-x)
+
+  Misc:
+    color_version()             -> text
+
+  Back-compat (kept from v0.1):
+    color_to_hex(color)         -> '#rrggbb'
+    color_to_rgb(color)         -> 'rgb(r, g, b)'
+    color_red / green / blue    -> integer channel
 """
 license = "MIT"
 publish = false
+
+# Standalone workspace (PLAN-more-extensions-3 hard rule #2).
+# Sibling extensions added in the same plan round also adopt this
+# layout; keeping us in line means `make ext NAME=color` works
+# without depending on the root workspace's member graph being in
+# a clean state.
+[workspace]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -17,6 +54,11 @@ embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Parser front door: handles hex / rgb()/rgba() / hsl()/hsla() /
+# hwb() / lab() / oklch() / 148 CSS named colors. Pure-rust,
+# no_std-friendly.
+csscolorparser = { version = "0.8", default-features = false, features = [
+    "named-colors",
+] }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
 sqlite-embed = { path = "../../sqlite-embed", optional = true }
-# add your upstream crate deps here
