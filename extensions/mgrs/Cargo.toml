@@ -1,0 +1,43 @@
+[package]
+name = "mgrs-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Military Grid Reference System (MGRS) coordinate extension for
+SQLite: convert between lat/lng (WGS84) and MGRS grid strings, parse
++ validate MGRS, and report grid-square / precision. MGRS is the
+DoD coordinate standard built on UTM (8 deg S .. 84 deg N) with the
+Universal Polar Stereographic (UPS) fallback at the poles, used by
+militaries, search-and-rescue and emergency services for
+human-readable rectangular grids (e.g. `31U DQ 48251 11553`).
+
+UPS extends the round-trip to |lat| <= 90; geoconvert handles UPS
+transparently, but the canonical UTM band is 80S..84N (per MGRS spec)
+and accuracy degrades outside that band -- callers needing
+high-precision polar work should prefer UPS-aware downstream tooling.
+
+Functions return NULL on parse failure / out-of-domain input rather
+than erroring so SQL pipelines can `COALESCE` instead of catching.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps this crate out of the parent workspace
+# build (PLAN-more-extensions hard rule 2). The wasi-component build
+# (`make ext NAME=mgrs`) still works because the Makefile invokes
+# cargo build with --manifest-path against this crate's own workspace.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust geographic-coordinate conversion library. Implements the
+# DoD MGRS spec via UTM (TransverseMercator) + UPS (PolarStereographic)
+# projections over the WGS84 ellipsoid -- the same math the
+# established GeographicLib reference uses, hand-ported. Lightweight
+# (only lazy_static + num + ryu transitive); cross-compiles cleanly
+# to wasm32-wasip2.
+geoconvert = { version = "1.0", default-features = false }

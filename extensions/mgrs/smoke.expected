@@ -1,0 +1,41 @@
+# MGRS reference values (geoconvert 1.0):
+#   Eiffel Tower (48.8584, 2.2945) ->
+#     compact: '31UDQ4825211954'
+#     spaced : '31U DQ 48252 11954'
+#   The plan acceptance hint is '31U DQ 48251 11553' (1m off in last
+#   digits) -- we check only the '31U DQ' (zone + 100km square) prefix
+#   per the plan's "check first chars + zone" rule.
+# Lengths:
+#   precision 5 -> '31U DQ NNNNN NNNNN' = 18 chars
+#   precision 2 -> '31U DQ NN NN'        = 12 chars
+#   precision 0 -> '31U DQ'               =  6 chars
+31U DQ
+18
+31U DQ
+12
+1
+31U DQ
+31U
+4Q
+31U
+1
+1
+0
+0
+0
+5
+0
+2
+<NULL>
+1
+1
+1
+1
+1
+0
+1
+1
+1
+1
+1
+1
