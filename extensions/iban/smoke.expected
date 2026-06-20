@@ -1,17 +1,25 @@
 # IBAN ISO 13616: mod-97 validate + decompose. Tampered check
-# digit, tampered bban char, and wrong-length all fail validate.
-# Unknown country code rejected before mod-97.
+# digit, tampered bban char, wrong-length, and unknown country
+# all fail validate. Per-country bank/account from BBAN slice.
+# NULL -> NULL propagation. iban_version() = crate version.
 1
 1
 1
-GB
-82
-WEST12345698765432
-GB82WEST12345698765432
-GB82 WEST 1234 5698 7654 32
+DE
+89
+370400440532013000
+37040044
+0532013000
+WEST
+98765432
+DE89370400440532013000
+DE89 3704 0044 0532 0130 00
 0
 0
 0
 0
 <NULL>
 0
+<NULL>
+<NULL>
+0.1.0

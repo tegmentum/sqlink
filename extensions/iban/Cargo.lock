@@ -139,6 +139,8 @@ checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 name = "iban-extension"
 version = "0.1.0"
 dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
  "wit-bindgen",
  "wit-bindgen-rt",
 ]
@@ -172,6 +174,12 @@ name = "leb128fmt"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
+
+[[package]]
+name = "libsqlite3-sys"
+version = "0.38.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6c19a05435c21ac299d71b6a9c13db3e3f47c520517d58990a462a1397a61db"
 
 [[package]]
 name = "log"
@@ -278,6 +286,13 @@ name = "slab"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
+
+[[package]]
+name = "sqlite-embed"
+version = "0.1.0"
+dependencies = [
+ "libsqlite3-sys",
+]
 
 [[package]]
 name = "syn"

@@ -3,11 +3,14 @@ name = "iban-extension"
 version = "0.1.0"
 edition = "2021"
 description = """
-IBAN  ISO 13616 international bank account number
+IBAN  ISO 13616 international bank account number validation +
+decomposition (mod-97 / ISO 7064).
 """
 license = "MIT"
 publish = false
 
+# Standalone workspace per project rules; does not affect `make ext`.
+[workspace]
 
 [lib]
 crate-type = ["cdylib", "rlib"]
