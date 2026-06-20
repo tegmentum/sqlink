@@ -1,0 +1,46 @@
+[package]
+name = "multi-comparison-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Multiple comparison corrections for SQL p-value arrays. Companion to
+`hypothesis`  the obvious follow-up once you start computing more than
+one p-value at a time. Hand-rolled (no external statistics dependency):
+
+  mc_bonferroni(p_values_json, alpha)
+      Bonferroni  reject p_i if p_i <= alpha / N. Returns
+      {adjusted_alpha, reject_array}.
+
+  mc_holm(p_values_json, alpha)
+      Holm step-down  sort ascending, reject p_(i) while
+      p_(i) <= alpha / (N - i). Returns {sorted_indices, reject_array}.
+
+  mc_bh_fdr(p_values_json, q)
+      Benjamini-Hochberg FDR  reject all p_(i) up to the largest i
+      where p_(i) <= q * i / N. Returns {threshold, reject_array}.
+
+  mc_by_fdr(p_values_json, q)
+      Benjamini-Yekutieli FDR (dependent tests)  same as BH but with
+      the denominator scaled by c(N) = sum_{k=1..N} 1/k. Returns
+      {threshold, reject_array}.
+
+  multi_comparison_version()  text
+
+reject_array is a JSON array of 0/1 in the *original input order*, so
+callers can zip it back against their per-test rows. NULL / malformed
+JSON / non-numeric / out-of-range p-values  NULL.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# JSON in/out  inputs arrive as TEXT JSON arrays, outputs are objects.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

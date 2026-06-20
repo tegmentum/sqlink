@@ -1,0 +1,77 @@
+[package]
+name = "rsa-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+RSA signing, verification, encryption and decryption for SQL.
+
+Function surface (PLAN-more-extensions-x.md  rsa):
+  rsa_generate(bits)                       -> text   (JSON {priv_pem, pub_pem})
+  rsa_pub_from_priv(priv_pem)              -> text   (SPKI public PEM)
+  rsa_sign_pkcs1v15(priv_pem, msg)         -> blob   (PKCS#1 v1.5 sig, SHA-256)
+  rsa_verify_pkcs1v15(pub_pem, msg, sig)   -> integer 0/1
+  rsa_sign_pss(priv_pem, msg)              -> blob   (PSS sig, SHA-256)
+  rsa_verify_pss(pub_pem, msg, sig)        -> integer 0/1
+  rsa_encrypt_oaep(pub_pem, pt)            -> blob   (OAEP, SHA-256 mgf1)
+  rsa_decrypt_oaep(priv_pem, ct)           -> blob | NULL
+  rsa_version()                            -> text
+
+PEM-encoded keys: private keys are PKCS#8 (BEGIN PRIVATE KEY) and
+public keys are SPKI (BEGIN PUBLIC KEY) by default. PKCS#1 PEM
+(BEGIN RSA PRIVATE KEY / BEGIN RSA PUBLIC KEY) is also accepted on
+read. `rsa_generate` defaults to 2048 bits if bits < 2048 (we
+refuse to issue insecure keys); 3072/4096 supported.
+
+The signature schemes hash the message with SHA-256 inside the
+extension  callers pass the *plaintext* message, not a pre-computed
+digest. (This matches openssl + the rsa crate's `.sign_with_rng`
+ergonomics; the alternative  pre-digested input  is harder to
+test interactively from SQL.)
+
+`rsa_decrypt_oaep` returns NULL on any decryption failure (wrong
+key, tampered ciphertext, bad padding). Signature verification
+returns 0 on any failure  matching the secp256k1 / ed25519 pattern.
+
+Backed by the `rsa` 0.9 crate. Randomness from `getrandom`'s WASI
+path; the rsa crate accepts a `&mut R: CryptoRngCore` for both key
+generation and PSS / OAEP. We seed a `rand_chacha::ChaCha20Rng`
+from `getrandom` per call  ChaCha20 is the rsa crate's documented
+example RNG and avoids pulling all of `rand`.
+
+JSON output for `rsa_generate` is hand-formatted (two fields, both
+PEM strings); no serde dependency needed.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# rsa 0.9: pure-rust RSA  PKCS#1 v1.5 + PSS + OAEP + PKCS#8 PEM.
+# `sha2` feature wires SHA-256 into the signature/oaep helpers
+# (`Pkcs1v15Sign::new::<Sha256>()`, etc.). `pem` feature pulls in
+# pkcs8/pkcs1 PEM encode + decode.
+rsa = { version = "0.9", default-features = false, features = ["sha2", "pem", "std"] }
+sha2 = "0.10"
+# CSPRNG: ChaCha20Rng seeded from getrandom per call. The rsa crate's
+# `generate` / `sign_with_rng` / `encrypt` APIs take `&mut R:
+# CryptoRngCore`. ChaCha20Rng impls that trait (via rand_core 0.6).
+rand_chacha = "0.3"
+rand_core = { version = "0.6", features = ["getrandom"] }
+# `getrandom` v0.2 auto-routes to WASI's `random_get` on
+# `target_os = "wasi"` (which wasm32-wasip2 sets); the WASI
+# reactor adapter wires that to `wasi:random/random` on the host.
+getrandom = "0.2"
+# pkcs8 / pkcs1: PEM encoding traits for public + private keys.
+# These are already in rsa 0.9's dep tree; importing the trait
+# crates by name keeps `use` paths legible.
+pkcs8 = { version = "0.10", features = ["pem"] }
+pkcs1 = { version = "0.7", features = ["pem"] }

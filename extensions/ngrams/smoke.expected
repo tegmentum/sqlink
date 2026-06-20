@@ -1,0 +1,41 @@
+# ngrams_char(abcd, n)
+["ab","bc","cd"]
+["abc","bcd"]
+["abcd"]
+# n == char count → one window; n > char count → []
+["abc"]
+[]
+# n=1 → per-char tokenizer
+["h","i","!"]
+# Unicode scalar code points: CJK chars are one window-element each
+["日本","本語"]
+# ngrams_word — canonical "the quick brown fox" vectors
+["the quick","quick brown","brown fox"]
+["the quick brown","quick brown fox"]
+# whitespace collapsing — runs of tabs/spaces fold to single sep
+["a b","b c"]
+# n > word count → []
+[]
+# count scalars — char
+3
+1
+0
+2
+# count scalars — word
+3
+1
+0
+# empty string — 0 windows / []
+0
+0
+[]
+[]
+# NULL propagation on every scalar
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# version is non-empty
+1

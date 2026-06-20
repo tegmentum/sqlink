@@ -1,0 +1,56 @@
+[package]
+name = "hyphenation-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Liang/Knuth-Plass hyphenation for SQL — backed by the
+`hyphenation` 0.8 crate (Tex-style patterns). The classic
+Liang algorithm computes valid word-break opportunities; the
+Knuth-Plass typesetter then chooses where to actually break a
+line. We expose just the break-discovery half: per-word break
+positions + a U+00AD-injected variant for soft-hyphen aware
+renderers (browsers, terminal pagers, PDF layout engines).
+
+Functions:
+  hyphenate(word [, lang])           -> text   (U+00AD between syllables)
+  hyphenate_positions(word [, lang]) -> text   (JSON array of byte offsets)
+  hyphenation_languages()            -> text   (JSON array of supported langs)
+  hyphenation_version()              -> text
+
+Default lang is "en-us" — the only language embedded by default
+to keep the wasm artifact small (~50 KB of pattern data per
+language; the 79-language `embed_all` set is ~3 MB). To embed
+additional languages, rebuild with the `embed_all` cargo feature
+on this crate.
+
+NULL word → NULL. Unknown lang → SQL error. Words shorter than
+the language's left+right minimums round-trip unchanged (no
+break opportunities).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keep the parent workspace's host-target
+# build from pulling in wasm-only deps (wit-bindgen, the embedded
+# pattern blob, …). `make ext` invokes cargo with this crate's
+# manifest path directly, so the standalone workspace is purely a
+# fence — it doesn't change build semantics.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Knuth-Liang hyphenation patterns + the resolver that walks them.
+# `embed_en-us` bakes the en-us pattern file (~50 KB) into the
+# artifact so the scalar works zero-config. Other languages can
+# be enabled by flipping to `embed_all` (~3 MB, 79 languages).
+hyphenation = { version = "0.8", default-features = false, features = ["embed_en-us"] }
+
+# JSON output for hyphenate_positions / hyphenation_languages —
+# the break list and language registry are both tiny vectors;
+# serde_json keeps the encoding obvious and matches what the
+# json1 extension's consumers expect downstream.
+serde_json = "1"

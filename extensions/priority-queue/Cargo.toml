@@ -1,0 +1,33 @@
+[package]
+name = "priority-queue-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Named heap-backed priority queues with thread-local state.
+
+Scalars:
+  pq_push(name, priority, value)  INTEGER  new size after push
+  pq_pop(name)                    TEXT     highest-priority value (NULL if empty)
+  pq_peek(name)                   TEXT     highest-priority value, non-destructive
+  pq_size(name)                   INTEGER  current queue size
+  pq_clear(name)                  INTEGER  number of elements cleared
+  pq_drain(name)                  TEXT     JSON array of all values, highest-first; clears
+  pq_version()                    TEXT     crate version
+
+Higher numeric priority = higher rank. Backed by the `priority-queue`
+crate (BinaryHeap-style max-heap). Queue identity is the `name` TEXT
+arg, mapped through a thread-local HashMap; state lives for the life
+of the extension instance.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+priority-queue = "2"

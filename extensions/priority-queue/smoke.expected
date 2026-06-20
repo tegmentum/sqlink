@@ -1,0 +1,51 @@
+# version
+1
+# empty: peek / pop / size
+<NULL>
+<NULL>
+0
+# push three  returns running size
+1
+2
+3
+# size + peek (highest = 'high')
+3
+high
+# pop in priority order
+high
+mid
+low
+# empty again
+0
+<NULL>
+# FIFO tie-break at equal priority
+1
+2
+3
+a
+b
+c
+# drain: JSON highest-first, then size=0
+1
+2
+3
+["three","two","one"]
+0
+# clear: returns prior size, queue then empty
+1
+2
+2
+0
+<NULL>
+# named queues are independent
+1
+1
+1
+1
+A
+B
+# JSON escape: quote survives drain
+1
+["he said \"hi\""]
+# drain on never-pushed queue
+[]

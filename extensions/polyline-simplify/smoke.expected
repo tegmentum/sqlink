@@ -1,0 +1,30 @@
+# Collinear y=x: middle three points collapse, endpoints survive.
+[[0.0,0.0],[4.0,4.0]]
+# Geo crate's RDP doctest: at tol=1.0 the (17.3,3.2) point is dropped.
+[[0.0,0.0],[5.0,4.0],[11.0,5.5],[27.8,0.1]]
+# Geo crate's VW doctest: at tol=30 only first, sharpest peak, last survive.
+[[5.0,2.0],[7.0,25.0],[10.0,10.0]]
+# Aggressive tolerance still preserves first + last -> length 2.
+2
+# Two-point passthrough (DP).
+[[0.0,0.0],[1.0,1.0]]
+# Two-point passthrough (VW).
+[[0.0,0.0],[1.0,1.0]]
+# Empty array round-trips.
+[]
+# NULL JSON -> NULL.
+<NULL>
+# NULL tolerance -> NULL.
+<NULL>
+# Bad JSON (not json) -> NULL.
+<NULL>
+# Bad JSON (object) -> NULL.
+<NULL>
+# Bad JSON (flat ints) -> NULL.
+<NULL>
+# Bad JSON (wrong arity) -> NULL.
+<NULL>
+# Bad JSON (non-numeric) -> NULL.
+<NULL>
+# Version is non-empty.
+1

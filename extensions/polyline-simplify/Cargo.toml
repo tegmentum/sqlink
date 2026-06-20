@@ -1,0 +1,45 @@
+[package]
+name = "polyline-simplify-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Douglas-Peucker (Ramer-Douglas-Peucker) and Visvalingam-Whyatt
+polyline simplification for SQL. Wraps `geo` 0.30's `Simplify`
+and `SimplifyVw` traits.
+
+Function surface:
+  polyline_simplify_dp(points_json, tolerance)  -> JSON array
+  polyline_simplify_vw(points_json, tolerance)  -> JSON array
+  polyline_simplify_version()                   -> TEXT
+
+`points_json` is a JSON array of `[lng, lat]` pairs (the same shape
+the `google-polyline` extension produces on decode). `tolerance` is
+in the same units as the input coordinates (degrees if you pass raw
+lng/lat; meters if you've already projected). The first and last
+points are always preserved. Bad JSON / non-array input returns
+NULL (not an error), so the surface composes inside CASE / WHERE
+without try/catch shenanigans.
+
+Pairs with `google-polyline` (encode/decode polyline5/6) and the
+h3 / s2 cell extensions for storage-efficient route data.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 1: the parent workspace
+# does not attempt to build this crate natively. CLI embed wiring
+# is a coordinator-level concern.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# geo 0.30: just the Simplify + SimplifyVw traits. Default features
+# pull in earcutr / spade / multithreading (rayon-based) -- none of
+# which are needed for line simplification, and rayon doesn't build
+# on wasm32-wasip2 anyway.
+geo = { version = "0.30", default-features = false }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

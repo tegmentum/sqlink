@@ -1,0 +1,49 @@
+# AES-128-CTR  RFC 3686 §6 Test Vector #1. The byte-exact ciphertext
+# locks the (nonce || 32-bit counter starting at 1) layout in place.
+E4095D4FB7A7B3792D6175A3261311B8
+# CTR is symmetric: decrypt under the same key/nonce recovers the
+# 16-byte "Single block msg" plaintext from the RFC.
+Single block msg
+# Multi-block CTR round-trip under a 256-bit key  exercises both
+# the Aes256 codepath and the 32-bit counter increment across blocks.
+two blocks worth of plaintext beyond one block.
+# AES-128-CBC + PKCS#7 round trip  decrypt(encrypt(x)) == x for
+# the NIST SP 800-38A §F.2.1 plaintext (used here as text, not the
+# raw vector  PKCS#7 would add a 16-byte pad block on top).
+6bc1bee22e409f96e93d7e117393172a
+# AES-192-CBC + PKCS#7 round trip with a 24-byte key.
+hello aes-192-cbc + pkcs7
+# AES-256-CBC + PKCS#7 round trip with a 32-byte key.
+hello aes-256-cbc + pkcs7
+# Padded-length check: 5-byte PT  16-byte CT (one block, padding-
+# rounded up). PKCS#7 always adds at least one byte.
+16
+# 16-byte (block-aligned) PT  32-byte CT (data block + a full
+# padding block). Locks in "padding is mandatory" semantics.
+32
+# Wrong key on CBC decrypt  PKCS#7 unpadding fails  NULL, not error.
+<NULL>
+# Malformed 1-byte key on CBC decrypt  NULL.
+<NULL>
+# AES-SIV  RFC 5297 §A.1 deterministic encryption vector. Output is
+# `S2V tag || ciphertext`, matching the RFC's published bytes.
+85632D07C6E8F37F950ACD320A2ECC9340C02B9690C4DC04DAEF7F6AFE5C
+# Decrypt the RFC 5297 vector  recovers the 14-byte plaintext
+# 112233445566778899aabbccddee.
+112233445566778899AABBCCDDEE
+# SIV is deterministic by design: encrypting the same (key, ad, pt)
+# twice MUST yield the same ciphertext. Equality check  1 (true).
+1
+# SIV round trip with the AAD argument omitted entirely  the slot
+# is optional, and missing AAD is equivalent to empty AAD.
+hello siv (no aad)
+# SIV round trip with a 64-byte key  AES-256-SIV codepath.
+hello aes-256-siv
+# Wrong AAD on SIV decrypt  S2V tag mismatch  NULL.
+<NULL>
+# Wrong key on SIV decrypt  NULL.
+<NULL>
+# Malformed 1-byte key on SIV decrypt  NULL.
+<NULL>
+# Version string is non-empty  length > 0  1.
+1

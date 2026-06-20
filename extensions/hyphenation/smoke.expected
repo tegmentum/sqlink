@@ -1,0 +1,34 @@
+# hyphenate(): 3 SHYs inserted → length delta = 3
+3
+# hyphenated form split on SHY (rendered as `|`)
+hy|phen|a|tion
+# 2-arg explicit lang matches 1-arg default
+1
+# Mixed-case lang tag works (lowercased internally)
+1
+# NULL lang → use default
+1
+# Short word — below en-us minimum letter count, unchanged
+cat
+1
+# hyphenate_positions: classic en-us examples
+[2,6,7]
+[2,6,8]
+# Short word → empty JSON array
+[]
+# json_array_length on the break list
+3
+# Default + explicit lang produce identical positions
+1
+# hyphenation_languages: at least en-us present
+1
+en-us
+# version is non-empty
+1
+# NULL word propagation
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# Unknown / non-embedded lang surfaces a SQL error
+Error: hyphenation: unknown or non-embedded language "de"; supported in this build: en-us

@@ -1,0 +1,28 @@
+# rsa_version() is non-empty.
+1
+# rsa_pub_from_priv reproduces the embedded SPKI PEM byte-for-byte.
+1
+# PKCS#1 v1.5 round-trip: sign + verify with matching key  1.
+1
+# PKCS#1 v1.5 is deterministic: two signatures over the same (key, msg) are equal.
+1
+# PKCS#1 v1.5 tamper: bit-flipped message vs original signature  0.
+0
+# PSS round-trip: sign + verify  1. (PSS uses RNG for salt; verify
+# still passes because the salt is encoded in the signature.)
+1
+# PSS tamper: bit-flipped message  0.
+0
+# OAEP round-trip: decrypt(encrypt("Hello, World!"))  hex of the plaintext.
+48656C6C6F2C20576F726C6421
+# OAEP tamper: prepending a 0x00 to the ciphertext corrupts OAEP  NULL.
+<NULL>
+# rsa_generate(2048) JSON contains both priv_pem and pub_pem fields.
+1
+# NULL / junk tolerance: 6 rows of NULL.
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>

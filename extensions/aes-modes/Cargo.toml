@@ -1,0 +1,73 @@
+[package]
+name = "aes-modes-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+AES non-AEAD modes for SQL: CBC, CTR, and deterministic SIV.
+
+Why this exists alongside `aead`: aead covers AES-GCM-256 and
+ChaCha20-Poly1305  the two AEADs you reach for first. This crate
+covers the modes you still meet at boundaries:
+
+  AES-CBC        legacy interop + TLS 1.0/1.1 / IPsec / disk crypto
+  AES-CTR        RFC 3686, the building block under GCM, raw stream
+  AES-SIV        deterministic AEAD (RFC 5297). Keywrap-shaped key
+                 storage, idempotent encrypt for dedup.
+
+Surface (scalar functions):
+  aes_cbc_encrypt(key, iv, pt) -> blob
+  aes_cbc_decrypt(key, iv, ct) -> blob | NULL
+        PKCS#7 pad; 16/24/32-byte keys; 16-byte iv
+
+  aes_ctr_encrypt(key, nonce, pt) -> blob
+  aes_ctr_decrypt(key, nonce, ct) -> blob
+        16/24/32-byte keys; 12-byte nonce (RFC 3686 style; the
+        cipher seeds the 32-bit counter at 1). CTR is symmetric
+        so decrypt is just a re-encrypt under the same nonce.
+
+  aes_siv_encrypt(key, pt, [aad]) -> blob
+  aes_siv_decrypt(key, ct, [aad]) -> blob | NULL
+        32-byte key  AES-128-SIV; 64-byte key  AES-256-SIV.
+        Deterministic: same (key, aad, pt)  same ct. The 16-byte
+        S2V tag is prepended (siv layout) so decrypt is self-
+        synchronizing.
+
+  aes_modes_version() -> text
+
+CBC / SIV decrypt return NULL on bad pad / wrong key / bad tag
+same "did this decrypt cleanly?" SQL contract used in the aead
+crate. CTR has no auth tag so the decrypt path simply re-keystreams
+and trusts the caller.
+
+Test vectors (locked in smoke.sql):
+  AES-CTR  RFC 3686 §6 test vector 1 (128-bit key, single block).
+  AES-CBC  NIST SP 800-38A §F.2.1 / .5.1 single block at zero IV.
+  AES-SIV  RFC 5297 §A.1 worked example.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: this crate intentionally
+# does not participate in the top-level workspace so a `cargo build`
+# at the repo root never tries to compile a wasm-target crate against
+# the host triple. The Makefile's `make ext NAME=aes-modes` drives the
+# wasm32-wasip2 build directly.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+
+# RustCrypto stack. Versions pinned to the brief's request:
+#   aes 0.8 supplies the block cipher (Aes128/192/256, BlockCipher).
+#   cbc 0.1 layers PKCS#7 padding + IV chaining on top.
+#   ctr 0.9 gives the counter-mode StreamCipher with a 32-bit ctr.
+#   aes-siv 0.7 implements RFC 5297 (CMAC S2V + CTR).
+# `alloc` features keep us in core/alloc land for wasm32-wasip2.
+aes = { version = "0.8", default-features = false }
+cbc = { version = "0.1", default-features = false, features = ["alloc", "block-padding"] }
+ctr = { version = "0.9", default-features = false }
+aes-siv = { version = "0.7", default-features = false, features = ["alloc"] }

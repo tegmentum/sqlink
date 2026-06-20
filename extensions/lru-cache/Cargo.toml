@@ -1,0 +1,29 @@
+[package]
+name = "lru-cache-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+LRU cache as in-process scalars. Per-connection (per host VM), in-memory only — values do not persist across CLI runs. Backed by lru 0.12.
+
+Functions:
+  lru_put(key, value)        -> integer (1 if inserted, 0 if updated)
+  lru_get(key)               -> the stored value (TEXT/BLOB/INTEGER/REAL) or NULL
+  lru_remove(key)            -> integer (1 if removed, 0 if absent)
+  lru_capacity()             -> integer (current capacity)
+  lru_capacity_set(cap)      -> integer (new capacity)
+  lru_size()                 -> integer (current number of entries)
+  lru_clear()                -> integer (entries cleared)
+  lru_version()              -> text
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+lru = "0.12"

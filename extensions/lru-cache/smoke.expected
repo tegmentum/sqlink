@@ -1,0 +1,59 @@
+# version + defaults: non-empty string, default cap 128, empty
+1
+128
+0
+# TEXT round-trip: three fresh puts return 1 each, size becomes 3
+1
+1
+1
+3
+# get returns the stored value
+apple
+banana
+cherry
+# put-over-existing returns 0 (updated, not inserted); size unchanged
+0
+apricot
+3
+# miss returns NULL
+1
+# INTEGER round-trip: 1 (inserted), value 42, typeof integer
+1
+42
+integer
+# REAL round-trip: 1 (inserted), value 3.5, typeof real
+1
+3.5
+real
+# BLOB round-trip: 1 (inserted), hex CAFEBABE, typeof blob
+1
+CAFEBABE
+blob
+# remove: first call returns 1, second returns 0, get is NULL
+1
+0
+1
+# live entries now: a,c,int,pi,blob = 5
+5
+# shrink cap to 3: returns 3, capacity reports 3, size drops to 3
+3
+3
+3
+# clear returns prior size (3), then size=0
+3
+0
+# shrink cap to 2, two fresh puts: returns 2 (cap), then 1,1 inserted, size 2
+2
+1
+1
+2
+# touch x (=1), insert z (=1 new), x still 1, y evicted (NULL=1), z=3, size 2
+1
+1
+1
+1
+3
+2
+# final clear returns prior size (2), then size=0
+2
+0

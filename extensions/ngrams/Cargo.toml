@@ -1,0 +1,40 @@
+[package]
+name = "ngrams-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+N-gram tokenization scalars (character + word) for SQL.
+
+Hand-rolled, no upstream crate dep — n-grams are a 40-line
+sliding window over `chars()` / `split_whitespace()`. Unicode-
+aware: char n-grams use Rust's `char` iterator (scalar code
+points, not bytes), and word n-grams use `split_whitespace()`
+(any Unicode whitespace). JSON output uses `serde_json` so the
+window tokens are quoted/escaped correctly for downstream
+`json_each` consumption.
+
+Functions:
+  ngrams_char(text, n)        TEXT (JSON array of n-char windows)
+  ngrams_word(text, n)        TEXT (JSON array of n-word windows)
+  ngrams_count_char(text, n)  INTEGER  (number of char n-grams)
+  ngrams_count_word(text, n)  INTEGER  (number of word n-grams)
+  ngrams_version()            TEXT
+
+NULL semantics: any NULL argument → NULL output. Errors on
+n < 1. When the input has fewer than n chars/words, the result
+is `[]` and the count is 0.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Used only to render the JSON output for ngrams_char / ngrams_word.
+# Default-features-on is fine — we want std for `to_string`.
+serde_json = "1"
