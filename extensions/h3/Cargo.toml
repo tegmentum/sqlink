@@ -1,0 +1,48 @@
+[package]
+name = "h3-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Uber's H3 hexagonal hierarchical geospatial index, exposed
+as i64 cell indices. Different surface from the existing
+`geo` extension's compact h3_to_cell/h3_to_geo (which uses
+TEXT cell hex): this extension is the "full H3 API" port,
+keying cells as INTEGER for fast PK / FK use.
+
+Scalars:
+  h3_latlng_to_cell(lat, lng, resolution) -> INTEGER (H3Index as i64)
+  h3_cell_to_latlng(cell)                 -> TEXT 'lat,lng'
+  h3_cell_to_boundary(cell)               -> TEXT (JSON list of 'lat,lng')
+  h3_cell_resolution(cell)                -> INTEGER (0-15)
+  h3_cell_parent(cell, resolution)        -> INTEGER
+  h3_cell_children(cell, resolution)      -> TEXT (JSON list of cell i64)
+  h3_neighbors(cell)                      -> TEXT (JSON list of i64, six cells)
+  h3_k_ring(cell, k)                      -> TEXT (JSON list of i64)
+  h3_distance(cell_a, cell_b)             -> INTEGER (or NULL)
+  h3_is_valid(cell)                       -> INTEGER (0 or 1)
+
+Backed by h3o (pure-rust port of Uber's H3, BSD-3). No C deps,
+clean wasm32-wasip2 build.
+
+H3 cell indices fit in u64 with the top mode bits clear, so a
+two-way bitcast u64 <-> i64 round-trips losslessly through
+SQLite's INTEGER type.
+
+Per PLAN-extensions-and-handlers.md #8.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace so the parent workspace does not try to
+# build this crate natively. The parent workspace builds for the
+# host triple; this crate is wasm-only.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+h3o = { version = "0.7", default-features = false }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
