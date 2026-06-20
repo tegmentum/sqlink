@@ -1,0 +1,35 @@
+# CBOR int 1 → 0x01 (byte-exact)
+01
+# CBOR text "hi" → 0x62 0x68 0x69
+626869
+# MessagePack empty map → 0x80
+80
+# MessagePack int 1 → 0x01 (positive fixint)
+01
+# CBOR round-trip of structured JSON
+{"a":1,"b":[2,3]}
+# MessagePack round-trip of structured JSON
+{"a":1,"b":[2,3]}
+# CBOR primitives round-trip: int, text
+42
+"hello"
+# MessagePack primitives round-trip: int, text
+42
+"hello"
+# Boolean / null shape via JSON
+true
+null
+false
+# NULL in → NULL out (4 functions)
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# Malformed BLOBs → NULL (CBOR, MessagePack)
+<NULL>
+<NULL>
+# Array round-trip (CBOR, MessagePack)
+[1,2,3]
+[1,2,3]
+# version non-empty
+1

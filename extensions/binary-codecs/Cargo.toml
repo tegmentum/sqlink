@@ -1,0 +1,55 @@
+[package]
+name = "binary-codecs-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+MessagePack + CBOR encode/decode scalars  modern binary
+serialization codecs alongside SQLite's builtin JSON1. Focused
+counterpart to the older `codecs` bundle (which also includes
+YAML); this crate is binary-only and accepts SQL primitives
+directly without forcing the caller to JSON-quote them.
+
+Functions:
+  msgpack_encode(value)        -> BLOB
+  msgpack_decode(blob)         -> TEXT  (canonical JSON)
+  cbor_encode(value)           -> BLOB
+  cbor_decode(blob)            -> TEXT  (canonical JSON)
+  binary_codecs_version()      -> TEXT
+
+`value` may be:
+  * TEXT that parses as a JSON value  the JSON is encoded
+    structurally (object/array/etc).
+  * TEXT that does not parse as JSON  encoded as a string.
+  * INTEGER  encoded as a CBOR/MsgPack integer.
+  * REAL    encoded as a CBOR/MsgPack float.
+  * BLOB    encoded as a CBOR/MsgPack byte-string.
+  * NULL    returns NULL.
+
+Decode pivots through serde_json::Value, so binary byte-strings
+in the source are surfaced as a JSON array of byte values (CBOR
+preserves byte-string-vs-text via serde's native handling; for
+the JSON-level API surface this loses the distinction).
+
+Errors on the encode side are returned as SQL errors; errors on
+the decode side return NULL so a malformed BLOB in a column
+doesn't blow up an entire SELECT.
+
+Per PLAN-more-extensions.md  8.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+ciborium = { version = "0.2", default-features = false }
+rmp-serde = "1"
