@@ -1,0 +1,49 @@
+[package]
+name = "lz4-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+LZ4 compression scalars. Backed by `lz4_flex` (pure-Rust, no C
+deps, ~100 KB of code). Two operating modes:
+
+  lz4_compress(blob)               -> BLOB   LZ4 frame format
+                                              (recognized by the
+                                              `lz4` CLI on disk)
+  lz4_decompress(blob)             -> BLOB   inverse of above
+  lz4_compress_raw(blob)           -> BLOB   LZ4 block format with
+                                              the original length
+                                              prepended as a 4-byte
+                                              little-endian u32
+                                              (matches lz4_flex's
+                                              `compress_prepend_size`)
+  lz4_decompress_raw(blob)         -> BLOB   inverse of compress_raw
+
+The frame format is the on-disk container produced by `lz4 file.txt`
+(magic 04 22 4d 18); use it when you want interop with the lz4 CLI.
+The raw block format skips the frame envelope (smaller for very
+small inputs, no integrity checksum, no streaming dictionary).
+
+NULL inputs return NULL on both encode and decode  matches the
+miniz / compress conventions used elsewhere in this catalog.
+
+Per PLAN-extensions-and-handlers.md section 6.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace: keeps the parent workspace from trying to
+# build this for the host target (lz4_flex compiles fine native,
+# but the parent ships wasi-component extensions, not native libs).
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-Rust LZ4. Default features (std + safe-encode + safe-decode
+# + frame + checked-decode) are what we want: frame for the on-disk
+# container, checked-decode so malformed input returns an Err
+# instead of UB.
+lz4_flex = { version = "0.11", default-features = true }

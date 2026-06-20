@@ -1,0 +1,17 @@
+# LZ4 frame + raw block round-trips, magic check, NULL propagation.
+# Frame magic 04 22 4d 18 is what the `lz4` CLI looks for on disk
+# (acceptance row in PLAN-extensions-and-handlers.md section 6).
+1
+1
+1
+04224D18
+1
+1
+1
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+1
+1
+1
