@@ -103,6 +103,32 @@ belongs in the database, not in the handler. Components share the
 host's on-disk compile cache (`SQLITE_WASM_COMPILE_CACHE`), so
 restart cost is bounded after the first run.
 
+#### Example handlers
+
+Two reference components live under `handlers/`. Both are built
+the same way: `cd handlers/NAME && ./build.sh`. The result is
+`target/wasm32-wasip2/release/wasm_NAME_handler.component.wasm`.
+
+- **`handlers/echo`**  ~100 lines. Receives the request JSON,
+  returns a one-line summary as `text/plain`. Tiny enough to
+  read end-to-end as a contract reference.
+
+- **`handlers/sql`** (~1.9 MB; sqlite-wasm-core bundled inside)
+  treats the request body (POST) or `?q=` query (GET) as a SQL
+  statement, runs it against a fresh `:memory:` database living
+  inside the wasm sandbox, returns the rows as the same JSON
+  shape the built-in `/sql` endpoint emits:
+
+      $ curl -X POST localhost:8080/sqlbox -d "SELECT 1+1 AS two"
+      {"columns":["two"],"rows":[[2]],"rowcount":1}
+      $ curl localhost:8080/sqlbox?q=SELECT%20sqlite_version()
+      {"columns":["sqlite_version()"],"rows":[["3.53.2"]],"rowcount":1}
+
+  Each request has its own SQLite state  no leakage across
+  calls; the host's main database is untouched. The "scratch SQL
+  endpoint" use case: process-isolated SQL execution without
+  spawning a process.
+
 ## Quickstart
 
 ```
