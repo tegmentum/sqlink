@@ -1,0 +1,39 @@
+# webauthn_version length > 0
+1
+# webauthn_register_options -> $.rp.id / $.user.name / $.attestation
+example.com
+alice
+none
+# pubKeyCredParams has 3 entries (ES256, EdDSA, RS256)
+3
+# challenge is at least 43 chars (32 raw bytes -> b64url)
+1
+# webauthn_auth_options: 2-arity + 3-arity userVerification override
+example.com
+preferred
+required
+# allowCredentials passthrough length 1
+1
+# verify_registration garbage -> NULL
+1
+1
+# verify_authentication garbage -> NULL
+1
+# EdDSA AUTH round-trip: new_sign_count, user_verified
+1
+1
+# Wrong challenge -> NULL
+1
+# Wrong rpId -> NULL
+1
+# Wrong public key -> NULL
+1
+# Sign-count regression -> NULL
+1
+# EdDSA REGISTRATION: credential_id (b64url of 0x0102030405060708),
+# attestation_format, user_id (b64url of "user-internal-id-001")
+AQIDBAUGBwg
+none
+dXNlci1pbnRlcm5hbC1pZC0wMDE
+# Full register->auth chain via json_extract  IS NOT NULL
+1

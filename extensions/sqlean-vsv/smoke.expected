@@ -1,0 +1,17 @@
+# Two surfaces: vsv vtab module + vsv_parse scalar.
+# Scalar emits JSON arrays of objects, NULL on parse failure
+# coerces to JSON null.
+# Happy path: INT + TEXT + REAL coercion across two rows.
+[{"id":1,"name":"alice","balance":100.5},{"id":2,"name":"bob","balance":250.75}]
+# Row with 'notanumber' for REAL -> JSON null.
+[{"id":3,"name":"carol","balance":null}]
+# Empty cell on numeric col -> JSON null.
+[{"id":4,"name":"dan","balance":null}]
+# Unknown type "WHATEVER" falls back to TEXT; quoted CSV cell.
+[{"greeting":"hello, world","tag":"x"}]
+# vsv_parse returns TEXT (a JSON string).
+text
+# NULL CSV input -> NULL output.
+<NULL>
+# Single-cell INT happy path.
+[{"n":42}]

@@ -1,0 +1,50 @@
+[package]
+name = "sqlean-vsv-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Virtual CSV view  port of sqlean's `vsv` vtab module.
+
+Like the upstream `csv` extension this reads a CSV file and
+exposes it as a virtual table, but unlike `csv` it accepts a
+typed column-spec and coerces each cell to the declared type.
+A cell that fails to parse for its declared type becomes NULL
+(NULL on parse failure  spec'd behavior).
+
+CREATE VIRTUAL TABLE call shape:
+
+    CREATE VIRTUAL TABLE t USING vsv(
+        filename='/path/to/file.csv',
+        schema='col1 INT, col2 TEXT, col3 REAL',
+        header=true
+    );
+
+`filename=` is required. `schema=` is required and must be a
+comma-separated list of `name TYPE` pairs. Supported types:
+    INT / INTEGER  -> SqlValue::Integer
+    REAL / FLOAT   -> SqlValue::Real
+    TEXT           -> SqlValue::Text
+    BLOB           -> SqlValue::Blob (raw bytes of the cell)
+Anything else falls through as TEXT.
+
+`header=true` strips the first row before iteration. Defaults to
+false.
+
+Alternate scalar surface (file-less): for callers that already
+have the CSV in a SQL value (a literal, an HTTP response, etc.)
+the extension also exports `vsv_parse(csv_text, schema)` which
+returns a JSON array of row objects, with the same NULL-on-
+parse-failure semantics. Useful when fileio isn't available
+(e.g. in the wasm sandbox without a usable preopen).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

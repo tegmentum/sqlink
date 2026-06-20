@@ -1,0 +1,67 @@
+[package]
+name = "webauthn-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+WebAuthn Level 2/3 registration + authentication verification for SQL.
+
+Surface (scalars):
+  webauthn_register_options(rp_id, rp_name, user_id_blob, user_name,
+                            user_display_name)
+        -> text/json   PublicKeyCredentialCreationOptions
+  webauthn_verify_registration(options_json, response_json, expected_rp_id)
+        -> text/json | NULL
+        On success returns {user_id, credential_id, public_key,
+        sign_count, attestation_format}.  NULL on any verify failure.
+  webauthn_auth_options(rp_id, allow_credentials_json [, user_verification])
+        -> text/json   PublicKeyCredentialRequestOptions
+  webauthn_verify_authentication(options_json, response_json,
+                                 credential_pub_key, expected_sign_count)
+        -> text/json | NULL
+        On success returns {new_sign_count, user_verified}.  NULL on any
+        verify failure.
+  webauthn_version() -> text
+
+Notes:
+  * Attestation chain validation is INTENTIONALLY deferred (spec § 7.1
+    step 20  trustworthiness): we verify the signature, the RP ID hash,
+    origin, and challenge binding; AAGUID-/cert-based attestation trust
+    is a deployment-policy follow-up (the chain bytes are passed through
+    via the attestation_format field for the caller's own pipeline).
+  * webauthn-rs (the established Rust implementation) pulls in
+    `openssl-sys`, which has no usable wasm32-wasip2 cross build path.
+    This extension hand-rolls the COSE-key parse + signature verify +
+    authenticator-data parse over RustCrypto so the resulting component
+    stays under ~2 MiB.
+  * Algorithms supported on credential public keys: ES256 (COSE -7),
+    EdDSA / Ed25519 (-8), RS256 (-257). RS256 covers the bulk of
+    Windows Hello / older platform authenticators; ES256 / Ed25519
+    cover modern hardware keys + passkeys.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# CBOR (authenticatorData attestedCredentialData embeds a COSE_Key in
+# CBOR; the attestationObject itself is a CBOR map).
+ciborium = { version = "0.2", default-features = false }
+ciborium-io = { version = "0.2", default-features = false }
+# Crypto building blocks. RustCrypto only  all wasi-clean.
+sha2 = { version = "0.10", default-features = false }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "alloc"] }
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
+rsa = { version = "0.9", default-features = false, features = ["sha2"] }
+# getrandom v0.2 auto-routes to WASI on `target_os = "wasi"` (set by
+# wasm32-wasip2). Used to generate registration/auth challenges.
+getrandom = "0.2"
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }

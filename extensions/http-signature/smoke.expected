@@ -1,0 +1,30 @@
+# http_sig_input: signature-input header value (alphabetical param order)
+("@method" "@path" "host" "date");alg="hmac-sha256";created=1700000000;keyid="test-key"
+# http_sig_base: canonical signature base (LF replaced with |)
+"@method": POST|"@path": /foo|"host": example.com|"date": Tue, 20 Apr 2021 02:07:55 GMT|"@signature-params": ("@method" "@path" "host" "date");alg="hmac-sha256";created=1700000000;keyid="test-key"
+# HMAC-SHA256 sign over the canonical base
+QGpGWGqH/WYroqwzcVk4dfY0jRt67uAIZU7vRpesZUY=
+# HMAC-SHA256 verify with the matching key
+1
+# HMAC-SHA256 verify with wrong key
+0
+# HMAC-SHA512 sign
+HaFe0SYP30Z7KkZZTwfaAsipUOQmkSRzZlYWDrVXUhln0yVGbwZdOYFQjeki1qYhWLG9iI+9JLeUobAkJ7lYng==
+# Ed25519 sign (deterministic, RFC 8037 seed)
+8h/Xqac9WO/g7Ow7KkhLo1xhptemZuRwEEkBDRMZzMVepQzWKReJ13KXRpvwatZe0IgDmaVf/N0P2kTcny4vCA==
+# Ed25519 verify with matching public key
+1
+# Ed25519 verify with wrong public key
+0
+# header value normalization: leading/trailing OWS stripped, internal runs collapsed
+"x-test": multi space value|"@signature-params": ("x-test")
+# @path strips query string; @query carries it
+"@method": GET|"@path": /items|"@query": ?id=42&sort=asc|"@signature-params": ("@method" "@path" "@query")
+# case-insensitive header lookup ("Date" matches lowercase "date" component)
+"date": Mon, 01 Jan 2024 00:00:00 GMT|"@signature-params": ("date")
+# unknown alg on verify => 0
+0
+# bad base64 sig => 0
+0
+# version is non-empty
+1

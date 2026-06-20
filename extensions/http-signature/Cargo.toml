@@ -1,0 +1,57 @@
+[package]
+name = "http-signature-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+HTTP Message Signatures (RFC 9421) for SQL.
+
+The signing surface ActivityPub / Mastodon / SSF use to authenticate
+inter-server HTTP requests. There is no canonical pure-Rust crate that
+cross-compiles cleanly to wasm32-wasip2 (the `http-sig` /
+`http-signature-normalization` crates pull `http` + `hyper` types),
+so the canonical signature-base construction is rolled by hand over
+`hmac` + `sha2` + `ed25519-dalek` + `base64`, the same trick the
+`jwt` extension uses.
+
+Function surface:
+  http_sig_base(method, path, headers_json, components_json)        -> text
+  http_sig_input(method, path, headers_json, components_json)       -> text
+  http_sig_sign_hmac(base, key, alg)                                -> text (base64)
+  http_sig_verify_hmac(base, sig_b64, key, alg)                     -> integer 0/1
+  http_sig_sign_ed25519(base, priv_blob)                            -> text (base64)
+  http_sig_verify_ed25519(base, sig_b64, pub_blob)                  -> integer 0/1
+  http_sig_version()                                                -> text
+
+`alg` is the RFC 9421 algorithm identifier: hmac-sha256 | hmac-sha512.
+`components_json` is the JSON spec consumed by both `http_sig_base`
+and `http_sig_input`; it has the shape:
+  {
+    "components": ["@method", "@path", "date", "host"],
+    "params": {"created": 1234, "keyid": "kid-1", "alg": "hmac-sha256"}
+  }
+`headers_json` is `{header_name_lc: value, ...}`. Header names are
+matched case-insensitively per RFC 9421 §2.1.
+
+`http_sig_base` returns the canonical signature base string per
+§2.5; `http_sig_input` returns the signature-input header value
+(parameter list + params), which is the last line of the base
+without the leading `\"@signature-params\": ` label.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+hmac = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

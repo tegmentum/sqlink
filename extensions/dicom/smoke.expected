@@ -1,0 +1,63 @@
+# Expected output for the `dicom` smoke harness.
+#
+# Fixture: a hand-crafted DICOM Part 10 blob with FMI (Explicit VR LE,
+# TransferSyntaxUID=1.2.840.10008.1.2.1) + dataset elements:
+#   (0008,0020) StudyDate=20240115
+#   (0008,0060) Modality=CT
+#   (0008,0070) Manufacturer=Acme Medical
+#   (0010,0010) PatientName=Doe^John
+#   (0010,0020) PatientID=P12345
+#   (0028,0010) Rows=512
+#   (0028,0011) Columns=256
+#   (0028,0100) BitsAllocated=16
+
+# ---- Acceptance 1: patient name (PN "Doe^John" -> "Doe John") ----
+Doe John
+
+# ---- Acceptance 2: patient id ----
+P12345
+
+# ---- Acceptance 3: study date (DA -> ISO 8601 calendar date) ----
+2024-01-15
+
+# ---- Acceptance 4: modality ----
+CT
+
+# ---- Acceptance 5: manufacturer ----
+Acme Medical
+
+# ---- Acceptance 6: dimensions JSON + spot-checks ----
+{"rows":512,"cols":256,"bits":16}
+512
+256
+16
+
+# ---- Acceptance 7: transfer syntax UID ----
+1.2.840.10008.1.2.1
+
+# ---- Acceptance 8: dicom_tag accessor ----
+2024-01-15
+1.2.840.10008.1.2.1
+<NULL>
+
+# ---- Acceptance 9: metadata JSON spot-checks ----
+CT
+2024-01-15
+
+# ---- Acceptance 10: is_valid 1 on the full blob ----
+1
+
+# ---- Acceptance 11: non-DICOM -> NULL on accessors; 0 on is_valid ----
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+0
+
+# ---- Acceptance 12: NULL input -> NULL on every fn ----
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 13: version is non-empty ----
+1
