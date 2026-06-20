@@ -4650,6 +4650,7 @@ dependencies = [
  "sqlite-wasm-core",
  "sqlparse-extension",
  "ssn-extension",
+ "stats-extension",
  "template-extension",
  "text-nlp-extension",
  "text-utils-extension",
@@ -4835,6 +4836,8 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 name = "stats-extension"
 version = "0.1.0"
 dependencies = [
+ "libsqlite3-sys",
+ "sqlite-embed",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",
 ]

@@ -807,6 +807,11 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = csv_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-csv: register_into failed rc={rc}"); }
     }
+    #[cfg(feature = "embed-stats")]
+    {
+        let rc = stats_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-stats: register_into failed rc={rc}"); }
+    }
 }
 
 // =========================================================================
