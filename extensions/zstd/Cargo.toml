@@ -1,0 +1,71 @@
+[package]
+name = "zstd-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Zstandard compression scalars. Backed by the `zstd` crate
+(wrapping the C `libzstd` reference encoder/decoder via
+`zstd-sys`). Both compress and decompress are supported on
+wasm32-wasip2  the C source cross-compiles cleanly against
+wasi-sdk clang (probed before commit; see
+PLAN-extensions-and-handlers.md  7).
+
+Functions:
+  zstd_compress(data, [level])                  -> BLOB
+  zstd_decompress(blob)                         -> BLOB
+  zstd_compress_dict(data, dict_blob, [level])  -> BLOB
+  zstd_decompress_dict(blob, dict_blob)         -> BLOB
+  zstd_version()                                -> TEXT
+
+Default level is 3 (zstd's documented default; matches the `zstd`
+CLI's default and the in-memory `encode_all(..., 3)` path). Level
+0 means "use default"  same convention as the C API. Negative
+levels (fast mode, down to -22 on modern libzstd) and high levels
+(up to 22) are passed through unchanged.
+
+The output of `zstd_compress` is a self-framed zstd stream  the
+same wire format the `zstd` CLI writes to disk (magic
+28 b5 2f fd). It round-trips with `zstd -d` and with any other
+conforming decoder; we lock that interop in smoke.sql with a
+fixture compressed by the host's `zstd` binary.
+
+Dict variants use raw dictionary bytes (not the prefixed
+"trained dict" format with magic ec 30 a4 37). A dict is just
+bytes shared between encoder + decoder; the compressor builds a
+literal/sequence prefix from it. Encode with dict X, decode with
+dict X, and the bytes match the original.
+
+Per PLAN-extensions-and-handlers.md  7.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate for the host target
+# (libzstd-sys would still link fine native, but the parent ships
+# wasi-component extensions, not native libs, and we don't want
+# to drag a C build into every `cargo check`).
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# `embed` is the native-register path used when this crate is
+# pulled into sqlite-cli-embedded as a Rust dep. Wiring the embed
+# module + sqlite-embed dependency is a separate follow-up (per
+# the standalone-workspace rule for new extensions); we declare
+# the feature now so the `cfg(feature = "embed")` gates in lib.rs
+# don't produce `unexpected_cfgs` warnings.
+embed = []
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# `zstd` 0.13 + `zstd-sys` 2.0 (reference C libzstd 1.5.7).
+# Probed against wasm32-wasip2 + wasi-sdk clang on 2026-06-20; the
+# C source compiles cleanly with no patches under
+#   CC_wasm32_wasip2=$WASI_SDK/bin/clang
+#   AR_wasm32_wasip2=$WASI_SDK/bin/ar
+# (both supplied by the workspace root .cargo/config.toml).
+zstd = { version = "0.13", default-features = false }

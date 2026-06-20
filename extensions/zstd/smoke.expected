@@ -1,0 +1,26 @@
+# Expected SELECT output for extensions/zstd/smoke.sql, one row
+# per SELECT in source order. Comments + blanks ignored by smoke.py.
+#
+# zstd_version() reports this crate's semver.
+0.1.0
+# Round-trip at default level: decompressed length == input length (11).
+1
+# Round-trip at levels 1, 3, 19: each returns the input ("the quick brown fox", 19 bytes).
+19
+19
+19
+# Level 0 == level 3 (zstd C API convention: 0 means default).
+1
+# Cross-impl: a blob produced by `zstd -3` CLI decompresses to "hello world".
+1
+# Frame magic of our compressor's output is 28 B5 2F FD (zstd frame magic, hex-uppered by `hex()`).
+28B52FFD
+# Dict round-trip with explicit level 3.
+31
+# Dict round-trip via the 2-arg (default level) form.
+26
+# Compressing a ~3.6 KB highly-redundant payload yields a small (<200 byte) blob.
+1
+# NULL propagates through both compress and decompress.
+<NULL>
+<NULL>
