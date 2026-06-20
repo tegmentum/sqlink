@@ -1,0 +1,52 @@
+# ssh-key  PLAN-more-extensions-5.md  3 acceptance.
+# Fixtures: ed25519 / rsa-2048 / ecdsa-p256 public keys + an
+# unencrypted ed25519 private key + an encrypted ed25519 private
+# key (all embedded as hex literals in smoke.sql).
+#
+# Acceptance 1: algorithm + bits + comment, three key types.
+ssh-ed25519
+ssh-rsa
+ecdsa-sha2-nistp256
+256
+2048
+256
+smoke@example.com
+rsa-smoke@example.com
+ecdsa-smoke@example.com
+# Acceptance 2: SHA-256 fingerprint matches `ssh-keygen -lf`.
+SHA256:O0/oKMoNiFA5dZbnFbuSrtNjAcH4nCTAOv9N/fS0Y0c
+SHA256:+k4u7vS2Jp4JdCiimuRv8+e9VerJv8GU9702LToZeQY
+SHA256:AcryHb+GKnxKFEsgh7Fb2HqhEPtgNk7Xyl/3zvmBTJ4
+# Acceptance 2b: MD5 fingerprint matches `ssh-keygen -E md5 -lf`.
+MD5:91:ba:26:70:ff:da:cd:75:0b:8f:fa:40:c0:37:b9:61
+MD5:5e:26:1b:40:9a:7f:0a:96:75:09:a5:17:35:2f:20:2d
+MD5:cb:7b:00:fd:7f:9d:39:9b:ae:30:48:6b:0c:cb:35:fe
+# Private-key path: algorithm + comment + fingerprint + unencrypted flag.
+ssh-ed25519
+smoke@example.com
+SHA256:O0/oKMoNiFA5dZbnFbuSrtNjAcH4nCTAOv9N/fS0Y0c
+0
+# pub_from_priv recovers the matching public-key text (1 = match).
+1
+# Encrypted private key: parses, flag=1, fingerprint of embedded
+# pub still works, pub_from_priv returns NULL.
+ssh-ed25519
+<no-comment>
+1
+SHA256:nA1yBXgc/jw0MkJmVnZBhUnbiLHuYLvpIawmLukzUtE
+<NULL>
+# ssh_key_all spot-checks via json_extract.
+ssh-ed25519
+256
+SHA256:O0/oKMoNiFA5dZbnFbuSrtNjAcH4nCTAOv9N/fS0Y0c
+0
+0
+# Garbage / NULL  every field-extracting fn NULLs out (no panic).
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# ssh_key_version() length > 0.
+1

@@ -1,0 +1,59 @@
+[package]
+name = "ssh-key-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+OpenSSH key file parsing for SQL (RFC 4253 + RFC 4716 + the modern
+OpenSSH key format).
+
+Function surface (PLAN-more-extensions-5.md #3):
+  ssh_key_algorithm(s)             -> text   ('ssh-rsa' / 'ssh-ed25519' / 'ecdsa-sha2-nistp256' / ...)
+  ssh_key_comment(s)               -> text   (trailing user@host comment, if any)
+  ssh_key_fingerprint_sha256(s)    -> text   (OpenSSH 'SHA256:' base64 form)
+  ssh_key_fingerprint_md5(s)       -> text   (legacy 'MD5:' colon-hex form)
+  ssh_key_pub_from_priv(priv)      -> text   (extract pub from an unencrypted priv key file)
+  ssh_key_bits(s)                  -> integer (RSA modulus / EC curve bits / Ed25519=256)
+  ssh_key_is_encrypted(s)          -> integer (private key has a non-'none' kdf)
+  ssh_key_all(s)                   -> text   (JSON of all metadata)
+  ssh_key_version()                -> text
+
+Accepts both public keys (`ssh-rsa AAAAB3... user@host`) and private
+keys (the wrapped OpenSSH format that begins
+`-----BEGIN OPENSSH PRIVATE KEY-----`). Encrypted private keys parse
+the metadata only; ssh_key_pub_from_priv returns NULL on encrypted
+inputs.
+
+NULL or unparseable input -> NULL on every field-extracting fn;
+ssh_key_version() is the only fn that always returns non-NULL.
+
+Fingerprints match `ssh-keygen -lf <file>` byte-for-byte (the
+OpenSSH canonical form: SHA-256 case is base64 w/o padding; MD5 case
+is colon-separated lowercase hex).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# RustCrypto's pure-rust OpenSSH key format implementation. Plan
+# pins 0.6 - `default-features = false` drops the rand_core / std
+# default so we stay no_std-friendly under wasip2. `alloc` for
+# String/Vec, `ecdsa` for the nistp256/384/521 algorithm names and
+# their public-key bit-sizes.
+ssh-key = { version = "0.6", default-features = false, features = ["alloc", "ecdsa"] }
+# MD5 for the legacy fingerprint form (`ssh-keygen -E md5`). The
+# RustCrypto crate name is `md-5`.
+md-5 = { version = "0.10", default-features = false }
+# OpenSSH SHA-256 fingerprints render as unpadded base64 (the
+# "standard, no padding" alphabet). The `base64` crate's no-pad
+# engine is the canonical match for `ssh-keygen` output.
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
+# JSON output for ssh_key_all.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
