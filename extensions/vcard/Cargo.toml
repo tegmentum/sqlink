@@ -1,0 +1,48 @@
+[package]
+name = "vcard-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+vCard parsing scalars (RFC 6350 / RFC 2426) via the `vcard4`
+crate. Sister to the existing `ical` extension — vcards are the
+contact-list parallel to iCalendar's events.
+
+Functions:
+  vcard_fn(s)         TEXT     FN (Formatted Name)
+  vcard_email(s)      TEXT     first EMAIL value
+  vcard_emails(s)     TEXT     JSON array of all EMAIL values
+  vcard_phone(s)      TEXT     first TEL value
+  vcard_phones(s)     TEXT     JSON array of all TEL values
+  vcard_org(s)        TEXT     ORG (first unit, joined by ';')
+  vcard_title(s)      TEXT     TITLE
+  vcard_addresses(s)  TEXT     JSON array of address objects
+  vcard_birthday(s)   TEXT     BDAY in ISO 8601 extended form
+  vcard_url(s)        TEXT     first URL value
+  vcard_note(s)       TEXT     NOTE
+  vcard_version_in(s) TEXT     vCard VERSION property (e.g. "3.0")
+  vcard_all(s)        TEXT     JSON object of every property
+  vcard_version()     TEXT     ext version
+
+Accepts a single vCard or a multi-vcard concatenation (returns the
+first card's fields). NULL on parse failure or absent field.
+
+vCard 3.0 (RFC 2426) + 4.0 (RFC 6350) parse cleanly; vCard 2.1 is
+best-effort and may fail on the encoding/folding quirks in the old
+spec — that's by design per the parent plan.
+
+See PLAN-more-extensions-4.md  3.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+vcard4 = { version = "0.7", default-features = false }
+serde_json = "1"

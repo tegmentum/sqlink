@@ -1,0 +1,35 @@
+# vCard 3.0 fixture (RFC 2426)
+Jane Smith
+jane@example.com
++1-555-2000
+Example Co; R&D
+Researcher
+1990-04-12
+https://janesmith.example.org/
+Test contact
+[{"country":"USA","extended_address":"","locality":"Anytown","po_box":"","postal_code":"10001","region":"NY","street":"456 Oak Ave"}]
+3.0
+# vCard 4.0 fixture (RFC 6350)
+John Doe
+1985-06-15
+4.0
+# Multi-EMAIL + first
+["first@example.com","work@example.com","home@example.com"]
+first@example.com
+# Multi-TEL
+["+1-555-1111","+1-555-2222"]
+# Multi-vcard: first card's fields
+First Person
+# vcard_all + json_extract
+3.0
+Jane Smith
+# Random text  every scalar NULL
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# NULL input  NULL out
+<NULL>
+# Version non-empty
+1
