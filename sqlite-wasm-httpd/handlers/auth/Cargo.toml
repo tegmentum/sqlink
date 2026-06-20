@@ -1,0 +1,27 @@
+[package]
+name = "wasm-auth-handler"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "JWT-verifying wasm handler. Validates a token presented in the request (Bearer body, ?token=, or raw JWT body), returns 401 on bad signature / expired / missing, returns 200 with the decoded claims JSON on valid. HS256 is inlined; no SQL jwt extension dep."
+
+# Standalone workspace: parent workspace builds for native; this
+# crate builds for wasm32-wasip2 only. Same pattern as the echo
+# and sql handlers.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# HS256 = HMAC + SHA-256. Both pure-rust, no_std-friendly, ~no
+# binary-size cost vs hand-rolling. We avoid pulling a full jwt
+# crate (e.g. `jsonwebtoken`) because it brings serde_json + the
+# whole alg matrix; for HS256-only the inline path is ~60 LoC.
+hmac = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+# Base64URL (no padding) decode for the JWT segments. The `alloc`
+# feature is enough; we don't need the std error types.
+base64 = { version = "0.22", default-features = false, features = ["alloc"] }
