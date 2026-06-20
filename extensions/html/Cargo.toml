@@ -1,0 +1,47 @@
+[package]
+name = "html-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+HTML text extraction, CSS-selector queries, entity codec, and
+convenience helpers (title / links / images) for SQL. Backed by
+`scraper` (html5ever, the same parser Servo uses) for liberal
+real-world HTML5 parsing, plus `html-escape` for the entity codec.
+
+Functions (PLAN-more-extensions-3.md  3):
+  html_to_text(html)                     TEXT
+  html_get_text(html, selector)          TEXT
+  html_get_attr(html, selector, attr)    TEXT
+  html_all_text(html, selector)          TEXT  (JSON array)
+  html_decode_entities(s)                TEXT
+  html_encode_entities(s)                TEXT
+  html_strip_tags(s)                     TEXT  (tag-only, no entity decode)
+  html_links(html)                       TEXT  (JSON array of href values)
+  html_images(html)                      TEXT  (JSON array of {src, alt})
+  html_title(html)                       TEXT  (first <title> contents)
+  html_version()                         TEXT
+
+Complementary to `web-parsers` (which bundles a thinner HTML
+surface alongside JSONPath); `html` is the document-focused
+extension with the broader text / entity / link / image surface.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps this crate out
+# of the parent workspace build.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# scraper bundles html5ever (the de-facto rust HTML5 parser, used
+# by Servo) plus the selectors crate for CSS-selector matching.
+scraper = { version = "0.21", default-features = false }
+# Entity codec  fast pure-rust encoder + decoder for HTML5 named
+# character references and numeric refs.
+html-escape = { version = "0.2", default-features = false }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

@@ -1,0 +1,31 @@
+# html extension acceptance vectors (PLAN-more-extensions-3.md  3).
+#
+# html_to_text strips tags + decodes entities:
+hi
+a&b
+# html_get_text by CSS selector returns the first match:
+a
+a
+# html_get_attr: first match's attribute value, NULL if absent:
+/x
+<NULL>
+# html_all_text: JSON array of matches' text:
+["a","b","c"]
+# entity codec round-trip (decode then encode):
+<b>hi&
+&lt;b&gt;
+# raw html_strip_tags does NOT decode entities:
+a&amp;b
+# links / images / title surface:
+["/a","/b"]
+[{"alt":"cat","src":"/i.png"},{"alt":"","src":"/j.png"}]
+T
+# NULL propagates:
+1
+1
+1
+1
+# html5ever is liberal: malformed HTML still extracts text:
+unclosed bold
+# version is non-empty:
+1
