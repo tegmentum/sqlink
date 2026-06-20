@@ -1,0 +1,31 @@
+# pgp  OpenPGP key parsing + signature verification (RFC 4880).
+# Fixture: Ed25519/Cv25519 self-signed PGP key, detached binary
+# signature over "Hello, World!".
+# Acceptance 1  field extractors against the binary public key.
+b16822930f6e3978
+0bbc8c118ed3ec80164f243cb16822930f6e3978
+["Smoke Tester <smoke@example.com>"]
+EdDSA
+256
+2026-06-20T18:47:48Z
+# Acceptance 2  armor round-trip + armored == binary on every fn.
+1
+1
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+# Acceptance 3  signature verifies.
+1
+# Acceptance 4  tamper detection: wrong message  0; wrong key  0.
+0
+0
+# Acceptance 5  garbage input  NULL on every parse fn (no panic).
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# NULL input  NULL.
+<NULL>
+<NULL>
+# pgp_version length > 0.
+1

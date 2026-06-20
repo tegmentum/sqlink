@@ -1,0 +1,42 @@
+# version is non-empty
+1
+# ES256: deterministic sign1 tagged blob (RFC 6979)
+D28443A10126A04A68656C6C6F20636F7365584036A6E10289BD3B1E9CECB57E9F89FD26B6463C596AFB1605D6E52BD93B66EEC55899715611D5A6A7DD3971064B4B76F062F13A39081E596335C0BBDB7F0D8377
+# ES256: verify returns the payload
+hello cose
+# ES256: wrong pubkey
+<NULL>
+# ES256: header alg != requested alg
+<NULL>
+# EdDSA: deterministic sign1 tagged blob (RFC 8037 keys)
+D28443A10127A04A68656C6C6F20636F73655840E8491C645D25D990E7EEAAFA710C67518B8BA332BE23F951E9D2F4A329860E3277DDBA19E7285A5BE6F28AF3D41C2355225AD55BE4A5D2C7B50015D6B994C20E
+# EdDSA: verify returns the payload
+hello cose
+# EdDSA: wrong pubkey
+<NULL>
+# EdDSA: tampered signature
+<NULL>
+# HS256: deterministic mac0 tagged blob
+D18443A10105A04A68656C6C6F20636F73655820324926862BB3C4F927CBCCA76FA420A08A54FB05CAB9A9E91DAE45870753952E
+# HS256: verify returns the payload
+hello cose
+# HS256: wrong key
+<NULL>
+# HS256: header alg != requested alg
+<NULL>
+# HS512: deterministic mac0 tagged blob
+D18443A10107A04A68656C6C6F20636F736558408D60EA2610752D687EEFC1ED0F433CF9D50025F89CBE1EB6C92E4A37CBE2A0F95D50470DFBB48BBD3B45A7200286335B83F6950D22FC9192DF54E3DA850EBAD6
+# A256GCM round-trip: decrypt returns the plaintext
+hello cose
+# A256GCM: wrong key
+<NULL>
+# A128GCM round-trip
+hello cose
+# inspect EdDSA sign1
+{"kind":"CoseSign1","payload":{"len":10,"text":"hello cose"},"protected":{"alg":-8,"alg_name":"EdDSA"},"tag":18,"unprotected":{}}
+# inspect HS256 mac0
+{"kind":"CoseMac0","payload":{"len":10,"text":"hello cose"},"protected":{"alg":5,"alg_name":"HS256"},"tag":17,"unprotected":{}}
+# inspect garbage returns an error JSON (LIKE check)
+1
+# unknown alg in verify  NULL (not an error)
+<NULL>

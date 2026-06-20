@@ -1,0 +1,57 @@
+[package]
+name = "cose-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+COSE (CBOR Object Signing and Encryption, RFC 8152) for SQL.
+
+Surface:
+  cose_sign1(payload, key, alg)      -> blob  (tagged COSE_Sign1)
+  cose_verify1(cose_msg, key, alg)   -> blob | NULL  (payload on valid sig)
+  cose_encrypt0(plaintext, key, alg) -> blob  (tagged COSE_Encrypt0; nonce generated)
+  cose_decrypt0(cose_msg, key, alg)  -> blob | NULL
+  cose_mac0(payload, key, alg)       -> blob  (tagged COSE_Mac0)
+  cose_inspect(blob)                 -> text  (JSON: tag + headers + payload presence)
+  cose_version()                     -> text
+
+Alg names follow JWT/JOSE conventions and map to IANA COSE algs:
+  ES256  -> COSE -7   (ECDSA w/ SHA-256 over P-256)
+  EdDSA  -> COSE -8   (Ed25519 raw 32-byte seed for sign; 32-byte pubkey for verify)
+  HS256  -> COSE  5   (HMAC 256/256)
+  HS512  -> COSE  7   (HMAC 512/512)
+  A128GCM/A192GCM/A256GCM -> COSE 1/2/3 (AES-GCM)
+
+Verify / decrypt return NULL on any failure (bad sig, tampered ciphertext,
+wrong key, header alg mismatch, malformed CBOR)  the SQL contract is
+\"did this validate cleanly, yes or no\".
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# coset 0.3 is the canonical COSE library; it wraps ciborium for the
+# CBOR layer + provides typed builders for CoseSign1 / CoseEncrypt0 /
+# CoseMac0 with closure-based sign/verify hooks so we plug in our own
+# crypto. Cross-compiles clean to wasm32-wasip2.
+coset = { version = "0.3", default-features = false }
+ciborium = { version = "0.2", default-features = false }
+# Crypto building blocks. All RustCrypto, all wasi-clean.
+hmac = "0.12"
+sha2 = { version = "0.10", default-features = false }
+ed25519-dalek = { version = "2", default-features = false, features = ["alloc"] }
+p256 = { version = "0.13", default-features = false, features = ["ecdsa", "alloc"] }
+aes-gcm = { version = "0.10", default-features = false, features = ["aes", "alloc"] }
+# `getrandom` v0.2 auto-routes to WASI on `target_os = "wasi"` (which
+# wasm32-wasip2 sets); the WASI reactor adapter wires that to
+# `wasi:random/random` on the host. Used to generate encrypt0 nonces.
+getrandom = "0.2"
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }

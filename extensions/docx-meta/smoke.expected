@@ -1,0 +1,69 @@
+# Expected output for the docx-meta smoke harness.
+#
+# See smoke.sql for fixture descriptions. The hex blobs are
+# byte-identical across rebuilds (zero-mtime ZIP entries),
+# so this file does not need regeneration with each run.
+
+# ---- Acceptance 1: docx fixture, every accessor ----
+docx
+Test Document
+Test Author
+2024-01-15T10:30:45Z
+2024-01-16T11:30:45Z
+3
+42
+Hello world
+Second paragraph
+
+# ---- Acceptance 2: xlsx fixture ----
+xlsx
+Test Spreadsheet
+Excel User
+1
+4
+Alpha
+Beta
+
+# ---- Acceptance 3: pptx fixture ----
+pptx
+Test Presentation
+Slide Author
+2
+100
+Slide One Title
+Slide Two Content
+
+# ---- Acceptance 4: docx_metadata JSON ----
+docx
+Test Document
+3
+42
+xlsx
+pptx
+
+# ---- Acceptance 5: valid ZIP w/o OOXML parts -> NULL ----
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 6: random bytes -> every fn NULL ----
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 7: NULL input -> every fn NULL ----
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 8: meta version is non-empty ----
+1
+

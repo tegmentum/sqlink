@@ -1,0 +1,36 @@
+# Expected output for wasm-introspect smoke.
+# Header sniffing, validity, imports/exports/customs/funcs/memory,
+# NULL passthrough, garbage handling.
+1
+13
+<NULL>
+<NULL>
+1
+1
+0
+0
+[]
+[{"kind":"function","module":"env","name":"f"}]
+env
+f
+function
+[{"kind":"function","name":"f"}]
+f
+function
+[]
+["hello","name"]
+0
+1
+1
+0
+2
+0
+1
+1
+1
+1
+1
+1
+1
+1
+1

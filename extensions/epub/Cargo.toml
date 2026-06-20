@@ -1,0 +1,72 @@
+[package]
+name = "epub-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+EPUB e-book metadata extraction from a raw blob.
+
+An EPUB file is a ZIP archive whose root contains `META-INF/container.xml`
+pointing to a Package Document (`.opf`) that carries Dublin Core metadata
+(`<dc:title>`, `<dc:creator>`, `<dc:language>`, ...). This extension reads
+the blob, locates the OPF entry through container.xml, parses its
+`<metadata>` block, and surfaces the standard Dublin Core fields plus a
+spine-entry count as SQL scalars.
+
+Function surface:
+  epub_title(blob)          -> TEXT    primary <dc:title>
+  epub_authors(blob)        -> TEXT    JSON array of <dc:creator>
+  epub_language(blob)       -> TEXT    primary <dc:language>
+  epub_publisher(blob)      -> TEXT    primary <dc:publisher>
+  epub_published_date(blob) -> TEXT    primary <dc:date>, ISO 8601 if
+                                       parseable (date-only YYYY-MM-DD
+                                       passes through unchanged)
+  epub_identifier(blob)     -> TEXT    primary <dc:identifier>
+                                       (ISBN/DOI/UUID, scheme prefix
+                                       stripped when present)
+  epub_subjects(blob)       -> TEXT    JSON array of <dc:subject>
+  epub_chapter_count(blob)  -> INTEGER count of <spine><itemref>
+  epub_metadata(blob)       -> TEXT    JSON object of all parsed metadata
+                                       (title, authors[], language,
+                                       publisher, date, identifier,
+                                       subjects[], description, rights,
+                                       contributors[], chapter_count,
+                                       version)
+  epub_version()            -> TEXT    extension build version
+
+Implementation: rolled atop `zip` 2 (read-only ZIP decoder, deflate
+enabled) + `quick-xml` 0.36 (pull XML parser). We deliberately avoid
+the `rbook` 0.9 / `epub` 2 crates -- rbook depends on `reqwest`-laden
+async transitively which is not happy on `wasm32-wasip2`, and `epub`
+ships a sync filesystem-oriented API that wants `std::path::Path`
+roots we'd have to fake. A hand-rolled walker over the OPF is ~150
+lines and lets us hand back a typed JSON object directly.
+
+NULL contract: every accessor returns SQL NULL on
+  - SqlValue::Null input or non-BLOB/non-TEXT arg
+  - blobs that fail to open as a ZIP archive
+  - ZIPs that lack META-INF/container.xml or whose container.xml
+    doesn't point at a valid OPF entry
+  - OPF documents whose <metadata> block is missing or malformed
+  - the requested field being absent from a successfully parsed OPF
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 1 -- keeps the parent
+# workspace from trying to build this crate natively (it's a
+# wasm32-wasip2 cdylib).
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Same `zip` build flags as extensions/zipfile -- pure rust, deflate
+# is the only compression EPUBs use in practice (stored is allowed
+# but rare; we get that "for free" since `default-features = false`
+# still supports stored entries).
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# Same quick-xml major as extensions/sitemap-xml / extensions/formats.
+quick-xml = "0.36"

@@ -1,0 +1,116 @@
+.load extensions/perceptual-hash/target/wasm32-wasip2/release/perceptual_hash_extension.component.wasm
+
+/* perceptual-hash  pHash / dHash / aHash for image similarity.
+ *
+ * Surface:
+ *   phash(blob)        -> BLOB(8)   8x8 DCT perceptual hash
+ *   dhash(blob)        -> BLOB(8)   9x8 horizontal-diff hash
+ *   ahash(blob)        -> BLOB(8)   8x8 mean-threshold hash
+ *   hash_distance(a,b) -> INTEGER   Hamming distance (popcount XOR)
+ *   perceptual_hash_version() -> TEXT
+ *
+ * Fixtures (synthetic 8x8 PNGs, RGB color type 2, 8-bit):
+ *   png_black   : all pixels 0x000000
+ *   png_white   : all pixels 0xFFFFFF
+ *   png_grad    : horizontal gradient, vertical stripes
+ *
+ * Acceptance shape (deterministic invariants, no fragile bit-pattern
+ * pinning beyond the known boundary cases):
+ *   - hash output is always 8 bytes (BLOB length = 8)
+ *   - phash/dhash/ahash on a NULL or random blob -> NULL
+ *   - hash_distance to self == 0
+ *   - hash_distance(a, b) is symmetric
+ *   - hash_distance with mismatched lengths -> NULL
+ *   - black-vs-white: aHash collides (both all-1), dHash collides
+ *     (both all-0)  these are the known degenerate cases of those
+ *     two algorithms and are exactly why pHash exists.
+ *   - black pHash is all-zero (DCT of constant -> all-zero AC,
+ *     median(zeros) = 0, block[i] > 0 is false everywhere)
+ */
+
+-- ---- Acceptance 1: hash outputs are always BLOB length 8 ----
+SELECT length(phash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'));
+SELECT length(dhash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'));
+SELECT length(ahash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'));
+
+-- ---- Acceptance 2: NULL passthrough ----
+SELECT phash(NULL);
+SELECT dhash(NULL);
+SELECT ahash(NULL);
+
+-- ---- Acceptance 3: unparseable bytes -> NULL ----
+SELECT phash(x'AAAAAAAAAAAAAAAAAAAAAAAA');
+SELECT dhash(x'AAAAAAAAAAAAAAAAAAAAAAAA');
+SELECT ahash(x'AAAAAAAAAAAAAAAAAAAAAAAA');
+
+-- ---- Acceptance 4: hash_distance(h, h) == 0 (self-similarity) ----
+SELECT hash_distance(
+    phash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'),
+    phash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082')
+);
+SELECT hash_distance(
+    dhash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'),
+    dhash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082')
+);
+SELECT hash_distance(
+    ahash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'),
+    ahash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082')
+);
+
+-- ---- Acceptance 5: hash_distance is symmetric ----
+-- black vs white, both directions  must match.
+SELECT hash_distance(
+    phash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'),
+    phash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000F49444154789C63F88F03300C2D0900BA1EBF4130930AFC0000000049454E44AE426082')
+) = hash_distance(
+    phash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000F49444154789C63F88F03300C2D0900BA1EBF4130930AFC0000000049454E44AE426082'),
+    phash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082')
+);
+
+-- ---- Acceptance 6: degenerate boundary cases ----
+-- All-black PNG: aHash bits all 1 (pixel >= mean=0 always true).
+SELECT hex(ahash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'));
+-- All-black PNG: dHash all 0 (left > right is false; both 0).
+SELECT hex(dhash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'));
+-- All-black PNG: pHash all 0 (DCT of constant -> all-zero AC; bit 0 is
+-- the convention DC=0 bit; AC bits compare to median=0 which is
+-- not > 0).
+SELECT hex(phash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000C49444154789C6360181E000000C80001AD4076220000000049454E44AE426082'));
+
+-- All-white PNG: aHash bits all 1 (pixel=255 >= mean=255). Same as
+-- black for aHash; this is exactly the known aHash weakness that
+-- pHash/dHash fix.
+SELECT hex(ahash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000F49444154789C63F88F03300C2D0900BA1EBF4130930AFC0000000049454E44AE426082'));
+-- All-white PNG: dHash all 0 (same constant-image collision).
+SELECT hex(dhash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000000F49444154789C63F88F03300C2D0900BA1EBF4130930AFC0000000049454E44AE426082'));
+
+-- ---- Acceptance 7: hash_distance mismatched lengths -> NULL ----
+SELECT hash_distance(x'00', x'0000');
+SELECT hash_distance(NULL, x'0000000000000000');
+SELECT hash_distance(x'0000000000000000', NULL);
+
+-- ---- Acceptance 8: hash_distance on known-distance inputs ----
+-- Distance between 0x00 and 0xFF = 8 (8 bits flipped).
+SELECT hash_distance(x'00', x'FF');
+-- Distance between 0xFFFFFFFFFFFFFFFF and 0x0000000000000000 = 64.
+SELECT hash_distance(x'FFFFFFFFFFFFFFFF', x'0000000000000000');
+-- Distance between 0xF0F0F0F0F0F0F0F0 and 0x0F0F0F0F0F0F0F0F = 64.
+SELECT hash_distance(x'F0F0F0F0F0F0F0F0', x'0F0F0F0F0F0F0F0F');
+-- Distance to self = 0 on an arbitrary value.
+SELECT hash_distance(x'DEADBEEFDEADBEEF', x'DEADBEEFDEADBEEF');
+
+-- ---- Acceptance 9: gradient image gives a non-trivial pHash ----
+-- The horizontal gradient (columns 0,32,64,...,224) has a strong
+-- horizontal AC component  pHash AC coefficients won't all be zero,
+-- so its hash differs from the all-zero hash by > 0 bits.
+SELECT hash_distance(
+    phash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000002549444154789C6360606050505070707048484868686858B060C18103071E3C78C030B424005899540167F0518B0000000049454E44AE426082'),
+    x'0000000000000000'
+) > 0;
+-- Same gradient: dHash is all zero because left < right in every
+-- horizontal pair (monotone-increasing rows). This is a known dHash
+-- property and worth pinning.
+SELECT hex(dhash(x'89504E470D0A1A0A0000000D49484452000000080000000808020000004B6D29DC0000002549444154789C6360606050505070707048484868686858B060C18103071E3C78C030B424005899540167F0518B0000000049454E44AE426082'));
+
+-- ---- Version sanity ----
+SELECT perceptual_hash_version();

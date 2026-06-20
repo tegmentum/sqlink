@@ -1,0 +1,70 @@
+[package]
+name = "docx-meta-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+OOXML document metadata extractor for SQLite. Reads the
+ZIP + XML structure of Office Open XML files (.docx / .xlsx /
+.pptx) and surfaces Core / Extended properties + a plain-text
+content dump to SQL scalars.
+
+Function surface:
+  docx_title(blob)         -> TEXT     dc:title from docProps/core.xml
+  docx_author(blob)        -> TEXT     dc:creator from docProps/core.xml
+  docx_created(blob)       -> TEXT     dcterms:created (ISO 8601)
+  docx_modified(blob)      -> TEXT     dcterms:modified (ISO 8601)
+  docx_word_count(blob)    -> INTEGER  word count (docx: app.xml Words;
+                                       xlsx: total non-empty cell count;
+                                       pptx: app.xml Words / slide count
+                                       fallback)
+  docx_page_count(blob)    -> INTEGER  page/sheet/slide count
+                                       (docx: app.xml Pages;
+                                       xlsx: sheet count;
+                                       pptx: slide count)
+  docx_format(blob)        -> TEXT     'docx' / 'xlsx' / 'pptx'
+  docx_text_content(blob)  -> TEXT     extracted plain text
+                                       (docx: word/document.xml runs;
+                                       xlsx: sharedStrings.xml + cells;
+                                       pptx: ppt/slides/slide*.xml a:t)
+  docx_metadata(blob)      -> TEXT     JSON object with every field
+  docx_meta_version()      -> TEXT
+
+Implementation: rolled atop `zip` 2 + `quick-xml` 0.36. OOXML is a
+ZIP archive of XML parts -- docProps/core.xml carries Dublin Core
+title/author/dates, docProps/app.xml carries Microsoft-extended
+properties (Words / Pages / Slides), and the format-specific part
+(word/document.xml, xl/sharedStrings.xml + xl/worksheets/, or
+ppt/slides/slide*.xml) carries the actual text. We avoid `docx-rs`
+because the lower-level zip+xml combo handles all three OOXML
+families uniformly and already cross-compiles to wasm32-wasip2.
+
+NULL contract: every accessor returns SQL NULL on
+  - SqlValue::Null input
+  - non-BLOB / non-TEXT input
+  - blobs that aren't a valid ZIP at all
+  - blobs whose ZIP contents don't look like OOXML
+  - the requested metadata field being absent from the package
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 1 -- keeps the parent
+# workspace from trying to build this crate natively (it's a
+# wasm32-wasip2 cdylib).
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# zip 2 with default-features off + deflate -- matches the choice
+# in extensions/zipfile. OOXML packages always store the parts as
+# deflate or stored; we don't need bzip2 / zstd / xz support.
+zip = { version = "2", default-features = false, features = ["deflate"] }
+# quick-xml 0.36 -- the same pull-parser version used by
+# extensions/sitemap-xml and extensions/formats. We hand-roll the
+# OOXML schemas rather than reach for `docx-rs` so the same code
+# path handles docx/xlsx/pptx and stays wasm-friendly.
+quick-xml = "0.36"

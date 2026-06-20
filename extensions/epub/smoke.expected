@@ -1,0 +1,58 @@
+# Expected output for the `epub` smoke harness.
+#
+# Fixture: a synthesized 1412-byte EPUB 3 archive (zip stored
+# mimetype + deflated container.xml + deflated content.opf + 3
+# deflated chapters) carrying:
+#   title="The Smoke Book"
+#   creators=[Alice Author, Bob Writer]
+#   contributor=Carol Editor
+#   language=en
+#   publisher=Smoke Press
+#   date=2024-03-15
+#   identifier=urn:isbn:9781234567897  (scheme-stripped at parse time)
+#   subjects=[Testing, SQLite, EPUB]
+#   description="A test e-book for the epub extension."
+#   rights=Public Domain
+#   3 spine entries -> chapter_count = 3
+#   package version="3.0"
+
+# ---- Acceptance 1: full EPUB single-value scalars ----
+The Smoke Book
+en
+Smoke Press
+2024-03-15
+9781234567897
+3
+
+# ---- Acceptance 2: JSON-array scalars (authors, subjects) ----
+["Alice Author","Bob Writer"]
+["Testing","SQLite","EPUB"]
+
+# ---- Acceptance 3: epub_metadata JSON, spot-checked via json_extract ----
+The Smoke Book
+3
+3.0
+
+# ---- Acceptance 4: ZIP without container.xml -> NULL on every fn ----
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 5: random bytes -> NULL on every fn ----
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 6: NULL input -> NULL on every fn ----
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 7: version is non-empty text ----
+1

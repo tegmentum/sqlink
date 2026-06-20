@@ -1,0 +1,26 @@
+# Expected output for mbox extension smoke.
+# Two-message mbox-O blob, then per-index accessors, then NULL /
+# empty / non-mbox edge cases and an mbox-rd unescape check.
+2
+["Hello Bob","Lunch?"]
+Alice <alice@example.com>
+Hello Bob
+2016-10-02T14:06:22Z
+Carol <carol@example.com>
+Lunch?
+2016-10-03T09:30:00Z
+1
+1
+1
+1
+1
+1
+1
+1
+1
+0
+[]
+0
+From the depths
+>From further down
+1

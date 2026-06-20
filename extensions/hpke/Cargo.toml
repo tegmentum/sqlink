@@ -1,0 +1,70 @@
+[package]
+name = "hpke-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Hybrid Public Key Encryption (RFC 9180) for SQL.
+
+Wraps the `hpke` crate's single-shot Base-mode seal/open with a
+runtime-selectable ciphersuite. The KEM/KDF/AEAD identifiers come
+from a TEXT suite name (see SUPPORTED_SUITES below) so callers can
+mix algorithms per row -- the trade-off is that every suite has
+to be enumerated at compile time, since hpke types are generics.
+
+Function surface:
+  hpke_keypair(suite)                            -> blob (priv || pub)
+  hpke_pub_from_priv(suite, priv_blob)           -> blob (pub) | NULL
+  hpke_seal(suite, pub, info, aad, plaintext)    -> blob (enc || ct) | NULL
+  hpke_open(suite, priv, info, aad, sealed_blob) -> blob (pt) | NULL
+  hpke_version()                                 -> text
+
+Sealed blob layout: `enc || ct` where `enc` is a fixed-size
+serialized KEM ephemeral public key (32 bytes for X25519, 65 bytes
+for P-256 uncompressed SEC1) and `ct` is the AEAD output with the
+16-byte Poly1305 / GCM tag appended.
+
+Supported suites (TEXT, case-insensitive, suffix-form is accepted):
+  X25519-SHA256-CHACHA20POLY1305  (default; KEM=0x0020 KDF=0x0001 AEAD=0x0003)
+  X25519-SHA256-AES128GCM         (KEM=0x0020 KDF=0x0001 AEAD=0x0001)
+  X25519-SHA256-AES256GCM         (KEM=0x0020 KDF=0x0001 AEAD=0x0002)
+  P256-SHA256-AES128GCM           (KEM=0x0010 KDF=0x0001 AEAD=0x0001)
+  P256-SHA256-AES256GCM           (KEM=0x0010 KDF=0x0001 AEAD=0x0002)
+  P256-SHA256-CHACHA20POLY1305    (KEM=0x0010 KDF=0x0001 AEAD=0x0003)
+
+Empty / NULL / unrecognized suite => NULL. Wrong key length or AEAD
+failure (wrong key, tampered ct, wrong info / aad) => NULL on open;
+no error. This matches the SQL "did this decrypt cleanly?" contract
+that the sibling `aead` extension uses.
+
+Randomness flows from `getrandom` 0.2, which on `target_os = "wasi"`
+auto-routes to `wasi:random/random` via the reactor adapter. hpke's
+RNG trait surface is rand_core 0.9; we expose a thin `WasiRng` shim
+that satisfies `RngCore + CryptoRng`.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 1: keeps the parent
+# workspace from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# hpke 0.13 (RFC 9180) -- pure Rust, no_std-friendly. Pulls aes-gcm,
+# chacha20poly1305, x25519-dalek, and p256 via the feature flags. The
+# `alloc` feature gates the allocating `single_shot_seal` /
+# `_open` entry points that we use. P-384 / P-521 / xwing left off
+# to keep the component size reasonable; add later if a caller asks.
+hpke = { version = "0.13", default-features = false, features = ["alloc", "x25519", "p256"] }
+# rand_core 0.9 is the trait surface hpke uses; the trait impls land
+# on our `WasiRng` shim in lib.rs.
+rand_core = { version = "0.9", default-features = false }
+# `getrandom` v0.2 auto-routes to WASI's `random_get` on
+# `target_os = "wasi"` (which wasm32-wasip2 sets); the reactor
+# adapter wires that to `wasi:random/random`. No feature flag
+# needed in 0.2 -- the WASI path is unconditional.
+getrandom = "0.2"

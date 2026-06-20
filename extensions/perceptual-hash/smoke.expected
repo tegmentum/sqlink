@@ -1,0 +1,43 @@
+# Acceptance 1: hash outputs are always BLOB length 8
+8
+8
+8
+# Acceptance 2: NULL passthrough
+<NULL>
+<NULL>
+<NULL>
+# Acceptance 3: unparseable bytes -> NULL
+<NULL>
+<NULL>
+<NULL>
+# Acceptance 4: hash_distance(h, h) == 0 (self-similarity)
+0
+0
+0
+# Acceptance 5: hash_distance is symmetric (1 == 1)
+1
+# Acceptance 6: degenerate boundary cases
+# black aHash all 1s (pixel=0 >= mean=0)
+FFFFFFFFFFFFFFFF
+# black dHash all 0s
+0000000000000000
+# black pHash all 0s (DCT of constant)
+0000000000000000
+# white aHash all 1s (pixel=255 >= mean=255)
+FFFFFFFFFFFFFFFF
+# white dHash all 0s
+0000000000000000
+# Acceptance 7: hash_distance mismatched lengths -> NULL
+<NULL>
+<NULL>
+<NULL>
+# Acceptance 8: hash_distance on known-distance inputs
+8
+64
+64
+0
+# Acceptance 9: gradient image  pHash non-trivial, dHash all zero
+1
+0000000000000000
+# Version sanity
+0.1.0

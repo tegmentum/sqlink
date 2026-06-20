@@ -1,0 +1,34 @@
+# HPKE (RFC 9180) round-trip smoke. Per-call ephemeral keys mean
+# we can't pin a deterministic ciphertext, so we test shape +
+# seal/open invariants instead:
+#
+#   - X25519 keypair shape: 32 priv || 32 pub = 64 bytes.
+#   - hpke_pub_from_priv(priv) matches the embedded pub.
+#   - seal then open round-trips the plaintext.
+#   - sealed-blob length: 32 enc + 3-byte ct + 16-byte tag = 51.
+#   - wrong recip / wrong info / wrong aad / truncated blob -> NULL.
+#   - suite name aliases ('', 'default', lower-case, slash-separated).
+#   - P-256 round trip + 32+65 = 97-byte keypair.
+#   - bad suite / NULL inputs -> NULL.
+#   - hpke_version is non-empty.
+64
+1
+hello hpke
+51
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+64
+64
+64
+64
+hello p256
+97
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+1

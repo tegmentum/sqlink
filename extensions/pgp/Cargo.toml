@@ -1,0 +1,49 @@
+[package]
+name = "pgp-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+OpenPGP key parsing + signature verification for SQL (RFC 4880).
+
+Function surface (parse-only + verify; signing deferred):
+  pgp_key_id(blob_or_armored)         -> text (lowercase hex, 16 hex chars)
+  pgp_key_fingerprint(blob_or_armored) -> text (lowercase hex)
+  pgp_key_user_ids(blob_or_armored)   -> text (JSON array of UID strings)
+  pgp_key_algorithm(blob_or_armored)  -> text (RSA/EdDSA/ECDSA/ECDH/DSA/Elgamal/Unknown)
+  pgp_key_bits(blob_or_armored)       -> integer (best-effort)
+  pgp_key_created(blob_or_armored)    -> text (ISO 8601 UTC, trailing Z)
+  pgp_armor_to_binary(armored_text)   -> blob
+  pgp_binary_to_armor(blob, type)     -> text (type: 'public','signature','message')
+  pgp_verify(sig_blob_or_armored, message_blob, pubkey_blob_or_armored) -> integer (0/1)
+  pgp_version()                       -> text
+
+Accepts ASCII-armored ("-----BEGIN PGP PUBLIC KEY BLOCK-----") OR
+raw OpenPGP binary on every public-key input. NULL or unparseable
+input  NULL on every field-extracting fn; pgp_version() always
+returns a non-NULL.
+
+Backed by `rPGP` 0.13 (pure Rust OpenPGP, RFC 4880). Verify
+supports Ed25519/ECDSA/RSA primary keys -- whatever rPGP's
+verify_signature path supports under wasip2.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 1.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# rPGP -- pure Rust OpenPGP implementation. Confirmed
+# cross-compiles to wasm32-wasip2 (pulls in rsa/dsa/p256/p384/p521/
+# k256/ed25519-dalek/x25519-dalek + nom-based packet parser).
+pgp = "0.13"
+# Armor reading/writing helpers + ArmorOptions live in the pgp
+# crate. We use hex for KeyId/fingerprint stringification.
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+# JSON for user-id array output.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

@@ -1,0 +1,50 @@
+[package]
+name = "wasm-introspect-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Wasm module introspection scalars. Reads a .wasm BLOB and surfaces
+the parts you ask about: validity, version byte, custom section
+names, import / export tables, function count, initial memory
+pages. Useful for SQL-side queries over a catalog of components
+(e.g. "which components import `wasi:filesystem/types`?").
+
+Functions:
+  wasm_is_valid(blob)         -> integer 0/1
+  wasm_imports(blob)          -> text JSON [{module, name, kind}, ...]
+  wasm_exports(blob)          -> text JSON [{name, kind}, ...]
+  wasm_custom_sections(blob)  -> text JSON [name, ...]
+  wasm_function_count(blob)   -> integer
+  wasm_memory_pages(blob)     -> integer (initial pages of first memory; 64KB each)
+  wasm_version_byte(blob)     -> integer (byte at offset 4 of the module header:
+                                          0x01 = module (MVP), 0x0d = component)
+  wasm_introspect_version()   -> text
+
+All blob-consuming scalars return NULL on parse failure (so a
+single bad row in a catalog doesn't blow up the SELECT).
+
+NULL in -> NULL out for the blob argument.
+
+Accepts both core wasm modules and component-model components.
+The version byte lets callers distinguish: 1 = core MVP module,
+0x0d (13) = component (matches the magic `\\0asm\\x0d\\x00\\x01\\x00`).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: parent workspace must
+# not try to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pinned to the spec'd version. wasmparser 0.215 compiles cleanly
+# for wasm32-wasip2 with default features off (we don't need
+# validate/serde here  just streaming reads). Default feature
+# `std` is still on; wasi-p2 has std.
+wasmparser = { version = "0.215", default-features = false, features = ["std", "validate"] }
+serde_json = "1"

@@ -1,0 +1,56 @@
+[package]
+name = "mbox-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+mbox / maildir email-format reader for SQL.
+
+Pulls scalar accessors over an mbox-O (From_-delimited) text blob:
+counts, subjects, per-index from / subject / date / body / raw
+message extraction. The mbox splitter is hand-rolled (mbox-reader
+v0.2 only takes a file path via memmap, which is not usable from a
+wasm32-wasip2 sandbox); per-message RFC 822 parsing is delegated to
+mailparse 0.15 (the canonical pure-Rust MIME parser; builds clean
+for wasm32-wasip2). mbox-rd content-length escaping is handled on
+a best-effort basis: leading-`>` From_ unquoting is applied to the
+extracted message body so round-tripped content matches the
+original.
+
+Surface:
+  mbox_message_count(text)        -> integer
+  mbox_subjects(text)             -> text  (JSON array of strings)
+  mbox_message_at(text, idx)      -> text  (raw RFC 822 message)
+  mbox_from_at(text, idx)         -> text
+  mbox_subject_at(text, idx)      -> text
+  mbox_date_at(text, idx)         -> text  (ISO 8601 UTC)
+  mbox_body_at(text, idx)         -> text  (decoded body)
+  mbox_version()                  -> text
+
+Behavior:
+  * Index is 0-based. Out-of-range -> NULL.
+  * NULL input or unparseable content -> NULL (not an error).
+  * Date conversion via mailparse::dateparse + time crate; on parse
+    failure the raw Date header text is returned verbatim.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# RFC 822 / MIME message parser. 0.15 was the latest series at
+# scaffold-time that built clean for wasm32-wasip2. 0.16 also
+# works; pin to 0.15 to track the spec.
+mailparse = "0.15"
+# JSON array assembly for mbox_subjects.
+serde_json = "1"
+# Epoch -> ISO 8601 formatter. default-features = false trims the
+# binary; we only need formatting + the well-known RFC 3339 fmt.
+time = { version = "0.3", default-features = false, features = ["formatting"] }

@@ -1,0 +1,37 @@
+[package]
+name = "perceptual-hash-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Perceptual image hashing for similarity / dedup: pHash (8x8 DCT), dHash
+(difference hash), and aHash (average hash) over PNG + JPEG blobs.
+Each hash is a 64-bit BLOB (8 bytes); compare with hash_distance() to
+get the Hamming distance.
+
+Decode-only deps  png 0.17 + jpeg-decoder 0.3, no full `image` crate
+ keep the wasm artifact small. The spec's img_hash + image 0.25
+path was rejected: img_hash 3 is unmaintained (2020) and dragging in
+`image` with even png+jpeg features pulls in too many transitive
+crates (zune-*, ravif, etc.) that don't all cross-compile cleanly to
+wasm32-wasip2. The hashing math (DCT for pHash, 9x8 diff for dHash,
+8x8 mean for aHash) is well-defined and short  hand-rolled here.
+
+NULL passes through on every fn. Unparseable image -> NULL (never an
+error). hash_distance handles BLOB-vs-BLOB, returns NULL on
+mismatched lengths or non-BLOB inputs.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust decoders. Both work fine on wasm32-wasip2 with default
+# features  no C deps, no SIMD-only paths.
+png = { version = "0.17", default-features = false }
+jpeg-decoder = { version = "0.3", default-features = false }
