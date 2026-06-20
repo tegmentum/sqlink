@@ -1,0 +1,60 @@
+[package]
+name = "roaring-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Roaring bitmap scalars  exact-set membership at scale, with O(1)
+cardinality and fast union/intersection/difference. Complements the
+probabilistic set structures in the catalog (bloom, hyperloglog,
+count-min); roaring is the exact-set partner for sparse-but-not-too-
+sparse u32 sets.
+
+Values are u32 per the Roaring spec. i64 SQL inputs that fit in u32
+get coerced; out-of-range inputs error.
+
+Function surface (PLAN-more-extensions-2.md  6):
+  rb_new()                          -> BLOB  (empty bitmap)
+  rb_from_array(json_array)         -> BLOB  (e.g. '[1,2,3]')
+  rb_from_range(lo, hi)             -> BLOB  (inclusive range)
+  rb_to_array(rb)                   -> TEXT  (sorted JSON array)
+  rb_cardinality(rb)                -> INTEGER
+  rb_contains(rb, value)            -> INTEGER (0/1)
+  rb_add(rb, value)                 -> BLOB
+  rb_remove(rb, value)              -> BLOB
+  rb_union(a, b)                    -> BLOB
+  rb_intersection(a, b)             -> BLOB
+  rb_difference(a, b)               -> BLOB
+  rb_symmetric_difference(a, b)     -> BLOB
+  rb_serialize(rb)                  -> BLOB  (portable Roaring spec)
+  rb_deserialize(blob)              -> BLOB  (validates + canonicalises)
+  rb_version()                      -> TEXT
+
+The BLOB form used everywhere is the portable Roaring serialization
+spec (CRoaring-compatible). `rb_serialize` / `rb_deserialize` are
+identity round-trips that explicitly document the wire format
+boundary  callers that want to interop with another roaring impl
+should stage through one of those.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# roaring 0.10 is pure rust and implements the portable Roaring
+# serialization spec (CRoaring-compatible byte format).
+# `std` is required for the serialize_into / deserialize_from API
+# (it brings in byteorder + bytemuck for the wire codec). wasm32-
+# wasip2 has full std anyway, so opting in is free.
+roaring = { version = "0.10", default-features = false, features = ["std"] }
+# Used for rb_from_array (JSON array of u32) and rb_to_array
+# (sorted JSON array). We do not need any non-default features.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
