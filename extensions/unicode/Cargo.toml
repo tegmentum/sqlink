@@ -1,0 +1,61 @@
+[package]
+name = "unicode-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Unicode-correctness scalars  the companion to `text-utils` (ASCII
+ops) and `case` (identifier case conversion).
+
+Function surface (PLAN-more-extensions-2.md  4):
+  unicode_nfc(s)            -> TEXT  (canonical composition)
+  unicode_nfd(s)            -> TEXT  (canonical decomposition)
+  unicode_nfkc(s)           -> TEXT  (compatibility composition)
+  unicode_nfkd(s)           -> TEXT  (compatibility decomposition)
+  unicode_fold(s)           -> TEXT  (full case folding per Unicode
+                                      CaseFolding.txt; '' folds to 'ss')
+  unicode_strip_accents(s)  -> TEXT  (NFD + drop combining marks)
+  unicode_slugify(s)        -> TEXT  (URL-safe slug, ASCII-only)
+  unicode_normalize_whitespace(s) -> TEXT  (collapse whitespace runs)
+  unicode_category(s)       -> TEXT  (Unicode category of first char)
+  unicode_grapheme_count(s) -> INTEGER (extended grapheme clusters)
+  unicode_version()         -> TEXT  (Unicode standard + crate version)
+
+NULL  NULL on every function.
+
+Slugify pipeline: deunicode transliterate to ASCII  lowercase
+runs of non-alphanumeric collapse to '-'  trim leading/trailing.
+'caf  ' -> 'cafe-e-a', 'Hello, World!' -> 'hello-world'.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2: keeps the parent
+# workspace from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# NFC/NFD/NFKC/NFKD + UNICODE_VERSION constant. The crate carries
+# its own tables (no system libicu dep)  builds cleanly on
+# wasm32-wasip2 with no special flags.
+unicode-normalization = "0.1"
+# Full Unicode case folding (CaseFolding.txt 'C' + 'F' mappings).
+# This is what folds '' (U+00DF) to "ss" and Greek final-sigma
+# to medial-sigma; Rust's stdlib `to_lowercase()` does NOT do
+# that  it's locale-independent simple casing only.
+caseless = "0.2"
+# Grapheme-cluster iterator. Used for unicode_grapheme_count so
+# emoji ZWJ sequences (a single user-visible character) count as 1.
+unicode-segmentation = "1"
+# Lossy ASCII transliteration for slugify + the strip-accents
+# fallback for non-Latin scripts. 'caf' -> "cafe", '' ->
+# "Pekin" (Russian) -> slugifies as "pekin", etc.
+deunicode = "1"
+# Unicode general-category (Lu/Ll/Nd/...) classification for
+# unicode_category(). Tiny dep (~50 KB), data-table only, builds on
+# wasm32 with no special flags.
+unicode-properties = "0.1"

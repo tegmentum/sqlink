@@ -1,0 +1,47 @@
+# NFC of 'e' + combining acute -> precomposed 'é' (U+00E9) = UTF-8 C3A9
+C3A9
+# NFD of 'é' decomposes to e + U+0301 = UTF-8 65CC81
+65CC81
+# NFC/NFD round-trip is identity for ASCII
+hello
+# NFKC of ligature 'fi' (U+FB01) -> "fi"
+fi
+# NFKD of ligature 'fi' -> "fi"
+fi
+# Full case folding turns 'ß' into "ss" -> "strasse"
+strasse
+# Strip accents: 'café' -> "cafe"
+cafe
+# Strip accents: 'naïve' -> "naive"
+naive
+# Slugify: plan headline criterion
+hello-world
+# Slugify: 'café é à' -> "cafe-e-a"
+cafe-e-a
+# Heavy punctuation collapses + trims
+hello-world
+# Whitespace runs collapse to single space + trim
+hello world
+# General category: uppercase letter
+Lu
+# Lowercase letter
+Ll
+# Decimal number
+Nd
+# Space separator
+Zs
+# Grapheme count: 'é' as NFD is 1 cluster
+1
+# US flag emoji is one grapheme
+1
+# Empty string -> 0
+0
+# NULL passthrough on TEXT scalar
+1
+1
+# NULL passthrough on INTEGER scalar
+1
+# Version is non-empty
+1
+# Version contains "Unicode"
+1
