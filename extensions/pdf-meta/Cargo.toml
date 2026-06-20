@@ -1,0 +1,37 @@
+[package]
+name = "pdf-meta-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+PDF document metadata extractor for SQLite: pulls Title, Author,
+Subject, Creator, Producer, CreationDate, ModDate, Keywords, page
+count, PDF version, and encrypted-state from a PDF blob. The
+document-side counterpart to `exif` / `image-meta`. Backed by
+`lopdf` 0.34 (pure-rust, no rendering).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per PLAN-more-extensions-4 cross-cut rules
+# (do NOT pollute the parent workspace). The build still works under
+# `make ext NAME=pdf-meta` because the Makefile invokes cargo with
+# --manifest-path against this Cargo.toml directly.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-rust lenient PDF parser. We use it for header version + xref
+# parse + /Info dictionary + /Root /Pages tree walk. We do NOT render
+# content streams, decompress page streams, or decode images — the
+# extension is metadata-only. lopdf 0.34 is the established
+# wasm32-wasip2-friendly choice.
+# lopdf 0.34 default features (chrono_time + rayon) drag in `chrono` and
+# `rayon` which we don't need for metadata extraction. The crate's
+# `pom_parser` feature is broken at this version (build errors in
+# parser.rs against the current `get_object` signature) — use the
+# `nom_parser` feature instead, which is the maintained path.
+lopdf = { version = "0.34", default-features = false, features = ["nom_parser"] }

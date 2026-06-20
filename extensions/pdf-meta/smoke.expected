@@ -1,0 +1,83 @@
+# Expected output for the `pdf-meta` smoke harness.
+#
+# Fixtures (synthesized minimal PDFs; see smoke.sql for hex):
+#
+#   pdf_a:    1-page PDF 1.7 with /Info dict carrying
+#             Title=Test PDF, Author=Test Author,
+#             Subject=Test Subject, Creator=Test Creator,
+#             Producer=Test Producer, Keywords=kw1, kw2,
+#             CreationDate=D:20240115103045Z,
+#             ModDate=D:20240116113045Z.
+#
+#   pdf_b:    3-page PDF 1.7 with the same /Info dict; the page
+#             tree has /Kids [3 0 R 4 0 R 5 0 R] /Count 3.
+#
+#   pdf_c:    header-only 15-byte truncated file ("%PDF-2.0\n%..."")
+#             with no body, no xref, no trailer -- full parse fails,
+#             header byte-scan still returns "2.0".
+#
+#   pdf_enc:  PDF 1.7 with a Standard V=1 R=2 RC4-40 encryption dict
+#             referenced from the trailer; lopdf flags the doc
+#             encrypted but /Info is byte-readable so Title +
+#             Author still extract.
+#
+#   random:   16 bytes of 0xAA -- no PDF marker, every fn NULL.
+
+# ---- Acceptance 1: single-page PDF, every /Info field ----
+Test PDF
+Test Author
+Test Subject
+Test Creator
+Test Producer
+kw1, kw2
+2024-01-15T10:30:45Z
+2024-01-16T11:30:45Z
+1
+1.7
+0
+
+# ---- Acceptance 2: 3-page PDF -> pdf_page_count == 3 ----
+3
+1.7
+
+# ---- Acceptance 3: truncated PDF (header only) ----
+# pdf_pdf_version still extracts via the byte-scan fallback;
+# title + page_count NULL because no /Info / page tree exists.
+2.0
+<NULL>
+<NULL>
+
+# ---- Acceptance 4: encrypted PDF ----
+# is_encrypted = 1; title/author still extract from the cleartext
+# /Info dictionary.
+1
+Encrypted PDF
+Test Author
+
+# ---- Acceptance 5: pdf_all returns parseable JSON ----
+Test PDF
+1
+1.7
+0
+
+# ---- Acceptance 6: random bytes -> every fn NULL ----
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 7: NULL input -> every fn NULL ----
+<NULL>
+<NULL>
+<NULL>
+
+# ---- Acceptance 8: version is non-empty ----
+1
