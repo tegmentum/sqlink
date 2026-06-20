@@ -1,0 +1,61 @@
+[package]
+name = "tls-cert-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+X.509 v3 certificate parsing for SQL (RFC 5280).
+
+Function surface (PLAN-more-extensions-4.md #8):
+  cert_subject(pem_or_der)              -> text   (RDN string)
+  cert_issuer(pem_or_der)               -> text   (RDN string)
+  cert_serial(pem_or_der)               -> text   (hex, no separators)
+  cert_not_before(pem_or_der)           -> text   (ISO 8601 UTC)
+  cert_not_after(pem_or_der)            -> text   (ISO 8601 UTC)
+  cert_sig_algorithm(pem_or_der)        -> text   (e.g. 'sha256WithRSAEncryption')
+  cert_public_key_algorithm(pem_or_der) -> text   (e.g. 'rsaEncryption', 'ecPublicKey')
+  cert_public_key_bits(pem_or_der)      -> integer
+  cert_sans(pem_or_der)                 -> text   (JSON array)
+  cert_fingerprint_sha256(pem_or_der)   -> text   (lowercase hex)
+  cert_is_valid_now(pem_or_der, [unix_epoch_s]) -> integer (0/1)
+  cert_self_signed(pem_or_der)          -> integer (0/1)
+  cert_all(pem_or_der)                  -> text   (JSON object)
+  tls_cert_version()                    -> text
+
+Accepts PEM (-----BEGIN CERTIFICATE-----) or raw DER. NULL or
+unparseable input  NULL on every fn except tls_cert_version.
+
+Backed by `x509-parser` (pure rust, RFC 5280 + RFC 8410 support)
+and `pem` (PEM envelope decode). SHA-256 fingerprint via the
+`sha2` RustCrypto crate -- the bytes that get hashed are the DER
+form of the cert (matches `openssl x509 -fingerprint -sha256`).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rule 2: keeps the parent
+# workspace from trying to build this crate natively.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# x509-parser 0.16 per PLAN-more-extensions-4.md #8. Pure rust;
+# nom-based DER decoder with X.509-specific helpers (subject /
+# issuer RDN formatting, SAN extension, validity, signature OID
+# names). Disable `verify` -- the optional ring-based signature
+# check pulls a heavy native dep, and we're a parse-only ext.
+x509-parser = { version = "0.16", default-features = false }
+# PEM envelope decode (BEGIN/END markers + base64 body). The
+# x509-parser crate has its own PEM helper but it's gated on
+# std; we want explicit control over the PEM-vs-DER fallback.
+pem = { version = "3", default-features = false }
+# Lowercase hex output for fingerprint + serial. The `alloc`
+# feature is the minimum needed for `String` output.
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+# SHA-256 of the DER bytes -> fingerprint.
+sha2 = { version = "0.10", default-features = false }
+# JSON output for cert_sans / cert_all.
+serde_json = { version = "1", default-features = false, features = ["alloc"] }

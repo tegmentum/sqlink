@@ -1,0 +1,40 @@
+# tls-cert  PLAN-more-extensions-4.md  8 acceptance.
+# Self-signed RSA-2048 fixture (DER hex literal in smoke.sql).
+# Subject/Issuer/Serial/dates fixed by the embedded cert.
+CN=example.com, O=Example Inc, C=US
+CN=example.com, O=Example Inc, C=US
+0be4349a5c650dbc0f37e628c0f343211cf82849
+2026-06-20T13:31:30Z
+2036-06-17T13:31:30Z
+sha256WithRSAEncryption
+rsaEncryption
+2048
+# SHA-256 fingerprint of the DER bytes (== openssl -fingerprint).
+97d7a61b4f88cc9e3dd8bd7de1b3dbe2491221cd9f0f04adbd4f02f489c8f233
+# SANs as JSON array (DNS / IP / email)
+["DNS:example.com","DNS:www.example.com","IP:127.0.0.1","email:ops@example.com"]
+# self-signed (subject == issuer)
+1
+# is_valid_now(2030)=1, is_valid_now(1980)=0, is_valid_now(2050)=0
+1
+0
+0
+# cert_all  json_extract spot-checks
+CN=example.com, O=Example Inc, C=US
+97d7a61b4f88cc9e3dd8bd7de1b3dbe2491221cd9f0f04adbd4f02f489c8f233
+1
+2048
+4
+# PEM input parses to the same subject + fingerprint as the DER form
+1
+1
+# Random bytes -> every fn NULL (no panic)
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# cert_subject(NULL) -> NULL
+<NULL>
+# tls_cert_version length > 0
+1
