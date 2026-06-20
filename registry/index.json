@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T18:39:51Z",
+  "updated": "2026-06-20T18:58:41Z",
   "registry_url": "https://raw.githubusercontent.com/user/sqlite-wasm-extensions/main/registry/index.json",
-  "commit_sha": "becd0446c7fa3da3cc9da3b4c95b43ec5be87202",
+  "commit_sha": "90f703fe73f0d3d79d1f67d64e9834f907569da2",
   "extensions": [
     {
       "name": "extension-manager",
@@ -1232,6 +1232,56 @@
       "dependencies": []
     },
     {
+      "name": "cose",
+      "version": "0.1.0",
+      "description": "COSE (CBOR Object Signing and Encryption, RFC 8152) for SQL.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/cose",
+      "keywords": [
+        "cose",
+        "cbor",
+        "object",
+        "signing",
+        "encryption",
+        "rfc"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/cose-0.1.0/cose-0.1.0.tar.gz",
+      "checksum": "sha256:b952f63ebc3964e79bad38bdea601eec7ad9c074f594bc91b17577c47e47f7ad",
+      "size_bytes": 584448,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "cose_decrypt0",
+        "cose_encrypt0",
+        "cose_inspect",
+        "cose_mac0",
+        "cose_mac0_verify",
+        "cose_placeholder",
+        "cose_sign1",
+        "cose_verify1",
+        "cose_version"
+      ],
+      "dependencies": [
+        "aes-gcm@0.10",
+        "ciborium@0.2",
+        "coset@0.3",
+        "ed25519-dalek@2",
+        "getrandom@0.2",
+        "hex@0.4",
+        "hmac@0.12",
+        "p256@0.13",
+        "serde_json@1",
+        "sha2@0.10"
+      ]
+    },
+    {
       "name": "count_min",
       "version": "0.1.0",
       "description": "Count-Min Sketch for top-k frequency estimation. Sized at 2048 (width) 4 (depth) by default = 32 KB state, ~0.05% error with 99.99% confidence. Parameters are fixed in the v1 wire format.",
@@ -1924,6 +1974,48 @@
       ]
     },
     {
+      "name": "docx-meta",
+      "version": "0.1.0",
+      "description": "OOXML document metadata extractor for SQLite. Reads the ZIP + XML structure of Office Open XML files (.docx / .xlsx / .pptx) and surfaces Core / Extended properties + a plain-text content dump to SQL scalars.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/docx-meta",
+      "keywords": [
+        "docx-meta",
+        "ooxml",
+        "document",
+        "metadata",
+        "extractor"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/docx-meta-0.1.0/docx-meta-0.1.0.tar.gz",
+      "checksum": "sha256:d7c75183af3b0bccccba075658100abaff5c42b372668e51da26c106a6d472bb",
+      "size_bytes": 270558,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "docx_author",
+        "docx_created",
+        "docx_format",
+        "docx_meta_version",
+        "docx_metadata",
+        "docx_modified",
+        "docx_page_count",
+        "docx_text_content",
+        "docx_title",
+        "docx_word_count"
+      ],
+      "dependencies": [
+        "quick-xml@0.36",
+        "zip@2"
+      ]
+    },
+    {
       "name": "ean",
       "version": "0.1.0",
       "description": "EAN-13 / UPC-A barcode validation (weighted mod-10)",
@@ -2132,6 +2224,49 @@
         "emojis@0.8",
         "serde_json@1",
         "unicode-segmentation@1"
+      ]
+    },
+    {
+      "name": "epub",
+      "version": "0.1.0",
+      "description": "EPUB e-book metadata extraction from a raw blob.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/epub",
+      "keywords": [
+        "epub",
+        "ebook",
+        "metadata",
+        "extraction",
+        "raw",
+        "blob"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/epub-0.1.0/epub-0.1.0.tar.gz",
+      "checksum": "sha256:d0558ecad4694d02b19661bdea38b7a67cbb8aad911c9ea74be8a3f352331a08",
+      "size_bytes": 254200,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "epub_authors",
+        "epub_chapter_count",
+        "epub_identifier",
+        "epub_language",
+        "epub_metadata",
+        "epub_published_date",
+        "epub_publisher",
+        "epub_subjects",
+        "epub_title",
+        "epub_version"
+      ],
+      "dependencies": [
+        "quick-xml@0.36",
+        "zip@2"
       ]
     },
     {
@@ -2910,6 +3045,46 @@
       "dependencies": [
         "hkdf@0.12",
         "sha2@0.10"
+      ]
+    },
+    {
+      "name": "hpke",
+      "version": "0.1.0",
+      "description": "Hybrid Public Key Encryption (RFC 9180) for SQL.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/hpke",
+      "keywords": [
+        "hpke",
+        "hybrid",
+        "public",
+        "key",
+        "encryption",
+        "rfc"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/hpke-0.1.0/hpke-0.1.0.tar.gz",
+      "checksum": "sha256:a06d7d61a73657c3191a0412fb929f331b6ca70b4d2003b1956c07c44143313b",
+      "size_bytes": 275156,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "hpke_keypair",
+        "hpke_open",
+        "hpke_placeholder",
+        "hpke_pub_from_priv",
+        "hpke_seal",
+        "hpke_version"
+      ],
+      "dependencies": [
+        "getrandom@0.2",
+        "hpke@0.13",
+        "rand_core@0.9"
       ]
     },
     {
@@ -4310,6 +4485,46 @@
       ]
     },
     {
+      "name": "mbox",
+      "version": "0.1.0",
+      "description": "mbox / maildir email-format reader for SQL.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/mbox",
+      "keywords": [
+        "mbox",
+        "maildir",
+        "emailformat",
+        "reader"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/mbox-0.1.0/mbox-0.1.0.tar.gz",
+      "checksum": "sha256:be9b95dbd99808b45e7b4b1393bd5e81adacfb3e0a09f96c25776bc158c93db0",
+      "size_bytes": 456911,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "mbox_body_at",
+        "mbox_date_at",
+        "mbox_from_at",
+        "mbox_message_at",
+        "mbox_message_count",
+        "mbox_subject_at",
+        "mbox_subjects",
+        "mbox_version"
+      ],
+      "dependencies": [
+        "mailparse@0.15",
+        "serde_json@1",
+        "time@0.3"
+      ]
+    },
+    {
       "name": "mgrs",
       "version": "0.1.0",
       "description": "Military Grid Reference System (MGRS) coordinate extension for SQLite: convert between lat/lng (WGS84) and MGRS grid strings, parse + validate MGRS, and report grid-square / precision. MGRS is the DoD coordinate standard built on UTM (8 deg S ..",
@@ -4982,6 +5197,88 @@
       ],
       "dependencies": [
         "lopdf@0.34"
+      ]
+    },
+    {
+      "name": "perceptual-hash",
+      "version": "0.1.0",
+      "description": "Perceptual image hashing for similarity / dedup: pHash (8x8 DCT), dHash (difference hash), and aHash (average hash) over PNG + JPEG blobs. Each hash is a 64-bit BLOB (8 bytes); compare with hash_distance() to get the Hamming distance.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/perceptual-hash",
+      "keywords": [
+        "perceptual-hash",
+        "perceptual",
+        "image",
+        "hashing",
+        "similarity",
+        "dedup"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/perceptual-hash-0.1.0/perceptual-hash-0.1.0.tar.gz",
+      "checksum": "sha256:0fe28afc690405b1c365ffc1b87ca92041b89cf16b1d74ababf2e647faf70a0b",
+      "size_bytes": 335840,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "ahash",
+        "dhash",
+        "hash_distance",
+        "perceptual_hash_version",
+        "phash"
+      ],
+      "dependencies": [
+        "jpeg-decoder@0.3",
+        "png@0.17"
+      ]
+    },
+    {
+      "name": "pgp",
+      "version": "0.1.0",
+      "description": "OpenPGP key parsing + signature verification for SQL (RFC 4880).",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/pgp",
+      "keywords": [
+        "pgp",
+        "openpgp",
+        "key",
+        "parsing",
+        "signature",
+        "verification"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/pgp-0.1.0/pgp-0.1.0.tar.gz",
+      "checksum": "sha256:dc3a1f3197ffd2eab43f4e5cff7f21041267a500de9a8a0d206ec0d5b88bd82a",
+      "size_bytes": 1338475,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "pgp_armor_to_binary",
+        "pgp_binary_to_armor",
+        "pgp_key_algorithm",
+        "pgp_key_bits",
+        "pgp_key_created",
+        "pgp_key_fingerprint",
+        "pgp_key_id",
+        "pgp_key_user_ids",
+        "pgp_verify",
+        "pgp_version"
+      ],
+      "dependencies": [
+        "hex@0.4",
+        "pgp@0.13",
+        "serde_json@1"
       ]
     },
     {
@@ -7882,6 +8179,46 @@
       "min_sqlite_version": "3.39.0",
       "exports": [],
       "dependencies": []
+    },
+    {
+      "name": "wasm-introspect",
+      "version": "0.1.0",
+      "description": "Wasm module introspection scalars. Reads a .wasm BLOB and surfaces the parts you ask about: validity, version byte, custom section names, import / export tables, function count, initial memory pages. Useful for SQL-side queries over a catalog of components (e.g.",
+      "license": "MIT",
+      "authors": [
+        "sqlite-wasm contributors"
+      ],
+      "repository": "https://github.com/anthropics/sqlite-wasm",
+      "homepage": "https://github.com/anthropics/sqlite-wasm/tree/main/extensions/wasm-introspect",
+      "keywords": [
+        "wasm-introspect",
+        "wasm",
+        "module",
+        "introspection",
+        "scalars"
+      ],
+      "categories": [
+        "utility"
+      ],
+      "source": "builtin",
+      "artifact_url": "https://github.com/anthropics/sqlite-wasm/releases/download/wasm-introspect-0.1.0/wasm-introspect-0.1.0.tar.gz",
+      "checksum": "sha256:4a5d17b7a5fc5f108e576911ee5d22ec64983c22d1cadcc65fbb75e9f417f226",
+      "size_bytes": 1229728,
+      "min_sqlite_version": "3.39.0",
+      "exports": [
+        "wasm_custom_sections",
+        "wasm_exports",
+        "wasm_function_count",
+        "wasm_imports",
+        "wasm_introspect_version",
+        "wasm_is_valid",
+        "wasm_memory_pages",
+        "wasm_version_byte"
+      ],
+      "dependencies": [
+        "serde_json@1",
+        "wasmparser@0.215"
+      ]
     },
     {
       "name": "web-mercator-tile",

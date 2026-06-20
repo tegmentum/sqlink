@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-20T18:39:51Z",
-  "commit_sha": "becd0446c7fa3da3cc9da3b4c95b43ec5be87202",
+  "updated": "2026-06-20T18:58:41Z",
+  "commit_sha": "90f703fe73f0d3d79d1f67d64e9834f907569da2",
   "candidates": [
     {
       "name": "flatbuffers",
@@ -35,50 +35,6 @@
       "reason": null,
       "proposed_crate": "thrift 0.17",
       "notes": "Schema problem; less common than protobuf."
-    },
-    {
-      "name": "wasm-introspect",
-      "source": "session-2026-06",
-      "description": "wasm module introspection (custom sections, imports/exports).",
-      "upstream_url": "https://webassembly.github.io/spec/core/",
-      "track": "codec",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "wasmparser 0.215",
-      "notes": "Meta: query the catalog's own components via SQL."
-    },
-    {
-      "name": "cose",
-      "source": "session-2026-06",
-      "description": "CBOR Object Signing and Encryption (RFC 8152).",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc8152",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "coset 0.3",
-      "notes": "CBOR-shaped JOSE alternative; used by WebAuthn / FIDO2."
-    },
-    {
-      "name": "hpke",
-      "source": "session-2026-06",
-      "description": "Hybrid Public Key Encryption (RFC 9180).",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc9180",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "hpke 0.13",
-      "notes": "Modern asymmetric encryption suite; pairs with aead + hkdf."
-    },
-    {
-      "name": "pgp",
-      "source": "session-2026-06",
-      "description": "OpenPGP key parsing + sign/verify (RFC 4880).",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc4880",
-      "track": "crypto",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "pgp 0.13",
-      "notes": "sequoia-openpgp is too heavy; pgp crate is the lighter choice."
     },
     {
       "name": "webauthn",
@@ -147,39 +103,6 @@
       "notes": "Niche; defer until a consumer asks."
     },
     {
-      "name": "docx-meta",
-      "source": "session-2026-06",
-      "description": "OOXML (docx/xlsx/pptx) metadata extraction.",
-      "upstream_url": "https://www.ecma-international.org/publications-and-standards/standards/ecma-376/",
-      "track": "media",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "docx-rs 0.4",
-      "notes": "OOXML is a zip + XML; might overlap with formats/xml + zipfile."
-    },
-    {
-      "name": "epub",
-      "source": "session-2026-06",
-      "description": "EPUB e-book metadata extraction.",
-      "upstream_url": "https://www.w3.org/publishing/epub32/",
-      "track": "media",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "epub 2 (or rbook 0.9)",
-      "notes": "image-meta + pdf-meta + id3 + vcard cover other formats; epub is the next."
-    },
-    {
-      "name": "perceptual-hash",
-      "source": "session-2026-06",
-      "description": "pHash / dHash / aHash for image similarity.",
-      "upstream_url": "https://en.wikipedia.org/wiki/Perceptual_hashing",
-      "track": "media",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "img_hash 3",
-      "notes": "Needs the image crate for pixel decode  bigger wasm bundle than image-meta."
-    },
-    {
       "name": "http-signature",
       "source": "session-2026-06",
       "description": "HTTP Message Signatures (RFC 9421).",
@@ -189,17 +112,6 @@
       "reason": null,
       "proposed_crate": "no canonical crate yet  hand-roll",
       "notes": "Used by ActivityPub / Mastodon and the SSF working group."
-    },
-    {
-      "name": "mbox",
-      "source": "session-2026-06",
-      "description": "mbox + maildir email format parsing as vtab.",
-      "upstream_url": "https://datatracker.ietf.org/doc/html/rfc4155",
-      "track": "vtab",
-      "status": "planned",
-      "reason": null,
-      "proposed_crate": "mbox-reader 0.2",
-      "notes": "Useful for email-database use cases."
     },
     {
       "name": "sqlean-vsv",

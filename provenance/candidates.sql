@@ -20,22 +20,10 @@ DELETE FROM plugin_candidate;
 -- ====== Crypto + wire-format gaps ======
 INSERT INTO plugin_candidate (name, source, description, upstream_url, track, proposed_crate, added_at, notes)
 VALUES
-('hpke',             'session-2026-06', 'Hybrid Public Key Encryption (RFC 9180).',
-                     'https://datatracker.ietf.org/doc/html/rfc9180',
-                     'crypto', 'hpke 0.13', unixepoch(),
-                     'Modern asymmetric encryption suite; pairs with aead + hkdf.'),
-('cose',             'session-2026-06', 'CBOR Object Signing and Encryption (RFC 8152).',
-                     'https://datatracker.ietf.org/doc/html/rfc8152',
-                     'crypto', 'coset 0.3', unixepoch(),
-                     'CBOR-shaped JOSE alternative; used by WebAuthn / FIDO2.'),
 ('webauthn',         'session-2026-06', 'WebAuthn registration + authentication verification.',
                      'https://www.w3.org/TR/webauthn-2/',
                      'crypto', 'webauthn-rs 0.5', unixepoch(),
                      'Heavy spec; needs handler-side surface as well as SQL.'),
-('pgp',              'session-2026-06', 'OpenPGP key parsing + sign/verify (RFC 4880).',
-                     'https://datatracker.ietf.org/doc/html/rfc4880',
-                     'crypto', 'pgp 0.13', unixepoch(),
-                     'sequoia-openpgp is too heavy; pgp crate is the lighter choice.'),
 
 -- ====== Codec gaps ======
 ('protobuf',         'session-2026-06', 'Protocol Buffers encode/decode (given schema).',
@@ -52,22 +40,10 @@ VALUES
                      'Schema problem; less common than protobuf.'),
 
 -- ====== Document / media ======
-('epub',             'session-2026-06', 'EPUB e-book metadata extraction.',
-                     'https://www.w3.org/publishing/epub32/',
-                     'media', 'epub 2 (or rbook 0.9)', unixepoch(),
-                     'image-meta + pdf-meta + id3 + vcard cover other formats; epub is the next.'),
 ('djvu',             'session-2026-06', 'DjVu document metadata.',
                      'http://djvu.org/',
                      'media', 'no crate yet  port djvulibre header', unixepoch(),
                      'Niche; defer until a consumer asks.'),
-('docx-meta',        'session-2026-06', 'OOXML (docx/xlsx/pptx) metadata extraction.',
-                     'https://www.ecma-international.org/publications-and-standards/standards/ecma-376/',
-                     'media', 'docx-rs 0.4', unixepoch(),
-                     'OOXML is a zip + XML; might overlap with formats/xml + zipfile.'),
-('perceptual-hash',  'session-2026-06', 'pHash / dHash / aHash for image similarity.',
-                     'https://en.wikipedia.org/wiki/Perceptual_hashing',
-                     'media', 'img_hash 3', unixepoch(),
-                     'Needs the image crate for pixel decode  bigger wasm bundle than image-meta.'),
 
 -- ====== Geo coordinate systems ======
 ('proj',             'session-2026-06', 'PROJ-style coordinate reference system transformations.',
@@ -100,18 +76,10 @@ VALUES
                      'csv extension exists but vsv has different shape  worth comparing.'),
 
 -- ====== Specialty / niche ======
-('mbox',             'session-2026-06', 'mbox + maildir email format parsing as vtab.',
-                     'https://datatracker.ietf.org/doc/html/rfc4155',
-                     'vtab', 'mbox-reader 0.2', unixepoch(),
-                     'Useful for email-database use cases.'),
 ('dicom',            'session-2026-06', 'DICOM medical imaging metadata.',
                      'https://www.dicomstandard.org/',
                      'media', 'dicom-rs 0.7', unixepoch(),
                      'Medical / healthcare context.'),
-('wasm-introspect',  'session-2026-06', 'wasm module introspection (custom sections, imports/exports).',
-                     'https://webassembly.github.io/spec/core/',
-                     'codec', 'wasmparser 0.215', unixepoch(),
-                     'Meta: query the catalog''s own components via SQL.'),
 ('mathml',           'session-2026-06', 'MathML parsing.',
                      'https://www.w3.org/Math/',
                      'document', 'mathml-rs 0.1', unixepoch(),
