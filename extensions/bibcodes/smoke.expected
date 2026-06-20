@@ -1,0 +1,62 @@
+# ISBN-13 valid (plan example) + hyphenated form
+1
+1
+# checksum-flipped ISBN-13
+0
+# ISBN-10 valid + normalize to ISBN-13
+1
+9780306406157
+9780306406157
+# isbn_format: EAN-9body-check
+978-030640615-7
+# ISSN: Nature 0028-0836 + digits-only
+1
+1
+# bad ISSN checksum
+0
+# canonical format
+0028-0836
+# Lancet ISSN
+1
+# DOI: plain, doi:, full URL
+1
+1
+1
+# missing 10. prefix
+0
+# missing suffix
+0
+# multi-segment registrant
+1
+# DOI normalize: prefix lowercased, suffix preserved
+10.1038/NPhys1170
+10.1038/nphys1170
+# ORCID hyphenated, digits-only, URL form
+1
+1
+1
+# bad ORCID checksum
+0
+# ORCID format
+0000-0002-1825-0097
+# Stephen Curry's public ORCID
+1
+# LCCN valid (plan example), trim spaces
+1
+1
+# LCCN normalize: strip hyphen + pad
+n78890351
+n78890351
+# alphaprefix + 8 digits passes through
+agr25000003
+# slash-tail dropped
+85000002
+# NULL -> NULL on six sampled scalars
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+<NULL>
+# version is non-empty
+1

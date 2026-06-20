@@ -1,0 +1,55 @@
+[package]
+name = "bibcodes-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Bibliographic identifier validation + canonical formatting.
+Sister to the aba / bic / cusip / creditcard / isin / ean
+checksum-flavored extensions in this catalog, except focused
+on the publishing world: ISBN-10, ISBN-13, ISSN, DOI, ORCID,
+and LCCN.
+
+Functions:
+  isbn_is_valid(s)    -> integer  (accepts ISBN-10 and ISBN-13)
+  isbn_normalize(s)   -> text     (canonical ISBN-13, digits only)
+  isbn_format(s)      -> text     (hyphenated ISBN-13)
+  issn_is_valid(s)    -> integer
+  issn_format(s)      -> text     (NNNN-NNNX)
+  doi_is_valid(s)     -> integer  (ISO 26324 syntactic check)
+  doi_normalize(s)    -> text     (strip 'doi:' / URL prefix,
+                                   lowercase the directory + prefix)
+  orcid_is_valid(s)   -> integer  (ISO 27729 + mod-11-2 checksum)
+  orcid_format(s)     -> text     (NNNN-NNNN-NNNN-NNNX)
+  lccn_is_valid(s)    -> integer  (LoC normalization rule shape)
+  lccn_normalize(s)   -> text     (LoC normalized form)
+  bibcodes_version()  -> text
+
+NULL  NULL everywhere. Validation rejects bad checksums + bad
+lengths. All checksum routines roll-own from the published specs
+(no external bibcode crate dep) so the component stays slim and
+the extension has no transitive surface.
+
+References:
+  ISO 2108  ISBN
+  ISO 3297  ISSN
+  ISO 26324 DOI syntax
+  ISO 27729 ORCID
+  Library of Congress LCCN normalization rules
+  https://www.loc.gov/marc/lccn-namespace.html
+
+See PLAN-more-extensions.md  7.
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules: keeps the parent
+# workspace from trying to build this crate natively. Embed-path
+# wiring into sqlite-cli-embedded is a separate follow-up.
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
