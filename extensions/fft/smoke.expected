@@ -1,0 +1,33 @@
+# Acceptance criteria for fft (PLAN-more-extensions-4.md  5).
+# All values are exact under double-precision; floating-point noise
+# from the FFT pass is removed by `round(value, 6)` in smoke.sql.
+#
+# DC test:     fft_forward([1,1,1,1]) puts the entire energy in bin 0.
+# Sin wave:    sin(2πn/8) for n=0..7 has |X[1]| = |X[7]| = N/2 = 4.
+# Round-trip:  inverse(forward([1,2,3,4])) == [1,2,3,4].
+# Hann sum:    periodic Hann over all-ones of length 8 sums to N/2.
+# Rect sum:    rectangular window is identity  sums to N.
+# Power:       power_spectrum([1,1,1,1]) = [16, 0, 0, 0].
+# Delta:       forward([1,0,0,0]) has |X[k]| = 1 for every k.
+[[4.0,0.0],[0.0,0.0],[0.0,0.0],[0.0,0.0]]
+[[4.0,0.0],[0.0,0.0],[0.0,0.0],[0.0,0.0]]
+[4.0,0.0,0.0,0.0]
+[1.0,2.0,3.0,4.0]
+[0.0,4.0,0.0,0.0,0.0,0.0,0.0,4.0]
+4
+8
+1
+1
+[0.0,0.0,0.0,0.0]
+[16.0,0.0,0.0,0.0]
+[1.0,1.0,1.0,1.0]
+<NULL>
+<NULL>
+<NULL>
+[]
+[]
+<NULL>
+<NULL>
+<NULL>
+[]
+1
