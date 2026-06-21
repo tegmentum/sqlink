@@ -3537,6 +3537,9 @@ fn embed_core_dotcmd() {
     const SERIALIZE_CLI_BYTES: &[u8] = include_bytes!(
         "../../extensions/serialize-cli/target/wasm32-wasip2/release/serialize_cli_extension.component.wasm"
     );
+    const ARCHIVE_CLI_BYTES: &[u8] = include_bytes!(
+        "../../extensions/archive-cli/target/wasm32-wasip2/release/archive_cli_extension.component.wasm"
+    );
     let options = LoadOptions {
         grant: Vec::new(),
         http_policy: None,
@@ -3594,6 +3597,19 @@ fn embed_core_dotcmd() {
         Err(e) => {
             eprintln!(
                 "auto-load serialize-cli failed: {} ({}). `.serialize` / `.deserialize` will read \"Unknown command\".",
+                e.message, e.code
+            );
+        }
+    }
+    match extension_loader::load_extension_from_bytes(
+        "archive-cli",
+        ARCHIVE_CLI_BYTES,
+        &options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load archive-cli failed: {} ({}). `.archive` will read \"Unknown command\".",
                 e.message, e.code
             );
         }

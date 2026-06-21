@@ -30,18 +30,28 @@ strip-prefix chain, with the migration shape for each.
   - `.sha3sum` — own extension (`extensions/sha3sum-cli`) using
     `spi.execute` to walk schema + rows, hashing with Sha3_256
     (FU-9).
+  - `.parameter` — `params/clear` + `params/set/<name>` +
+    `params/unset/<name>` deltas; `params/value/<name>` entries
+    in the snapshot (FU-10).
+  - `.serialize` / `.deserialize` — own extension
+    (`extensions/serialize-cli`) using a new `spi.serialize-db`
+    for the read and a `conn/deserialize/<name>` delta carrying
+    `SqlValue::Blob` for the write. `sql_value_to_json` now
+    encodes blobs as `X'<hex>'` literals to round-trip raw
+    bytes through state-deltas (FU-11).
+  - `.archive` — own extension (`extensions/archive-cli`) using
+    `spi.execute` for sqlar table ops + `std::fs` for files +
+    `miniz_oxide` for zlib (FU-12). `--list` / `--extract` /
+    `--create` / `--update` all work; `--file SEPARATE_DB` is
+    unsupported pending a spi.open-other-db addition.
 
 ## What's left in the cli's hard-coded dispatch
 
-### `cli/src/dot.rs` (5 arms remaining)
+### `cli/src/dot.rs` (1 arm remaining)
 
 | Command         | Blocker / migration target |
 |-----------------|----------------------------|
-| `.parameter`    | needs a map-shaped state-delta key class (parameter bindings are a HashMap, not a single value) — `params/set/<name>` + `params/clear` keys would work, but the cli's parameter map also needs to round-trip through the cli-state snapshot |
-| `.archive`      | own extension (`archive-cli`) — needs the zip vtab port + sqlite3_archive surface |
-| `.session`      | own extension (`session-cli`) — needs `sqlite3_session_*` exposed via a new spi sub-interface |
-| `.serialize`    | own extension (`serialize-cli`) — needs `sqlite3_serialize` / `sqlite3_deserialize` via spi |
-| `.deserialize`  | same as `.serialize`                       |
+| `.session`      | **structurally bound to the cli** — `sqlite3_session_create` returns a `sqlite3_session*` that tracks changes on the connection it was created against. The cli's main connection lives inside the cli wasm component; the extension's `spi` connection is a different handle. Moving session handles into an extension would track changes on the wrong connection. Fixing this needs either (a) the cli's main connection threaded into the extension's spi (sharing the raw sqlite3 handle across a wasm boundary), or (b) a new `spi.session-*` family that the cli implements as host-importable callbacks (host→guest→cli call chain). Both are non-trivial enough to defer to a follow-up. For now `.session` is the only remaining dispatch arm in `dot.rs`. |
 
 ### `cli/src/lib.rs` strip-prefix chain (~27 arms)
 

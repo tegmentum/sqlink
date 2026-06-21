@@ -95,7 +95,7 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         // through core-dotcmd.
         // .vfslist / .vfsname  routed through core-dotcmd via
         // new spi.list-vfs + spi.vfs-name imports (FU-6).
-        ".archive" => cmd_archive(arg, conn),
+        // .archive  migrated to extensions/archive-cli (FU-12).
         ".session" => cmd_session(arg, conn),
         // .serialize / .deserialize  migrated to
         // extensions/serialize-cli (FU-11).

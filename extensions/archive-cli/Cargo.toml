@@ -1,0 +1,26 @@
+[package]
+name = "archive-cli-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+`.archive` as a wasm dot-command extension. SQLAR (SQLite
+Archive Format)  files are stored as rows in a `sqlar` table.
+
+Migrated out of cli/src/dot.rs as a follow-up to
+PLAN-dotcmd-phase5.md. v1 supports --list / --extract /
+--create / --update against the cli's main db only. The
+--file flag (which operates on a different db file) is
+deferred until spi gains an open-other-db method.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+miniz_oxide = { version = "0.8", default-features = false, features = ["with-alloc"] }
