@@ -285,27 +285,27 @@ Shipped subcommits:
   - 5e.10d (8b896f3): hooks (authorizer + update + commit)
     via spi.register-authorizer / register-update-hook /
     register-commit-hook. Single-slot tracking on Host.
+  - 5e.10e: vtabs via spi.register-vtab. cli/src/vtab.rs (the
+    full sqlite3_module trampoline pile) moved to
+    host/src/vtab.rs; dispatch::vtab_* calls became
+    sync_dispatch_vtab_* wrappers (tokio block_in_place +
+    Handle::current().block_on() into host.dispatch_vtab_*).
+    cli's do_load + do_unload route through spi; cli/src/vtab.rs
+    deleted. Smoked with series (eponymous read-only) and vec0
+    (CREATE VIRTUAL TABLE, batched fetch_batch path).
 
-CLI_CONN.with site count: 16  4 across cli/src/lib.rs.
+CLI_CONN.with site count: 16  2 across cli/src/lib.rs.
 
 Remaining sites (lib.rs only):
 
-  - **L111: ensure_cli_conn** itself  collapses once last
+  - **L113: ensure_cli_conn** itself  collapses once last
     consumer goes away.
-  - **L1272: .session passthrough**  Stage 6 blocker.
-  - **L1991 (was L1938): do_load vtab registration**  only
-    function-registration type still on CLI_CONN. Needs the
-    vtab.rs trampoline infrastructure (xConnect, xBestIndex,
-    xFilter, xColumn, etc) moved host-side, OR a refactor
-    to work against the host's raw_handle.
-  - **L2863: do_unload vtab teardown**  paired with the
-    above; only the regs.vtabs-side cleanup remains.
+  - **L1274: .session passthrough**  Stage 6 blocker.
 
-Stage 5e.10 next batches:
-  - vtabs (the largest remaining piece  ~300 LOC of
-    sqlite3_module trampolines in cli/src/vtab.rs need to
-    move to host/, with dispatch::vtab_* calls replaced by
-    direct host.dispatch_vtab_* via the sync_dispatch glue)
+With Stage 5e.10 complete, the only remaining CLI_CONN
+consumer is .session (Stage 6) and the ensure_cli_conn
+function it depends on. Stage 5f can land as soon as
+Stage 6 ports .session.
 
 Remaining (each ~half-day, no shared theme):
 

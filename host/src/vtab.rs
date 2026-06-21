@@ -1,16 +1,21 @@
-//! Vtab module registration + SQLite trampolines.
+//! Vtab module registration + SQLite trampolines (host side).
 //!
-//! When an extension declares `vtabs` in its manifest, the cli
-//! registers each vtab module against the active SQLite
-//! connection via `sqlite3_create_module_v2`. The module's
-//! function pointers route through these trampolines into the
-//! host-implemented `dispatch::vtab_*` WIT methods, which in
-//! turn instantiate the loaded extension's `tabular` world and
-//! call the matching `vtab.*` export.
+//! PLAN-cli-stages-5-6.md Stage 5e.10e moves the vtab registration
+//! infrastructure from the cli (cli/src/vtab.rs) onto the host so
+//! loaded-extension vtabs install on the host's shared spi
+//! connection — the same connection eval_sql runs against. Before
+//! this stage they were installed on the cli's libsqlite3-sys
+//! connection and `CREATE VIRTUAL TABLE ... USING <ext>(...)`
+//! failed at SQL-time because eval_sql couldn't see the module.
 //!
-//! v1 is read-only: xUpdate / xRename / transactional hooks /
-//! xFindFunction are left null. A future `vtab.update`
-//! interface adds them.
+//! Trampoline structure mirrors cli/src/vtab.rs verbatim; only the
+//! WIT crossing layer is different. Every `dispatch::vtab_*` call
+//! (the cli's wasm-import) becomes a `sync_dispatch_vtab_*` wrapper
+//! that uses `tokio::task::block_in_place` + `Handle::current().
+//! block_on()` to bridge the sync sqlite3 callback into the host's
+//! async `host.dispatch_vtab_*` path. Same async-from-sync glue as
+//! `sync_dispatch_scalar` / `sync_dispatch_aggregate_*` /
+//! `sync_dispatch_authorize` on the host's lib.rs side.
 
 use core::ffi::{c_char, c_int, c_void};
 use std::collections::HashMap;
@@ -21,9 +26,30 @@ use std::sync::{Mutex, OnceLock};
 
 use libsqlite3_sys as ffi;
 
+use crate::Host;
 use crate::bindings::sqlite::extension::types::SqlValue as WitSqlValue;
 use crate::bindings::sqlite::extension::vtab as wv;
-use crate::bindings::sqlite::wasm::dispatch;
+
+// ─────────── Host handle ───────────
+//
+// Trampolines run as sync sqlite3 callbacks; they have no `&Host`
+// in scope. `register_vtab_module` stores a clone here on first
+// call; the trampolines fetch it lazily. Cloning is cheap (Host
+// is Arc-wrapped fields internally).
+
+static HOST_REF: OnceLock<Host> = OnceLock::new();
+
+/// Idempotent — the first registration installs the Host; later
+/// ones see the slot is populated and skip.
+fn init_host_ref(host: Host) {
+    let _ = HOST_REF.set(host);
+}
+
+fn host() -> &'static Host {
+    HOST_REF
+        .get()
+        .expect("vtab trampolines invoked before register_vtab_module init_host_ref")
+}
 
 // ─────────── State ───────────
 
@@ -71,6 +97,14 @@ struct CursorMeta {
     batched: bool,
 }
 
+/// One cached row pulled in by fetch_batch. Stored in the
+/// host-side bindings sql-value type so xColumn can route it
+/// through `wit_to_sqlite3_result` without an extra conversion.
+struct BatchRow {
+    rowid: i64,
+    columns: Vec<WitSqlValue>,
+}
+
 /// Per-cursor row cache for batched vtabs. Populated by xFilter and
 /// refilled by xNext when the cache is consumed. `idx` is the
 /// position within `rows` we're currently serving; `eof_seen` is
@@ -78,7 +112,7 @@ struct CursorMeta {
 /// vtab).
 #[derive(Default)]
 struct BatchCache {
-    rows: Vec<dispatch::VtabRow>,
+    rows: Vec<BatchRow>,
     idx: usize,
     eof_seen: bool,
 }
@@ -103,7 +137,7 @@ fn drop_batch_cache(cursor_id: u64) {
 /// Try to pull a fresh batch into the cache. Returns true if a
 /// non-empty batch landed; false if EOF / error.
 fn refill_batch(meta: &CursorMeta, cursor_id: u64) -> bool {
-    let rows = match dispatch::vtab_fetch_batch(
+    let rows = match sync_dispatch_vtab_fetch_batch(
         &meta.ext_name,
         meta.vtab_id,
         cursor_id,
@@ -157,15 +191,17 @@ fn alloc_instance_id(meta: InstanceMeta) -> u64 {
     id
 }
 
-thread_local! {
-    /// xShadowName context  see x_shadow_name for the rationale.
-    /// `register_vtab_module` sets this immediately before the
-    /// sqlite3_create_module_v2 call. Stays set; sqlite calls
-    /// xShadowName lazily and infrequently (mostly during PRAGMA
-    /// writable_schema / integrity_check), so the last-writer-wins
-    /// caveat is acceptable for v1.
-    static SHADOW_NAME_OWNER: core::cell::RefCell<Option<(String, u64)>> =
-        const { core::cell::RefCell::new(None) };
+/// xShadowName context — see x_shadow_name for the rationale.
+/// `register_vtab_module` sets this immediately before the
+/// sqlite3_create_module_v2 call. Stays set; sqlite calls
+/// xShadowName lazily and infrequently (mostly during PRAGMA
+/// writable_schema / integrity_check), so the last-writer-wins
+/// caveat is acceptable for v1. Host side uses a Mutex (not a
+/// thread_local) because the trampolines are async-bridged from
+/// arbitrary tokio worker threads via block_in_place.
+fn shadow_name_owner() -> &'static Mutex<Option<(String, u64)>> {
+    static OWN: OnceLock<Mutex<Option<(String, u64)>>> = OnceLock::new();
+    OWN.get_or_init(|| Mutex::new(None))
 }
 
 fn alloc_cursor_id(meta: CursorMeta) -> u64 {
@@ -189,6 +225,342 @@ fn drop_instance(id: u64) {
 
 fn drop_cursor(id: u64) {
     registry().lock().unwrap().cursors.remove(&id);
+}
+
+// ─────────── async-from-sync dispatch bridges ───────────
+
+fn block_on<F, T>(fut: F) -> T
+where
+    F: std::future::Future<Output = T>,
+{
+    tokio::task::block_in_place(|| tokio::runtime::Handle::current().block_on(fut))
+}
+
+fn sync_dispatch_vtab_create(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    db_name: &str,
+    table_name: &str,
+    args: &[String],
+) -> Result<String, String> {
+    let res = block_on(host().dispatch_vtab_create(
+        ext_name,
+        vtab_id,
+        instance_id,
+        db_name.to_string(),
+        table_name.to_string(),
+        args.to_vec(),
+    ));
+    match res {
+        Ok(Ok(schema)) => Ok(schema),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_connect(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    db_name: &str,
+    table_name: &str,
+    args: &[String],
+) -> Result<String, String> {
+    let res = block_on(host().dispatch_vtab_connect(
+        ext_name,
+        vtab_id,
+        instance_id,
+        db_name.to_string(),
+        table_name.to_string(),
+        args.to_vec(),
+    ));
+    match res {
+        Ok(Ok(schema)) => Ok(schema),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_disconnect(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_disconnect(ext_name, vtab_id, instance_id)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_destroy(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_destroy(ext_name, vtab_id, instance_id)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_best_index(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    info: wv::IndexInfo,
+) -> Result<wv::IndexPlan, String> {
+    match block_on(host().dispatch_vtab_best_index(ext_name, vtab_id, instance_id, info)) {
+        Ok(Ok(plan)) => Ok(plan),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_open(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    cursor_id: u64,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_open(ext_name, vtab_id, instance_id, cursor_id)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_close(
+    ext_name: &str,
+    vtab_id: u64,
+    cursor_id: u64,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_close(ext_name, vtab_id, cursor_id)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_filter(
+    ext_name: &str,
+    vtab_id: u64,
+    cursor_id: u64,
+    idx_num: i32,
+    idx_str: Option<&str>,
+    args: &[WitSqlValue],
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_filter(
+        ext_name,
+        vtab_id,
+        cursor_id,
+        idx_num,
+        idx_str.map(|s| s.to_string()),
+        args.to_vec(),
+    )) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_next(
+    ext_name: &str,
+    vtab_id: u64,
+    cursor_id: u64,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_next(ext_name, vtab_id, cursor_id)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_eof(ext_name: &str, vtab_id: u64, cursor_id: u64) -> bool {
+    // Host returns Result<bool>; treat dispatch error as EOF
+    // (matches the cli's previous behavior — host logged it
+    // already; a non-recoverable extension error should not stall
+    // sqlite's vdbe).
+    block_on(host().dispatch_vtab_eof(ext_name, vtab_id, cursor_id)).unwrap_or(true)
+}
+
+fn sync_dispatch_vtab_column(
+    ext_name: &str,
+    vtab_id: u64,
+    cursor_id: u64,
+    col: i32,
+) -> Result<WitSqlValue, String> {
+    match block_on(host().dispatch_vtab_column(ext_name, vtab_id, cursor_id, col)) {
+        Ok(Ok(v)) => Ok(v),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_rowid(
+    ext_name: &str,
+    vtab_id: u64,
+    cursor_id: u64,
+) -> Result<i64, String> {
+    match block_on(host().dispatch_vtab_rowid(ext_name, vtab_id, cursor_id)) {
+        Ok(Ok(r)) => Ok(r),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_fetch_batch(
+    ext_name: &str,
+    vtab_id: u64,
+    cursor_id: u64,
+    max_rows: u32,
+) -> Result<Vec<BatchRow>, String> {
+    use crate::convert_sql_value_from_loaded;
+    match block_on(host().dispatch_vtab_fetch_batch(ext_name, vtab_id, cursor_id, max_rows)) {
+        Ok(Ok(rows)) => Ok(rows
+            .into_iter()
+            .map(|r| BatchRow {
+                rowid: r.rowid,
+                columns: r.columns.into_iter().map(convert_sql_value_from_loaded).collect(),
+            })
+            .collect()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_update(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    args: &[WitSqlValue],
+) -> Result<i64, String> {
+    match block_on(host().dispatch_vtab_update(ext_name, vtab_id, instance_id, args.to_vec())) {
+        Ok(Ok(rowid)) => Ok(rowid),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_begin(ext_name: &str, vtab_id: u64, instance_id: u64) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_begin(ext_name, vtab_id, instance_id)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_sync(ext_name: &str, vtab_id: u64, instance_id: u64) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_sync(ext_name, vtab_id, instance_id)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_commit(ext_name: &str, vtab_id: u64, instance_id: u64) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_commit(ext_name, vtab_id, instance_id)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_rollback(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_rollback(ext_name, vtab_id, instance_id)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_rename(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    new_name: &str,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_rename(
+        ext_name,
+        vtab_id,
+        instance_id,
+        new_name.to_string(),
+    )) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_savepoint(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    sp: i32,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_savepoint(ext_name, vtab_id, instance_id, sp)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_release(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    sp: i32,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_release(ext_name, vtab_id, instance_id, sp)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_rollback_to(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    sp: i32,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_rollback_to(ext_name, vtab_id, instance_id, sp)) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+fn sync_dispatch_vtab_is_shadow_name(ext_name: &str, vtab_id: u64, name: &str) -> bool {
+    block_on(host().dispatch_vtab_is_shadow_name(ext_name, vtab_id, name)).unwrap_or(false)
+}
+
+fn sync_dispatch_vtab_integrity(
+    ext_name: &str,
+    vtab_id: u64,
+    instance_id: u64,
+    schema: &str,
+    table_name: &str,
+    mode_flags: u32,
+) -> Result<(), String> {
+    match block_on(host().dispatch_vtab_integrity(
+        ext_name,
+        vtab_id,
+        instance_id,
+        schema,
+        table_name,
+        mode_flags,
+    )) {
+        Ok(Ok(())) => Ok(()),
+        Ok(Err(e)) => Err(e),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 // ─────────── Helpers ───────────
@@ -343,7 +715,7 @@ unsafe fn create_or_connect(
     });
 
     let result = if is_connect || aux.eponymous {
-        dispatch::vtab_connect(
+        sync_dispatch_vtab_connect(
             &aux.ext_name,
             aux.vtab_id,
             instance_id,
@@ -352,7 +724,7 @@ unsafe fn create_or_connect(
             &user_args,
         )
     } else {
-        dispatch::vtab_create(
+        sync_dispatch_vtab_create(
             &aux.ext_name,
             aux.vtab_id,
             instance_id,
@@ -400,7 +772,7 @@ unsafe fn create_or_connect(
 unsafe extern "C" fn x_disconnect(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     let wv = Box::from_raw(p_vtab as *mut WasmVtab);
     if let Some(meta) = instance_meta(wv.instance_id) {
-        let _ = dispatch::vtab_disconnect(&meta.ext_name, meta.vtab_id, wv.instance_id);
+        let _ = sync_dispatch_vtab_disconnect(&meta.ext_name, meta.vtab_id, wv.instance_id);
     }
     drop_instance(wv.instance_id);
     ffi::SQLITE_OK
@@ -409,7 +781,7 @@ unsafe extern "C" fn x_disconnect(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
 unsafe extern "C" fn x_destroy(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     let wv = Box::from_raw(p_vtab as *mut WasmVtab);
     if let Some(meta) = instance_meta(wv.instance_id) {
-        let _ = dispatch::vtab_destroy(&meta.ext_name, meta.vtab_id, wv.instance_id);
+        let _ = sync_dispatch_vtab_destroy(&meta.ext_name, meta.vtab_id, wv.instance_id);
     }
     drop_instance(wv.instance_id);
     ffi::SQLITE_OK
@@ -451,7 +823,7 @@ unsafe extern "C" fn x_best_index(
         col_used: info.colUsed,
     };
 
-    let plan = match dispatch::vtab_best_index(&meta.ext_name, meta.vtab_id, wv.instance_id, &wit_info) {
+    let plan = match sync_dispatch_vtab_best_index(&meta.ext_name, meta.vtab_id, wv.instance_id, wit_info) {
         Ok(p) => p,
         Err(e) => {
             // Best-effort error surfacing: SQLite expects an error
@@ -508,7 +880,7 @@ unsafe extern "C" fn x_open(
         vtab_id: meta.vtab_id,
         batched: meta.batched,
     });
-    if let Err(e) = dispatch::vtab_open(&meta.ext_name, meta.vtab_id, wv.instance_id, cursor_id) {
+    if let Err(e) = sync_dispatch_vtab_open(&meta.ext_name, meta.vtab_id, wv.instance_id, cursor_id) {
         drop_cursor(cursor_id);
         let _ = e;
         return ffi::SQLITE_ERROR;
@@ -524,7 +896,7 @@ unsafe extern "C" fn x_open(
 unsafe extern "C" fn x_close(p_cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int {
     let c = Box::from_raw(p_cursor as *mut WasmVtabCursor);
     if let Some(meta) = cursor_meta(c.cursor_id) {
-        let _ = dispatch::vtab_close(&meta.ext_name, meta.vtab_id, c.cursor_id);
+        let _ = sync_dispatch_vtab_close(&meta.ext_name, meta.vtab_id, c.cursor_id);
     }
     drop_batch_cache(c.cursor_id);
     drop_cursor(c.cursor_id);
@@ -552,7 +924,7 @@ unsafe extern "C" fn x_filter(
     for i in 0..argc as usize {
         args.push(sqlite3_value_to_wit(*argv.add(i)));
     }
-    match dispatch::vtab_filter(
+    match sync_dispatch_vtab_filter(
         &meta.ext_name,
         meta.vtab_id,
         c.cursor_id,
@@ -601,7 +973,7 @@ unsafe extern "C" fn x_next(p_cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int {
         }
         return ffi::SQLITE_OK;
     }
-    match dispatch::vtab_next(&meta.ext_name, meta.vtab_id, c.cursor_id) {
+    match sync_dispatch_vtab_next(&meta.ext_name, meta.vtab_id, c.cursor_id) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
     }
@@ -625,14 +997,14 @@ unsafe extern "C" fn x_eof(p_cursor: *mut ffi::sqlite3_vtab_cursor) -> c_int {
         if entry.eof_seen {
             return 1;
         }
-        // Cache exhausted but EOF not seen yet  EOF will resolve
+        // Cache exhausted but EOF not seen yet — EOF will resolve
         // when xNext refills. Returning 1 here would terminate the
         // scan prematurely, so we conservatively report not-EOF
         // and let the next xColumn / xRowid use the (already-
         // refilled) cache; xFilter primed the first block.
         return 0;
     }
-    if dispatch::vtab_eof(&meta.ext_name, meta.vtab_id, c.cursor_id) {
+    if sync_dispatch_vtab_eof(&meta.ext_name, meta.vtab_id, c.cursor_id) {
         1
     } else {
         0
@@ -657,7 +1029,7 @@ unsafe extern "C" fn x_column(
                     wit_to_sqlite3_result(ctx, v.clone());
                     return ffi::SQLITE_OK;
                 }
-                // Out-of-range column  return NULL, matching
+                // Out-of-range column — return NULL, matching
                 // sqlite's behavior for HIDDEN columns past the
                 // explicit schema.
                 ffi::sqlite3_result_null(ctx);
@@ -666,7 +1038,7 @@ unsafe extern "C" fn x_column(
         }
         return ffi::SQLITE_ERROR;
     }
-    match dispatch::vtab_column(&meta.ext_name, meta.vtab_id, c.cursor_id, col) {
+    match sync_dispatch_vtab_column(&meta.ext_name, meta.vtab_id, c.cursor_id, col) {
         Ok(v) => {
             wit_to_sqlite3_result(ctx, v);
             ffi::SQLITE_OK
@@ -694,7 +1066,7 @@ unsafe extern "C" fn x_rowid(
         }
         return ffi::SQLITE_ERROR;
     }
-    match dispatch::vtab_rowid(&meta.ext_name, meta.vtab_id, c.cursor_id) {
+    match sync_dispatch_vtab_rowid(&meta.ext_name, meta.vtab_id, c.cursor_id) {
         Ok(r) => {
             *p_rowid = r;
             ffi::SQLITE_OK
@@ -712,7 +1084,7 @@ unsafe extern "C" fn x_destroy_aux(p: *mut c_void) {
 /// Stub function pointer registered for every operator vtabs
 /// might want to handle via xBestIndex. Returning a non-null
 /// pxFunc from xFindFunction is what tells SQLite "this vtab
-/// handles `column OP rhs` for OP=name"  the planner then
+/// handles `column OP rhs` for OP=name" — the planner then
 /// emits a SQLITE_INDEX_CONSTRAINT_<OP> constraint to xBestIndex
 /// instead of trying to evaluate the operator as a normal
 /// function. The pointer here should never actually be called
@@ -723,7 +1095,8 @@ unsafe extern "C" fn x_vtab_op_stub(
     _argc: c_int,
     _argv: *mut *mut ffi::sqlite3_value,
 ) {
-    let msg = CString::new("vtab operator stub called  best_index should have consumed it").unwrap();
+    let msg =
+        CString::new("vtab operator stub called — best_index should have consumed it").unwrap();
     ffi::sqlite3_result_error(ctx, msg.as_ptr(), -1);
 }
 
@@ -753,7 +1126,7 @@ unsafe extern "C" fn x_find_function(
     };
     // Per SQLite's xFindFunction contract, the return value
     // is the constraint-op code the planner should emit for
-    // this operator into xBestIndex (NOT a 0/1 boolean
+    // this operator into xBestIndex (NOT a 0/1 boolean).
     // FTS5 returns SQLITE_INDEX_CONSTRAINT_MATCH = 64 for
     // `MATCH`, and similarly LIKE / GLOB / REGEXP have their
     // own constants). Returning 1 here would tell SQLite to
@@ -810,7 +1183,7 @@ unsafe extern "C" fn x_update(
         return ffi::SQLITE_ERROR;
     };
     let args = argv_to_wit_values(argc, argv);
-    match dispatch::vtab_update(&meta.ext_name, meta.vtab_id, wv.instance_id, &args) {
+    match sync_dispatch_vtab_update(&meta.ext_name, meta.vtab_id, wv.instance_id, &args) {
         Ok(new_rowid) => {
             if !p_rowid.is_null() {
                 *p_rowid = new_rowid;
@@ -826,7 +1199,7 @@ unsafe extern "C" fn x_begin(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     let Some(meta) = instance_meta(wv.instance_id) else {
         return ffi::SQLITE_ERROR;
     };
-    match dispatch::vtab_begin(&meta.ext_name, meta.vtab_id, wv.instance_id) {
+    match sync_dispatch_vtab_begin(&meta.ext_name, meta.vtab_id, wv.instance_id) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
     }
@@ -837,7 +1210,7 @@ unsafe extern "C" fn x_sync(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     let Some(meta) = instance_meta(wv.instance_id) else {
         return ffi::SQLITE_ERROR;
     };
-    match dispatch::vtab_sync(&meta.ext_name, meta.vtab_id, wv.instance_id) {
+    match sync_dispatch_vtab_sync(&meta.ext_name, meta.vtab_id, wv.instance_id) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
     }
@@ -848,7 +1221,7 @@ unsafe extern "C" fn x_commit(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     let Some(meta) = instance_meta(wv.instance_id) else {
         return ffi::SQLITE_ERROR;
     };
-    match dispatch::vtab_commit(&meta.ext_name, meta.vtab_id, wv.instance_id) {
+    match sync_dispatch_vtab_commit(&meta.ext_name, meta.vtab_id, wv.instance_id) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
     }
@@ -859,7 +1232,7 @@ unsafe extern "C" fn x_rollback(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     let Some(meta) = instance_meta(wv.instance_id) else {
         return ffi::SQLITE_ERROR;
     };
-    match dispatch::vtab_rollback(&meta.ext_name, meta.vtab_id, wv.instance_id) {
+    match sync_dispatch_vtab_rollback(&meta.ext_name, meta.vtab_id, wv.instance_id) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
     }
@@ -881,7 +1254,7 @@ unsafe extern "C" fn x_rename(
             Err(_) => return ffi::SQLITE_ERROR,
         }
     };
-    match dispatch::vtab_rename(&meta.ext_name, meta.vtab_id, wv.instance_id, &new_name) {
+    match sync_dispatch_vtab_rename(&meta.ext_name, meta.vtab_id, wv.instance_id, &new_name) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
     }
@@ -892,7 +1265,7 @@ unsafe extern "C" fn x_savepoint(p_vtab: *mut ffi::sqlite3_vtab, sp: c_int) -> c
     let Some(meta) = instance_meta(wv.instance_id) else {
         return ffi::SQLITE_ERROR;
     };
-    match dispatch::vtab_savepoint(&meta.ext_name, meta.vtab_id, wv.instance_id, sp) {
+    match sync_dispatch_vtab_savepoint(&meta.ext_name, meta.vtab_id, wv.instance_id, sp) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
     }
@@ -903,7 +1276,7 @@ unsafe extern "C" fn x_release(p_vtab: *mut ffi::sqlite3_vtab, sp: c_int) -> c_i
     let Some(meta) = instance_meta(wv.instance_id) else {
         return ffi::SQLITE_ERROR;
     };
-    match dispatch::vtab_release(&meta.ext_name, meta.vtab_id, wv.instance_id, sp) {
+    match sync_dispatch_vtab_release(&meta.ext_name, meta.vtab_id, wv.instance_id, sp) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
     }
@@ -914,7 +1287,7 @@ unsafe extern "C" fn x_rollback_to(p_vtab: *mut ffi::sqlite3_vtab, sp: c_int) ->
     let Some(meta) = instance_meta(wv.instance_id) else {
         return ffi::SQLITE_ERROR;
     };
-    match dispatch::vtab_rollback_to(&meta.ext_name, meta.vtab_id, wv.instance_id, sp) {
+    match sync_dispatch_vtab_rollback_to(&meta.ext_name, meta.vtab_id, wv.instance_id, sp) {
         Ok(()) => ffi::SQLITE_OK,
         Err(_) => ffi::SQLITE_ERROR,
     }
@@ -924,7 +1297,7 @@ unsafe extern "C" fn x_rollback_to(p_vtab: *mut ffi::sqlite3_vtab, sp: c_int) ->
 /// instance. SQLite hands us only the candidate name. The aux ptr
 /// (sqlite3_user_data on the module) carries the (ext_name,
 /// vtab_id) so the dispatch can route. We pull it from a
-/// thread_local registry keyed by module pointer  see
+/// thread_local registry keyed by module pointer — see
 /// `register_vtab_module` where the entry is installed.
 unsafe extern "C" fn x_shadow_name(z_name: *const c_char) -> c_int {
     if z_name.is_null() {
@@ -935,23 +1308,22 @@ unsafe extern "C" fn x_shadow_name(z_name: *const c_char) -> c_int {
         Err(_) => return 0,
     };
     // SQLite's xShadowName has no way to pass a context to us, so
-    // we look up the active module via a thread_local. The cli
-    // serializes vtab registration; only one module is "current"
-    // during the brief window sqlite calls xShadowName, which is
-    // not part of the standard hot path. v1 caveat: if two
-    // modules are registered with conflicting shadow-name sets,
-    // only the most-recently-registered wins for ambiguous names.
-    SHADOW_NAME_OWNER.with(|cell| {
-        let owner = cell.borrow().clone();
-        let Some((ext_name, vtab_id)) = owner else {
-            return 0;
-        };
-        if dispatch::vtab_is_shadow_name(&ext_name, vtab_id, &name) {
-            1
-        } else {
-            0
-        }
-    })
+    // we look up the active module via a process-wide slot. The
+    // cli serializes vtab registration; only one module is
+    // "current" during the brief window sqlite calls xShadowName,
+    // which is not part of the standard hot path. v1 caveat: if
+    // two modules are registered with conflicting shadow-name
+    // sets, only the most-recently-registered wins for ambiguous
+    // names.
+    let owner = shadow_name_owner().lock().unwrap().clone();
+    let Some((ext_name, vtab_id)) = owner else {
+        return 0;
+    };
+    if sync_dispatch_vtab_is_shadow_name(&ext_name, vtab_id, &name) {
+        1
+    } else {
+        0
+    }
 }
 
 unsafe extern "C" fn x_integrity(
@@ -975,7 +1347,7 @@ unsafe extern "C" fn x_integrity(
     } else {
         CStr::from_ptr(z_tab_name).to_string_lossy().into_owned()
     };
-    match dispatch::vtab_integrity(
+    match sync_dispatch_vtab_integrity(
         &meta.ext_name,
         meta.vtab_id,
         wv.instance_id,
@@ -1101,12 +1473,15 @@ const MODULE_MUTABLE: ffi::sqlite3_module = ffi::sqlite3_module {
     xIntegrity: Some(x_integrity),
 };
 
-/// Register `name` as a vtab module on `conn`, routing every
+/// Register `name` as a vtab module on `db`, routing every
 /// callback through the loaded extension `ext_name` / `vtab_id`.
 /// Eponymous modules can be used in SELECT without a prior
-/// CREATE VIRTUAL TABLE.
-pub fn register_vtab_module(
-    conn: &sqlite_wasm_core::db::Connection,
+/// CREATE VIRTUAL TABLE. `host` is captured into the OnceLock
+/// the trampolines fetch; passing different `host` instances on
+/// successive calls is a programmer error (only the first sticks).
+pub unsafe fn register_vtab_module(
+    db: *mut ffi::sqlite3,
+    host: Host,
     name: &str,
     ext_name: &str,
     vtab_id: u64,
@@ -1114,6 +1489,7 @@ pub fn register_vtab_module(
     mutable: bool,
     batched: bool,
 ) -> Result<(), String> {
+    init_host_ref(host);
     let aux = Box::into_raw(Box::new(ModuleAux {
         ext_name: ext_name.to_string(),
         vtab_id,
@@ -1125,30 +1501,44 @@ pub fn register_vtab_module(
     // (eponymous mutable vtabs are not a known shape; pick the
     // mutable template since that's the more conservative choice).
     let module_ptr: *const ffi::sqlite3_module = if mutable {
-        // xShadowName has no per-call context  stash the active
+        // xShadowName has no per-call context — stash the active
         // (ext, vtab_id) so the trampoline can route. See the
-        // SHADOW_NAME_OWNER doc-comment for the caveat.
-        SHADOW_NAME_OWNER.with(|cell| {
-            *cell.borrow_mut() = Some((ext_name.to_string(), vtab_id));
-        });
+        // shadow_name_owner() doc-comment for the caveat.
+        *shadow_name_owner().lock().unwrap() = Some((ext_name.to_string(), vtab_id));
         &MODULE_MUTABLE
     } else if eponymous {
         &MODULE_EPONYMOUS
     } else {
         &MODULE
     };
-    let rc = unsafe {
-        ffi::sqlite3_create_module_v2(
-            conn.raw_handle(),
-            name_c.as_ptr(),
-            module_ptr,
-            aux,
-            Some(x_destroy_aux),
-        )
-    };
+    let rc = ffi::sqlite3_create_module_v2(
+        db,
+        name_c.as_ptr(),
+        module_ptr,
+        aux,
+        Some(x_destroy_aux),
+    );
     if rc != ffi::SQLITE_OK {
-        unsafe { drop(Box::from_raw(aux as *mut ModuleAux)) };
+        drop(Box::from_raw(aux as *mut ModuleAux));
         return Err(format!("sqlite3_create_module_v2: rc={rc}"));
     }
     Ok(())
+}
+
+/// Drop a previously-registered vtab module by name. sqlite3
+/// has no first-class "remove module" call — registering a
+/// fresh null module under the same name overrides the
+/// previous registration. Called by `unregister-extension`.
+pub unsafe fn unregister_vtab_module(db: *mut ffi::sqlite3, name: &str) -> c_int {
+    let name_c = match CString::new(name) {
+        Ok(c) => c,
+        Err(_) => return ffi::SQLITE_MISUSE,
+    };
+    ffi::sqlite3_create_module_v2(
+        db,
+        name_c.as_ptr(),
+        std::ptr::null(),
+        std::ptr::null_mut(),
+        None,
+    )
 }

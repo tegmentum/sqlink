@@ -40,7 +40,9 @@ mod grants;
 mod orchestration;
 mod settings;
 mod sqlink_registry;
-mod vtab;
+// vtab module moved to host/src/vtab.rs (PLAN-cli-stages-5-6.md
+// Stage 5e.10e). The cli now calls spi.register_vtab and the
+// host installs trampolines on its own shared connection.
 
 use std::cell::RefCell;
 use std::io::{BufRead, Write};
@@ -1987,61 +1989,38 @@ fn do_load(input: &str) -> String {
             Err(e) => eprintln!("register commit_hook: {} (code {})", e.message, e.code),
         }
     }
-
-    let counts = CLI_CONN.with(|c| {
-        let g = c.borrow();
-        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-        let mut a_count = 0;
-        let mut c_count = 0;
-        let mut h_count = 0;
-        let mut regs = ExtRegistrations::default();
-
-        // Aggregates migrated to spi (Stage 5e.10)  see the
-        // pre-block loop that calls spi::register_aggregate.
-
-        // Collations migrated to spi (Stage 5e.10)  see the
-        // pre-block loop that calls spi::register_collation.
-
-        let mut v_count = 0;
-        for spec in &manifest.vtabs {
-            match vtab::register_vtab_module(
-                conn,
-                &spec.name,
-                &ext_name,
-                spec.id,
-                spec.eponymous,
-                spec.mutable,
-                spec.batched,
-            ) {
-                Ok(()) => {
-                    v_count += 1;
-                    regs.vtabs.push(spec.name.clone());
-                }
-                Err(e) => {
-                    eprintln!("Error registering vtab {}: {e}", spec.name);
-                }
-            }
+    let mut v_count_host = 0;
+    for spec in &manifest.vtabs {
+        match bindings::sqlite::extension::spi::register_vtab(
+            &ext_name,
+            &spec.name,
+            spec.id,
+            spec.eponymous,
+            spec.mutable,
+            spec.batched,
+        ) {
+            Ok(()) => v_count_host += 1,
+            Err(e) => eprintln!(
+                "register vtab {}: {} (code {})",
+                spec.name, e.message, e.code
+            ),
         }
+    }
 
-        // Hooks (authorizer / update / commit) migrated to spi
-        // (Stage 5e.10)  registered via the pre-block calls
-        // below outside the CLI_CONN.with closure. h_count for
-        // CLI_CONN-side tracking stays 0.
+    // Stage 5e.10e: every registration type now routes through spi
+    // against the host's shared connection. Persist the EXT_REGS
+    // book-keeping (used by .reload to remember the source) and
+    // we're done. The do_unload path calls spi.unregister-extension
+    // to tear all of this down host-side.
+    let mut regs = ExtRegistrations::default();
+    regs.source = input.to_string();
+    EXT_REGS.with(|m| m.borrow_mut().insert(ext_name.clone(), regs));
 
-        // Remember the source for `.reload NAME` so the user doesn't
-        // need to re-type the path / URL. Set BEFORE insert so the
-        // value travels with the registration record.
-        regs.source = input.to_string();
-
-        EXT_REGS.with(|m| m.borrow_mut().insert(ext_name.clone(), regs));
-
-        (a_count, c_count, h_count, v_count)
-    });
-    let (_a_count_inside, _c_count_inside, _h_count_inside, vtabs) = counts;
     let scalars = s_count;
     let collations = c_count_host;
     let aggregates = a_count_host;
     let hooks = h_count_host;
+    let vtabs = v_count_host;
     let total = scalars + aggregates + collations + hooks + vtabs;
     let mut bits = Vec::new();
     if scalars > 0 { bits.push(format!("{scalars} scalar")); }
@@ -2851,28 +2830,13 @@ fn do_unload(name: &str) -> String {
     use bindings::sqlite::wasm::extension_loader;
     let host_result = extension_loader::unload_extension(name);
 
-    // Stage 5e.10: scalar trampolines live on the host's shared
-    // spi connection now  tell the host to tear them down.
-    // Aggregates/collations/hooks etc. still live on CLI_CONN; the
-    // CLI_CONN.with block below handles them.
+    // Stage 5e.10: every registration type (scalars / aggregates /
+    // collations / vtabs / hooks) lives on the host's shared spi
+    // connection now; spi.unregister-extension is the single
+    // teardown call. The cli's own connection has nothing to
+    // clean up.
     bindings::sqlite::extension::spi::unregister_extension(name);
-
-    let regs = EXT_REGS.with(|m| m.borrow_mut().remove(name));
-    if let Some(regs) = regs {
-        ensure_cli_conn();
-        CLI_CONN.with(|c| {
-            let g = c.borrow();
-            let Some(conn) = g.as_ref() else { return };
-            for (fn_name, n_arg) in &regs.functions {
-                let _ = conn.remove_function(fn_name, *n_arg);
-            }
-            // Collations + scalars + aggregates + hooks all
-            // removed host-side by spi.unregister_extension; only
-            // any CLI_CONN-side vtab registrations remain here.
-            // (regs.functions still tracks the cli-side legacy
-            // empties; loop is a cheap no-op when empty.)
-        });
-    }
+    let _ = EXT_REGS.with(|m| m.borrow_mut().remove(name));
 
     match host_result {
         Ok(()) => format!("Unloaded extension: {name}\n"),

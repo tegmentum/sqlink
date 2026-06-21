@@ -29,6 +29,7 @@ pub mod cache;
 pub mod component_blob_cache;
 pub mod compose_provider;
 pub mod policy;
+pub mod vtab;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -3213,6 +3214,23 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
                 .to_string(),
         })
     }
+
+    async fn register_vtab(
+        &mut self,
+        _ext_name: String,
+        _name: String,
+        _vtab_id: u64,
+        _eponymous: bool,
+        _mutable: bool,
+        _batched: bool,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi.register-vtab is only available on the cli's shared connection"
+                .to_string(),
+        })
+    }
 }
 
 /// Shared implementation of spi.execute_multi for the LoadedState
@@ -4100,6 +4118,11 @@ pub struct Host {
     ext_authorizer_owner: Arc<Mutex<Option<String>>>,
     ext_update_hook_owner: Arc<Mutex<Option<String>>>,
     ext_commit_hook_owner: Arc<Mutex<Option<String>>>,
+    /// PLAN-cli-stages-5-6.md Stage 5e.10e: per-extension list of
+    /// vtab module names the host registered on the shared spi
+    /// connection. Same lifecycle as the scalar/aggregate maps;
+    /// cleared by unregister-extension.
+    ext_vtab_registrations: Arc<Mutex<HashMap<String, Vec<String>>>>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
     /// as a `resolving`-world component. `file` and `blake3` schemes
@@ -4498,6 +4521,7 @@ impl Host {
             ext_authorizer_owner: Arc::new(Mutex::new(None)),
             ext_update_hook_owner: Arc::new(Mutex::new(None)),
             ext_commit_hook_owner: Arc::new(Mutex::new(None)),
+            ext_vtab_registrations: Arc::new(Mutex::new(HashMap::new())),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
@@ -7973,6 +7997,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
         let colls = self.host.ext_collation_registrations.lock().remove(&ext_name);
         let aggs = self.host.ext_aggregate_registrations.lock().remove(&ext_name);
+        let vtabs = self.host.ext_vtab_registrations.lock().remove(&ext_name);
         // Clear hook ownership only if THIS extension owned the slot.
         let drop_authorizer = {
             let mut g = self.host.ext_authorizer_owner.lock();
@@ -7989,6 +8014,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         if scalars.is_none()
             && colls.is_none()
             && aggs.is_none()
+            && vtabs.is_none()
             && !drop_authorizer
             && !drop_update_hook
             && !drop_commit_hook
@@ -8019,6 +8045,11 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
                 let _ = unsafe {
                     unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
                 };
+            }
+        }
+        if let Some(entries) = vtabs {
+            for name in entries {
+                let _ = unsafe { crate::vtab::unregister_vtab_module(conn.raw_handle(), &name) };
             }
         }
         if drop_authorizer {
@@ -8215,6 +8246,47 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         }
         self.host
             .ext_collation_registrations
+            .lock()
+            .entry(ext_name)
+            .or_default()
+            .push(name);
+        Ok(())
+    }
+
+    async fn register_vtab(
+        &mut self,
+        ext_name: String,
+        name: String,
+        vtab_id: u64,
+        eponymous: bool,
+        mutable: bool,
+        batched: bool,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let result = unsafe {
+            crate::vtab::register_vtab_module(
+                conn.raw_handle(),
+                self.host.clone(),
+                &name,
+                &ext_name,
+                vtab_id,
+                eponymous,
+                mutable,
+                batched,
+            )
+        };
+        if let Err(e) = result {
+            return Err(bindings::sqlite::extension::types::SqliteError {
+                code: 1,
+                extended_code: 1,
+                message: format!("register vtab {name}: {e}"),
+            });
+        }
+        self.host
+            .ext_vtab_registrations
             .lock()
             .entry(ext_name)
             .or_default()
