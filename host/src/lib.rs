@@ -2436,6 +2436,24 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         src.backup_into(&src_db, &dst, &dst_db).map_err(db_err_to_spi)
     }
 
+    async fn restore_from(
+        &mut self,
+        src_path: String,
+        src_db: String,
+        dst_db: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        spi_ensure_open(self)?;
+        let src = sqlite_wasm_core::db::Connection::open(
+            &src_path,
+            sqlite_wasm_core::db::OpenFlags::READONLY,
+        )
+        .map_err(db_err_to_spi)?;
+        let dst_g = self.spi_conn.lock();
+        let dst_r = dst_g.borrow();
+        let dst = dst_r.as_ref().expect("ensured open");
+        src.backup_into(&src_db, dst, &dst_db).map_err(db_err_to_spi)
+    }
+
     async fn set_busy_timeout(
         &mut self,
         ms: i32,
@@ -7029,6 +7047,24 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         )
         .map_err(db_err_to_bindings)?;
         src.backup_into(&src_db, &dst, &dst_db).map_err(db_err_to_bindings)
+    }
+
+    async fn restore_from(
+        &mut self,
+        src_path: String,
+        src_db: String,
+        dst_db: String,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let src = sqlite_wasm_core::db::Connection::open(
+            &src_path,
+            sqlite_wasm_core::db::OpenFlags::READONLY,
+        )
+        .map_err(db_err_to_bindings)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let dst = r.as_ref().expect("ensured open");
+        src.backup_into(&src_db, dst, &dst_db).map_err(db_err_to_bindings)
     }
 
     async fn set_busy_timeout(

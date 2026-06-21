@@ -3221,19 +3221,15 @@ fn do_restore(arg: &str) -> String {
     if src_path.is_empty() {
         return "Usage: .restore ?DB? FILE\n".to_string();
     }
-    ensure_cli_conn();
-    let src = match db::Connection::open(&src_path, db::OpenFlags::READONLY) {
-        Ok(c) => c,
-        Err(e) => return format!("Error: cannot open {src_path}: {}\n", e.message),
-    };
-    CLI_CONN.with(|c| {
-        let g = c.borrow();
-        let dst = g.as_ref().expect("ensure_cli_conn opened a connection");
-        match src.backup_into("main", dst, &dst_db) {
-            Ok(()) => format!("Restored {src_path} into {dst_db}\n"),
-            Err(e) => format!("Error: {}\n", e.message),
-        }
-    })
+    // PLAN-cli-stages-5-6.md Stage 5e: routes through the new
+    // spi.restore-from method  symmetric of spi.backup-into.
+    // Host opens src read-only and copies into the shared
+    // connection's `dst_db`.
+    use bindings::sqlite::extension::spi;
+    match spi::restore_from(&src_path, "main", &dst_db) {
+        Ok(()) => format!("Restored {src_path} into {dst_db}\n"),
+        Err(e) => format!("Error: {}\n", e.message),
+    }
 }
 
 /// `.save FILE` — alias for `.backup main FILE`.
