@@ -1269,14 +1269,11 @@ fn eval_input(input: &str) -> String {
     if let Some(rest) = trimmed.strip_prefix(".compose") {
         return do_compose(rest.trim());
     }
-    ensure_cli_conn();
     if trimmed.starts_with('.') {
-        let dot_out = CLI_CONN.with(|c| {
-            let g = c.borrow();
-            let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-            dot::dispatch(trimmed, conn)
-        });
-        if let Some(out) = dot_out {
+        // Stage 5f: dot::dispatch only routes .session now (stubbed
+        // pending Stage 6). The conn arg was dropped along with the
+        // last CLI_CONN consumer.
+        if let Some(out) = dot::dispatch(trimmed) {
             return out;
         }
         // No built-in matched  walk the loaded-extension registry
@@ -1846,7 +1843,9 @@ fn do_load(input: &str) -> String {
     // digest, update record'" decision — describe would just be
     // a wasted wasm-host crossing.
     let mut preload_msg = String::new();
-    ensure_cli_conn();
+    // Stage 5e.10: do_load no longer touches CLI_CONN  every
+    // registration type routes through spi.register-* against
+    // the host's shared connection.
     if matches!(trust, TrustMode::Stored) {
         let preflight = if is_uri {
             extension_loader::describe_extension_from_uri(path)

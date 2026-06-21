@@ -45,14 +45,20 @@ fn query_text_col(conn: &Connection, sql: &str, params: &[Value]) -> Result<Vec<
 /// Try to interpret `input` (already trimmed) as a dot-command.
 /// Returns Some(output) if it was; None if not (caller falls back
 /// to SQL execution).
-pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
+///
+/// PLAN-cli-stages-5-6.md Stage 5f: with Stage 5e.10e complete,
+/// the only built-in still routed here is `.session`, which is
+/// pending Stage 6 (port via new sqlite:extension/session WIT
+/// interface). Every other built-in is either in core-dotcmd
+/// (auto-embedded) or its own extension.
+pub fn dispatch(input: &str) -> Option<String> {
     let trimmed = input.trim();
     if !trimmed.starts_with('.') {
         return None;
     }
     let mut parts = trimmed.splitn(2, char::is_whitespace);
     let cmd = parts.next().unwrap_or("");
-    let arg = parts.next().unwrap_or("").trim();
+    let _arg = parts.next().unwrap_or("").trim();
     Some(match cmd {
         // .help  routed through core-dotcmd registry.
         // .show  routed through core-dotcmd via cli-state snapshot (FU-7).
@@ -96,7 +102,9 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         // .vfslist / .vfsname  routed through core-dotcmd via
         // new spi.list-vfs + spi.vfs-name imports (FU-6).
         // .archive  migrated to extensions/archive-cli (FU-12).
-        ".session" => cmd_session(arg, conn),
+        ".session" => "Error: .session is pending Stage 6 (sqlite:extension/session port). \
+                       The cli's legacy CLI_CONN-based session capture was a no-op since \
+                       Stage 3c moved eval_sql onto the host's shared connection.\n".to_string(),
         // .serialize / .deserialize  migrated to
         // extensions/serialize-cli (FU-11).
         _ => return None,
