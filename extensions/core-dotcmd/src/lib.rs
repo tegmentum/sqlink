@@ -75,6 +75,7 @@ mod wasm_export {
     const FID_SHOW:       u64 = 28;
     const FID_LIMIT:      u64 = 29;
     const FID_DBCONFIG:   u64 = 30;
+    const FID_PARAMETER:  u64 = 31;
 
     struct Ext;
 
@@ -232,6 +233,13 @@ mod wasm_export {
                          "Without args, lists every recognized SQLITE_DBCONFIG_* bool. \
                           With OP, prints just that one. With OP VAL (on/off/0/1), sets \
                           and prints the new value via the conn/db-config/<op> state-delta."),
+                    spec(FID_PARAMETER, "parameter",
+                         "Manage named SQL parameter bindings",
+                         "parameter init|list|set NAME VALUE|unset NAME|clear",
+                         "set NAME VALUE binds :NAME / $NAME / @NAME in subsequent \
+                          statements. VALUE is parsed as NULL, integer, real, single- \
+                          or double-quoted text, or bare text. State-delta keys: \
+                          params/set/<name>, params/unset/<name>, params/clear."),
                 ],
                 has_authorizer: false,
                 has_update_hook: false,
@@ -734,6 +742,141 @@ mod wasm_export {
         }
     }
 
+    /// `.parameter`  manages the SQL parameter-binding map the
+    /// cli applies before each prepared statement.
+    ///
+    /// Subcommands:
+    ///   (empty / unknown)            usage
+    ///   init / clear                 emit params/clear sentinel
+    ///   list                         read params/value/* via snapshot
+    ///   set NAME VALUE               emit params/set/<bare>(typed)
+    ///   unset NAME                   emit params/unset/<bare>
+    fn cmd_parameter(arg: &str) -> InvokeResult {
+        let mut parts = arg.splitn(3, char::is_whitespace);
+        let sub = parts.next().unwrap_or("").trim();
+        match sub {
+            "" => err_with_usage(),
+            "init" | "clear" => {
+                // Sentinel: value isn't read by the cli's applier
+                // for params/clear; using Integer(1) for consistency.
+                InvokeResult {
+                    text: String::new(),
+                    state_deltas: alloc::vec![StateDelta {
+                        key: "params/clear".into(),
+                        value: SqlValue::Integer(1),
+                    }],
+                    ok: true,
+                    exit_code: 0,
+                }
+            }
+            "list" => {
+                let keys = cli_state::list_keys("params/value/");
+                if keys.is_empty() {
+                    cli_stdout::write("(no parameters)\n");
+                    return ok();
+                }
+                let mut names: Vec<String> = keys
+                    .into_iter()
+                    .filter_map(|k| k.strip_prefix("params/value/").map(|s| s.to_string()))
+                    .collect();
+                names.sort();
+                let mut out = String::new();
+                for n in &names {
+                    // get_text returns the JSON-decoded string the
+                    // snapshot stored. For integers/reals the snapshot
+                    // encodes bare digits; get_text yields "" then.
+                    // Use get_value for a typed read.
+                    let v = cli_state::get_value(&format!("params/value/{n}"));
+                    out.push_str(&format!("{n} = {}\n", display_sql_value(&v)));
+                }
+                cli_stdout::write(&out);
+                ok()
+            }
+            "set" => {
+                let name = parts.next().unwrap_or("").trim();
+                let value = parts.next().unwrap_or("").trim();
+                if name.is_empty() || value.is_empty() {
+                    return err(".parameter set NAME VALUE  missing args".into());
+                }
+                let bare = strip_param_sigil(name);
+                let typed = parse_param_literal(value);
+                InvokeResult {
+                    text: String::new(),
+                    state_deltas: alloc::vec![StateDelta {
+                        key: format!("params/set/{bare}"),
+                        value: typed,
+                    }],
+                    ok: true,
+                    exit_code: 0,
+                }
+            }
+            "unset" => {
+                let name = parts.next().unwrap_or("").trim();
+                if name.is_empty() {
+                    return err(".parameter unset NAME  missing arg".into());
+                }
+                let bare = strip_param_sigil(name);
+                InvokeResult {
+                    text: String::new(),
+                    state_deltas: alloc::vec![StateDelta {
+                        key: format!("params/unset/{bare}"),
+                        value: SqlValue::Integer(1),
+                    }],
+                    ok: true,
+                    exit_code: 0,
+                }
+            }
+            other => err(format!(".parameter: unknown subcommand {other:?}")),
+        }
+    }
+
+    fn err_with_usage() -> InvokeResult {
+        err(".parameter init|list|set NAME VALUE|unset NAME|clear".into())
+    }
+
+    /// Same shape as cli/src/dot.rs::strip_param_sigil  ":foo",
+    /// "$foo", "@foo" all return "foo".
+    fn strip_param_sigil(name: &str) -> &str {
+        match name.as_bytes().first() {
+            Some(b':') | Some(b'$') | Some(b'@') => &name[1..],
+            _ => name,
+        }
+    }
+
+    /// Same shape as cli/src/dot.rs::parse_parameter_value
+    /// NULL / quoted text / int / float / bare text.
+    fn parse_param_literal(raw: &str) -> SqlValue {
+        if raw.eq_ignore_ascii_case("null") { return SqlValue::Null; }
+        let bytes = raw.as_bytes();
+        if bytes.len() >= 2 {
+            let first = bytes[0];
+            let last = bytes[bytes.len() - 1];
+            if (first == b'\'' || first == b'"') && first == last {
+                let inner = &raw[1..raw.len() - 1];
+                let unesc = if first == b'\'' {
+                    inner.replace("''", "'")
+                } else {
+                    inner.replace("\"\"", "\"")
+                };
+                return SqlValue::Text(unesc);
+            }
+        }
+        if let Ok(n) = raw.parse::<i64>() { return SqlValue::Integer(n); }
+        if let Ok(f) = raw.parse::<f64>() { return SqlValue::Real(f); }
+        SqlValue::Text(raw.to_string())
+    }
+
+    fn display_sql_value(v: &SqlValue) -> String {
+        match v {
+            SqlValue::Null       => "NULL".to_string(),
+            SqlValue::Integer(i) => i.to_string(),
+            SqlValue::Real(r)    => r.to_string(),
+            SqlValue::Text(s)    => format!("'{}'", s.replace('\'', "''")),
+            SqlValue::Blob(b)    => format!("X'{}'",
+                b.iter().map(|x| format!("{x:02x}")).collect::<String>()),
+        }
+    }
+
     fn cmd_show() -> InvokeResult {
         let on_off = |b: bool| if b { "on" } else { "off" };
         let echo    = cli_state::get_bool("io/echo");
@@ -873,6 +1016,7 @@ mod wasm_export {
                 FID_SHOW      => cmd_show(),
                 FID_LIMIT     => cmd_limit(arg),
                 FID_DBCONFIG  => cmd_dbconfig(arg),
+                FID_PARAMETER => cmd_parameter(arg),
                 _ => return Err(SqliteError {
                     code: 1,
                     extended_code: 1,

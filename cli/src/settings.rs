@@ -212,7 +212,16 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
                     });
                 }
             },
+            "params/clear" => {
+                g.parameters.clear();
+            }
             other => {
+                // Map-shaped deltas with a `/<name>` suffix.
+                if let Some(name) = other.strip_prefix("params/set/") {
+                    g.parameters.insert(name.to_string(), parse_param_value(value_json));
+                } else if let Some(name) = other.strip_prefix("params/unset/") {
+                    g.parameters.remove(name);
+                } else
                 // Connection-level deltas with a `/<name>` suffix.
                 if let Some(name) = other.strip_prefix("conn/limit/") {
                     if let (Some(code), Some(n)) =
@@ -247,6 +256,21 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
 
 fn parse_int(json: &str) -> Option<i64> {
     json.trim().parse::<i64>().ok()
+}
+
+/// Decode a state-delta value-json into a db::Value. Used by the
+/// `params/set/<name>` delta handler  the extension sends an
+/// SqlValue, the host JSON-encodes it (Integer  bare, Real
+/// bare, Text  "...", Blob  null sentinel, Null  null).
+fn parse_param_value(json: &str) -> db::Value {
+    let t = json.trim();
+    if t == "null" { return db::Value::Null; }
+    if t == "true" { return db::Value::Integer(1); }
+    if t == "false" { return db::Value::Integer(0); }
+    if let Ok(i) = t.parse::<i64>() { return db::Value::Integer(i); }
+    if let Ok(f) = t.parse::<f64>() { return db::Value::Real(f); }
+    if let Some(s) = parse_string(json) { return db::Value::Text(s); }
+    db::Value::Null
 }
 
 /// Decode a JSON boolean. Accepts the JSON forms `true`/`false`, and

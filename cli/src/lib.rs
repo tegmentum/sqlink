@@ -3431,6 +3431,27 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
             ("prompt/main".into(),     str_v(&g.prompt_main)),
             ("prompt/cont".into(),     str_v(&g.prompt_cont)),
         ];
+        // Named parameters from the SETTINGS HashMap. One snapshot
+        // entry per binding; the extension reads them via
+        // cli_state.list_keys("params/value/") + get_value.
+        for (name, val) in &g.parameters {
+            let key = format!("params/value/{name}");
+            let encoded = match val {
+                db::Value::Null      => "null".to_string(),
+                db::Value::Integer(i) => i.to_string(),
+                db::Value::Real(r)    => r.to_string(),
+                db::Value::Text(s)    => str_v(s),
+                // Blobs aren't snapshot-able through the
+                // JSON-ish encoding cli-state.get_text reads;
+                // emit a hex literal that round-trips through
+                // get_text.
+                db::Value::Blob(b)    => {
+                    let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
+                    str_v(&format!("X'{hex}'"))
+                }
+            };
+            out.push((key, encoded));
+        }
         drop(g);
         // Pull live sqlite3_limit + sqlite3_db_config values off
         // the cli's connection so `.limit` / `.dbconfig` can

@@ -75,7 +75,9 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         // registry via state-delta emission (FU-5).
         // .changes / .timer / .explain / .eqp / .stats  routed
         // through the core-dotcmd registry (Phase 2.2).
-        ".parameter" => cmd_parameter(arg),
+        // .parameter  routed through core-dotcmd via the
+        // params/clear / params/set/<name> / params/unset/<name>
+        // state-delta keys + params/value/<name> snapshot read (FU-10).
         // .fullschema  routed through core-dotcmd registry.
         // .dbinfo  routed through the registry (core-dotcmd).
         // .dbconfig / .limit  routed through core-dotcmd
