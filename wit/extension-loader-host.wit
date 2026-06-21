@@ -15,4 +15,12 @@ package sqlite:wasm@0.1.0;
 world extension-loader-host {
     import extension-loader;
     import dispatch;
+    /// PLAN-cli-shared-conn.md Stage 3: the host's bindgen now
+    /// also generates spi + prepared Host traits + add_to_linker
+    /// helpers so the cli component (whose sqlite-cli-command
+    /// world imports the same interfaces) can call them. The
+    /// existing LoadedState impls satisfy the trait for
+    /// extensions; HostWrap satisfies it for the cli.
+    import sqlite:extension/spi@0.1.0;
+    import sqlite:extension/prepared@0.1.0;
 }

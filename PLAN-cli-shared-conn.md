@@ -133,38 +133,42 @@ Direct API methods:
 
 ## Stages
 
-### Stage 1 — WIT foundation (this commit)
+### Stage 1 — WIT foundation (shipped: a5a3df6 / e1e194b)
 
   - Add `import sqlite:extension/spi` + `import sqlite:extension/prepared`
-    to the `sqlite-cli-command` world.
+    to the `sqlite-cli-command` world. ✓
   - Add the missing spi methods (changes / total-changes /
-    last-insert-rowid / current-memory-used / backup-into).
-  - Add `prepared.prepare-with-tail`.
-  - Host: wire add-to-linker so the cli component can resolve
-    these imports. Host's implementations route to the same
-    connection extensions use (today: `spi_conn` per-extension;
-    we'll converge to a single per-session connection in
-    Stage 2).
+    last-insert-rowid / current-memory-used / backup-into /
+    set-busy-timeout / limit / db-config-bool / deserialize-db). ✓
+  - Add `prepared.prepare-with-tail` + `step-batch`. ✓
+  - Host: `LoadedState` impls for every new spi method. ✓
   - Cli code unchanged — its `CLI_CONN` still exists, still
-    used by every existing path. The new imports are just
-    available. Nothing breaks; nothing migrates.
+    used by every existing path. The new imports are declared
+    in the cli's world but the compiled cli wasm doesn't pull
+    them in until Stage 3 starts referencing them from Rust.
 
-### Stage 2 — host owns one connection per cli session
+### Stage 2 — host owns one connection per cli session (shipped: eb240e5)
 
-  - Today: host opens its `spi_conn` lazily per extension.
-    Each one is a distinct `db::Connection` against the same
-    db path.
-  - Change: host opens ONE connection at cli launch. Both the
-    cli's spi imports AND every extension's spi share it.
-    `LoadedState.spi_conn` becomes a clone of a single
-    `Arc<Mutex<Connection>>` rather than a per-extension
-    connection.
-  - This unblocks shared session state — once Stage 5 ports
-    `.session`, sessions created from the cli see changes
-    extensions make (and vice versa).
-  - Still no cli code change. The cli's `CLI_CONN` is now the
-    second connection to the same file (cli + shared host
-    one). Both keep working.
+  - `Host.shared_spi_conn: Arc<Mutex<Option<Connection>>>` ✓
+  - Every LoadedExtension's `spi_conn` is now a clone of this
+    Arc; first spi call lazy-opens the underlying connection,
+    every subsequent call reuses it. ✓
+  - Three init sites converted (`describe_extension_from_bytes`,
+    `register_component` twice). ✓
+  - The cli's `CLI_CONN` is now genuinely the second handle to
+    the same db file — proper Stage 3 will collapse it.
+
+### Stage 2.5 — host bindgen widens (shipped: this commit)
+
+  - `wit/extension-loader-host.wit` now imports
+    `sqlite:extension/spi` + `sqlite:extension/prepared`. ✓
+  - Host's `bindings` module now has `spi::Host` +
+    `prepared::Host` traits + their `add_to_linker` helpers.
+    They aren't implemented for `HostWrap` yet and the cli's
+    linker doesn't call `add_to_linker` for them — those land
+    with Stage 3.
+  - This commit unblocks Stage 3 without changing any runtime
+    behavior.
 
 ### Stage 3 — migrate eval_sql to spi/prepared
 
