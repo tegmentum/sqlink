@@ -97,8 +97,8 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         // new spi.list-vfs + spi.vfs-name imports (FU-6).
         ".archive" => cmd_archive(arg, conn),
         ".session" => cmd_session(arg, conn),
-        ".serialize" => cmd_serialize(arg, conn),
-        ".deserialize" => cmd_deserialize(arg, conn),
+        // .serialize / .deserialize  migrated to
+        // extensions/serialize-cli (FU-11).
         _ => return None,
     })
 }

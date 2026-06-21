@@ -1,0 +1,27 @@
+[package]
+name = "serialize-cli-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+`.serialize` and `.deserialize` as a wasm dot-command extension.
+
+Migrated out of cli/src/dot.rs as a follow-up to
+PLAN-dotcmd-phase5.md. .serialize reads the cli's main db bytes
+via the new spi.serialize-db host call (which dispatches against
+the extension's spi connection  same db file as the cli, so
+the bytes are equivalent) and writes them to a path. .deserialize
+reads the bytes off disk and emits a conn/deserialize/<dbname>
+state-delta the cli applies via sqlite3_deserialize on its main
+connection.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

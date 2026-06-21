@@ -221,6 +221,15 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
                     g.parameters.insert(name.to_string(), parse_param_value(value_json));
                 } else if let Some(name) = other.strip_prefix("params/unset/") {
                     g.parameters.remove(name);
+                } else if let Some(db_name) = other.strip_prefix("conn/deserialize/") {
+                    if let Some(bytes) = parse_blob_hex(value_json) {
+                        crate::CLI_CONN.with(|c| {
+                            let cg = c.borrow();
+                            if let Some(conn) = cg.as_ref() {
+                                let _ = conn.deserialize_db(db_name, &bytes);
+                            }
+                        });
+                    }
                 } else
                 // Connection-level deltas with a `/<name>` suffix.
                 if let Some(name) = other.strip_prefix("conn/limit/") {
@@ -256,6 +265,24 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
 
 fn parse_int(json: &str) -> Option<i64> {
     json.trim().parse::<i64>().ok()
+}
+
+/// Decode a JSON-quoted SQL hex literal `"X'<hex>'"` into raw
+/// bytes. Used by `conn/deserialize/<name>` to round-trip the
+/// blob payload through the JSON-encoded state-delta wire.
+fn parse_blob_hex(json: &str) -> Option<Vec<u8>> {
+    let s = parse_string(json)?;
+    let s = s.trim();
+    let body = s.strip_prefix("X'")?.strip_suffix('\'')?;
+    if body.len() % 2 != 0 { return None; }
+    let mut out = Vec::with_capacity(body.len() / 2);
+    let bytes = body.as_bytes();
+    for chunk in bytes.chunks(2) {
+        let hi = (chunk[0] as char).to_digit(16)?;
+        let lo = (chunk[1] as char).to_digit(16)?;
+        out.push(((hi << 4) | lo) as u8);
+    }
+    Some(out)
 }
 
 /// Decode a state-delta value-json into a db::Value. Used by the

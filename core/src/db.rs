@@ -620,6 +620,70 @@ impl Connection {
         Ok(s)
     }
 
+    /// `sqlite3_serialize` against this connection. Returns a
+    /// copy of `db_name`'s contents (default schema is "main")
+    /// as a Vec<u8>. Used by the cli's `.serialize` dot command
+    /// and by the loader-bridge's serialize-db spi method.
+    ///
+    /// Implementation note: we ask for our own copy (mFlags=0)
+    /// so sqlite3_serialize returns a fresh malloc'd buffer that
+    /// we own. We copy out then free.
+    pub fn serialize_db(&self, db_name: &str) -> Result<Vec<u8>, Error> {
+        let db_c = CString::new(db_name)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let mut size: i64 = 0;
+        let ptr = unsafe { ds_ffi::sqlite3_serialize(self.raw, db_c.as_ptr(), &mut size, 0) };
+        if ptr.is_null() {
+            return Err(standalone_error(
+                ffi::SQLITE_ERROR,
+                format!("sqlite3_serialize({db_name:?}) returned NULL"),
+            ));
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(ptr, size as usize) }.to_vec();
+        unsafe { ffi::sqlite3_free(ptr as *mut c_void) };
+        Ok(bytes)
+    }
+
+    /// `sqlite3_deserialize` against this connection. Replaces
+    /// `db_name`'s contents with `bytes`. Used by the cli's
+    /// `.deserialize` dot command  applied via the
+    /// `conn/deserialize/<name>` state-delta.
+    ///
+    /// Allocates via sqlite3_malloc64 so sqlite owns the buffer
+    /// (SQLITE_DESERIALIZE_FREEONCLOSE flag), and copies the
+    /// caller's bytes in. The RESIZEABLE flag lets sqlite grow
+    /// the buffer if needed.
+    pub fn deserialize_db(&self, db_name: &str, bytes: &[u8]) -> Result<(), Error> {
+        let db_c = CString::new(db_name)
+            .map_err(|e| standalone_error(ffi::SQLITE_MISUSE, e.to_string()))?;
+        let size = bytes.len() as i64;
+        let alloc = unsafe { ffi::sqlite3_malloc64(size as u64) };
+        if alloc.is_null() {
+            return Err(standalone_error(
+                ffi::SQLITE_NOMEM,
+                "sqlite3_malloc64 returned NULL".to_string(),
+            ));
+        }
+        unsafe {
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), alloc as *mut u8, bytes.len());
+        }
+        let rc = unsafe {
+            ds_ffi::sqlite3_deserialize(
+                self.raw,
+                db_c.as_ptr(),
+                alloc as *mut std::os::raw::c_uchar,
+                size,
+                size,
+                ds_ffi::SQLITE_DESERIALIZE_FREEONCLOSE | ds_ffi::SQLITE_DESERIALIZE_RESIZEABLE,
+            )
+        };
+        if rc != ffi::SQLITE_OK {
+            unsafe { ffi::sqlite3_free(alloc) };
+            return Err(unsafe { last_error(self.raw) });
+        }
+        Ok(())
+    }
+
     /// Walk the global VFS list (process-wide registry). Returns
     /// every registered VFS's name in the order sqlite3 holds them
     /// (default first).
@@ -1790,6 +1854,36 @@ impl Connection {
         }
         Ok(())
     }
+}
+
+/// Manual extern decls for sqlite3_serialize / sqlite3_deserialize.
+/// libsqlite3-sys's `serialize` feature would auto-declare them but
+/// requires buildtime_bindgen which doesn't cross-compile to
+/// wasm32-wasip2. The bundled sqlite3 has the symbols via
+/// LIBSQLITE3_FLAGS, so a direct extern picks them up.
+mod ds_ffi {
+    use std::os::raw::{c_char, c_int, c_uchar, c_uint};
+
+    extern "C" {
+        pub fn sqlite3_serialize(
+            db: *mut libsqlite3_sys::sqlite3,
+            zSchema: *const c_char,
+            piSize: *mut i64,
+            mFlags: c_uint,
+        ) -> *mut c_uchar;
+
+        pub fn sqlite3_deserialize(
+            db: *mut libsqlite3_sys::sqlite3,
+            zSchema: *const c_char,
+            pData: *mut c_uchar,
+            szDb: i64,
+            szBuf: i64,
+            mFlags: c_uint,
+        ) -> c_int;
+    }
+
+    pub const SQLITE_DESERIALIZE_FREEONCLOSE: c_uint = 1;
+    pub const SQLITE_DESERIALIZE_RESIZEABLE: c_uint = 2;
 }
 
 #[cfg(test)]

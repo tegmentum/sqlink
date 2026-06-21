@@ -1389,7 +1389,22 @@ fn sql_value_to_json(v: loaded::sqlite::extension::types::SqlValue) -> String {
             out.push('"');
             out
         }
-        V::Blob(_) => "null".to_string(),
+        V::Blob(b) => {
+            // Encode as a JSON-quoted SQL hex literal `X'<hex>'`
+            // so the cli's delta applier can round-trip raw bytes
+            // (used by `conn/deserialize/<name>`).
+            let mut out = String::with_capacity(b.len() * 2 + 5);
+            out.push('"');
+            out.push('X');
+            out.push('\'');
+            for byte in &b {
+                use core::fmt::Write;
+                let _ = write!(out, "{byte:02x}");
+            }
+            out.push('\'');
+            out.push('"');
+            out
+        }
     }
 }
 
@@ -1485,6 +1500,16 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         let g = self.spi_conn.lock();
         let conn = g.as_ref().expect("ensured open");
         conn.vfs_name(&db_name).map_err(db_err_to_spi)
+    }
+
+    async fn serialize_db(
+        &mut self,
+        db_name: String,
+    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
+        spi_ensure_open(self)?;
+        let g = self.spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        conn.serialize_db(&db_name).map_err(db_err_to_spi)
     }
 }
 
