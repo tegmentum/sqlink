@@ -3327,26 +3327,20 @@ fn do_clone(arg: &str) -> String {
     do_backup_into("main", path)
 }
 
-/// Shared backup body. Opens `dst_path` as a fresh writable
-/// connection, then asks the cli's connection to copy `src_db`
-/// into the destination's "main".
+/// Shared backup body. PLAN-cli-shared-conn.md Stage 3b: routes
+/// through `spi.backup-into`  the host owns both the
+/// source-connection clone (shared_spi_conn) and the destination
+/// file open. The cli's CLI_CONN isn't involved beyond
+/// `ensure_cli_conn` running auto-load + pragma setup at startup.
 fn do_backup_into(src_db: &str, dst_path: &str) -> String {
     if dst_path.is_empty() {
         return "Usage: .backup ?DB? FILE\n".to_string();
     }
-    ensure_cli_conn();
-    let dst = match db::Connection::open(dst_path, db::OpenFlags::DEFAULT) {
-        Ok(c) => c,
-        Err(e) => return format!("Error: cannot open {dst_path}: {}\n", e.message),
-    };
-    CLI_CONN.with(|c| {
-        let g = c.borrow();
-        let src = g.as_ref().expect("ensure_cli_conn opened a connection");
-        match src.backup_into(src_db, &dst, "main") {
-            Ok(()) => format!("Backed up {src_db} to {dst_path}\n"),
-            Err(e) => format!("Error: {}\n", e.message),
-        }
-    })
+    use bindings::sqlite::extension::spi;
+    match spi::backup_into(src_db, dst_path, "main") {
+        Ok(()) => format!("Backed up {src_db} to {dst_path}\n"),
+        Err(e) => format!("Error: {}\n", e.message),
+    }
 }
 
 /// sqlite3 style `.backup ?DB? FILE`: if one token, it's FILE and
