@@ -37,7 +37,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, ReentrantMutex, RwLock};
+use std::cell::RefCell;
 use wasmtime::component::{Component, Linker};
 use wasmtime::{Cache, CacheConfig, Config, Engine};
 
@@ -866,7 +867,7 @@ pub struct LoadedExtension {
     /// zero. core::db::Connection is Send (not Sync) per the
     /// `unsafe impl Send` on the type; Mutex serializes per-extension
     /// concurrent SPI calls.
-    pub spi_conn: Arc<Mutex<Option<sqlite_wasm_core::db::Connection>>>,
+    pub spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_wasm_core::db::Connection>>>>,
     /// Cached `tabular`-world (Store, Instance) for vtab dispatch.
     /// Vtab semantics require per-instance / per-cursor state to
     /// persist across xCreate  xOpen  xColumn — a fresh
@@ -1015,7 +1016,7 @@ pub struct LoadedState {
     /// Pooled connection borrowed from the owning LoadedExtension.
     /// Cloned Arc<Mutex<…>> so it survives across the per-call
     /// Stores each dispatch builds (mirror of state/cache).
-    spi_conn: Arc<Mutex<Option<sqlite_wasm_core::db::Connection>>>,
+    spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_wasm_core::db::Connection>>>>,
     /// Outbound HTTP policy cloned from `ext.policy.http`. The
     /// `http::Host::handle` impl gates every request on this:
     /// `allowed_hosts` (with `*.suffix` wildcard support) and the
@@ -1319,8 +1320,15 @@ fn spi_ensure_open(
                 .to_string(),
         });
     }
-    let mut g = state.spi_conn.lock();
-    if g.is_none() {
+    let g = state.spi_conn.lock();
+    // Fast path: if a connection is already open, exit without
+    // mutably borrowing the RefCell. SQL callbacks re-enter here
+    // while an outer .borrow() is alive  borrow_mut() would
+    // panic. The first call opens the connection; subsequent
+    // calls see it already populated and return.
+    if g.borrow().is_some() { return Ok(()); }
+    let mut r = g.borrow_mut();
+    if r.is_none() {
         let conn = db::Connection::open(&state.db_path, db::OpenFlags::DEFAULT).map_err(|e| {
             loaded::sqlite::extension::types::SqliteError {
                 code: 1,
@@ -1328,7 +1336,7 @@ fn spi_ensure_open(
                 message: format!("open {}: {}", state.db_path, e.message),
             }
         })?;
-        *g = Some(conn);
+        *r = Some(conn);
     }
     Ok(())
 }
@@ -1471,24 +1479,142 @@ fn shared_spi_ensure_open(host: &Host) -> std::result::Result<(), bindings::sqli
                 .to_string(),
         });
     }
-    let mut g = host.shared_spi_conn.lock();
-    if g.is_none() {
+    let g = host.shared_spi_conn.lock();
+    if g.borrow().is_some() { return Ok(()); }
+    let mut r = g.borrow_mut();
+    if r.is_none() {
         let conn = db::Connection::open(&path, db::OpenFlags::DEFAULT)
             .map_err(db_err_to_bindings)?;
-        // PLAN-cli-shared-conn.md Stage 3c: the cli registered a
-        // `dot_command(name [, args...])` SQL function on
-        // CLI_CONN. After eval_sql migrated to spi, queries run
-        // against this shared connection  the function is gone.
-        // Re-registering host-side hit a tokio nesting panic
-        // (the SQL callback is sync; Host::dispatch_dot_command
-        // is async). Routing that needs a deferred / channel-
-        // based dispatcher or a sync wrapper around the host's
-        // dispatch path  staged out to Stage 5 along with the
-        // rest of the raw-handle work (register_dotcmd_sql_surface,
-        // apply_cli_pragmas, register_embedded_extensions).
-        *g = Some(conn);
+        // PLAN-cli-stages-5-6.md Stage 5b: re-register the
+        // `dot_command(name [, args...])` SQL function host-side
+        // now that eval_sql goes through this shared connection.
+        // The async-from-sync glue (Stage 5a) makes it possible
+        // for the sync sqlite3 callback to call back into
+        // Host::dispatch_dot_command's async path.
+        unsafe { register_host_dot_command_function(conn.raw_handle(), host.clone()) };
+        *r = Some(conn);
     }
     Ok(())
+}
+
+/// PLAN-cli-stages-5-6.md Stage 5a: bridge a sync sqlite3 SQL
+/// function callback into the host's async dispatch path.
+/// `#[tokio::main]` runs the host on a multi-thread runtime by
+/// default, so `block_in_place` is available  it moves the
+/// current task to a blocking worker, freeing the original
+/// worker to keep driving async tasks. `Handle::current` picks
+/// up the runtime the callback is running inside.
+fn sync_dispatch_dot_command(
+    host: &Host,
+    name: &str,
+    args: &str,
+    cli_state: Vec<(String, String)>,
+) -> anyhow::Result<DotCommandOutcome> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_dot_command(name, args, cli_state))
+    })
+}
+
+/// Stage 5b: register the `dot_command(name [, args...])` SQL
+/// function on the host's shared connection. The callback uses
+/// the Stage 5a sync wrapper to call back into the async
+/// dispatch path. Empty cli-state snapshot  the SQL surface
+/// has always dropped state-deltas, so the missing snapshot
+/// only affects extensions that read cli-state from a SELECT
+/// (no real-world callers).
+unsafe fn register_host_dot_command_function(
+    db: *mut libsqlite3_sys::sqlite3,
+    host: Host,
+) {
+    use std::os::raw::{c_char, c_int, c_void};
+    // Box the Host clone (cheap  internally Arc) and hand the
+    // raw pointer to sqlite3 as the function's user_data. The
+    // destructor below drops the box when sqlite3 finalizes the
+    // function.
+    let boxed_host: Box<Host> = Box::new(host);
+    let host_ptr = Box::into_raw(boxed_host) as *mut c_void;
+
+    extern "C" fn xfunc(
+        ctx: *mut libsqlite3_sys::sqlite3_context,
+        argc: c_int,
+        argv: *mut *mut libsqlite3_sys::sqlite3_value,
+    ) {
+        if argc < 1 {
+            unsafe {
+                let msg = b"dot_command: needs at least 1 arg (name)\0".as_ptr() as *const c_char;
+                libsqlite3_sys::sqlite3_result_error(ctx, msg, -1);
+            }
+            return;
+        }
+        let host_ptr = unsafe { libsqlite3_sys::sqlite3_user_data(ctx) } as *const Host;
+        let host: &Host = unsafe { &*host_ptr };
+        let name = unsafe { sqlite3_value_to_string(*argv) };
+        let mut joined = String::new();
+        for i in 1..argc {
+            let v = unsafe { *argv.add(i as usize) };
+            let s = unsafe { sqlite3_value_to_string(v) };
+            if !joined.is_empty() { joined.push(' '); }
+            joined.push_str(&s);
+        }
+        let result = sync_dispatch_dot_command(host, &name, &joined, Vec::new());
+        match result {
+            Ok(outcome) => {
+                let cs = std::ffi::CString::new(outcome.text).unwrap_or_default();
+                let bytes = cs.as_bytes_with_nul();
+                unsafe {
+                    libsqlite3_sys::sqlite3_result_text(
+                        ctx,
+                        bytes.as_ptr() as *const c_char,
+                        (bytes.len() - 1) as c_int,
+                        libsqlite3_sys::SQLITE_TRANSIENT(),
+                    );
+                }
+            }
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("no dot-command") {
+                    unsafe { libsqlite3_sys::sqlite3_result_null(ctx) };
+                } else {
+                    let cs = std::ffi::CString::new(format!(
+                        "dot_command({name}): {msg}"
+                    )).unwrap_or_default();
+                    unsafe { libsqlite3_sys::sqlite3_result_error(ctx, cs.as_ptr(), -1) };
+                }
+            }
+        }
+    }
+
+    extern "C" fn destructor(p: *mut c_void) {
+        if !p.is_null() {
+            drop(unsafe { Box::from_raw(p as *mut Host) });
+        }
+    }
+
+    let name_c = b"dot_command\0".as_ptr() as *const c_char;
+    let rc = libsqlite3_sys::sqlite3_create_function_v2(
+        db,
+        name_c,
+        -1,
+        libsqlite3_sys::SQLITE_UTF8 as c_int,
+        host_ptr,
+        Some(xfunc),
+        None,
+        None,
+        Some(destructor),
+    );
+    if rc != libsqlite3_sys::SQLITE_OK {
+        eprintln!("register host-side dot_command(): rc={rc}");
+    }
+}
+
+/// Read an sqlite3_value as a String.
+unsafe fn sqlite3_value_to_string(v: *mut libsqlite3_sys::sqlite3_value) -> String {
+    let p = libsqlite3_sys::sqlite3_value_text(v);
+    if p.is_null() { return String::new(); }
+    let len = libsqlite3_sys::sqlite3_value_bytes(v) as usize;
+    let bytes = std::slice::from_raw_parts(p, len);
+    String::from_utf8_lossy(bytes).into_owned()
 }
 
 impl loaded::sqlite::extension::spi::Host for LoadedState {
@@ -1502,7 +1628,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     > {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         let mut stmt = conn.prepare(&sql).map_err(db_err_to_spi)?;
         let columns: Vec<String> = stmt.column_names();
         let bound: Vec<_> = params.into_iter().map(spi_value_to_db).collect();
@@ -1531,7 +1658,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     > {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         let mut stmt = conn.prepare(&sql).map_err(db_err_to_spi)?;
         let bound: Vec<_> = params.into_iter().map(spi_value_to_db).collect();
         stmt.bind_all(&bound).map_err(db_err_to_spi)?;
@@ -1554,7 +1682,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     ) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.execute_batch(&sql).map_err(db_err_to_spi)?;
         Ok(conn.changes())
     }
@@ -1569,7 +1698,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     ) -> std::result::Result<String, loaded::sqlite::extension::types::SqliteError> {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.vfs_name(&db_name).map_err(db_err_to_spi)
     }
 
@@ -1579,26 +1709,30 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.serialize_db(&db_name).map_err(db_err_to_spi)
     }
 
     async fn changes(&mut self) -> i64 {
         let _ = spi_ensure_open(self);
         let g = self.spi_conn.lock();
-        g.as_ref().map(|c| c.changes()).unwrap_or(0)
+        let r = g.borrow();
+        r.as_ref().map(|c| c.changes()).unwrap_or(0)
     }
 
     async fn total_changes(&mut self) -> i64 {
         let _ = spi_ensure_open(self);
         let g = self.spi_conn.lock();
-        g.as_ref().map(|c| c.total_changes()).unwrap_or(0)
+        let r = g.borrow();
+        r.as_ref().map(|c| c.total_changes()).unwrap_or(0)
     }
 
     async fn last_insert_rowid(&mut self) -> i64 {
         let _ = spi_ensure_open(self);
         let g = self.spi_conn.lock();
-        g.as_ref().map(|c| c.last_insert_rowid()).unwrap_or(0)
+        let r = g.borrow();
+        r.as_ref().map(|c| c.last_insert_rowid()).unwrap_or(0)
     }
 
     async fn current_memory_used(&mut self) -> i64 {
@@ -1613,7 +1747,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
         spi_ensure_open(self)?;
         let src_g = self.spi_conn.lock();
-        let src = src_g.as_ref().expect("ensured open");
+        let src_r = src_g.borrow();
+        let src = src_r.as_ref().expect("ensured open");
         let dst = sqlite_wasm_core::db::Connection::open(
             &dst_path,
             sqlite_wasm_core::db::OpenFlags::DEFAULT,
@@ -1628,14 +1763,16 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.busy_timeout(ms).map_err(db_err_to_spi)
     }
 
     async fn limit(&mut self, category: i32, value: i32) -> i32 {
         let _ = spi_ensure_open(self);
         let g = self.spi_conn.lock();
-        g.as_ref().map(|c| c.limit(category, value)).unwrap_or(-1)
+        let r = g.borrow();
+        r.as_ref().map(|c| c.limit(category, value)).unwrap_or(-1)
     }
 
     async fn db_config_bool(
@@ -1646,7 +1783,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         if set {
             conn.db_config_set_bool(op, value).map_err(db_err_to_spi)
         } else {
@@ -1661,7 +1799,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.deserialize_db(&db_name, &bytes).map_err(db_err_to_spi)
     }
 
@@ -1675,7 +1814,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     > {
         spi_ensure_open(self)?;
         let g = self.spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         execute_multi_impl_loaded(conn, &sql, &named_params)
     }
 }
@@ -2527,7 +2667,7 @@ pub struct Host {
     /// this Arc, so all extensions (and, in Stage 3+, the cli)
     /// observe the same sqlite3 handle. Lazy-opened by
     /// `spi_ensure_open` on first spi call.
-    shared_spi_conn: Arc<Mutex<Option<sqlite_wasm_core::db::Connection>>>,
+    shared_spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_wasm_core::db::Connection>>>>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
     /// as a `resolving`-world component. `file` and `blake3` schemes
@@ -2917,7 +3057,7 @@ impl Host {
             engine_run,
             components: Arc::new(RwLock::new(HashMap::new())),
             db_path: Arc::new(RwLock::new(String::new())),
-            shared_spi_conn: Arc::new(Mutex::new(None)),
+            shared_spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
@@ -6083,7 +6223,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     > {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         let mut stmt = conn.prepare(&sql).map_err(db_err_to_bindings)?;
         let columns: Vec<String> = stmt.column_names();
         let bound: Vec<_> = params.into_iter().map(bindings_value_to_db).collect();
@@ -6112,7 +6253,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     > {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         let mut stmt = conn.prepare(&sql).map_err(db_err_to_bindings)?;
         let bound: Vec<_> = params.into_iter().map(bindings_value_to_db).collect();
         stmt.bind_all(&bound).map_err(db_err_to_bindings)?;
@@ -6135,7 +6277,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     ) -> std::result::Result<i64, bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.execute_batch(&sql).map_err(db_err_to_bindings)?;
         Ok(conn.changes())
     }
@@ -6150,7 +6293,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     ) -> std::result::Result<String, bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.vfs_name(&db_name).map_err(db_err_to_bindings)
     }
 
@@ -6160,26 +6304,30 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     ) -> std::result::Result<Vec<u8>, bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.serialize_db(&db_name).map_err(db_err_to_bindings)
     }
 
     async fn changes(&mut self) -> i64 {
         let _ = shared_spi_ensure_open(self.host);
         let g = self.host.shared_spi_conn.lock();
-        g.as_ref().map(|c| c.changes()).unwrap_or(0)
+        let r = g.borrow();
+        r.as_ref().map(|c| c.changes()).unwrap_or(0)
     }
 
     async fn total_changes(&mut self) -> i64 {
         let _ = shared_spi_ensure_open(self.host);
         let g = self.host.shared_spi_conn.lock();
-        g.as_ref().map(|c| c.total_changes()).unwrap_or(0)
+        let r = g.borrow();
+        r.as_ref().map(|c| c.total_changes()).unwrap_or(0)
     }
 
     async fn last_insert_rowid(&mut self) -> i64 {
         let _ = shared_spi_ensure_open(self.host);
         let g = self.host.shared_spi_conn.lock();
-        g.as_ref().map(|c| c.last_insert_rowid()).unwrap_or(0)
+        let r = g.borrow();
+        r.as_ref().map(|c| c.last_insert_rowid()).unwrap_or(0)
     }
 
     async fn current_memory_used(&mut self) -> i64 {
@@ -6194,7 +6342,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let src = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let src = r.as_ref().expect("ensured open");
         let dst = sqlite_wasm_core::db::Connection::open(
             &dst_path,
             sqlite_wasm_core::db::OpenFlags::DEFAULT,
@@ -6209,14 +6358,16 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.busy_timeout(ms).map_err(db_err_to_bindings)
     }
 
     async fn limit(&mut self, category: i32, value: i32) -> i32 {
         let _ = shared_spi_ensure_open(self.host);
         let g = self.host.shared_spi_conn.lock();
-        g.as_ref().map(|c| c.limit(category, value)).unwrap_or(-1)
+        let r = g.borrow();
+        r.as_ref().map(|c| c.limit(category, value)).unwrap_or(-1)
     }
 
     async fn db_config_bool(
@@ -6227,7 +6378,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     ) -> std::result::Result<bool, bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         if set {
             conn.db_config_set_bool(op, value).map_err(db_err_to_bindings)
         } else {
@@ -6242,7 +6394,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         conn.deserialize_db(&db_name, &bytes).map_err(db_err_to_bindings)
     }
 
@@ -6256,7 +6409,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     > {
         shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
-        let conn = g.as_ref().expect("ensured open");
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
         execute_multi_impl_bindings(conn, &sql, &named_params)
     }
 }
