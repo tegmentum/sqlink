@@ -2089,6 +2089,92 @@ impl sqlite_wasm_core::db::WindowAggregate<u64> for HostLoadedAggregate {
     }
 }
 
+/// Stage 5e.10: bridge a sync sqlite3 authorizer callback into
+/// dispatch_authorize. Map sqlite3's i32 action codes to the WIT
+/// AuthAction enum here (the cli used to do this on its side).
+fn sqlite_code_to_auth_action(op: i32) -> bindings::sqlite::extension::types::AuthAction {
+    use bindings::sqlite::extension::types::AuthAction as A;
+    use libsqlite3_sys as ffi;
+    match op {
+        ffi::SQLITE_CREATE_INDEX => A::CreateIndex,
+        ffi::SQLITE_CREATE_TABLE => A::CreateTable,
+        ffi::SQLITE_CREATE_TEMP_INDEX => A::CreateTempIndex,
+        ffi::SQLITE_CREATE_TEMP_TABLE => A::CreateTempTable,
+        ffi::SQLITE_CREATE_TEMP_TRIGGER => A::CreateTempTrigger,
+        ffi::SQLITE_CREATE_TEMP_VIEW => A::CreateTempView,
+        ffi::SQLITE_CREATE_TRIGGER => A::CreateTrigger,
+        ffi::SQLITE_CREATE_VIEW => A::CreateView,
+        ffi::SQLITE_DELETE => A::Delete,
+        ffi::SQLITE_DROP_INDEX => A::DropIndex,
+        ffi::SQLITE_DROP_TABLE => A::DropTable,
+        ffi::SQLITE_DROP_TEMP_INDEX => A::DropTempIndex,
+        ffi::SQLITE_DROP_TEMP_TABLE => A::DropTempTable,
+        ffi::SQLITE_DROP_TEMP_TRIGGER => A::DropTempTrigger,
+        ffi::SQLITE_DROP_TEMP_VIEW => A::DropTempView,
+        ffi::SQLITE_DROP_TRIGGER => A::DropTrigger,
+        ffi::SQLITE_DROP_VIEW => A::DropView,
+        ffi::SQLITE_INSERT => A::Insert,
+        ffi::SQLITE_PRAGMA => A::Pragma,
+        ffi::SQLITE_READ => A::Read,
+        ffi::SQLITE_SELECT => A::Select,
+        ffi::SQLITE_TRANSACTION => A::Transaction,
+        ffi::SQLITE_UPDATE => A::Update,
+        ffi::SQLITE_ATTACH => A::Attach,
+        ffi::SQLITE_DETACH => A::Detach,
+        ffi::SQLITE_ALTER_TABLE => A::AlterTable,
+        ffi::SQLITE_REINDEX => A::Reindex,
+        ffi::SQLITE_ANALYZE => A::Analyze,
+        ffi::SQLITE_CREATE_VTABLE => A::CreateVtable,
+        ffi::SQLITE_DROP_VTABLE => A::DropVtable,
+        ffi::SQLITE_FUNCTION => A::Function,
+        ffi::SQLITE_SAVEPOINT => A::Savepoint,
+        ffi::SQLITE_RECURSIVE => A::Recursive,
+        _ => A::Read,
+    }
+}
+
+fn sync_dispatch_authorize(
+    host: &Host,
+    ext_name: &str,
+    action: bindings::sqlite::extension::types::AuthAction,
+    a1: Option<String>,
+    a2: Option<String>,
+    a3: Option<String>,
+    a4: Option<String>,
+) -> anyhow::Result<bindings::sqlite::extension::types::AuthResult> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(
+            host.dispatch_authorize(ext_name, action, a1, a2, a3, a4),
+        )
+    })
+}
+
+fn sync_dispatch_on_update(
+    host: &Host,
+    ext_name: &str,
+    op: bindings::sqlite::extension::types::UpdateOperation,
+    db: &str,
+    table: &str,
+    rowid: i64,
+) -> anyhow::Result<()> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_on_update(ext_name, op, db, table, rowid))
+    })
+}
+
+fn sync_dispatch_on_commit(host: &Host, ext_name: &str) -> anyhow::Result<bool> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(host.dispatch_on_commit(ext_name))
+    })
+}
+
+fn sync_dispatch_on_rollback(host: &Host, ext_name: &str) -> anyhow::Result<()> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(host.dispatch_on_rollback(ext_name))
+    })
+}
+
 unsafe fn unregister_host_loaded_collation(
     db: *mut libsqlite3_sys::sqlite3,
     coll_name: &str,
@@ -3091,6 +3177,42 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
                 .to_string(),
         })
     }
+
+    async fn register_authorizer(
+        &mut self,
+        _ext_name: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi.register-authorizer is only available on the cli's shared connection"
+                .to_string(),
+        })
+    }
+
+    async fn register_update_hook(
+        &mut self,
+        _ext_name: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi.register-update-hook is only available on the cli's shared connection"
+                .to_string(),
+        })
+    }
+
+    async fn register_commit_hook(
+        &mut self,
+        _ext_name: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi.register-commit-hook is only available on the cli's shared connection"
+                .to_string(),
+        })
+    }
 }
 
 /// Shared implementation of spi.execute_multi for the LoadedState
@@ -3967,6 +4089,17 @@ pub struct Host {
     /// counter used to allocate aggregate context_ids on the host
     /// side. Mirrors AGG_CTX_COUNTER on the cli's old path.
     agg_ctx_counter: Arc<std::sync::atomic::AtomicU64>,
+    /// PLAN-cli-stages-5-6.md Stage 5e.10: ext_name of the
+    /// extension that owns each single-slot connection hook.
+    /// Authorizer / update_hook / commit_hook each have exactly
+    /// one slot on the sqlite3 connection; tracking the owner
+    /// lets unregister-extension know whether to clear the slot.
+    /// None when no extension hook is installed (.auth's stderr
+    /// logger does not count here  it's a host-managed
+    /// authorizer installed via spi.set-auth-log).
+    ext_authorizer_owner: Arc<Mutex<Option<String>>>,
+    ext_update_hook_owner: Arc<Mutex<Option<String>>>,
+    ext_commit_hook_owner: Arc<Mutex<Option<String>>>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
     /// as a `resolving`-world component. `file` and `blake3` schemes
@@ -4362,6 +4495,9 @@ impl Host {
             ext_collation_registrations: Arc::new(Mutex::new(HashMap::new())),
             ext_aggregate_registrations: Arc::new(Mutex::new(HashMap::new())),
             agg_ctx_counter: Arc::new(std::sync::atomic::AtomicU64::new(1)),
+            ext_authorizer_owner: Arc::new(Mutex::new(None)),
+            ext_update_hook_owner: Arc::new(Mutex::new(None)),
+            ext_commit_hook_owner: Arc::new(Mutex::new(None)),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
@@ -7837,7 +7973,26 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
         let colls = self.host.ext_collation_registrations.lock().remove(&ext_name);
         let aggs = self.host.ext_aggregate_registrations.lock().remove(&ext_name);
-        if scalars.is_none() && colls.is_none() && aggs.is_none() {
+        // Clear hook ownership only if THIS extension owned the slot.
+        let drop_authorizer = {
+            let mut g = self.host.ext_authorizer_owner.lock();
+            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
+        };
+        let drop_update_hook = {
+            let mut g = self.host.ext_update_hook_owner.lock();
+            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
+        };
+        let drop_commit_hook = {
+            let mut g = self.host.ext_commit_hook_owner.lock();
+            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
+        };
+        if scalars.is_none()
+            && colls.is_none()
+            && aggs.is_none()
+            && !drop_authorizer
+            && !drop_update_hook
+            && !drop_commit_hook
+        {
             return;
         }
         let g = self.host.shared_spi_conn.lock();
@@ -7866,6 +8021,120 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
                 };
             }
         }
+        if drop_authorizer {
+            let _ = conn.set_authorizer::<fn(
+                i32,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+            ) -> sqlite_wasm_core::db::AuthResult>(None);
+        }
+        if drop_update_hook {
+            conn.update_hook::<fn(sqlite_wasm_core::db::UpdateAction, &str, &str, i64)>(None);
+        }
+        if drop_commit_hook {
+            conn.commit_hook::<fn() -> bool>(None);
+            conn.rollback_hook::<fn()>(None);
+        }
+    }
+
+    async fn register_authorizer(
+        &mut self,
+        ext_name: String,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let host = self.host.clone();
+        let ext_n = ext_name.clone();
+        let result = conn.set_authorizer(Some(
+            move |action: i32,
+                  a1: Option<String>,
+                  a2: Option<String>,
+                  a3: Option<String>,
+                  a4: Option<String>| {
+                let wit_action = sqlite_code_to_auth_action(action);
+                match sync_dispatch_authorize(&host, &ext_n, wit_action, a1, a2, a3, a4) {
+                    Ok(bindings::sqlite::extension::types::AuthResult::Ok) => {
+                        sqlite_wasm_core::db::AuthResult::Allow
+                    }
+                    Ok(bindings::sqlite::extension::types::AuthResult::Deny) => {
+                        sqlite_wasm_core::db::AuthResult::Deny
+                    }
+                    Ok(bindings::sqlite::extension::types::AuthResult::Ignore) => {
+                        sqlite_wasm_core::db::AuthResult::Ignore
+                    }
+                    Err(_) => sqlite_wasm_core::db::AuthResult::Allow,
+                }
+            },
+        ));
+        if let Err(e) = result {
+            return Err(bindings::sqlite::extension::types::SqliteError {
+                code: e.code,
+                extended_code: e.extended_code,
+                message: e.message,
+            });
+        }
+        *self.host.ext_authorizer_owner.lock() = Some(ext_name);
+        Ok(())
+    }
+
+    async fn register_update_hook(
+        &mut self,
+        ext_name: String,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let host = self.host.clone();
+        let ext_n = ext_name.clone();
+        conn.update_hook(Some(
+            move |action: sqlite_wasm_core::db::UpdateAction,
+                  db_name: &str,
+                  table: &str,
+                  rowid: i64| {
+                use bindings::sqlite::extension::types::UpdateOperation as Op;
+                let op = match action {
+                    sqlite_wasm_core::db::UpdateAction::Insert => Op::Insert,
+                    sqlite_wasm_core::db::UpdateAction::Update => Op::Update,
+                    sqlite_wasm_core::db::UpdateAction::Delete => Op::Delete,
+                    sqlite_wasm_core::db::UpdateAction::Unknown => return,
+                };
+                let _ = sync_dispatch_on_update(&host, &ext_n, op, db_name, table, rowid);
+            },
+        ));
+        *self.host.ext_update_hook_owner.lock() = Some(ext_name);
+        Ok(())
+    }
+
+    async fn register_commit_hook(
+        &mut self,
+        ext_name: String,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let host_c = self.host.clone();
+        let ext_c = ext_name.clone();
+        // sqlite commit_hook: return non-zero  abort. WIT on_commit:
+        // return true  proceed. Invert.
+        conn.commit_hook(Some(move || {
+            match sync_dispatch_on_commit(&host_c, &ext_c) {
+                Ok(proceed) => !proceed,
+                Err(_) => false,
+            }
+        }));
+        let host_r = self.host.clone();
+        let ext_r = ext_name.clone();
+        conn.rollback_hook(Some(move || {
+            let _ = sync_dispatch_on_rollback(&host_r, &ext_r);
+        }));
+        *self.host.ext_commit_hook_owner.lock() = Some(ext_name);
+        Ok(())
     }
 
     async fn register_aggregate(

@@ -1968,6 +1968,25 @@ fn do_load(input: &str) -> String {
             );
         }
     }
+    let mut h_count_host = 0;
+    if manifest.has_authorizer {
+        match bindings::sqlite::extension::spi::register_authorizer(&ext_name) {
+            Ok(()) => h_count_host += 1,
+            Err(e) => eprintln!("register authorizer: {} (code {})", e.message, e.code),
+        }
+    }
+    if manifest.has_update_hook {
+        match bindings::sqlite::extension::spi::register_update_hook(&ext_name) {
+            Ok(()) => h_count_host += 1,
+            Err(e) => eprintln!("register update_hook: {} (code {})", e.message, e.code),
+        }
+    }
+    if manifest.has_commit_hook {
+        match bindings::sqlite::extension::spi::register_commit_hook(&ext_name) {
+            Ok(()) => h_count_host += 1,
+            Err(e) => eprintln!("register commit_hook: {} (code {})", e.message, e.code),
+        }
+    }
 
     let counts = CLI_CONN.with(|c| {
         let g = c.borrow();
@@ -2004,53 +2023,10 @@ fn do_load(input: &str) -> String {
             }
         }
 
-        if manifest.has_authorizer {
-            let ext_n = ext_name.clone();
-            let r = conn.set_authorizer(Some(
-                move |action: i32, a1: Option<String>, a2: Option<String>, a3: Option<String>, a4: Option<String>| {
-                    let wit_action = sqlite_code_to_auth_action(action);
-                    match dispatch::authorize(&ext_n, wit_action, a1.as_deref(), a2.as_deref(), a3.as_deref(), a4.as_deref()) {
-                        bindings::sqlite::extension::types::AuthResult::Ok => db::AuthResult::Allow,
-                        bindings::sqlite::extension::types::AuthResult::Deny => db::AuthResult::Deny,
-                        bindings::sqlite::extension::types::AuthResult::Ignore => db::AuthResult::Ignore,
-                    }
-                },
-            ));
-            if r.is_ok() {
-                h_count += 1;
-                regs.has_authorizer = true;
-            }
-        }
-
-        if manifest.has_update_hook {
-            let ext_n = ext_name.clone();
-            use bindings::sqlite::extension::types::UpdateOperation as Op;
-            conn.update_hook(Some(move |action: db::UpdateAction, db_name: &str, table: &str, rowid: i64| {
-                let op = match action {
-                    db::UpdateAction::Insert => Op::Insert,
-                    db::UpdateAction::Update => Op::Update,
-                    db::UpdateAction::Delete => Op::Delete,
-                    db::UpdateAction::Unknown => return,
-                };
-                dispatch::on_update(&ext_n, op, db_name, table, rowid);
-            }));
-            h_count += 1;
-            regs.has_update_hook = true;
-        }
-        // commit_hook: WIT on_commit returns true = proceed; sqlite
-        // commit_hook returns true = abort. Invert.
-        if manifest.has_commit_hook {
-            let ext_n = ext_name.clone();
-            conn.commit_hook(Some(move || {
-                !dispatch::on_commit(&ext_n)
-            }));
-            let ext_n2 = ext_name.clone();
-            conn.rollback_hook(Some(move || {
-                dispatch::on_rollback(&ext_n2);
-            }));
-            h_count += 1;
-            regs.has_commit_hook = true;
-        }
+        // Hooks (authorizer / update / commit) migrated to spi
+        // (Stage 5e.10)  registered via the pre-block calls
+        // below outside the CLI_CONN.with closure. h_count for
+        // CLI_CONN-side tracking stays 0.
 
         // Remember the source for `.reload NAME` so the user doesn't
         // need to re-type the path / URL. Set BEFORE insert so the
@@ -2061,10 +2037,11 @@ fn do_load(input: &str) -> String {
 
         (a_count, c_count, h_count, v_count)
     });
-    let (_a_count_inside, _c_count_inside, hooks, vtabs) = counts;
+    let (_a_count_inside, _c_count_inside, _h_count_inside, vtabs) = counts;
     let scalars = s_count;
     let collations = c_count_host;
     let aggregates = a_count_host;
+    let hooks = h_count_host;
     let total = scalars + aggregates + collations + hooks + vtabs;
     let mut bits = Vec::new();
     if scalars > 0 { bits.push(format!("{scalars} scalar")); }
@@ -2889,23 +2866,11 @@ fn do_unload(name: &str) -> String {
             for (fn_name, n_arg) in &regs.functions {
                 let _ = conn.remove_function(fn_name, *n_arg);
             }
-            // Collations removed host-side by spi.unregister_extension.
-            if regs.has_authorizer {
-                let _ = conn.set_authorizer::<fn(
-                    i32,
-                    Option<String>,
-                    Option<String>,
-                    Option<String>,
-                    Option<String>,
-                ) -> db::AuthResult>(None);
-            }
-            if regs.has_update_hook {
-                conn.update_hook::<fn(db::UpdateAction, &str, &str, i64)>(None);
-            }
-            if regs.has_commit_hook {
-                conn.commit_hook::<fn() -> bool>(None);
-                conn.rollback_hook::<fn()>(None);
-            }
+            // Collations + scalars + aggregates + hooks all
+            // removed host-side by spi.unregister_extension; only
+            // any CLI_CONN-side vtab registrations remain here.
+            // (regs.functions still tracks the cli-side legacy
+            // empties; loop is a cheap no-op when empty.)
         });
     }
 
