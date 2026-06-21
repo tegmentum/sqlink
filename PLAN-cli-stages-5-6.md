@@ -264,7 +264,17 @@ Trivial. The function runs a handful of PRAGMA statements.
 Move it to `host/src/lib.rs`, call from `shared_spi_ensure_open`.
 Drop the cli-side call.
 
-### Stage 5e — purge remaining CLI_CONN usage (~2-3 days)
+### Stage 5e — purge remaining CLI_CONN usage (in flight)
+
+Shipped subcommits:
+  - 5e.1 (2cfd346): grants module via spi
+  - 5e.2 (d7a70ed): orchestration module via spi
+  - 5e.3 (2f031fb): .dump via spi
+  - 5e.4 (c37cb52): .import via spi
+
+CLI_CONN.with site count: 16  9 across cli/src/lib.rs.
+
+Remaining (each ~half-day, no shared theme):
 
 For each remaining `CLI_CONN.with` site:
 
