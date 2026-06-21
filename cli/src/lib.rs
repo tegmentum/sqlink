@@ -1262,12 +1262,7 @@ fn eval_input(input: &str) -> String {
         return do_log(rest.trim());
     }
     if let Some(rest) = trimmed.strip_prefix(".grants") {
-        ensure_cli_conn();
-        return CLI_CONN.with(|c| {
-            let g = c.borrow();
-            let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-            do_grants(rest.trim(), conn)
-        });
+        return do_grants(rest.trim());
     }
     if let Some(rest) = trimmed.strip_prefix(".compose") {
         ensure_cli_conn();
@@ -1879,11 +1874,7 @@ fn do_load(input: &str) -> String {
             Ok(r) => (r.name, r.digest_hex),
             Err(e) => return format!("Error describing {path}: {} (code {})\n", e.message, e.code),
         };
-        let stored_grant = CLI_CONN.with(|c| {
-            let g = c.borrow();
-            g.as_ref()
-                .and_then(|conn| grants::get(conn, &preflight_name).ok().flatten())
-        });
+        let stored_grant = grants::get(&preflight_name).ok().flatten();
         let Some(g) = stored_grant else {
             return format!(
                 "Error: --trust=stored but no grant on file for \
@@ -1938,14 +1929,9 @@ fn do_load(input: &str) -> String {
     // (digest changed since last grant — manifest mode's
     // explicit "accept new digest, update record" semantics).
     let mut grants_msg = String::new();
-    CLI_CONN.with(|c| {
-        let g = c.borrow();
-        if let Some(conn) = g.as_ref() {
-            if let Some(diag) = grants_record_load(conn, &ext_name, digest.as_deref()) {
-                grants_msg.push_str(&diag);
-            }
-        }
-    });
+    if let Some(diag) = grants_record_load(&ext_name, digest.as_deref()) {
+        grants_msg.push_str(&diag);
+    }
     let counts = CLI_CONN.with(|c| {
         let g = c.borrow();
         let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
@@ -2163,22 +2149,16 @@ enum TrustMode {
 /// Returns a diagnostic line to prepend to the load output, or
 /// None if nothing notable happened.
 fn grants_record_load(
-    conn: &db::Connection,
     ext_name: &str,
     digest: Option<&str>,
 ) -> Option<String> {
-    let existing = grants::get(conn, ext_name).ok().flatten();
+    let existing = grants::get(ext_name).ok().flatten();
     let now = grants::now_iso8601();
     match (existing, digest) {
         (Some(prior), Some(new_digest)) => {
             if prior.digest_hex.as_deref() == Some(new_digest) {
                 None
             } else {
-                // E2 / PLAN-grants-db.md: trust=manifest's
-                // explicit "accept new digest, update record"
-                // semantics. We INSERT OR REPLACE the row to the
-                // new digest and surface a notice (not an error)
-                // so the user sees the change happened.
                 let prior_d = prior.digest_hex.as_deref().unwrap_or("<none>");
                 let grant = grants::StoredGrant {
                     extension_name: ext_name.into(),
@@ -2188,7 +2168,7 @@ fn grants_record_load(
                     granted_by: Some("manifest".into()),
                     notes: prior.notes.clone(),
                 };
-                let _ = grants::put(conn, &grant);
+                let _ = grants::put(&grant);
                 Some(format!(
                     "Updated grant for '{ext_name}': bytes changed since \
                      last sight (was {}…, now {}…).\n",
@@ -2198,7 +2178,6 @@ fn grants_record_load(
             }
         }
         (None, _) => {
-            // First sight — record what got loaded.
             let grant = grants::StoredGrant {
                 extension_name: ext_name.into(),
                 digest_hex: digest.map(|s| s.to_string()),
@@ -2207,7 +2186,7 @@ fn grants_record_load(
                 granted_by: Some("manifest".into()),
                 notes: None,
             };
-            let _ = grants::put(conn, &grant);
+            let _ = grants::put(&grant);
             None
         }
         (Some(_), None) => None,
@@ -2724,14 +2703,14 @@ fn do_cache(arg: &str) -> String {
 ///   .grants approve NAME …   -> not yet wired (needs pre-load
 ///                               policy injection; G1 is post-load
 ///                               TOFU only)
-fn do_grants(arg: &str, conn: &db::Connection) -> String {
+fn do_grants(arg: &str) -> String {
     let (sub, rest) = match arg.split_once(char::is_whitespace) {
         Some((s, r)) => (s, r.trim()),
         None => (arg, ""),
     };
     match sub {
         "" | "list" => {
-            let entries = match grants::list(conn) {
+            let entries = match grants::list() {
                 Ok(v) => v,
                 Err(e) => return format!("Error: {}\n", e.message),
             };
@@ -2753,7 +2732,7 @@ fn do_grants(arg: &str, conn: &db::Connection) -> String {
             if rest.is_empty() {
                 return "Usage: .grants show NAME\n".to_string();
             }
-            match grants::get(conn, rest) {
+            match grants::get(rest) {
                 Ok(Some(g)) => format!(
                     "name        : {}\ndigest      : {}\ngranted_at  : {}\ngranted_by  : {}\npolicy_json : {}\nnotes       : {}\n",
                     g.extension_name,
@@ -2771,7 +2750,7 @@ fn do_grants(arg: &str, conn: &db::Connection) -> String {
             if rest.is_empty() {
                 return "Usage: .grants revoke NAME\n".to_string();
             }
-            match grants::delete(conn, rest) {
+            match grants::delete(rest) {
                 Ok(true) => format!("Revoked grant for '{rest}'.\n"),
                 Ok(false) => format!("No grant on file for '{rest}'.\n"),
                 Err(e) => format!("Error: {}\n", e.message),

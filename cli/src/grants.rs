@@ -16,10 +16,17 @@
 //! different .sqlite file gets a fresh grant decision. This
 //! matches how `.load` itself behaves (extensions register
 //! against the open connection, not globally).
+//!
+//! PLAN-cli-stages-5-6.md Stage 5e: the module no longer takes
+//! a `&Connection` argument  every operation routes through
+//! `bindings::sqlite::extension::spi::execute` /
+//! `execute_batch`, hitting the host's shared connection. Drops
+//! 4 CLI_CONN.with sites from cli/src/lib.rs at the call sites.
 
 extern crate alloc;
 
-use sqlite_wasm_core::db::{Connection, Error, StepResult, Value};
+use crate::bindings::sqlite::extension::spi;
+use crate::bindings::sqlite::extension::types::{SqlValue, SqliteError};
 
 const SCHEMA_DDL: &str = "
 CREATE TABLE IF NOT EXISTS _capability_grants (
@@ -47,84 +54,66 @@ pub struct StoredGrant {
     pub notes: Option<String>,
 }
 
-/// Idempotent — call before any other grants query. The two
+/// Idempotent  call before any other grants query. The two
 /// tables get created on the first invocation against a given
 /// database; subsequent calls are cheap (no-ops at the SQLite
 /// engine layer thanks to IF NOT EXISTS).
-pub fn ensure_schema(conn: &Connection) -> Result<(), Error> {
-    conn.execute_batch(SCHEMA_DDL)
+pub fn ensure_schema() -> Result<(), SqliteError> {
+    spi::execute_batch(SCHEMA_DDL).map(|_| ())
 }
 
 /// Fetch the stored grant for `extension_name`, if any. Returns
 /// `Ok(None)` for an unknown extension (the trust-on-first-use
 /// signal) rather than an error.
-pub fn get(conn: &Connection, extension_name: &str) -> Result<Option<StoredGrant>, Error> {
-    ensure_schema(conn)?;
-    let mut stmt = conn.prepare(
+pub fn get(extension_name: &str) -> Result<Option<StoredGrant>, SqliteError> {
+    ensure_schema()?;
+    let result = spi::execute(
         "SELECT extension_name, digest_hex, policy_json, granted_at, granted_by, notes
          FROM _capability_grants WHERE extension_name = ?1",
+        &[SqlValue::Text(extension_name.into())],
     )?;
-    stmt.bind(1, &Value::Text(extension_name.into()))?;
-    match stmt.step()? {
-        StepResult::Row => Ok(Some(StoredGrant {
-            extension_name: text_col(&stmt, 0),
-            digest_hex: text_col_opt(&stmt, 1),
-            policy_json: text_col(&stmt, 2),
-            granted_at: text_col(&stmt, 3),
-            granted_by: text_col_opt(&stmt, 4),
-            notes: text_col_opt(&stmt, 5),
-        })),
-        StepResult::Done => Ok(None),
-    }
+    let Some(row) = result.rows.into_iter().next() else { return Ok(None) };
+    Ok(Some(row_to_grant(row)))
 }
 
 /// Upsert a grant. Replaces any existing row keyed by name.
-pub fn put(conn: &Connection, grant: &StoredGrant) -> Result<(), Error> {
-    ensure_schema(conn)?;
-    let mut stmt = conn.prepare(
+pub fn put(grant: &StoredGrant) -> Result<(), SqliteError> {
+    ensure_schema()?;
+    spi::execute(
         "INSERT OR REPLACE INTO _capability_grants
          (extension_name, digest_hex, policy_json, granted_at, granted_by, notes)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        &[
+            SqlValue::Text(grant.extension_name.clone()),
+            opt_text(grant.digest_hex.as_deref()),
+            SqlValue::Text(grant.policy_json.clone()),
+            SqlValue::Text(grant.granted_at.clone()),
+            opt_text(grant.granted_by.as_deref()),
+            opt_text(grant.notes.as_deref()),
+        ],
     )?;
-    stmt.bind(1, &Value::Text(grant.extension_name.clone()))?;
-    stmt.bind(2, &opt_text(grant.digest_hex.as_deref()))?;
-    stmt.bind(3, &Value::Text(grant.policy_json.clone()))?;
-    stmt.bind(4, &Value::Text(grant.granted_at.clone()))?;
-    stmt.bind(5, &opt_text(grant.granted_by.as_deref()))?;
-    stmt.bind(6, &opt_text(grant.notes.as_deref()))?;
-    while let StepResult::Row = stmt.step()? {}
     Ok(())
 }
 
 /// Remove a grant. Returns true iff a row was actually removed.
-pub fn delete(conn: &Connection, extension_name: &str) -> Result<bool, Error> {
-    ensure_schema(conn)?;
-    let before = conn.total_changes();
-    let mut stmt = conn.prepare("DELETE FROM _capability_grants WHERE extension_name = ?1")?;
-    stmt.bind(1, &Value::Text(extension_name.into()))?;
-    while let StepResult::Row = stmt.step()? {}
-    Ok(conn.total_changes() > before)
+pub fn delete(extension_name: &str) -> Result<bool, SqliteError> {
+    ensure_schema()?;
+    let result = spi::execute(
+        "DELETE FROM _capability_grants WHERE extension_name = ?1",
+        &[SqlValue::Text(extension_name.into())],
+    )?;
+    Ok(result.changes > 0)
 }
 
 /// All stored grants, ordered by name. Used by `.grants list`.
-pub fn list(conn: &Connection) -> Result<Vec<StoredGrant>, Error> {
-    ensure_schema(conn)?;
-    let mut stmt = conn.prepare(
+pub fn list() -> Result<Vec<StoredGrant>, SqliteError> {
+    ensure_schema()?;
+    let result = spi::execute(
         "SELECT extension_name, digest_hex, policy_json, granted_at, granted_by, notes
          FROM _capability_grants ORDER BY extension_name",
+        &[],
     )?;
-    let mut out = Vec::new();
-    while let StepResult::Row = stmt.step()? {
-        out.push(StoredGrant {
-            extension_name: text_col(&stmt, 0),
-            digest_hex: text_col_opt(&stmt, 1),
-            policy_json: text_col(&stmt, 2),
-            granted_at: text_col(&stmt, 3),
-            granted_by: text_col_opt(&stmt, 4),
-            notes: text_col_opt(&stmt, 5),
-        });
-    }
-    Ok(out)
+    Ok(result.rows.into_iter().map(row_to_grant).collect())
 }
 
 /// Tiny ISO-8601 stamp using std::time. Avoids pulling in chrono
@@ -134,9 +123,6 @@ pub fn now_iso8601() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
-    // Days since 1970-01-01 + seconds-of-day → printable
-    // YYYY-MM-DDTHH:MM:SSZ. Good enough for human audit; not
-    // expected to be machine-parsed with timezone math.
     let secs = now;
     let days = secs / 86_400;
     let sec_of_day = secs % 86_400;
@@ -147,8 +133,6 @@ pub fn now_iso8601() -> String {
     format!("{y:04}-{m:02}-{d:02}T{hh:02}:{mm:02}:{ss:02}Z")
 }
 
-/// Civil date from Unix-epoch days. Public-domain algorithm from
-/// Howard Hinnant's "date" library — handles 1970..2400 cleanly.
 fn days_to_ymd(z: i64) -> (i64, u32, u32) {
     let z = z + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
@@ -163,28 +147,37 @@ fn days_to_ymd(z: i64) -> (i64, u32, u32) {
     (y, m as u32, d as u32)
 }
 
-fn text_col(stmt: &sqlite_wasm_core::db::Statement<'_>, idx: usize) -> String {
-    match stmt.column_value(idx) {
-        Value::Text(s) => s,
-        Value::Null => String::new(),
-        v => format!("{v:?}"),
+fn row_to_grant(row: Vec<SqlValue>) -> StoredGrant {
+    let mut it = row.into_iter();
+    StoredGrant {
+        extension_name: it.next().map(text).unwrap_or_default(),
+        digest_hex:     it.next().and_then(text_opt),
+        policy_json:    it.next().map(text).unwrap_or_default(),
+        granted_at:     it.next().map(text).unwrap_or_default(),
+        granted_by:     it.next().and_then(text_opt),
+        notes:          it.next().and_then(text_opt),
     }
 }
 
-fn text_col_opt(
-    stmt: &sqlite_wasm_core::db::Statement<'_>,
-    idx: usize,
-) -> Option<String> {
-    match stmt.column_value(idx) {
-        Value::Null => None,
-        Value::Text(s) => Some(s),
-        v => Some(format!("{v:?}")),
+fn text(v: SqlValue) -> String {
+    match v {
+        SqlValue::Text(s) => s,
+        SqlValue::Null    => String::new(),
+        other             => format!("{other:?}"),
     }
 }
 
-fn opt_text(s: Option<&str>) -> Value {
+fn text_opt(v: SqlValue) -> Option<String> {
+    match v {
+        SqlValue::Null    => None,
+        SqlValue::Text(s) => Some(s),
+        other             => Some(format!("{other:?}")),
+    }
+}
+
+fn opt_text(s: Option<&str>) -> SqlValue {
     match s {
-        Some(t) => Value::Text(t.into()),
-        None => Value::Null,
+        Some(t) => SqlValue::Text(t.into()),
+        None    => SqlValue::Null,
     }
 }
