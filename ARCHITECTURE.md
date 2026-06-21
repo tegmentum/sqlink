@@ -17,7 +17,7 @@ READMEs and PLAN-*.md files have the detail.
                               ⇅
 ┌─────────────────────────────────────────────────────────────────┐
 │ host/  — the runner                                             │
-│   sqlite-wasm-run binary                                        │
+│   sqlink binary                                        │
 │   wasmtime engine, async-lifted bindings, dispatch routing      │
 │   policy enforcement, per-extension Stores, helper-connection   │
 │   SPI                                                           │
@@ -34,7 +34,7 @@ READMEs and PLAN-*.md files have the detail.
 ## Three deployment shapes
 
 The runtime supports three distinct extension/function shapes,
-all living alongside each other in the same `sqlite-wasm-run`
+all living alongside each other in the same `sqlink`
 binary:
 
 1. **`sqlite:extension`-world extensions** — the original shape.
@@ -153,7 +153,7 @@ crate so policy values port identically across deployment modes.
 
 In-WASM `spi.execute` doesn't re-enter the cli's SQLite. Instead,
 the host opens its OWN `rusqlite::Connection` to the same db file
-(passed via `sqlite-wasm-run --db <path>` and propagated through
+(passed via `sqlink --db <path>` and propagated through
 `cli.init(db_path)`). The extension sees committed state; it
 doesn't see uncommitted writes from the outer transaction or
 functions the cli has registered post-`.load`.
@@ -202,7 +202,7 @@ sqlite-wasm/
 ├── cli/target/wasm32-wasip1/release/
 │   └── sqlite_cli.wasm      ← reactor CLI
 └── host/target/aarch64-apple-darwin/release/
-    └── sqlite-wasm-run           ← the runner
+    └── sqlink           ← the runner
 
 sqlite-wasm-loader/target/wasm32-wasip1/release/
 ├── test_extension.wasm           ← 6 scalar functions

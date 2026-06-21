@@ -167,6 +167,181 @@ impl Regression {
         let num = n * self.sum_xy - self.sum_x * self.sum_y;
         Some(num * num / (dx * dy))
     }
+
+    /// Population covariance: `sum((x  )(y  )) / n`. None if
+    /// n < 1.
+    pub fn covariance_pop(&self) -> Option<f64> {
+        if self.n < 1 { return None; }
+        let n = self.n as f64;
+        Some((self.sum_xy - self.sum_x * self.sum_y / n) / n)
+    }
+
+    /// Sample covariance: divide by `n - 1` instead of `n`. None
+    /// if n < 2.
+    pub fn covariance_samp(&self) -> Option<f64> {
+        if self.n < 2 { return None; }
+        let n = self.n as f64;
+        Some((self.sum_xy - self.sum_x * self.sum_y / n) / (n - 1.0))
+    }
+
+    /// Pearson correlation coefficient r. None if n < 2 or
+    /// either variable has zero variance.
+    pub fn correlation(&self) -> Option<f64> {
+        if self.n < 2 { return None; }
+        let n = self.n as f64;
+        let dx = n * self.sum_x2 - self.sum_x * self.sum_x;
+        let dy = n * self.sum_y2 - self.sum_y * self.sum_y;
+        if dx <= 0.0 || dy <= 0.0 { return None; }
+        let num = n * self.sum_xy - self.sum_x * self.sum_y;
+        Some(num / (dx * dy).sqrt())
+    }
+
+    // PostgreSQL regr_* family  surface the accumulator
+    // components directly so callers can reproduce regression
+    // diagnostics without recomputing.
+    pub fn regr_count(&self) -> i64 { self.n as i64 }
+    pub fn regr_avgx(&self) -> Option<f64> {
+        if self.n == 0 { None } else { Some(self.sum_x / self.n as f64) }
+    }
+    pub fn regr_avgy(&self) -> Option<f64> {
+        if self.n == 0 { None } else { Some(self.sum_y / self.n as f64) }
+    }
+    /// Sxx = (x  )²  =  sum_x2  (sum_x)² / n.
+    pub fn regr_sxx(&self) -> Option<f64> {
+        if self.n == 0 { None } else {
+            Some(self.sum_x2 - self.sum_x * self.sum_x / self.n as f64)
+        }
+    }
+    pub fn regr_syy(&self) -> Option<f64> {
+        if self.n == 0 { None } else {
+            Some(self.sum_y2 - self.sum_y * self.sum_y / self.n as f64)
+        }
+    }
+    pub fn regr_sxy(&self) -> Option<f64> {
+        if self.n == 0 { None } else {
+            Some(self.sum_xy - self.sum_x * self.sum_y / self.n as f64)
+        }
+    }
+}
+
+/// Bitwise reduce over INTEGER columns. NULLs are skipped (per
+/// SQL aggregate convention). Op picks AND / OR / XOR.
+#[derive(Debug, Clone)]
+pub struct BitReduce {
+    pub n: u64,
+    pub acc: i64,
+    pub op: BitOp,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BitOp {
+    And,
+    Or,
+    Xor,
+}
+
+impl BitReduce {
+    pub fn new(op: BitOp) -> Self {
+        Self {
+            n: 0,
+            acc: match op {
+                BitOp::And => !0,   // identity for AND is all-ones
+                BitOp::Or | BitOp::Xor => 0,
+            },
+            op,
+        }
+    }
+    pub fn add(&mut self, x: i64) {
+        self.n += 1;
+        self.acc = match self.op {
+            BitOp::And => self.acc & x,
+            BitOp::Or => self.acc | x,
+            BitOp::Xor => self.acc ^ x,
+        };
+    }
+    pub fn value(&self) -> Option<i64> {
+        if self.n == 0 { None } else { Some(self.acc) }
+    }
+}
+
+/// `any_value(x)` aggregate  remembers the first non-null seen.
+/// Subsequent steps are no-ops. PG / DuckDB semantics.
+#[derive(Debug, Default, Clone)]
+pub struct AnyValue {
+    pub seen: bool,
+    pub kind: ValueKind,
+    pub i: i64,
+    pub r: f64,
+    pub s: String,
+    pub b: Vec<u8>,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ValueKind {
+    #[default]
+    Null,
+    Integer,
+    Real,
+    Text,
+    Blob,
+}
+
+/// `array_agg(x)` collects items as JSON. We tag each item with
+/// its SQL kind so the serialized output round-trips when
+/// possible.
+#[derive(Debug, Default, Clone)]
+pub struct ArrayAgg {
+    pub items: Vec<serde_json::Value>,
+}
+
+impl ArrayAgg {
+    pub fn add_int(&mut self, x: i64) { self.items.push(serde_json::Value::from(x)); }
+    pub fn add_real(&mut self, x: f64) {
+        match serde_json::Number::from_f64(x) {
+            Some(n) => self.items.push(serde_json::Value::Number(n)),
+            None => self.items.push(serde_json::Value::Null),
+        }
+    }
+    pub fn add_text(&mut self, s: &str) {
+        // If the string parses as JSON, store it as that JSON
+        // value (so callers can array_agg a JSON column without
+        // double-encoding). Otherwise treat as TEXT.
+        let v: serde_json::Value = serde_json::from_str(s)
+            .unwrap_or_else(|_| serde_json::Value::String(s.to_string()));
+        self.items.push(v);
+    }
+    pub fn add_null(&mut self) { self.items.push(serde_json::Value::Null); }
+    pub fn into_json(self) -> String {
+        serde_json::to_string(&self.items).unwrap_or_else(|_| "[]".to_string())
+    }
+    pub fn to_json(&self) -> String {
+        serde_json::to_string(&self.items).unwrap_or_else(|_| "[]".to_string())
+    }
+}
+
+/// `string_agg(x, sep)` joins TEXT values with a per-aggregation
+/// separator (taken from the first step).
+#[derive(Debug, Default, Clone)]
+pub struct StringAgg {
+    pub sep: Option<String>,
+    pub parts: Vec<String>,
+}
+
+impl StringAgg {
+    pub fn add(&mut self, s: String, sep: &str) {
+        if self.sep.is_none() { self.sep = Some(sep.to_string()); }
+        self.parts.push(s);
+    }
+    pub fn into_string(self) -> Option<String> {
+        if self.parts.is_empty() { return None; }
+        let sep = self.sep.unwrap_or_default();
+        Some(self.parts.join(&sep))
+    }
+    pub fn to_owned_string(&self) -> Option<String> {
+        if self.parts.is_empty() { return None; }
+        let sep = self.sep.clone().unwrap_or_default();
+        Some(self.parts.join(&sep))
+    }
 }
 
 /// Collects samples for median / percentile / mode at finalize.

@@ -32,6 +32,9 @@ mod wasm_export {
     const FID_B32_DEC: u64 = 2;
     const FID_B58_ENC: u64 = 3;
     const FID_B58_DEC: u64 = 4;
+    // Cross-DB Base64 aliases (PG / DuckDB / Snowflake / BigQuery).
+    const FID_TO_BASE64:   u64 = 5;
+    const FID_FROM_BASE64: u64 = 6;
 
     struct Ext;
 
@@ -67,6 +70,8 @@ mod wasm_export {
                     s(FID_B32_DEC, "base32_decode", 1),
                     s(FID_B58_ENC, "base58_encode", 1),
                     s(FID_B58_DEC, "base58_decode", 1),
+                    s(FID_TO_BASE64,   "to_base64",   1),
+                    s(FID_FROM_BASE64, "from_base64", 1),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -74,6 +79,7 @@ mod wasm_export {
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }
@@ -103,6 +109,19 @@ mod wasm_export {
                 FID_B58_DEC => {
                     let t = arg_text(&args, 0, "base58_decode")?;
                     match bs58::decode(t.as_bytes()).into_vec() {
+                        Ok(b) => Ok(SqlValue::Blob(b)),
+                        Err(_) => Ok(SqlValue::Null),
+                    }
+                }
+                FID_TO_BASE64 => {
+                    use base64::Engine;
+                    let b = arg_blob(&args, 0, "to_base64")?;
+                    Ok(SqlValue::Text(base64::engine::general_purpose::STANDARD.encode(&b)))
+                }
+                FID_FROM_BASE64 => {
+                    use base64::Engine;
+                    let t = arg_text(&args, 0, "from_base64")?;
+                    match base64::engine::general_purpose::STANDARD.decode(t.as_bytes()) {
                         Ok(b) => Ok(SqlValue::Blob(b)),
                         Err(_) => Ok(SqlValue::Null),
                     }

@@ -169,6 +169,9 @@ changeset-extension   = { path = "../extensions/changeset", optional = true, fea
 csv-extension         = { path = "../extensions/csv",       optional = true, features = ["embed"], default-features = false }
 stats-extension       = { path = "../extensions/stats",     optional = true, features = ["embed"], default-features = false }
 vec0-extension        = { path = "../extensions/vec0",      optional = true, features = ["embed"], default-features = false }
+stdsql-extension      = { path = "../extensions/stdsql",    optional = true, features = ["embed"], default-features = false }
+"sys-compat-extension" = { path = "../extensions/sys-compat", optional = true, features = ["embed"], default-features = false }
+list-extension        = { path = "../extensions/list",      optional = true, features = ["embed"], default-features = false }
 
 [features]
 # Family-of-features layout: each embeddable extension gets its own
@@ -273,6 +276,9 @@ embed-changeset  = ["dep:changeset-extension"]
 embed-csv        = ["dep:csv-extension"]
 embed-stats      = ["dep:stats-extension"]
 embed-vec0       = ["dep:vec0-extension"]
+embed-stdsql     = ["dep:stdsql-extension"]
+"embed-sys-compat" = ["dep:sys-compat-extension"]
+embed-list       = ["dep:list-extension"]
 
 # Component packaging: after `cargo build --release --target
 # wasm32-wasip2`, run

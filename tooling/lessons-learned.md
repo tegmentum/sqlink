@@ -3177,11 +3177,11 @@ been much worse.
 Took the C option from the plan (real architectural work)
 but scoped to the minimum viable: enable SQLITE_ENABLE_SESSION
 on libsqlite3-sys (via the `session` feature) and expose the
-connection-free changeset ops as a `sqlite-wasm-run changeset
+connection-free changeset ops as a `sqlink changeset
 {invert|concat}` subcommand:
 
-  $ sqlite-wasm-run changeset invert input.cs output.cs
-  $ sqlite-wasm-run changeset concat a.cs b.cs out.cs
+  $ sqlink changeset invert input.cs output.cs
+  $ sqlink changeset concat a.cs b.cs out.cs
 
 Direct libsqlite3-sys FFI calls (sqlite3changeset_invert +
 sqlite3changeset_concat). No WIT changes  the operations
@@ -3261,11 +3261,11 @@ they're useful general scalar packs and the plan doc's
 **Session phase 3 (capture + apply against live connection):**
 
 Continued the subcommand model from phase 2. Two new
-subcommands on sqlite-wasm-run:
+subcommands on sqlink:
 
-  sqlite-wasm-run changeset capture --db PATH --sql FILE
+  sqlink changeset capture --db PATH --sql FILE
                                     --output FILE [--table NAME]
-  sqlite-wasm-run changeset apply --db PATH --input FILE
+  sqlink changeset apply --db PATH --input FILE
 
 Capture: opens the db, attaches a session, runs the user's SQL
 script, extracts the changeset blob. Attach takes NULL (all
@@ -3287,7 +3287,7 @@ non-empty changesets without capture" gap and validates
 phase 2's invert/concat against real (not just empty) blobs.
 
 **What worked:**
-- Following phase 2's "subcommand on sqlite-wasm-run, no WIT
+- Following phase 2's "subcommand on sqlink, no WIT
   surgery" pattern. Phase 3 added ~150 LOC to host/src/main.rs
   on top of phase 2's invert/concat. Same architecture; the
   added cost was just FFI wiring for session_create / attach /
@@ -3360,7 +3360,7 @@ elsewhere in the codebase.
 
 End-to-end verified:
   1. cli captures CREATE TABLE + 2 INSERTs into a 44-byte blob
-  2. blob is byte-compatible with the host's sqlite-wasm-run
+  2. blob is byte-compatible with the host's sqlink
      changeset apply subcommand
   3. apply to fresh target db  target has alice + bob
 

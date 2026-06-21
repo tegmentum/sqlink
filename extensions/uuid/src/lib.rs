@@ -103,6 +103,10 @@ mod wasm_export {
                     s(FID_UUID_V7, "uuid_v7", 0, nd),
                     s(FID_UUID_V7_BLOB, "uuid_v7_blob", 0, nd),
                     s(FID_UUID_V7_TIMESTAMP, "uuid_v7_timestamp", 1, det),
+                    // Cross-DB aliases:
+                    s(FID_UUID, "gen_random_uuid", 0, nd),        // PostgreSQL
+                    s(FID_UUID, "generate_uuid", 0, nd),          // BigQuery / Snowflake
+                    s(FID_VALIDATE, "is_uuid", 1, det),           // MySQL / MariaDB
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -110,6 +114,7 @@ mod wasm_export {
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }

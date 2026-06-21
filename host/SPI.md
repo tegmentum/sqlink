@@ -16,7 +16,7 @@ Three components are alive when a dynamically-loaded extension's
 
 ```
 +----------------------------+      +-------------------+      +------------------------+
-| sqlite-cli-demo.wasm       |      | sqlite-wasm-run   |      | test_extension.wasm    |
+| sqlite-cli-demo.wasm       |      | sqlink   |      | test_extension.wasm    |
 | (SQLite-in-WASM + CLI;     |      | (Rust binary;     |      | (loaded ext;           |
 |  command-mode, has main()) |      |  embeds wasmtime) |      |  reactor)              |
 +----------------------------+      +-------------------+      +------------------------+

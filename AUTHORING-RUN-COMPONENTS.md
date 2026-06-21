@@ -5,7 +5,7 @@ providers at runtime via `compose:dynlink/linker`. Functions are
 typically **~150 KB**, vs. the ~12 KB-each-but-needs-the-2MB-cli
 shape that the `sqlite:extension`-world extensions take. The
 runtime (SQLite, common libs) is shared across all functions
-loaded into the same `sqlite-wasm-run` session.
+loaded into the same `sqlink` session.
 
 ## When to write a runnable component vs. an extension
 
@@ -139,7 +139,7 @@ $ cargo component build --release
 $ ls -lh target/wasm32-wasip1/release/my_tool.wasm
 -rw-r--r--  151K  ...
 
-$ sqlite-wasm-run --reactor --db /tmp/data.db sqlite-cli.wasm
+$ sqlink --reactor --db /tmp/data.db sqlite-cli.wasm
 sqlite> .run /path/to/my_tool.wasm
 The answer is 42
 ```

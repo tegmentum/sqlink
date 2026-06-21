@@ -1,0 +1,19 @@
+[package]
+name = "sequence-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+PG/Snowflake sequence helpers  nextval(name), currval(name), setval(name, value). Sequence state is process-local (thread_local HashMap)  matches the gap-analysis function but not the persistence semantics of PG sequences.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# add your upstream crate deps here

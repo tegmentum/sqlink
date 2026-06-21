@@ -36,6 +36,14 @@ mod wasm_export {
     const FID_REGEXP_LIKE: u64 = 2;
     const FID_REGEXP_SUBSTR: u64 = 3;
     const FID_REGEXP_REPLACE: u64 = 4;
+    const FID_REGEXP_INSTR: u64 = 5;
+    const FID_REGEXP_COUNT: u64 = 6;
+    const FID_REGEXP_CONTAINS: u64 = 7;
+    const FID_REGEXP_EXTRACT:  u64 = 8;
+    const FID_REGEXP_EXTRACT_ALL: u64 = 9;
+    const FID_REGEXP_MATCH:    u64 = 10;
+    const FID_REGEXP_MATCHES:  u64 = 11;
+    const FID_REGEXP_SPLIT_TO_ARRAY: u64 = 12;
 
     struct RegexpExtension;
 
@@ -59,6 +67,14 @@ mod wasm_export {
                     s(FID_REGEXP_LIKE, "regexp_like", 2),
                     s(FID_REGEXP_SUBSTR, "regexp_substr", 2),
                     s(FID_REGEXP_REPLACE, "regexp_replace", 3),
+                    s(FID_REGEXP_INSTR, "regexp_instr", 2),
+                    s(FID_REGEXP_COUNT, "regexp_count", 2),
+                    s(FID_REGEXP_CONTAINS, "regexp_contains", 2),
+                    s(FID_REGEXP_EXTRACT, "regexp_extract", 2),
+                    s(FID_REGEXP_EXTRACT_ALL, "regexp_extract_all", 2),
+                    s(FID_REGEXP_MATCH, "regexp_match", 2),
+                    s(FID_REGEXP_MATCHES, "regexp_matches", 2),
+                    s(FID_REGEXP_SPLIT_TO_ARRAY, "regexp_split_to_array", 2),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -66,6 +82,7 @@ mod wasm_export {
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }
@@ -119,6 +136,89 @@ mod wasm_export {
                     let re = Regex::new(pattern)
                         .map_err(|e| alloc::format!("regexp_replace: bad pattern: {e}"))?;
                     Ok(SqlValue::Text(re.replace_all(text, replacement).into_owned()))
+                }
+                FID_REGEXP_INSTR => {
+                    let text = text_arg(&args, 0, "regexp_instr")?;
+                    let pattern = text_arg(&args, 1, "regexp_instr")?;
+                    let re = Regex::new(pattern)
+                        .map_err(|e| alloc::format!("regexp_instr: bad pattern: {e}"))?;
+                    // 1-based byte position of first match, 0 if no
+                    // match. PG/MySQL semantics. (Char-based vs
+                    // byte-based diverges across engines; we return
+                    // char position to match SQL textual semantics.)
+                    Ok(match re.find(text) {
+                        Some(m) => {
+                            let prefix = &text[..m.start()];
+                            SqlValue::Integer((prefix.chars().count() + 1) as i64)
+                        }
+                        None => SqlValue::Integer(0),
+                    })
+                }
+                FID_REGEXP_COUNT => {
+                    let text = text_arg(&args, 0, "regexp_count")?;
+                    let pattern = text_arg(&args, 1, "regexp_count")?;
+                    let re = Regex::new(pattern)
+                        .map_err(|e| alloc::format!("regexp_count: bad pattern: {e}"))?;
+                    Ok(SqlValue::Integer(re.find_iter(text).count() as i64))
+                }
+                FID_REGEXP_CONTAINS => {
+                    let text = text_arg(&args, 0, "regexp_contains")?;
+                    let pattern = text_arg(&args, 1, "regexp_contains")?;
+                    let re = Regex::new(pattern)
+                        .map_err(|e| alloc::format!("regexp_contains: bad pattern: {e}"))?;
+                    Ok(SqlValue::Integer(re.is_match(text) as i64))
+                }
+                // PG `regexp_match(s, pattern)`  returns the first
+                // captured group as JSON array; BQ `regexp_extract`
+                // returns just the matched substring. We return the
+                // matched substring for both; tooling that wants the
+                // array form can call regexp_extract_all.
+                FID_REGEXP_EXTRACT | FID_REGEXP_MATCH => {
+                    let text = text_arg(&args, 0, "regexp_extract")?;
+                    let pattern = text_arg(&args, 1, "regexp_extract")?;
+                    let re = Regex::new(pattern)
+                        .map_err(|e| alloc::format!("regexp_extract: bad pattern: {e}"))?;
+                    Ok(match re.find(text) {
+                        Some(m) => SqlValue::Text(m.as_str().to_string()),
+                        None => SqlValue::Null,
+                    })
+                }
+                FID_REGEXP_EXTRACT_ALL | FID_REGEXP_MATCHES => {
+                    let text = text_arg(&args, 0, "regexp_extract_all")?;
+                    let pattern = text_arg(&args, 1, "regexp_extract_all")?;
+                    let re = Regex::new(pattern)
+                        .map_err(|e| alloc::format!("regexp_extract_all: bad pattern: {e}"))?;
+                    let mut items = Vec::new();
+                    for m in re.find_iter(text) {
+                        items.push(m.as_str().to_string());
+                    }
+                    let mut json = String::from("[");
+                    for (i, s) in items.iter().enumerate() {
+                        if i > 0 { json.push(','); }
+                        let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+                        json.push('"');
+                        json.push_str(&escaped);
+                        json.push('"');
+                    }
+                    json.push(']');
+                    Ok(SqlValue::Text(json))
+                }
+                FID_REGEXP_SPLIT_TO_ARRAY => {
+                    let text = text_arg(&args, 0, "regexp_split_to_array")?;
+                    let pattern = text_arg(&args, 1, "regexp_split_to_array")?;
+                    let re = Regex::new(pattern)
+                        .map_err(|e| alloc::format!("regexp_split_to_array: bad pattern: {e}"))?;
+                    let parts: Vec<&str> = re.split(text).collect();
+                    let mut json = String::from("[");
+                    for (i, s) in parts.iter().enumerate() {
+                        if i > 0 { json.push(','); }
+                        let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
+                        json.push('"');
+                        json.push_str(&escaped);
+                        json.push('"');
+                    }
+                    json.push(']');
+                    Ok(SqlValue::Text(json))
                 }
                 other => Err(alloc::format!("regexp: unknown func id {other}")),
             }

@@ -1,4 +1,4 @@
-//! `sqlite-wasm-run` — reference runner for SQLite-in-WebAssembly
+//! `sqlink` — reference runner for SQLite-in-WebAssembly
 //! components.
 //!
 //! Instantiates a `wasi:cli/run`-style component (sqlite-cli-demo.wasm,
@@ -43,13 +43,13 @@ impl wasmtime_wasi::WasiView for State {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: sqlite-wasm-run [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wasm|.cwasm> [-- guest-args...]");
-    eprintln!("       sqlite-wasm-run changeset {{invert|concat}} <in1> [in2] <out>");
-    eprintln!("       sqlite-wasm-run changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
-    eprintln!("       sqlite-wasm-run changeset apply --db PATH --input FILE");
-    eprintln!("       sqlite-wasm-run precompile <in.wasm> <out.cwasm>");
-    eprintln!("       sqlite-wasm-run compose --list");
-    eprintln!("       sqlite-wasm-run compose --embed NAME[,NAME...] [--output PATH] [--precompile] [--repo-root DIR]");
+    eprintln!("usage: sqlink [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wasm|.cwasm> [-- guest-args...]");
+    eprintln!("       sqlink changeset {{invert|concat}} <in1> [in2] <out>");
+    eprintln!("       sqlink changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
+    eprintln!("       sqlink changeset apply --db PATH --input FILE");
+    eprintln!("       sqlink precompile <in.wasm> <out.cwasm>");
+    eprintln!("       sqlink compose --list");
+    eprintln!("       sqlink compose --embed NAME[,NAME...] [--output PATH] [--precompile] [--repo-root DIR]");
     std::process::exit(2);
 }
 
@@ -59,7 +59,7 @@ fn usage() -> ! {
 /// `embed` cargo feature in their Cargo.toml and ship a
 /// `src/embed.rs`. Shells out to cargo + wasm-tools; having the
 /// orchestration inside the main binary keeps SQLite's single-
-/// executable spirit  one sqlite-wasm-run, every workflow.
+/// executable spirit  one sqlink, every workflow.
 fn run_compose_subcommand(args: &[String]) -> Result<()> {
     let mut list = false;
     let mut embed: Vec<String> = Vec::new();
@@ -238,7 +238,7 @@ fn discover_embeddable_extensions(repo_root: &std::path::Path) -> Result<Vec<Str
 /// across host CPUs; regenerate on each machine.
 fn run_precompile_subcommand(args: &[String]) -> Result<()> {
     if args.len() != 2 {
-        eprintln!("usage: sqlite-wasm-run precompile <in.wasm> <out.cwasm>");
+        eprintln!("usage: sqlink precompile <in.wasm> <out.cwasm>");
         std::process::exit(2);
     }
     let in_path = std::path::Path::new(&args[0]);
@@ -273,10 +273,10 @@ fn run_precompile_subcommand(args: &[String]) -> Result<()> {
 /// per-connection state and is a separate effort.
 fn run_changeset_subcommand(args: &[String]) -> Result<()> {
     if args.len() < 2 {
-        eprintln!("usage: sqlite-wasm-run changeset invert <input.cs> <output.cs>");
-        eprintln!("       sqlite-wasm-run changeset concat <a.cs> <b.cs> <output.cs>");
-        eprintln!("       sqlite-wasm-run changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
-        eprintln!("       sqlite-wasm-run changeset apply --db PATH --input FILE");
+        eprintln!("usage: sqlink changeset invert <input.cs> <output.cs>");
+        eprintln!("       sqlink changeset concat <a.cs> <b.cs> <output.cs>");
+        eprintln!("       sqlink changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
+        eprintln!("       sqlink changeset apply --db PATH --input FILE");
         std::process::exit(2);
     }
     let op = args[0].as_str();
@@ -685,12 +685,12 @@ async fn main() -> Result<()> {
     // cli component is the runtime here, not an extension, so it
     // doesn't need fuel-metering on every backedge. Loading the
     // precompiled .cwasm against engine_run matches the engine
-    // `sqlite-wasm-run precompile` uses to write it; the .cwasm
+    // `sqlink precompile` uses to write it; the .cwasm
     // is bound to its compile-time engine config and would refuse
     // to load against any other.
     let engine = host.engine_run().clone();
 
-    // .cwasm = precompiled by `sqlite-wasm-run precompile`. Loading
+    // .cwasm = precompiled by `sqlink precompile`. Loading
     // it via Component::deserialize_file skips parse+validate+compile.
     // unsafe is the API contract  caller asserts the file is a
     // trusted artifact from this exact wasmtime + host CPU.

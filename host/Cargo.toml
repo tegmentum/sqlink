@@ -6,7 +6,7 @@ description = "Reference wasmtime-based host for SQLite-in-WebAssembly component
 license = "MIT"
 
 [[bin]]
-name = "sqlite-wasm-run"
+name = "sqlink"
 path = "src/main.rs"
 
 [lib]

@@ -1,0 +1,41 @@
+[package]
+name = "json-table-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+`unnest(V)` — eponymous TVF that yields one row per element of
+a packed f32 vector. Sibling to extensions/vec (the scalar
+surface) and extensions/vec0 (the kNN vtab).
+
+    SELECT idx, value FROM unnest(vec_f32('[10, 20, 30]'));
+     idx | value
+    -----+-------
+       0 | 10.0
+       1 | 20.0
+       2 | 30.0
+
+The vector input is a HIDDEN column matched against an EQ
+constraint with argv_index=1 in best_index. Useful for
+debugging stored embeddings, expanding into JOIN-friendly
+row form, or computing element-wise functions in SQL.
+
+Tier-1 vtab port per PLAN-sqlite-plugins.md. Pure-Rust
+wasm32-wasip2 clean.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

@@ -1,0 +1,21 @@
+[package]
+name = "stdsql-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Cross-DB standard SQL scalars  greatest, least, left, right, lpad, rpad, repeat, space, starts_with, ends_with, translate, to_hex, bit_length, initcap, plus aliases (if, chr, ascii, char_length, from_hex). Fills the cross-database portability gap surfaced by the function-gap analysis  PostgreSQL/MySQL/MariaDB/DuckDB/ClickHouse all ship these as builtins.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

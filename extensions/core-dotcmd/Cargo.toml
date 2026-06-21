@@ -1,0 +1,26 @@
+[package]
+name = "core-dotcmd-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Seed of the eventual full port of cli/src/dot.rs into an
+extension. Ports .version, .help, .tables, .schema, .databases
+as proof that the dotcmd-aware contract supports the built-in
+surface. Subsequent batches port the remaining ~30 commands
+until cli/src/dot.rs can be deleted (see PLAN-dotcmd-plugins.md
+Phase 2/5).
+
+Targets the `dotcmd-aware` world; uses `spi.execute` for every
+db-driven command so the wasm boundary stays clean.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }

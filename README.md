@@ -28,7 +28,7 @@ cli/                  The cli  a wasm component that loads other
                       .dump, .backup, .session, ...).
 host/                 The runtime that loads + runs the cli component
                       (and any extension components it `.load`s).
-                      Ships as `sqlite-wasm-run` binary.
+                      Ships as the `sqlink` binary.
 sqlite-loader-wit/    The WIT contract every extension speaks. Defines
                       worlds for scalar-only, vtab, collation, stateful
                       aggregate, and authorizer extensions.
@@ -59,7 +59,7 @@ wasm-tools component new \
 Run a SQL session:
 
 ```bash
-./target/release/sqlite-wasm-run \
+./target/release/sqlink \
     target/wasm32-wasip2/release/sqlite_cli.component.wasm \
     --db mydata.db
 sqlite> CREATE TABLE t(id INTEGER, name TEXT);
@@ -67,6 +67,17 @@ sqlite> INSERT INTO t VALUES (1, 'alice');
 sqlite> .tables
 sqlite> .dump
 ```
+
+The CLI is the `sqlink` binary  named after the loadable-extension
+contract it ships. If you prefer the familiar `sqlite` command name,
+symlink it onto your PATH:
+
+```bash
+ln -s /full/path/to/target/release/sqlink ~/.local/bin/sqlite
+```
+
+The binary doesn't look at argv\[0\], so it behaves identically under
+either name.
 
 Load an extension and use its scalars:
 

@@ -14,7 +14,7 @@ Reference wasmtime-based host for `sqlite-cli-unified`-world components.
       variant, same wildcard-suffix `HttpPolicy`, same fuel/memory/epoch
       knobs — so values port directly between the native loader and this
       in-WASM host
-- **Binary (`sqlite-wasm-run`)** — drop-in replacement for `wasmtime run` for
+- **Binary (`sqlink`)** — drop-in replacement for `wasmtime run` for
   SQLite-in-WebAssembly components. Wires WASI Preview 2 (stdio inherited,
   env inherited, argv passed through), instantiates the component as a
   `wasi:cli/command`, calls `run`.
@@ -23,7 +23,7 @@ Reference wasmtime-based host for `sqlite-cli-unified`-world components.
 
 ```sh
 echo "SELECT wasm_reverse('hello'), wasm_double(21);" \
-  | host/target/aarch64-apple-darwin/release/sqlite-wasm-run \
+  | host/target/aarch64-apple-darwin/release/sqlink \
       build/sqlite-cli-demo.wasm
 → SQLite version 3.53.1
   sqlite> olleh|42
@@ -58,7 +58,7 @@ dispatched in all three.
 - `Host::load_extension(path, policy)` — reads the file, compiles
   the component, stashes it in the registry alongside its Policy
 - `Host::unload(name)`, `Host::list()`, `Host::is_loaded(name)`
-- `sqlite-wasm-run` — runs any `wasi:cli/command`-style component
+- `sqlink` — runs any `wasi:cli/command`-style component
   with WASI fully provided
 
 **Next iteration** — surfacing `Host::load_extension` to the in-WASM CLI

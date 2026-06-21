@@ -67,6 +67,19 @@ mod wasm_export {
     // Constants
     const FID_PI: u64 = 61;
     const FID_E: u64 = 62;
+    // Gap-analysis additions (cross-DB portability):
+    const FID_COT: u64 = 71;
+    const FID_FACTORIAL: u64 = 72;
+    const FID_RAND: u64 = 73;        // [0, 1) float
+    const FID_DIV: u64 = 74;         // integer division
+    const FID_GCD: u64 = 75;
+    const FID_LCM: u64 = 76;
+    const FID_TRUNCATE_1: u64 = 77;  // alias of trunc
+    const FID_TRUNCATE_2: u64 = 78;  // trunc to N decimal places
+    const FID_BIT_COUNT: u64 = 79;
+    const FID_ISFINITE: u64 = 80;
+    const FID_WIDTH_BUCKET: u64 = 81;
+    const FID_BIN: u64 = 82;         // binary repr
 
     struct MathExtension;
 
@@ -115,6 +128,19 @@ mod wasm_export {
                     s(FID_RADIANS, "radians", 1),
                     s(FID_PI, "pi", 0),
                     s(FID_E, "e", 0),
+                    // Cross-DB portability:
+                    s(FID_COT, "cot", 1),
+                    s(FID_FACTORIAL, "factorial", 1),
+                    s(FID_RAND, "rand", 0),
+                    s(FID_DIV, "div", 2),
+                    s(FID_GCD, "gcd", 2),
+                    s(FID_LCM, "lcm", 2),
+                    s(FID_TRUNCATE_1, "truncate", 1),
+                    s(FID_TRUNCATE_2, "truncate", 2),
+                    s(FID_BIT_COUNT, "bit_count", 1),
+                    s(FID_ISFINITE, "isfinite", 1),
+                    s(FID_WIDTH_BUCKET, "width_bucket", 4),
+                    s(FID_BIN, "bin", 1),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -122,6 +148,7 @@ mod wasm_export {
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }
@@ -141,8 +168,10 @@ mod wasm_export {
     impl ScalarFunctionGuest for MathExtension {
         fn call(func_id: u64, args: Vec<SqlValue>) -> Result<SqlValue, alloc::string::String> {
             // SQLite NULL propagation: any NULL arg in a math op
-            // returns NULL (except the zero-arg constants).
-            if func_id < 60 && args.iter().any(|v| matches!(v, SqlValue::Null)) {
+            // returns NULL (except the zero-arg constants and
+            // `rand` which has no args).
+            let is_zero_arg = matches!(func_id, FID_PI | FID_E | FID_RAND);
+            if !is_zero_arg && args.iter().any(|v| matches!(v, SqlValue::Null)) {
                 return Ok(SqlValue::Null);
             }
             let a: Vec<Arg> = args.iter().map(sql_to_arg).collect();
@@ -257,6 +286,95 @@ mod wasm_export {
                 FID_RADIANS => SqlValue::Real(funcs::radians(get1("radians")?)),
                 FID_PI => SqlValue::Real(core::f64::consts::PI),
                 FID_E => SqlValue::Real(core::f64::consts::E),
+                FID_COT => {
+                    let x = get1("cot")?;
+                    let t = libm::tan(x);
+                    if t == 0.0 { return Err("cot: undefined at multiples of pi".to_string()); }
+                    SqlValue::Real(1.0 / t)
+                }
+                FID_FACTORIAL => {
+                    let n = match a.first() {
+                        Some(Arg::Integer(n)) => *n,
+                        Some(Arg::Real(r)) if r.fract() == 0.0 => *r as i64,
+                        _ => return Err("factorial: INTEGER arg".to_string()),
+                    };
+                    if n < 0 { return Err("factorial: negative arg".to_string()); }
+                    if n > 20 { return Err("factorial: overflows i64 for n > 20".to_string()); }
+                    let mut acc: i64 = 1;
+                    for i in 2..=n { acc *= i; }
+                    SqlValue::Integer(acc)
+                }
+                FID_RAND => {
+                    // Lightweight LCG seeded from a thread_local cell.
+                    // We avoid `rand` crate to keep math wasm32-wasip2
+                    // light  this matches the cli's randomblob(2) helper
+                    // which is itself a custom LCG. Quality is good
+                    // enough for SQL-side sampling but not for crypto.
+                    use core::cell::Cell;
+                    std::thread_local! {
+                        static STATE: Cell<u64> = const { Cell::new(0xCAFE_BABE_C0FF_EEEE) };
+                    }
+                    let s = STATE.with(|c| {
+                        let mut v = c.get();
+                        v ^= v << 13; v ^= v >> 7; v ^= v << 17;
+                        c.set(v);
+                        v
+                    });
+                    SqlValue::Real((s >> 11) as f64 / (1u64 << 53) as f64)
+                }
+                FID_DIV => {
+                    let x = funcs::to_f64(a.first().ok_or("div: missing arg 0")?)? as i64;
+                    let y = funcs::to_f64(a.get(1).ok_or("div: missing arg 1")?)? as i64;
+                    if y == 0 { return Err("div: division by zero".to_string()); }
+                    SqlValue::Integer(x / y)
+                }
+                FID_GCD => {
+                    let x = funcs::to_f64(a.first().ok_or("gcd: missing arg 0")?)? as i64;
+                    let y = funcs::to_f64(a.get(1).ok_or("gcd: missing arg 1")?)? as i64;
+                    fn g(a: i64, b: i64) -> i64 { if b == 0 { a.abs() } else { g(b, a % b) } }
+                    SqlValue::Integer(g(x, y))
+                }
+                FID_LCM => {
+                    let x = funcs::to_f64(a.first().ok_or("lcm: missing arg 0")?)? as i64;
+                    let y = funcs::to_f64(a.get(1).ok_or("lcm: missing arg 1")?)? as i64;
+                    if x == 0 || y == 0 { SqlValue::Integer(0) }
+                    else {
+                        fn g(a: i64, b: i64) -> i64 { if b == 0 { a.abs() } else { g(b, a % b) } }
+                        SqlValue::Integer((x / g(x, y) * y).abs())
+                    }
+                }
+                FID_TRUNCATE_1 => SqlValue::Real(libm::trunc(get1("truncate")?)),
+                FID_TRUNCATE_2 => {
+                    let (x, p) = get2("truncate")?;
+                    let scale = libm::pow(10.0, p);
+                    SqlValue::Real(libm::trunc(x * scale) / scale)
+                }
+                FID_BIT_COUNT => {
+                    let n = funcs::to_f64(a.first().ok_or("bit_count: missing arg")?)? as i64;
+                    SqlValue::Integer(n.count_ones() as i64)
+                }
+                FID_ISFINITE => {
+                    let x = get1("isfinite")?;
+                    SqlValue::Integer(x.is_finite() as i64)
+                }
+                FID_WIDTH_BUCKET => {
+                    let x = funcs::to_f64(a.first().ok_or("width_bucket: missing arg 0")?)?;
+                    let lo = funcs::to_f64(a.get(1).ok_or("width_bucket: missing arg 1")?)?;
+                    let hi = funcs::to_f64(a.get(2).ok_or("width_bucket: missing arg 2")?)?;
+                    let n = funcs::to_f64(a.get(3).ok_or("width_bucket: missing arg 3")?)? as i64;
+                    if n <= 0 { return Err("width_bucket: nbuckets must be > 0".to_string()); }
+                    if lo == hi { return Err("width_bucket: lo == hi".to_string()); }
+                    if x < lo { SqlValue::Integer(0) }
+                    else if x >= hi { SqlValue::Integer(n + 1) }
+                    else {
+                        let span = hi - lo;
+                        SqlValue::Integer(((x - lo) * (n as f64) / span).floor() as i64 + 1)
+                    }
+                }
+                FID_BIN => {
+                    let n = funcs::to_f64(a.first().ok_or("bin: missing arg")?)? as i64;
+                    SqlValue::Text(alloc::format!("{:b}", n as u64))
+                }
                 other => return Err(alloc::format!("math: unknown func id {other}")),
             };
             Ok(r)

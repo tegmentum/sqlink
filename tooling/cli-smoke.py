@@ -27,7 +27,7 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-CLI_BIN = REPO_ROOT / "target" / "release" / "sqlite-wasm-run"
+CLI_BIN = REPO_ROOT / "target" / "release" / "sqlink"
 CLI_COMPONENT = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.wasm"
 # Embed-built variant. Smokes opt in with `-- cli: embedded` at top.
 CLI_COMPONENT_EMBEDDED = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_embedded.component.wasm"
@@ -105,7 +105,7 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
         component = CLI_COMPONENT_EMBEDDED
         if not component.exists():
             return False, (f"embedded cli not built: {component.relative_to(REPO_ROOT)}; "
-                           f"run `sqlite-wasm-run compose --embed sha3,uuid`")
+                           f"run `sqlink compose --embed sha3,uuid`")
     else:
         component = CLI_COMPONENT
         if not component.exists():

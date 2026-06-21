@@ -70,16 +70,28 @@ mod wasm_export {
                 scalar_functions: alloc::vec![],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
-                vtabs: alloc::vec![VtabSpec {
-                    id: VTAB_ID_SERIES,
-                    name: "generate_series".to_string(),
-                    eponymous: true,
-                    mutable: false,
-                    batched: true,
-                }],
+                vtabs: alloc::vec![
+                    VtabSpec {
+                        id: VTAB_ID_SERIES,
+                        name: "generate_series".to_string(),
+                        eponymous: true,
+                        mutable: false,
+                        batched: true,
+                    },
+                    // DuckDB / Snowflake / BigQuery flavour: same
+                    // surface as generate_series, different name.
+                    VtabSpec {
+                        id: VTAB_ID_SERIES,
+                        name: "range".to_string(),
+                        eponymous: true,
+                        mutable: false,
+                        batched: true,
+                    },
+                ],
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }

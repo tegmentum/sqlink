@@ -1,0 +1,23 @@
+[package]
+name = "sys-compat-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Cross-DB system/identity scalars  current_user, session_user, current_database, current_schema, version, etc. Returns sensible constants so BI tools and ORMs that probe with SELECT version() / SELECT current_user succeed against SQLink. Identity functions return 'sqlink'; schema/database return 'main'; version returns 'SQLink/X.Y.Z (SQLite Z.Z.Z)'.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-embed", optional = true }

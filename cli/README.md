@@ -5,7 +5,7 @@ Reactor-shape Rust port of the SQLite CLI. Targets the
 
 ## Why a reactor, not command-mode
 
-The host (`sqlite-wasm-run`) drives the REPL. The CLI exports
+The host (`sqlink`) drives the REPL. The CLI exports
 `init`/`eval`/`is-done`/etc., the host calls them per line of user
 input. This control-flow inversion is what makes the in-WASM
 `spi.execute` re-entry pattern possible (see
@@ -22,14 +22,14 @@ Error: component imports instance `sqlite:wasm/extension-loader@0.1.0`,
 
 `wasmtime run` only provides WASI imports. This component imports
 the `extension-loader`, `dispatch`, slot, and `zip-operations`
-interfaces that only `sqlite-wasm-run` knows how to satisfy. Run it
+interfaces that only `sqlink` knows how to satisfy. Run it
 through that binary instead:
 
 ```
-$ sqlite-wasm-run --reactor sqlite_cli.wasm
+$ sqlink --reactor sqlite_cli.wasm
 
 # Or with a file-backed db (needed for in-WASM spi.execute):
-$ sqlite-wasm-run --reactor --db /tmp/my.db sqlite_cli.wasm
+$ sqlink --reactor --db /tmp/my.db sqlite_cli.wasm
 ```
 
 ## Building

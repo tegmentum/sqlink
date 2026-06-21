@@ -7,7 +7,7 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use md5::Md5;
 use sha1::Sha1;
-use sha2::{Digest, Sha256, Sha512};
+use sha2::{Digest, Sha224, Sha256, Sha384, Sha512};
 
 /// Hash `bytes` with SHA-1 and return the digest as lowercase
 /// hex.
@@ -27,6 +27,30 @@ pub fn sha512(bytes: &[u8]) -> String {
     let mut h = Sha512::new();
     h.update(bytes);
     hex::encode(h.finalize())
+}
+
+pub fn sha224(bytes: &[u8]) -> String {
+    let mut h = Sha224::new();
+    h.update(bytes);
+    hex::encode(h.finalize())
+}
+
+pub fn sha384(bytes: &[u8]) -> String {
+    let mut h = Sha384::new();
+    h.update(bytes);
+    hex::encode(h.finalize())
+}
+
+/// MySQL `SHA2(s, bits)`  dispatch to one of the SHA-2 variants
+/// by bit length. `bits=0` is treated as 256 (MySQL convention).
+pub fn sha2(bytes: &[u8], bits: i64) -> Result<String, String> {
+    Ok(match bits {
+        0 | 256 => sha256(bytes),
+        224 => sha224(bytes),
+        384 => sha384(bytes),
+        512 => sha512(bytes),
+        other => return Err(alloc::format!("sha2: unsupported bit length {other}")),
+    })
 }
 
 pub fn md5(bytes: &[u8]) -> String {

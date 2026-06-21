@@ -417,11 +417,17 @@ def build_entry(
         "description": description,
         "license": license_,
         "authors": authors,
-        "repository": "https://github.com/anthropics/sqlite-wasm",
-        "homepage": f"https://github.com/anthropics/sqlite-wasm/tree/main/extensions/{name}",
+        "repository": "https://github.com/tegmentum/sqlite-wasm",
+        "homepage": f"https://github.com/tegmentum/sqlite-wasm/tree/main/extensions/{name}",
         "keywords": derive_keywords(name, description),
         "categories": categorize(name, plugin_row["declared_world"]),
         "source": "builtin",
+        # plugin.upstream_url is populated by provenance/scan.py from
+        # provenance/upstream-urls.json  the canonical reference for
+        # the algorithm / spec / original implementation this extension
+        # is based on. Missing  empty string here  the per-extension
+        # page hides the "upstream" row.
+        "upstream_url": plugin_row["upstream_url"] or "",
         "artifact_url": artifact_url(artifact_base, name, version),
         "checksum": checksum,
         "size_bytes": size_bytes,
@@ -451,8 +457,8 @@ def build_registry(db_path: Path, repo: Path, artifact_base: str) -> dict:
             "description": "SQL interface for managing SQLite WASM extensions",
             "license": "MIT",
             "authors": ["SQLite WASM Team"],
-            "repository": "https://github.com/anthropics/sqlite-wasm",
-            "homepage": "https://github.com/anthropics/sqlite-wasm#readme",
+            "repository": "https://github.com/tegmentum/sqlite-wasm",
+            "homepage": "https://github.com/tegmentum/sqlite-wasm#readme",
             "keywords": ["extension", "manager", "registry", "install"],
             "categories": ["utility"],
             "source": "builtin",

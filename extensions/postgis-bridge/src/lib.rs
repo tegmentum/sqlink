@@ -783,6 +783,12 @@ impl MetadataGuest for PostgisBridge {
                 // Output
                 s(FID_ST_ASTEXT, "st_astext", 1),
                 s(FID_ST_ASBINARY, "st_asbinary", 1),
+                // MySQL/MariaDB OGC-flavoured aliases  share FIDs.
+                s(FID_ST_ASTEXT, "st_aswkt", 1),
+                s(FID_ST_ASBINARY, "st_aswkb", 1),
+                // PG `point(x, y)` and `polygon(text)` constructors.
+                s(FID_ST_MAKEPOINT, "point", 2),
+                s(FID_ST_GEOMFROMTEXT, "polygon", 1),
                 s(FID_ST_AS_EWKT, "st_asewkt", 1),
                 s(FID_ST_AS_EWKB, "st_asewkb", 1),
                 s(FID_ST_AS_HEXEWKB, "st_ashexewkb", 1),
@@ -1195,6 +1201,7 @@ impl MetadataGuest for PostgisBridge {
             has_authorizer: false,
             has_update_hook: false,
             has_commit_hook: false,
+            dot_commands: alloc::vec![],
             declared_capabilities: alloc::vec![],
         }
     }

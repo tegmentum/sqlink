@@ -35,7 +35,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
-CLI_BIN = REPO_ROOT / "target" / "release" / "sqlite-wasm-run"
+CLI_BIN = REPO_ROOT / "target" / "release" / "sqlink"
 CLI_COMPONENT = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.wasm"
 
 # Strip leading prompts the cli prints: "sqlite> " and "   ...> ".
@@ -181,7 +181,7 @@ def _prepare_smoke(name: str) -> tuple[str, str | None] | str:
 
 
 def _build_argv(marker: str | None, no_cache: bool) -> tuple[list[str], str | None, str | None]:
-    """Build the sqlite-wasm-run argv. Returns (argv, tmpdir, db_tempfile)
+    """Build the sqlink argv. Returns (argv, tmpdir, db_tempfile)
     where tmpdir / db_tempfile are paths to clean up (or None).
     """
     import tempfile

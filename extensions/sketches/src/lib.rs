@@ -353,10 +353,45 @@ mod wasm_export {
     const FID_VERSION: u64 = 4;
     const FID_TD_AGG: u64 = 100;
     const FID_MH_AGG: u64 = 101;
+    const FID_TOP_K_AGG: u64 = 102;  // approx_top_k via Misra-Gries
+
+    /// Misra-Gries summary  fixed-K counters that survive
+    /// arbitrary stream length using O(K) memory. Items are
+    /// compared by their string serialization so the aggregate
+    /// works on any SQL type.
+    pub struct MisraGries {
+        pub k: usize,
+        pub counters: alloc::collections::BTreeMap<String, i64>,
+    }
+
+    impl MisraGries {
+        pub fn new(k: usize) -> Self { Self { k: k.max(1), counters: alloc::collections::BTreeMap::new() } }
+        pub fn add(&mut self, key: String) {
+            if let Some(c) = self.counters.get_mut(&key) { *c += 1; return; }
+            if self.counters.len() < self.k {
+                self.counters.insert(key, 1);
+                return;
+            }
+            // Decrement every counter; drop those reaching zero.
+            let mut drops = alloc::vec::Vec::new();
+            for (k, c) in self.counters.iter_mut() {
+                *c -= 1;
+                if *c <= 0 { drops.push(k.clone()); }
+            }
+            for k in drops { self.counters.remove(&k); }
+        }
+        pub fn top(&self) -> alloc::vec::Vec<(String, i64)> {
+            let mut v: alloc::vec::Vec<(String, i64)> = self.counters.iter()
+                .map(|(k, c)| (k.clone(), *c)).collect();
+            v.sort_by(|a, b| b.1.cmp(&a.1));
+            v
+        }
+    }
 
     enum AggState {
         TDigest(super::TDigest),
         MinHash(super::MinHash),
+        TopK { k: Option<usize>, mg: MisraGries },
     }
 
     thread_local! {
@@ -413,12 +448,14 @@ mod wasm_export {
                 aggregate_functions: alloc::vec![
                     a(FID_TD_AGG, "t_digest", 1),
                     a(FID_MH_AGG, "minhash", 1),
+                    a(FID_TOP_K_AGG, "approx_top_k", 2),
                 ],
                 collations: alloc::vec![],
                 vtabs: alloc::vec![],
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }
@@ -471,6 +508,7 @@ mod wasm_export {
                 let mut tbl = m.borrow_mut();
                 let entry = tbl.entry(context_id).or_insert_with(|| match func_id {
                     FID_TD_AGG => AggState::TDigest(super::TDigest::new(100.0)),
+                    FID_TOP_K_AGG => AggState::TopK { k: None, mg: MisraGries::new(64) },
                     _ => AggState::MinHash(super::MinHash::new(super::MH_DEFAULT_K)),
                 });
                 match (func_id, entry) {
@@ -482,6 +520,31 @@ mod wasm_export {
                     (FID_MH_AGG, AggState::MinHash(mh)) => {
                         let bytes = val_bytes(&args[0]);
                         mh.add(&bytes);
+                    }
+                    (FID_TOP_K_AGG, AggState::TopK { k, mg }) => {
+                        // First step captures k from arg[1]; subsequent
+                        // steps reuse it. K is bounded to a safety cap
+                        // so a runaway value can't OOM the worker.
+                        if k.is_none() {
+                            let kk = val_f64(args.get(1).unwrap_or(&SqlValue::Null))
+                                .ok_or_else(|| "approx_top_k: numeric k".to_string())? as usize;
+                            let kk = kk.clamp(1, 1024);
+                            *k = Some(kk);
+                            // Replace the default 64-counter MG with
+                            // one sized for the requested k.
+                            *mg = MisraGries::new(kk);
+                        }
+                        // Key the item by its stringified form so
+                        // INT/REAL/TEXT all collapse to a comparable
+                        // key  matches DuckDB approx_top_k semantics.
+                        let key = match &args[0] {
+                            SqlValue::Null => return Ok(()),
+                            SqlValue::Integer(n) => n.to_string(),
+                            SqlValue::Real(r) => r.to_string(),
+                            SqlValue::Text(s) => s.clone(),
+                            SqlValue::Blob(b) => format!("BLOB({})", b.len()),
+                        };
+                        mg.add(key);
                     }
                     _ => return Err(format!("sketches: bad agg func_id {func_id}")),
                 }
@@ -497,6 +560,20 @@ mod wasm_export {
                     }
                     (FID_MH_AGG, Some(AggState::MinHash(mh))) => {
                         SqlValue::Blob(super::mh_serialize(&mh))
+                    }
+                    (FID_TOP_K_AGG, Some(AggState::TopK { k, mg })) => {
+                        // Return TEXT containing a JSON array of
+                        // {value, approx_count} objects, sorted by
+                        // count descending, truncated to k.
+                        let top = mg.top();
+                        let take = k.unwrap_or(mg.k).min(top.len());
+                        let arr: alloc::vec::Vec<serde_json::Value> = top
+                            .into_iter()
+                            .take(take)
+                            .map(|(v, c)| serde_json::json!({"value": v, "approx_count": c}))
+                            .collect();
+                        SqlValue::Text(serde_json::to_string(&arr)
+                            .unwrap_or_else(|_| "[]".to_string()))
                     }
                     _ => SqlValue::Null,
                 })

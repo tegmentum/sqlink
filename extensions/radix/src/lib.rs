@@ -33,6 +33,7 @@ mod wasm_export {
     const FID_CHANGE: u64 = 3;
     const FID_DIGITS: u64 = 4;
     const FID_BITS: u64 = 5;
+    const FID_CONV: u64 = 6;  // MySQL alias of radix_change
 
     struct Ext;
 
@@ -158,6 +159,7 @@ mod wasm_export {
                     s(FID_CHANGE, "radix_change", 3, det),
                     s(FID_DIGITS, "radix_digits", 2, det),
                     s(FID_BITS, "radix_bits", 1, det),
+                    s(FID_CONV, "conv", 3, det),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -165,6 +167,7 @@ mod wasm_export {
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }
@@ -206,6 +209,22 @@ mod wasm_export {
                 FID_BITS => {
                     let n = arg_int(&args, 0, "radix_bits")?;
                     Ok(SqlValue::Integer(bits(n) as i64))
+                }
+                FID_CONV => {
+                    // MySQL CONV(N, from, to): N may be TEXT or
+                    // INTEGER; result is uppercase TEXT.
+                    let s = match args.first() {
+                        Some(SqlValue::Text(t)) => t.clone(),
+                        Some(SqlValue::Integer(n)) => n.to_string(),
+                        Some(SqlValue::Real(r)) => (*r as i64).to_string(),
+                        _ => return Err("conv: missing arg".to_string()),
+                    };
+                    let from = arg_int(&args, 1, "conv")? as u32;
+                    let to = arg_int(&args, 2, "conv")? as u32;
+                    Ok(from_base(&s, from)
+                        .and_then(|n| to_base(n, to))
+                        .map(|s| SqlValue::Text(s.to_uppercase()))
+                        .unwrap_or(SqlValue::Null))
                 }
                 other => Err(format!("radix: unknown func id {other}")),
             }

@@ -878,8 +878,8 @@ PRECOMPILE_IN := target/wasm32-wasip2/release/sqlite_cli.component.wasm
 PRECOMPILE_OUT := target/wasm32-wasip2/release/sqlite_cli.component.cwasm
 precompile-cli: $(PRECOMPILE_OUT)
 
-$(PRECOMPILE_OUT): $(PRECOMPILE_IN) target/release/sqlite-wasm-run
-	@./target/release/sqlite-wasm-run precompile $(PRECOMPILE_IN) $(PRECOMPILE_OUT)
+$(PRECOMPILE_OUT): $(PRECOMPILE_IN) target/release/sqlink
+	@./target/release/sqlink precompile $(PRECOMPILE_IN) $(PRECOMPILE_OUT)
 
 ext-check-snippets:
 	@python3 tooling/check-snippets.py

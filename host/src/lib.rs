@@ -138,6 +138,27 @@ pub mod loaded_stateful {
     });
 }
 
+/// Used when a loaded extension declares one or more dot commands
+/// in its manifest. The `dotcmd-aware` world adds `cli-stdout`,
+/// `cli-stderr`, `cli-state` host imports and the `dot-command`
+/// export. Shares the rest of the minimal surface via `with:`.
+pub mod loaded_dotcmd_aware {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "dotcmd-aware",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "sqlite:extension/types":   super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":  super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+        },
+    });
+}
+
 /// Used when a loaded extension declares custom collations. The
 /// `collating` world is minimal + `collation` export — same import
 /// surface as `loaded`, plus the `compare` callback. Shares types
@@ -766,6 +787,7 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
                 batched: v.batched,
             })
             .collect(),
+        dot_commands: vec![],
         has_authorizer: ext.has_authorizer,
         has_update_hook: ext.has_update_hook,
         has_commit_hook: ext.has_commit_hook,
@@ -871,6 +893,15 @@ pub struct LoadedExtension {
     /// shape as `cached_minimal_http`; populated lazily on first
     /// dispatch for extensions declaring `capability::dns`.
     pub cached_minimal_dns: Arc<tokio::sync::Mutex<Option<CachedMinimalDns>>>,
+    /// Dot-command specs declared in the manifest. The cli's
+    /// repl dispatcher walks this on every `.NAME` parse to
+    /// route the call into the extension's `dot-command.invoke`.
+    pub dot_commands: Vec<DotCommandEntry>,
+    /// Cached `dotcmd-aware`-world (Store, Instance) for dot-cmd
+    /// dispatch. Built lazily on first `.NAME` against this
+    /// extension; persists for the cli session.
+    pub cached_dotcmd_aware:
+        Arc<tokio::sync::Mutex<Option<CachedDotcmdAware>>>,
 }
 
 /// Which cached Store should handle a scalar call. See
@@ -938,6 +969,17 @@ pub struct CachedMinimalHttp {
 pub struct CachedMinimalDns {
     pub store: wasmtime::Store<LoadedState>,
     pub instance: loaded_minimal_dns::MinimalDns,
+}
+
+/// Long-lived `DotcmdAware`-world instance backing dot-command
+/// dispatch for extensions that register one or more dot
+/// commands. Same pattern as the other cached worlds  one
+/// instance per extension, serialized by `TokioMutex` so
+/// concurrent `.foo` calls on different extensions don't
+/// trample each other's wasm linear memory.
+pub struct CachedDotcmdAware {
+    pub store: wasmtime::Store<LoadedState>,
+    pub instance: loaded_dotcmd_aware::DotcmdAware,
 }
 
 /// State carried by the per-call Store when dispatching into a
@@ -1240,7 +1282,7 @@ fn spi_ensure_open(
         return Err(loaded::sqlite::extension::types::SqliteError {
             code: 1,
             extended_code: 1,
-            message: "spi requires a file-backed database. Pass --db <path> to sqlite-wasm-run; \
+            message: "spi requires a file-backed database. Pass --db <path> to sqlink; \
                  :memory: dbs aren't shareable between the cli's wasm-internal sqlite3 \
                  instance and the host's sqlite3 instance (separate libraries with \
                  separate page caches even though they run in one process)."
@@ -1439,6 +1481,62 @@ impl loaded::sqlite::extension::config::Host for LoadedState {
     }
     async fn extension_version(&mut self) -> String {
         String::from("0.1.0")
+    }
+}
+
+// ─────────── dotcmd-aware imports ────────────────────────
+//
+// V1 implementation:
+// - cli-stdout / cli-stderr write straight to the host process's
+//   stdout/stderr. The cli's `.output FILE` redirection is NOT
+//   wired here yet  see PLAN-dotcmd-plugins.md Phase 1.5/3 for
+//   the cli-state-driven router.
+// - cli-state returns empty/zero across the board. Phase 2 wires
+//   in the cli's actual session snapshot.
+
+impl loaded_dotcmd_aware::sqlite::extension::cli_stdout::Host for LoadedState {
+    async fn write(&mut self, text: String) {
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(text.as_bytes());
+    }
+    async fn flush(&mut self) {
+        use std::io::Write;
+        let _ = std::io::stdout().flush();
+    }
+    async fn row_end(&mut self) {
+        use std::io::Write;
+        let _ = std::io::stdout().write_all(b"\n");
+    }
+}
+
+impl loaded_dotcmd_aware::sqlite::extension::cli_stderr::Host for LoadedState {
+    async fn write(&mut self, text: String) {
+        use std::io::Write;
+        let _ = std::io::stderr().write_all(text.as_bytes());
+    }
+}
+
+impl loaded_dotcmd_aware::sqlite::extension::cli_state::Host for LoadedState {
+    async fn get_text(&mut self, _key: String) -> String {
+        String::new()
+    }
+    async fn get_int(&mut self, _key: String) -> i64 {
+        0
+    }
+    async fn get_bool(&mut self, _key: String) -> bool {
+        false
+    }
+    async fn get_real(&mut self, _key: String) -> f64 {
+        0.0
+    }
+    async fn get_value(
+        &mut self,
+        _key: String,
+    ) -> loaded::sqlite::extension::types::SqlValue {
+        loaded::sqlite::extension::types::SqlValue::Null
+    }
+    async fn list_keys(&mut self, _prefix: String) -> Vec<String> {
+        Vec::new()
     }
 }
 
@@ -1684,6 +1782,38 @@ fn make_loaded_stateful_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
         |state| state,
     )
     .map_err(|e| anyhow!("loaded-ext bootstrap dns: {e}"))?;
+    // Same rationale for dotcmd-aware imports  bootstrap linker
+    // resolves describe() of any extension that imports them.
+    loaded_dotcmd_aware::sqlite::extension::cli_stdout::add_to_linker::<_, LoadedHostData>(
+        &mut linker,
+        |state| state,
+    )
+    .map_err(|e| anyhow!("loaded-ext bootstrap cli-stdout: {e}"))?;
+    loaded_dotcmd_aware::sqlite::extension::cli_stderr::add_to_linker::<_, LoadedHostData>(
+        &mut linker,
+        |state| state,
+    )
+    .map_err(|e| anyhow!("loaded-ext bootstrap cli-stderr: {e}"))?;
+    loaded_dotcmd_aware::sqlite::extension::cli_state::add_to_linker::<_, LoadedHostData>(
+        &mut linker,
+        |state| state,
+    )
+    .map_err(|e| anyhow!("loaded-ext bootstrap cli-state: {e}"))?;
+    Ok(linker)
+}
+
+/// Build a Linker pre-wired for a `dotcmd-aware`-world loaded
+/// extension: minimal + cli-stdout/stderr/state imports. Used
+/// when the manifest carries non-empty `dot_commands`.
+fn make_loaded_dotcmd_aware_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+    let mut linker: Linker<LoadedState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
+    loaded_dotcmd_aware::DotcmdAware::add_to_linker::<_, LoadedHostData>(
+        &mut linker,
+        |state| state,
+    )
+    .map_err(|e| anyhow!("loaded-ext dotcmd-aware: {e}"))?;
     Ok(linker)
 }
 
@@ -1854,6 +1984,18 @@ pub struct AggregateFunctionEntry {
 pub struct CollationEntry {
     pub id: u64,
     pub name: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct DotCommandEntry {
+    pub id: u64,
+    pub name: String,
+    pub version: String,
+    pub summary: String,
+    pub usage: String,
+    pub help: String,
+    pub requires_write: bool,
+    pub no_args: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -2425,7 +2567,7 @@ impl Host {
     /// the registration.
     ///
     /// The sync entry point is suitable for non-async callers
-    /// (sqlite-wasm-run's main routine, etc.). Async callers
+    /// (sqlink's main routine, etc.). Async callers
     /// already inside a tokio runtime should use
     /// `register_wasm_provider_in_async` to avoid nesting
     /// runtimes.
@@ -2741,7 +2883,7 @@ impl Host {
         self.components.clone()
     }
 
-    /// Set the database path the cli is using. Called by sqlite-wasm-run
+    /// Set the database path the cli is using. Called by sqlink
     /// before instantiating the component; loaded extensions' spi.execute
     /// reads this when opening their own core::db connection.
     pub fn set_db_path(&self, path: &str) {
@@ -2841,7 +2983,9 @@ impl Host {
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
-        };
+
+            dot_commands: Vec::new(),
+            cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),        };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
             .await
@@ -3055,7 +3199,9 @@ impl Host {
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
-        };
+
+            dot_commands: Vec::new(),
+            cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),        };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
             .await
@@ -3149,6 +3295,20 @@ impl Host {
                 batched: v.batched,
             })
             .collect();
+        let dot_commands: Vec<DotCommandEntry> = manifest
+            .dot_commands
+            .iter()
+            .map(|d| DotCommandEntry {
+                id: d.id,
+                name: d.name.clone(),
+                version: d.version.clone(),
+                summary: d.summary.clone(),
+                usage: d.usage.clone(),
+                help: d.help.clone(),
+                requires_write: d.requires_write,
+                no_args: d.no_args,
+            })
+            .collect();
         self.components.write().insert(
             name.clone(),
             Arc::new(LoadedExtension {
@@ -3168,15 +3328,80 @@ impl Host {
                 cache: Arc::new(Mutex::new(HashMap::new())),
                 spi_conn: Arc::new(Mutex::new(None)),
                 cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_tabular_mutating: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
+                cached_tabular_mutating: Arc::new(tokio::sync::Mutex::new(None)),
+                cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
+                cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
+                cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
+                cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
+                dot_commands,
+                cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),
             }),
         );
 
         Ok(name)
+    }
+
+    /// Dispatch a dot command by name. Walks every loaded
+    /// extension looking for one whose manifest declared the
+    /// name; instantiates the dotcmd-aware world if not
+    /// already cached, then calls `dot-command.invoke(func_id,
+    /// args)`. Streamed output (via cli-stdout.write) goes
+    /// directly to the host's stdout during the call; the
+    /// returned String is the trailing text from
+    /// invoke-result.text.
+    pub async fn dispatch_dot_command(
+        &self,
+        name: &str,
+        args: &str,
+    ) -> Result<String> {
+        // Find the extension whose manifest registers `name`.
+        let (ext_arc, func_id) = {
+            let components = self.components.read();
+            let mut found = None;
+            for (_, ext) in components.iter() {
+                if let Some(dc) = ext.dot_commands.iter().find(|d| d.name == name) {
+                    found = Some((ext.clone(), dc.id));
+                    break;
+                }
+            }
+            found.ok_or_else(|| anyhow!("no dot-command named {name:?}"))?
+        };
+
+        // Lazy-instantiate the dotcmd-aware cached store on first
+        // call against this extension.
+        let cached_arc = ext_arc.cached_dotcmd_aware.clone();
+        let mut guard = cached_arc.lock_owned().await;
+        if guard.is_none() {
+            let linker = make_loaded_dotcmd_aware_linker(&self.engine)?;
+            let mut store = build_loaded_store(&self.engine, &ext_arc, self.db_path())?;
+            let instance = loaded_dotcmd_aware::DotcmdAware::instantiate_async(
+                &mut store,
+                &ext_arc.component,
+                &linker,
+            )
+            .await
+            .map_err(|e| anyhow!("instantiate dotcmd-aware: {e}"))?;
+            *guard = Some(CachedDotcmdAware { store, instance });
+        }
+        let cached = guard.as_mut().unwrap();
+        refresh_call_budget(&mut cached.store, &ext_arc)?;
+
+        let ctx = loaded_dotcmd_aware::exports::sqlite::extension::dot_command::InvokeContext {
+            args: args.to_string(),
+            interactive: true,
+            display_mode: String::from("list"),
+            bail_on_error: false,
+        };
+        let result = cached
+            .instance
+            .sqlite_extension_dot_command()
+            .call_invoke(&mut cached.store, func_id, &ctx)
+            .await
+            .map_err(|e| anyhow!("dot-command.invoke trap: {e}"))?;
+        match result {
+            Ok(r) => Ok(r.text),
+            Err(e) => Err(anyhow!("{}: {}", e.code, e.message)),
+        }
     }
 
     /// Invoke a scalar function on a previously-loaded extension.
@@ -4789,6 +5014,23 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         String::new()
     }
 
+    async fn dispatch_dot_command(
+        &mut self,
+        _name: String,
+        _args: String,
+    ) -> std::result::Result<String, LoaderError> {
+        Err(loader_stub_err("dispatch-dot-command"))
+    }
+
+    async fn load_extension_from_bytes(
+        &mut self,
+        _name_hint: String,
+        _bytes: Vec<u8>,
+        _options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<Manifest, LoaderError> {
+        Err(loader_stub_err("load-extension-from-bytes"))
+    }
+
     async fn describe_extension(
         &mut self,
         _path: String,
@@ -5892,6 +6134,45 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             .get(&name)
             .map(|e| e.digest.clone())
             .unwrap_or_default()
+    }
+
+    async fn load_extension_from_bytes(
+        &mut self,
+        name_hint: String,
+        bytes: Vec<u8>,
+        options: bindings::sqlite::extension::policy::LoadOptions,
+    ) -> std::result::Result<Manifest, LoaderError> {
+        let policy = policy_from_load_options(&options);
+        let name = self
+            .host
+            .load_extension_from_bytes(bytes, &name_hint, policy)
+            .await
+            .map_err(|e| LoaderError {
+                code: 1,
+                message: e.to_string(),
+            })?;
+        let components = self.host.components.read();
+        let ext = components
+            .get(&name)
+            .ok_or_else(|| LoaderError {
+                code: 1,
+                message: format!("load-from-bytes succeeded but {name} not in registry"),
+            })?;
+        Ok(manifest_for_ext(ext))
+    }
+
+    async fn dispatch_dot_command(
+        &mut self,
+        name: String,
+        args: String,
+    ) -> std::result::Result<String, LoaderError> {
+        self.host
+            .dispatch_dot_command(&name, &args)
+            .await
+            .map_err(|e| LoaderError {
+                code: if e.to_string().contains("no dot-command") { 404 } else { 500 },
+                message: e.to_string(),
+            })
     }
 
     async fn describe_extension(

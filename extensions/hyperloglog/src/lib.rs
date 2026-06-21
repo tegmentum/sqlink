@@ -233,6 +233,7 @@ mod wasm_export {
     const FID_MERGE: u64 = 2;
     const FID_VERSION: u64 = 3;
     const FID_HLL_AGG: u64 = 100;
+    const FID_APPROX_COUNT_DISTINCT: u64 = 101;  // hll() then cardinality at finalize
 
     thread_local! {
         static CTX: RefCell<HashMap<u64, Vec<u8>>> = RefCell::new(HashMap::new());
@@ -265,12 +266,16 @@ mod wasm_export {
                     s(FID_MERGE, "hll_merge", 2, det),
                     s(FID_VERSION, "hll_version", 0, nd),
                 ],
-                aggregate_functions: alloc::vec![a(FID_HLL_AGG, "hll", 1)],
+                aggregate_functions: alloc::vec![
+                    a(FID_HLL_AGG, "hll", 1),
+                    a(FID_APPROX_COUNT_DISTINCT, "approx_count_distinct", 1),
+                ],
                 collations: alloc::vec![],
                 vtabs: alloc::vec![],
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }
@@ -323,7 +328,7 @@ mod wasm_export {
             if matches!(args.first(), Some(SqlValue::Null) | None) {
                 return Ok(());
             }
-            if func_id != FID_HLL_AGG {
+            if func_id != FID_HLL_AGG && func_id != FID_APPROX_COUNT_DISTINCT {
                 return Err(format!("hll: bad agg func id {func_id}"));
             }
             let bytes = val_bytes(&args[0]);
@@ -335,14 +340,16 @@ mod wasm_export {
             Ok(())
         }
         fn finalize(func_id: u64, context_id: u64) -> Result<SqlValue, String> {
-            if func_id != FID_HLL_AGG {
+            if func_id != FID_HLL_AGG && func_id != FID_APPROX_COUNT_DISTINCT {
                 return Err(format!("hll: bad agg func id {func_id}"));
             }
             CTX.with(|m| {
                 let acc = m.borrow_mut().remove(&context_id);
-                Ok(match acc {
-                    Some(v) => SqlValue::Blob(v),
-                    None => SqlValue::Blob(super::empty_state()),
+                let state = acc.unwrap_or_else(super::empty_state);
+                Ok(if func_id == FID_APPROX_COUNT_DISTINCT {
+                    SqlValue::Integer(super::cardinality(&state) as i64)
+                } else {
+                    SqlValue::Blob(state)
                 })
             })
         }

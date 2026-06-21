@@ -5,7 +5,7 @@
 //!
 //!   - `SqliteRuntime` — host shim that dispatches CBOR-encoded
 //!     methods to the cli's shared `core::db::Connection`. Built-in;
-//!     wired by sqlite-wasm-run automatically.
+//!     wired by sqlink automatically.
 //!   - `WasmComponent` — bytes of a `dynlink-provider`-world wasm
 //!     component. Each invoke instantiates the component in a
 //!     fresh Store and calls `endpoint.handle`. Registered via the

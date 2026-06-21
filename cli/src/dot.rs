@@ -49,10 +49,9 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
     Some(match cmd {
         ".help" => cmd_help(),
         ".show" => cmd_show(),
-        ".tables" => cmd_tables(arg, conn),
-        ".schema" => cmd_schema(arg, conn),
-        ".indexes" => cmd_indexes(arg, conn),
-        ".databases" => cmd_databases(conn),
+        // .tables / .schema  routed through core-dotcmd registry.
+        // .indexes  routed through the registry (core-dotcmd).
+        // .databases  routed through core-dotcmd registry.
         ".headers" => cmd_headers(arg),
         ".mode" => cmd_mode(arg),
         ".nullvalue" => cmd_nullvalue(arg),
@@ -61,7 +60,14 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".prompt" => cmd_prompt(arg),
         ".print" => format!("{arg}\n"),
         ".bail" => cmd_bail(arg),
-        ".version" => cmd_version(),
+        // .version is now provided by the `core-dotcmd` extension
+        // (extensions/core-dotcmd). Phase 2 of PLAN-dotcmd-plugins.md
+        // ports built-ins to the registry one at a time. When the
+        // user loads core-dotcmd (or auto-load lands in Phase 2.5),
+        // `.version` resolves through the loader fallthrough in
+        // lib.rs. Without it loaded the user sees "Unknown command:
+        // .version"  preferred over silently shadowing the new
+        // registry surface.
         ".width" => cmd_width(arg),
         ".changes" => cmd_changes(arg),
         ".timer" => cmd_timer(arg),
@@ -70,15 +76,15 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".eqp" => cmd_eqp(arg),
         ".stats" => cmd_stats(arg),
         ".parameter" => cmd_parameter(arg),
-        ".fullschema" => cmd_fullschema(conn),
-        ".dbinfo" => cmd_dbinfo(arg, conn),
+        // .fullschema  routed through core-dotcmd registry.
+        // .dbinfo  routed through the registry (core-dotcmd).
         ".dbconfig" => cmd_dbconfig(arg, conn),
         ".limit" => cmd_limit(arg, conn),
         ".binary" => cmd_binary(arg),
         // .log handled in lib.rs (the callback lives there, and
         // it depends on the install-time wiring done before
         // sqlite3 initialized).
-        ".lint" => cmd_lint(arg, conn),
+        // .lint  routed through core-dotcmd registry.
         ".sha3sum" => cmd_sha3sum(arg, conn),
         ".vfslist" => cmd_vfslist(),
         ".vfsname" => cmd_vfsname(arg, conn),

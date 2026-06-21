@@ -232,6 +232,166 @@ pub fn json_insert(args: &[Arg]) -> Result<Out, String> {
     apply_path_value_pairs(args, "json_insert", false, true)
 }
 
+/// `json_array_append(json, path, value[, path, value...])`  PG-style
+/// append-to-array at each `path`. If the target node is not an
+/// array, it is wrapped in a singleton array first (PG behaviour
+/// with `jsonb_set` + create_missing). Path must exist.
+pub fn json_array_append(args: &[Arg]) -> Result<Out, String> {
+    if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
+        return Err("json_array_append: arg count must be json + (path, value)*".to_string());
+    }
+    let json_text = expect_text(args, 0, "json_array_append")?;
+    let mut root: Value = serde_json::from_str(json_text)
+        .map_err(|e| format!("json_array_append: malformed JSON: {e}"))?;
+    let mut i = 1;
+    while i < args.len() {
+        let p = expect_text(args, i, "json_array_append")?;
+        let segs = path::parse(p)
+            .map_err(|e| format!("json_array_append: bad path: {e}"))?;
+        let value = arg_to_value(&args[i + 1]);
+        let node = path::resolve_mut(&mut root, &segs)
+            .ok_or_else(|| format!("json_array_append: path {p} not found"))?;
+        if let Value::Array(arr) = node {
+            arr.push(value);
+        } else {
+            // Wrap the scalar into an array then append.
+            let existing = core::mem::replace(node, Value::Null);
+            *node = Value::Array(alloc::vec![existing, value]);
+        }
+        i += 2;
+    }
+    Ok(Out::Text(root.to_string()))
+}
+
+/// `json_array_insert(json, path, value[, path, value...])`  inserts
+/// a value at a 0-based array index encoded by the final `[N]`
+/// segment of `path`. Shifts subsequent elements right.
+pub fn json_array_insert(args: &[Arg]) -> Result<Out, String> {
+    if args.len() < 3 || !(args.len() - 1).is_multiple_of(2) {
+        return Err("json_array_insert: arg count must be json + (path, value)*".to_string());
+    }
+    let json_text = expect_text(args, 0, "json_array_insert")?;
+    let mut root: Value = serde_json::from_str(json_text)
+        .map_err(|e| format!("json_array_insert: malformed JSON: {e}"))?;
+    let mut i = 1;
+    while i < args.len() {
+        let p = expect_text(args, i, "json_array_insert")?;
+        let segs = path::parse(p)
+            .map_err(|e| format!("json_array_insert: bad path: {e}"))?;
+        if segs.is_empty() {
+            return Err("json_array_insert: path must end at an array index".to_string());
+        }
+        let (last, parent_segs) = segs.split_last().unwrap();
+        let idx = match last {
+            path::Segment::Index(n) => *n,
+            _ => return Err("json_array_insert: final path segment must be [N]".to_string()),
+        };
+        let value = arg_to_value(&args[i + 1]);
+        let node = path::resolve_mut(&mut root, parent_segs)
+            .ok_or_else(|| format!("json_array_insert: path {p} parent not found"))?;
+        if let Value::Array(arr) = node {
+            let pos = (idx.max(0) as usize).min(arr.len());
+            arr.insert(pos, value);
+        } else {
+            return Err(format!("json_array_insert: path {p} parent is not an array"));
+        }
+        i += 2;
+    }
+    Ok(Out::Text(root.to_string()))
+}
+
+/// SQL/JSON `json_value(json, path)`  return the SCALAR value at
+/// `path`, or NULL if path missing / target is an array/object.
+pub fn json_value(args: &[Arg]) -> Result<Out, String> {
+    if args.len() < 2 { return Err("json_value: needs json + path".to_string()); }
+    let json_text = expect_text(args, 0, "json_value")?;
+    let p = expect_text(args, 1, "json_value")?;
+    let root: Value = serde_json::from_str(json_text)
+        .map_err(|e| format!("json_value: malformed JSON: {e}"))?;
+    let segs = path::parse(p)
+        .map_err(|e| format!("json_value: bad path: {e}"))?;
+    let Some(v) = path::resolve(&root, &segs) else {
+        return Ok(Out::Null);
+    };
+    Ok(match v {
+        Value::Null => Out::Null,
+        Value::Bool(b) => Out::Integer(if *b { 1 } else { 0 }),
+        Value::Number(n) => {
+            if let Some(i) = n.as_i64() { Out::Integer(i) }
+            else if let Some(f) = n.as_f64() { Out::Real(f) }
+            else { Out::Null }
+        }
+        Value::String(s) => Out::Text(s.clone()),
+        // Array/object aren't scalars  json_value returns NULL.
+        Value::Array(_) | Value::Object(_) => Out::Null,
+    })
+}
+
+/// SQL/JSON `json_query(json, path)`  return the OBJECT or ARRAY
+/// value at `path` as a JSON-encoded string. NULL if path missing
+/// or target is a scalar.
+pub fn json_query(args: &[Arg]) -> Result<Out, String> {
+    if args.len() < 2 { return Err("json_query: needs json + path".to_string()); }
+    let json_text = expect_text(args, 0, "json_query")?;
+    let p = expect_text(args, 1, "json_query")?;
+    let root: Value = serde_json::from_str(json_text)
+        .map_err(|e| format!("json_query: malformed JSON: {e}"))?;
+    let segs = path::parse(p)
+        .map_err(|e| format!("json_query: bad path: {e}"))?;
+    let Some(v) = path::resolve(&root, &segs) else {
+        return Ok(Out::Null);
+    };
+    Ok(match v {
+        Value::Array(_) | Value::Object(_) => Out::Text(v.to_string()),
+        // Scalars aren't queryable structures  return NULL.
+        _ => Out::Null,
+    })
+}
+
+/// SQL/JSON `json_exists(json, path)`  1 if path resolves to any
+/// value (including null), 0 otherwise.
+pub fn json_exists(args: &[Arg]) -> Result<Out, String> {
+    if args.len() < 2 { return Err("json_exists: needs json + path".to_string()); }
+    let json_text = expect_text(args, 0, "json_exists")?;
+    let p = expect_text(args, 1, "json_exists")?;
+    let root: Value = serde_json::from_str(json_text)
+        .map_err(|e| format!("json_exists: malformed JSON: {e}"))?;
+    let segs = path::parse(p)
+        .map_err(|e| format!("json_exists: bad path: {e}"))?;
+    Ok(Out::Integer(if path::resolve(&root, &segs).is_some() { 1 } else { 0 }))
+}
+
+/// `json_keys(json[, path])`  array of keys at the object found
+/// at `path` (defaults to `$`). NULL if the target isn't an object.
+pub fn json_keys(args: &[Arg]) -> Result<Out, String> {
+    if args.is_empty() {
+        return Err("json_keys: needs JSON arg".to_string());
+    }
+    let json_text = expect_text(args, 0, "json_keys")?;
+    let root: Value = serde_json::from_str(json_text)
+        .map_err(|e| format!("json_keys: malformed JSON: {e}"))?;
+    let target = if args.len() > 1 {
+        let p = expect_text(args, 1, "json_keys")?;
+        let segs = path::parse(p)
+            .map_err(|e| format!("json_keys: bad path: {e}"))?;
+        match path::resolve(&root, &segs) {
+            Some(v) => v.clone(),
+            None => return Ok(Out::Null),
+        }
+    } else {
+        root
+    };
+    match target {
+        Value::Object(map) => {
+            let keys: alloc::vec::Vec<Value> = map.keys()
+                .map(|k| Value::String(k.clone()))
+                .collect();
+            Ok(Out::Text(Value::Array(keys).to_string()))
+        }
+        _ => Ok(Out::Null),
+    }
+}
+
 fn apply_path_value_pairs(
     args: &[Arg],
     name: &str,

@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import os
 import pathlib
 import re
@@ -374,17 +375,41 @@ def init_db(db_path: pathlib.Path) -> sqlite3.Connection:
     return conn
 
 
+def load_upstream_urls() -> dict:
+    """Load the curated name -> upstream URL map for shipped extensions.
+
+    The file lives at provenance/upstream-urls.json. Keys starting with
+    underscore are treated as section dividers / comments and ignored.
+    Missing entries leave plugin.upstream_url as NULL  the per-extension
+    page hides the "upstream" row when empty."""
+    path = REPO_ROOT / "provenance" / "upstream-urls.json"
+    if not path.exists():
+        return {}
+    try:
+        data = json.loads(path.read_text())
+    except Exception as e:
+        print(f"warning: upstream-urls.json failed to parse: {e}", file=sys.stderr)
+        return {}
+    return {k: v for k, v in data.items() if not k.startswith("_") and isinstance(v, str)}
+
+
+_UPSTREAM_URLS = load_upstream_urls()
+
+
 def upsert_plugin(conn: sqlite3.Connection, info: dict, commit_sha: Optional[str]) -> None:
     cur = conn.cursor()
+    upstream_url = _UPSTREAM_URLS.get(info["name"])
     cur.execute(
-        "INSERT INTO plugin(name, kind, path, description, declared_world, notes) "
-        "VALUES (?, ?, ?, ?, ?, NULL) "
+        "INSERT INTO plugin(name, kind, path, description, declared_world, upstream_url, notes) "
+        "VALUES (?, ?, ?, ?, ?, ?, NULL) "
         "ON CONFLICT(name) DO UPDATE SET "
         "  kind=excluded.kind, "
         "  path=excluded.path, "
         "  description=excluded.description, "
-        "  declared_world=excluded.declared_world",
-        (info["name"], info["kind"], info["path"], info["description"], info["declared_world"]),
+        "  declared_world=excluded.declared_world, "
+        "  upstream_url=excluded.upstream_url",
+        (info["name"], info["kind"], info["path"], info["description"],
+         info["declared_world"], upstream_url),
     )
     cur.execute("SELECT id FROM plugin WHERE name = ?", (info["name"],))
     plugin_id = cur.fetchone()[0]

@@ -13,7 +13,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 wrapper="$repo_root/sqlite-wasm"
 component="$repo_root/target/wasm32-wasip2/release/sqlite_cli.component.wasm"
-runner="$repo_root/target/debug/sqlite-wasm-run"
+runner="$repo_root/target/debug/sqlink"
 
 if [[ ! -f "$component" ]]; then
     echo "skipping: $component not built"

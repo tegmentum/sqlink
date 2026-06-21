@@ -18,3 +18,4 @@ INSERT INTO xy VALUES (2,1),(4,2),(6,3),(8,4),(10,5);
 SELECT regr_slope(y, x) FROM xy;
 SELECT regr_intercept(y, x) FROM xy;
 SELECT regr_r2(y, x) FROM xy;
+

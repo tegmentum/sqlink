@@ -1,0 +1,19 @@
+[package]
+name = "greet-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Hello-world dot-command extension. Registers a single .greet NAME command that writes "hello NAME" to cli-stdout. Demonstrates the dotcmd-aware world from PLAN-dotcmd-plugins.md Phase 1.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# add your upstream crate deps here

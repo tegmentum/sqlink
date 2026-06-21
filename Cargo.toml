@@ -34,6 +34,8 @@ exclude = [
     "extensions/color",
     "extensions/formats",
     "extensions/iban",
+    "extensions/sys-compat",
+    "extensions/list",
 ]
 
 # `cargo build` / `cargo test` at the workspace root operate on

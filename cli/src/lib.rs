@@ -3,7 +3,7 @@
 //! Targets the `sqlite-cli-command` world: exports `wasi:cli/run`,
 //! imports the host-side extension-loader + dispatch surfaces. Any
 //! wasi:p2 host (`wasmtime run`, `jco`, the in-browser polyfill,
-//! `sqlite-wasm-run`) can drive it — the component owns its own
+//! `sqlink`) can drive it — the component owns its own
 //! REPL via `wasi:cli/stdin` and `wasi:cli/stdout`.
 //!
 //! SQLite comes from `libsqlite3-sys` (bundled `sqlite3.c` compiled
@@ -119,11 +119,104 @@ fn ensure_cli_conn() {
             // on the hot path for these scalars.
             if let Some(ref conn) = opened {
                 unsafe { register_embedded_extensions(conn.raw_handle()) };
+                unsafe { register_dotcmd_sql_surface(conn.raw_handle()) };
                 unsafe { apply_cli_pragmas(conn.raw_handle()) };
             }
             *g = opened;
         }
     });
+}
+
+/// Phase 1.5 SQL surface for dot commands. Registers
+/// `dot_command(name [, arg1, arg2, ...])` as a variadic
+/// SQL scalar that calls
+/// `extension_loader::dispatch_dot_command(name, args.join(' '))`
+/// and returns the resulting TEXT. Errors on a 404 produce
+/// SQL NULL; other errors raise as a sqlite3 error so the user
+/// sees them in result-set rendering.
+///
+/// Same dispatcher as the shell and argv entry points; this is
+/// just a third front-end over the same contract.
+unsafe fn register_dotcmd_sql_surface(db: *mut libsqlite3_sys::sqlite3) {
+    use core::ffi::{c_char, c_int, c_void};
+    use bindings::sqlite::wasm::extension_loader;
+
+    extern "C" fn xfunc(
+        ctx: *mut libsqlite3_sys::sqlite3_context,
+        argc: core::ffi::c_int,
+        argv: *mut *mut libsqlite3_sys::sqlite3_value,
+    ) {
+        if argc < 1 {
+            unsafe {
+                let msg = b"dot_command: needs at least 1 arg (name)\0".as_ptr() as *const c_char;
+                libsqlite3_sys::sqlite3_result_error(ctx, msg, -1);
+            }
+            return;
+        }
+        let name = unsafe {
+            let p = libsqlite3_sys::sqlite3_value_text(*argv);
+            if p.is_null() { String::new() }
+            else {
+                let len = libsqlite3_sys::sqlite3_value_bytes(*argv) as usize;
+                let bytes = std::slice::from_raw_parts(p, len);
+                String::from_utf8_lossy(bytes).into_owned()
+            }
+        };
+        // Concat remaining args (TEXT-coerced) with a single space.
+        let mut joined = String::new();
+        for i in 1..argc {
+            let p = unsafe { libsqlite3_sys::sqlite3_value_text(*argv.add(i as usize)) };
+            if !p.is_null() {
+                let len = unsafe {
+                    libsqlite3_sys::sqlite3_value_bytes(*argv.add(i as usize))
+                } as usize;
+                let bytes = unsafe { std::slice::from_raw_parts(p, len) };
+                if !joined.is_empty() { joined.push(' '); }
+                joined.push_str(&String::from_utf8_lossy(bytes));
+            }
+        }
+        match extension_loader::dispatch_dot_command(&name, &joined) {
+            Ok(text) => {
+                let cs = std::ffi::CString::new(text).unwrap_or_default();
+                let bytes = cs.as_bytes_with_nul();
+                unsafe {
+                    libsqlite3_sys::sqlite3_result_text(
+                        ctx,
+                        bytes.as_ptr() as *const c_char,
+                        (bytes.len() - 1) as c_int,
+                        libsqlite3_sys::SQLITE_TRANSIENT(),
+                    );
+                }
+            }
+            Err(e) if e.code == 404 => {
+                unsafe { libsqlite3_sys::sqlite3_result_null(ctx) };
+            }
+            Err(e) => {
+                let cs = std::ffi::CString::new(format!(
+                    "dot_command({name}): {} ({})", e.message, e.code
+                )).unwrap_or_default();
+                unsafe {
+                    libsqlite3_sys::sqlite3_result_error(ctx, cs.as_ptr(), -1);
+                }
+            }
+        }
+    }
+
+    let name = b"dot_command\0".as_ptr() as *const c_char;
+    let rc = libsqlite3_sys::sqlite3_create_function_v2(
+        db,
+        name,
+        -1,  // variadic
+        libsqlite3_sys::SQLITE_UTF8 as c_int,
+        std::ptr::null_mut::<c_void>(),
+        Some(xfunc),
+        None,
+        None,
+        None,
+    );
+    if rc != libsqlite3_sys::SQLITE_OK {
+        eprintln!("register dot_command(): rc={rc}");
+    }
 }
 
 /// Pragmas set on every cli connection. The defaults sqlite ships
@@ -778,6 +871,21 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = vec0_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-vec0: register_into failed rc={rc}"); }
     }
+    #[cfg(feature = "embed-stdsql")]
+    {
+        let rc = stdsql_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-stdsql: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-sys-compat")]
+    {
+        let rc = sys_compat_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-sys-compat: register_into failed rc={rc}"); }
+    }
+    #[cfg(feature = "embed-list")]
+    {
+        let rc = list_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-list: register_into failed rc={rc}"); }
+    }
     #[cfg(feature = "embed-inmem")]
     {
         let rc = inmem_extension::embed::register_into(_db);
@@ -870,6 +978,76 @@ impl RunGuest for CliCommand {
         let db_path = if argv.len() > 1 { argv[1].clone() } else { String::new() };
         DB_PATH.with(|p| *p.borrow_mut() = db_path);
         ensure_cli_conn();
+
+        // Phase 2.5 auto-embed  the cli ships core-dotcmd
+        // baked into its binary via include_bytes!. Load it on
+        // first boot so the registry has the built-in surface
+        // BEFORE the user types anything. Failure is non-fatal
+        // (we degrade to "no built-in commands" rather than
+        // aborting the session).
+        embed_core_dotcmd();
+
+        // Phase 1.5 argv entry point. Argv shape:
+        //   sqlite_cli.component.wasm <db_path>
+        //       [--load FILE.wasm]* [--keep-open]
+        //       [.NAME args...]
+        //
+        // The `--load` flag pre-loads zero or more wasm extension
+        // components (each gets turned into a synthesized
+        // `.load FILE` line). The single `.NAME` that follows
+        // (terminated by EOL) is the dispatch target. With
+        // `--keep-open` the cli drops into its repl after the
+        // command completes; without it the process exits.
+        let mut keep_open = false;
+        let mut preload: Vec<String> = Vec::new();
+        let mut dot_args: Vec<&str> = Vec::new();
+        let mut dot_seen = false;
+        let mut i = 2;
+        while i < argv.len() {
+            let a = &argv[i];
+            if !dot_seen {
+                if a == "--keep-open" {
+                    keep_open = true;
+                    i += 1; continue;
+                }
+                if a == "--load" {
+                    i += 1;
+                    if i < argv.len() {
+                        preload.push(argv[i].clone());
+                    }
+                    i += 1; continue;
+                }
+                if a.starts_with('.') {
+                    dot_seen = true;
+                    dot_args.push(a.as_str());
+                    i += 1; continue;
+                }
+            } else {
+                dot_args.push(a.as_str());
+            }
+            i += 1;
+        }
+        for path in &preload {
+            let line = format!(".load {}", path);
+            let out = eval_input(&line);
+            if !out.is_empty() {
+                let mut stdout = std::io::stdout();
+                write_output(&out, &mut stdout);
+            }
+        }
+        if dot_seen {
+            let line = dot_args.join(" ");
+            let out = eval_input(&line);
+            if !out.is_empty() {
+                let mut stdout = std::io::stdout();
+                write_output(&out, &mut stdout);
+            }
+            if !keep_open {
+                return Ok(());
+            }
+        } else if !preload.is_empty() && !keep_open {
+            return Ok(());
+        }
 
         let stdin = std::io::stdin();
         let mut stdout = std::io::stdout();
@@ -1091,7 +1269,22 @@ fn eval_input(input: &str) -> String {
         if let Some(out) = dot_out {
             return out;
         }
-        return format!("Unknown command: {trimmed}\n");
+        // No built-in matched  walk the loaded-extension registry
+        // for an extension that registered this dot command. See
+        // PLAN-dotcmd-plugins.md Phase 1 dispatcher.
+        use bindings::sqlite::wasm::extension_loader;
+        let mut parts = trimmed.splitn(2, char::is_whitespace);
+        let name = parts.next().unwrap_or("").trim_start_matches('.');
+        let args = parts.next().unwrap_or("").trim();
+        match extension_loader::dispatch_dot_command(name, args) {
+            Ok(text) => return text,
+            Err(e) if e.code == 404 => {
+                return format!("Unknown command: {trimmed}\n");
+            }
+            Err(e) => {
+                return format!("Error: {trimmed}: {} ({})\n", e.message, e.code);
+            }
+        }
     }
     eval_sql(trimmed)
 }
@@ -3058,6 +3251,49 @@ fn parse_db_file_pair(s: &str, _kind: &str) -> (String, String) {
         0 => (String::new(), String::new()),
         1 => ("main".to_string(), parts[0].to_string()),
         _ => (parts[0].to_string(), parts[1..].join(" ")),
+    }
+}
+
+/// Auto-load the built-in `core-dotcmd` extension at cli startup.
+/// The bytes are baked into the cli binary via `include_bytes!`
+/// and loaded through the same `extension-loader` API a user
+/// would hit with `.load FILE.wasm`  the registry doesn't
+/// distinguish "built-in" from "user-loaded" past this point.
+///
+/// The path is set at compile time and points at the wasm
+/// component artifact produced by `cargo build --release --
+/// target wasm32-wasip2` on `extensions/core-dotcmd`. If the
+/// file doesn't exist at compile time the include_bytes! macro
+/// raises a compile error  surfacing the missing artifact
+/// before ship rather than at runtime.
+fn embed_core_dotcmd() {
+    use bindings::sqlite::extension::policy::LoadOptions;
+    use bindings::sqlite::wasm::extension_loader;
+
+    const CORE_DOTCMD_BYTES: &[u8] = include_bytes!(
+        "../../extensions/core-dotcmd/target/wasm32-wasip2/release/core_dotcmd_extension.component.wasm"
+    );
+    let options = LoadOptions {
+        grant: Vec::new(),
+        http_policy: None,
+        dns_policy: None,
+        fs_policy: None,
+        fuel_per_call: None,
+        memory_limit_bytes: None,
+        epoch_deadline_ms: None,
+    };
+    match extension_loader::load_extension_from_bytes(
+        "core-dotcmd",
+        CORE_DOTCMD_BYTES,
+        &options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load core-dotcmd failed: {} ({}). Built-in dot commands like .version will read \"Unknown command\".",
+                e.message, e.code
+            );
+        }
     }
 }
 

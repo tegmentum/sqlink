@@ -37,6 +37,9 @@ mod wasm_export {
     const FID_UNHEX: u64 = 6;
     const FID_B64_ENC: u64 = 7;
     const FID_B64_DEC: u64 = 8;
+    const FID_SHA224: u64 = 9;
+    const FID_SHA384: u64 = 10;
+    const FID_SHA2: u64 = 11;
 
     struct CryptoExtension;
 
@@ -63,6 +66,9 @@ mod wasm_export {
                     s(FID_UNHEX, "unhex", 1),
                     s(FID_B64_ENC, "base64_encode", 1),
                     s(FID_B64_DEC, "base64_decode", 1),
+                    s(FID_SHA224, "sha224", 1),
+                    s(FID_SHA384, "sha384", 1),
+                    s(FID_SHA2, "sha2", 2),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -70,6 +76,7 @@ mod wasm_export {
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }
@@ -115,6 +122,16 @@ mod wasm_export {
                 FID_B64_DEC => {
                     let s = arg_text(arg0, "base64_decode")?;
                     SqlValue::Blob(funcs::base64_decode(s)?)
+                }
+                FID_SHA224 => SqlValue::Text(funcs::sha224(&arg_bytes(arg0))),
+                FID_SHA384 => SqlValue::Text(funcs::sha384(&arg_bytes(arg0))),
+                FID_SHA2 => {
+                    let bits = match args.get(1) {
+                        Some(SqlValue::Integer(n)) => *n,
+                        Some(SqlValue::Real(r)) => *r as i64,
+                        _ => return Err("sha2: 2nd arg must be INTEGER bit length".to_string()),
+                    };
+                    SqlValue::Text(funcs::sha2(&arg_bytes(arg0), bits)?)
                 }
                 other => return Err(alloc::format!("crypto: unknown func id {other}")),
             };

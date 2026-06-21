@@ -202,7 +202,7 @@ proposal I'm aware of as of 2026-06.
    semantics as the dropped methods, no naming lie.
 2. The dispatch-chain bridge mechanism (`LiveSpiBridge`,
    `LiveSpiRequest`, the `Store::run_concurrent` dispatcher in
-   `sqlite-wasm-run`) was torn out. The reactor's bindgen reverted
+   `sqlink`) was torn out. The reactor's bindgen reverted
    from concurrent (`async | store`) mode to plain `async`.
    `LoadedState::execute*` calls go through a pooled
    `rusqlite::Connection`.

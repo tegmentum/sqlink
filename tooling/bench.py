@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Benchmark harness  run the same SQL workload through native
-`sqlite3` and our `sqlite-wasm-run` cli, report timings and a ratio.
+`sqlite3` and our `sqlink` cli, report timings and a ratio.
 
 Each workload runs against a fresh on-disk db. Each measurement is
 taken 5x and the median is reported (one-shot timings on a JIT'd
@@ -12,7 +12,7 @@ Caveats:
   * SQLite versions differ slightly: native 3.43.x on this machine
     vs 3.53.2 in the wasm build (libsqlite3-sys 0.38.1). Expect
     minor planner differences.
-  * The wasm runtime is wasmtime via sqlite-wasm-run; component
+  * The wasm runtime is wasmtime via sqlink; component
     instantiation + WIT-bindgen marshalling are on every call,
     so small workloads will skew "wasm is much slower"  the
     constant cost dominates. Read the larger sizes to see where
@@ -41,13 +41,13 @@ from pathlib import Path
 from typing import Callable, Iterable
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-WASM_BIN = REPO_ROOT / "target" / "release" / "sqlite-wasm-run"
+WASM_BIN = REPO_ROOT / "target" / "release" / "sqlink"
 WASM_COMPONENT = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.wasm"
 # Precompiled (AOT) variant; produced by `make precompile-cli`. Loads
 # via Component::deserialize_file instead of Component::from_binary,
 # saving ~360 ms of startup per invocation.
 WASM_COMPONENT_CWASM = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli.component.cwasm"
-# Embedded variant produced by `sqlite-wasm-run compose --embed
+# Embedded variant produced by `sqlink compose --embed
 # ... [--precompile]`. Used by EMBEDDED_WORKLOADS.
 WASM_COMPONENT_EMBEDDED = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_embedded.component.wasm"
 WASM_COMPONENT_EMBEDDED_CWASM = REPO_ROOT / "target" / "wasm32-wasip2" / "release" / "sqlite_cli_embedded.component.cwasm"
@@ -220,7 +220,7 @@ def _gen_embedded_uuid_sql(n: int) -> str:
 
 def _gen_embedded_scalar_sql(n: int) -> str:
     """Same workload as ext-scalar but assumes sha3 is EMBEDDED at
-    build time via `sqlite-wasm-run compose --embed sha3`. No
+    build time via `sqlink compose --embed sha3`. No
     `.load`  the scalar is registered at cli startup via
     sqlite3_create_function. Pairs with ext-scalar  the delta IS
     the WIT boundary cost.
@@ -281,7 +281,7 @@ def time_wasm(
     db_path: str, sql: str, component: Path = WASM_COMPONENT,
     cwd: str | None = None,
 ) -> float:
-    """Pipe SQL through sqlite-wasm-run. Returns wall-clock seconds.
+    """Pipe SQL through sqlink. Returns wall-clock seconds.
     Component can be either the .wasm (parsed every invocation) or
     the .cwasm (precompiled, loaded via deserialize_file). When cwd
     is set, runs from there  needed for workloads whose SQL uses

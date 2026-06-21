@@ -50,6 +50,38 @@ interface extension-loader {
     /// — `PLAN-grants-db.md` G3.
     extension-digest: func(name: string) -> string;
 
+    /// Load a WASM extension component from a byte buffer the
+    /// caller supplies in-memory. Same shape as `load-extension`
+    /// but without a filesystem round-trip  used by the cli's
+    /// startup auto-embed path (each `embed-*-component` cargo
+    /// feature stuffs the bytes in via `include_bytes!`).
+    ///
+    /// `name-hint` is the registry key the loader uses when
+    /// the embedded manifest has an empty `name` field; for
+    /// well-formed extensions it's redundant.
+    load-extension-from-bytes: func(
+        name-hint: string,
+        bytes: list<u8>,
+        options: load-options,
+    ) -> result<manifest, loader-error>;
+
+    /// Dispatch a dot command by name. Walks loaded extensions
+    /// for one whose manifest registered `name` as a
+    /// `dot-command-spec`, invokes its `dot-command.invoke`,
+    /// and returns the trailing text from the result. Streamed
+    /// output (via `cli-stdout.write`) lands directly on the
+    /// host's stdout during the invoke.
+    ///
+    /// Error variants:
+    ///   - code = 404, message = "no such dot-command"
+    ///     no loaded extension registers that name
+    ///   - code = 500, message = invoke error text
+    ///     the extension itself returned an error
+    ///
+    /// Wired into the cli's repl dispatcher  see PLAN-dotcmd-
+    /// plugins.md Phase 1 / Phase 2.
+    dispatch-dot-command: func(name: string, args: string) -> result<string, loader-error>;
+
     /// Describe an extension WITHOUT loading it — reads the bytes,
     /// computes the digest, instantiates briefly to call
     /// `metadata.describe()`, tears down. Used by the cli to

@@ -137,11 +137,11 @@ INSERT INTO t VALUES (1), (2);
 
 Path arg to `changeset` / `patchset` is relative to wasi cwd
 preopens  use a path inside the directory you invoked
-sqlite-wasm-run from. Absolute paths outside wasi preopens fail
+sqlink from. Absolute paths outside wasi preopens fail
 with "No such file or directory" (this is wasi sandboxing, not a
 session bug).
 
-The captured blob is byte-compatible with `sqlite-wasm-run
+The captured blob is byte-compatible with `sqlink
 changeset {invert|concat|apply}` host subcommands  capture
 inside the cli, transform / replicate outside.
 

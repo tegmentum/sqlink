@@ -27,6 +27,24 @@ mod wasm_export {
 
     const FID_TOINTEGER: u64 = 1;
     const FID_TOREAL: u64 = 2;
+    const FID_TO_NUMBER: u64 = 3;  // Snowflake/Oracle to_number(s)
+    // Snowflake / BigQuery try_*/safe_* family. All share the
+    // same "parse-or-NULL" semantics  errors collapse to NULL,
+    // matching the Snowflake/BigQuery contract.
+    const FID_TRY_CAST:        u64 = 4;
+    const FID_TRY_TO_NUMBER:   u64 = 5;
+    const FID_TRY_TO_DECIMAL:  u64 = 6;
+    const FID_TRY_TO_DOUBLE:   u64 = 7;
+    const FID_TRY_TO_NUMERIC:  u64 = 8;
+    const FID_TRY_TO_BOOLEAN:  u64 = 9;
+    const FID_TRY_TO_BINARY:   u64 = 10;
+    const FID_SAFE_CAST:       u64 = 11;
+    const FID_SAFE_NEGATE:     u64 = 12;
+    const FID_TO_BOOLEAN:      u64 = 13;
+    const FID_TO_DOUBLE:       u64 = 14;
+    const FID_TO_DECIMAL:      u64 = 15;
+    const FID_TO_NUMERIC:      u64 = 16;
+    const FID_TO_BINARY:       u64 = 17;
 
     struct Ext;
 
@@ -157,6 +175,21 @@ mod wasm_export {
                 scalar_functions: alloc::vec![
                     s(FID_TOINTEGER, "tointeger", 1, det),
                     s(FID_TOREAL, "toreal", 1, det),
+                    s(FID_TO_NUMBER, "to_number", 1, det),
+                    s(FID_TRY_CAST,       "try_cast",       2, det),
+                    s(FID_TRY_TO_NUMBER,  "try_to_number",  1, det),
+                    s(FID_TRY_TO_DECIMAL, "try_to_decimal", 1, det),
+                    s(FID_TRY_TO_DOUBLE,  "try_to_double",  1, det),
+                    s(FID_TRY_TO_NUMERIC, "try_to_numeric", 1, det),
+                    s(FID_TRY_TO_BOOLEAN, "try_to_boolean", 1, det),
+                    s(FID_TRY_TO_BINARY,  "try_to_binary",  1, det),
+                    s(FID_SAFE_CAST,      "safe_cast",      2, det),
+                    s(FID_SAFE_NEGATE,    "safe_negate",    1, det),
+                    s(FID_TO_BOOLEAN,     "to_boolean",     1, det),
+                    s(FID_TO_DOUBLE,      "to_double",      1, det),
+                    s(FID_TO_DECIMAL,     "to_decimal",     1, det),
+                    s(FID_TO_NUMERIC,     "to_numeric",     1, det),
+                    s(FID_TO_BINARY,      "to_binary",      1, det),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -164,6 +197,7 @@ mod wasm_export {
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }
@@ -180,6 +214,83 @@ mod wasm_export {
                 FID_TOREAL => Ok(to_real(v)
                     .map(SqlValue::Real)
                     .unwrap_or(SqlValue::Null)),
+                FID_TO_NUMBER
+                | FID_TRY_TO_NUMBER | FID_TRY_TO_DECIMAL | FID_TRY_TO_NUMERIC
+                | FID_TO_DECIMAL | FID_TO_NUMERIC => {
+                    if let Some(n) = to_integer(v) {
+                        Ok(SqlValue::Integer(n))
+                    } else if let Some(r) = to_real(v) {
+                        Ok(SqlValue::Real(r))
+                    } else {
+                        Ok(SqlValue::Null)
+                    }
+                }
+                FID_TRY_TO_DOUBLE | FID_TO_DOUBLE => {
+                    Ok(to_real(v).map(SqlValue::Real).unwrap_or(SqlValue::Null))
+                }
+                FID_TRY_TO_BOOLEAN | FID_TO_BOOLEAN => {
+                    let r = match v {
+                        SqlValue::Null => None,
+                        SqlValue::Integer(n) => Some(*n != 0),
+                        SqlValue::Real(r) => Some(*r != 0.0),
+                        SqlValue::Text(s) => match s.trim().to_lowercase().as_str() {
+                            "true" | "t" | "yes" | "y" | "on" | "1" => Some(true),
+                            "false" | "f" | "no" | "n" | "off" | "0" => Some(false),
+                            _ => None,
+                        },
+                        SqlValue::Blob(b) => Some(!b.is_empty()),
+                    };
+                    Ok(r.map(|b| SqlValue::Integer(b as i64)).unwrap_or(SqlValue::Null))
+                }
+                FID_TRY_TO_BINARY | FID_TO_BINARY => {
+                    Ok(match v {
+                        SqlValue::Blob(b) => SqlValue::Blob(b.clone()),
+                        SqlValue::Text(s) => SqlValue::Blob(s.as_bytes().to_vec()),
+                        SqlValue::Integer(n) => SqlValue::Blob(n.to_le_bytes().to_vec()),
+                        SqlValue::Real(r) => SqlValue::Blob(r.to_le_bytes().to_vec()),
+                        SqlValue::Null => SqlValue::Null,
+                    })
+                }
+                // try_cast(value, type) / safe_cast(value, type)
+                // The 2-arg form takes a type name string; we honour
+                // 'INTEGER'/'INT'/'BIGINT'/'REAL'/'DOUBLE'/'FLOAT'/
+                // 'TEXT'/'VARCHAR'/'BOOLEAN'/'BLOB'/'BINARY'.
+                FID_TRY_CAST | FID_SAFE_CAST => {
+                    let tname = match args.get(1) {
+                        Some(SqlValue::Text(s)) => s.to_lowercase(),
+                        _ => return Ok(SqlValue::Null),
+                    };
+                    Ok(match tname.as_str() {
+                        "integer" | "int" | "bigint" | "smallint" =>
+                            to_integer(v).map(SqlValue::Integer).unwrap_or(SqlValue::Null),
+                        "real" | "double" | "float" | "double precision" =>
+                            to_real(v).map(SqlValue::Real).unwrap_or(SqlValue::Null),
+                        "text" | "varchar" | "string" | "char" => match v {
+                            SqlValue::Null => SqlValue::Null,
+                            SqlValue::Integer(n) => SqlValue::Text(n.to_string()),
+                            SqlValue::Real(r) => SqlValue::Text(r.to_string()),
+                            SqlValue::Text(s) => SqlValue::Text(s.clone()),
+                            SqlValue::Blob(b) => SqlValue::Text(String::from_utf8_lossy(b).into_owned()),
+                        },
+                        "boolean" | "bool" => match v {
+                            SqlValue::Integer(n) => SqlValue::Integer((*n != 0) as i64),
+                            _ => SqlValue::Null,
+                        },
+                        "blob" | "binary" | "varbinary" => match v {
+                            SqlValue::Blob(b) => SqlValue::Blob(b.clone()),
+                            SqlValue::Text(s) => SqlValue::Blob(s.as_bytes().to_vec()),
+                            _ => SqlValue::Null,
+                        },
+                        _ => SqlValue::Null,
+                    })
+                }
+                FID_SAFE_NEGATE => {
+                    Ok(match v {
+                        SqlValue::Integer(n) => n.checked_neg().map(SqlValue::Integer).unwrap_or(SqlValue::Null),
+                        SqlValue::Real(r) => SqlValue::Real(-r),
+                        _ => SqlValue::Null,
+                    })
+                }
                 other => Err(format!("totype: unknown func id {other}")),
             }
         }

@@ -23,7 +23,8 @@ use alloc::string::{String, ToString};
 use core::ffi::c_int;
 use sqlite_embed::{register_aggregates, AggregateSpec, SqlValueOwned};
 
-use crate::aggs::{ModeTracker, Moments, Regression, Samples, Welford};
+use alloc::vec::Vec;
+use crate::aggs::{AnyValue, ArrayAgg, BitOp, BitReduce, ModeTracker, Moments, Regression, Samples, StringAgg, ValueKind, Welford};
 
 const FID_STDDEV_POP:       u64 = 1;
 const FID_STDDEV_SAMP:      u64 = 2;
@@ -39,6 +40,18 @@ const FID_KURTOSIS:         u64 = 11;
 const FID_REGR_SLOPE:       u64 = 12;
 const FID_REGR_INTERCEPT:   u64 = 13;
 const FID_REGR_R2:          u64 = 14;
+// Gap-analysis additions
+const FID_STDDEV:           u64 = 15;
+const FID_VARIANCE:         u64 = 16;
+const FID_CORR:             u64 = 17;
+const FID_COVAR_POP:        u64 = 18;
+const FID_COVAR_SAMP:       u64 = 19;
+const FID_ANY_VALUE:        u64 = 20;
+const FID_BIT_AND:          u64 = 21;
+const FID_BIT_OR:           u64 = 22;
+const FID_BIT_XOR:          u64 = 23;
+const FID_ARRAY_AGG:        u64 = 24;
+const FID_STRING_AGG:       u64 = 25;
 
 fn val_f64(v: &SqlValueOwned) -> Option<f64> {
     match v {
@@ -290,6 +303,143 @@ unsafe fn regr_final_r2(s: *mut ()) -> Result<SqlValueOwned, String> {
         .map(SqlValueOwned::Real)
         .unwrap_or(SqlValueOwned::Null))
 }
+unsafe fn regr_final_corr(s: *mut ()) -> Result<SqlValueOwned, String> {
+    Ok((*(s as *const Regression))
+        .correlation()
+        .map(SqlValueOwned::Real)
+        .unwrap_or(SqlValueOwned::Null))
+}
+unsafe fn regr_final_covar_pop(s: *mut ()) -> Result<SqlValueOwned, String> {
+    Ok((*(s as *const Regression))
+        .covariance_pop()
+        .map(SqlValueOwned::Real)
+        .unwrap_or(SqlValueOwned::Null))
+}
+unsafe fn regr_final_covar_samp(s: *mut ()) -> Result<SqlValueOwned, String> {
+    Ok((*(s as *const Regression))
+        .covariance_samp()
+        .map(SqlValueOwned::Real)
+        .unwrap_or(SqlValueOwned::Null))
+}
+
+// ── BitReduce (bit_and / or / xor) ────────────────────────────
+
+unsafe fn bit_make_and() -> *mut () {
+    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(BitReduce::new(BitOp::And))) as *mut ()
+}
+unsafe fn bit_make_or() -> *mut () {
+    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(BitReduce::new(BitOp::Or))) as *mut ()
+}
+unsafe fn bit_make_xor() -> *mut () {
+    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(BitReduce::new(BitOp::Xor))) as *mut ()
+}
+unsafe fn bit_destroy(s: *mut ()) {
+    drop(alloc::boxed::Box::from_raw(s as *mut BitReduce));
+}
+unsafe fn bit_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
+    let b = &mut *(s as *mut BitReduce);
+    let x = match args.first() {
+        Some(SqlValueOwned::Integer(n)) => *n,
+        Some(SqlValueOwned::Real(r)) => *r as i64,
+        Some(SqlValueOwned::Text(t)) => t.parse::<i64>().map_err(|_| "bit_*: non-integer".to_string())?,
+        Some(SqlValueOwned::Null) | None => return Ok(()),
+        _ => return Err("bit_*: INTEGER arg expected".to_string()),
+    };
+    b.add(x);
+    Ok(())
+}
+unsafe fn bit_final(s: *mut ()) -> Result<SqlValueOwned, String> {
+    Ok((*(s as *const BitReduce))
+        .value()
+        .map(SqlValueOwned::Integer)
+        .unwrap_or(SqlValueOwned::Null))
+}
+
+// ── AnyValue ─────────────────────────────────────────────────
+
+unsafe fn any_make() -> *mut () {
+    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(AnyValue::default())) as *mut ()
+}
+unsafe fn any_destroy(s: *mut ()) {
+    drop(alloc::boxed::Box::from_raw(s as *mut AnyValue));
+}
+unsafe fn any_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
+    let av = &mut *(s as *mut AnyValue);
+    if av.seen { return Ok(()); }
+    av.seen = true;
+    match args.first() {
+        Some(SqlValueOwned::Null) | None => av.kind = ValueKind::Null,
+        Some(SqlValueOwned::Integer(n)) => { av.kind = ValueKind::Integer; av.i = *n; }
+        Some(SqlValueOwned::Real(r)) => { av.kind = ValueKind::Real; av.r = *r; }
+        Some(SqlValueOwned::Text(t)) => { av.kind = ValueKind::Text; av.s = t.clone(); }
+        Some(SqlValueOwned::Blob(b)) => { av.kind = ValueKind::Blob; av.b = b.clone(); }
+    }
+    Ok(())
+}
+unsafe fn any_final(s: *mut ()) -> Result<SqlValueOwned, String> {
+    let av = &*(s as *const AnyValue);
+    Ok(if !av.seen { SqlValueOwned::Null }
+    else { match av.kind {
+        ValueKind::Null => SqlValueOwned::Null,
+        ValueKind::Integer => SqlValueOwned::Integer(av.i),
+        ValueKind::Real => SqlValueOwned::Real(av.r),
+        ValueKind::Text => SqlValueOwned::Text(av.s.clone()),
+        ValueKind::Blob => SqlValueOwned::Blob(av.b.clone()),
+    }})
+}
+
+// ── ArrayAgg ─────────────────────────────────────────────────
+
+unsafe fn arrayagg_make() -> *mut () {
+    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(ArrayAgg::default())) as *mut ()
+}
+unsafe fn arrayagg_destroy(s: *mut ()) {
+    drop(alloc::boxed::Box::from_raw(s as *mut ArrayAgg));
+}
+unsafe fn arrayagg_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
+    let aa = &mut *(s as *mut ArrayAgg);
+    match args.first() {
+        Some(SqlValueOwned::Null) | None => aa.add_null(),
+        Some(SqlValueOwned::Integer(n)) => aa.add_int(*n),
+        Some(SqlValueOwned::Real(r)) => aa.add_real(*r),
+        Some(SqlValueOwned::Text(t)) => aa.add_text(t),
+        Some(SqlValueOwned::Blob(b)) => aa.add_text(&String::from_utf8_lossy(b)),
+    }
+    Ok(())
+}
+unsafe fn arrayagg_final(s: *mut ()) -> Result<SqlValueOwned, String> {
+    let aa = &*(s as *const ArrayAgg);
+    Ok(SqlValueOwned::Text(aa.to_json()))
+}
+
+// ── StringAgg ────────────────────────────────────────────────
+
+unsafe fn stringagg_make() -> *mut () {
+    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(StringAgg::default())) as *mut ()
+}
+unsafe fn stringagg_destroy(s: *mut ()) {
+    drop(alloc::boxed::Box::from_raw(s as *mut StringAgg));
+}
+unsafe fn stringagg_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
+    let sa = &mut *(s as *mut StringAgg);
+    let v = match args.first() {
+        Some(SqlValueOwned::Null) | None => return Ok(()),
+        Some(SqlValueOwned::Text(t)) => t.clone(),
+        Some(SqlValueOwned::Integer(n)) => n.to_string(),
+        Some(SqlValueOwned::Real(r)) => r.to_string(),
+        Some(SqlValueOwned::Blob(b)) => String::from_utf8_lossy(b).into_owned(),
+    };
+    let sep = match args.get(1) {
+        Some(SqlValueOwned::Text(t)) => t.clone(),
+        _ => String::new(),
+    };
+    sa.add(v, &sep);
+    Ok(())
+}
+unsafe fn stringagg_final(s: *mut ()) -> Result<SqlValueOwned, String> {
+    let sa = &*(s as *const StringAgg);
+    Ok(sa.to_owned_string().map(SqlValueOwned::Text).unwrap_or(SqlValueOwned::Null))
+}
 
 const AGGREGATES: &[AggregateSpec] = &[
     AggregateSpec {
@@ -361,6 +511,64 @@ const AGGREGATES: &[AggregateSpec] = &[
         func_id: FID_REGR_R2, name: b"regr_r2\0", num_args: 2, deterministic: true,
         make_state: regr_make, step_state: regr_step,
         final_state: regr_final_r2, destroy_state: regr_destroy,
+    },
+    // Aliases that reuse existing Welford state with the sample variant.
+    AggregateSpec {
+        func_id: FID_STDDEV, name: b"stddev\0", num_args: 1, deterministic: true,
+        make_state: welford_make, step_state: welford_step,
+        final_state: welford_final_stddev_samp, destroy_state: welford_destroy,
+    },
+    AggregateSpec {
+        func_id: FID_VARIANCE, name: b"variance\0", num_args: 1, deterministic: true,
+        make_state: welford_make, step_state: welford_step,
+        final_state: welford_final_var_samp, destroy_state: welford_destroy,
+    },
+    // Correlation + covariance reuse Regression's accumulators.
+    AggregateSpec {
+        func_id: FID_CORR, name: b"corr\0", num_args: 2, deterministic: true,
+        make_state: regr_make, step_state: regr_step,
+        final_state: regr_final_corr, destroy_state: regr_destroy,
+    },
+    AggregateSpec {
+        func_id: FID_COVAR_POP, name: b"covar_pop\0", num_args: 2, deterministic: true,
+        make_state: regr_make, step_state: regr_step,
+        final_state: regr_final_covar_pop, destroy_state: regr_destroy,
+    },
+    AggregateSpec {
+        func_id: FID_COVAR_SAMP, name: b"covar_samp\0", num_args: 2, deterministic: true,
+        make_state: regr_make, step_state: regr_step,
+        final_state: regr_final_covar_samp, destroy_state: regr_destroy,
+    },
+    // Bitwise reduces over INTEGER columns.
+    AggregateSpec {
+        func_id: FID_BIT_AND, name: b"bit_and\0", num_args: 1, deterministic: true,
+        make_state: bit_make_and, step_state: bit_step,
+        final_state: bit_final, destroy_state: bit_destroy,
+    },
+    AggregateSpec {
+        func_id: FID_BIT_OR, name: b"bit_or\0", num_args: 1, deterministic: true,
+        make_state: bit_make_or, step_state: bit_step,
+        final_state: bit_final, destroy_state: bit_destroy,
+    },
+    AggregateSpec {
+        func_id: FID_BIT_XOR, name: b"bit_xor\0", num_args: 1, deterministic: true,
+        make_state: bit_make_xor, step_state: bit_step,
+        final_state: bit_final, destroy_state: bit_destroy,
+    },
+    AggregateSpec {
+        func_id: FID_ANY_VALUE, name: b"any_value\0", num_args: 1, deterministic: true,
+        make_state: any_make, step_state: any_step,
+        final_state: any_final, destroy_state: any_destroy,
+    },
+    AggregateSpec {
+        func_id: FID_ARRAY_AGG, name: b"array_agg\0", num_args: 1, deterministic: true,
+        make_state: arrayagg_make, step_state: arrayagg_step,
+        final_state: arrayagg_final, destroy_state: arrayagg_destroy,
+    },
+    AggregateSpec {
+        func_id: FID_STRING_AGG, name: b"string_agg\0", num_args: 2, deterministic: true,
+        make_state: stringagg_make, step_state: stringagg_step,
+        final_state: stringagg_final, destroy_state: stringagg_destroy,
     },
 ];
 

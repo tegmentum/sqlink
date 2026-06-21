@@ -12,7 +12,7 @@
 //! Lifetime + scope:
 //!   The cache lives in the wasm guest's thread-local storage. The
 //!   host instantiates one guest per loader scope, so for the
-//!   `sqlite-wasm-run` CLI that means one cache per process. The
+//!   `sqlink` CLI that means one cache per process. The
 //!   cache is *not* persisted: values evaporate when the process
 //!   exits. Two CLIs hitting the same .db file get two independent
 //!   caches.
@@ -167,6 +167,7 @@ mod wasm_export {
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
         }
