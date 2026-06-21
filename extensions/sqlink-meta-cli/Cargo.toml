@@ -1,0 +1,33 @@
+[package]
+name = "sqlink-meta-cli-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+The `.sqlink` meta-cli as a wasm dot-command extension.
+
+PLAN-dotcmd-plugins.md Phase 3 originally shipped .sqlink as a
+cli built-in in cli/src/dot.rs because the dotcmd-aware world
+didn't import an extension-loader surface. The follow-up
+landed sqlite:extension/loader-bridge  a narrow slice of
+load-extension-from-bytes + extension-digest  so .sqlink can
+now live in its own extension. The cli embeds this extension
+via include_bytes! at startup the same way core-dotcmd is
+embedded.
+
+Subcommands: list / show / install / uninstall / bundle /
+unbundle / bundle-all / unbundle-all / verify / gc / export /
+resolver list+add+remove+set-priority. All operate on the
+three sqlink_* tables in the user's db via spi.execute.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+blake3 = { version = "1", default-features = false }

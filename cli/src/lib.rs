@@ -3368,6 +3368,14 @@ fn embed_core_dotcmd() {
     const CORE_DOTCMD_BYTES: &[u8] = include_bytes!(
         "../../extensions/core-dotcmd/target/wasm32-wasip2/release/core_dotcmd_extension.component.wasm"
     );
+    /// The follow-up to PLAN-dotcmd-phase5.md moved `.sqlink`
+    /// out of `cli/src/dot.rs` into its own dot-command
+    /// extension that targets the new loader-bridge import.
+    /// The bytes are baked into the cli binary alongside
+    /// core-dotcmd; both auto-load on first conn.
+    const SQLINK_META_CLI_BYTES: &[u8] = include_bytes!(
+        "../../extensions/sqlink-meta-cli/target/wasm32-wasip2/release/sqlink_meta_cli_extension.component.wasm"
+    );
     let options = LoadOptions {
         grant: Vec::new(),
         http_policy: None,
@@ -3386,6 +3394,19 @@ fn embed_core_dotcmd() {
         Err(e) => {
             eprintln!(
                 "auto-load core-dotcmd failed: {} ({}). Built-in dot commands like .version will read \"Unknown command\".",
+                e.message, e.code
+            );
+        }
+    }
+    match extension_loader::load_extension_from_bytes(
+        "sqlink-meta-cli",
+        SQLINK_META_CLI_BYTES,
+        &options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load sqlink-meta-cli failed: {} ({}). `.sqlink` will read \"Unknown command\".",
                 e.message, e.code
             );
         }

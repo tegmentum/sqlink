@@ -1029,6 +1029,14 @@ pub struct LoadedState {
     /// but for dns::resolve. None means the extension wasn't granted
     /// `Capability::Dns`; the resolver denies every query.
     dns_policy: Option<DnsPolicy>,
+    /// Optional back-reference to the owning Host. Set when the
+    /// Store is built for the `dotcmd-aware` world so extensions
+    /// reaching the `loader-bridge` import can delegate to the
+    /// host's existing extension-loader paths. None for every
+    /// other world (those extensions don't import loader-bridge).
+    /// Host is `Clone`-able via Arc<...>, so the clone is just
+    /// Arc bumps; no deep copy.
+    host_ref: Option<Host>,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -1594,6 +1602,77 @@ impl loaded_dotcmd_aware::sqlite::extension::cli_state::Host for LoadedState {
     }
 }
 
+/// loader-bridge Host: a tightly-scoped slice of the host's
+/// extension-loader surface. Available only to extensions
+/// targeting the `dotcmd-aware` world  built today for
+/// `sqlink-meta-cli`'s `.sqlink install` path. Delegates to
+/// the owning Host (set on LoadedState by `dispatch_dot_command`
+/// at Store-build time).
+impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState {
+    async fn load_extension_from_bytes(
+        &mut self,
+        name_hint: String,
+        bytes: Vec<u8>,
+        _extra_grants: Vec<String>,
+    ) -> std::result::Result<
+        loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest,
+        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
+    > {
+        let Some(ref host) = self.host_ref else {
+            return Err(loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                code: 1,
+                message: "loader-bridge: host_ref not wired".into(),
+            });
+        };
+        // v1 ignores extra_grants  uses the cli's default
+        // policy. A future revision can map per-string capability
+        // tokens onto a Policy + http/dns/fs sub-policies.
+        let policy = Policy::default();
+        match host.load_extension_from_bytes(bytes, &name_hint, policy).await {
+            Ok(name) => {
+                let components = host.components.read();
+                let Some(ext) = components.get(&name) else {
+                    return Err(
+                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                            code: 1,
+                            message: format!("loader-bridge: {name} vanished after load"),
+                        },
+                    );
+                };
+                let dot_commands = ext
+                    .dot_commands
+                    .iter()
+                    .map(|d| {
+                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedDotCommand {
+                            id: d.id,
+                            name: d.name.clone(),
+                            summary: d.summary.clone(),
+                            usage: d.usage.clone(),
+                            help: d.help.clone(),
+                            requires_write: d.requires_write,
+                        }
+                    })
+                    .collect();
+                Ok(loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest {
+                    name: ext.name.clone(),
+                    version: ext.version.clone(),
+                    dot_commands,
+                })
+            }
+            Err(e) => Err(loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+
+    async fn extension_digest(&mut self, name: String) -> String {
+        let Some(ref host) = self.host_ref else { return String::new() };
+        let components = host.components.read();
+        components.get(&name).map(|e| e.digest.clone()).unwrap_or_default()
+    }
+}
+
 /// HasData tag for the loaded-extension linker setup.
 pub struct LoadedHostData;
 impl wasmtime::component::HasData for LoadedHostData {
@@ -1853,6 +1932,11 @@ fn make_loaded_stateful_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
         |state| state,
     )
     .map_err(|e| anyhow!("loaded-ext bootstrap cli-state: {e}"))?;
+    loaded_dotcmd_aware::sqlite::extension::loader_bridge::add_to_linker::<_, LoadedHostData>(
+        &mut linker,
+        |state| state,
+    )
+    .map_err(|e| anyhow!("loaded-ext bootstrap loader-bridge: {e}"))?;
     Ok(linker)
 }
 
@@ -1986,6 +2070,7 @@ fn build_loaded_store(
         spi_conn: ext.spi_conn.clone(),
         http_policy: ext.policy.http.clone(),
         dns_policy: ext.policy.dns.clone(),
+        host_ref: None,
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
@@ -3449,6 +3534,11 @@ impl Host {
         if guard.is_none() {
             let linker = make_loaded_dotcmd_aware_linker(&self.engine)?;
             let mut store = build_loaded_store(&self.engine, &ext_arc, self.db_path())?;
+            // Hand the Store data a back-reference to Self so the
+            // loader-bridge imports route to the right registry.
+            // Host is Arc-internal so the clone is just refcount
+            // bumps; no deep copy.
+            store.data_mut().host_ref = Some(self.clone());
             let instance = loaded_dotcmd_aware::DotcmdAware::instantiate_async(
                 &mut store,
                 &ext_arc.component,

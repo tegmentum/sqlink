@@ -1,37 +1,48 @@
-//! Phase 3 database-resident dot-command registry.
+//! Cli-side helpers for the database-resident dot-command
+//! registry.
 //!
-//! Owns three tables in the user's database (the one passed via
-//! `--db PATH`):
+//! After the follow-up to PLAN-dotcmd-phase5.md, most of the
+//! registry surface lives in `extensions/sqlink-meta-cli`
+//! (which uses `spi.execute` against the same tables). This
+//! module retains the bits the cli itself still needs:
 //!
-//!   `sqlink_dotcmd`        one row per registered command
-//!   `sqlink_artifact`      content-addressed wasm bytes
-//!   `sqlink_cas_resolver`  external CAS endpoints (Phase 4)
+//!   * `ensure_schemas`  bootstrap the three sqlink_* tables
+//!     on every connection (called from `ensure_cli_conn`).
+//!   * `lookup` / `fetch_artifact`  cheap reads the dispatcher
+//!     does on a session miss before deciding whether to walk
+//!     CAS resolvers.
+//!   * `resolver_list`  the CAS walk needs to enumerate
+//!     resolvers in priority order.
 //!
-//! On startup the cli runs `ensure_schemas`; on a session-miss the
-//! cli's `eval_input` consults `lookup` to find a matching row +
-//! `fetch_artifact` for the bytes, then asks the host to load the
-//! extension. Subsequent invocations hit the in-memory session
-//! registry directly.
-//!
-//! Schemas are CREATE IF NOT EXISTS so the tables are cheap when
-//! unused. The cli runs against databases that have no awareness of
-//! sqlink without surprise.
+//! All install / uninstall / bundle / unbundle / verify /
+//! gc / export / resolver-mutate flows now live in the
+//! sqlink-meta-cli extension and go through `spi.execute`. The
+//! cli has no remaining write path against these tables.
 
-use sqlite_wasm_core::db::{self, Connection, StepResult, Value};
+use sqlite_wasm_core::db::{Connection, StepResult, Value};
 
 /// Subset of `sqlink_dotcmd` the dispatcher actually needs to
-/// resolve a command. The full row (manifest, install metadata,
-/// tags) is queried separately by `.sqlink show`.
+/// resolve a command. The full row is queried by `.sqlink show`
+/// inside the sqlink-meta-cli extension.
 pub struct ResolvedRow {
     pub name: String,
     pub artifact_digest: String,
 }
 
+/// One row of `sqlink_cas_resolver`. Used by the cli's CAS walk
+/// (`dot::walk_cas_resolvers`) to iterate resolvers in priority
+/// order.
+pub struct ResolverRow {
+    pub priority: i64,
+    pub kind: String,
+    pub uri: String,
+}
+
 /// Run idempotent schema bootstrap. Called from `ensure_cli_conn`
-/// the first time the cli opens a db. Failures are swallowed  the
-/// cli's registry surface is best-effort and gracefully degrades to
-/// "session-only" when the user db is read-only or otherwise
-/// hostile.
+/// the first time the cli opens a db. Failures are swallowed
+/// the cli's registry surface is best-effort and gracefully
+/// degrades to "session-only" when the user db is read-only or
+/// otherwise hostile.
 pub fn ensure_schemas(conn: &Connection) {
     let _ = conn.execute_batch(SCHEMAS);
 }
@@ -65,9 +76,6 @@ CREATE TABLE IF NOT EXISTS sqlink_cas_resolver (
 );
 ";
 
-/// `SELECT name, artifact_digest FROM sqlink_dotcmd WHERE name = ?`.
-/// Returns None if the schema is absent, the row is missing, or any
-/// step error.
 pub fn lookup(conn: &Connection, name: &str) -> Option<ResolvedRow> {
     let mut stmt = conn
         .prepare("SELECT name, artifact_digest FROM sqlink_dotcmd WHERE name = ?1")
@@ -89,10 +97,6 @@ pub fn lookup(conn: &Connection, name: &str) -> Option<ResolvedRow> {
     }
 }
 
-/// `SELECT bytes FROM sqlink_artifact WHERE digest = ?`. Returns
-/// None when the row is missing OR the column is something other
-/// than a BLOB (the schema enforces this, but a corrupt row should
-/// fail closed rather than panic).
 pub fn fetch_artifact(conn: &Connection, digest: &str) -> Option<Vec<u8>> {
     let mut stmt = conn
         .prepare("SELECT bytes FROM sqlink_artifact WHERE digest = ?1")
@@ -107,295 +111,16 @@ pub fn fetch_artifact(conn: &Connection, digest: &str) -> Option<Vec<u8>> {
     }
 }
 
-/// `SELECT name, summary, artifact_size, artifact_digest,
-///         EXISTS(SELECT 1 FROM sqlink_artifact WHERE digest = sqlink_dotcmd.artifact_digest)
-///  FROM sqlink_dotcmd ORDER BY name`.
-///
-/// Returns (name, summary, size, digest, bundled). Empty Vec on any
-/// schema/step error (caller renders as "(empty)").
-pub fn list_rows(conn: &Connection) -> Vec<(String, String, i64, String, bool)> {
-    let sql = "SELECT name, summary, artifact_size, artifact_digest,
-                  EXISTS(SELECT 1 FROM sqlink_artifact WHERE digest = sqlink_dotcmd.artifact_digest)
-               FROM sqlink_dotcmd ORDER BY name";
-    let mut stmt = match conn.prepare(sql) {
-        Ok(s) => s,
-        Err(_) => return Vec::new(),
-    };
-    let mut out = Vec::new();
-    while let Ok(StepResult::Row) = stmt.step() {
-        let name = match stmt.column_value(0) { Value::Text(s) => s, _ => String::new() };
-        let summary = match stmt.column_value(1) { Value::Text(s) => s, _ => String::new() };
-        let size = match stmt.column_value(2) { Value::Integer(i) => i, _ => 0 };
-        let digest = match stmt.column_value(3) { Value::Text(s) => s, _ => String::new() };
-        let bundled = matches!(stmt.column_value(4), Value::Integer(1));
-        out.push((name, summary, size, digest, bundled));
-    }
-    out
-}
-
-/// Full row fetch for `.sqlink show NAME`. Returns the
-/// (name, summary, help, source_uri, digest, size, installed_at,
-///  bundled) tuple or None.
-pub fn show_row(conn: &Connection, name: &str) -> Option<ShowRow> {
-    let sql = "SELECT d.summary, d.help, d.source_uri, d.artifact_digest,
-                      d.artifact_size, d.installed_at,
-                      EXISTS(SELECT 1 FROM sqlink_artifact WHERE digest = d.artifact_digest)
-               FROM sqlink_dotcmd d WHERE d.name = ?1";
-    let mut stmt = conn.prepare(sql).ok()?;
-    stmt.bind(1, &Value::Text(name.to_string())).ok()?;
-    if !matches!(stmt.step(), Ok(StepResult::Row)) { return None; }
-    Some(ShowRow {
-        name: name.to_string(),
-        summary: text(stmt.column_value(0)),
-        help: text(stmt.column_value(1)),
-        source_uri: text(stmt.column_value(2)),
-        digest: text(stmt.column_value(3)),
-        size: int(stmt.column_value(4)),
-        installed_at: text(stmt.column_value(5)),
-        bundled: matches!(stmt.column_value(6), Value::Integer(1)),
-    })
-}
-
-pub struct ShowRow {
-    pub name: String,
-    pub summary: String,
-    pub help: String,
-    pub source_uri: String,
-    pub digest: String,
-    pub size: i64,
-    pub installed_at: String,
-    pub bundled: bool,
-}
-
-fn text(v: Value) -> String { if let Value::Text(s) = v { s } else { String::new() } }
-fn int(v: Value) -> i64 { if let Value::Integer(i) = v { i } else { 0 } }
-
-/// Insert/replace one `sqlink_dotcmd` row + the matching
-/// `sqlink_artifact` row (if not already present). `bytes` is moved
-/// in; pass the same slice the host received in
-/// `load-extension-from-bytes`.
-///
-/// The artifact row only gets inserted if `bundle` is true  callers
-/// pass `false` for unbundled installs (resolved via CAS later).
-pub fn install(
-    conn: &Connection,
-    name: &str,
-    summary: &str,
-    help: &str,
-    func_id: u64,
-    requires_write: bool,
-    digest: &str,
-    size: i64,
-    source_uri: &str,
-    bundle: bool,
-    bytes: &[u8],
-) -> Result<(), db::Error> {
-    if bundle {
-        // INSERT OR IGNORE so a second install of the same artifact
-        // (e.g. a multi-command extension installed twice) doesn't
-        // fail; the bytes column is already correct.
-        let mut s = conn.prepare(
-            "INSERT OR IGNORE INTO sqlink_artifact (digest, size, bytes, source_uri)
-             VALUES (?1, ?2, ?3, ?4)",
-        )?;
-        s.bind(1, &Value::Text(digest.to_string()))?;
-        s.bind(2, &Value::Integer(size))?;
-        s.bind(3, &Value::Blob(bytes.to_vec()))?;
-        s.bind(4, &Value::Text(source_uri.to_string()))?;
-        let _ = s.step()?;
-    }
-    let mut s = conn.prepare(
-        "INSERT OR REPLACE INTO sqlink_dotcmd
-            (name, summary, help, func_id, requires_write,
-             artifact_digest, artifact_size, source_uri)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-    )?;
-    s.bind(1, &Value::Text(name.to_string()))?;
-    s.bind(2, &Value::Text(summary.to_string()))?;
-    s.bind(3, &Value::Text(help.to_string()))?;
-    s.bind(4, &Value::Integer(func_id as i64))?;
-    s.bind(5, &Value::Integer(if requires_write { 1 } else { 0 }))?;
-    s.bind(6, &Value::Text(digest.to_string()))?;
-    s.bind(7, &Value::Integer(size))?;
-    s.bind(8, &Value::Text(source_uri.to_string()))?;
-    let _ = s.step()?;
-    Ok(())
-}
-
-/// `DELETE FROM sqlink_dotcmd WHERE name = ?`. Leaves the artifact
-/// in place  callers that want a full GC follow up with `gc()`.
-/// Returns the changes count.
-pub fn uninstall(conn: &Connection, name: &str) -> Result<i64, db::Error> {
-    let mut s = conn.prepare("DELETE FROM sqlink_dotcmd WHERE name = ?1")?;
-    s.bind(1, &Value::Text(name.to_string()))?;
-    let _ = s.step()?;
-    Ok(conn.changes())
-}
-
-/// `SELECT artifact_digest, artifact_size, source_uri FROM sqlink_dotcmd WHERE name = ?`.
-/// Used by `.sqlink bundle` / `verify` / `export` to find the row
-/// whose bytes we care about.
-pub fn dotcmd_meta(conn: &Connection, name: &str) -> Option<DotcmdMeta> {
-    let mut s = conn
-        .prepare("SELECT artifact_digest, artifact_size, source_uri FROM sqlink_dotcmd WHERE name = ?1")
-        .ok()?;
-    s.bind(1, &Value::Text(name.to_string())).ok()?;
-    if !matches!(s.step(), Ok(StepResult::Row)) { return None; }
-    Some(DotcmdMeta {
-        digest: text(s.column_value(0)),
-        size: int(s.column_value(1)),
-        source_uri: text(s.column_value(2)),
-    })
-}
-
-pub struct DotcmdMeta {
-    pub digest: String,
-    pub size: i64,
-    pub source_uri: String,
-}
-
-/// `INSERT OR REPLACE INTO sqlink_artifact (digest, size, bytes, source_uri)`.
-/// Returned by `.sqlink bundle` after fetching+verifying bytes.
-pub fn store_artifact(
-    conn: &Connection,
-    digest: &str,
-    size: i64,
-    bytes: &[u8],
-    source_uri: &str,
-) -> Result<(), db::Error> {
-    let mut s = conn.prepare(
-        "INSERT OR REPLACE INTO sqlink_artifact (digest, size, bytes, source_uri)
-         VALUES (?1, ?2, ?3, ?4)",
-    )?;
-    s.bind(1, &Value::Text(digest.to_string()))?;
-    s.bind(2, &Value::Integer(size))?;
-    s.bind(3, &Value::Blob(bytes.to_vec()))?;
-    s.bind(4, &Value::Text(source_uri.to_string()))?;
-    let _ = s.step()?;
-    Ok(())
-}
-
-/// `DELETE FROM sqlink_artifact WHERE digest = ?`. Returns the
-/// changes count. Caller should check refcount via
-/// `digest_refcount` first if it wants to refuse on shared rows.
-pub fn drop_artifact(conn: &Connection, digest: &str) -> Result<i64, db::Error> {
-    let mut s = conn.prepare("DELETE FROM sqlink_artifact WHERE digest = ?1")?;
-    s.bind(1, &Value::Text(digest.to_string()))?;
-    let _ = s.step()?;
-    Ok(conn.changes())
-}
-
-/// Count of sqlink_dotcmd rows pointing at the given digest. Used
-/// by `.sqlink unbundle` to refuse when other commands still rely
-/// on the bundled bytes.
-pub fn digest_refcount(conn: &Connection, digest: &str) -> i64 {
-    let Ok(mut s) = conn
-        .prepare("SELECT COUNT(*) FROM sqlink_dotcmd WHERE artifact_digest = ?1")
-    else { return 0; };
-    if s.bind(1, &Value::Text(digest.to_string())).is_err() { return 0; }
-    if !matches!(s.step(), Ok(StepResult::Row)) { return 0; }
-    int(s.column_value(0))
-}
-
-/// Every (name, digest) pair  used by `.sqlink bundle-all` /
-/// `unbundle-all` / `verify` so the iteration runs in plain code
-/// instead of one query per row.
-pub fn all_name_digest(conn: &Connection) -> Vec<(String, String)> {
-    let Ok(mut s) = conn.prepare(
-        "SELECT name, artifact_digest FROM sqlink_dotcmd ORDER BY name"
-    ) else { return Vec::new() };
-    let mut out = Vec::new();
-    while let Ok(StepResult::Row) = s.step() {
-        out.push((text(s.column_value(0)), text(s.column_value(1))));
-    }
-    out
-}
-
-/// Every (digest, size) pair from sqlink_artifact  iterated by
-/// `.sqlink verify` so the actual byte fetch (and re-hash) happens
-/// row-by-row.
-pub fn all_artifact_digests(conn: &Connection) -> Vec<(String, i64)> {
-    let Ok(mut s) = conn.prepare("SELECT digest, size FROM sqlink_artifact ORDER BY digest")
-    else { return Vec::new() };
-    let mut out = Vec::new();
-    while let Ok(StepResult::Row) = s.step() {
-        out.push((text(s.column_value(0)), int(s.column_value(1))));
-    }
-    out
-}
-
-/// `SELECT bytes FROM sqlink_artifact WHERE digest = ?`. Public alias
-/// of `fetch_artifact` for use by `.sqlink export` (clearer name at
-/// the call site).
-pub fn fetch_artifact_bytes(conn: &Connection, digest: &str) -> Option<Vec<u8>> {
-    fetch_artifact(conn, digest)
-}
-
-/// `DELETE FROM sqlink_artifact WHERE digest NOT IN (SELECT artifact_digest FROM sqlink_dotcmd)`.
-/// Returns the count of dropped rows.
-pub fn gc_artifacts(conn: &Connection) -> Result<i64, db::Error> {
-    let _ = conn.execute_batch(
-        "DELETE FROM sqlink_artifact \
-         WHERE digest NOT IN (SELECT artifact_digest FROM sqlink_dotcmd)",
-    )?;
-    Ok(conn.changes())
-}
-
-// ---------------------------------------------------------------
-// sqlink_cas_resolver helpers (Phase 4 entry points).
-
-pub struct ResolverRow {
-    pub priority: i64,
-    pub kind: String,
-    pub uri: String,
-}
-
 pub fn resolver_list(conn: &Connection) -> Vec<ResolverRow> {
     let Ok(mut s) = conn.prepare(
         "SELECT priority, kind, uri FROM sqlink_cas_resolver ORDER BY priority"
     ) else { return Vec::new() };
     let mut out = Vec::new();
     while let Ok(StepResult::Row) = s.step() {
-        out.push(ResolverRow {
-            priority: int(s.column_value(0)),
-            kind: text(s.column_value(1)),
-            uri: text(s.column_value(2)),
-        });
+        let priority = if let Value::Integer(i) = s.column_value(0) { i } else { 0 };
+        let kind = if let Value::Text(t) = s.column_value(1) { t } else { String::new() };
+        let uri = if let Value::Text(t) = s.column_value(2) { t } else { String::new() };
+        out.push(ResolverRow { priority, kind, uri });
     }
     out
-}
-
-pub fn resolver_add(
-    conn: &Connection,
-    priority: i64,
-    kind: &str,
-    uri: &str,
-) -> Result<(), db::Error> {
-    let mut s = conn.prepare(
-        "INSERT OR REPLACE INTO sqlink_cas_resolver (priority, kind, uri) VALUES (?1, ?2, ?3)",
-    )?;
-    s.bind(1, &Value::Integer(priority))?;
-    s.bind(2, &Value::Text(kind.to_string()))?;
-    s.bind(3, &Value::Text(uri.to_string()))?;
-    let _ = s.step()?;
-    Ok(())
-}
-
-pub fn resolver_remove(conn: &Connection, uri: &str) -> Result<i64, db::Error> {
-    let mut s = conn.prepare("DELETE FROM sqlink_cas_resolver WHERE uri = ?1")?;
-    s.bind(1, &Value::Text(uri.to_string()))?;
-    let _ = s.step()?;
-    Ok(conn.changes())
-}
-
-pub fn resolver_set_priority(
-    conn: &Connection,
-    uri: &str,
-    priority: i64,
-) -> Result<i64, db::Error> {
-    let mut s = conn.prepare("UPDATE sqlink_cas_resolver SET priority = ?1 WHERE uri = ?2")?;
-    s.bind(1, &Value::Integer(priority))?;
-    s.bind(2, &Value::Text(uri.to_string()))?;
-    let _ = s.step()?;
-    Ok(conn.changes())
 }
