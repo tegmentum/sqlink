@@ -1265,12 +1265,7 @@ fn eval_input(input: &str) -> String {
         return do_grants(rest.trim());
     }
     if let Some(rest) = trimmed.strip_prefix(".compose") {
-        ensure_cli_conn();
-        return CLI_CONN.with(|c| {
-            let g = c.borrow();
-            let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-            do_compose(rest.trim(), conn)
-        });
+        return do_compose(rest.trim());
     }
     ensure_cli_conn();
     if trimmed.starts_with('.') {
@@ -2783,13 +2778,13 @@ fn do_grants(arg: &str) -> String {
 ///   .compose show NAME                  -> dump body
 ///   .compose save NAME FILE [FORMAT]    -> read FILE and persist
 ///   .compose delete NAME                -> drop the row
-fn do_compose(arg: &str, conn: &db::Connection) -> String {
+fn do_compose(arg: &str) -> String {
     let (sub, rest) = match arg.split_once(char::is_whitespace) {
         Some((s, r)) => (s, r.trim()),
         None => (arg, ""),
     };
     match sub {
-        "" | "list" => match orchestration::list(conn) {
+        "" | "list" => match orchestration::list() {
             Ok(names) => {
                 if names.is_empty() {
                     "(no stored orchestrations)\n".to_string()
@@ -2803,7 +2798,7 @@ fn do_compose(arg: &str, conn: &db::Connection) -> String {
             if rest.is_empty() {
                 return "Usage: .compose show NAME\n".to_string();
             }
-            match orchestration::get(conn, rest) {
+            match orchestration::get(rest) {
                 Ok(Some(def)) => format!(
                     "name       : {}\nversion    : {}\nroot       : {}\ndigest_hex : {}\nformat     : {}\nsaved_at   : {}\nbody_bytes : {}\n",
                     def.name,
@@ -2822,7 +2817,7 @@ fn do_compose(arg: &str, conn: &db::Connection) -> String {
             if rest.is_empty() {
                 return "Usage: .compose delete NAME\n".to_string();
             }
-            match orchestration::delete(conn, rest) {
+            match orchestration::delete(rest) {
                 Ok(true) => format!("Deleted '{rest}'.\n"),
                 Ok(false) => format!("No orchestration on file for '{rest}'.\n"),
                 Err(e) => format!("Error: {}\n", e.message),
@@ -2864,7 +2859,7 @@ fn do_compose(arg: &str, conn: &db::Connection) -> String {
                 body,
                 saved_at: now,
             };
-            match orchestration::put(conn, &def) {
+            match orchestration::put(&def) {
                 Ok(()) => format!("Saved orchestration '{name}'.\n"),
                 Err(e) => format!("Error: {}\n", e.message),
             }
