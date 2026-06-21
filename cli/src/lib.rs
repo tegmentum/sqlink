@@ -3024,55 +3024,41 @@ fn do_import(arg: &str) -> String {
     if data_rows.is_empty() {
         return "Imported 0 rows\n".to_string();
     }
-    ensure_cli_conn();
+    // PLAN-cli-stages-5-6.md Stage 5e: .import via spi. One
+    // spi::execute call per row instead of prepare-once-bind-N
+    // since spi.execute_multi handles tail but not row-loop
+    // binding. For typical .import sizes (CSV with hundreds
+    // of rows) the per-row host crossing is fine; if it ever
+    // becomes a hot path, add a spi.bulk-insert(sql, rows)
+    // method that prepares once host-side.
+    use bindings::sqlite::extension::spi;
+    use bindings::sqlite::extension::types::SqlValue;
     let col_count = data_rows[0].len();
     let placeholders = std::iter::repeat("?").take(col_count).collect::<Vec<_>>().join(", ");
     let sql = format!("INSERT INTO \"{table}\" VALUES ({placeholders})");
-    let mut imported = 0u64;
-    let result = CLI_CONN.with(|c| -> Result<u64, String> {
-        let g = c.borrow();
-        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-        let mut stmt = conn.prepare(&sql).map_err(|e| format!("Error: {}\n", e.message))?;
-        // Wrap in a transaction for performance + atomicity. Errors abort.
-        conn.execute_batch("BEGIN")
-            .map_err(|e| format!("Error: {}\n", e.message))?;
-        for (i, row) in data_rows.iter().enumerate() {
-            if row.len() != col_count {
-                let _ = conn.execute_batch("ROLLBACK");
-                return Err(format!(
-                    "Error: row {} has {} columns, expected {}\n",
-                    i + 1,
-                    row.len(),
-                    col_count
-                ));
-            }
-            stmt.reset().map_err(|e| format!("Error: {}\n", e.message))?;
-            let vals: Vec<db::Value> = row
-                .iter()
-                .map(|s| db::Value::Text(s.clone()))
-                .collect();
-            stmt.bind_all(&vals)
-                .map_err(|e| format!("Error: {}\n", e.message))?;
-            loop {
-                match stmt.step() {
-                    Ok(db::StepResult::Row) => continue,
-                    Ok(db::StepResult::Done) => break,
-                    Err(e) => {
-                        let _ = conn.execute_batch("ROLLBACK");
-                        return Err(format!("Error: {}\n", e.message));
-                    }
-                }
-            }
-            imported += 1;
-        }
-        conn.execute_batch("COMMIT")
-            .map_err(|e| format!("Error: {}\n", e.message))?;
-        Ok(imported)
-    });
-    match result {
-        Ok(n) => format!("Imported {n} rows\n"),
-        Err(msg) => msg,
+    if let Err(e) = spi::execute_batch("BEGIN") {
+        return format!("Error: {}\n", e.message);
     }
+    let mut imported = 0u64;
+    for (i, row) in data_rows.iter().enumerate() {
+        if row.len() != col_count {
+            let _ = spi::execute_batch("ROLLBACK");
+            return format!(
+                "Error: row {} has {} columns, expected {}\n",
+                i + 1, row.len(), col_count
+            );
+        }
+        let vals: Vec<SqlValue> = row.iter().map(|s| SqlValue::Text(s.clone())).collect();
+        if let Err(e) = spi::execute(&sql, &vals) {
+            let _ = spi::execute_batch("ROLLBACK");
+            return format!("Error: {}\n", e.message);
+        }
+        imported += 1;
+    }
+    if let Err(e) = spi::execute_batch("COMMIT") {
+        return format!("Error: {}\n", e.message);
+    }
+    format!("Imported {imported} rows\n")
 }
 
 /// Minimal CSV parser: handles `"`-quoted fields, doubled quotes as
