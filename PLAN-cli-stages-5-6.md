@@ -342,21 +342,45 @@ For each remaining `CLI_CONN.with` site:
 Run the cli-smokes after each file's migration. Output modes,
 .timer, .changes all should keep working.
 
-### Stage 5f — delete CLI_CONN, drop libsqlite3-sys (~half day)
+### Stage 5f — delete CLI_CONN, drop libsqlite3-sys (shipped)
 
-After 5e leaves no remaining `CLI_CONN.with` sites:
+Shipped subcommits:
+  - 533e851: drop `CLI_CONN.with` from the `.session` passthrough
+    (.session stubbed pending Stage 6).
+  - 363c5ce: drop startup `ensure_cli_conn`.
+  - (this commit): full Stage 5f purge  delete `CLI_CONN`
+    thread_local, `ensure_cli_conn`, `ExtRegistrations`,
+    `EXT_REGS`, the cli copies of
+    `register_embedded_extensions` / `register_dotcmd_sql_surface`
+    / `apply_cli_pragmas`, `sqlite_code_to_auth_action`,
+    `next_agg_context_id`, `db_value_display`. Replace
+    `EXT_REGS` with a leaner `RELOAD_SOURCES` (the only thing
+    `.reload` needs). Replace `sqlite3_complete` with a
+    Rust-side `is_statement_complete`. Hardcode the stable
+    `SQLITE_LIMIT_*` / `SQLITE_DBCONFIG_*` constants. Convert
+    `format.rs` + `settings.rs` from `db::Value` to the WIT
+    `SqlValue`. Gut `dot.rs` (every `cmd_*` helper unreachable
+    post-5e.10  the only surviving entrypoint is the
+    `.session` stub + the `try_fetch_bytes`/CAS helpers used by
+    the auto-resolve fallthrough). Drop the sqlite3 startup
+    setup (`install_log_callback`, `init_wasivfs`,
+    `init_memvfs`, `sqlite-pcache-tvm`, `sqlite-mem-tvm`,
+    `sqlite-vfs-tvm::install`)  no in-wasm sqlite3 to
+    configure anymore. Drop `libsqlite3-sys`, `sqlite-wasm-core`,
+    `sqlite-pcache-tvm`, `sqlite-mem-tvm`, `sqlite-vfs-tvm`,
+    `sqlite-embed` from `cli/Cargo.toml`.
 
-1. Delete the `CLI_CONN: RefCell<Option<db::Connection>>`
-   thread_local in `cli/src/lib.rs`.
-2. Delete `ensure_cli_conn`. Replace any remaining callers
-   (should be none post-5e) with no-ops.
-3. Drop `sqlite-wasm-core` from `cli/Cargo.toml`. The cli's
-   `db::` references should be gone after 5e.
-4. Drop `libsqlite3-sys` if no other path references it.
-5. Verify `cargo build -p sqlite-cli --target wasm32-wasip2`
-   succeeds; check the binary size (`ls -lh
-   target/wasm32-wasip2/release/sqlite_cli.component.wasm`).
-   Should drop from ~3 MB to ~500 KB.
+Binary size: **2.4 MB  1.2 MB** for
+`target/wasm32-wasip2/release/sqlite_cli.component.wasm`
+(half  shy of the plan's 500 KB target; remaining bulk is
+the 89 still-listed-but-default-off `<name>-extension` deps and
+the wit-bindgen scaffolding. A follow-up could prune the dead
+embed-* feature flags if the build's reachability analysis
+isn't doing it already.)
+
+Smoke (case + stats round-trip): scalars, aggregates, .load /
+.unload cycle all work. `.session` returns the Stage 6
+diagnostic stub.
 
 ## Stage 6 — `.session` port
 

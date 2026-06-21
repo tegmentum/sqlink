@@ -22,25 +22,13 @@ crate-type = ["cdylib"]
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 # Bindings are produced inline in src/lib.rs via wit_bindgen::generate!.
 wit-bindgen = { version = "0.44", features = ["macros"] }
-# Shared SQLite wrapper — owns the libsqlite3-sys bundled compile.
-sqlite-wasm-core = { path = "../core" }
-# TVM-track integrations  installed at startup so the trampolines
-# are always active. With default features they all use in-proc
-# backends (rough parity with the SQLite defaults). The `tvm`
-# feature on this crate flips them to wit-bindgen-backed
-# tvm:memory variants  the cli component then imports
-# tvm:memory and the host must wire tvm-wasmtime.
-sqlite-pcache-tvm = { path = "../sqlite-pcache-tvm" }
-sqlite-mem-tvm = { path = "../sqlite-mem-tvm" }
-sqlite-vfs-tvm = { path = "../sqlite-vfs-tvm" }
-# Needed directly for sqlite3_complete + SQLITE_* action codes used
-# by the in-WASM authorizer dispatch. The cli also calls sqlite3session_*
-# (see cli/src/dot.rs `.session`) via manual extern decls  the
-# `session` feature on libsqlite3-sys forces buildtime_bindgen which
-# fails to cross-compile to wasm32-wasip2. The bundled sqlite3.c IS
-# compiled with -DSQLITE_ENABLE_SESSION (core's session feature), so
-# the symbols are present; we just declare them by hand.
-libsqlite3-sys = { version = "0.38" }
+# PLAN-cli-stages-5-6.md Stage 5f: every SQL call now routes
+# through `bindings::sqlite::extension::spi::*` against the
+# host's shared connection. The cli no longer needs an in-wasm
+# sqlite3 of its own  libsqlite3-sys + sqlite-wasm-core +
+# sqlite-pcache-tvm / sqlite-mem-tvm / sqlite-vfs-tvm are all
+# dropped. is_statement_complete is a Rust-side approximation
+# (see lib.rs).
 # .sha3sum uses SHA3-256 over a canonical encoding of every row
 # of every table. Pure Rust impl works on wasm32-wasip2 unchanged.
 sha3 = { version = "0.10", default-features = false }
@@ -58,12 +46,11 @@ blake3 = { version = "1", default-features = false }
 # at startup. Same scalar surface; no WIT boundary on the hot path.
 # Add a new embed-* feature alongside its dep when adopting more
 # extensions. See PLAN-embed-extensions.md for the contract.
-# Shared embed helpers. Carried unconditionally so cli code can
-# reference its types in shared bodies; the dep is cheap (no
-# bundled compile, just the FFI thunks + value glue) and gating
-# it on a feature would force every embed-* feature to also
-# list it.
-sqlite-embed = { path = "../sqlite-embed" }
+# sqlite-embed dropped along with libsqlite3-sys in Stage 5f
+# the cli no longer instantiates `<crate>::embed::register_into(db)`
+# on its own connection (the host owns the only sqlite3 instance
+# the cli ever talks to, and registers its embed-* extensions
+# there itself).
 sha3-extension  = { path = "../extensions/sha3",  optional = true, features = ["embed"], default-features = false }
 uuid-extension  = { path = "../extensions/uuid",  optional = true, features = ["embed"], default-features = false }
 crc-extension   = { path = "../extensions/crc",   optional = true, features = ["embed"], default-features = false }

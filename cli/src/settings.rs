@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use sqlite_wasm_core::db;
+use crate::bindings::sqlite::extension::types::SqlValue as Value;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ExplainMode {
@@ -87,7 +87,7 @@ pub struct Settings {
     /// the cli applies to prepared statements whose
     /// `bind_parameter_name(i)` matches `:NAME` / `$NAME` /
     /// `@NAME`. Cleared by `.parameter init` / `.parameter clear`.
-    pub parameters: HashMap<String, db::Value>,
+    pub parameters: HashMap<String, Value>,
     /// `.binary on|off` — when on, BLOBs print as `X'…'` hex
     /// literals (the SQL-quotable form). When off (default),
     /// `<blob:N bytes>` placeholder. We don't dump raw bytes to
@@ -268,19 +268,19 @@ fn parse_blob_hex(json: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
-/// Decode a state-delta value-json into a db::Value. Used by the
+/// Decode a state-delta value-json into a Value. Used by the
 /// `params/set/<name>` delta handler  the extension sends an
 /// SqlValue, the host JSON-encodes it (Integer  bare, Real
 /// bare, Text  "...", Blob  null sentinel, Null  null).
-fn parse_param_value(json: &str) -> db::Value {
+fn parse_param_value(json: &str) -> Value {
     let t = json.trim();
-    if t == "null" { return db::Value::Null; }
-    if t == "true" { return db::Value::Integer(1); }
-    if t == "false" { return db::Value::Integer(0); }
-    if let Ok(i) = t.parse::<i64>() { return db::Value::Integer(i); }
-    if let Ok(f) = t.parse::<f64>() { return db::Value::Real(f); }
-    if let Some(s) = parse_string(json) { return db::Value::Text(s); }
-    db::Value::Null
+    if t == "null" { return Value::Null; }
+    if t == "true" { return Value::Integer(1); }
+    if t == "false" { return Value::Integer(0); }
+    if let Ok(i) = t.parse::<i64>() { return Value::Integer(i); }
+    if let Ok(f) = t.parse::<f64>() { return Value::Real(f); }
+    if let Some(s) = parse_string(json) { return Value::Text(s); }
+    Value::Null
 }
 
 /// Decode a JSON boolean. Accepts the JSON forms `true`/`false`, and

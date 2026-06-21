@@ -1,7 +1,7 @@
 //! Output formatter — takes column names + rows + current
 //! Settings and emits the textual representation.
 
-use crate::db::Value;
+use crate::bindings::sqlite::extension::types::SqlValue as Value;
 use crate::settings::{Mode, Settings};
 
 /// Format a result set under the current settings. `rows[i][j]` is

@@ -32,8 +32,6 @@ mod bindings {
     });
 }
 
-pub use sqlite_wasm_core::db;
-
 mod dot;
 mod format;
 mod grants;
@@ -52,877 +50,17 @@ use bindings::exports::wasi::cli::run::Guest as RunGuest;
 struct CliCommand;
 
 thread_local! {
-    // Visible to other modules (settings::apply_dotcmd_delta) so
-    // connection-level deltas like `conn/busy-timeout` can apply
-    // on the cli's own connection rather than the extension's
-    // spi connection.
-    pub(crate) static CLI_CONN: RefCell<Option<db::Connection>> = const { RefCell::new(None) };
     static DONE: RefCell<bool> = const { RefCell::new(false) };
     static DB_PATH: RefCell<String> = const { RefCell::new(String::new()) };
-    static AGG_CTX_COUNTER: RefCell<u64> = const { RefCell::new(1) };
-    // Per-extension record of what got registered against the cli's
-    // connection at .load time. .unload uses this to drop the
-    // matching sqlite3_create_function_v2 / sqlite3_create_collation_v2
-    // registrations so the function names stop resolving in SQL.
-    // Without this, the host's registry forgot the extension but
-    // the sqlite3 connection still held the trampolines, and SQL
-    // calls into the dispatched names fell through to a generic
-    // "extension not loaded" error rather than a clean "no such
-    // function" — confusing for anyone who reloads a different
-    // extension under the same name.
-    //
-    // HashMap::new isn't const-fn, so this can't use the `const { ... }`
-    // initializer block the other thread-locals use; it's a lazy
-    // init on first .with() call instead.
-    static EXT_REGS: RefCell<std::collections::HashMap<String, ExtRegistrations>> =
+    // PLAN-cli-stages-5-6.md Stage 5f: only the `.reload NAME` path
+    // still needs cli-side per-extension state  the input string
+    // .load was given so the user doesn't have to retype it.
+    // Everything else (scalar / agg / coll / vtab / hook trampolines,
+    // connection state) lives on the host now.
+    static RELOAD_SOURCES: RefCell<std::collections::HashMap<String, String>> =
         RefCell::new(std::collections::HashMap::new());
 }
 
-/// What an extension registered against the cli's sqlite3
-/// connection. .unload drains the entry and asks the connection to
-/// remove each registration.
-#[derive(Default)]
-struct ExtRegistrations {
-    /// (function name, num args) — covers both scalar and aggregate
-    /// since sqlite3_create_function_v2 removes either shape.
-    functions: Vec<(String, i32)>,
-    collations: Vec<String>,
-    /// Vtab module names registered via sqlite3_create_module_v2.
-    /// .unload drops them from the connection.
-    vtabs: Vec<String>,
-    /// True if .load installed an authorizer on behalf of this
-    /// extension. .unload clears the connection's authorizer in
-    /// that case so it doesn't keep dispatching into a dropped
-    /// extension. (sqlite3 has one authorizer slot per connection,
-    /// so this also clears any user-installed `.auth on` callback —
-    /// the user can re-enable it.)
-    has_authorizer: bool,
-    /// Same for the (update / commit / rollback) hook trio. We track
-    /// commit + rollback together because the cli installs them as
-    /// a pair when `manifest.has_commit_hook` is true.
-    has_update_hook: bool,
-    has_commit_hook: bool,
-    /// Source the extension was loaded from. Used by `.reload NAME`
-    /// to re-fetch the same .wasm without the caller re-typing the path.
-    /// Set to the `<input>` part of `.load <input>` — could be a path,
-    /// URL, or any string the loader accepts.
-    source: String,
-}
-
-fn ensure_cli_conn() {
-    CLI_CONN.with(|c| {
-        let mut g = c.borrow_mut();
-        if g.is_none() {
-            let path = DB_PATH.with(|p| p.borrow().clone());
-            let opened = if path.is_empty() || path == ":memory:" {
-                db::Connection::open_in_memory().ok()
-            } else {
-                db::Connection::open(&path, db::OpenFlags::DEFAULT).ok()
-            };
-            // Run embedded-extension registrations RIGHT AFTER the
-            // connection opens, before any user statement runs. Each
-            // `embed-*` cargo feature pulls in the ext as a Rust dep
-            // and wires its `register_into(db)` here. No WIT boundary
-            // on the hot path for these scalars.
-            if let Some(ref conn) = opened {
-                unsafe { register_embedded_extensions(conn.raw_handle()) };
-                unsafe { register_dotcmd_sql_surface(conn.raw_handle()) };
-                unsafe { apply_cli_pragmas(conn.raw_handle()) };
-                // Phase 3: idempotent schema bootstrap.
-                // PLAN-cli-shared-conn.md Stage 3 moves this off
-                // the cli's CLI_CONN onto spi  the dispatcher's
-                // session-miss fallthrough calls ensure_schemas()
-                // (no arg) before the first lookup.
-            }
-            *g = opened;
-        }
-    });
-}
-
-/// Phase 1.5 SQL surface for dot commands. Registers
-/// `dot_command(name [, arg1, arg2, ...])` as a variadic
-/// SQL scalar that calls
-/// `extension_loader::dispatch_dot_command(name, args.join(' '))`
-/// and returns the resulting TEXT. Errors on a 404 produce
-/// SQL NULL; other errors raise as a sqlite3 error so the user
-/// sees them in result-set rendering.
-///
-/// Same dispatcher as the shell and argv entry points; this is
-/// just a third front-end over the same contract.
-unsafe fn register_dotcmd_sql_surface(db: *mut libsqlite3_sys::sqlite3) {
-    use core::ffi::{c_char, c_int, c_void};
-    use bindings::sqlite::wasm::extension_loader;
-
-    extern "C" fn xfunc(
-        ctx: *mut libsqlite3_sys::sqlite3_context,
-        argc: core::ffi::c_int,
-        argv: *mut *mut libsqlite3_sys::sqlite3_value,
-    ) {
-        if argc < 1 {
-            unsafe {
-                let msg = b"dot_command: needs at least 1 arg (name)\0".as_ptr() as *const c_char;
-                libsqlite3_sys::sqlite3_result_error(ctx, msg, -1);
-            }
-            return;
-        }
-        let name = unsafe {
-            let p = libsqlite3_sys::sqlite3_value_text(*argv);
-            if p.is_null() { String::new() }
-            else {
-                let len = libsqlite3_sys::sqlite3_value_bytes(*argv) as usize;
-                let bytes = std::slice::from_raw_parts(p, len);
-                String::from_utf8_lossy(bytes).into_owned()
-            }
-        };
-        // Concat remaining args (TEXT-coerced) with a single space.
-        let mut joined = String::new();
-        for i in 1..argc {
-            let p = unsafe { libsqlite3_sys::sqlite3_value_text(*argv.add(i as usize)) };
-            if !p.is_null() {
-                let len = unsafe {
-                    libsqlite3_sys::sqlite3_value_bytes(*argv.add(i as usize))
-                } as usize;
-                let bytes = unsafe { std::slice::from_raw_parts(p, len) };
-                if !joined.is_empty() { joined.push(' '); }
-                joined.push_str(&String::from_utf8_lossy(bytes));
-            }
-        }
-        let snapshot = build_cli_state_snapshot();
-        match extension_loader::dispatch_dot_command(&name, &joined, &snapshot) {
-            Ok(out) => {
-                // The SQL surface is read-only by design  state-deltas
-                // would surprise callers of `SELECT dot_command(...)`
-                // (no shell, no settings to mutate). Drop them.
-                let cs = std::ffi::CString::new(out.text).unwrap_or_default();
-                let bytes = cs.as_bytes_with_nul();
-                unsafe {
-                    libsqlite3_sys::sqlite3_result_text(
-                        ctx,
-                        bytes.as_ptr() as *const c_char,
-                        (bytes.len() - 1) as c_int,
-                        libsqlite3_sys::SQLITE_TRANSIENT(),
-                    );
-                }
-            }
-            Err(e) if e.code == 404 => {
-                unsafe { libsqlite3_sys::sqlite3_result_null(ctx) };
-            }
-            Err(e) => {
-                let cs = std::ffi::CString::new(format!(
-                    "dot_command({name}): {} ({})", e.message, e.code
-                )).unwrap_or_default();
-                unsafe {
-                    libsqlite3_sys::sqlite3_result_error(ctx, cs.as_ptr(), -1);
-                }
-            }
-        }
-    }
-
-    let name = b"dot_command\0".as_ptr() as *const c_char;
-    let rc = libsqlite3_sys::sqlite3_create_function_v2(
-        db,
-        name,
-        -1,  // variadic
-        libsqlite3_sys::SQLITE_UTF8 as c_int,
-        std::ptr::null_mut::<c_void>(),
-        Some(xfunc),
-        None,
-        None,
-        None,
-    );
-    if rc != libsqlite3_sys::SQLITE_OK {
-        eprintln!("register dot_command(): rc={rc}");
-    }
-}
-
-/// Pragmas set on every cli connection. The defaults sqlite ships
-/// with are sized for desktop/server processes with multi-GB heap
-/// budgets and a fast fsync path. Our wasm runtime has the opposite
-/// shape  cheap in-process memory, expensive wasi-call fsync
-/// so we lean toward larger page cache (less wasi roundtripping)
-/// and NORMAL sync (one less fsync per commit). temp_store=MEMORY
-/// keeps temp tables off-disk entirely.
-///
-/// Users can override any of these by issuing the matching PRAGMA
-/// after startup.
-unsafe fn apply_cli_pragmas(db: *mut libsqlite3_sys::sqlite3) {
-    const PRAGMAS: &[&[u8]] = &[
-        // Negative value = KB of memory cache. -262144 = 256 MB.
-        // SQLite's default is -2000 (~8 MB), tuned for desktops with
-        // 16 GB RAM that need to share. Our wasm sandbox uses what
-        // we give it; 256 MB absorbs most working sets without
-        // physical-memory cost beyond actual cache demand (wasmtime
-        // virtual-allocates linear memory and only commits pages
-        // on first touch).
-        b"PRAGMA cache_size = -262144\0",
-        // MEMORY keeps CTEs / temp indexes / sort scratch out of
-        // the file system path. Default is FILE.
-        b"PRAGMA temp_store = MEMORY\0",
-        // NORMAL writes the rollback journal + does ONE fsync per
-        // commit; default FULL does an extra fsync at the start of
-        // commit. The extra fsync exists to defend against power
-        // loss DURING commit  for a wasm cli that's not a realistic
-        // failure mode for the workloads we target.
-        b"PRAGMA synchronous = NORMAL\0",
-    ];
-    for sql in PRAGMAS {
-        let rc = libsqlite3_sys::sqlite3_exec(
-            db,
-            sql.as_ptr() as *const _,
-            None,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-        );
-        if rc != libsqlite3_sys::SQLITE_OK {
-            // Non-fatal  if a PRAGMA fails (e.g. read-only db),
-            // continue with sqlite's defaults for that knob.
-            let name = std::ffi::CStr::from_ptr(sql.as_ptr() as *const _)
-                .to_string_lossy();
-            eprintln!("cli pragma {name}: rc={rc}");
-        }
-    }
-}
-
-/// Called once per cli connection open. Each `embed-<name>` cargo
-/// feature compiles in one block below. The body is intentionally
-/// trivial  pile every embeddable extension in here; the feature
-/// gate decides what reaches the binary.
-unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
-    #[cfg(feature = "embed-sha3")]
-    {
-        let rc = sha3_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-sha3: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-uuid")]
-    {
-        let rc = uuid_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-uuid: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-crc")]
-    {
-        let rc = crc_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-crc: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-baseN")]
-    {
-        let rc = baseN_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-baseN: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-color")]
-    {
-        let rc = color_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-color: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-ean")]
-    {
-        let rc = ean_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-ean: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-emoji")]
-    {
-        let rc = emoji_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-emoji: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-morse")]
-    {
-        let rc = morse_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-morse: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-hexdump")]
-    {
-        let rc = hexdump_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-hexdump: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-idna")]
-    {
-        let rc = idna_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-idna: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-faker")]
-    {
-        let rc = faker_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-faker: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-regexp")]
-    {
-        let rc = regexp_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-regexp: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-sentiment")]
-    {
-        let rc = sentiment_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-sentiment: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-json1")]
-    {
-        let rc = json1_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-json1: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-cron")]
-    {
-        let rc = cron_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-cron: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-crypto")]
-    {
-        let rc = crypto_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-crypto: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-mailto")]
-    {
-        let rc = mailto_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-mailto: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-ssn")]
-    {
-        let rc = ssn_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-ssn: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-numfmt")]
-    {
-        let rc = numfmt_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-numfmt: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-ipaddr")]
-    {
-        let rc = ipaddr_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-ipaddr: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-aba")]
-    {
-        let rc = aba_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-aba: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-bic")]
-    {
-        let rc = bic_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-bic: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-cusip")]
-    {
-        let rc = cusip_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-cusip: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-creditcard")]
-    {
-        let rc = creditcard_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-creditcard: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-isin")]
-    {
-        let rc = isin_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-isin: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-dns")]
-    {
-        let rc = dns_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-dns: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-detect")]
-    {
-        let rc = detect_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-detect: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-ical")]
-    {
-        let rc = ical_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-ical: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-zorder")]
-    {
-        let rc = zorder_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-zorder: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-postcode")]
-    {
-        let rc = postcode_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-postcode: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-totype")]
-    {
-        let rc = totype_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-totype: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-template")]
-    {
-        let rc = template_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-template: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-email")]
-    {
-        let rc = email_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-email: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-case")]
-    {
-        let rc = case_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-case: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-phone")]
-    {
-        let rc = phone_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-phone: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-csscolor")]
-    {
-        let rc = csscolor_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-csscolor: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-lorem")]
-    {
-        let rc = lorem_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-lorem: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-url")]
-    {
-        let rc = url_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-url: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-graphql")]
-    {
-        let rc = graphql_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-graphql: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-eval")]
-    {
-        let rc = eval_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-eval: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-roman")]
-    {
-        let rc = roman_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-roman: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-mac")]
-    {
-        let rc = mac_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-mac: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-fileio")]
-    {
-        let rc = fileio_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-fileio: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-bpe")]
-    {
-        let rc = bpe_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-bpe: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-geo-distance")]
-    {
-        let rc = geo_distance_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-geo-distance: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-http")]
-    {
-        let rc = http_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-http: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-bencode")]
-    {
-        let rc = bencode_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-bencode: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-sqlparse")]
-    {
-        let rc = sqlparse_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-sqlparse: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-semver")]
-    {
-        let rc = semver_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-semver: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-container")]
-    {
-        let rc = container_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-container: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-currency")]
-    {
-        let rc = currency_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-currency: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-codecs")]
-    {
-        let rc = codecs_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-codecs: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-radix")]
-    {
-        let rc = radix_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-radix: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-natsort")]
-    {
-        let rc = natsort_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-natsort: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-unitconv")]
-    {
-        let rc = unitconv_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-unitconv: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-latlon")]
-    {
-        let rc = latlon_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-latlon: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-vin")]
-    {
-        let rc = vin_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-vin: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-ieee754")]
-    {
-        let rc = ieee754_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-ieee754: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-escape")]
-    {
-        let rc = escape_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-escape: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-iban")]
-    {
-        let rc = iban_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-iban: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-humansize")]
-    {
-        let rc = humansize_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-humansize: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-math")]
-    {
-        let rc = math_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-math: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-compress")]
-    {
-        let rc = compress_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-compress: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-bloom")]
-    {
-        let rc = bloom_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-bloom: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-setops")]
-    {
-        let rc = setops_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-setops: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-db-utils")]
-    {
-        let rc = db_utils_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-db-utils: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-phone-prefix")]
-    {
-        let rc = phone_prefix_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-phone-prefix: register_into failed rc={rc}");
-        }
-    }
-    #[cfg(feature = "embed-country")]
-    {
-        let rc = country_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK {
-            eprintln!("embed-country: register_into failed rc={rc}");
-        }
-    }
-    // embed-ids deferred: wasi_snapshot_preview1 adapter required
-    // (ulid/nanoid use std::time). embed.rs ships in extensions/ids/.
-    #[cfg(feature = "embed-onnx")]
-    {
-        let rc = onnx_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-onnx: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-text-nlp")]
-    {
-        let rc = text_nlp_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-text-nlp: register_into failed rc={rc}"); }
-    }
-    // embed-avro deferred: rust-lld SIGSEGV (heavy apache_avro graph).
-    // embed.rs ships; same blocker as template/graphql.
-    #[cfg(feature = "embed-formats")]
-    {
-        let rc = formats_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-formats: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-web-parsers")]
-    {
-        let rc = web_parsers_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-web-parsers: register_into failed rc={rc}"); }
-    }
-    // embed-crypto-keys deferred: wasi p1 adapter required (random_get).
-    // embed.rs ships in extensions/crypto-keys/.
-    #[cfg(feature = "embed-extfns")]
-    {
-        let rc = extfns_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-extfns: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-vec")]
-    {
-        let rc = vec_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-vec: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-time")]
-    {
-        let rc = time_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-time: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-parsers")]
-    {
-        let rc = parsers_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-parsers: register_into failed rc={rc}"); }
-    }
-    // embed-crypto-auth deferred: wasi p1 adapter required (random_get for salts).
-    // embed.rs ships in extensions/crypto-auth/.
-    #[cfg(feature = "embed-geo")]
-    {
-        let rc = geo_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-geo: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-decimal")]
-    {
-        let rc = decimal_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-decimal: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-hyperloglog")]
-    {
-        let rc = hyperloglog_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-hyperloglog: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-count-min")]
-    {
-        let rc = count_min_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-count-min: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-sketches")]
-    {
-        let rc = sketches_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-sketches: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-series")]
-    {
-        let rc = series_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-series: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-listargs")]
-    {
-        let rc = listargs_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-listargs: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-define")]
-    {
-        let rc = define_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-define: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-completion")]
-    {
-        let rc = completion_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-completion: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-vec-each")]
-    {
-        let rc = vec_each_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-vec-each: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-text-utils")]
-    {
-        let rc = text_utils_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-text-utils: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-time-series")]
-    {
-        let rc = time_series_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-time-series: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-trie")]
-    {
-        let rc = trie_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-trie: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-pmtiles")]
-    {
-        let rc = pmtiles_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-pmtiles: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-vec0")]
-    {
-        let rc = vec0_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-vec0: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-stdsql")]
-    {
-        let rc = stdsql_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-stdsql: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-sys-compat")]
-    {
-        let rc = sys_compat_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-sys-compat: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-list")]
-    {
-        let rc = list_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-list: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-inmem")]
-    {
-        let rc = inmem_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-inmem: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-changeset")]
-    {
-        let rc = changeset_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-changeset: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-csv")]
-    {
-        let rc = csv_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-csv: register_into failed rc={rc}"); }
-    }
-    #[cfg(feature = "embed-stats")]
-    {
-        let rc = stats_extension::embed::register_into(_db);
-        if rc != libsqlite3_sys::SQLITE_OK { eprintln!("embed-stats: register_into failed rc={rc}"); }
-    }
-}
 
 // =========================================================================
 // wasi:cli/run — the component's entry point.
@@ -934,62 +72,15 @@ unsafe fn register_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
 
 impl RunGuest for CliCommand {
     fn run() -> Result<(), ()> {
-        // Every sqlite3_config(...) call must run BEFORE
-        // sqlite3_initialize. init_wasivfs's vfs_register call
-        // triggers initialize, so the four config installs all
-        // go above it.
-        //
-        // Order:
-        //   1. log callback (CONFIG_LOG)  routes sqlite log
-        //      events to .log on|off|FILE state
-        //   2. mem methods (CONFIG_MALLOC)  size-header
-        //      allocator over the Rust global heap
-        //   3. pcache2 (CONFIG_PCACHE2)  shadow-pool + LRU
-        //      cache with InProcRegion (or WitTvmRegion when
-        //      the `tvm` feature is on)
-        //   4. wasivfs registration  triggers initialize
-        //   5. sqlite-vfs-tvm registration (named "tvm-mem",
-        //      not default)  users opt in with .open VFSNAME
-        let _ = db::install_log_callback(Some(log_event));
-        if let Err(e) = sqlite_mem_tvm::install() {
-            eprintln!("sqlite-mem-tvm install failed: {}", e);
-        }
-        if let Err(e) = sqlite_pcache_tvm::install() {
-            eprintln!("sqlite-pcache-tvm install failed: {}", e);
-        }
-
-        // Register the WASI-backed VFS so file-backed opens persist.
-        // The `match` ensures the optimizer can't dead-code the call
-        // (let _ = wasn't enough — possibly because init_wasivfs is
-        // a no-op on non-wasm targets, the optimizer was inferring
-        // it as a no-op overall and removing it).
-        match db::init_wasivfs() {
-            Ok(()) => {}
-            Err(e) => eprintln!("init_wasivfs failed: {} ({})", e.message, e.code),
-        }
-
-        // Register memvfs alongside. SQLITE_WASM_MEMVFS=1 in env
-        // makes it the DEFAULT (every NULL-vfs open routes through
-        // RAM-backed I/O); unset / 0 leaves memvfs available by
-        // name only so callers can opt in via `vfs=memvfs` in the
-        // URI without changing the default-VFS contract for
-        // existing tests.
-        let memvfs_default = std::env::var("SQLITE_WASM_MEMVFS")
-            .ok()
-            .map(|s| s == "1" || s.eq_ignore_ascii_case("true"))
-            .unwrap_or(false);
-        match db::init_memvfs(memvfs_default) {
-            Ok(()) => {}
-            Err(e) => eprintln!("init_memvfs failed: {} ({})", e.message, e.code),
-        }
-
-        // VFS register can happen after initialize  it's not
-        // boot-order-constrained the way CONFIG_* are. Registered
-        // under the name "tvm-mem", NOT as default, so existing
-        // file-backed opens keep routing through wasivfs.
-        if let Err(e) = sqlite_vfs_tvm::install() {
-            eprintln!("sqlite-vfs-tvm install failed: {}", e);
-        }
+        // PLAN-cli-stages-5-6.md Stage 5f: the cli no longer
+        // configures or instantiates an in-wasm sqlite3 (no
+        // CLI_CONN, no embedded-extension registration on the
+        // cli side). The host's `register_host_embedded_extensions`
+        // / `apply_host_cli_pragmas` / `register_host_dot_command_function`
+        // do the equivalent setup on its shared spi connection at
+        // first-open time. sqlite-pcache-tvm / sqlite-mem-tvm /
+        // sqlite-vfs-tvm / install_log_callback / init_wasivfs /
+        // init_memvfs are all dropped along with libsqlite3-sys.
         let argv: Vec<String> = std::env::args().collect();
         let db_path = if argv.len() > 1 { argv[1].clone() } else { String::new() };
         DB_PATH.with(|p| *p.borrow_mut() = db_path);
@@ -1160,13 +251,105 @@ fn is_statement_complete(buffered: &str) -> bool {
     if trimmed.starts_with('.') {
         return true;
     }
-    // sqlite3_complete handles unterminated string literals, block
-    // comments, line comments, BEGIN/END trigger bodies.
-    let cstring = match std::ffi::CString::new(trimmed) {
-        Ok(s) => s,
-        Err(_) => return false,
-    };
-    unsafe { libsqlite3_sys::sqlite3_complete(cstring.as_ptr()) != 0 }
+    // PLAN-cli-stages-5-6.md Stage 5f: replace sqlite3_complete with
+    // a Rust-side approximation so the cli can drop libsqlite3-sys.
+    // Tracks: '...' / "..." / `...` string literals (with embedded
+    // escape-by-doubling), -- line comments, /* ... */ block
+    // comments, BEGIN/END trigger bodies (simple word-boundary
+    // match, case-insensitive). A statement is complete when the
+    // last non-trivial char is `;` outside of any open construct.
+    let bytes = trimmed.as_bytes();
+    let mut i = 0;
+    let n = bytes.len();
+    let mut in_string: Option<u8> = None; // Some(b'\'' | b'"' | b'`')
+    let mut in_block_comment = false;
+    let mut begin_depth: i32 = 0;
+    let mut last_semi: Option<usize> = None;
+    while i < n {
+        let c = bytes[i];
+        if in_block_comment {
+            if c == b'*' && i + 1 < n && bytes[i + 1] == b'/' {
+                in_block_comment = false;
+                i += 2;
+                continue;
+            }
+            i += 1;
+            continue;
+        }
+        if let Some(q) = in_string {
+            if c == q {
+                if i + 1 < n && bytes[i + 1] == q {
+                    i += 2;
+                    continue;
+                }
+                in_string = None;
+            }
+            i += 1;
+            continue;
+        }
+        // line comment
+        if c == b'-' && i + 1 < n && bytes[i + 1] == b'-' {
+            while i < n && bytes[i] != b'\n' { i += 1; }
+            continue;
+        }
+        if c == b'/' && i + 1 < n && bytes[i + 1] == b'*' {
+            in_block_comment = true;
+            i += 2;
+            continue;
+        }
+        match c {
+            b'\'' | b'"' | b'`' => { in_string = Some(c); i += 1; continue; }
+            b';' => { last_semi = Some(i); i += 1; continue; }
+            _ => {}
+        }
+        // case-insensitive BEGIN / END word match at a word boundary
+        let is_word_boundary = i == 0 || !is_ident_byte(bytes[i - 1]);
+        if is_word_boundary {
+            if matches_word_ci(bytes, i, b"BEGIN") {
+                begin_depth += 1;
+                i += 5;
+                continue;
+            }
+            if matches_word_ci(bytes, i, b"END") {
+                begin_depth = (begin_depth - 1).max(0);
+                i += 3;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    if in_string.is_some() || in_block_comment || begin_depth > 0 {
+        return false;
+    }
+    // Look for the last non-whitespace, non-comment-tail char.
+    last_semi.map(|idx| idx + 1 >= trailing_trivial_start(bytes)).unwrap_or(false)
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+fn matches_word_ci(bytes: &[u8], pos: usize, kw: &[u8]) -> bool {
+    if pos + kw.len() > bytes.len() {
+        return false;
+    }
+    for (i, k) in kw.iter().enumerate() {
+        if bytes[pos + i].to_ascii_uppercase() != *k {
+            return false;
+        }
+    }
+    let after = pos + kw.len();
+    after >= bytes.len() || !is_ident_byte(bytes[after])
+}
+
+/// Byte index where trailing whitespace begins  used to confirm
+/// the last `;` we saw really is the tail of the statement.
+fn trailing_trivial_start(bytes: &[u8]) -> usize {
+    let mut i = bytes.len();
+    while i > 0 && bytes[i - 1].is_ascii_whitespace() {
+        i -= 1;
+    }
+    i
 }
 
 fn eval_input(input: &str) -> String {
@@ -1462,31 +645,16 @@ fn eval_sql_inner(sql: &str) -> String {
     let named: Vec<spi::NamedParam> = settings::SETTINGS.with(|s| {
         s.borrow().parameters.iter().map(|(name, v)| spi::NamedParam {
             name: name.clone(),
-            value: match v {
-                db::Value::Null      => SqlValue::Null,
-                db::Value::Integer(i) => SqlValue::Integer(*i),
-                db::Value::Real(r)    => SqlValue::Real(*r),
-                db::Value::Text(s)    => SqlValue::Text(s.clone()),
-                db::Value::Blob(b)    => SqlValue::Blob(b.clone()),
-            },
+            value: v.clone(),
         }).collect()
     });
     match spi::execute_multi(sql, &named) {
         Ok(results) => {
             let settings = settings::SETTINGS.with(|s| s.borrow().clone());
             for r in &results {
-                // Convert bindings::SqlValue -> db::Value for the
-                // existing format::format consumer.
-                let rows: Vec<Vec<db::Value>> = r.rows.iter().map(|row| {
-                    row.iter().map(|v| match v {
-                        SqlValue::Null       => db::Value::Null,
-                        SqlValue::Integer(i) => db::Value::Integer(*i),
-                        SqlValue::Real(r)    => db::Value::Real(*r),
-                        SqlValue::Text(s)    => db::Value::Text(s.clone()),
-                        SqlValue::Blob(b)    => db::Value::Blob(b.clone()),
-                    }).collect()
-                }).collect();
-                out.push_str(&format::format(&r.columns, &rows, &settings));
+                // PLAN-cli-stages-5-6.md Stage 5f: format::format
+                // accepts bindings::SqlValue directly; no conversion.
+                out.push_str(&format::format(&r.columns, &r.rows, &settings));
             }
         }
         Err(e) => {
@@ -1617,18 +785,6 @@ fn log_event(err_code: i32, msg: &str) {
     }
 }
 
-/// Render a `db::Value` for `.parameter list`. Public so dot.rs's
-/// cmd_parameter can use it.
-pub fn db_value_display(v: &db::Value) -> String {
-    match v {
-        db::Value::Null => "NULL".to_string(),
-        db::Value::Integer(i) => i.to_string(),
-        db::Value::Real(r) => r.to_string(),
-        db::Value::Text(s) => format!("'{}'", s.replace('\'', "''")),
-        db::Value::Blob(b) => format!("X'{}'", b.iter().map(|x| format!("{x:02x}")).collect::<String>()),
-    }
-}
-
 /// `.read FILE` — buffer FILE line by line, fire each complete
 /// statement through eval_input as if the user had typed it. Echoes
 /// when `.echo on`; stops on the first error when `.bail on`.
@@ -1734,8 +890,6 @@ fn parse_grants(s: &str) -> Result<Vec<bindings::sqlite::extension::policy::Capa
 /// in. Matches the security-first defaults of the native loader.
 fn do_load(input: &str) -> String {
     use bindings::sqlite::extension::policy::{DnsPolicy, HttpPolicy, LoadOptions, Method};
-    use bindings::sqlite::extension::types::SqlValue as WitSqlValue;
-    use bindings::sqlite::wasm::dispatch;
     use bindings::sqlite::wasm::extension_loader;
 
     let mut parts = input.split_whitespace();
@@ -2012,13 +1166,10 @@ fn do_load(input: &str) -> String {
     }
 
     // Stage 5e.10e: every registration type now routes through spi
-    // against the host's shared connection. Persist the EXT_REGS
-    // book-keeping (used by .reload to remember the source) and
-    // we're done. The do_unload path calls spi.unregister-extension
-    // to tear all of this down host-side.
-    let mut regs = ExtRegistrations::default();
-    regs.source = input.to_string();
-    EXT_REGS.with(|m| m.borrow_mut().insert(ext_name.clone(), regs));
+    // against the host's shared connection. The cli only needs to
+    // remember the input string so `.reload NAME` can re-fetch
+    // without the user re-typing the path.
+    RELOAD_SOURCES.with(|m| m.borrow_mut().insert(ext_name.clone(), input.to_string()));
 
     let scalars = s_count;
     let collations = c_count_host;
@@ -2099,79 +1250,6 @@ fn grants_record_load(
             None
         }
         (Some(_), None) => None,
-    }
-}
-
-fn db_to_wit(v: db::Value) -> bindings::sqlite::extension::types::SqlValue {
-    use bindings::sqlite::extension::types::SqlValue as V;
-    match v {
-        db::Value::Null => V::Null,
-        db::Value::Integer(i) => V::Integer(i),
-        db::Value::Real(r) => V::Real(r),
-        db::Value::Text(s) => V::Text(s),
-        db::Value::Blob(b) => V::Blob(b),
-    }
-}
-
-fn wit_to_db(v: bindings::sqlite::extension::types::SqlValue) -> db::Value {
-    use bindings::sqlite::extension::types::SqlValue as V;
-    match v {
-        V::Null => db::Value::Null,
-        V::Integer(i) => db::Value::Integer(i),
-        V::Real(r) => db::Value::Real(r),
-        V::Text(s) => db::Value::Text(s),
-        V::Blob(b) => db::Value::Blob(b),
-    }
-}
-
-fn next_agg_context_id() -> u64 {
-    AGG_CTX_COUNTER.with(|c| {
-        let mut g = c.borrow_mut();
-        let id = *g;
-        *g = g.wrapping_add(1).max(1);
-        id
-    })
-}
-
-/// Map a SQLite SQLITE_* action code to the WIT auth-action enum.
-fn sqlite_code_to_auth_action(op: i32) -> bindings::sqlite::extension::types::AuthAction {
-    use bindings::sqlite::extension::types::AuthAction as A;
-    use libsqlite3_sys as ffi;
-    match op {
-        ffi::SQLITE_CREATE_INDEX => A::CreateIndex,
-        ffi::SQLITE_CREATE_TABLE => A::CreateTable,
-        ffi::SQLITE_CREATE_TEMP_INDEX => A::CreateTempIndex,
-        ffi::SQLITE_CREATE_TEMP_TABLE => A::CreateTempTable,
-        ffi::SQLITE_CREATE_TEMP_TRIGGER => A::CreateTempTrigger,
-        ffi::SQLITE_CREATE_TEMP_VIEW => A::CreateTempView,
-        ffi::SQLITE_CREATE_TRIGGER => A::CreateTrigger,
-        ffi::SQLITE_CREATE_VIEW => A::CreateView,
-        ffi::SQLITE_DELETE => A::Delete,
-        ffi::SQLITE_DROP_INDEX => A::DropIndex,
-        ffi::SQLITE_DROP_TABLE => A::DropTable,
-        ffi::SQLITE_DROP_TEMP_INDEX => A::DropTempIndex,
-        ffi::SQLITE_DROP_TEMP_TABLE => A::DropTempTable,
-        ffi::SQLITE_DROP_TEMP_TRIGGER => A::DropTempTrigger,
-        ffi::SQLITE_DROP_TEMP_VIEW => A::DropTempView,
-        ffi::SQLITE_DROP_TRIGGER => A::DropTrigger,
-        ffi::SQLITE_DROP_VIEW => A::DropView,
-        ffi::SQLITE_INSERT => A::Insert,
-        ffi::SQLITE_PRAGMA => A::Pragma,
-        ffi::SQLITE_READ => A::Read,
-        ffi::SQLITE_SELECT => A::Select,
-        ffi::SQLITE_TRANSACTION => A::Transaction,
-        ffi::SQLITE_UPDATE => A::Update,
-        ffi::SQLITE_ATTACH => A::Attach,
-        ffi::SQLITE_DETACH => A::Detach,
-        ffi::SQLITE_ALTER_TABLE => A::AlterTable,
-        ffi::SQLITE_REINDEX => A::Reindex,
-        ffi::SQLITE_ANALYZE => A::Analyze,
-        ffi::SQLITE_CREATE_VTABLE => A::CreateVtable,
-        ffi::SQLITE_DROP_VTABLE => A::DropVtable,
-        ffi::SQLITE_FUNCTION => A::Function,
-        ffi::SQLITE_SAVEPOINT => A::Savepoint,
-        ffi::SQLITE_RECURSIVE => A::Recursive,
-        _ => A::Read,
     }
 }
 
@@ -2807,9 +1885,7 @@ fn do_reload(input: &str) -> String {
 
     // Look up the remembered source if no new path supplied.
     let target = if rest.is_empty() {
-        let remembered = EXT_REGS.with(|m| {
-            m.borrow().get(name).map(|r| r.source.clone())
-        });
+        let remembered = RELOAD_SOURCES.with(|m| m.borrow().get(name).cloned());
         match remembered {
             Some(s) if !s.is_empty() => s,
             _ => return format!(
@@ -2840,7 +1916,7 @@ fn do_unload(name: &str) -> String {
     // teardown call. The cli's own connection has nothing to
     // clean up.
     bindings::sqlite::extension::spi::unregister_extension(name);
-    let _ = EXT_REGS.with(|m| m.borrow_mut().remove(name));
+    let _ = RELOAD_SOURCES.with(|m| m.borrow_mut().remove(name));
 
     match host_result {
         Ok(()) => format!("Unloaded extension: {name}\n"),
@@ -3250,16 +2326,17 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
         // cli_state.list_keys("params/value/") + get_value.
         for (name, val) in &g.parameters {
             let key = format!("params/value/{name}");
+            use bindings::sqlite::extension::types::SqlValue as V;
             let encoded = match val {
-                db::Value::Null      => "null".to_string(),
-                db::Value::Integer(i) => i.to_string(),
-                db::Value::Real(r)    => r.to_string(),
-                db::Value::Text(s)    => str_v(s),
+                V::Null      => "null".to_string(),
+                V::Integer(i) => i.to_string(),
+                V::Real(r)    => r.to_string(),
+                V::Text(s)    => str_v(s),
                 // Blobs aren't snapshot-able through the
                 // JSON-ish encoding cli-state.get_text reads;
                 // emit a hex literal that round-trips through
                 // get_text.
-                db::Value::Blob(b)    => {
+                V::Blob(b)    => {
                     let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
                     str_v(&format!("X'{hex}'"))
                 }
@@ -3286,38 +2363,42 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
 }
 
 /// SQLITE_LIMIT_* categories pushed in the cli-state snapshot
-/// (read side of `.limit`).
+/// (read side of `.limit`). PLAN-cli-stages-5-6.md Stage 5f:
+/// constants hardcoded so the cli can drop libsqlite3-sys. These
+/// are stable ABI values that haven't changed since SQLite 3.0
+/// (and `SQLITE_LIMIT_WORKER_THREADS` since 3.8.7).
 pub(crate) const LIMIT_NAMES: &[(&str, std::os::raw::c_int)] = &[
-    ("length",                libsqlite3_sys::SQLITE_LIMIT_LENGTH),
-    ("sql_length",            libsqlite3_sys::SQLITE_LIMIT_SQL_LENGTH),
-    ("column",                libsqlite3_sys::SQLITE_LIMIT_COLUMN),
-    ("expr_depth",            libsqlite3_sys::SQLITE_LIMIT_EXPR_DEPTH),
-    ("compound_select",       libsqlite3_sys::SQLITE_LIMIT_COMPOUND_SELECT),
-    ("vdbe_op",               libsqlite3_sys::SQLITE_LIMIT_VDBE_OP),
-    ("function_arg",          libsqlite3_sys::SQLITE_LIMIT_FUNCTION_ARG),
-    ("attached",              libsqlite3_sys::SQLITE_LIMIT_ATTACHED),
-    ("like_pattern_length",   libsqlite3_sys::SQLITE_LIMIT_LIKE_PATTERN_LENGTH),
-    ("variable_number",       libsqlite3_sys::SQLITE_LIMIT_VARIABLE_NUMBER),
-    ("trigger_depth",         libsqlite3_sys::SQLITE_LIMIT_TRIGGER_DEPTH),
-    ("worker_threads",        libsqlite3_sys::SQLITE_LIMIT_WORKER_THREADS),
+    ("length",                0),
+    ("sql_length",            1),
+    ("column",                2),
+    ("expr_depth",            3),
+    ("compound_select",       4),
+    ("vdbe_op",               5),
+    ("function_arg",          6),
+    ("attached",              7),
+    ("like_pattern_length",   8),
+    ("variable_number",       9),
+    ("trigger_depth",         10),
+    ("worker_threads",        11),
 ];
 
 /// SQLITE_DBCONFIG_* bools pushed in the cli-state snapshot
-/// (read side of `.dbconfig`).
+/// (read side of `.dbconfig`). Constants hardcoded per Stage 5f
+/// for the same reason as `LIMIT_NAMES`.
 pub(crate) const DBCONFIG_BOOLEANS: &[(&str, std::os::raw::c_int)] = &[
-    ("defensive",              libsqlite3_sys::SQLITE_DBCONFIG_DEFENSIVE as std::os::raw::c_int),
-    ("dqs_dml",                libsqlite3_sys::SQLITE_DBCONFIG_DQS_DML as std::os::raw::c_int),
-    ("dqs_ddl",                libsqlite3_sys::SQLITE_DBCONFIG_DQS_DDL as std::os::raw::c_int),
-    ("enable_fkey",            libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_FKEY as std::os::raw::c_int),
-    ("enable_trigger",         libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_TRIGGER as std::os::raw::c_int),
-    ("enable_view",            libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_VIEW as std::os::raw::c_int),
-    ("enable_load_extension",  libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION as std::os::raw::c_int),
-    ("enable_qpsg",            libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_QPSG as std::os::raw::c_int),
-    ("legacy_alter_table",     libsqlite3_sys::SQLITE_DBCONFIG_LEGACY_ALTER_TABLE as std::os::raw::c_int),
-    ("legacy_file_format",     libsqlite3_sys::SQLITE_DBCONFIG_LEGACY_FILE_FORMAT as std::os::raw::c_int),
-    ("trigger_eqp",            libsqlite3_sys::SQLITE_DBCONFIG_TRIGGER_EQP as std::os::raw::c_int),
-    ("trusted_schema",         libsqlite3_sys::SQLITE_DBCONFIG_TRUSTED_SCHEMA as std::os::raw::c_int),
-    ("writable_schema",        libsqlite3_sys::SQLITE_DBCONFIG_WRITABLE_SCHEMA as std::os::raw::c_int),
+    ("defensive",              1010),
+    ("dqs_dml",                1013),
+    ("dqs_ddl",                1014),
+    ("enable_fkey",            1002),
+    ("enable_trigger",         1003),
+    ("enable_view",            1015),
+    ("enable_load_extension",  1005),
+    ("enable_qpsg",            1007),
+    ("legacy_alter_table",     1012),
+    ("legacy_file_format",     1016),
+    ("trigger_eqp",            1008),
+    ("trusted_schema",         1017),
+    ("writable_schema",        1011),
 ];
 
 /// Lookup by name; used by the delta path.
