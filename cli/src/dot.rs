@@ -1865,8 +1865,21 @@ pub(crate) fn walk_cas_resolvers(
                 }
             }
             "http" => {
-                errs.push(format!("{}: http kind not yet wired (TODO Phase 4.2)", r.uri));
-                None
+                // Phase 4 http-CAS: route through the host. The cli's
+                // wasm sandbox doesn't speak the network itself; the
+                // host has reqwest + TLS + DNS configured already.
+                // The host also blake3-verifies, but we re-check here
+                // (defense in depth + clearer error path).
+                let trimmed = r.uri.trim_end_matches('/');
+                let probe = format!("{trimmed}/blake3/{aa}/{rest}");
+                use crate::bindings::sqlite::wasm::extension_loader;
+                match extension_loader::fetch_cas_uri(&probe, expected_digest) {
+                    Ok(b) => Some(b),
+                    Err(e) => {
+                        errs.push(format!("{probe}: {} ({})", e.message, e.code));
+                        None
+                    }
+                }
             }
             other => { errs.push(format!("{}: unknown kind {other:?}", r.uri)); None }
         };

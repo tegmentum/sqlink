@@ -100,6 +100,22 @@ interface extension-loader {
         exit-code: s32,
     }
 
+    /// Phase 4 http-CAS support. The cli's `.sqlink` registry
+    /// stores `sqlink_cas_resolver` rows; on a session-miss for a
+    /// row whose digest isn't in `sqlink_artifact`, the cli walks
+    /// resolvers in priority order. `file` kind is resolved
+    /// cli-side via `std::fs::read`; `http` (and any other
+    /// network-backed kind) routes through here so the host's
+    /// reqwest client + capability gating handles the actual GET.
+    ///
+    /// The host fetches `uri`, blake3-hashes the response body,
+    /// and returns the bytes only if the hash matches
+    /// `expected-digest`. On hash mismatch the error message is
+    /// "digest mismatch: <got> != <expected>"; on network failure
+    /// the underlying error text is passed through.
+    fetch-cas-uri: func(uri: string, expected-digest: string)
+        -> result<list<u8>, loader-error>;
+
     /// Describe an extension WITHOUT loading it — reads the bytes,
     /// computes the digest, instantiates briefly to call
     /// `metadata.describe()`, tears down. Used by the cli to

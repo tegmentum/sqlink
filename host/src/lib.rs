@@ -5176,6 +5176,14 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         Err(loader_stub_err("load-extension-from-uri"))
     }
 
+    async fn fetch_cas_uri(
+        &mut self,
+        _uri: String,
+        _expected_digest: String,
+    ) -> std::result::Result<Vec<u8>, LoaderError> {
+        Err(loader_stub_err("fetch-cas-uri"))
+    }
+
     async fn register_resolver(
         &mut self,
         _scheme: String,
@@ -6418,6 +6426,43 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
                 message: e.to_string(),
             }),
         }
+    }
+
+    /// Phase 4 http-CAS. GET `uri`, verify blake3 hash matches
+    /// `expected_digest`, return the bytes. Wired off the host's
+    /// existing reqwest client so the same TLS / DNS configuration
+    /// applies. The cli's `.sqlink resolver` walk routes any
+    /// non-file resolver here.
+    async fn fetch_cas_uri(
+        &mut self,
+        uri: String,
+        expected_digest: String,
+    ) -> std::result::Result<Vec<u8>, LoaderError> {
+        let client = reqwest::Client::new();
+        let resp = client
+            .get(&uri)
+            .send()
+            .await
+            .map_err(|e| LoaderError { code: 1, message: format!("GET {uri}: {e}") })?;
+        if !resp.status().is_success() {
+            return Err(LoaderError {
+                code: resp.status().as_u16() as i32,
+                message: format!("GET {uri}: status {}", resp.status()),
+            });
+        }
+        let bytes = resp
+            .bytes()
+            .await
+            .map_err(|e| LoaderError { code: 1, message: format!("read body of {uri}: {e}") })?
+            .to_vec();
+        let got = format!("blake3:{}", blake3::hash(&bytes).to_hex());
+        if got != expected_digest {
+            return Err(LoaderError {
+                code: 1,
+                message: format!("digest mismatch: {got} != {expected_digest}"),
+            });
+        }
+        Ok(bytes)
     }
 
     async fn register_resolver(
