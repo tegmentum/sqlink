@@ -280,6 +280,8 @@ Shipped subcommits:
     + unregister-extension (fixes the .load regression for the
     87/89 scalar-only case)
   - 5e.10b (f79a29a): collations via spi.register-collation
+  - 5e.10c (03328f4): aggregates via spi.register-aggregate
+    (window-mode + context_id via host-side AtomicU64)
 
 CLI_CONN.with site count: 16  4 across cli/src/lib.rs.
 
@@ -288,19 +290,22 @@ Remaining sites (lib.rs only):
   - **L111: ensure_cli_conn** itself  collapses once last
     consumer goes away.
   - **L1272: .session passthrough**  Stage 6 blocker.
-  - **L1938 (was L1916): do_load aggregate/vtab/hook
-    registration** still on CLI_CONN. Scalars + collations
-    moved out in 5e.10a/b; remaining types need their own
-    spi.register-* methods.
+  - **L1938 (was L1916): do_load vtab/hook registration**
+    still on CLI_CONN. Scalars + collations + aggregates
+    moved out in 5e.10a/b/c; vtabs (sqlite3_module) and
+    hooks (authorizer / update / commit) remain.
   - **L2913: do_unload hook teardown**  paired with the
-    above. Functions + collations already drop via
-    spi.unregister-extension.
+    above. Functions + collations + aggregates already drop
+    via spi.unregister-extension.
 
 Stage 5e.10 next batches:
-  - aggregates (register-aggregate + window flag; tricker
-    because each call allocates a context_id)
-  - vtabs (sqlite3_module install)
-  - authorizer / update_hook / commit_hook
+  - hooks (authorizer / update_hook / commit_hook  three
+    register-* methods, each a single-slot host-side
+    installer)
+  - vtabs (the largest remaining piece  needs the
+    sqlite3_module trampoline infrastructure that lives in
+    cli/src/vtab.rs duplicated host-side, or refactored to
+    work against the host's connection raw_handle)
 
 Remaining (each ~half-day, no shared theme):
 
