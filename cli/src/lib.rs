@@ -1913,9 +1913,9 @@ fn do_load(input: &str) -> String {
     if let Some(diag) = grants_record_load(&ext_name, digest.as_deref()) {
         grants_msg.push_str(&diag);
     }
-    // Stage 5e.10: scalar functions register on the host's shared
-    // spi connection (so eval_sql can find them). Aggregates,
-    // collations, vtabs, and hooks still register on CLI_CONN
+    // Stage 5e.10: scalars + collations register on the host's
+    // shared spi connection (so eval_sql can find them).
+    // Aggregates, vtabs, and hooks still register on CLI_CONN
     // below  follow-up commits move those one type at a time.
     let mut s_count = 0;
     for spec in &manifest.scalar_functions {
@@ -1931,6 +1931,22 @@ fn do_load(input: &str) -> String {
             eprintln!(
                 "register scalar {} arity={}: {} (code {})",
                 spec.name, spec.num_args, e.message, e.code
+            );
+        }
+    }
+    let mut c_count_host = 0;
+    for spec in &manifest.collations {
+        let r = bindings::sqlite::extension::spi::register_collation(
+            &ext_name,
+            &spec.name,
+            spec.id,
+        );
+        if r.is_ok() {
+            c_count_host += 1;
+        } else if let Err(e) = r {
+            eprintln!(
+                "register collation {}: {} (code {})",
+                spec.name, e.message, e.code
             );
         }
     }
@@ -2003,20 +2019,8 @@ fn do_load(input: &str) -> String {
             }
         }
 
-        for spec in &manifest.collations {
-            let ext_n = ext_name.clone();
-            let coll_id = spec.id;
-            let r = conn.create_collation(&spec.name, move |a: &str, b: &str| {
-                let n = dispatch::collation_compare(&ext_n, coll_id, a, b);
-                if n < 0 { std::cmp::Ordering::Less }
-                else if n > 0 { std::cmp::Ordering::Greater }
-                else { std::cmp::Ordering::Equal }
-            });
-            if r.is_ok() {
-                c_count += 1;
-                regs.collations.push(spec.name.clone());
-            }
-        }
+        // Collations migrated to spi (Stage 5e.10)  see the
+        // pre-block loop that calls spi::register_collation.
 
         let mut v_count = 0;
         for spec in &manifest.vtabs {
@@ -2096,8 +2100,9 @@ fn do_load(input: &str) -> String {
 
         (a_count, c_count, h_count, v_count)
     });
-    let (aggregates, collations, hooks, vtabs) = counts;
+    let (aggregates, _c_count_inside, hooks, vtabs) = counts;
     let scalars = s_count;
+    let collations = c_count_host;
     let total = scalars + aggregates + collations + hooks + vtabs;
     let mut bits = Vec::new();
     if scalars > 0 { bits.push(format!("{scalars} scalar")); }
@@ -2922,9 +2927,7 @@ fn do_unload(name: &str) -> String {
             for (fn_name, n_arg) in &regs.functions {
                 let _ = conn.remove_function(fn_name, *n_arg);
             }
-            for coll in &regs.collations {
-                let _ = conn.remove_collation(coll);
-            }
+            // Collations removed host-side by spi.unregister_extension.
             if regs.has_authorizer {
                 let _ = conn.set_authorizer::<fn(
                     i32,

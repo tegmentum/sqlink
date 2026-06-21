@@ -1818,6 +1818,107 @@ unsafe fn unregister_host_loaded_scalar(
     )
 }
 
+/// Stage 5e.10 collation companion to sync_dispatch_scalar.
+fn sync_dispatch_collation(
+    host: &Host,
+    ext_name: &str,
+    coll_id: u64,
+    a: &str,
+    b: &str,
+) -> anyhow::Result<i32> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_collation(ext_name, coll_id, a, b))
+    })
+}
+
+/// Stage 5e.10: install a native sqlite3 collation trampoline
+/// that routes to the loaded extension's collation-compare via
+/// the host's dispatch path.
+unsafe fn register_host_loaded_collation(
+    db: *mut libsqlite3_sys::sqlite3,
+    host: Host,
+    ext_name: String,
+    coll_name: &str,
+    coll_id: u64,
+) -> i32 {
+    use std::os::raw::{c_char, c_int, c_void};
+
+    struct CollCtx {
+        host: Host,
+        ext_name: String,
+        coll_id: u64,
+    }
+
+    let boxed = Box::new(CollCtx { host, ext_name, coll_id });
+    let ptr = Box::into_raw(boxed) as *mut c_void;
+
+    extern "C" fn xcompare(
+        user: *mut c_void,
+        n1: c_int,
+        p1: *const c_void,
+        n2: c_int,
+        p2: *const c_void,
+    ) -> c_int {
+        let coll_ctx = user as *const CollCtx;
+        if coll_ctx.is_null() {
+            return 0;
+        }
+        let coll_ctx: &CollCtx = unsafe { &*coll_ctx };
+        let a = unsafe {
+            let bytes = std::slice::from_raw_parts(p1 as *const u8, n1 as usize);
+            String::from_utf8_lossy(bytes).into_owned()
+        };
+        let b = unsafe {
+            let bytes = std::slice::from_raw_parts(p2 as *const u8, n2 as usize);
+            String::from_utf8_lossy(bytes).into_owned()
+        };
+        match sync_dispatch_collation(&coll_ctx.host, &coll_ctx.ext_name, coll_ctx.coll_id, &a, &b)
+        {
+            Ok(n) => n as c_int,
+            Err(_) => 0,
+        }
+    }
+
+    extern "C" fn destructor(p: *mut c_void) {
+        if !p.is_null() {
+            drop(unsafe { Box::from_raw(p as *mut CollCtx) });
+        }
+    }
+
+    let name_c = match std::ffi::CString::new(coll_name) {
+        Ok(c) => c,
+        Err(_) => return libsqlite3_sys::SQLITE_MISUSE,
+    };
+    libsqlite3_sys::sqlite3_create_collation_v2(
+        db,
+        name_c.as_ptr() as *const c_char,
+        libsqlite3_sys::SQLITE_UTF8 as c_int,
+        ptr,
+        Some(xcompare),
+        Some(destructor),
+    )
+}
+
+unsafe fn unregister_host_loaded_collation(
+    db: *mut libsqlite3_sys::sqlite3,
+    coll_name: &str,
+) -> i32 {
+    use std::os::raw::{c_char, c_int};
+    let name_c = match std::ffi::CString::new(coll_name) {
+        Ok(c) => c,
+        Err(_) => return libsqlite3_sys::SQLITE_MISUSE,
+    };
+    libsqlite3_sys::sqlite3_create_collation_v2(
+        db,
+        name_c.as_ptr() as *const c_char,
+        libsqlite3_sys::SQLITE_UTF8 as c_int,
+        std::ptr::null_mut(),
+        None,
+        None,
+    )
+}
+
 /// PLAN-cli-stages-5-6.md Stage 5c: every enabled `embed-*` feature
 /// adds one `<crate>::embed::register_into(db)` call here. The
 /// extensions are native Rust crates  their SQL function
@@ -2771,6 +2872,20 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     async fn unregister_extension(&mut self, _ext_name: String) {
         // No-op on LoadedState (extension callers).
     }
+
+    async fn register_collation(
+        &mut self,
+        _ext_name: String,
+        _name: String,
+        _coll_id: u64,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi.register-collation is only available on the cli's shared connection"
+                .to_string(),
+        })
+    }
 }
 
 /// Shared implementation of spi.execute_multi for the LoadedState
@@ -3635,6 +3750,10 @@ pub struct Host {
     /// down. Names are sqlite3 function names (the one the
     /// SQL caller types), not WIT entry names.
     ext_scalar_registrations: Arc<Mutex<HashMap<String, Vec<(String, i32)>>>>,
+    /// PLAN-cli-stages-5-6.md Stage 5e.10: per-extension list of
+    /// collation names the host registered. Same lifecycle as
+    /// ext_scalar_registrations  cleared on unregister-extension.
+    ext_collation_registrations: Arc<Mutex<HashMap<String, Vec<String>>>>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
     /// as a `resolving`-world component. `file` and `blake3` schemes
@@ -4027,6 +4146,7 @@ impl Host {
             shared_spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
             trace_buf: Arc::new(Mutex::new(Vec::new())),
             ext_scalar_registrations: Arc::new(Mutex::new(HashMap::new())),
+            ext_collation_registrations: Arc::new(Mutex::new(HashMap::new())),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
@@ -7499,16 +7619,63 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     }
 
     async fn unregister_extension(&mut self, ext_name: String) {
-        let entries = self.host.ext_scalar_registrations.lock().remove(&ext_name);
-        let Some(entries) = entries else { return };
+        let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
+        let colls = self.host.ext_collation_registrations.lock().remove(&ext_name);
+        if scalars.is_none() && colls.is_none() {
+            return;
+        }
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
         let Some(conn) = r.as_ref() else { return };
-        for (name, num_args) in entries {
-            let _ = unsafe {
-                unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
-            };
+        if let Some(entries) = scalars {
+            for (name, num_args) in entries {
+                let _ = unsafe {
+                    unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
+                };
+            }
         }
+        if let Some(entries) = colls {
+            for name in entries {
+                let _ = unsafe {
+                    unregister_host_loaded_collation(conn.raw_handle(), &name)
+                };
+            }
+        }
+    }
+
+    async fn register_collation(
+        &mut self,
+        ext_name: String,
+        name: String,
+        coll_id: u64,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let rc = unsafe {
+            register_host_loaded_collation(
+                conn.raw_handle(),
+                self.host.clone(),
+                ext_name.clone(),
+                &name,
+                coll_id,
+            )
+        };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(bindings::sqlite::extension::types::SqliteError {
+                code: rc,
+                extended_code: rc,
+                message: format!("register collation {name}: rc={rc}"),
+            });
+        }
+        self.host
+            .ext_collation_registrations
+            .lock()
+            .entry(ext_name)
+            .or_default()
+            .push(name);
+        Ok(())
     }
 
     async fn open_db(
