@@ -729,6 +729,21 @@ async fn main() -> Result<()> {
     )
     .map_err(|e| anyhow!("wire dispatch: {e}"))?;
 
+    // PLAN-cli-shared-conn.md Stage 3: the cli component's
+    // sqlite-cli-command world now declares it can import spi,
+    // so the linker provides it via HostWrap's impl. The
+    // connection HostWrap reaches lives on Host.shared_spi_conn
+    // (Stage 2)  same connection every extension's spi calls
+    // already touch.
+    bindings::sqlite::extension::spi::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |state: &mut State| HostWrap {
+            host: &mut state.host,
+            resources: Some(&mut state.resources),
+        },
+    )
+    .map_err(|e| anyhow!("wire spi: {e}"))?;
+
     // tvm:memory wiring  the cli imports it unconditionally
     // because sqlite-pcache-tvm + sqlite-vfs-tvm use
     // wit-bindgen-backed cold tiers on wasm32.

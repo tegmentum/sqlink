@@ -126,11 +126,11 @@ fn ensure_cli_conn() {
                 unsafe { register_embedded_extensions(conn.raw_handle()) };
                 unsafe { register_dotcmd_sql_surface(conn.raw_handle()) };
                 unsafe { apply_cli_pragmas(conn.raw_handle()) };
-                // Phase 3: idempotent schema bootstrap. No-op on a
-                // db that already has the tables; cheap on a fresh
-                // one. The dispatcher's session-miss fallthrough
-                // queries these tables for an installed command.
-                sqlink_registry::ensure_schemas(conn);
+                // Phase 3: idempotent schema bootstrap.
+                // PLAN-cli-shared-conn.md Stage 3 moves this off
+                // the cli's CLI_CONN onto spi  the dispatcher's
+                // session-miss fallthrough calls ensure_schemas()
+                // (no arg) before the first lookup.
             }
             *g = opened;
         }
@@ -992,6 +992,10 @@ impl RunGuest for CliCommand {
         let db_path = if argv.len() > 1 { argv[1].clone() } else { String::new() };
         DB_PATH.with(|p| *p.borrow_mut() = db_path);
         ensure_cli_conn();
+        // PLAN-cli-shared-conn.md Stage 3: schemas now bootstrap
+        // via spi (against the host's shared connection) rather
+        // than CLI_CONN. Cheap when the tables already exist.
+        sqlink_registry::ensure_schemas();
 
         // Phase 2.5 auto-embed  the cli ships core-dotcmd
         // baked into its binary via include_bytes!. Load it on
@@ -1334,22 +1338,23 @@ fn try_db_registry_resolve(name: &str, args: &str) -> Option<String> {
     // First step is the same as the previous v1: lookup the row,
     // try sqlink_artifact. The Phase 4 addition is the fallthrough
     // to walk sqlink_cas_resolver when the bytes aren't bundled.
-    let (row, bytes) = CLI_CONN.with(|c| {
-        let g = c.borrow();
-        let conn = g.as_ref()?;
-        let row = sqlink_registry::lookup(conn, name)?;
-        if let Some(bytes) = sqlink_registry::fetch_artifact(conn, &row.artifact_digest) {
-            return Some((row, bytes));
-        }
+    // Lazy-init the sqlink_* tables on first auto-resolve
+    // attempt. Cheap when already there. PLAN-cli-shared-conn.md
+    // Stage 3 moved this off CLI_CONN onto spi.
+    sqlink_registry::ensure_schemas();
+    let row = sqlink_registry::lookup(name)?;
+    let bytes = if let Some(bytes) = sqlink_registry::fetch_artifact(&row.artifact_digest) {
+        bytes
+    } else {
         // Try resolvers. We pass an empty source_uri  the lookup
         // row's source_uri isn't surfaced here (the dispatcher
         // doesn't need it for non-bundle resolves; the CAS walk
         // probes by digest).
-        match try_fetch_bytes(conn, "", &row.artifact_digest) {
-            FetchResult::Bytes(b) => Some((row, b)),
-            _ => None,
+        match try_fetch_bytes("", &row.artifact_digest) {
+            FetchResult::Bytes(b) => b,
+            _ => return None,
         }
-    })?;
+    };
 
     let opts = bindings::sqlite::extension::policy::LoadOptions {
         grant: alloc_default_grants(),

@@ -1420,6 +1420,66 @@ fn db_value_to_spi(v: sqlite_wasm_core::db::Value) -> loaded::sqlite::extension:
     }
 }
 
+/// PLAN-cli-shared-conn.md Stage 3 helpers: same conversions as
+/// `spi_value_to_db` / `db_value_to_spi` / `db_err_to_spi` but
+/// against the host's `bindings::sqlite::extension::types`. The
+/// cli's spi imports live on that side; LoadedState's impls
+/// stay on the `loaded` side.
+fn bindings_value_to_db(v: bindings::sqlite::extension::types::SqlValue) -> sqlite_wasm_core::db::Value {
+    use bindings::sqlite::extension::types::SqlValue as V;
+    use sqlite_wasm_core::db;
+    match v {
+        V::Null => db::Value::Null,
+        V::Integer(i) => db::Value::Integer(i),
+        V::Real(r) => db::Value::Real(r),
+        V::Text(s) => db::Value::Text(s),
+        V::Blob(b) => db::Value::Blob(b),
+    }
+}
+
+fn db_value_to_bindings(v: sqlite_wasm_core::db::Value) -> bindings::sqlite::extension::types::SqlValue {
+    use bindings::sqlite::extension::types::SqlValue as V;
+    use sqlite_wasm_core::db;
+    match v {
+        db::Value::Null => V::Null,
+        db::Value::Integer(i) => V::Integer(i),
+        db::Value::Real(r) => V::Real(r),
+        db::Value::Text(s) => V::Text(s),
+        db::Value::Blob(b) => V::Blob(b),
+    }
+}
+
+fn db_err_to_bindings(e: sqlite_wasm_core::db::Error) -> bindings::sqlite::extension::types::SqliteError {
+    bindings::sqlite::extension::types::SqliteError {
+        code: e.code,
+        extended_code: e.extended_code,
+        message: e.message,
+    }
+}
+
+/// Ensure the shared spi connection is open; same lazy-open
+/// semantics as `spi_ensure_open` on LoadedState but the
+/// connection lives on Host (one per cli session).
+fn shared_spi_ensure_open(host: &Host) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+    use sqlite_wasm_core::db;
+    let path = host.db_path.read().clone();
+    if path.is_empty() || path == ":memory:" {
+        return Err(bindings::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi requires a file-backed database. Pass --db <path> to sqlink."
+                .to_string(),
+        });
+    }
+    let mut g = host.shared_spi_conn.lock();
+    if g.is_none() {
+        let conn = db::Connection::open(&path, db::OpenFlags::DEFAULT)
+            .map_err(db_err_to_bindings)?;
+        *g = Some(conn);
+    }
+    Ok(())
+}
+
 impl loaded::sqlite::extension::spi::Host for LoadedState {
     async fn execute(
         &mut self,
@@ -5922,6 +5982,185 @@ fn convert_update_op_to_loaded(
         From::Insert => To::Insert,
         From::Update => To::Update,
         From::Delete => To::Delete,
+    }
+}
+
+/// PLAN-cli-shared-conn.md Stage 3: spi Host impl for the cli.
+/// Mirrors the LoadedState impl but operates directly on
+/// `host.shared_spi_conn`  the same connection extensions reach
+/// via the Stage 2 shared Arc.
+impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
+    async fn execute(
+        &mut self,
+        sql: String,
+        params: Vec<bindings::sqlite::extension::types::SqlValue>,
+    ) -> std::result::Result<
+        bindings::sqlite::extension::types::QueryResult,
+        bindings::sqlite::extension::types::SqliteError,
+    > {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        let mut stmt = conn.prepare(&sql).map_err(db_err_to_bindings)?;
+        let columns: Vec<String> = stmt.column_names();
+        let bound: Vec<_> = params.into_iter().map(bindings_value_to_db).collect();
+        stmt.bind_all(&bound).map_err(db_err_to_bindings)?;
+        let rows = stmt.collect_rows().map_err(db_err_to_bindings)?;
+        drop(stmt);
+        let out_rows: Vec<Vec<bindings::sqlite::extension::types::SqlValue>> = rows
+            .into_iter()
+            .map(|r| r.into_iter().map(db_value_to_bindings).collect())
+            .collect();
+        Ok(bindings::sqlite::extension::types::QueryResult {
+            columns,
+            rows: out_rows,
+            changes: conn.changes(),
+            last_insert_rowid: conn.last_insert_rowid(),
+        })
+    }
+
+    async fn execute_scalar(
+        &mut self,
+        sql: String,
+        params: Vec<bindings::sqlite::extension::types::SqlValue>,
+    ) -> std::result::Result<
+        bindings::sqlite::extension::types::SqlValue,
+        bindings::sqlite::extension::types::SqliteError,
+    > {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        let mut stmt = conn.prepare(&sql).map_err(db_err_to_bindings)?;
+        let bound: Vec<_> = params.into_iter().map(bindings_value_to_db).collect();
+        stmt.bind_all(&bound).map_err(db_err_to_bindings)?;
+        let rows = stmt.collect_rows().map_err(db_err_to_bindings)?;
+        let v = rows
+            .into_iter()
+            .next()
+            .and_then(|r| r.into_iter().next())
+            .ok_or_else(|| bindings::sqlite::extension::types::SqliteError {
+                code: 1,
+                extended_code: 1,
+                message: "execute_scalar: no rows".to_string(),
+            })?;
+        Ok(db_value_to_bindings(v))
+    }
+
+    async fn execute_batch(
+        &mut self,
+        sql: String,
+    ) -> std::result::Result<i64, bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        conn.execute_batch(&sql).map_err(db_err_to_bindings)?;
+        Ok(conn.changes())
+    }
+
+    async fn list_vfs(&mut self) -> Vec<String> {
+        sqlite_wasm_core::db::Connection::list_vfses()
+    }
+
+    async fn vfs_name(
+        &mut self,
+        db_name: String,
+    ) -> std::result::Result<String, bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        conn.vfs_name(&db_name).map_err(db_err_to_bindings)
+    }
+
+    async fn serialize_db(
+        &mut self,
+        db_name: String,
+    ) -> std::result::Result<Vec<u8>, bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        conn.serialize_db(&db_name).map_err(db_err_to_bindings)
+    }
+
+    async fn changes(&mut self) -> i64 {
+        let _ = shared_spi_ensure_open(self.host);
+        let g = self.host.shared_spi_conn.lock();
+        g.as_ref().map(|c| c.changes()).unwrap_or(0)
+    }
+
+    async fn total_changes(&mut self) -> i64 {
+        let _ = shared_spi_ensure_open(self.host);
+        let g = self.host.shared_spi_conn.lock();
+        g.as_ref().map(|c| c.total_changes()).unwrap_or(0)
+    }
+
+    async fn last_insert_rowid(&mut self) -> i64 {
+        let _ = shared_spi_ensure_open(self.host);
+        let g = self.host.shared_spi_conn.lock();
+        g.as_ref().map(|c| c.last_insert_rowid()).unwrap_or(0)
+    }
+
+    async fn current_memory_used(&mut self) -> i64 {
+        sqlite_wasm_core::db::Connection::current_memory_used()
+    }
+
+    async fn backup_into(
+        &mut self,
+        src_db: String,
+        dst_path: String,
+        dst_db: String,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let src = g.as_ref().expect("ensured open");
+        let dst = sqlite_wasm_core::db::Connection::open(
+            &dst_path,
+            sqlite_wasm_core::db::OpenFlags::DEFAULT,
+        )
+        .map_err(db_err_to_bindings)?;
+        src.backup_into(&src_db, &dst, &dst_db).map_err(db_err_to_bindings)
+    }
+
+    async fn set_busy_timeout(
+        &mut self,
+        ms: i32,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        conn.busy_timeout(ms).map_err(db_err_to_bindings)
+    }
+
+    async fn limit(&mut self, category: i32, value: i32) -> i32 {
+        let _ = shared_spi_ensure_open(self.host);
+        let g = self.host.shared_spi_conn.lock();
+        g.as_ref().map(|c| c.limit(category, value)).unwrap_or(-1)
+    }
+
+    async fn db_config_bool(
+        &mut self,
+        op: i32,
+        set: bool,
+        value: bool,
+    ) -> std::result::Result<bool, bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        if set {
+            conn.db_config_set_bool(op, value).map_err(db_err_to_bindings)
+        } else {
+            conn.db_config_get_bool(op).map_err(db_err_to_bindings)
+        }
+    }
+
+    async fn deserialize_db(
+        &mut self,
+        db_name: String,
+        bytes: Vec<u8>,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        conn.deserialize_db(&db_name, &bytes).map_err(db_err_to_bindings)
     }
 }
 

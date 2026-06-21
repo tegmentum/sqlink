@@ -1371,7 +1371,6 @@ fn _unused() { let _: RefCell<()> = RefCell::new(()); }
 ///      each (`file` and `http` kinds; http routes through the
 ///      host's `fetch-cas-uri` WIT method).
 pub(crate) fn try_fetch_bytes(
-    conn: &crate::db::Connection,
     source_uri: &str,
     expected_digest: &str,
 ) -> FetchResult {
@@ -1389,7 +1388,7 @@ pub(crate) fn try_fetch_bytes(
         // For non-file source_uri we still want to try CAS  fall
         // through.
     }
-    walk_cas_resolvers(conn, expected_digest)
+    walk_cas_resolvers(expected_digest)
 }
 
 pub(crate) enum FetchResult {
@@ -1405,10 +1404,7 @@ pub(crate) enum FetchResult {
 /// v1 supports the `file` kind only  probes
 /// `ROOT/blake3/AA/REST` where `digest = "blake3:AAREST..."`.
 /// `http` kind logs and skips (TODO).
-pub(crate) fn walk_cas_resolvers(
-    conn: &crate::db::Connection,
-    expected_digest: &str,
-) -> FetchResult {
+pub(crate) fn walk_cas_resolvers(expected_digest: &str) -> FetchResult {
     let Some(hex) = expected_digest.strip_prefix("blake3:") else {
         return FetchResult::Err(format!(
             "unsupported digest scheme {expected_digest:?}  expected blake3:HEX",
@@ -1417,7 +1413,7 @@ pub(crate) fn walk_cas_resolvers(
     if hex.len() < 3 {
         return FetchResult::Err(format!("digest too short: {expected_digest:?}"));
     }
-    let resolvers = crate::sqlink_registry::resolver_list(conn);
+    let resolvers = crate::sqlink_registry::resolver_list();
     if resolvers.is_empty() {
         return FetchResult::NoSource;
     }

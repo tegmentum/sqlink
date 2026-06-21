@@ -1,13 +1,17 @@
 //! Cli-side helpers for the database-resident dot-command
 //! registry.
 //!
-//! After the follow-up to PLAN-dotcmd-phase5.md, most of the
-//! registry surface lives in `extensions/sqlink-meta-cli`
-//! (which uses `spi.execute` against the same tables). This
-//! module retains the bits the cli itself still needs:
+//! PLAN-cli-shared-conn.md Stage 3: this module no longer takes
+//! a `Connection` argument  it routes every read through
+//! `bindings::sqlite::extension::spi::execute`, hitting the
+//! host's shared connection (Stage 2). The cli's `CLI_CONN`
+//! still exists today, but this module is one step closer to
+//! `CLI_CONN`-free.
+//!
+//! Surface kept:
 //!
 //!   * `ensure_schemas`  bootstrap the three sqlink_* tables
-//!     on every connection (called from `ensure_cli_conn`).
+//!     on first use.
 //!   * `lookup` / `fetch_artifact`  cheap reads the dispatcher
 //!     does on a session miss before deciding whether to walk
 //!     CAS resolvers.
@@ -15,11 +19,12 @@
 //!     resolvers in priority order.
 //!
 //! All install / uninstall / bundle / unbundle / verify /
-//! gc / export / resolver-mutate flows now live in the
-//! sqlink-meta-cli extension and go through `spi.execute`. The
-//! cli has no remaining write path against these tables.
+//! gc / export / resolver-mutate flows live in
+//! `extensions/sqlink-meta-cli` and have always gone through
+//! `spi.execute`.
 
-use sqlite_wasm_core::db::{Connection, StepResult, Value};
+use crate::bindings::sqlite::extension::spi;
+use crate::bindings::sqlite::extension::types::SqlValue;
 
 /// Subset of `sqlink_dotcmd` the dispatcher actually needs to
 /// resolve a command. The full row is queried by `.sqlink show`
@@ -38,13 +43,13 @@ pub struct ResolverRow {
     pub uri: String,
 }
 
-/// Run idempotent schema bootstrap. Called from `ensure_cli_conn`
-/// the first time the cli opens a db. Failures are swallowed
+/// Run idempotent schema bootstrap. Called from the dispatcher
+/// fallthrough on first auto-resolve. Failures are swallowed
 /// the cli's registry surface is best-effort and gracefully
 /// degrades to "session-only" when the user db is read-only or
 /// otherwise hostile.
-pub fn ensure_schemas(conn: &Connection) {
-    let _ = conn.execute_batch(SCHEMAS);
+pub fn ensure_schemas() {
+    let _ = spi::execute_batch(SCHEMAS);
 }
 
 const SCHEMAS: &str = r"
@@ -76,50 +81,49 @@ CREATE TABLE IF NOT EXISTS sqlink_cas_resolver (
 );
 ";
 
-pub fn lookup(conn: &Connection, name: &str) -> Option<ResolvedRow> {
-    let mut stmt = conn
-        .prepare("SELECT name, artifact_digest FROM sqlink_dotcmd WHERE name = ?1")
-        .ok()?;
-    stmt.bind(1, &Value::Text(name.to_string())).ok()?;
-    match stmt.step() {
-        Ok(StepResult::Row) => {
-            let name = match stmt.column_value(0) {
-                Value::Text(s) => s,
-                _ => return None,
-            };
-            let digest = match stmt.column_value(1) {
-                Value::Text(s) => s,
-                _ => return None,
-            };
-            Some(ResolvedRow { name, artifact_digest: digest })
-        }
+pub fn lookup(name: &str) -> Option<ResolvedRow> {
+    let result = spi::execute(
+        "SELECT name, artifact_digest FROM sqlink_dotcmd WHERE name = ?1",
+        &[SqlValue::Text(name.to_string())],
+    )
+    .ok()?;
+    let row = result.rows.into_iter().next()?;
+    let mut it = row.into_iter();
+    let name = match it.next()? {
+        SqlValue::Text(s) => s,
+        _ => return None,
+    };
+    let digest = match it.next()? {
+        SqlValue::Text(s) => s,
+        _ => return None,
+    };
+    Some(ResolvedRow { name, artifact_digest: digest })
+}
+
+pub fn fetch_artifact(digest: &str) -> Option<Vec<u8>> {
+    let result = spi::execute(
+        "SELECT bytes FROM sqlink_artifact WHERE digest = ?1",
+        &[SqlValue::Text(digest.to_string())],
+    )
+    .ok()?;
+    let row = result.rows.into_iter().next()?;
+    match row.into_iter().next()? {
+        SqlValue::Blob(b) => Some(b),
         _ => None,
     }
 }
 
-pub fn fetch_artifact(conn: &Connection, digest: &str) -> Option<Vec<u8>> {
-    let mut stmt = conn
-        .prepare("SELECT bytes FROM sqlink_artifact WHERE digest = ?1")
-        .ok()?;
-    stmt.bind(1, &Value::Text(digest.to_string())).ok()?;
-    match stmt.step() {
-        Ok(StepResult::Row) => match stmt.column_value(0) {
-            Value::Blob(b) => Some(b),
-            _ => None,
-        },
-        _ => None,
-    }
-}
-
-pub fn resolver_list(conn: &Connection) -> Vec<ResolverRow> {
-    let Ok(mut s) = conn.prepare(
-        "SELECT priority, kind, uri FROM sqlink_cas_resolver ORDER BY priority"
+pub fn resolver_list() -> Vec<ResolverRow> {
+    let Ok(result) = spi::execute(
+        "SELECT priority, kind, uri FROM sqlink_cas_resolver ORDER BY priority",
+        &[],
     ) else { return Vec::new() };
     let mut out = Vec::new();
-    while let Ok(StepResult::Row) = s.step() {
-        let priority = if let Value::Integer(i) = s.column_value(0) { i } else { 0 };
-        let kind = if let Value::Text(t) = s.column_value(1) { t } else { String::new() };
-        let uri = if let Value::Text(t) = s.column_value(2) { t } else { String::new() };
+    for row in result.rows {
+        let mut it = row.into_iter();
+        let priority = match it.next() { Some(SqlValue::Integer(i)) => i, _ => 0 };
+        let kind = match it.next() { Some(SqlValue::Text(t)) => t, _ => String::new() };
+        let uri = match it.next() { Some(SqlValue::Text(t)) => t, _ => String::new() };
         out.push(ResolverRow { priority, kind, uri });
     }
     out
