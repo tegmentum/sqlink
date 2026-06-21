@@ -1913,35 +1913,35 @@ fn do_load(input: &str) -> String {
     if let Some(diag) = grants_record_load(&ext_name, digest.as_deref()) {
         grants_msg.push_str(&diag);
     }
+    // Stage 5e.10: scalar functions register on the host's shared
+    // spi connection (so eval_sql can find them). Aggregates,
+    // collations, vtabs, and hooks still register on CLI_CONN
+    // below  follow-up commits move those one type at a time.
+    let mut s_count = 0;
+    for spec in &manifest.scalar_functions {
+        let r = bindings::sqlite::extension::spi::register_scalar(
+            &ext_name,
+            &spec.name,
+            spec.num_args,
+            spec.id,
+        );
+        if r.is_ok() {
+            s_count += 1;
+        } else if let Err(e) = r {
+            eprintln!(
+                "register scalar {} arity={}: {} (code {})",
+                spec.name, spec.num_args, e.message, e.code
+            );
+        }
+    }
+
     let counts = CLI_CONN.with(|c| {
         let g = c.borrow();
         let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-        let mut s_count = 0;
         let mut a_count = 0;
         let mut c_count = 0;
         let mut h_count = 0;
         let mut regs = ExtRegistrations::default();
-
-        for spec in &manifest.scalar_functions {
-            let ext_n = ext_name.clone();
-            let func_id = spec.id;
-            let r = conn.create_scalar_function(
-                &spec.name,
-                spec.num_args,
-                db::FunctionFlags::UTF8 | db::FunctionFlags::DIRECTONLY,
-                move |args: &[db::Value]| -> Result<db::Value, db::Error> {
-                    let wit_args: Vec<WitSqlValue> = args.iter().cloned().map(db_to_wit).collect();
-                    match dispatch::scalar_call(&ext_n, func_id, &wit_args) {
-                        Ok(v) => Ok(wit_to_db(v)),
-                        Err(e) => Err(db::Error { code: 1, extended_code: 1, message: e }),
-                    }
-                },
-            );
-            if r.is_ok() {
-                s_count += 1;
-                regs.functions.push((spec.name.clone(), spec.num_args));
-            }
-        }
 
         // Aggregates: each invocation owns a context_id; init allocates
         // one, step/finalize forward it to the host-side aggregator.
@@ -2094,9 +2094,10 @@ fn do_load(input: &str) -> String {
 
         EXT_REGS.with(|m| m.borrow_mut().insert(ext_name.clone(), regs));
 
-        (s_count, a_count, c_count, h_count, v_count)
+        (a_count, c_count, h_count, v_count)
     });
-    let (scalars, aggregates, collations, hooks, vtabs) = counts;
+    let (aggregates, collations, hooks, vtabs) = counts;
+    let scalars = s_count;
     let total = scalars + aggregates + collations + hooks + vtabs;
     let mut bits = Vec::new();
     if scalars > 0 { bits.push(format!("{scalars} scalar")); }
@@ -2905,6 +2906,12 @@ fn do_reload(input: &str) -> String {
 fn do_unload(name: &str) -> String {
     use bindings::sqlite::wasm::extension_loader;
     let host_result = extension_loader::unload_extension(name);
+
+    // Stage 5e.10: scalar trampolines live on the host's shared
+    // spi connection now  tell the host to tear them down.
+    // Aggregates/collations/hooks etc. still live on CLI_CONN; the
+    // CLI_CONN.with block below handles them.
+    bindings::sqlite::extension::spi::unregister_extension(name);
 
     let regs = EXT_REGS.with(|m| m.borrow_mut().remove(name));
     if let Some(regs) = regs {

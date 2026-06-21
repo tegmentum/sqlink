@@ -1619,6 +1619,205 @@ unsafe fn register_host_dot_command_function(
     }
 }
 
+/// Stage 5e.10: bridge a sync sqlite3 scalar callback to the
+/// host's async dispatch_scalar path. Same async-from-sync glue
+/// as `sync_dispatch_dot_command`.
+fn sync_dispatch_scalar(
+    host: &Host,
+    ext_name: &str,
+    func_id: u64,
+    args: Vec<bindings::sqlite::extension::types::SqlValue>,
+) -> anyhow::Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_scalar(ext_name, func_id, args))
+    })
+}
+
+/// Read a single sqlite3_value into the bindings SqlValue used
+/// by `dispatch_scalar`. Mirrors the host's existing
+/// db_value_to_bindings, but starts from a raw sqlite3_value*.
+unsafe fn sqlite3_value_to_bindings(
+    v: *mut libsqlite3_sys::sqlite3_value,
+) -> bindings::sqlite::extension::types::SqlValue {
+    use bindings::sqlite::extension::types::SqlValue as V;
+    let kind = libsqlite3_sys::sqlite3_value_type(v);
+    match kind {
+        x if x == libsqlite3_sys::SQLITE_NULL => V::Null,
+        x if x == libsqlite3_sys::SQLITE_INTEGER => {
+            V::Integer(libsqlite3_sys::sqlite3_value_int64(v))
+        }
+        x if x == libsqlite3_sys::SQLITE_FLOAT => {
+            V::Real(libsqlite3_sys::sqlite3_value_double(v))
+        }
+        x if x == libsqlite3_sys::SQLITE_TEXT => {
+            let p = libsqlite3_sys::sqlite3_value_text(v);
+            if p.is_null() {
+                V::Text(String::new())
+            } else {
+                let n = libsqlite3_sys::sqlite3_value_bytes(v) as usize;
+                let bytes = std::slice::from_raw_parts(p, n);
+                V::Text(String::from_utf8_lossy(bytes).into_owned())
+            }
+        }
+        x if x == libsqlite3_sys::SQLITE_BLOB => {
+            let p = libsqlite3_sys::sqlite3_value_blob(v);
+            if p.is_null() {
+                V::Blob(Vec::new())
+            } else {
+                let n = libsqlite3_sys::sqlite3_value_bytes(v) as usize;
+                let bytes = std::slice::from_raw_parts(p as *const u8, n);
+                V::Blob(bytes.to_vec())
+            }
+        }
+        _ => V::Null,
+    }
+}
+
+/// Apply a bindings SqlValue to a sqlite3 scalar context as the
+/// function's result.
+unsafe fn bindings_to_sqlite3_result(
+    ctx: *mut libsqlite3_sys::sqlite3_context,
+    v: bindings::sqlite::extension::types::SqlValue,
+) {
+    use std::os::raw::{c_char, c_int};
+    use bindings::sqlite::extension::types::SqlValue as V;
+    match v {
+        V::Null => libsqlite3_sys::sqlite3_result_null(ctx),
+        V::Integer(i) => libsqlite3_sys::sqlite3_result_int64(ctx, i),
+        V::Real(r) => libsqlite3_sys::sqlite3_result_double(ctx, r),
+        V::Text(s) => {
+            let cs = std::ffi::CString::new(s).unwrap_or_default();
+            let bytes = cs.as_bytes_with_nul();
+            libsqlite3_sys::sqlite3_result_text(
+                ctx,
+                bytes.as_ptr() as *const c_char,
+                (bytes.len() - 1) as c_int,
+                libsqlite3_sys::SQLITE_TRANSIENT(),
+            );
+        }
+        V::Blob(b) => {
+            libsqlite3_sys::sqlite3_result_blob(
+                ctx,
+                b.as_ptr() as *const std::os::raw::c_void,
+                b.len() as c_int,
+                libsqlite3_sys::SQLITE_TRANSIENT(),
+            );
+        }
+    }
+}
+
+/// Stage 5e.10: install a sqlite3 native scalar trampoline that
+/// crosses into the loaded extension's dispatcher. Returns a
+/// sqlite3 result code; SQLITE_OK on success.
+unsafe fn register_host_loaded_scalar(
+    db: *mut libsqlite3_sys::sqlite3,
+    host: Host,
+    ext_name: String,
+    func_name: &str,
+    num_args: i32,
+    func_id: u64,
+) -> i32 {
+    use std::os::raw::{c_char, c_int, c_void};
+
+    struct ScalarCtx {
+        host: Host,
+        ext_name: String,
+        func_id: u64,
+    }
+
+    let boxed = Box::new(ScalarCtx { host, ext_name, func_id });
+    let ptr = Box::into_raw(boxed) as *mut c_void;
+
+    extern "C" fn xfunc(
+        ctx: *mut libsqlite3_sys::sqlite3_context,
+        argc: std::os::raw::c_int,
+        argv: *mut *mut libsqlite3_sys::sqlite3_value,
+    ) {
+        let scalar_ctx = unsafe {
+            libsqlite3_sys::sqlite3_user_data(ctx) as *const ScalarCtx
+        };
+        if scalar_ctx.is_null() {
+            unsafe {
+                let msg = b"scalar trampoline: null context\0".as_ptr() as *const std::os::raw::c_char;
+                libsqlite3_sys::sqlite3_result_error(ctx, msg, -1);
+            }
+            return;
+        }
+        let scalar_ctx: &ScalarCtx = unsafe { &*scalar_ctx };
+        let mut args = Vec::with_capacity(argc as usize);
+        for i in 0..argc {
+            let v = unsafe { *argv.add(i as usize) };
+            args.push(unsafe { sqlite3_value_to_bindings(v) });
+        }
+        let result = sync_dispatch_scalar(
+            &scalar_ctx.host,
+            &scalar_ctx.ext_name,
+            scalar_ctx.func_id,
+            args,
+        );
+        match result {
+            Ok(Ok(v)) => unsafe { bindings_to_sqlite3_result(ctx, v) },
+            Ok(Err(extension_err)) => unsafe {
+                let cs = std::ffi::CString::new(extension_err).unwrap_or_default();
+                libsqlite3_sys::sqlite3_result_error(ctx, cs.as_ptr(), -1);
+            },
+            Err(host_err) => unsafe {
+                let cs = std::ffi::CString::new(host_err.to_string()).unwrap_or_default();
+                libsqlite3_sys::sqlite3_result_error(ctx, cs.as_ptr(), -1);
+            },
+        }
+    }
+
+    extern "C" fn destructor(p: *mut c_void) {
+        if !p.is_null() {
+            drop(unsafe { Box::from_raw(p as *mut ScalarCtx) });
+        }
+    }
+
+    let name_c = match std::ffi::CString::new(func_name) {
+        Ok(c) => c,
+        Err(_) => return libsqlite3_sys::SQLITE_MISUSE,
+    };
+    libsqlite3_sys::sqlite3_create_function_v2(
+        db,
+        name_c.as_ptr() as *const c_char,
+        num_args as c_int,
+        (libsqlite3_sys::SQLITE_UTF8 | libsqlite3_sys::SQLITE_DETERMINISTIC) as c_int,
+        ptr,
+        Some(xfunc),
+        None,
+        None,
+        Some(destructor),
+    )
+}
+
+/// Stage 5e.10: remove a previously-registered scalar trampoline.
+/// `num_args` must match the registration's arity exactly (sqlite3
+/// keys by name + arity).
+unsafe fn unregister_host_loaded_scalar(
+    db: *mut libsqlite3_sys::sqlite3,
+    func_name: &str,
+    num_args: i32,
+) -> i32 {
+    use std::os::raw::{c_char, c_int};
+    let name_c = match std::ffi::CString::new(func_name) {
+        Ok(c) => c,
+        Err(_) => return libsqlite3_sys::SQLITE_MISUSE,
+    };
+    libsqlite3_sys::sqlite3_create_function_v2(
+        db,
+        name_c.as_ptr() as *const c_char,
+        num_args as c_int,
+        libsqlite3_sys::SQLITE_UTF8 as c_int,
+        std::ptr::null_mut(),
+        None,
+        None,
+        None,
+        None,
+    )
+}
+
 /// PLAN-cli-stages-5-6.md Stage 5c: every enabled `embed-*` feature
 /// adds one `<crate>::embed::register_into(db)` call here. The
 /// extensions are native Rust crates  their SQL function
@@ -2553,6 +2752,25 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
                 .to_string(),
         })
     }
+
+    async fn register_scalar(
+        &mut self,
+        _ext_name: String,
+        _name: String,
+        _num_args: i32,
+        _func_id: u64,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi.register-scalar is only available on the cli's shared connection"
+                .to_string(),
+        })
+    }
+
+    async fn unregister_extension(&mut self, _ext_name: String) {
+        // No-op on LoadedState (extension callers).
+    }
 }
 
 /// Shared implementation of spi.execute_multi for the LoadedState
@@ -3410,6 +3628,13 @@ pub struct Host {
     /// them. Mutex (not RwLock) because the trace callback always
     /// writes; drain reads-and-clears. Empty Vec when trace is off.
     trace_buf: Arc<Mutex<Vec<String>>>,
+    /// PLAN-cli-stages-5-6.md Stage 5e.10: per-extension list of
+    /// (name, num_args) tuples for SQL functions the host
+    /// registered on shared_spi_conn on the extension's behalf.
+    /// Used by spi.unregister-extension to know what to tear
+    /// down. Names are sqlite3 function names (the one the
+    /// SQL caller types), not WIT entry names.
+    ext_scalar_registrations: Arc<Mutex<HashMap<String, Vec<(String, i32)>>>>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
     /// as a `resolving`-world component. `file` and `blake3` schemes
@@ -3801,6 +4026,7 @@ impl Host {
             db_path: Arc::new(RwLock::new(String::new())),
             shared_spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
             trace_buf: Arc::new(Mutex::new(Vec::new())),
+            ext_scalar_registrations: Arc::new(Mutex::new(HashMap::new())),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
@@ -7232,6 +7458,56 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
                 Option<String>,
             ) -> sqlite_wasm_core::db::AuthResult>(None)
                 .map_err(db_err_to_bindings)
+        }
+    }
+
+    async fn register_scalar(
+        &mut self,
+        ext_name: String,
+        name: String,
+        num_args: i32,
+        func_id: u64,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let rc = unsafe {
+            register_host_loaded_scalar(
+                conn.raw_handle(),
+                self.host.clone(),
+                ext_name.clone(),
+                &name,
+                num_args,
+                func_id,
+            )
+        };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(bindings::sqlite::extension::types::SqliteError {
+                code: rc,
+                extended_code: rc,
+                message: format!("register scalar {name}/{num_args}: rc={rc}"),
+            });
+        }
+        self.host
+            .ext_scalar_registrations
+            .lock()
+            .entry(ext_name)
+            .or_default()
+            .push((name, num_args));
+        Ok(())
+    }
+
+    async fn unregister_extension(&mut self, ext_name: String) {
+        let entries = self.host.ext_scalar_registrations.lock().remove(&ext_name);
+        let Some(entries) = entries else { return };
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let Some(conn) = r.as_ref() else { return };
+        for (name, num_args) in entries {
+            let _ = unsafe {
+                unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
+            };
         }
     }
 
