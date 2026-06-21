@@ -192,7 +192,32 @@ Direct API methods:
     addition (or the eval_sql migration making spi.execute the
     canonical SQL path).
 
-#### Stage 3c — eval_sql (deferred)
+#### Stage 3c — eval_sql (shipped: bb8725e / 12c9e63)
+
+  - New `spi.execute-multi(sql, named-params)` handles tail
+    walking + named-param binding host-side; returns
+    `list<query-result>`. ✓
+  - `LoadedState` + `HostWrap` impls share the body via two
+    `execute_multi_impl_*` functions (different type universes,
+    same logic). ✓
+  - `eval_sql_inner` rewritten from 70+ lines of CLI_CONN
+    prepare/bind/collect to ~15 lines of `spi::execute_multi` +
+    format. `eval_sql`'s `.changes`/`.stats` counters now read
+    from spi. ✓
+  - **Regression:** `SELECT dot_command('tables')` no longer
+    resolves  the cli's `register_dotcmd_sql_surface` ran on
+    CLI_CONN. Re-registering host-side hit a tokio nesting
+    panic (sync SQL callback, async dispatch). Documented in
+    `shared_spi_ensure_open`; fix lands in Stage 5 with a sync
+    wrapper or deferred channel-based dispatch.
+  - **Regression:** every embedded SQL function (sha3_*,
+    uuid, regexp, json1, ...) no longer resolves  the cli's
+    `register_embedded_extensions` ran on CLI_CONN. Stage 5
+    fixes by either moving the 89 embed-* crates host-side
+    or auto-loading their existing `.component.wasm` artifacts
+    on the host's connection at startup.
+
+#### Stage 3c-residual (deferred)
 
   - The biggest single change. `eval_sql` currently does
     `prepare_with_tail` → `bind_all` → `step` loop → format
@@ -215,31 +240,49 @@ Direct API methods:
     `.eqp`, `.explain` — they all flow through `eval_sql`.
     Re-run the cli-smoke suite.
 
-### Stage 4 — migrate the remaining dot.rs callers
+### Stage 4 — migrate the remaining dot.rs callers (shipped: 0f470ae)
 
-  - `cmd_timeout` (delta path goes away once spi.set-busy-timeout
-    lands)
-  - `cmd_limit` / `cmd_dbconfig` (delta paths go away once spi
-    direct-set methods land)
-  - `do_backup` / `do_restore` / `do_save` / `do_clone` — use
-    `spi.backup-into`
-  - `do_open` — connection lifecycle; needs care because the
-    cli's "current path" tracking still lives in cli wasm.
-    Host needs `spi.reopen(new-path)`.
-  - The four `.archive` / `.session` / `.serialize` /
-    `.deserialize` extensions already use spi; nothing to do
-    on their side.
+  - `conn/busy-timeout` delta handler in settings.rs calls
+    `spi::set_busy_timeout` (not CLI_CONN.busy_timeout). ✓
+  - `conn/limit/<name>` calls `spi::limit`. ✓
+  - `conn/db-config/<op>` calls `spi::db_config_bool`. ✓
+  - `conn/deserialize/<name>` calls `spi::deserialize_db`. ✓
+  - `do_backup` / `do_save` / `do_clone` already moved in
+    Stage 3b.
+  - Still on CLI_CONN: `do_restore` (needs `spi.restore-from`),
+    `do_open` (connection lifecycle  needs `spi.reopen(path)`),
+    `do_dump` / `do_import` (use prepare/step heavily; need
+    `prepared::Host` impl on HostWrap or migration to
+    `spi.execute_multi`), grants table I/O.
 
-### Stage 5 — remove CLI_CONN, drop libsqlite3-sys
+### Stage 5 — remove CLI_CONN, drop libsqlite3-sys (deferred)
 
   - Delete `CLI_CONN` thread_local.
   - Delete `ensure_cli_conn`. Replace callers with no-ops or
     host-side init.
-  - Move `register_embedded_extensions` to the host's
-    open-time path. Each embedded extension registers against
-    the host's connection at startup.
+  - **Move `register_embedded_extensions` to the host's
+    open-time path.** 89 embed-* features  two paths:
+      a) Move each `<name>-extension` crate as an optional
+         dep in `host/Cargo.toml`, then copy the
+         `register_embedded_extensions` function over. ~270
+         lines of cargo plumbing + the function body. Each
+         crate must build for the host's native target (most
+         already do; spot-check before committing).
+      b) Auto-load the existing `.component.wasm` artifact
+         for each enabled embedded extension at host
+         startup, using the same include_bytes! +
+         extension_loader path as core-dotcmd / sqlink-meta-cli
+         / sha3sum-cli. Smaller diff (no cargo plumbing) but
+         requires the host's `load_extension_from_bytes` to
+         also register the loaded extension's scalar
+         functions on `shared_spi_conn`  today the
+         registration only happens cli-side via the do_load
+         callback path. Adds a host-side
+         `register_scalars_on_shared_conn(manifest)` step.
   - Move `apply_cli_pragmas` similarly.
-  - Move `register_dotcmd_sql_surface` to host.
+  - Move `register_dotcmd_sql_surface` to host. Needs the
+    sync wrapper / channel dispatcher fix mentioned in the
+    Stage 3c regression note.
   - Move `init_wasivfs` / `init_memvfs` (already host-side
     really; just stop calling from cli).
   - Drop `libsqlite3-sys` from `cli/Cargo.toml`. Drop
