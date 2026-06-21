@@ -2531,6 +2531,28 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
                 .to_string(),
         })
     }
+
+    async fn set_stmt_trace(&mut self, _on: bool) {
+        // .trace targets the cli's shared connection only. No-op
+        // for extension callers; the trace buffer lives on Host.
+    }
+
+    async fn drain_trace_buf(&mut self) -> Vec<String> {
+        // Always empty for extension callers  see set_stmt_trace.
+        Vec::new()
+    }
+
+    async fn set_auth_log(
+        &mut self,
+        _on: bool,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi.set-auth-log is only available on the cli's shared connection"
+                .to_string(),
+        })
+    }
 }
 
 /// Shared implementation of spi.execute_multi for the LoadedState
@@ -3381,6 +3403,13 @@ pub struct Host {
     /// observe the same sqlite3 handle. Lazy-opened by
     /// `spi_ensure_open` on first spi call.
     shared_spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_wasm_core::db::Connection>>>>,
+    /// PLAN-cli-stages-5-6.md Stage 5e.8: buffer for sqlite3's
+    /// statement-level trace callback. The cli toggles it via
+    /// `spi.set-stmt-trace`; lines accumulate on the host while a
+    /// statement runs, and `spi.drain-trace-buf` returns + clears
+    /// them. Mutex (not RwLock) because the trace callback always
+    /// writes; drain reads-and-clears. Empty Vec when trace is off.
+    trace_buf: Arc<Mutex<Vec<String>>>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
     /// as a `resolving`-world component. `file` and `blake3` schemes
@@ -3771,6 +3800,7 @@ impl Host {
             components: Arc::new(RwLock::new(HashMap::new())),
             db_path: Arc::new(RwLock::new(String::new())),
             shared_spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
+            trace_buf: Arc::new(Mutex::new(Vec::new())),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
@@ -7143,6 +7173,66 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         execute_multi_impl_bindings(conn, &sql, &named_params)
+    }
+
+    async fn set_stmt_trace(&mut self, on: bool) {
+        if shared_spi_ensure_open(self.host).is_err() {
+            return;
+        }
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let Some(conn) = r.as_ref() else { return };
+        if on {
+            let buf = self.host.trace_buf.clone();
+            conn.set_stmt_trace::<_>(Some(move |s: &str| {
+                buf.lock().push(s.to_string());
+            }));
+        } else {
+            conn.set_stmt_trace::<fn(&str)>(None);
+            self.host.trace_buf.lock().clear();
+        }
+    }
+
+    async fn drain_trace_buf(&mut self) -> Vec<String> {
+        std::mem::take(&mut *self.host.trace_buf.lock())
+    }
+
+    async fn set_auth_log(
+        &mut self,
+        on: bool,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        if on {
+            conn.set_authorizer(Some(
+                |action: i32,
+                 a1: Option<String>,
+                 a2: Option<String>,
+                 a3: Option<String>,
+                 a4: Option<String>| {
+                    eprintln!(
+                        "auth: action={action} a1={:?} a2={:?} a3={:?} a4={:?}",
+                        a1.as_deref(),
+                        a2.as_deref(),
+                        a3.as_deref(),
+                        a4.as_deref()
+                    );
+                    sqlite_wasm_core::db::AuthResult::Allow
+                },
+            ))
+            .map_err(db_err_to_bindings)
+        } else {
+            conn.set_authorizer::<fn(
+                i32,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+            ) -> sqlite_wasm_core::db::AuthResult>(None)
+                .map_err(db_err_to_bindings)
+        }
     }
 
     async fn open_db(

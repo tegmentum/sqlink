@@ -1490,8 +1490,13 @@ fn eval_sql_inner(sql: &str) -> String {
         }
     }
     // Drain any trace lines captured by .trace's callback while
-    // this statement was running.
-    let traced = settings::TRACE_BUF.with(|b| std::mem::take(&mut *b.borrow_mut()));
+    // this statement was running. The buffer lives on the host
+    // now (Stage 5e.8); spi.drain-trace-buf returns + clears it.
+    let traced: Vec<String> = if settings::SETTINGS.with(|s| s.borrow().trace_on) {
+        bindings::sqlite::extension::spi::drain_trace_buf()
+    } else {
+        Vec::new()
+    };
     if !traced.is_empty() {
         let mut t = String::new();
         for line in traced {
@@ -1503,9 +1508,13 @@ fn eval_sql_inner(sql: &str) -> String {
     out
 }
 
-/// `.trace on|off` — install / clear the statement-level trace
-/// callback on the cli's connection. Captured lines are buffered
-/// in `settings::TRACE_BUF` and flushed inline by `eval_sql_inner`.
+/// `.trace on|off` — install / clear sqlite3's statement-level
+/// trace callback on the host's shared connection.
+///
+/// PLAN-cli-stages-5-6.md Stage 5e.8: routed through new
+/// `spi.set-stmt-trace` / `spi.drain-trace-buf` methods. The
+/// trace buffer lives on the host (one less wasm crossing per
+/// statement); eval_sql drains it via spi after every batch.
 fn do_trace(arg: &str) -> String {
     let arg = arg.trim();
     let on = if arg.is_empty() {
@@ -1518,27 +1527,22 @@ fn do_trace(arg: &str) -> String {
             _ => return "Usage: .trace on|off\n".to_string(),
         }
     };
-    ensure_cli_conn();
-    CLI_CONN.with(|c| {
-        let g = c.borrow();
-        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-        if on {
-            conn.set_stmt_trace::<_>(Some(|s: &str| {
-                settings::TRACE_BUF.with(|b| b.borrow_mut().push(s.to_string()));
-            }));
-        } else {
-            conn.set_stmt_trace::<fn(&str)>(None);
-        }
-    });
+    bindings::sqlite::extension::spi::set_stmt_trace(on);
     settings::SETTINGS.with(|s| s.borrow_mut().trace_on = on);
     String::new()
 }
 
 /// `.auth on|off` — install / clear an authorizer that logs every
 /// action SQLite checks (CREATE_TABLE, READ, INSERT, etc.) to
-/// stderr. Mostly a debugging aid. Replaces any extension-side
-/// authorizer that `.load` installed; the user can reload to
-/// restore it.
+/// the host's stderr. Mostly a debugging aid. Replaces any
+/// extension-side authorizer that `.load` installed; the user
+/// can reload to restore it.
+///
+/// PLAN-cli-stages-5-6.md Stage 5e.9: routed through new
+/// `spi.set-auth-log` so the authorizer attaches to the host's
+/// shared connection rather than a per-cli libsqlite3-sys
+/// connection. eprintln runs host-side  no wasm crossing per
+/// check.
 fn do_auth(arg: &str) -> String {
     let arg = arg.trim();
     if arg.is_empty() {
@@ -1549,28 +1553,10 @@ fn do_auth(arg: &str) -> String {
         "off" => false,
         _ => return "Usage: .auth on|off\n".to_string(),
     };
-    ensure_cli_conn();
-    CLI_CONN.with(|c| {
-        let g = c.borrow();
-        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-        let result = if on {
-            conn.set_authorizer(Some(
-                |action: i32, a1: Option<String>, a2: Option<String>, a3: Option<String>, a4: Option<String>| {
-                    eprintln!(
-                        "auth: action={action} a1={:?} a2={:?} a3={:?} a4={:?}",
-                        a1.as_deref(), a2.as_deref(), a3.as_deref(), a4.as_deref()
-                    );
-                    db::AuthResult::Allow
-                },
-            ))
-        } else {
-            conn.set_authorizer::<fn(i32, Option<String>, Option<String>, Option<String>, Option<String>) -> db::AuthResult>(None)
-        };
-        match result {
-            Ok(()) => String::new(),
-            Err(e) => format!("Error: {}\n", e.message),
-        }
-    })
+    match bindings::sqlite::extension::spi::set_auth_log(on) {
+        Ok(()) => String::new(),
+        Err(e) => format!("Error: {}\n", e.message),
+    }
 }
 
 /// `.log on|off|stdout|FILE` — route sqlite3's process-wide log
