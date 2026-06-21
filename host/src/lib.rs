@@ -1485,6 +1485,11 @@ fn shared_spi_ensure_open(host: &Host) -> std::result::Result<(), bindings::sqli
     if r.is_none() {
         let conn = db::Connection::open(&path, db::OpenFlags::DEFAULT)
             .map_err(db_err_to_bindings)?;
+        // PLAN-cli-stages-5-6.md Stage 5c: register each enabled
+        // embed-* extension on the host's connection. Native Rust
+        // callbacks (no wasm crossing)  the SQL function call
+        // path stays sync the whole way.
+        unsafe { register_host_embedded_extensions(conn.raw_handle()) };
         // PLAN-cli-stages-5-6.md Stage 5b: re-register the
         // `dot_command(name [, args...])` SQL function host-side
         // now that eval_sql goes through this shared connection.
@@ -1605,6 +1610,47 @@ unsafe fn register_host_dot_command_function(
     );
     if rc != libsqlite3_sys::SQLITE_OK {
         eprintln!("register host-side dot_command(): rc={rc}");
+    }
+}
+
+/// PLAN-cli-stages-5-6.md Stage 5c: every enabled `embed-*` feature
+/// adds one `<crate>::embed::register_into(db)` call here. The
+/// extensions are native Rust crates  their SQL function
+/// callbacks run sync from sqlite3_step without crossing the
+/// wasm boundary, so they don't need the Stage 5a sync wrapper.
+///
+/// Called once from `shared_spi_ensure_open` right after the
+/// connection opens. Cli builds that don't enable any features
+/// reduce this to an empty function (no-op).
+#[allow(unused_variables)]
+unsafe fn register_host_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
+    #[cfg(feature = "embed-sha3")]
+    {
+        let rc = sha3_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-sha3: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-uuid")]
+    {
+        let rc = uuid_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-uuid: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-regexp")]
+    {
+        let rc = regexp_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-regexp: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-json1")]
+    {
+        let rc = json1_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-json1: register_into failed rc={rc}");
+        }
     }
 }
 
