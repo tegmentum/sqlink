@@ -1900,6 +1900,195 @@ unsafe fn register_host_loaded_collation(
     )
 }
 
+/// Stage 5e.10: bridge sync aggregate callbacks to dispatch_aggregate_*.
+fn sync_dispatch_aggregate_step(
+    host: &Host,
+    ext_name: &str,
+    func_id: u64,
+    context_id: u64,
+    args: Vec<bindings::sqlite::extension::types::SqlValue>,
+) -> anyhow::Result<std::result::Result<(), String>> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(
+            host.dispatch_aggregate_step(ext_name, func_id, context_id, args),
+        )
+    })
+}
+
+fn sync_dispatch_aggregate_finalize(
+    host: &Host,
+    ext_name: &str,
+    func_id: u64,
+    context_id: u64,
+) -> anyhow::Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_aggregate_finalize(ext_name, func_id, context_id))
+    })
+}
+
+fn sync_dispatch_aggregate_value(
+    host: &Host,
+    ext_name: &str,
+    func_id: u64,
+    context_id: u64,
+) -> anyhow::Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_aggregate_value(ext_name, func_id, context_id))
+    })
+}
+
+fn sync_dispatch_aggregate_inverse(
+    host: &Host,
+    ext_name: &str,
+    func_id: u64,
+    context_id: u64,
+    args: Vec<bindings::sqlite::extension::types::SqlValue>,
+) -> anyhow::Result<std::result::Result<(), String>> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(
+            host.dispatch_aggregate_inverse(ext_name, func_id, context_id, args),
+        )
+    })
+}
+
+/// Convert a core db::Value to the bindings SqlValue used by
+/// dispatch_aggregate_*. Mirrors db_to_wit on the cli side.
+fn db_value_to_bindings_sql(
+    v: sqlite_wasm_core::db::Value,
+) -> bindings::sqlite::extension::types::SqlValue {
+    use bindings::sqlite::extension::types::SqlValue as V;
+    use sqlite_wasm_core::db;
+    match v {
+        db::Value::Null => V::Null,
+        db::Value::Integer(i) => V::Integer(i),
+        db::Value::Real(r) => V::Real(r),
+        db::Value::Text(s) => V::Text(s),
+        db::Value::Blob(b) => V::Blob(b),
+    }
+}
+
+fn bindings_sql_to_db_value(
+    v: bindings::sqlite::extension::types::SqlValue,
+) -> sqlite_wasm_core::db::Value {
+    use bindings::sqlite::extension::types::SqlValue as V;
+    use sqlite_wasm_core::db;
+    match v {
+        V::Null => db::Value::Null,
+        V::Integer(i) => db::Value::Integer(i),
+        V::Real(r) => db::Value::Real(r),
+        V::Text(s) => db::Value::Text(s),
+        V::Blob(b) => db::Value::Blob(b),
+    }
+}
+
+/// Stage 5e.10: aggregate trampoline implementing core::db::Aggregate
+/// (and WindowAggregate for window-mode functions). State type S = u64
+/// is the context_id; init() pulls a fresh one from Host's counter,
+/// step/finalize/value/inverse pass it through to dispatch_aggregate_*.
+struct HostLoadedAggregate {
+    host: Host,
+    ext_name: String,
+    func_id: u64,
+}
+
+impl sqlite_wasm_core::db::Aggregate<u64> for HostLoadedAggregate {
+    fn init(&self) -> u64 {
+        self.host.agg_ctx_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn step(
+        &self,
+        acc: &mut u64,
+        args: &[sqlite_wasm_core::db::Value],
+    ) -> std::result::Result<(), sqlite_wasm_core::db::Error> {
+        let wit_args: Vec<_> = args.iter().cloned().map(db_value_to_bindings_sql).collect();
+        match sync_dispatch_aggregate_step(&self.host, &self.ext_name, self.func_id, *acc, wit_args)
+        {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(sqlite_wasm_core::db::Error {
+                code: 1,
+                extended_code: 1,
+                message: e,
+            }),
+            Err(e) => Err(sqlite_wasm_core::db::Error {
+                code: 1,
+                extended_code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+
+    fn finalize(
+        &self,
+        acc: Option<u64>,
+    ) -> std::result::Result<sqlite_wasm_core::db::Value, sqlite_wasm_core::db::Error> {
+        let ctx_id = acc.unwrap_or(0);
+        match sync_dispatch_aggregate_finalize(&self.host, &self.ext_name, self.func_id, ctx_id) {
+            Ok(Ok(v)) => Ok(bindings_sql_to_db_value(v)),
+            Ok(Err(e)) => Err(sqlite_wasm_core::db::Error {
+                code: 1,
+                extended_code: 1,
+                message: e,
+            }),
+            Err(e) => Err(sqlite_wasm_core::db::Error {
+                code: 1,
+                extended_code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+}
+
+impl sqlite_wasm_core::db::WindowAggregate<u64> for HostLoadedAggregate {
+    fn value(
+        &self,
+        ctx: &u64,
+    ) -> std::result::Result<sqlite_wasm_core::db::Value, sqlite_wasm_core::db::Error> {
+        match sync_dispatch_aggregate_value(&self.host, &self.ext_name, self.func_id, *ctx) {
+            Ok(Ok(v)) => Ok(bindings_sql_to_db_value(v)),
+            Ok(Err(e)) => Err(sqlite_wasm_core::db::Error {
+                code: 1,
+                extended_code: 1,
+                message: e,
+            }),
+            Err(e) => Err(sqlite_wasm_core::db::Error {
+                code: 1,
+                extended_code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+
+    fn inverse(
+        &self,
+        ctx: &mut u64,
+        args: &[sqlite_wasm_core::db::Value],
+    ) -> std::result::Result<(), sqlite_wasm_core::db::Error> {
+        let wit_args: Vec<_> = args.iter().cloned().map(db_value_to_bindings_sql).collect();
+        match sync_dispatch_aggregate_inverse(
+            &self.host,
+            &self.ext_name,
+            self.func_id,
+            *ctx,
+            wit_args,
+        ) {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(sqlite_wasm_core::db::Error {
+                code: 1,
+                extended_code: 1,
+                message: e,
+            }),
+            Err(e) => Err(sqlite_wasm_core::db::Error {
+                code: 1,
+                extended_code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+}
+
 unsafe fn unregister_host_loaded_collation(
     db: *mut libsqlite3_sys::sqlite3,
     coll_name: &str,
@@ -2886,6 +3075,22 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
                 .to_string(),
         })
     }
+
+    async fn register_aggregate(
+        &mut self,
+        _ext_name: String,
+        _name: String,
+        _num_args: i32,
+        _func_id: u64,
+        _window: bool,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi.register-aggregate is only available on the cli's shared connection"
+                .to_string(),
+        })
+    }
 }
 
 /// Shared implementation of spi.execute_multi for the LoadedState
@@ -3754,6 +3959,14 @@ pub struct Host {
     /// collation names the host registered. Same lifecycle as
     /// ext_scalar_registrations  cleared on unregister-extension.
     ext_collation_registrations: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    /// PLAN-cli-stages-5-6.md Stage 5e.10: per-extension list of
+    /// (name, num_args) tuples for aggregate functions the host
+    /// registered. Same lifecycle as the scalar/collation maps.
+    ext_aggregate_registrations: Arc<Mutex<HashMap<String, Vec<(String, i32)>>>>,
+    /// PLAN-cli-stages-5-6.md Stage 5e.10: monotonically-increasing
+    /// counter used to allocate aggregate context_ids on the host
+    /// side. Mirrors AGG_CTX_COUNTER on the cli's old path.
+    agg_ctx_counter: Arc<std::sync::atomic::AtomicU64>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
     /// as a `resolving`-world component. `file` and `blake3` schemes
@@ -4147,6 +4360,8 @@ impl Host {
             trace_buf: Arc::new(Mutex::new(Vec::new())),
             ext_scalar_registrations: Arc::new(Mutex::new(HashMap::new())),
             ext_collation_registrations: Arc::new(Mutex::new(HashMap::new())),
+            ext_aggregate_registrations: Arc::new(Mutex::new(HashMap::new())),
+            agg_ctx_counter: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
@@ -7621,7 +7836,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     async fn unregister_extension(&mut self, ext_name: String) {
         let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
         let colls = self.host.ext_collation_registrations.lock().remove(&ext_name);
-        if scalars.is_none() && colls.is_none() {
+        let aggs = self.host.ext_aggregate_registrations.lock().remove(&ext_name);
+        if scalars.is_none() && colls.is_none() && aggs.is_none() {
             return;
         }
         let g = self.host.shared_spi_conn.lock();
@@ -7641,6 +7857,65 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
                 };
             }
         }
+        if let Some(entries) = aggs {
+            // Aggregates use the same FFI removal path as scalars
+            // (sqlite3_create_function_v2 with null callbacks).
+            for (name, num_args) in entries {
+                let _ = unsafe {
+                    unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
+                };
+            }
+        }
+    }
+
+    async fn register_aggregate(
+        &mut self,
+        ext_name: String,
+        name: String,
+        num_args: i32,
+        func_id: u64,
+        window: bool,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let agg = HostLoadedAggregate {
+            host: self.host.clone(),
+            ext_name: ext_name.clone(),
+            func_id,
+        };
+        let result = if window {
+            conn.create_window_function(
+                &name,
+                num_args,
+                sqlite_wasm_core::db::FunctionFlags::UTF8
+                    | sqlite_wasm_core::db::FunctionFlags::DIRECTONLY,
+                agg,
+            )
+        } else {
+            conn.create_aggregate_function(
+                &name,
+                num_args,
+                sqlite_wasm_core::db::FunctionFlags::UTF8
+                    | sqlite_wasm_core::db::FunctionFlags::DIRECTONLY,
+                agg,
+            )
+        };
+        if let Err(e) = result {
+            return Err(bindings::sqlite::extension::types::SqliteError {
+                code: e.code,
+                extended_code: e.extended_code,
+                message: format!("register aggregate {name}/{num_args}: {}", e.message),
+            });
+        }
+        self.host
+            .ext_aggregate_registrations
+            .lock()
+            .entry(ext_name)
+            .or_default()
+            .push((name, num_args));
+        Ok(())
     }
 
     async fn register_collation(

@@ -1950,6 +1950,24 @@ fn do_load(input: &str) -> String {
             );
         }
     }
+    let mut a_count_host = 0;
+    for spec in &manifest.aggregate_functions {
+        let r = bindings::sqlite::extension::spi::register_aggregate(
+            &ext_name,
+            &spec.name,
+            spec.num_args,
+            spec.id,
+            spec.is_window,
+        );
+        if r.is_ok() {
+            a_count_host += 1;
+        } else if let Err(e) = r {
+            eprintln!(
+                "register aggregate {} arity={}: {} (code {})",
+                spec.name, spec.num_args, e.message, e.code
+            );
+        }
+    }
 
     let counts = CLI_CONN.with(|c| {
         let g = c.borrow();
@@ -1959,65 +1977,8 @@ fn do_load(input: &str) -> String {
         let mut h_count = 0;
         let mut regs = ExtRegistrations::default();
 
-        // Aggregates: each invocation owns a context_id; init allocates
-        // one, step/finalize forward it to the host-side aggregator.
-        // Window-mode aggregates additionally implement value/inverse
-        // so the host can route SQLite's xValue/xInverse calls back
-        // through `aggregate_value` / `aggregate_inverse`.
-        struct AggDispatcher { ext_name: String, func_id: u64 }
-        impl db::Aggregate<u64> for AggDispatcher {
-            fn init(&self) -> u64 { next_agg_context_id() }
-            fn step(&self, acc: &mut u64, args: &[db::Value]) -> Result<(), db::Error> {
-                let wit_args: Vec<WitSqlValue> = args.iter().cloned().map(db_to_wit).collect();
-                match dispatch::aggregate_step(&self.ext_name, self.func_id, *acc, &wit_args) {
-                    Ok(()) => Ok(()),
-                    Err(e) => Err(db::Error { code: 1, extended_code: 1, message: e }),
-                }
-            }
-            fn finalize(&self, acc: Option<u64>) -> Result<db::Value, db::Error> {
-                let ctx_id = acc.unwrap_or(0);
-                match dispatch::aggregate_finalize(&self.ext_name, self.func_id, ctx_id) {
-                    Ok(v) => Ok(wit_to_db(v)),
-                    Err(e) => Err(db::Error { code: 1, extended_code: 1, message: e }),
-                }
-            }
-        }
-        impl db::WindowAggregate<u64> for AggDispatcher {
-            fn value(&self, ctx: &u64) -> Result<db::Value, db::Error> {
-                match dispatch::aggregate_value(&self.ext_name, self.func_id, *ctx) {
-                    Ok(v) => Ok(wit_to_db(v)),
-                    Err(e) => Err(db::Error { code: 1, extended_code: 1, message: e }),
-                }
-            }
-            fn inverse(&self, ctx: &mut u64, args: &[db::Value]) -> Result<(), db::Error> {
-                let wit_args: Vec<WitSqlValue> = args.iter().cloned().map(db_to_wit).collect();
-                match dispatch::aggregate_inverse(&self.ext_name, self.func_id, *ctx, &wit_args) {
-                    Ok(()) => Ok(()),
-                    Err(e) => Err(db::Error { code: 1, extended_code: 1, message: e }),
-                }
-            }
-        }
-        for spec in &manifest.aggregate_functions {
-            let r = if spec.is_window {
-                conn.create_window_function(
-                    &spec.name,
-                    spec.num_args,
-                    db::FunctionFlags::UTF8 | db::FunctionFlags::DIRECTONLY,
-                    AggDispatcher { ext_name: ext_name.clone(), func_id: spec.id },
-                )
-            } else {
-                conn.create_aggregate_function(
-                    &spec.name,
-                    spec.num_args,
-                    db::FunctionFlags::UTF8 | db::FunctionFlags::DIRECTONLY,
-                    AggDispatcher { ext_name: ext_name.clone(), func_id: spec.id },
-                )
-            };
-            if r.is_ok() {
-                a_count += 1;
-                regs.functions.push((spec.name.clone(), spec.num_args));
-            }
-        }
+        // Aggregates migrated to spi (Stage 5e.10)  see the
+        // pre-block loop that calls spi::register_aggregate.
 
         // Collations migrated to spi (Stage 5e.10)  see the
         // pre-block loop that calls spi::register_collation.
@@ -2100,9 +2061,10 @@ fn do_load(input: &str) -> String {
 
         (a_count, c_count, h_count, v_count)
     });
-    let (aggregates, _c_count_inside, hooks, vtabs) = counts;
+    let (_a_count_inside, _c_count_inside, hooks, vtabs) = counts;
     let scalars = s_count;
     let collations = c_count_host;
+    let aggregates = a_count_host;
     let total = scalars + aggregates + collations + hooks + vtabs;
     let mut bits = Vec::new();
     if scalars > 0 { bits.push(format!("{scalars} scalar")); }
