@@ -1437,15 +1437,14 @@ fn eval_sql(sql: &str) -> String {
         ));
     }
     if show_changes && !out.contains("Error:") {
-        let (changes, total) = CLI_CONN.with(|c| {
-            let g = c.borrow();
-            let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-            (conn.changes(), conn.total_changes())
-        });
+        // PLAN-cli-shared-conn.md Stage 3c: read from the host's
+        // shared connection now that eval_sql_inner mutates it.
+        let changes = bindings::sqlite::extension::spi::changes();
+        let total = bindings::sqlite::extension::spi::total_changes();
         out.push_str(&format!("changes: {changes} total_changes: {total}\n"));
     }
     if show_stats {
-        let mem = db::Connection::current_memory_used();
+        let mem = bindings::sqlite::extension::spi::current_memory_used();
         out.push_str(&format!("Memory Used: {mem} bytes\n"));
     }
     out
@@ -1458,73 +1457,48 @@ fn eval_sql(sql: &str) -> String {
 /// wrapping helpers (timer/changes/explain/eqp/stats) live in
 /// `eval_sql`. Drains any trace lines captured during execution.
 fn eval_sql_inner(sql: &str) -> String {
+    use bindings::sqlite::extension::spi;
+    use bindings::sqlite::extension::types::SqlValue;
     let mut out = String::new();
-    let mut remaining: &str = sql;
-    CLI_CONN.with(|c| {
-        let g = c.borrow();
-        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
-        while !remaining.trim().is_empty() {
-            let (mut stmt, tail) = match conn.prepare_with_tail(remaining) {
-                Ok(parts) => parts,
-                Err(_) => {
-                    // Prepare failed — fall back to execute_batch
-                    // on the rest, which surfaces errors and may
-                    // handle pragmas/triggers we can't prepare.
-                    match conn.execute_batch(remaining) {
-                        Ok(()) => break,
-                        Err(e) => {
-                            out.push_str(&format!("Error: {}\n", e.message));
-                            break;
-                        }
-                    }
-                }
-            };
-            // Comment-only or whitespace-only segments produce a
-            // NULL stmt with SQLITE_OK. Calling step() on that
-            // returns SQLITE_MISUSE; sqlite3_errmsg(NULL) returns
-            // the misleading static string "out of memory". Just
-            // advance past it without stepping.
-            if stmt.is_empty() {
-                if tail >= remaining.len() {
-                    break;
-                }
-                remaining = &remaining[tail..];
-                continue;
-            }
-            // Bind named `.parameter set` values. cli stores names
-            // without the sigil; FFI returns sigil-prefixed names.
-            let nparams = stmt.parameter_count();
-            if nparams > 0 {
-                let params = settings::SETTINGS.with(|s| s.borrow().parameters.clone());
-                for i in 1..=nparams {
-                    if let Some(name) = stmt.bind_parameter_name(i) {
-                        let bare = &name[1..];
-                        if let Some(v) = params.get(bare) {
-                            if let Err(e) = stmt.bind(i, v) {
-                                out.push_str(&format!("Error: {}\n", e.message));
-                                return;
-                            }
-                        }
-                    }
-                }
-            }
-            let columns = stmt.column_names();
-            let out_rows = match stmt.collect_rows() {
-                Ok(r) => r,
-                Err(e) => {
-                    out.push_str(&format!("Error: {}\n", e.message));
-                    return;
-                }
-            };
-            let settings = settings::SETTINGS.with(|s| s.borrow().clone());
-            out.push_str(&format::format(&columns, &out_rows, &settings));
-            // Advance past the just-executed statement.
-            if tail >= remaining.len() {
-                break;
-            }
-            remaining = &remaining[tail..];
-        }
+    // PLAN-cli-shared-conn.md Stage 3c: route every cli SQL exec
+    // through spi.execute_multi. The host walks the statement
+    // tail, binds named params, returns one query-result per
+    // statement. The cli still owns format::format + the
+    // settings::SETTINGS snapshot used to render.
+    let named: Vec<spi::NamedParam> = settings::SETTINGS.with(|s| {
+        s.borrow().parameters.iter().map(|(name, v)| spi::NamedParam {
+            name: name.clone(),
+            value: match v {
+                db::Value::Null      => SqlValue::Null,
+                db::Value::Integer(i) => SqlValue::Integer(*i),
+                db::Value::Real(r)    => SqlValue::Real(*r),
+                db::Value::Text(s)    => SqlValue::Text(s.clone()),
+                db::Value::Blob(b)    => SqlValue::Blob(b.clone()),
+            },
+        }).collect()
     });
+    match spi::execute_multi(sql, &named) {
+        Ok(results) => {
+            let settings = settings::SETTINGS.with(|s| s.borrow().clone());
+            for r in &results {
+                // Convert bindings::SqlValue -> db::Value for the
+                // existing format::format consumer.
+                let rows: Vec<Vec<db::Value>> = r.rows.iter().map(|row| {
+                    row.iter().map(|v| match v {
+                        SqlValue::Null       => db::Value::Null,
+                        SqlValue::Integer(i) => db::Value::Integer(*i),
+                        SqlValue::Real(r)    => db::Value::Real(*r),
+                        SqlValue::Text(s)    => db::Value::Text(s.clone()),
+                        SqlValue::Blob(b)    => db::Value::Blob(b.clone()),
+                    }).collect()
+                }).collect();
+                out.push_str(&format::format(&r.columns, &rows, &settings));
+            }
+        }
+        Err(e) => {
+            out.push_str(&format!("Error: {}\n", e.message));
+        }
+    }
     // Drain any trace lines captured by .trace's callback while
     // this statement was running.
     let traced = settings::TRACE_BUF.with(|b| std::mem::take(&mut *b.borrow_mut()));

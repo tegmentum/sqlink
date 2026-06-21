@@ -1475,6 +1475,17 @@ fn shared_spi_ensure_open(host: &Host) -> std::result::Result<(), bindings::sqli
     if g.is_none() {
         let conn = db::Connection::open(&path, db::OpenFlags::DEFAULT)
             .map_err(db_err_to_bindings)?;
+        // PLAN-cli-shared-conn.md Stage 3c: the cli registered a
+        // `dot_command(name [, args...])` SQL function on
+        // CLI_CONN. After eval_sql migrated to spi, queries run
+        // against this shared connection  the function is gone.
+        // Re-registering host-side hit a tokio nesting panic
+        // (the SQL callback is sync; Host::dispatch_dot_command
+        // is async). Routing that needs a deferred / channel-
+        // based dispatcher or a sync wrapper around the host's
+        // dispatch path  staged out to Stage 5 along with the
+        // rest of the raw-handle work (register_dotcmd_sql_surface,
+        // apply_cli_pragmas, register_embedded_extensions).
         *g = Some(conn);
     }
     Ok(())
@@ -1653,6 +1664,78 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         let conn = g.as_ref().expect("ensured open");
         conn.deserialize_db(&db_name, &bytes).map_err(db_err_to_spi)
     }
+
+    async fn execute_multi(
+        &mut self,
+        sql: String,
+        named_params: Vec<loaded::sqlite::extension::spi::NamedParam>,
+    ) -> std::result::Result<
+        Vec<loaded::sqlite::extension::types::QueryResult>,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        spi_ensure_open(self)?;
+        let g = self.spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        execute_multi_impl_loaded(conn, &sql, &named_params)
+    }
+}
+
+/// Shared implementation of spi.execute_multi for the LoadedState
+/// (extensions) view. The HostWrap view uses
+/// `execute_multi_impl_bindings`  same logic, different type
+/// universes.
+fn execute_multi_impl_loaded(
+    conn: &sqlite_wasm_core::db::Connection,
+    sql: &str,
+    named_params: &[loaded::sqlite::extension::spi::NamedParam],
+) -> std::result::Result<
+    Vec<loaded::sqlite::extension::types::QueryResult>,
+    loaded::sqlite::extension::types::SqliteError,
+> {
+    let mut results = Vec::new();
+    let mut remaining: &str = sql;
+    while !remaining.trim().is_empty() {
+        let (mut stmt, tail) = match conn.prepare_with_tail(remaining) {
+            Ok(p) => p,
+            Err(e) => return Err(db_err_to_spi(e)),
+        };
+        if stmt.is_empty() {
+            if tail >= remaining.len() { break; }
+            remaining = &remaining[tail..];
+            continue;
+        }
+        let nparams = stmt.parameter_count();
+        for i in 1..=nparams {
+            if let Some(name) = stmt.bind_parameter_name(i) {
+                let bare = &name[1..];
+                if let Some(p) = named_params.iter().find(|p| p.name == bare) {
+                    let v = spi_value_to_db(p.value.clone());
+                    if let Err(e) = stmt.bind(i, &v) {
+                        return Err(db_err_to_spi(e));
+                    }
+                }
+            }
+        }
+        let columns = stmt.column_names();
+        let rows = match stmt.collect_rows() {
+            Ok(r) => r,
+            Err(e) => return Err(db_err_to_spi(e)),
+        };
+        drop(stmt);
+        let out_rows: Vec<Vec<_>> = rows
+            .into_iter()
+            .map(|r| r.into_iter().map(db_value_to_spi).collect())
+            .collect();
+        results.push(loaded::sqlite::extension::types::QueryResult {
+            columns,
+            rows: out_rows,
+            changes: conn.changes(),
+            last_insert_rowid: conn.last_insert_rowid(),
+        });
+        if tail >= remaining.len() { break; }
+        remaining = &remaining[tail..];
+    }
+    Ok(results)
 }
 
 impl loaded::sqlite::extension::logging::Host for LoadedState {
@@ -6162,6 +6245,74 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let conn = g.as_ref().expect("ensured open");
         conn.deserialize_db(&db_name, &bytes).map_err(db_err_to_bindings)
     }
+
+    async fn execute_multi(
+        &mut self,
+        sql: String,
+        named_params: Vec<bindings::sqlite::extension::spi::NamedParam>,
+    ) -> std::result::Result<
+        Vec<bindings::sqlite::extension::types::QueryResult>,
+        bindings::sqlite::extension::types::SqliteError,
+    > {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        execute_multi_impl_bindings(conn, &sql, &named_params)
+    }
+}
+
+fn execute_multi_impl_bindings(
+    conn: &sqlite_wasm_core::db::Connection,
+    sql: &str,
+    named_params: &[bindings::sqlite::extension::spi::NamedParam],
+) -> std::result::Result<
+    Vec<bindings::sqlite::extension::types::QueryResult>,
+    bindings::sqlite::extension::types::SqliteError,
+> {
+    let mut results = Vec::new();
+    let mut remaining: &str = sql;
+    while !remaining.trim().is_empty() {
+        let (mut stmt, tail) = match conn.prepare_with_tail(remaining) {
+            Ok(p) => p,
+            Err(e) => return Err(db_err_to_bindings(e)),
+        };
+        if stmt.is_empty() {
+            if tail >= remaining.len() { break; }
+            remaining = &remaining[tail..];
+            continue;
+        }
+        let nparams = stmt.parameter_count();
+        for i in 1..=nparams {
+            if let Some(name) = stmt.bind_parameter_name(i) {
+                let bare = &name[1..];
+                if let Some(p) = named_params.iter().find(|p| p.name == bare) {
+                    let v = bindings_value_to_db(p.value.clone());
+                    if let Err(e) = stmt.bind(i, &v) {
+                        return Err(db_err_to_bindings(e));
+                    }
+                }
+            }
+        }
+        let columns = stmt.column_names();
+        let rows = match stmt.collect_rows() {
+            Ok(r) => r,
+            Err(e) => return Err(db_err_to_bindings(e)),
+        };
+        drop(stmt);
+        let out_rows: Vec<Vec<_>> = rows
+            .into_iter()
+            .map(|r| r.into_iter().map(db_value_to_bindings).collect())
+            .collect();
+        results.push(bindings::sqlite::extension::types::QueryResult {
+            columns,
+            rows: out_rows,
+            changes: conn.changes(),
+            last_insert_rowid: conn.last_insert_rowid(),
+        });
+        if tail >= remaining.len() { break; }
+        remaining = &remaining[tail..];
+    }
+    Ok(results)
 }
 
 impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
