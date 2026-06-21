@@ -993,7 +993,12 @@ impl RunGuest for CliCommand {
         let argv: Vec<String> = std::env::args().collect();
         let db_path = if argv.len() > 1 { argv[1].clone() } else { String::new() };
         DB_PATH.with(|p| *p.borrow_mut() = db_path);
-        ensure_cli_conn();
+        // Stage 5f: the cli no longer maintains its own libsqlite3-sys
+        // connection. Every embedded-extension / pragma / dot_command
+        // SQL-fn registration that ensure_cli_conn() used to do
+        // duplicates the host's first-shared-spi-open registration
+        // (see register_host_embedded_extensions et al in host/lib.rs).
+        // Schemas bootstrap via spi below.
         // PLAN-cli-shared-conn.md Stage 3: schemas now bootstrap
         // via spi (against the host's shared connection) rather
         // than CLI_CONN. Cheap when the tables already exist.
