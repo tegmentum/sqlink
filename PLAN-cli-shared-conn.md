@@ -170,21 +170,46 @@ Direct API methods:
   - This commit unblocks Stage 3 without changing any runtime
     behavior.
 
-### Stage 3 — migrate eval_sql to spi/prepared
+### Stage 3 — migrate cli SQL paths to spi/prepared
+
+#### Stage 3a — first spi consumer (shipped: c37e8c0)
+
+  - `impl bindings::sqlite::extension::spi::Host for HostWrap`
+    (15 methods, all delegating to `host.shared_spi_conn`). ✓
+  - `bindings::sqlite::extension::spi::add_to_linker` wired
+    into the cli's linker. ✓
+  - `sqlink_registry` migrated end-to-end (its `Connection`
+    parameter dropped from all 4 helpers; every call now goes
+    through `spi::execute` / `execute_batch`). ✓
+  - `try_fetch_bytes` + `walk_cas_resolvers` in `dot.rs`
+    dropped their `conn` arg. ✓
+
+#### Stage 3b — .backup / .save / .clone (shipped: c97dae4)
+
+  - `do_backup_into` calls `spi::backup_into` directly;
+    `do_backup` / `do_save` / `do_clone` ride on it. ✓
+  - `do_restore` stays on `CLI_CONN`  needs a `spi.restore-from`
+    addition (or the eval_sql migration making spi.execute the
+    canonical SQL path).
+
+#### Stage 3c — eval_sql (deferred)
 
   - The biggest single change. `eval_sql` currently does
     `prepare_with_tail` → `bind_all` → `step` loop → format
     rows via `format::render_*`.
-  - Replace each step with the spi/prepared host calls. The
-    cli still owns format.rs; data comes from host instead of
+  - Replace each step with the prepared host calls. The cli
+    still owns format.rs; data comes from host instead of
     `CLI_CONN`.
-  - Performance note: the prepared interface goes one
-    `step` per host crossing. For tight result loops this is
+  - Performance note: the prepared interface goes one `step`
+    per host crossing. For tight result loops this is
     measurably slower than direct ffi. Mitigation: use the
-    existing `vtab.fetch-batch` shape — a bulk-step that
-    returns N rows at a time. Add `prepared.step-batch(n) ->
-    list<list<sql-value>>` if benchmarks show the per-row
-    crossing dominates.
+    `prepared.step-batch(n)` method shipped in Stage 1.
+  - Until eval_sql migrates, the settings.rs delta handlers
+    (`conn/busy-timeout`, `conn/limit/<name>`,
+    `conn/db-config/<name>`, `conn/deserialize/<name>`) MUST
+    keep using `CLI_CONN`  per-connection state on the host
+    side wouldn't be visible to the cli's user-facing
+    statements that still flow through `CLI_CONN`.
   - Test surface: every output mode (list/csv/line/column/
     table/markdown/tabs/json), `.timer`, `.changes`, `.stats`,
     `.eqp`, `.explain` — they all flow through `eval_sql`.
