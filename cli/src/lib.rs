@@ -50,7 +50,11 @@ use bindings::exports::wasi::cli::run::Guest as RunGuest;
 struct CliCommand;
 
 thread_local! {
-    static CLI_CONN: RefCell<Option<db::Connection>> = const { RefCell::new(None) };
+    // Visible to other modules (settings::apply_dotcmd_delta) so
+    // connection-level deltas like `conn/busy-timeout` can apply
+    // on the cli's own connection rather than the extension's
+    // spi connection.
+    pub(crate) static CLI_CONN: RefCell<Option<db::Connection>> = const { RefCell::new(None) };
     static DONE: RefCell<bool> = const { RefCell::new(false) };
     static DB_PATH: RefCell<String> = const { RefCell::new(String::new()) };
     static AGG_CTX_COUNTER: RefCell<u64> = const { RefCell::new(1) };

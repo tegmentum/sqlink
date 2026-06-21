@@ -1464,6 +1464,20 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         conn.execute_batch(&sql).map_err(db_err_to_spi)?;
         Ok(conn.changes())
     }
+
+    async fn list_vfs(&mut self) -> Vec<String> {
+        sqlite_wasm_core::db::Connection::list_vfses()
+    }
+
+    async fn vfs_name(
+        &mut self,
+        db_name: String,
+    ) -> std::result::Result<String, loaded::sqlite::extension::types::SqliteError> {
+        spi_ensure_open(self)?;
+        let g = self.spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        conn.vfs_name(&db_name).map_err(db_err_to_spi)
+    }
 }
 
 impl loaded::sqlite::extension::logging::Host for LoadedState {

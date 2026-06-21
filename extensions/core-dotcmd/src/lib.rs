@@ -67,6 +67,10 @@ mod wasm_export {
     const FID_EXPLAIN:    u64 = 21;
     const FID_EQP:        u64 = 22;
     const FID_BINARY:     u64 = 23;
+    const FID_WIDTH:      u64 = 24;
+    const FID_TIMEOUT:    u64 = 25;
+    const FID_VFSLIST:    u64 = 26;
+    const FID_VFSNAME:    u64 = 27;
 
     struct Ext;
 
@@ -185,6 +189,26 @@ mod wasm_export {
                          "Print BLOBs as hex literals",
                          "binary on|off",
                          "When on, BLOBs render as `X'…'` hex literals; otherwise `<blob:N bytes>`."),
+                    spec(FID_WIDTH, "width",
+                         "Set per-column minimum widths",
+                         "width [N N N ...]",
+                         "Space-separated widths apply as MINIMUMS in column/box/table modes. \
+                          Empty list resets to data-driven widths."),
+                    spec(FID_TIMEOUT, "timeout",
+                         "Set the busy-handler timeout (sqlite3_busy_timeout)",
+                         "timeout MS",
+                         "Sets how long the cli's connection waits when SQLite reports SQLITE_BUSY. \
+                          Applied to the cli's main connection via a state delta."),
+                    spec(FID_VFSLIST, "vfslist",
+                         "List registered VFSes",
+                         "vfslist",
+                         "Prints the names of every VFS the host has registered. The first \
+                          entry is the default."),
+                    spec(FID_VFSNAME, "vfsname",
+                         "Print the active VFS for a database",
+                         "vfsname [DB]",
+                         "DB defaults to `main`. Resolves via the extension's spi connection \
+                          (which opens against the same db file, so the VFS matches the cli's)."),
                 ],
                 has_authorizer: false,
                 has_update_hook: false,
@@ -552,6 +576,58 @@ mod wasm_export {
         InvokeResult { text: String::new(), state_deltas: deltas, ok: true, exit_code: 0 }
     }
 
+    /// `.width N N N`  emit `display/width` delta as a single
+    /// space-separated string. The cli's applier parses tokens
+    /// back into a Vec<usize>; empty arg resets to data-driven.
+    fn cmd_width(arg: &str) -> InvokeResult {
+        // Validate: every token must parse as a non-negative int.
+        // Don't emit a delta if validation fails  fail closed.
+        let trimmed = arg.trim();
+        for tok in trimmed.split_whitespace() {
+            if tok.parse::<isize>().is_err() {
+                return err(format!(".width: bad width {tok:?}  expected non-negative integers"));
+            }
+        }
+        delta("display/width", SqlValue::Text(trimmed.into()))
+    }
+
+    fn cmd_timeout(arg: &str) -> InvokeResult {
+        let s = arg.trim();
+        if s.is_empty() {
+            return err(".timeout: missing MS".into());
+        }
+        let ms: i64 = match s.parse() {
+            Ok(n) if n >= 0 => n,
+            _ => return err(format!(".timeout: bad ms {s:?}")),
+        };
+        delta("conn/busy-timeout", SqlValue::Integer(ms))
+    }
+
+    fn cmd_vfslist() -> InvokeResult {
+        let names = spi::list_vfs();
+        if names.is_empty() {
+            cli_stdout::write("(no VFSes registered)\n");
+        } else {
+            for (i, name) in names.iter().enumerate() {
+                let marker = if i == 0 { " (default)" } else { "" };
+                cli_stdout::write(&format!("{name}{marker}\n"));
+            }
+        }
+        ok()
+    }
+
+    fn cmd_vfsname(arg: &str) -> InvokeResult {
+        let db = arg.trim();
+        let db_name = if db.is_empty() { "main" } else { db };
+        match spi::vfs_name(db_name) {
+            Ok(name) if name.is_empty() =>
+                { cli_stdout::write(&format!("(no vfs name for {db_name})\n")); ok() },
+            Ok(name) =>
+                { cli_stdout::write(&format!("{name}\n")); ok() },
+            Err(e) => err(format!(".vfsname: {}", e.message)),
+        }
+    }
+
     fn strip_quotes(s: &str) -> &str {
         if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
             &s[1..s.len() - 1]
@@ -633,6 +709,10 @@ mod wasm_export {
                 FID_SEPARATOR => cmd_set_string("display/separator", arg, "separator"),
                 FID_EXPLAIN   => cmd_set_string("io/explain",        arg, "explain"),
                 FID_PROMPT    => cmd_prompt(arg),
+                FID_WIDTH     => cmd_width(arg),
+                FID_TIMEOUT   => cmd_timeout(arg),
+                FID_VFSLIST   => cmd_vfslist(),
+                FID_VFSNAME   => cmd_vfsname(arg),
                 _ => return Err(SqliteError {
                     code: 1,
                     extended_code: 1,

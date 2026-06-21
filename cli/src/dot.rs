@@ -71,10 +71,10 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         // lib.rs. Without it loaded the user sees "Unknown command:
         // .version"  preferred over silently shadowing the new
         // registry surface.
-        ".width" => cmd_width(arg),
+        // .width / .timeout  routed through the core-dotcmd
+        // registry via state-delta emission (FU-5).
         // .changes / .timer / .explain / .eqp / .stats  routed
         // through the core-dotcmd registry (Phase 2.2).
-        ".timeout" => cmd_timeout(arg, conn),
         ".parameter" => cmd_parameter(arg),
         // .fullschema  routed through core-dotcmd registry.
         // .dbinfo  routed through the registry (core-dotcmd).
@@ -91,8 +91,8 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         // dispatcher's loader-fallthrough routes `.sqlink ...`
         // to it the same way `.version`/`.tables`/etc. resolve
         // through core-dotcmd.
-        ".vfslist" => cmd_vfslist(),
-        ".vfsname" => cmd_vfsname(arg, conn),
+        // .vfslist / .vfsname  routed through core-dotcmd via
+        // new spi.list-vfs + spi.vfs-name imports (FU-6).
         ".archive" => cmd_archive(arg, conn),
         ".session" => cmd_session(arg, conn),
         ".serialize" => cmd_serialize(arg, conn),

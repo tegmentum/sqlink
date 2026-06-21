@@ -183,11 +183,42 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
             },
             "display/nullvalue" => if let Some(s) = parse_string(value_json) { g.null_value = s; },
             "display/separator" => if let Some(s) = parse_string(value_json) { g.separator = s; },
+            "display/width"     => if let Some(s) = parse_string(value_json) {
+                // Space-separated non-negative ints; empty resets.
+                let mut widths = Vec::new();
+                let mut bad = false;
+                for tok in s.split_whitespace() {
+                    match tok.parse::<isize>() {
+                        Ok(n) => widths.push(n.max(0) as usize),
+                        Err(_) => { bad = true; break; }
+                    }
+                }
+                if !bad { g.column_widths = widths; }
+            },
             "prompt/main"       => if let Some(s) = parse_string(value_json) { g.prompt_main = s; },
             "prompt/cont"       => if let Some(s) = parse_string(value_json) { g.prompt_cont = s; },
+            "conn/busy-timeout" => if let Some(ms) = parse_int(value_json) {
+                // Apply to the cli's main connection. Extensions
+                // run their own spi connection; setting busy_timeout
+                // there wouldn't help the cli's user-facing
+                // statements, so the delta path is the only way to
+                // affect what the cli sees.
+                if let Some(conn_ms) = i32::try_from(ms).ok() {
+                    crate::CLI_CONN.with(|c| {
+                        let g = c.borrow();
+                        if let Some(conn) = g.as_ref() {
+                            let _ = conn.busy_timeout(conn_ms);
+                        }
+                    });
+                }
+            },
             _ => {} // unknown key  ignore.
         }
     });
+}
+
+fn parse_int(json: &str) -> Option<i64> {
+    json.trim().parse::<i64>().ok()
 }
 
 /// Decode a JSON boolean. Accepts the JSON forms `true`/`false`, and
