@@ -85,7 +85,7 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         // it depends on the install-time wiring done before
         // sqlite3 initialized).
         // .lint  routed through core-dotcmd registry.
-        ".sha3sum" => cmd_sha3sum(arg, conn),
+        // .sha3sum  migrated to extensions/sha3sum-cli (FU-9).
         // .sqlink  migrated to extensions/sqlink-meta-cli (FU-3).
         // The cli auto-embeds that extension at startup; the
         // dispatcher's loader-fallthrough routes `.sqlink ...`

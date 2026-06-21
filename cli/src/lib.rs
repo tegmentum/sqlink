@@ -3510,6 +3510,9 @@ fn embed_core_dotcmd() {
     const SQLINK_META_CLI_BYTES: &[u8] = include_bytes!(
         "../../extensions/sqlink-meta-cli/target/wasm32-wasip2/release/sqlink_meta_cli_extension.component.wasm"
     );
+    const SHA3SUM_CLI_BYTES: &[u8] = include_bytes!(
+        "../../extensions/sha3sum-cli/target/wasm32-wasip2/release/sha3sum_cli_extension.component.wasm"
+    );
     let options = LoadOptions {
         grant: Vec::new(),
         http_policy: None,
@@ -3541,6 +3544,19 @@ fn embed_core_dotcmd() {
         Err(e) => {
             eprintln!(
                 "auto-load sqlink-meta-cli failed: {} ({}). `.sqlink` will read \"Unknown command\".",
+                e.message, e.code
+            );
+        }
+    }
+    match extension_loader::load_extension_from_bytes(
+        "sha3sum-cli",
+        SHA3SUM_CLI_BYTES,
+        &options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load sha3sum-cli failed: {} ({}). `.sha3sum` will read \"Unknown command\".",
                 e.message, e.code
             );
         }

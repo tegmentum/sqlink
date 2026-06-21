@@ -1,0 +1,28 @@
+[package]
+name = "sha3sum-cli-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+`.sha3sum` as a wasm dot-command extension.
+
+Migrated out of cli/src/dot.rs as a follow-up to
+PLAN-dotcmd-phase5.md. Walks the schema via spi.execute,
+computes a Sha3_256 over each table's rows in a canonical
+encoding, prints one line per table.
+
+Independent of cli internals  the cli auto-embeds the
+extension at startup the same way core-dotcmd + sqlink-meta-cli
+are embedded.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+sha3 = { version = "0.10", default-features = false }

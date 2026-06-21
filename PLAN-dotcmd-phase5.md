@@ -21,18 +21,23 @@ strip-prefix chain, with the migration shape for each.
     connection (FU-5).
   - `.vfslist`, `.vfsname` — via new `spi.list-vfs` +
     `spi.vfs-name` (FU-6).
+  - `.show` — cli-state snapshot pushed on every dispatch;
+    extension reads via `cli_state.get_*` (FU-7).
+  - `.limit`, `.dbconfig` — snapshot pushes live
+    `conn/limit/<name>` and `conn/db-config/<name>` values;
+    set side emits matching state-deltas the cli applies on
+    its own connection (FU-8).
+  - `.sha3sum` — own extension (`extensions/sha3sum-cli`) using
+    `spi.execute` to walk schema + rows, hashing with Sha3_256
+    (FU-9).
 
 ## What's left in the cli's hard-coded dispatch
 
-### `cli/src/dot.rs` (9 arms remaining)
+### `cli/src/dot.rs` (5 arms remaining)
 
 | Command         | Blocker / migration target |
 |-----------------|----------------------------|
-| `.show`         | needs a `cli-state.get-*` read path (host-side snapshot push before invoke, or fields on `InvokeContext`) |
-| `.parameter`    | needs a map-shaped state-delta key class (parameter bindings are not a single value but a map) |
-| `.dbconfig`     | set works via delta (`conn/db-config/<op>`); the `.dbconfig OP` and `.dbconfig` no-arg cases need read access to the cli's connection state — needs cli→ext snapshot path |
-| `.limit`        | same shape as `.dbconfig` — set via delta works; read needs back-channel |
-| `.sha3sum`      | own extension (`sha3-sum-cli`) — uses `spi.execute` to walk schema, hashes incrementally |
+| `.parameter`    | needs a map-shaped state-delta key class (parameter bindings are a HashMap, not a single value) — `params/set/<name>` + `params/clear` keys would work, but the cli's parameter map also needs to round-trip through the cli-state snapshot |
 | `.archive`      | own extension (`archive-cli`) — needs the zip vtab port + sqlite3_archive surface |
 | `.session`      | own extension (`session-cli`) — needs `sqlite3_session_*` exposed via a new spi sub-interface |
 | `.serialize`    | own extension (`serialize-cli`) — needs `sqlite3_serialize` / `sqlite3_deserialize` via spi |
