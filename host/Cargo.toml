@@ -94,18 +94,273 @@ sha3-extension   = { path = "../extensions/sha3",   optional = true, features = 
 uuid-extension   = { path = "../extensions/uuid",   optional = true, features = ["embed"], default-features = false }
 regexp-extension = { path = "../extensions/regexp", optional = true, features = ["embed"], default-features = false }
 json1-extension  = { path = "../extensions/json1",  optional = true, features = ["embed"], default-features = false }
+crc-extension   = { path = "../extensions/crc",   optional = true, features = ["embed"], default-features = false }
+baseN-extension = { path = "../extensions/baseN", optional = true, features = ["embed"], default-features = false }
+color-extension = { path = "../extensions/color", optional = true, features = ["embed"], default-features = false }
+ean-extension     = { path = "../extensions/ean",     optional = true, features = ["embed"], default-features = false }
+emoji-extension   = { path = "../extensions/emoji",   optional = true, features = ["embed"], default-features = false }
+morse-extension   = { path = "../extensions/morse",   optional = true, features = ["embed"], default-features = false }
+hexdump-extension   = { path = "../extensions/hexdump",   optional = true, features = ["embed"], default-features = false }
+idna-extension      = { path = "../extensions/idna",      optional = true, features = ["embed"], default-features = false }
+faker-extension     = { path = "../extensions/faker",     optional = true, features = ["embed"], default-features = false }
+sentiment-extension = { path = "../extensions/sentiment", optional = true, features = ["embed"], default-features = false }
+cron-extension      = { path = "../extensions/cron",      optional = true, features = ["embed"], default-features = false }
+crypto-extension    = { path = "../extensions/crypto",    optional = true, features = ["embed"], default-features = false }
+mailto-extension    = { path = "../extensions/mailto",    optional = true, features = ["embed"], default-features = false }
+ssn-extension       = { path = "../extensions/ssn",       optional = true, features = ["embed"], default-features = false }
+numfmt-extension    = { path = "../extensions/numfmt",    optional = true, features = ["embed"], default-features = false }
+ipaddr-extension    = { path = "../extensions/ipaddr",    optional = true, features = ["embed"], default-features = false }
+aba-extension        = { path = "../extensions/aba",        optional = true, features = ["embed"], default-features = false }
+bic-extension        = { path = "../extensions/bic",        optional = true, features = ["embed"], default-features = false }
+cusip-extension      = { path = "../extensions/cusip",      optional = true, features = ["embed"], default-features = false }
+creditcard-extension = { path = "../extensions/creditcard", optional = true, features = ["embed"], default-features = false }
+isin-extension       = { path = "../extensions/isin",       optional = true, features = ["embed"], default-features = false }
+dns-extension        = { path = "../extensions/dns",        optional = true, features = ["embed"], default-features = false }
+detect-extension     = { path = "../extensions/detect",     optional = true, features = ["embed"], default-features = false }
+ical-extension       = { path = "../extensions/ical",       optional = true, features = ["embed"], default-features = false }
+zorder-extension     = { path = "../extensions/zorder",     optional = true, features = ["embed"], default-features = false }
+postcode-extension   = { path = "../extensions/postcode",   optional = true, features = ["embed"], default-features = false }
+totype-extension     = { path = "../extensions/totype",     optional = true, features = ["embed"], default-features = false }
+template-extension   = { path = "../extensions/template",   optional = true, features = ["embed"], default-features = false }
+email-extension      = { path = "../extensions/email",      optional = true, features = ["embed"], default-features = false }
+case-extension       = { path = "../extensions/case",       optional = true, features = ["embed"], default-features = false }
+phone-extension      = { path = "../extensions/phone",      optional = true, features = ["embed"], default-features = false }
+csscolor-extension   = { path = "../extensions/csscolor",   optional = true, features = ["embed"], default-features = false }
+lorem-extension      = { path = "../extensions/lorem",      optional = true, features = ["embed"], default-features = false }
+url-extension        = { path = "../extensions/url",        optional = true, features = ["embed"], default-features = false }
+graphql-extension    = { path = "../extensions/graphql",    optional = true, features = ["embed"], default-features = false }
+eval-extension       = { path = "../extensions/eval",       optional = true, features = ["embed"], default-features = false }
+roman-extension      = { path = "../extensions/roman",      optional = true, features = ["embed"], default-features = false }
+mac-extension        = { path = "../extensions/mac",        optional = true, features = ["embed"], default-features = false }
+fileio-extension       = { path = "../extensions/fileio",       optional = true, features = ["embed"], default-features = false }
+bpe-extension          = { path = "../extensions/bpe",          optional = true, features = ["embed"], default-features = false }
+http-extension         = { path = "../extensions/http",         optional = true, features = ["embed"], default-features = false }
+bencode-extension      = { path = "../extensions/bencode",      optional = true, features = ["embed"], default-features = false }
+sqlparse-extension     = { path = "../extensions/sqlparse",     optional = true, features = ["embed"], default-features = false }
+semver-extension       = { path = "../extensions/semver",       optional = true, features = ["embed"], default-features = false }
+container-extension    = { path = "../extensions/container",    optional = true, features = ["embed"], default-features = false }
+currency-extension     = { path = "../extensions/currency",     optional = true, features = ["embed"], default-features = false }
+codecs-extension       = { path = "../extensions/codecs",       optional = true, features = ["embed"], default-features = false }
+radix-extension       = { path = "../extensions/radix",     optional = true, features = ["embed"], default-features = false }
+natsort-extension     = { path = "../extensions/natsort",   optional = true, features = ["embed"], default-features = false }
+unitconv-extension    = { path = "../extensions/unitconv",  optional = true, features = ["embed"], default-features = false }
+latlon-extension      = { path = "../extensions/latlon",    optional = true, features = ["embed"], default-features = false }
+vin-extension         = { path = "../extensions/vin",       optional = true, features = ["embed"], default-features = false }
+ieee754-extension     = { path = "../extensions/ieee754",   optional = true, features = ["embed"], default-features = false }
+escape-extension      = { path = "../extensions/escape",    optional = true, features = ["embed"], default-features = false }
+iban-extension        = { path = "../extensions/iban",      optional = true, features = ["embed"], default-features = false }
+humansize-extension   = { path = "../extensions/humansize", optional = true, features = ["embed"], default-features = false }
+math-extension        = { path = "../extensions/math",      optional = true, features = ["embed"], default-features = false }
+compress-extension    = { path = "../extensions/compress",  optional = true, features = ["embed"], default-features = false }
+bloom-extension       = { path = "../extensions/bloom",     optional = true, features = ["embed"], default-features = false }
+setops-extension      = { path = "../extensions/setops",    optional = true, features = ["embed"], default-features = false }
+country-extension     = { path = "../extensions/country",   optional = true, features = ["embed"], default-features = false }
+onnx-extension        = { path = "../extensions/onnx",      optional = true, features = ["embed"], default-features = false }
+formats-extension     = { path = "../extensions/formats",   optional = true, features = ["embed"], default-features = false }
+extfns-extension      = { path = "../extensions/extfns",    optional = true, features = ["embed"], default-features = false }
+vec-extension         = { path = "../extensions/vec",       optional = true, features = ["embed"], default-features = false }
+time-extension        = { path = "../extensions/time",      optional = true, features = ["embed"], default-features = false }
+parsers-extension     = { path = "../extensions/parsers",   optional = true, features = ["embed"], default-features = false }
+geo-extension         = { path = "../extensions/geo",       optional = true, features = ["embed"], default-features = false }
+decimal-extension     = { path = "../extensions/decimal",   optional = true, features = ["embed"], default-features = false }
+hyperloglog-extension = { path = "../extensions/hyperloglog", optional = true, features = ["embed"], default-features = false }
+count-min-extension   = { path = "../extensions/count_min", optional = true, features = ["embed"], default-features = false }
+sketches-extension    = { path = "../extensions/sketches",  optional = true, features = ["embed"], default-features = false }
+series-extension      = { path = "../extensions/series",    optional = true, features = ["embed"], default-features = false }
+listargs-extension    = { path = "../extensions/listargs",  optional = true, features = ["embed"], default-features = false }
+define-extension      = { path = "../extensions/define",    optional = true, features = ["embed"], default-features = false }
+completion-extension  = { path = "../extensions/completion", optional = true, features = ["embed"], default-features = false }
+trie-extension        = { path = "../extensions/trie",      optional = true, features = ["embed"], default-features = false }
+pmtiles-extension     = { path = "../extensions/pmtiles",   optional = true, features = ["embed"], default-features = false }
+inmem-extension       = { path = "../extensions/inmem",     optional = true, features = ["embed"], default-features = false }
+changeset-extension   = { path = "../extensions/changeset", optional = true, features = ["embed"], default-features = false }
+csv-extension         = { path = "../extensions/csv",       optional = true, features = ["embed"], default-features = false }
+stats-extension       = { path = "../extensions/stats",     optional = true, features = ["embed"], default-features = false }
+vec0-extension        = { path = "../extensions/vec0",      optional = true, features = ["embed"], default-features = false }
+stdsql-extension      = { path = "../extensions/stdsql",    optional = true, features = ["embed"], default-features = false }
+list-extension        = { path = "../extensions/list",      optional = true, features = ["embed"], default-features = false }
 
 [features]
 embed-sha3   = ["dep:sha3-extension"]
 embed-uuid   = ["dep:uuid-extension"]
 embed-regexp = ["dep:regexp-extension"]
 embed-json1  = ["dep:json1-extension"]
-# Convenience: all-embed pulls in the lot once we've ported them.
+embed-crc = ["dep:crc-extension"]
+embed-baseN = ["dep:baseN-extension"]
+embed-color = ["dep:color-extension"]
+embed-ean = ["dep:ean-extension"]
+embed-emoji = ["dep:emoji-extension"]
+embed-morse = ["dep:morse-extension"]
+embed-hexdump = ["dep:hexdump-extension"]
+embed-idna = ["dep:idna-extension"]
+embed-faker = ["dep:faker-extension"]
+embed-sentiment = ["dep:sentiment-extension"]
+embed-cron = ["dep:cron-extension"]
+embed-crypto = ["dep:crypto-extension"]
+embed-mailto = ["dep:mailto-extension"]
+embed-ssn = ["dep:ssn-extension"]
+embed-numfmt = ["dep:numfmt-extension"]
+embed-ipaddr = ["dep:ipaddr-extension"]
+embed-aba = ["dep:aba-extension"]
+embed-bic = ["dep:bic-extension"]
+embed-cusip = ["dep:cusip-extension"]
+embed-creditcard = ["dep:creditcard-extension"]
+embed-isin = ["dep:isin-extension"]
+embed-dns = ["dep:dns-extension"]
+embed-detect = ["dep:detect-extension"]
+embed-ical = ["dep:ical-extension"]
+embed-zorder = ["dep:zorder-extension"]
+embed-postcode = ["dep:postcode-extension"]
+embed-totype = ["dep:totype-extension"]
+embed-template = ["dep:template-extension"]
+embed-email = ["dep:email-extension"]
+embed-case = ["dep:case-extension"]
+embed-phone = ["dep:phone-extension"]
+embed-csscolor = ["dep:csscolor-extension"]
+embed-lorem = ["dep:lorem-extension"]
+embed-url = ["dep:url-extension"]
+embed-graphql = ["dep:graphql-extension"]
+embed-eval = ["dep:eval-extension"]
+embed-roman = ["dep:roman-extension"]
+embed-mac = ["dep:mac-extension"]
+embed-fileio = ["dep:fileio-extension"]
+embed-bpe = ["dep:bpe-extension"]
+embed-http = ["dep:http-extension"]
+embed-bencode = ["dep:bencode-extension"]
+embed-sqlparse = ["dep:sqlparse-extension"]
+embed-semver = ["dep:semver-extension"]
+embed-container = ["dep:container-extension"]
+embed-currency = ["dep:currency-extension"]
+embed-codecs = ["dep:codecs-extension"]
+embed-radix = ["dep:radix-extension"]
+embed-natsort = ["dep:natsort-extension"]
+embed-unitconv = ["dep:unitconv-extension"]
+embed-latlon = ["dep:latlon-extension"]
+embed-vin = ["dep:vin-extension"]
+embed-ieee754 = ["dep:ieee754-extension"]
+embed-escape = ["dep:escape-extension"]
+embed-iban = ["dep:iban-extension"]
+embed-humansize = ["dep:humansize-extension"]
+embed-math = ["dep:math-extension"]
+embed-compress = ["dep:compress-extension"]
+embed-bloom = ["dep:bloom-extension"]
+embed-setops = ["dep:setops-extension"]
+embed-country = ["dep:country-extension"]
+embed-onnx = ["dep:onnx-extension"]
+embed-formats = ["dep:formats-extension"]
+embed-extfns = ["dep:extfns-extension"]
+embed-vec = ["dep:vec-extension"]
+embed-time = ["dep:time-extension"]
+embed-parsers = ["dep:parsers-extension"]
+embed-geo = ["dep:geo-extension"]
+embed-decimal = ["dep:decimal-extension"]
+embed-hyperloglog = ["dep:hyperloglog-extension"]
+embed-count-min = ["dep:count-min-extension"]
+embed-sketches = ["dep:sketches-extension"]
+embed-series = ["dep:series-extension"]
+embed-listargs = ["dep:listargs-extension"]
+embed-define = ["dep:define-extension"]
+embed-completion = ["dep:completion-extension"]
+embed-trie = ["dep:trie-extension"]
+embed-pmtiles = ["dep:pmtiles-extension"]
+embed-inmem = ["dep:inmem-extension"]
+embed-changeset = ["dep:changeset-extension"]
+embed-csv = ["dep:csv-extension"]
+embed-stats = ["dep:stats-extension"]
+embed-vec0 = ["dep:vec0-extension"]
+embed-stdsql = ["dep:stdsql-extension"]
+embed-list = ["dep:list-extension"]
+# Convenience: all-embed pulls in the lot.
 all-embed = [
+    "embed-json1",
+    "embed-regexp",
     "embed-sha3",
     "embed-uuid",
-    "embed-regexp",
-    "embed-json1",
+    "embed-crc",
+    "embed-baseN",
+    "embed-color",
+    "embed-ean",
+    "embed-emoji",
+    "embed-morse",
+    "embed-hexdump",
+    "embed-idna",
+    "embed-faker",
+    "embed-sentiment",
+    "embed-cron",
+    "embed-crypto",
+    "embed-mailto",
+    "embed-ssn",
+    "embed-numfmt",
+    "embed-ipaddr",
+    "embed-aba",
+    "embed-bic",
+    "embed-cusip",
+    "embed-creditcard",
+    "embed-isin",
+    "embed-dns",
+    "embed-detect",
+    "embed-ical",
+    "embed-zorder",
+    "embed-postcode",
+    "embed-totype",
+    "embed-template",
+    "embed-email",
+    "embed-case",
+    "embed-phone",
+    "embed-csscolor",
+    "embed-lorem",
+    "embed-url",
+    "embed-graphql",
+    "embed-eval",
+    "embed-roman",
+    "embed-mac",
+    "embed-fileio",
+    "embed-bpe",
+    "embed-http",
+    "embed-bencode",
+    "embed-sqlparse",
+    "embed-semver",
+    "embed-container",
+    "embed-currency",
+    "embed-codecs",
+    "embed-radix",
+    "embed-natsort",
+    "embed-unitconv",
+    "embed-latlon",
+    "embed-vin",
+    "embed-ieee754",
+    "embed-escape",
+    "embed-iban",
+    "embed-humansize",
+    "embed-math",
+    "embed-compress",
+    "embed-bloom",
+    "embed-setops",
+    "embed-country",
+    "embed-onnx",
+    "embed-formats",
+    "embed-extfns",
+    "embed-vec",
+    "embed-time",
+    "embed-parsers",
+    "embed-geo",
+    "embed-decimal",
+    "embed-hyperloglog",
+    "embed-count-min",
+    "embed-sketches",
+    "embed-series",
+    "embed-listargs",
+    "embed-define",
+    "embed-completion",
+    "embed-trie",
+    "embed-pmtiles",
+    "embed-inmem",
+    "embed-changeset",
+    "embed-csv",
+    "embed-stats",
+    "embed-vec0",
+    "embed-stdsql",
+    "embed-list",
 ]
 
 [dev-dependencies]

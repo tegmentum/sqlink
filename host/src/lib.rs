@@ -1652,6 +1652,601 @@ unsafe fn register_host_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-json1: register_into failed rc={rc}");
         }
     }
+#[cfg(feature = "embed-crc")]
+    {
+        let rc = crc_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-crc: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-baseN")]
+    {
+        let rc = baseN_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-baseN: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-color")]
+    {
+        let rc = color_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-color: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-ean")]
+    {
+        let rc = ean_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-ean: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-emoji")]
+    {
+        let rc = emoji_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-emoji: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-morse")]
+    {
+        let rc = morse_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-morse: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-hexdump")]
+    {
+        let rc = hexdump_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-hexdump: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-idna")]
+    {
+        let rc = idna_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-idna: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-faker")]
+    {
+        let rc = faker_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-faker: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-sentiment")]
+    {
+        let rc = sentiment_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-sentiment: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-cron")]
+    {
+        let rc = cron_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-cron: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-crypto")]
+    {
+        let rc = crypto_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-crypto: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-mailto")]
+    {
+        let rc = mailto_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-mailto: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-ssn")]
+    {
+        let rc = ssn_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-ssn: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-numfmt")]
+    {
+        let rc = numfmt_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-numfmt: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-ipaddr")]
+    {
+        let rc = ipaddr_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-ipaddr: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-aba")]
+    {
+        let rc = aba_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-aba: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-bic")]
+    {
+        let rc = bic_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-bic: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-cusip")]
+    {
+        let rc = cusip_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-cusip: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-creditcard")]
+    {
+        let rc = creditcard_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-creditcard: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-isin")]
+    {
+        let rc = isin_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-isin: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-dns")]
+    {
+        let rc = dns_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-dns: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-detect")]
+    {
+        let rc = detect_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-detect: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-ical")]
+    {
+        let rc = ical_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-ical: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-zorder")]
+    {
+        let rc = zorder_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-zorder: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-postcode")]
+    {
+        let rc = postcode_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-postcode: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-totype")]
+    {
+        let rc = totype_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-totype: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-template")]
+    {
+        let rc = template_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-template: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-email")]
+    {
+        let rc = email_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-email: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-case")]
+    {
+        let rc = case_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-case: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-phone")]
+    {
+        let rc = phone_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-phone: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-csscolor")]
+    {
+        let rc = csscolor_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-csscolor: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-lorem")]
+    {
+        let rc = lorem_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-lorem: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-url")]
+    {
+        let rc = url_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-url: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-graphql")]
+    {
+        let rc = graphql_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-graphql: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-eval")]
+    {
+        let rc = eval_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-eval: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-roman")]
+    {
+        let rc = roman_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-roman: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-mac")]
+    {
+        let rc = mac_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-mac: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-fileio")]
+    {
+        let rc = fileio_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-fileio: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-bpe")]
+    {
+        let rc = bpe_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-bpe: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-http")]
+    {
+        let rc = http_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-http: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-bencode")]
+    {
+        let rc = bencode_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-bencode: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-sqlparse")]
+    {
+        let rc = sqlparse_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-sqlparse: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-semver")]
+    {
+        let rc = semver_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-semver: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-container")]
+    {
+        let rc = container_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-container: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-currency")]
+    {
+        let rc = currency_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-currency: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-codecs")]
+    {
+        let rc = codecs_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-codecs: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-radix")]
+    {
+        let rc = radix_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-radix: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-natsort")]
+    {
+        let rc = natsort_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-natsort: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-unitconv")]
+    {
+        let rc = unitconv_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-unitconv: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-latlon")]
+    {
+        let rc = latlon_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-latlon: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-vin")]
+    {
+        let rc = vin_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-vin: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-ieee754")]
+    {
+        let rc = ieee754_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-ieee754: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-escape")]
+    {
+        let rc = escape_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-escape: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-iban")]
+    {
+        let rc = iban_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-iban: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-humansize")]
+    {
+        let rc = humansize_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-humansize: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-math")]
+    {
+        let rc = math_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-math: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-compress")]
+    {
+        let rc = compress_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-compress: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-bloom")]
+    {
+        let rc = bloom_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-bloom: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-setops")]
+    {
+        let rc = setops_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-setops: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-country")]
+    {
+        let rc = country_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-country: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-onnx")]
+    {
+        let rc = onnx_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-onnx: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-formats")]
+    {
+        let rc = formats_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-formats: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-extfns")]
+    {
+        let rc = extfns_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-extfns: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-vec")]
+    {
+        let rc = vec_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-vec: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-time")]
+    {
+        let rc = time_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-time: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-parsers")]
+    {
+        let rc = parsers_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-parsers: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-geo")]
+    {
+        let rc = geo_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-geo: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-decimal")]
+    {
+        let rc = decimal_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-decimal: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-hyperloglog")]
+    {
+        let rc = hyperloglog_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-hyperloglog: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-count-min")]
+    {
+        let rc = count_min_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-count-min: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-sketches")]
+    {
+        let rc = sketches_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-sketches: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-series")]
+    {
+        let rc = series_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-series: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-listargs")]
+    {
+        let rc = listargs_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-listargs: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-define")]
+    {
+        let rc = define_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-define: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-completion")]
+    {
+        let rc = completion_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-completion: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-trie")]
+    {
+        let rc = trie_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-trie: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-pmtiles")]
+    {
+        let rc = pmtiles_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-pmtiles: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-inmem")]
+    {
+        let rc = inmem_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-inmem: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-changeset")]
+    {
+        let rc = changeset_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-changeset: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-csv")]
+    {
+        let rc = csv_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-csv: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-stats")]
+    {
+        let rc = stats_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-stats: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-vec0")]
+    {
+        let rc = vec0_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-vec0: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-stdsql")]
+    {
+        let rc = stdsql_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-stdsql: register_into failed rc={rc}");
+        }
+    }
+    #[cfg(feature = "embed-list")]
+    {
+        let rc = list_extension::embed::register_into(_db);
+        if rc != libsqlite3_sys::SQLITE_OK {
+            eprintln!("embed-list: register_into failed rc={rc}");
+        }
+    }
 }
 
 /// Read an sqlite3_value as a String.
