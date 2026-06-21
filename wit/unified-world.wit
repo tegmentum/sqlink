@@ -73,6 +73,15 @@ world sqlite-cli-command {
 
     import extension-loader;
     import dispatch;
+    /// Stage 1 of PLAN-cli-shared-conn.md: the cli world now
+    /// imports the same SQL surface extensions use. Today
+    /// (Stage 1) the cli still owns its own CLI_CONN via
+    /// libsqlite3-sys and uses these imports for nothing
+    /// the host wires them in so subsequent stages can migrate
+    /// eval_sql + dot.rs callers off the local connection one
+    /// path at a time.
+    import sqlite:extension/spi@0.1.0;
+    import sqlite:extension/prepared@0.1.0;
 }
 
 /// Programmatic SQLite library world.

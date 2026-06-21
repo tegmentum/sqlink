@@ -1511,6 +1511,88 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         let conn = g.as_ref().expect("ensured open");
         conn.serialize_db(&db_name).map_err(db_err_to_spi)
     }
+
+    async fn changes(&mut self) -> i64 {
+        let _ = spi_ensure_open(self);
+        let g = self.spi_conn.lock();
+        g.as_ref().map(|c| c.changes()).unwrap_or(0)
+    }
+
+    async fn total_changes(&mut self) -> i64 {
+        let _ = spi_ensure_open(self);
+        let g = self.spi_conn.lock();
+        g.as_ref().map(|c| c.total_changes()).unwrap_or(0)
+    }
+
+    async fn last_insert_rowid(&mut self) -> i64 {
+        let _ = spi_ensure_open(self);
+        let g = self.spi_conn.lock();
+        g.as_ref().map(|c| c.last_insert_rowid()).unwrap_or(0)
+    }
+
+    async fn current_memory_used(&mut self) -> i64 {
+        sqlite_wasm_core::db::Connection::current_memory_used()
+    }
+
+    async fn backup_into(
+        &mut self,
+        src_db: String,
+        dst_path: String,
+        dst_db: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        spi_ensure_open(self)?;
+        let src_g = self.spi_conn.lock();
+        let src = src_g.as_ref().expect("ensured open");
+        let dst = sqlite_wasm_core::db::Connection::open(
+            &dst_path,
+            sqlite_wasm_core::db::OpenFlags::DEFAULT,
+        )
+        .map_err(db_err_to_spi)?;
+        src.backup_into(&src_db, &dst, &dst_db).map_err(db_err_to_spi)
+    }
+
+    async fn set_busy_timeout(
+        &mut self,
+        ms: i32,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        spi_ensure_open(self)?;
+        let g = self.spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        conn.busy_timeout(ms).map_err(db_err_to_spi)
+    }
+
+    async fn limit(&mut self, category: i32, value: i32) -> i32 {
+        let _ = spi_ensure_open(self);
+        let g = self.spi_conn.lock();
+        g.as_ref().map(|c| c.limit(category, value)).unwrap_or(-1)
+    }
+
+    async fn db_config_bool(
+        &mut self,
+        op: i32,
+        set: bool,
+        value: bool,
+    ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
+        spi_ensure_open(self)?;
+        let g = self.spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        if set {
+            conn.db_config_set_bool(op, value).map_err(db_err_to_spi)
+        } else {
+            conn.db_config_get_bool(op).map_err(db_err_to_spi)
+        }
+    }
+
+    async fn deserialize_db(
+        &mut self,
+        db_name: String,
+        bytes: Vec<u8>,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        spi_ensure_open(self)?;
+        let g = self.spi_conn.lock();
+        let conn = g.as_ref().expect("ensured open");
+        conn.deserialize_db(&db_name, &bytes).map_err(db_err_to_spi)
+    }
 }
 
 impl loaded::sqlite::extension::logging::Host for LoadedState {
