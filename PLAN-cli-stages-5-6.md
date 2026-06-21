@@ -276,6 +276,10 @@ Shipped subcommits:
   - 5e.7 (b50c41a): .open via spi.open-db
   - 5e.8/5e.9 (f7ab9ef): .trace + .auth via spi (set-stmt-trace,
     drain-trace-buf, set-auth-log)
+  - 5e.10a (e478d8d): scalar trampolines via spi.register-scalar
+    + unregister-extension (fixes the .load regression for the
+    87/89 scalar-only case)
+  - 5e.10b (f79a29a): collations via spi.register-collation
 
 CLI_CONN.with site count: 16  4 across cli/src/lib.rs.
 
@@ -284,16 +288,19 @@ Remaining sites (lib.rs only):
   - **L111: ensure_cli_conn** itself  collapses once last
     consumer goes away.
   - **L1272: .session passthrough**  Stage 6 blocker.
-  - **L1916/L2912: do_load / do_unload registration
-    trampolines**  registers scalars/aggregates/collations/
-    hooks on the cli's connection. Stage 5e.10 needs ~10 new
-    spi methods to move trampolines to the host's shared
-    connection (so eval_sql can actually find them  today
-    they're on the wrong connection and SELECT my_func() can't
-    resolve).
-    *Side-effect:* .load is broken right now for any
-    extension that registers a scalar/agg/coll. The host's
-    spi conn never sees the trampoline.
+  - **L1938 (was L1916): do_load aggregate/vtab/hook
+    registration** still on CLI_CONN. Scalars + collations
+    moved out in 5e.10a/b; remaining types need their own
+    spi.register-* methods.
+  - **L2913: do_unload hook teardown**  paired with the
+    above. Functions + collations already drop via
+    spi.unregister-extension.
+
+Stage 5e.10 next batches:
+  - aggregates (register-aggregate + window flag; tricker
+    because each call allocates a context_id)
+  - vtabs (sqlite3_module install)
+  - authorizer / update_hook / commit_hook
 
 Remaining (each ~half-day, no shared theme):
 
