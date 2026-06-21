@@ -17,7 +17,7 @@ use std::os::raw::c_int;
 use libsqlite3_sys as ffi;
 
 use crate::db::{Connection, Value};
-use crate::settings::{self, Mode};
+use crate::settings;
 
 /// Run a parameterized query whose results are a single column;
 /// collect column 0 from every row, stringifying via SQLite's
@@ -1048,15 +1048,7 @@ fn cmd_limit(arg: &str, conn: &Connection) -> String {
     }
 }
 
-fn cmd_binary(arg: &str) -> String {
-    if arg.is_empty() {
-        let on = settings::SETTINGS.with(|s| s.borrow().binary_output);
-        return format!("binary: {}\n", if on { "on" } else { "off" });
-    }
-    let on = parse_on_off(arg);
-    settings::SETTINGS.with(|s| s.borrow_mut().binary_output = on);
-    String::new()
-}
+// .binary  moved to extensions/core-dotcmd (Phase 2.2).
 
 fn cmd_timeout(arg: &str, conn: &Connection) -> String {
     if arg.is_empty() {
@@ -1072,46 +1064,7 @@ fn cmd_timeout(arg: &str, conn: &Connection) -> String {
     }
 }
 
-fn cmd_explain(arg: &str) -> String {
-    use crate::settings::ExplainMode;
-    let mode = match arg {
-        "" => {
-            let m = settings::SETTINGS.with(|s| s.borrow().explain_mode);
-            let name = match m {
-                ExplainMode::Off => "off",
-                ExplainMode::On => "on",
-                ExplainMode::Auto => "auto",
-            };
-            return format!("explain: {name}\n");
-        }
-        "on" => ExplainMode::On,
-        "off" => ExplainMode::Off,
-        "auto" => ExplainMode::Auto,
-        _ => return "Usage: .explain on|off|auto\n".to_string(),
-    };
-    settings::SETTINGS.with(|s| s.borrow_mut().explain_mode = mode);
-    String::new()
-}
-
-fn cmd_eqp(arg: &str) -> String {
-    if arg.is_empty() {
-        let on = settings::SETTINGS.with(|s| s.borrow().eqp);
-        return format!("eqp: {}\n", if on { "on" } else { "off" });
-    }
-    let on = parse_on_off(arg);
-    settings::SETTINGS.with(|s| s.borrow_mut().eqp = on);
-    String::new()
-}
-
-fn cmd_stats(arg: &str) -> String {
-    if arg.is_empty() {
-        let on = settings::SETTINGS.with(|s| s.borrow().show_stats);
-        return format!("stats: {}\n", if on { "on" } else { "off" });
-    }
-    let on = parse_on_off(arg);
-    settings::SETTINGS.with(|s| s.borrow_mut().show_stats = on);
-    String::new()
-}
+// .explain / .eqp / .stats  moved to extensions/core-dotcmd (Phase 2.2).
 
 fn cmd_parameter(arg: &str) -> String {
     let mut parts = arg.splitn(3, char::is_whitespace);
@@ -1233,25 +1186,7 @@ fn cmd_width(arg: &str) -> String {
     String::new()
 }
 
-fn cmd_changes(arg: &str) -> String {
-    if arg.is_empty() {
-        let on = settings::SETTINGS.with(|s| s.borrow().show_changes);
-        return format!("changes: {}\n", if on { "on" } else { "off" });
-    }
-    let on = parse_on_off(arg);
-    settings::SETTINGS.with(|s| s.borrow_mut().show_changes = on);
-    String::new()
-}
-
-fn cmd_timer(arg: &str) -> String {
-    if arg.is_empty() {
-        let on = settings::SETTINGS.with(|s| s.borrow().show_timer);
-        return format!("timer: {}\n", if on { "on" } else { "off" });
-    }
-    let on = parse_on_off(arg);
-    settings::SETTINGS.with(|s| s.borrow_mut().show_timer = on);
-    String::new()
-}
+// .changes / .timer  moved to extensions/core-dotcmd (Phase 2.2).
 
 fn cmd_help() -> String {
     let mut o = String::new();
@@ -1395,59 +1330,9 @@ fn cmd_databases(conn: &Connection) -> String {
     out
 }
 
-fn cmd_headers(arg: &str) -> String {
-    let v = parse_on_off(arg);
-    settings::SETTINGS.with(|s| s.borrow_mut().headers = v);
-    String::new()
-}
-
-fn cmd_mode(arg: &str) -> String {
-    let m = match arg {
-        "list" => Mode::List,
-        "csv" => Mode::Csv,
-        "line" => Mode::Line,
-        "column" => Mode::Column,
-        "table" => Mode::Table,
-        "markdown" => Mode::Markdown,
-        "tabs" => Mode::Tabs,
-        "json" => Mode::Json,
-        _ => return format!("Unknown mode: {arg}\n"),
-    };
-    settings::SETTINGS.with(|s| s.borrow_mut().mode = m);
-    String::new()
-}
-
-fn cmd_nullvalue(arg: &str) -> String {
-    settings::SETTINGS.with(|s| s.borrow_mut().null_value = strip_quotes(arg));
-    String::new()
-}
-
-fn cmd_separator(arg: &str) -> String {
-    settings::SETTINGS.with(|s| s.borrow_mut().separator = strip_quotes(arg));
-    String::new()
-}
-
-fn cmd_echo(arg: &str) -> String {
-    settings::SETTINGS.with(|s| s.borrow_mut().echo = parse_on_off(arg));
-    String::new()
-}
-
-fn cmd_prompt(arg: &str) -> String {
-    let mut parts = arg.splitn(2, char::is_whitespace);
-    let main = strip_quotes(parts.next().unwrap_or("sqlite> "));
-    let cont = strip_quotes(parts.next().unwrap_or("   ...> ").trim());
-    settings::SETTINGS.with(|s| {
-        let mut g = s.borrow_mut();
-        g.prompt_main = main;
-        g.prompt_cont = cont;
-    });
-    String::new()
-}
-
-fn cmd_bail(arg: &str) -> String {
-    settings::SETTINGS.with(|s| s.borrow_mut().bail = parse_on_off(arg));
-    String::new()
-}
+// .headers / .mode / .nullvalue / .separator / .echo / .prompt
+// / .bail  moved to extensions/core-dotcmd (Phase 2.2). The cli
+// applies the returned state-deltas via settings::apply_dotcmd_delta.
 
 fn parse_on_off(s: &str) -> bool {
     matches!(s.trim().to_lowercase().as_str(), "on" | "true" | "1" | "yes")
