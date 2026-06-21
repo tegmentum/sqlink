@@ -787,7 +787,21 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
                 batched: v.batched,
             })
             .collect(),
-        dot_commands: vec![],
+        dot_commands: ext
+            .dot_commands
+            .iter()
+            .map(|d| bindings::sqlite::extension::metadata::DotCommandSpec {
+                id: d.id,
+                name: d.name.clone(),
+                version: d.version.clone(),
+                summary: d.summary.clone(),
+                usage: d.usage.clone(),
+                help: d.help.clone(),
+                examples: vec![],
+                requires_write: d.requires_write,
+                no_args: d.no_args,
+            })
+            .collect(),
         has_authorizer: ext.has_authorizer,
         has_update_hook: ext.has_update_hook,
         has_commit_hook: ext.has_commit_hook,

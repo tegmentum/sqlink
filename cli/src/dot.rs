@@ -86,6 +86,7 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         // sqlite3 initialized).
         // .lint  routed through core-dotcmd registry.
         ".sha3sum" => cmd_sha3sum(arg, conn),
+        ".sqlink" => cmd_sqlink(arg, conn),
         ".vfslist" => cmd_vfslist(),
         ".vfsname" => cmd_vfsname(arg, conn),
         ".archive" => cmd_archive(arg, conn),
@@ -1350,3 +1351,193 @@ fn strip_quotes(s: &str) -> String {
 
 #[allow(dead_code)]
 fn _unused() { let _: RefCell<()> = RefCell::new(()); }
+
+// ---------------------------------------------------------------
+// .sqlink  Phase 3 meta-cli (PLAN-dotcmd-plugins.md Layer 2).
+//
+// Subcommands:
+//
+//   .sqlink list                         every registered command
+//   .sqlink show NAME                    full row + manifest snippet
+//   .sqlink install URI [--bundle]       file://PATH today (Phase 4: http/cas)
+//   .sqlink uninstall NAME               delete the row (artifact stays)
+//
+// `install` reads bytes off the local fs, hashes them with blake3
+// for the artifact_digest, calls
+// `extension-loader.load-extension-from-bytes` so the manifest comes
+// back AND the session registry sees the extension immediately, then
+// INSERTs one row per `manifest.dot_commands` entry. `--bundle`
+// (default true for file://) also stores the bytes in
+// `sqlink_artifact` so future runs can resolve without the file.
+//
+// Lives in dot.rs because it needs `extension-loader` host access
+// (which the dotcmd-aware world doesn't expose). Plan calls for
+// a separate `extensions/sqlink-meta-cli/` extension once the world
+// is widened  see open question in PLAN-dotcmd-plugins.md.
+fn cmd_sqlink(arg: &str, conn: &crate::db::Connection) -> String {
+    let mut parts = arg.splitn(2, char::is_whitespace);
+    let sub = parts.next().unwrap_or("").trim();
+    let rest = parts.next().unwrap_or("").trim();
+    match sub {
+        "" => sqlink_usage(),
+        "list" => sqlink_list(conn),
+        "show" => sqlink_show(conn, rest),
+        "install" => sqlink_install(conn, rest),
+        "uninstall" => sqlink_uninstall(conn, rest),
+        other => format!(".sqlink: unknown subcommand {other:?}\n{}", sqlink_usage()),
+    }
+}
+
+fn sqlink_usage() -> String {
+    "Usage:\n  \
+        .sqlink list\n  \
+        .sqlink show NAME\n  \
+        .sqlink install URI [--no-bundle]\n  \
+        .sqlink uninstall NAME\n"
+        .to_string()
+}
+
+fn sqlink_list(conn: &crate::db::Connection) -> String {
+    let rows = crate::sqlink_registry::list_rows(conn);
+    if rows.is_empty() {
+        return "(no commands installed)\n".to_string();
+    }
+    let mut out = String::new();
+    out.push_str("NAME              BUNDLED   SIZE    SUMMARY\n");
+    for (name, summary, size, _digest, bundled) in rows {
+        out.push_str(&format!(
+            "{name:<17} {b:<8} {size:<7} {summary}\n",
+            b = if bundled { "yes" } else { "no" },
+        ));
+    }
+    out
+}
+
+fn sqlink_show(conn: &crate::db::Connection, name: &str) -> String {
+    if name.is_empty() {
+        return "Usage: .sqlink show NAME\n".to_string();
+    }
+    let Some(row) = crate::sqlink_registry::show_row(conn, name) else {
+        return format!("(no row for {name:?})\n");
+    };
+    let mut o = String::new();
+    o.push_str(&format!("name:         {}\n", row.name));
+    o.push_str(&format!("summary:      {}\n", row.summary));
+    if !row.help.is_empty() {
+        o.push_str(&format!("help:         {}\n", row.help));
+    }
+    o.push_str(&format!("digest:       {}\n", row.digest));
+    o.push_str(&format!("size:         {} bytes\n", row.size));
+    o.push_str(&format!("installed_at: {}\n", row.installed_at));
+    o.push_str(&format!("source_uri:   {}\n",
+        if row.source_uri.is_empty() { "(none)" } else { &row.source_uri }));
+    o.push_str(&format!("bundled:      {}\n", if row.bundled { "yes" } else { "no" }));
+    o
+}
+
+fn sqlink_install(conn: &crate::db::Connection, arg: &str) -> String {
+    let mut bundle = true;
+    let mut uri: Option<&str> = None;
+    for tok in arg.split_whitespace() {
+        match tok {
+            "--no-bundle" => bundle = false,
+            "--bundle" => bundle = true,
+            other if !other.starts_with("--") => uri = Some(other),
+            other => return format!(".sqlink install: unknown flag {other:?}\n"),
+        }
+    }
+    let Some(uri) = uri else {
+        return "Usage: .sqlink install URI [--no-bundle]\n".to_string();
+    };
+
+    // v1: only file:// is wired host-side.
+    let path: String = if let Some(p) = uri.strip_prefix("file://") {
+        p.to_string()
+    } else if uri.starts_with("http://") || uri.starts_with("https://") {
+        return ".sqlink install: http(s) URIs deferred to Phase 4 (external CAS)\n".to_string();
+    } else if uri.starts_with("cas:") {
+        return ".sqlink install: cas: URIs deferred to Phase 4 (external CAS)\n".to_string();
+    } else {
+        // Bare path  treat as a local file.
+        uri.to_string()
+    };
+
+    let bytes = match std::fs::read(&path) {
+        Ok(b) => b,
+        Err(e) => return format!(".sqlink install: read {path:?}: {e}\n"),
+    };
+    let digest_hex = blake3::hash(&bytes).to_hex().to_string();
+    let digest = format!("blake3:{digest_hex}");
+    let size = bytes.len() as i64;
+
+    // Load the bytes through the host  this gives us the manifest
+    // and populates the session registry simultaneously, so the
+    // newly-installed command is callable in this very session.
+    use crate::bindings::sqlite::wasm::extension_loader;
+    let opts = crate::bindings::sqlite::extension::policy::LoadOptions {
+        grant: Vec::new(),
+        http_policy: None,
+        dns_policy: None,
+        fs_policy: None,
+        fuel_per_call: None,
+        memory_limit_bytes: None,
+        epoch_deadline_ms: None,
+    };
+    let manifest = match extension_loader::load_extension_from_bytes("", &bytes, &opts) {
+        Ok(m) => m,
+        Err(e) => return format!(".sqlink install: load failed: {} ({})\n", e.message, e.code),
+    };
+
+    if manifest.dot_commands.is_empty() {
+        return format!(
+            ".sqlink install: {} declares no dot commands (loaded but not registered in sqlink_dotcmd)\n",
+            manifest.name,
+        );
+    }
+
+    let mut installed: Vec<String> = Vec::new();
+    let mut errs: Vec<String> = Vec::new();
+    for dc in &manifest.dot_commands {
+        match crate::sqlink_registry::install(
+            conn,
+            &dc.name,
+            &dc.summary,
+            &dc.help,
+            dc.id,
+            dc.requires_write,
+            &digest,
+            size,
+            uri,
+            bundle,
+            &bytes,
+        ) {
+            Ok(()) => installed.push(dc.name.clone()),
+            Err(e) => errs.push(format!("{}: {}", dc.name, e.message)),
+        }
+    }
+    let mut out = format!(
+        "Installed {} from {} ({} bytes, digest {}):\n",
+        manifest.name, uri, size, digest,
+    );
+    for n in &installed {
+        out.push_str(&format!("  .{n}\n"));
+    }
+    if !errs.is_empty() {
+        out.push_str("Errors:\n");
+        for e in &errs {
+            out.push_str(&format!("  {e}\n"));
+        }
+    }
+    out
+}
+
+fn sqlink_uninstall(conn: &crate::db::Connection, name: &str) -> String {
+    if name.is_empty() {
+        return "Usage: .sqlink uninstall NAME\n".to_string();
+    }
+    match crate::sqlink_registry::uninstall(conn, name) {
+        Ok(0) => format!("(no row for {name:?})\n"),
+        Ok(n) => format!("Uninstalled {} ({n} row{})\n", name, if n == 1 { "" } else { "s" }),
+        Err(e) => format!(".sqlink uninstall {name}: {}\n", e.message),
+    }
+}

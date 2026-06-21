@@ -39,6 +39,7 @@ mod format;
 mod grants;
 mod orchestration;
 mod settings;
+mod sqlink_registry;
 mod vtab;
 
 use std::cell::RefCell;
@@ -121,6 +122,11 @@ fn ensure_cli_conn() {
                 unsafe { register_embedded_extensions(conn.raw_handle()) };
                 unsafe { register_dotcmd_sql_surface(conn.raw_handle()) };
                 unsafe { apply_cli_pragmas(conn.raw_handle()) };
+                // Phase 3: idempotent schema bootstrap. No-op on a
+                // db that already has the tables; cheap on a fresh
+                // one. The dispatcher's session-miss fallthrough
+                // queries these tables for an installed command.
+                sqlink_registry::ensure_schemas(conn);
             }
             *g = opened;
         }
@@ -1287,6 +1293,15 @@ fn eval_input(input: &str) -> String {
                 return out.text;
             }
             Err(e) if e.code == 404 => {
+                // Phase 3: try the database-resident registry. If
+                // the user installed `name` via `.sqlink install`,
+                // we have a row pointing at an artifact_digest. Load
+                // bytes (bundled or from CAS later), hand them to
+                // the host loader, and retry  the second dispatch
+                // hits the session registry the host just populated.
+                if let Some(out) = try_db_registry_resolve(name, args) {
+                    return out;
+                }
                 return format!("Unknown command: {trimmed}\n");
             }
             Err(e) => {
@@ -1295,6 +1310,65 @@ fn eval_input(input: &str) -> String {
         }
     }
     eval_sql(trimmed)
+}
+
+/// Phase 3 auto-resolve. On a session miss the cli walks
+/// `sqlink_dotcmd` for a row matching `name`, pulls the artifact
+/// bytes from `sqlink_artifact`, hands them to
+/// `extension-loader.load-extension-from-bytes`, and retries the
+/// dispatch. Returns `Some(output)` on a successful round-trip,
+/// `None` to let the caller emit "Unknown command".
+///
+/// Phase 4 will extend the bytes-fetch with `sqlink_cas_resolver`
+/// walks when the artifact row is absent.
+fn try_db_registry_resolve(name: &str, args: &str) -> Option<String> {
+    use bindings::sqlite::wasm::extension_loader;
+
+    let (row, bytes) = CLI_CONN.with(|c| {
+        let g = c.borrow();
+        let conn = g.as_ref()?;
+        let row = sqlink_registry::lookup(conn, name)?;
+        let bytes = sqlink_registry::fetch_artifact(conn, &row.artifact_digest)?;
+        Some((row, bytes))
+    })?;
+
+    let opts = bindings::sqlite::extension::policy::LoadOptions {
+        grant: alloc_default_grants(),
+        http_policy: None,
+        dns_policy: None,
+        fs_policy: None,
+        fuel_per_call: None,
+        memory_limit_bytes: None,
+        epoch_deadline_ms: None,
+    };
+    match extension_loader::load_extension_from_bytes(&row.name, &bytes, &opts) {
+        Ok(_manifest) => {
+            // Retry dispatch  this time it lands in the session
+            // registry the host just populated.
+            match extension_loader::dispatch_dot_command(name, args) {
+                Ok(out) => {
+                    for d in &out.state_deltas {
+                        settings::apply_dotcmd_delta(&d.key, &d.value_json);
+                    }
+                    Some(out.text)
+                }
+                Err(e) => Some(format!(
+                    "auto-load {}: post-load dispatch failed: {} ({})\n",
+                    name, e.message, e.code,
+                )),
+            }
+        }
+        Err(e) => Some(format!(
+            "auto-load {}: {} ({})\n", name, e.message, e.code,
+        )),
+    }
+}
+
+/// Default capability grants for an auto-resolved extension. v1
+/// keeps it tight  scalar+dot-command only, no http/dns/fs/kv.
+/// Phase 3 follow-up: per-row capability columns in sqlink_dotcmd.
+fn alloc_default_grants() -> Vec<bindings::sqlite::extension::policy::Capability> {
+    Vec::new()
 }
 
 /// SQL execution path — split out from eval_input so the timer +
