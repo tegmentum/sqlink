@@ -2376,6 +2376,15 @@ pub struct Host {
     /// means `:memory:`, and SPI returns an error then (in-memory
     /// dbs can't be shared between connections).
     db_path: Arc<RwLock<String>>,
+    /// PLAN-cli-shared-conn.md Stage 2: a single
+    /// `core::db::Connection` shared by every LoadedExtension's
+    /// `spi_conn`. Previously each extension had its own Arc<Mutex>
+    /// pointing at a per-extension Connection  separate handles to
+    /// the same db file. Now every `spi_conn` field is a clone of
+    /// this Arc, so all extensions (and, in Stage 3+, the cli)
+    /// observe the same sqlite3 handle. Lazy-opened by
+    /// `spi_ensure_open` on first spi call.
+    shared_spi_conn: Arc<Mutex<Option<sqlite_wasm_core::db::Connection>>>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
     /// as a `resolving`-world component. `file` and `blake3` schemes
@@ -2765,6 +2774,7 @@ impl Host {
             engine_run,
             components: Arc::new(RwLock::new(HashMap::new())),
             db_path: Arc::new(RwLock::new(String::new())),
+            shared_spi_conn: Arc::new(Mutex::new(None)),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
@@ -3310,7 +3320,7 @@ impl Host {
             has_commit_hook: false,
             state: Arc::new(Mutex::new(HashMap::new())),
             cache: Arc::new(Mutex::new(HashMap::new())),
-            spi_conn: Arc::new(Mutex::new(None)),
+            spi_conn: self.shared_spi_conn.clone(),
             cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
             cached_tabular_mutating: Arc::new(tokio::sync::Mutex::new(None)),
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
@@ -3526,7 +3536,7 @@ impl Host {
             has_commit_hook: false,
             state: Arc::new(Mutex::new(HashMap::new())),
             cache: Arc::new(Mutex::new(HashMap::new())),
-            spi_conn: Arc::new(Mutex::new(None)),
+            spi_conn: self.shared_spi_conn.clone(),
             cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
             cached_tabular_mutating: Arc::new(tokio::sync::Mutex::new(None)),
             cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
@@ -3660,7 +3670,7 @@ impl Host {
                 has_commit_hook: manifest.has_commit_hook,
                 state: Arc::new(Mutex::new(HashMap::new())),
                 cache: Arc::new(Mutex::new(HashMap::new())),
-                spi_conn: Arc::new(Mutex::new(None)),
+                spi_conn: self.shared_spi_conn.clone(),
                 cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
                 cached_tabular_mutating: Arc::new(tokio::sync::Mutex::new(None)),
                 cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
