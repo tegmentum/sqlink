@@ -267,8 +267,10 @@ applies known keys, ignores unknown ones (forward-compatible).
 | `display/mode`       | text | `list` / `csv` / `line` / `column` / `table` / `markdown` / `tabs` / `json` |
 | `display/nullvalue`  | text | text rendered for SQL NULL |
 | `display/separator`  | text | column separator |
+| `display/width`      | text | space-separated per-column minimum widths (empty = data-driven) |
 | `prompt/main`        | text | main prompt |
 | `prompt/cont`        | text | continuation prompt |
+| `conn/busy-timeout`  | int  | applied to the cli's connection via `sqlite3_busy_timeout(ms)` |
 
 bool values cross the WIT boundary as `SqlValue::Integer(0)` /
 `Integer(1)`; text values as `SqlValue::Text(...)`.

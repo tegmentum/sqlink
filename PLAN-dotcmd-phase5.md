@@ -1,36 +1,42 @@
 # Phase 5 — dot.rs deletion readiness
 
 Status as of this commit: Phases 1–4 of `PLAN-dotcmd-plugins.md`
-have landed; Phase 5 has shipped its docs portion (this file,
-`AUTHORING-DOTCMD-COMPONENTS.md`, `tooling/cli-cheatsheet.md`
-update). The remaining Phase 5 deliverable — "remove
-`cli/src/dot.rs` entirely; everything now flows through the
-registry" — is bigger than the plan estimate suggested. This
-file is the inventory of what still lives in `dot.rs` and
-`lib.rs`'s `eval_input` strip-prefix chain, with the migration
-shape for each.
+have landed; Phase 5 has shipped its docs portion plus follow-up
+commits that exercised lift #1 (widened the dotcmd-aware world
+for extension-loader access via `loader-bridge`) and the
+beginning of lift #2 (spi expansion for `list-vfs` + `vfs-name`).
+The remaining Phase 5 deliverable — "remove `cli/src/dot.rs`
+entirely; everything now flows through the registry" — is bigger
+than the plan estimate suggested. This file is the inventory of
+what still lives in `dot.rs` and `lib.rs`'s `eval_input`
+strip-prefix chain, with the migration shape for each.
+
+## Migrated since this doc landed
+
+  - `.sqlink` and all subcommands — moved to
+    `extensions/sqlink-meta-cli` after `loader-bridge` shipped
+    (FU-1..4).
+  - `.width` — `display/width` delta (FU-5).
+  - `.timeout` — `conn/busy-timeout` delta applied to the cli's
+    connection (FU-5).
+  - `.vfslist`, `.vfsname` — via new `spi.list-vfs` +
+    `spi.vfs-name` (FU-6).
 
 ## What's left in the cli's hard-coded dispatch
 
-### `cli/src/dot.rs` (15 arms)
+### `cli/src/dot.rs` (9 arms remaining)
 
-| Command         | Class                        | Migration target |
-|-----------------|------------------------------|------------------|
-| `.show`         | reads cli-state              | core-dotcmd, needs `cli-state.get-*` read path |
-| `.width`        | mutates cli-state            | core-dotcmd, needs `display/width` delta |
-| `.timeout`      | direct sqlite3 ffi           | core-dotcmd, needs `spi.busy-timeout` |
-| `.parameter`    | mutates cli-state map        | core-dotcmd, needs map-shaped delta (new key class) |
-| `.dbconfig`     | direct sqlite3 ffi           | core-dotcmd, needs `spi.db-config-get/set` |
-| `.limit`        | direct sqlite3 ffi           | core-dotcmd, needs `spi.limit` |
-| `.sha3sum`      | direct sqlite3 ffi + crypto  | own extension (`sha3-sum`) — independent of cli |
-| `.sqlink`       | needs extension-loader       | own extension once dotcmd-aware imports loader |
-| `.vfslist`      | direct sqlite3 ffi           | core-dotcmd, needs `spi.list-vfs` |
-| `.vfsname`      | direct sqlite3 ffi           | core-dotcmd, needs `spi.vfs-name(db)` |
-| `.archive`      | sqlite3_archive / zip vtab   | own extension (`archive-cli`) |
-| `.session`      | sqlite3_session              | own extension (`session-cli`) |
-| `.serialize`    | sqlite3_serialize            | own extension (`serialize-cli`) |
-| `.deserialize`  | sqlite3_deserialize          | own extension (`serialize-cli`) |
-| `(.show etc.)`  | also rendering current state | tied to above |
+| Command         | Blocker / migration target |
+|-----------------|----------------------------|
+| `.show`         | needs a `cli-state.get-*` read path (host-side snapshot push before invoke, or fields on `InvokeContext`) |
+| `.parameter`    | needs a map-shaped state-delta key class (parameter bindings are not a single value but a map) |
+| `.dbconfig`     | set works via delta (`conn/db-config/<op>`); the `.dbconfig OP` and `.dbconfig` no-arg cases need read access to the cli's connection state — needs cli→ext snapshot path |
+| `.limit`        | same shape as `.dbconfig` — set via delta works; read needs back-channel |
+| `.sha3sum`      | own extension (`sha3-sum-cli`) — uses `spi.execute` to walk schema, hashes incrementally |
+| `.archive`      | own extension (`archive-cli`) — needs the zip vtab port + sqlite3_archive surface |
+| `.session`      | own extension (`session-cli`) — needs `sqlite3_session_*` exposed via a new spi sub-interface |
+| `.serialize`    | own extension (`serialize-cli`) — needs `sqlite3_serialize` / `sqlite3_deserialize` via spi |
+| `.deserialize`  | same as `.serialize`                       |
 
 ### `cli/src/lib.rs` strip-prefix chain (~27 arms)
 
