@@ -1490,6 +1490,12 @@ fn shared_spi_ensure_open(host: &Host) -> std::result::Result<(), bindings::sqli
         // callbacks (no wasm crossing)  the SQL function call
         // path stays sync the whole way.
         unsafe { register_host_embedded_extensions(conn.raw_handle()) };
+        // PLAN-cli-stages-5-6.md Stage 5d: cli pragmas now apply
+        // to the host's shared connection at first open. Eval_sql
+        // goes through this connection (Stage 3c), so the tuning
+        // (cache_size, temp_store, synchronous) takes effect on
+        // the hot path.
+        unsafe { apply_host_cli_pragmas(conn.raw_handle()) };
         // PLAN-cli-stages-5-6.md Stage 5b: re-register the
         // `dot_command(name [, args...])` SQL function host-side
         // now that eval_sql goes through this shared connection.
@@ -2245,6 +2251,38 @@ unsafe fn register_host_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
         let rc = list_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK {
             eprintln!("embed-list: register_into failed rc={rc}");
+        }
+    }
+}
+
+/// PLAN-cli-stages-5-6.md Stage 5d: cli pragmas applied on the
+/// host's shared connection at first open. Mirror of the cli's
+/// (now redundant) `apply_cli_pragmas`. Stage 5e drops the
+/// cli-side counterpart once `CLI_CONN` is gone.
+unsafe fn apply_host_cli_pragmas(db: *mut libsqlite3_sys::sqlite3) {
+    const PRAGMAS: &[&[u8]] = &[
+        // -262144 = 256 MB cache (KB units, negative = explicit).
+        b"PRAGMA cache_size = -262144\0",
+        // CTEs / temp indexes / sort scratch in memory rather than
+        // file-system.
+        b"PRAGMA temp_store = MEMORY\0",
+        // One fsync per commit instead of the default two; the
+        // missing fsync defends against power loss during commit
+        // which isn't a realistic failure mode for a cli session.
+        b"PRAGMA synchronous = NORMAL\0",
+    ];
+    for sql in PRAGMAS {
+        let rc = libsqlite3_sys::sqlite3_exec(
+            db,
+            sql.as_ptr() as *const _,
+            None,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+        if rc != libsqlite3_sys::SQLITE_OK {
+            let name = std::ffi::CStr::from_ptr(sql.as_ptr() as *const _)
+                .to_string_lossy();
+            eprintln!("host cli pragma {name}: rc={rc}");
         }
     }
 }
