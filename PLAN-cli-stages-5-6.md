@@ -271,8 +271,29 @@ Shipped subcommits:
   - 5e.2 (d7a70ed): orchestration module via spi
   - 5e.3 (2f031fb): .dump via spi
   - 5e.4 (c37cb52): .import via spi
+  - 5e.5 (2c4e9e7): .restore via spi.restore-from
+  - 5e.6 (18269d5): cli-state snapshot reader via spi
+  - 5e.7 (b50c41a): .open via spi.open-db
+  - 5e.8/5e.9 (f7ab9ef): .trace + .auth via spi (set-stmt-trace,
+    drain-trace-buf, set-auth-log)
 
-CLI_CONN.with site count: 16  9 across cli/src/lib.rs.
+CLI_CONN.with site count: 16  4 across cli/src/lib.rs.
+
+Remaining sites (lib.rs only):
+
+  - **L111: ensure_cli_conn** itself  collapses once last
+    consumer goes away.
+  - **L1272: .session passthrough**  Stage 6 blocker.
+  - **L1916/L2912: do_load / do_unload registration
+    trampolines**  registers scalars/aggregates/collations/
+    hooks on the cli's connection. Stage 5e.10 needs ~10 new
+    spi methods to move trampolines to the host's shared
+    connection (so eval_sql can actually find them  today
+    they're on the wrong connection and SELECT my_func() can't
+    resolve).
+    *Side-effect:* .load is broken right now for any
+    extension that registers a scalar/agg/coll. The host's
+    spi conn never sees the trampoline.
 
 Remaining (each ~half-day, no shared theme):
 
