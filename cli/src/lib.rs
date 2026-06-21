@@ -3131,89 +3131,82 @@ fn parse_delim(s: &str, sep: char) -> Vec<Vec<String>> {
 /// and re-inserts every row of every table (or only TABLE / tables
 /// matching the GLOB pattern). Output is replayable via `.read`.
 fn do_dump(arg: &str) -> String {
+    use bindings::sqlite::extension::spi;
+    use bindings::sqlite::extension::types::SqlValue;
     let pattern = arg.trim();
-    ensure_cli_conn();
     let mut out = String::from("PRAGMA foreign_keys=OFF;\nBEGIN TRANSACTION;\n");
-    let result = CLI_CONN.with(|c| -> Result<(), String> {
-        let g = c.borrow();
-        let conn = g.as_ref().expect("ensure_cli_conn opened a connection");
 
-        // 1) Schema entries (tables + indexes + views + triggers).
-        let schema_sql = if pattern.is_empty() {
+    // 1) Schema entries (tables + indexes + views + triggers).
+    // PLAN-cli-stages-5-6.md Stage 5e: routes through spi against
+    // the host's shared connection.
+    let schema_sql = if pattern.is_empty() {
+        "SELECT type, name, sql FROM sqlite_master \
+             WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' \
+             ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 \
+                                WHEN 'view' THEN 3 WHEN 'trigger' THEN 4 \
+                                ELSE 5 END".to_string()
+    } else {
+        format!(
             "SELECT type, name, sql FROM sqlite_master \
-                 WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' \
-                 ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 \
-                                    WHEN 'view' THEN 3 WHEN 'trigger' THEN 4 \
-                                    ELSE 5 END".to_string()
-        } else {
-            format!(
-                "SELECT type, name, sql FROM sqlite_master \
-                 WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' \
-                   AND name GLOB '{}' \
-                 ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 \
-                                    WHEN 'view' THEN 3 WHEN 'trigger' THEN 4 \
-                                    ELSE 5 END",
-                pattern.replace('\'', "''")
-            )
-        };
-        let mut stmt = conn.prepare(&schema_sql).map_err(|e| format!("Error: {}\n", e.message))?;
-        let rows = stmt.collect_rows().map_err(|e| format!("Error: {}\n", e.message))?;
-        drop(stmt);
-        // Collect table names for the data dump below.
-        let mut tables: Vec<String> = Vec::new();
-        for row in &rows {
-            let ty = match &row[0] { db::Value::Text(s) => s.as_str(), _ => "" };
-            let name = match &row[1] { db::Value::Text(s) => s.clone(), _ => String::new() };
-            let create = match &row[2] { db::Value::Text(s) => s.clone(), _ => String::new() };
-            if create.is_empty() { continue; }
-            out.push_str(&create);
-            out.push_str(";\n");
-            if ty == "table" {
-                tables.push(name);
-            }
+             WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' \
+               AND name GLOB '{}' \
+             ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 \
+                                WHEN 'view' THEN 3 WHEN 'trigger' THEN 4 \
+                                ELSE 5 END",
+            pattern.replace('\'', "''")
+        )
+    };
+    let schema = match spi::execute(&schema_sql, &[]) {
+        Ok(r) => r,
+        Err(e) => return format!("Error: {}\n", e.message),
+    };
+    let mut tables: Vec<String> = Vec::new();
+    for row in &schema.rows {
+        let ty = match row.first() { Some(SqlValue::Text(s)) => s.as_str(), _ => "" };
+        let name = match row.get(1) { Some(SqlValue::Text(s)) => s.clone(), _ => String::new() };
+        let create = match row.get(2) { Some(SqlValue::Text(s)) => s.clone(), _ => String::new() };
+        if create.is_empty() { continue; }
+        out.push_str(&create);
+        out.push_str(";\n");
+        if ty == "table" {
+            tables.push(name);
         }
-
-        // 2) Per-table INSERTs.
-        for table in &tables {
-            let select = format!("SELECT * FROM \"{}\"", table.replace('"', "\"\""));
-            let mut s = conn.prepare(&select).map_err(|e| format!("Error: {}\n", e.message))?;
-            let cols = s.column_names();
-            let trows = s.collect_rows().map_err(|e| format!("Error: {}\n", e.message))?;
-            drop(s);
-            for trow in trows {
-                let mut parts = Vec::with_capacity(trow.len());
-                for v in trow {
-                    parts.push(sql_literal(&v));
-                }
-                out.push_str(&format!(
-                    "INSERT INTO \"{}\" VALUES({});\n",
-                    table.replace('"', "\"\""),
-                    parts.join(",")
-                ));
-                let _ = &cols; // column names are illustrative; sqlite3 doesn't emit them in .dump
-            }
-        }
-        Ok(())
-    });
-    match result {
-        Ok(()) => {
-            out.push_str("COMMIT;\n");
-            out
-        }
-        Err(msg) => msg,
     }
+
+    // 2) Per-table INSERTs.
+    for table in &tables {
+        let select = format!("SELECT * FROM \"{}\"", table.replace('"', "\"\""));
+        let data = match spi::execute(&select, &[]) {
+            Ok(r) => r,
+            Err(e) => return format!("Error: {}\n", e.message),
+        };
+        for trow in &data.rows {
+            let mut parts = Vec::with_capacity(trow.len());
+            for v in trow {
+                parts.push(sql_literal(v));
+            }
+            out.push_str(&format!(
+                "INSERT INTO \"{}\" VALUES({});\n",
+                table.replace('"', "\"\""),
+                parts.join(",")
+            ));
+        }
+    }
+    out.push_str("COMMIT;\n");
+    out
 }
 
-/// Render a `db::Value` as a SQL literal suitable for INSERT
+/// Render an `SqlValue` as a SQL literal suitable for INSERT
 /// statements emitted by `.dump`. Text: single-quote-escape. Blobs:
 /// `X'…'` hex. NULL → `NULL`. Numbers: as-is.
-fn sql_literal(v: &db::Value) -> String {
+fn sql_literal(v: &bindings::sqlite::extension::types::SqlValue) -> String {
+    use bindings::sqlite::extension::types::SqlValue as V;
     match v {
-        db::Value::Null => "NULL".to_string(),
-        db::Value::Integer(i) => i.to_string(),
-        db::Value::Real(r) => r.to_string(),
-        db::Value::Text(s) => format!("'{}'", s.replace('\'', "''")),
-        db::Value::Blob(b) => {
+        V::Null => "NULL".to_string(),
+        V::Integer(i) => i.to_string(),
+        V::Real(r) => r.to_string(),
+        V::Text(s) => format!("'{}'", s.replace('\'', "''")),
+        V::Blob(b) => {
             let mut o = String::from("X'");
             for byte in b {
                 o.push_str(&format!("{byte:02x}"));
