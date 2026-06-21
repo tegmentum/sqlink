@@ -76,13 +76,26 @@ interface extension-loader {
     ///     these to its own session state after the call returns
     ///   - exit-code  process exit code for argv-mode dispatch
     ///
+    /// `cli-state` is a snapshot the cli builds from its
+    /// SETTINGS thread-local just before this call. The host
+    /// stores it on the dotcmd-aware Store so the extension's
+    /// `cli-state.get-*` reads return the cli's actual current
+    /// values (not the stubs `cli-state` had returned before).
+    /// Each entry is `(key, json-value)` using the same
+    /// slash-namespaced keys as the state-delta schema; an
+    /// extension expecting `display/mode` finds the JSON-string
+    /// it should decode (`"csv"` etc.).
+    ///
     /// Error variants:
     ///   - code = 404, message = "no such dot-command"
     ///     no loaded extension registers that name
     ///   - code = 500, message = invoke error text
     ///     the extension itself returned an error
-    dispatch-dot-command: func(name: string, args: string)
-        -> result<dot-command-result, loader-error>;
+    dispatch-dot-command: func(
+        name: string,
+        args: string,
+        cli-state: list<tuple<string, string>>,
+    ) -> result<dot-command-result, loader-error>;
 
     /// State delta the extension proposes  applied by the cli
     /// after the invoke returns. `value-json` is JSON-encoded so

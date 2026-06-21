@@ -1037,6 +1037,14 @@ pub struct LoadedState {
     /// Host is `Clone`-able via Arc<...>, so the clone is just
     /// Arc bumps; no deep copy.
     host_ref: Option<Host>,
+    /// Snapshot of the cli's session state, pushed via
+    /// `dispatch-dot-command(... , cli-state)` immediately
+    /// before the wasm invoke runs. Values are JSON-encoded
+    /// using the same conventions as state-deltas. Read-side
+    /// of the cli-state surface: `cli-state.get-*` reads from
+    /// this map. Defaults to empty for non-dotcmd-aware Stores
+    /// (their cli-state Host impl returns stubs anyway).
+    cli_state_snapshot: HashMap<String, String>,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -1593,27 +1601,71 @@ impl loaded_dotcmd_aware::sqlite::extension::cli_stderr::Host for LoadedState {
 }
 
 impl loaded_dotcmd_aware::sqlite::extension::cli_state::Host for LoadedState {
-    async fn get_text(&mut self, _key: String) -> String {
-        String::new()
+    async fn get_text(&mut self, key: String) -> String {
+        let Some(j) = self.cli_state_snapshot.get(&key) else { return String::new() };
+        parse_json_text(j).unwrap_or_default()
     }
-    async fn get_int(&mut self, _key: String) -> i64 {
-        0
+    async fn get_int(&mut self, key: String) -> i64 {
+        let Some(j) = self.cli_state_snapshot.get(&key) else { return 0 };
+        // Accept bare integer or JSON int.
+        j.trim().parse::<i64>().unwrap_or(0)
     }
-    async fn get_bool(&mut self, _key: String) -> bool {
-        false
+    async fn get_bool(&mut self, key: String) -> bool {
+        let Some(j) = self.cli_state_snapshot.get(&key) else { return false };
+        matches!(j.trim(), "true" | "1")
     }
-    async fn get_real(&mut self, _key: String) -> f64 {
-        0.0
+    async fn get_real(&mut self, key: String) -> f64 {
+        let Some(j) = self.cli_state_snapshot.get(&key) else { return 0.0 };
+        j.trim().parse::<f64>().unwrap_or(0.0)
     }
     async fn get_value(
         &mut self,
-        _key: String,
+        key: String,
     ) -> loaded::sqlite::extension::types::SqlValue {
-        loaded::sqlite::extension::types::SqlValue::Null
+        use loaded::sqlite::extension::types::SqlValue as V;
+        let Some(j) = self.cli_state_snapshot.get(&key) else { return V::Null };
+        let t = j.trim();
+        if t == "null" { return V::Null; }
+        if t == "true" { return V::Integer(1); }
+        if t == "false" { return V::Integer(0); }
+        if let Ok(i) = t.parse::<i64>() { return V::Integer(i); }
+        if let Ok(f) = t.parse::<f64>() { return V::Real(f); }
+        if let Some(s) = parse_json_text(t) { return V::Text(s); }
+        V::Null
     }
-    async fn list_keys(&mut self, _prefix: String) -> Vec<String> {
-        Vec::new()
+    async fn list_keys(&mut self, prefix: String) -> Vec<String> {
+        self.cli_state_snapshot
+            .keys()
+            .filter(|k| prefix.is_empty() || k.starts_with(&prefix))
+            .cloned()
+            .collect()
     }
+}
+
+/// Decode a JSON string literal (minimal subset matching what the
+/// cli encodes for state-deltas). Returns None if the input
+/// isn't a quoted string.
+fn parse_json_text(json: &str) -> Option<String> {
+    let s = json.trim();
+    if !s.starts_with('"') || !s.ends_with('"') || s.len() < 2 {
+        return None;
+    }
+    let inner = &s[1..s.len() - 1];
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' { out.push(c); continue; }
+        match chars.next() {
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some(other) => { out.push('\\'); out.push(other); }
+            None => out.push('\\'),
+        }
+    }
+    Some(out)
 }
 
 /// loader-bridge Host: a tightly-scoped slice of the host's
@@ -2085,6 +2137,7 @@ fn build_loaded_store(
         http_policy: ext.policy.http.clone(),
         dns_policy: ext.policy.dns.clone(),
         host_ref: None,
+        cli_state_snapshot: HashMap::new(),
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);
@@ -3527,6 +3580,7 @@ impl Host {
         &self,
         name: &str,
         args: &str,
+        cli_state: Vec<(String, String)>,
     ) -> Result<DotCommandOutcome> {
         // Find the extension whose manifest registers `name`.
         let (ext_arc, func_id) = {
@@ -3565,11 +3619,26 @@ impl Host {
         let cached = guard.as_mut().unwrap();
         refresh_call_budget(&mut cached.store, &ext_arc)?;
 
+        // Push the latest cli-state snapshot into the Store data
+        // so cli_state.get_* see fresh values for this invoke.
+        let snapshot: HashMap<String, String> = cli_state.into_iter().collect();
+        cached.store.data_mut().cli_state_snapshot = snapshot;
+
+        let display_mode = cached.store.data()
+            .cli_state_snapshot
+            .get("display/mode")
+            .and_then(|j| parse_json_text(j))
+            .unwrap_or_else(|| "list".to_string());
+        let bail_on_error = cached.store.data()
+            .cli_state_snapshot
+            .get("bail/on-error")
+            .map(|j| matches!(j.trim(), "true" | "1"))
+            .unwrap_or(false);
         let ctx = loaded_dotcmd_aware::exports::sqlite::extension::dot_command::InvokeContext {
             args: args.to_string(),
             interactive: true,
-            display_mode: String::from("list"),
-            bail_on_error: false,
+            display_mode,
+            bail_on_error,
         };
         let result = cached
             .instance
@@ -5211,6 +5280,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         &mut self,
         _name: String,
         _args: String,
+        _cli_state: Vec<(String, String)>,
     ) -> std::result::Result<
         bindings::sqlite::wasm::extension_loader::DotCommandResult,
         LoaderError,
@@ -6369,13 +6439,14 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         &mut self,
         name: String,
         args: String,
+        cli_state: Vec<(String, String)>,
     ) -> std::result::Result<
         bindings::sqlite::wasm::extension_loader::DotCommandResult,
         LoaderError,
     > {
         let outcome = self
             .host
-            .dispatch_dot_command(&name, &args)
+            .dispatch_dot_command(&name, &args, cli_state)
             .await
             .map_err(|e| LoaderError {
                 code: if e.to_string().contains("no dot-command") { 404 } else { 500 },

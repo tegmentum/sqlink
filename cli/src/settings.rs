@@ -212,7 +212,35 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
                     });
                 }
             },
-            _ => {} // unknown key  ignore.
+            other => {
+                // Connection-level deltas with a `/<name>` suffix.
+                if let Some(name) = other.strip_prefix("conn/limit/") {
+                    if let (Some(code), Some(n)) =
+                        (crate::limit_code(name), parse_int(value_json))
+                    {
+                        if let Ok(v) = i32::try_from(n) {
+                            crate::CLI_CONN.with(|c| {
+                                let cg = c.borrow();
+                                if let Some(conn) = cg.as_ref() {
+                                    let _ = conn.limit(code, v);
+                                }
+                            });
+                        }
+                    }
+                } else if let Some(name) = other.strip_prefix("conn/db-config/") {
+                    if let (Some(code), Some(b)) =
+                        (crate::dbconfig_code(name), parse_bool(value_json))
+                    {
+                        crate::CLI_CONN.with(|c| {
+                            let cg = c.borrow();
+                            if let Some(conn) = cg.as_ref() {
+                                let _ = conn.db_config_set_bool(code, b);
+                            }
+                        });
+                    }
+                }
+                // Other unknown keys are silently ignored.
+            }
         }
     });
 }

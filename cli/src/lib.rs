@@ -185,7 +185,8 @@ unsafe fn register_dotcmd_sql_surface(db: *mut libsqlite3_sys::sqlite3) {
                 joined.push_str(&String::from_utf8_lossy(bytes));
             }
         }
-        match extension_loader::dispatch_dot_command(&name, &joined) {
+        let snapshot = build_cli_state_snapshot();
+        match extension_loader::dispatch_dot_command(&name, &joined, &snapshot) {
             Ok(out) => {
                 // The SQL surface is read-only by design  state-deltas
                 // would surprise callers of `SELECT dot_command(...)`
@@ -1289,7 +1290,8 @@ fn eval_input(input: &str) -> String {
         let mut parts = trimmed.splitn(2, char::is_whitespace);
         let name = parts.next().unwrap_or("").trim_start_matches('.');
         let args = parts.next().unwrap_or("").trim();
-        match extension_loader::dispatch_dot_command(name, args) {
+        let snapshot = build_cli_state_snapshot();
+        match extension_loader::dispatch_dot_command(name, args, &snapshot) {
             Ok(out) => {
                 for d in &out.state_deltas {
                     settings::apply_dotcmd_delta(&d.key, &d.value_json);
@@ -1362,7 +1364,8 @@ fn try_db_registry_resolve(name: &str, args: &str) -> Option<String> {
         Ok(_manifest) => {
             // Retry dispatch  this time it lands in the session
             // registry the host just populated.
-            match extension_loader::dispatch_dot_command(name, args) {
+            let snapshot = build_cli_state_snapshot();
+        match extension_loader::dispatch_dot_command(name, args, &snapshot) {
                 Ok(out) => {
                     for d in &out.state_deltas {
                         settings::apply_dotcmd_delta(&d.key, &d.value_json);
@@ -3365,6 +3368,133 @@ fn parse_db_file_pair(s: &str, _kind: &str) -> (String, String) {
 /// file doesn't exist at compile time the include_bytes! macro
 /// raises a compile error  surfacing the missing artifact
 /// before ship rather than at runtime.
+/// Build the (key, json-value) list the host stores on the
+/// dotcmd-aware Store before each invoke. The extension's
+/// `cli-state.get-*` reads this  the dispatch-dot-command WIT
+/// signature has a `cli-state: list<tuple<string, string>>`
+/// parameter for it.
+///
+/// Keys are slash-namespaced per the state schema (PLAN-dotcmd-
+/// plugins.md / tooling/cli-cheatsheet.md). JSON encoding matches
+/// the state-delta convention: bools as `0`/`1`, strings as
+/// `"..."` (with the same minimal escapes settings::parse_string
+/// expects).
+fn build_cli_state_snapshot() -> Vec<(String, String)> {
+    use settings::ExplainMode;
+    settings::SETTINGS.with(|s| {
+        let g = s.borrow();
+        let bool_v = |b: bool| if b { "1".to_string() } else { "0".to_string() };
+        let str_v = |s: &str| {
+            let mut out = String::with_capacity(s.len() + 2);
+            out.push('"');
+            for c in s.chars() {
+                match c {
+                    '"' => out.push_str("\\\""),
+                    '\\' => out.push_str("\\\\"),
+                    '\n' => out.push_str("\\n"),
+                    '\r' => out.push_str("\\r"),
+                    '\t' => out.push_str("\\t"),
+                    c if (c as u32) < 0x20 => {
+                        use core::fmt::Write;
+                        let _ = write!(out, "\\u{:04x}", c as u32);
+                    }
+                    c => out.push(c),
+                }
+            }
+            out.push('"');
+            out
+        };
+        let explain = match g.explain_mode {
+            ExplainMode::Off  => "off",
+            ExplainMode::On   => "on",
+            ExplainMode::Auto => "auto",
+        };
+        let widths_str = g.column_widths.iter()
+            .map(|n| n.to_string())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let mut out: Vec<(String, String)> = vec![
+            ("io/echo".into(),         bool_v(g.echo)),
+            ("io/headers".into(),      bool_v(g.headers)),
+            ("io/timer".into(),        bool_v(g.show_timer)),
+            ("io/stats".into(),        bool_v(g.show_stats)),
+            ("io/changes".into(),      bool_v(g.show_changes)),
+            ("io/binary".into(),       bool_v(g.binary_output)),
+            ("io/eqp".into(),          bool_v(g.eqp)),
+            ("io/explain".into(),      str_v(explain)),
+            ("io/trace".into(),        bool_v(g.trace_on)),
+            ("bail/on-error".into(),   bool_v(g.bail)),
+            ("display/mode".into(),    str_v(g.mode.name())),
+            ("display/nullvalue".into(), str_v(&g.null_value)),
+            ("display/separator".into(), str_v(&g.separator)),
+            ("display/width".into(),   str_v(&widths_str)),
+            ("prompt/main".into(),     str_v(&g.prompt_main)),
+            ("prompt/cont".into(),     str_v(&g.prompt_cont)),
+        ];
+        drop(g);
+        // Pull live sqlite3_limit + sqlite3_db_config values off
+        // the cli's connection so `.limit` / `.dbconfig` can
+        // surface them via cli_state.get_int.
+        CLI_CONN.with(|c| {
+            let g = c.borrow();
+            let Some(conn) = g.as_ref() else { return };
+            for (name, code) in LIMIT_NAMES {
+                let v = conn.limit(*code, -1);
+                out.push((format!("conn/limit/{name}"), v.to_string()));
+            }
+            for (name, code) in DBCONFIG_BOOLEANS {
+                if let Ok(b) = conn.db_config_get_bool(*code) {
+                    out.push((format!("conn/db-config/{name}"), if b { "1".into() } else { "0".into() }));
+                }
+            }
+        });
+        out
+    })
+}
+
+/// SQLITE_LIMIT_* categories pushed in the cli-state snapshot
+/// (read side of `.limit`).
+pub(crate) const LIMIT_NAMES: &[(&str, std::os::raw::c_int)] = &[
+    ("length",                libsqlite3_sys::SQLITE_LIMIT_LENGTH),
+    ("sql_length",            libsqlite3_sys::SQLITE_LIMIT_SQL_LENGTH),
+    ("column",                libsqlite3_sys::SQLITE_LIMIT_COLUMN),
+    ("expr_depth",            libsqlite3_sys::SQLITE_LIMIT_EXPR_DEPTH),
+    ("compound_select",       libsqlite3_sys::SQLITE_LIMIT_COMPOUND_SELECT),
+    ("vdbe_op",               libsqlite3_sys::SQLITE_LIMIT_VDBE_OP),
+    ("function_arg",          libsqlite3_sys::SQLITE_LIMIT_FUNCTION_ARG),
+    ("attached",              libsqlite3_sys::SQLITE_LIMIT_ATTACHED),
+    ("like_pattern_length",   libsqlite3_sys::SQLITE_LIMIT_LIKE_PATTERN_LENGTH),
+    ("variable_number",       libsqlite3_sys::SQLITE_LIMIT_VARIABLE_NUMBER),
+    ("trigger_depth",         libsqlite3_sys::SQLITE_LIMIT_TRIGGER_DEPTH),
+    ("worker_threads",        libsqlite3_sys::SQLITE_LIMIT_WORKER_THREADS),
+];
+
+/// SQLITE_DBCONFIG_* bools pushed in the cli-state snapshot
+/// (read side of `.dbconfig`).
+pub(crate) const DBCONFIG_BOOLEANS: &[(&str, std::os::raw::c_int)] = &[
+    ("defensive",              libsqlite3_sys::SQLITE_DBCONFIG_DEFENSIVE as std::os::raw::c_int),
+    ("dqs_dml",                libsqlite3_sys::SQLITE_DBCONFIG_DQS_DML as std::os::raw::c_int),
+    ("dqs_ddl",                libsqlite3_sys::SQLITE_DBCONFIG_DQS_DDL as std::os::raw::c_int),
+    ("enable_fkey",            libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_FKEY as std::os::raw::c_int),
+    ("enable_trigger",         libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_TRIGGER as std::os::raw::c_int),
+    ("enable_view",            libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_VIEW as std::os::raw::c_int),
+    ("enable_load_extension",  libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION as std::os::raw::c_int),
+    ("enable_qpsg",            libsqlite3_sys::SQLITE_DBCONFIG_ENABLE_QPSG as std::os::raw::c_int),
+    ("legacy_alter_table",     libsqlite3_sys::SQLITE_DBCONFIG_LEGACY_ALTER_TABLE as std::os::raw::c_int),
+    ("legacy_file_format",     libsqlite3_sys::SQLITE_DBCONFIG_LEGACY_FILE_FORMAT as std::os::raw::c_int),
+    ("trigger_eqp",            libsqlite3_sys::SQLITE_DBCONFIG_TRIGGER_EQP as std::os::raw::c_int),
+    ("trusted_schema",         libsqlite3_sys::SQLITE_DBCONFIG_TRUSTED_SCHEMA as std::os::raw::c_int),
+    ("writable_schema",        libsqlite3_sys::SQLITE_DBCONFIG_WRITABLE_SCHEMA as std::os::raw::c_int),
+];
+
+/// Lookup by name; used by the delta path.
+pub(crate) fn limit_code(name: &str) -> Option<std::os::raw::c_int> {
+    LIMIT_NAMES.iter().find(|(n, _)| *n == name).map(|(_, c)| *c)
+}
+pub(crate) fn dbconfig_code(name: &str) -> Option<std::os::raw::c_int> {
+    DBCONFIG_BOOLEANS.iter().find(|(n, _)| *n == name).map(|(_, c)| *c)
+}
+
 fn embed_core_dotcmd() {
     use bindings::sqlite::extension::policy::LoadOptions;
     use bindings::sqlite::wasm::extension_loader;

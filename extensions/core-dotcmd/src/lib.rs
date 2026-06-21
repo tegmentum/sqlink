@@ -40,6 +40,7 @@ mod wasm_export {
         DotCommandExample, DotCommandSpec, Guest as MetadataGuest, Manifest,
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
+    use bindings::sqlite::extension::cli_state;
     use bindings::sqlite::extension::cli_stdout;
     use bindings::sqlite::extension::spi;
     use bindings::sqlite::extension::types::{SqlValue, SqliteError};
@@ -71,6 +72,9 @@ mod wasm_export {
     const FID_TIMEOUT:    u64 = 25;
     const FID_VFSLIST:    u64 = 26;
     const FID_VFSNAME:    u64 = 27;
+    const FID_SHOW:       u64 = 28;
+    const FID_LIMIT:      u64 = 29;
+    const FID_DBCONFIG:   u64 = 30;
 
     struct Ext;
 
@@ -209,6 +213,25 @@ mod wasm_export {
                          "vfsname [DB]",
                          "DB defaults to `main`. Resolves via the extension's spi connection \
                           (which opens against the same db file, so the VFS matches the cli's)."),
+                    spec(FID_SHOW, "show",
+                         "Dump current cli settings",
+                         "show",
+                         "Reads the cli-state snapshot the dispatcher pushes before each \
+                          invoke and prints every relevant setting (echo / bail / mode / \
+                          prompts / etc.)."),
+                    spec(FID_LIMIT, "limit",
+                         "Inspect or set sqlite3 per-connection limits",
+                         "limit [NAME [VAL]]",
+                         "Without args, lists every category and its current value. \
+                          With NAME, prints that one. With NAME VAL, sets and prints the \
+                          old + new value. Affects the cli's main connection via the \
+                          conn/limit/<name> state-delta."),
+                    spec(FID_DBCONFIG, "dbconfig",
+                         "Inspect or set per-connection db config bools",
+                         "dbconfig [OP [VAL]]",
+                         "Without args, lists every recognized SQLITE_DBCONFIG_* bool. \
+                          With OP, prints just that one. With OP VAL (on/off/0/1), sets \
+                          and prints the new value via the conn/db-config/<op> state-delta."),
                 ],
                 has_authorizer: false,
                 has_update_hook: false,
@@ -616,6 +639,140 @@ mod wasm_export {
         ok()
     }
 
+    /// Names mirrored from the cli's `LIMIT_NAMES` / `DBCONFIG_BOOLEANS`
+    /// tables. The host's cli-state snapshot exposes the current
+    /// values under `conn/limit/<name>` / `conn/db-config/<name>`,
+    /// and the set-side state-delta uses the same keys.
+    const LIMIT_NAMES_C: &[&str] = &[
+        "length", "sql_length", "column", "expr_depth", "compound_select",
+        "vdbe_op", "function_arg", "attached", "like_pattern_length",
+        "variable_number", "trigger_depth", "worker_threads",
+    ];
+    const DBCONFIG_NAMES_C: &[&str] = &[
+        "defensive", "dqs_dml", "dqs_ddl", "enable_fkey", "enable_trigger",
+        "enable_view", "enable_load_extension", "enable_qpsg",
+        "legacy_alter_table", "legacy_file_format", "trigger_eqp",
+        "trusted_schema", "writable_schema",
+    ];
+
+    fn cmd_limit(arg: &str) -> InvokeResult {
+        let mut parts = arg.split_whitespace();
+        let name = parts.next().unwrap_or("");
+        let val = parts.next().unwrap_or("");
+        if name.is_empty() {
+            // List all.
+            let mut out = String::new();
+            for n in LIMIT_NAMES_C {
+                let v = cli_state::get_int(&format!("conn/limit/{n}"));
+                out.push_str(&format!("{:>22} {v}\n", n));
+            }
+            cli_stdout::write(&out);
+            return ok();
+        }
+        if !LIMIT_NAMES_C.iter().any(|n| *n == name) {
+            return err(format!(".limit: unknown category {name:?}"));
+        }
+        if val.is_empty() {
+            let v = cli_state::get_int(&format!("conn/limit/{name}"));
+            cli_stdout::write(&format!("{name} {v}\n"));
+            return ok();
+        }
+        let Ok(n) = val.parse::<i64>() else {
+            return err(format!(".limit: bad value {val:?}"));
+        };
+        let prev = cli_state::get_int(&format!("conn/limit/{name}"));
+        // Emit a state-delta the cli applies via sqlite3_limit on
+        // its main connection. Echo prev + new so users see the
+        // change like the upstream cli prints.
+        let new_text = format!("{name} {prev} -> {n}\n");
+        InvokeResult {
+            text: new_text,
+            state_deltas: alloc::vec![StateDelta {
+                key: format!("conn/limit/{name}"),
+                value: SqlValue::Integer(n),
+            }],
+            ok: true,
+            exit_code: 0,
+        }
+    }
+
+    fn cmd_dbconfig(arg: &str) -> InvokeResult {
+        let mut parts = arg.split_whitespace();
+        let op = parts.next().unwrap_or("");
+        let val = parts.next().unwrap_or("");
+        if op.is_empty() {
+            let mut out = String::new();
+            for n in DBCONFIG_NAMES_C {
+                let v = cli_state::get_int(&format!("conn/db-config/{n}"));
+                out.push_str(&format!("{:>22} {v}\n", n));
+            }
+            cli_stdout::write(&out);
+            return ok();
+        }
+        if !DBCONFIG_NAMES_C.iter().any(|n| *n == op) {
+            return err(format!(".dbconfig: unknown op {op:?}"));
+        }
+        if val.is_empty() {
+            let v = cli_state::get_int(&format!("conn/db-config/{op}"));
+            cli_stdout::write(&format!("{op} {v}\n"));
+            return ok();
+        }
+        let on: bool = match val.to_ascii_lowercase().as_str() {
+            "on"  | "1" | "true"  | "yes" => true,
+            "off" | "0" | "false" | "no"  => false,
+            _ => return err(format!(".dbconfig: bad value {val:?}")),
+        };
+        let new_text = format!("{op} {}\n", if on { 1 } else { 0 });
+        InvokeResult {
+            text: new_text,
+            state_deltas: alloc::vec![StateDelta {
+                key: format!("conn/db-config/{op}"),
+                value: SqlValue::Integer(if on { 1 } else { 0 }),
+            }],
+            ok: true,
+            exit_code: 0,
+        }
+    }
+
+    fn cmd_show() -> InvokeResult {
+        let on_off = |b: bool| if b { "on" } else { "off" };
+        let echo    = cli_state::get_bool("io/echo");
+        let bail    = cli_state::get_bool("bail/on-error");
+        let headers = cli_state::get_bool("io/headers");
+        let mode    = cli_state::get_text("display/mode");
+        let nullv   = cli_state::get_text("display/nullvalue");
+        let sep     = cli_state::get_text("display/separator");
+        let prompt  = cli_state::get_text("prompt/main");
+        let cont    = cli_state::get_text("prompt/cont");
+        let timer   = cli_state::get_bool("io/timer");
+        let changes = cli_state::get_bool("io/changes");
+        let stats   = cli_state::get_bool("io/stats");
+        let eqp     = cli_state::get_bool("io/eqp");
+        let binary  = cli_state::get_bool("io/binary");
+        let explain = cli_state::get_text("io/explain");
+        let widths  = cli_state::get_text("display/width");
+        let mode_s  = if mode.is_empty() { "list".to_string() } else { mode };
+        let explain_s = if explain.is_empty() { "off".to_string() } else { explain };
+        let mut o = String::new();
+        o.push_str(&format!("        echo: {}\n", on_off(echo)));
+        o.push_str(&format!("        bail: {}\n", on_off(bail)));
+        o.push_str(&format!("     headers: {}\n", on_off(headers)));
+        o.push_str(&format!("        mode: {}\n", mode_s));
+        o.push_str(&format!("   nullvalue: {:?}\n", nullv));
+        o.push_str(&format!("   separator: {:?}\n", sep));
+        o.push_str(&format!("       width: {:?}\n", widths));
+        o.push_str(&format!("       timer: {}\n", on_off(timer)));
+        o.push_str(&format!("     changes: {}\n", on_off(changes)));
+        o.push_str(&format!("       stats: {}\n", on_off(stats)));
+        o.push_str(&format!("         eqp: {}\n", on_off(eqp)));
+        o.push_str(&format!("      binary: {}\n", on_off(binary)));
+        o.push_str(&format!("     explain: {}\n", explain_s));
+        o.push_str(&format!("      prompt: {:?}\n", prompt));
+        o.push_str(&format!("  contprompt: {:?}\n", cont));
+        cli_stdout::write(&o);
+        ok()
+    }
+
     fn cmd_vfsname(arg: &str) -> InvokeResult {
         let db = arg.trim();
         let db_name = if db.is_empty() { "main" } else { db };
@@ -713,6 +870,9 @@ mod wasm_export {
                 FID_TIMEOUT   => cmd_timeout(arg),
                 FID_VFSLIST   => cmd_vfslist(),
                 FID_VFSNAME   => cmd_vfsname(arg),
+                FID_SHOW      => cmd_show(),
+                FID_LIMIT     => cmd_limit(arg),
+                FID_DBCONFIG  => cmd_dbconfig(arg),
                 _ => return Err(SqliteError {
                     code: 1,
                     extended_code: 1,

@@ -55,7 +55,7 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
     let arg = parts.next().unwrap_or("").trim();
     Some(match cmd {
         // .help  routed through core-dotcmd registry.
-        ".show" => cmd_show(),
+        // .show  routed through core-dotcmd via cli-state snapshot (FU-7).
         // .tables / .schema  routed through core-dotcmd registry.
         // .indexes  routed through the registry (core-dotcmd).
         // .databases  routed through core-dotcmd registry.
@@ -78,8 +78,8 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         ".parameter" => cmd_parameter(arg),
         // .fullschema  routed through core-dotcmd registry.
         // .dbinfo  routed through the registry (core-dotcmd).
-        ".dbconfig" => cmd_dbconfig(arg, conn),
-        ".limit" => cmd_limit(arg, conn),
+        // .dbconfig / .limit  routed through core-dotcmd
+        // (FU-8: cli-state snapshot push + state-delta apply).
         // .binary  routed through core-dotcmd registry.
         // .log handled in lib.rs (the callback lives there, and
         // it depends on the install-time wiring done before
