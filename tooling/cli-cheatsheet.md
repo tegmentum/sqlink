@@ -198,3 +198,80 @@ rules.
   Most cleanly surfaced by any function that returns an
   empty string by spec  catch via
     `SELECT coalesce(nullif(f(), ''), '<empty>');`
+
+## `.sqlink` — pluggable dot-command registry (PLAN-dotcmd-plugins.md)
+
+Phases 1-4 of PLAN-dotcmd-plugins.md replaced the hard-coded
+cli/src/dot.rs dispatch with a registry that resolves commands
+in three layers:
+
+1. **Session registry** (built-ins + `.load`-loaded extensions).
+2. **Database registry** (`sqlink_dotcmd` rows in the user's db).
+3. **External CAS** (`sqlink_cas_resolver` rows; file:// + http
+   today).
+
+A dot-command installed once with `.sqlink install` persists in
+the user's db and auto-resolves on next use — no `.load` needed.
+Move the db file to another host and the commands come with it.
+
+### Subcommand reference
+
+| Subcommand                              | Purpose |
+|-----------------------------------------|---------|
+| `.sqlink list`                          | every registered command, with bundled?+size |
+| `.sqlink show NAME`                     | full row (digest, source, install time, …) |
+| `.sqlink install URI [--no-bundle]`     | load + register every dot-command in the extension |
+| `.sqlink uninstall NAME`                | drop the registry row (artifact stays) |
+| `.sqlink bundle NAME`                   | (re-)cache bytes in `sqlink_artifact` |
+| `.sqlink unbundle NAME`                 | drop the artifact row (refcount-safe) |
+| `.sqlink bundle-all`                    | iterate; bundle each |
+| `.sqlink unbundle-all`                  | drop every artifact (refcount-blind) |
+| `.sqlink verify`                        | re-hash every artifact row; flag mismatches |
+| `.sqlink gc`                            | drop unreferenced artifact rows |
+| `.sqlink export NAME PATH`              | write the wasm bytes to disk |
+| `.sqlink resolver list`                 | sqlink_cas_resolver rows in priority order |
+| `.sqlink resolver add PRIORITY URI`     | add a `file://` or `http(s)://` resolver |
+| `.sqlink resolver remove URI`           | drop a resolver |
+| `.sqlink resolver set-priority URI N`   | re-prioritise |
+
+URI schemes for `.sqlink install`:
+- `file:///abs/path/to/foo.component.wasm` — local file (today)
+- `file:RELATIVE/PATH` — equivalent, no host part
+- `http://…` / `https://…` — deferred to a follow-up
+- `cas:blake3:…` — deferred to a follow-up
+
+The host walks resolvers when `sqlink_artifact` doesn't have the
+bytes for a row's digest:
+- `file` kind: probe `ROOT/blake3/AA/REST`
+- `http` kind: GET `URI/blake3/AA/REST` (host's reqwest client,
+  blake3-verified)
+
+### State schema (Layer 1)
+
+A dot-command extension mutates cli session state by emitting
+`StateDelta` entries in `InvokeResult.state_deltas`. The cli
+applies known keys, ignores unknown ones (forward-compatible).
+
+| key                  | type | meaning |
+|----------------------|------|---------|
+| `io/echo`            | bool | echo each input line before execution |
+| `io/headers`         | bool | column headers in list/csv/tabs |
+| `io/timer`           | bool | `Run Time: real X.XXX` after each statement |
+| `io/stats`           | bool | `Memory Used: N bytes` after each statement |
+| `io/changes`         | bool | `changes: N total_changes: M` |
+| `io/binary`          | bool | render BLOBs as `X'…'` hex literals |
+| `io/eqp`             | bool | prepend `EXPLAIN QUERY PLAN` output |
+| `io/explain`         | text | `on` / `off` / `auto` |
+| `io/trace`           | bool | log expanded SQL per statement |
+| `bail/on-error`      | bool | abort the rest of the script on first error |
+| `display/mode`       | text | `list` / `csv` / `line` / `column` / `table` / `markdown` / `tabs` / `json` |
+| `display/nullvalue`  | text | text rendered for SQL NULL |
+| `display/separator`  | text | column separator |
+| `prompt/main`        | text | main prompt |
+| `prompt/cont`        | text | continuation prompt |
+
+bool values cross the WIT boundary as `SqlValue::Integer(0)` /
+`Integer(1)`; text values as `SqlValue::Text(...)`.
+
+See `AUTHORING-DOTCMD-COMPONENTS.md` for the full author's
+guide.
