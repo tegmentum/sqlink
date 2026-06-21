@@ -196,7 +196,7 @@ when users type commands like `.session foo create`.
 
 ## Stage 5 — milestones
 
-### Stage 5a — async-from-sync wrapper (~1 day)
+### Stage 5a — async-from-sync wrapper (shipped: 5256933)
 
 Add to `host/src/lib.rs`:
 
@@ -218,7 +218,7 @@ Smoke: write a temp main that exercises the wrapper inside a
 multi-thread runtime + extension that triggers a dispatch.
 Verify no panic + correct result.
 
-### Stage 5b — move `dot_command()` SQL fn to host (~half day)
+### Stage 5b — move `dot_command()` SQL fn to host (shipped: 5256933)
 
 Restore the host-side `register_host_dot_command_function`
 that was reverted in Stage 3c. Use `sync_dispatch_dot_command`
@@ -230,7 +230,7 @@ Verify: `SELECT dot_command('tables');` returns table list
 again. Drop the cli's `register_dotcmd_sql_surface` from
 `ensure_cli_conn`.
 
-### Stage 5c — port embedded extensions (~2 days)
+### Stage 5c — port embedded extensions (shipped: bdb17aa + c4fe7f0)
 
 Mechanical migration following Option A:
 
@@ -258,7 +258,7 @@ Smoke: `SELECT sha3_256('hello')`, `SELECT uuid()`,
 `SELECT regexp('^a', 'abc')`. All should work after Stage 5c
 without the cli holding any registration responsibility.
 
-### Stage 5d — move `apply_cli_pragmas` to host (~1 hour)
+### Stage 5d — move `apply_cli_pragmas` to host (shipped: 73a84e8)
 
 Trivial. The function runs a handful of PRAGMA statements.
 Move it to `host/src/lib.rs`, call from `shared_spi_ensure_open`.
