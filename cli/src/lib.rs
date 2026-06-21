@@ -2957,28 +2957,29 @@ fn do_unload(name: &str) -> String {
     }
 }
 
-/// `.open ?FILE?` — switch the cli's connection to a different db.
-/// Empty arg resets to :memory:. Resets registered scalar functions
-/// (they were attached to the old connection); the user must re-.load
-/// extensions they want against the new db.
+/// `.open ?FILE?` — switch the host's shared spi connection to a
+/// different db. Empty arg attempts `:memory:`, which the host
+/// refuses with a clear diagnostic (in-memory dbs aren't shareable
+/// between the cli's wasm-internal sqlite3 and the host's). Resets
+/// registered scalar functions (they were attached to the old
+/// connection); the user must re-.load extensions they want.
+///
+/// PLAN-cli-stages-5-6.md Stage 5e.7: routes through `spi.open-db`
+/// instead of opening a per-cli db::Connection. The actual
+/// connection swap happens host-side.
 fn do_open(arg: &str) -> String {
     let path = arg.trim();
-    let new_conn = if path.is_empty() || path == ":memory:" {
-        db::Connection::open_in_memory()
-    } else {
-        db::Connection::open(path, db::OpenFlags::DEFAULT)
-    };
-    match new_conn {
-        Ok(c) => {
+    let target = if path.is_empty() { ":memory:" } else { path };
+    match bindings::sqlite::extension::spi::open_db(target) {
+        Ok(()) => {
             DB_PATH.with(|p| *p.borrow_mut() = if path.is_empty() { String::new() } else { path.to_string() });
-            CLI_CONN.with(|cc| *cc.borrow_mut() = Some(c));
             if path.is_empty() {
                 "Opened :memory: (extensions reset)\n".to_string()
             } else {
                 format!("Opened {path} (extensions reset)\n")
             }
         }
-        Err(e) => format!("Error opening {path}: {e}\n"),
+        Err(e) => format!("Error opening {target}: {} (code {})\n", e.message, e.code),
     }
 }
 

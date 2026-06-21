@@ -2515,6 +2515,22 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         let conn = r.as_ref().expect("ensured open");
         execute_multi_impl_loaded(conn, &sql, &named_params)
     }
+
+    async fn open_db(
+        &mut self,
+        _path: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        // Extensions can't swap the cli's shared db target  the
+        // LoadedState spi connection is per-extension and tied to
+        // the db_path the host opened with. Stage 5e.7 surface
+        // is for the cli (HostWrap) only.
+        Err(loaded::sqlite::extension::types::SqliteError {
+            code: 1,
+            extended_code: 1,
+            message: "spi.open-db is only available on the cli's shared connection"
+                .to_string(),
+        })
+    }
 }
 
 /// Shared implementation of spi.execute_multi for the LoadedState
@@ -7127,6 +7143,33 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         execute_multi_impl_bindings(conn, &sql, &named_params)
+    }
+
+    async fn open_db(
+        &mut self,
+        path: String,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        // Drop the existing shared connection and update the host's
+        // db_path so the next spi call lazy-reopens against the new
+        // target. Empty path is the cli convention for `:memory:`.
+        let new_path = if path.is_empty() || path == ":memory:" {
+            ":memory:".to_string()
+        } else {
+            path
+        };
+        // Drop the old connection first  if the user is switching
+        // away from a WAL file, we want sqlite to flush before we
+        // throw away the handle.
+        {
+            let g = self.host.shared_spi_conn.lock();
+            let mut r = g.borrow_mut();
+            *r = None;
+        }
+        *self.host.db_path.write() = new_path;
+        // shared_spi_ensure_open refuses `:memory:` with a clear
+        // error; preserve that for `.open` (with no arg) so the
+        // user sees the same diagnostic as a startup `--db ""`.
+        shared_spi_ensure_open(self.host)
     }
 }
 
