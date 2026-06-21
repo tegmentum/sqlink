@@ -1323,13 +1323,26 @@ fn eval_input(input: &str) -> String {
 /// walks when the artifact row is absent.
 fn try_db_registry_resolve(name: &str, args: &str) -> Option<String> {
     use bindings::sqlite::wasm::extension_loader;
+    use dot::{try_fetch_bytes, FetchResult};
 
+    // First step is the same as the previous v1: lookup the row,
+    // try sqlink_artifact. The Phase 4 addition is the fallthrough
+    // to walk sqlink_cas_resolver when the bytes aren't bundled.
     let (row, bytes) = CLI_CONN.with(|c| {
         let g = c.borrow();
         let conn = g.as_ref()?;
         let row = sqlink_registry::lookup(conn, name)?;
-        let bytes = sqlink_registry::fetch_artifact(conn, &row.artifact_digest)?;
-        Some((row, bytes))
+        if let Some(bytes) = sqlink_registry::fetch_artifact(conn, &row.artifact_digest) {
+            return Some((row, bytes));
+        }
+        // Try resolvers. We pass an empty source_uri  the lookup
+        // row's source_uri isn't surfaced here (the dispatcher
+        // doesn't need it for non-bundle resolves; the CAS walk
+        // probes by digest).
+        match try_fetch_bytes(conn, "", &row.artifact_digest) {
+            FetchResult::Bytes(b) => Some((row, b)),
+            _ => None,
+        }
     })?;
 
     let opts = bindings::sqlite::extension::policy::LoadOptions {

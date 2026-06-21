@@ -231,3 +231,171 @@ pub fn uninstall(conn: &Connection, name: &str) -> Result<i64, db::Error> {
     let _ = s.step()?;
     Ok(conn.changes())
 }
+
+/// `SELECT artifact_digest, artifact_size, source_uri FROM sqlink_dotcmd WHERE name = ?`.
+/// Used by `.sqlink bundle` / `verify` / `export` to find the row
+/// whose bytes we care about.
+pub fn dotcmd_meta(conn: &Connection, name: &str) -> Option<DotcmdMeta> {
+    let mut s = conn
+        .prepare("SELECT artifact_digest, artifact_size, source_uri FROM sqlink_dotcmd WHERE name = ?1")
+        .ok()?;
+    s.bind(1, &Value::Text(name.to_string())).ok()?;
+    if !matches!(s.step(), Ok(StepResult::Row)) { return None; }
+    Some(DotcmdMeta {
+        digest: text(s.column_value(0)),
+        size: int(s.column_value(1)),
+        source_uri: text(s.column_value(2)),
+    })
+}
+
+pub struct DotcmdMeta {
+    pub digest: String,
+    pub size: i64,
+    pub source_uri: String,
+}
+
+/// `INSERT OR REPLACE INTO sqlink_artifact (digest, size, bytes, source_uri)`.
+/// Returned by `.sqlink bundle` after fetching+verifying bytes.
+pub fn store_artifact(
+    conn: &Connection,
+    digest: &str,
+    size: i64,
+    bytes: &[u8],
+    source_uri: &str,
+) -> Result<(), db::Error> {
+    let mut s = conn.prepare(
+        "INSERT OR REPLACE INTO sqlink_artifact (digest, size, bytes, source_uri)
+         VALUES (?1, ?2, ?3, ?4)",
+    )?;
+    s.bind(1, &Value::Text(digest.to_string()))?;
+    s.bind(2, &Value::Integer(size))?;
+    s.bind(3, &Value::Blob(bytes.to_vec()))?;
+    s.bind(4, &Value::Text(source_uri.to_string()))?;
+    let _ = s.step()?;
+    Ok(())
+}
+
+/// `DELETE FROM sqlink_artifact WHERE digest = ?`. Returns the
+/// changes count. Caller should check refcount via
+/// `digest_refcount` first if it wants to refuse on shared rows.
+pub fn drop_artifact(conn: &Connection, digest: &str) -> Result<i64, db::Error> {
+    let mut s = conn.prepare("DELETE FROM sqlink_artifact WHERE digest = ?1")?;
+    s.bind(1, &Value::Text(digest.to_string()))?;
+    let _ = s.step()?;
+    Ok(conn.changes())
+}
+
+/// Count of sqlink_dotcmd rows pointing at the given digest. Used
+/// by `.sqlink unbundle` to refuse when other commands still rely
+/// on the bundled bytes.
+pub fn digest_refcount(conn: &Connection, digest: &str) -> i64 {
+    let Ok(mut s) = conn
+        .prepare("SELECT COUNT(*) FROM sqlink_dotcmd WHERE artifact_digest = ?1")
+    else { return 0; };
+    if s.bind(1, &Value::Text(digest.to_string())).is_err() { return 0; }
+    if !matches!(s.step(), Ok(StepResult::Row)) { return 0; }
+    int(s.column_value(0))
+}
+
+/// Every (name, digest) pair  used by `.sqlink bundle-all` /
+/// `unbundle-all` / `verify` so the iteration runs in plain code
+/// instead of one query per row.
+pub fn all_name_digest(conn: &Connection) -> Vec<(String, String)> {
+    let Ok(mut s) = conn.prepare(
+        "SELECT name, artifact_digest FROM sqlink_dotcmd ORDER BY name"
+    ) else { return Vec::new() };
+    let mut out = Vec::new();
+    while let Ok(StepResult::Row) = s.step() {
+        out.push((text(s.column_value(0)), text(s.column_value(1))));
+    }
+    out
+}
+
+/// Every (digest, size) pair from sqlink_artifact  iterated by
+/// `.sqlink verify` so the actual byte fetch (and re-hash) happens
+/// row-by-row.
+pub fn all_artifact_digests(conn: &Connection) -> Vec<(String, i64)> {
+    let Ok(mut s) = conn.prepare("SELECT digest, size FROM sqlink_artifact ORDER BY digest")
+    else { return Vec::new() };
+    let mut out = Vec::new();
+    while let Ok(StepResult::Row) = s.step() {
+        out.push((text(s.column_value(0)), int(s.column_value(1))));
+    }
+    out
+}
+
+/// `SELECT bytes FROM sqlink_artifact WHERE digest = ?`. Public alias
+/// of `fetch_artifact` for use by `.sqlink export` (clearer name at
+/// the call site).
+pub fn fetch_artifact_bytes(conn: &Connection, digest: &str) -> Option<Vec<u8>> {
+    fetch_artifact(conn, digest)
+}
+
+/// `DELETE FROM sqlink_artifact WHERE digest NOT IN (SELECT artifact_digest FROM sqlink_dotcmd)`.
+/// Returns the count of dropped rows.
+pub fn gc_artifacts(conn: &Connection) -> Result<i64, db::Error> {
+    let _ = conn.execute_batch(
+        "DELETE FROM sqlink_artifact \
+         WHERE digest NOT IN (SELECT artifact_digest FROM sqlink_dotcmd)",
+    )?;
+    Ok(conn.changes())
+}
+
+// ---------------------------------------------------------------
+// sqlink_cas_resolver helpers (Phase 4 entry points).
+
+pub struct ResolverRow {
+    pub priority: i64,
+    pub kind: String,
+    pub uri: String,
+}
+
+pub fn resolver_list(conn: &Connection) -> Vec<ResolverRow> {
+    let Ok(mut s) = conn.prepare(
+        "SELECT priority, kind, uri FROM sqlink_cas_resolver ORDER BY priority"
+    ) else { return Vec::new() };
+    let mut out = Vec::new();
+    while let Ok(StepResult::Row) = s.step() {
+        out.push(ResolverRow {
+            priority: int(s.column_value(0)),
+            kind: text(s.column_value(1)),
+            uri: text(s.column_value(2)),
+        });
+    }
+    out
+}
+
+pub fn resolver_add(
+    conn: &Connection,
+    priority: i64,
+    kind: &str,
+    uri: &str,
+) -> Result<(), db::Error> {
+    let mut s = conn.prepare(
+        "INSERT OR REPLACE INTO sqlink_cas_resolver (priority, kind, uri) VALUES (?1, ?2, ?3)",
+    )?;
+    s.bind(1, &Value::Integer(priority))?;
+    s.bind(2, &Value::Text(kind.to_string()))?;
+    s.bind(3, &Value::Text(uri.to_string()))?;
+    let _ = s.step()?;
+    Ok(())
+}
+
+pub fn resolver_remove(conn: &Connection, uri: &str) -> Result<i64, db::Error> {
+    let mut s = conn.prepare("DELETE FROM sqlink_cas_resolver WHERE uri = ?1")?;
+    s.bind(1, &Value::Text(uri.to_string()))?;
+    let _ = s.step()?;
+    Ok(conn.changes())
+}
+
+pub fn resolver_set_priority(
+    conn: &Connection,
+    uri: &str,
+    priority: i64,
+) -> Result<i64, db::Error> {
+    let mut s = conn.prepare("UPDATE sqlink_cas_resolver SET priority = ?1 WHERE uri = ?2")?;
+    s.bind(1, &Value::Integer(priority))?;
+    s.bind(2, &Value::Text(uri.to_string()))?;
+    let _ = s.step()?;
+    Ok(conn.changes())
+}

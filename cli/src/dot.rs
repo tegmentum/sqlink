@@ -1384,6 +1384,14 @@ fn cmd_sqlink(arg: &str, conn: &crate::db::Connection) -> String {
         "show" => sqlink_show(conn, rest),
         "install" => sqlink_install(conn, rest),
         "uninstall" => sqlink_uninstall(conn, rest),
+        "bundle" => sqlink_bundle(conn, rest),
+        "unbundle" => sqlink_unbundle(conn, rest),
+        "bundle-all" => sqlink_bundle_all(conn),
+        "unbundle-all" => sqlink_unbundle_all(conn),
+        "verify" => sqlink_verify(conn),
+        "gc" => sqlink_gc(conn),
+        "export" => sqlink_export(conn, rest),
+        "resolver" => sqlink_resolver(conn, rest),
         other => format!(".sqlink: unknown subcommand {other:?}\n{}", sqlink_usage()),
     }
 }
@@ -1393,7 +1401,18 @@ fn sqlink_usage() -> String {
         .sqlink list\n  \
         .sqlink show NAME\n  \
         .sqlink install URI [--no-bundle]\n  \
-        .sqlink uninstall NAME\n"
+        .sqlink uninstall NAME\n  \
+        .sqlink bundle NAME\n  \
+        .sqlink unbundle NAME\n  \
+        .sqlink bundle-all\n  \
+        .sqlink unbundle-all\n  \
+        .sqlink verify\n  \
+        .sqlink gc\n  \
+        .sqlink export NAME PATH\n  \
+        .sqlink resolver list\n  \
+        .sqlink resolver add PRIORITY URI\n  \
+        .sqlink resolver remove URI\n  \
+        .sqlink resolver set-priority URI N\n"
         .to_string()
 }
 
@@ -1540,4 +1559,325 @@ fn sqlink_uninstall(conn: &crate::db::Connection, name: &str) -> String {
         Ok(n) => format!("Uninstalled {} ({n} row{})\n", name, if n == 1 { "" } else { "s" }),
         Err(e) => format!(".sqlink uninstall {name}: {}\n", e.message),
     }
+}
+
+/// `.sqlink bundle NAME`  ensure the row's artifact_digest has
+/// matching bytes in sqlink_artifact. v1: re-reads from
+/// `source_uri` when it's a `file://` URI. Phase 4 will fall back
+/// to walking sqlink_cas_resolver for non-file sources.
+fn sqlink_bundle(conn: &crate::db::Connection, name: &str) -> String {
+    if name.is_empty() {
+        return "Usage: .sqlink bundle NAME\n".to_string();
+    }
+    let Some(meta) = crate::sqlink_registry::dotcmd_meta(conn, name) else {
+        return format!("(no row for {name:?})\n");
+    };
+    if crate::sqlink_registry::fetch_artifact(conn, &meta.digest).is_some() {
+        return format!("{name}: already bundled\n");
+    }
+    let bytes = match try_fetch_bytes(conn, &meta.source_uri, &meta.digest) {
+        FetchResult::Bytes(b) => b,
+        FetchResult::NoSource => return format!(
+            "{name}: source_uri empty and no CAS resolver hit  cannot bundle\n"
+        ),
+        FetchResult::Err(e) => return format!("{name}: {e}\n"),
+    };
+    let got_digest = format!("blake3:{}", blake3::hash(&bytes).to_hex());
+    if got_digest != meta.digest {
+        return format!(
+            "{name}: digest mismatch from {} ({} != {})\n",
+            meta.source_uri, got_digest, meta.digest,
+        );
+    }
+    match crate::sqlink_registry::store_artifact(
+        conn, &meta.digest, bytes.len() as i64, &bytes, &meta.source_uri,
+    ) {
+        Ok(()) => format!("{name}: bundled {} bytes ({})\n", bytes.len(), meta.digest),
+        Err(e) => format!("{name}: store_artifact: {}\n", e.message),
+    }
+}
+
+/// `.sqlink unbundle NAME`  drop the artifact iff this is the
+/// last sqlink_dotcmd row pointing at it. Otherwise refuse with a
+/// list of shared names (a multi-command extension stays bundled
+/// until every command using it is unbundled or uninstalled).
+fn sqlink_unbundle(conn: &crate::db::Connection, name: &str) -> String {
+    if name.is_empty() {
+        return "Usage: .sqlink unbundle NAME\n".to_string();
+    }
+    let Some(meta) = crate::sqlink_registry::dotcmd_meta(conn, name) else {
+        return format!("(no row for {name:?})\n");
+    };
+    let refs = crate::sqlink_registry::digest_refcount(conn, &meta.digest);
+    if refs > 1 {
+        return format!(
+            "{name}: artifact shared by {refs} commands  refusing to unbundle. \
+             Run `.sqlink uninstall` on the others first or use `.sqlink unbundle-all`.\n"
+        );
+    }
+    match crate::sqlink_registry::drop_artifact(conn, &meta.digest) {
+        Ok(0) => format!("{name}: artifact already gone\n"),
+        Ok(_) => format!("{name}: unbundled ({})\n", meta.digest),
+        Err(e) => format!("{name}: drop_artifact: {}\n", e.message),
+    }
+}
+
+fn sqlink_bundle_all(conn: &crate::db::Connection) -> String {
+    let rows = crate::sqlink_registry::all_name_digest(conn);
+    if rows.is_empty() {
+        return "(no commands installed)\n".to_string();
+    }
+    let mut out = String::new();
+    for (name, _digest) in rows {
+        out.push_str(&sqlink_bundle(conn, &name));
+    }
+    out
+}
+
+fn sqlink_unbundle_all(conn: &crate::db::Connection) -> String {
+    // unbundle-all bypasses the refcount check  the user is
+    // explicitly saying "every artifact goes".
+    let mut dropped = 0i64;
+    let mut errs: Vec<String> = Vec::new();
+    for (digest, _size) in crate::sqlink_registry::all_artifact_digests(conn) {
+        match crate::sqlink_registry::drop_artifact(conn, &digest) {
+            Ok(n) => dropped += n,
+            Err(e) => errs.push(format!("{digest}: {}", e.message)),
+        }
+    }
+    let mut out = format!("Dropped {dropped} artifact row{}\n",
+        if dropped == 1 { "" } else { "s" });
+    for e in errs { out.push_str(&format!("  {e}\n")); }
+    out
+}
+
+/// `.sqlink verify`  re-hash every sqlink_artifact row's bytes
+/// column and flag any digest mismatches. Doesn't touch the
+/// database  it's a read-only audit.
+fn sqlink_verify(conn: &crate::db::Connection) -> String {
+    let rows = crate::sqlink_registry::all_artifact_digests(conn);
+    if rows.is_empty() {
+        return "(no artifacts)\n".to_string();
+    }
+    let mut ok = 0u64;
+    let mut bad: Vec<String> = Vec::new();
+    for (digest, size) in rows {
+        let Some(bytes) = crate::sqlink_registry::fetch_artifact(conn, &digest) else {
+            bad.push(format!("{digest}: fetch failed"));
+            continue;
+        };
+        if bytes.len() as i64 != size {
+            bad.push(format!(
+                "{digest}: size column = {size} but blob is {} bytes",
+                bytes.len(),
+            ));
+            continue;
+        }
+        let got = format!("blake3:{}", blake3::hash(&bytes).to_hex());
+        if got == digest {
+            ok += 1;
+        } else {
+            bad.push(format!("{digest}: hashes to {got}"));
+        }
+    }
+    let mut out = format!("verify: {ok} ok, {} bad\n", bad.len());
+    for b in &bad { out.push_str(&format!("  {b}\n")); }
+    out
+}
+
+fn sqlink_gc(conn: &crate::db::Connection) -> String {
+    match crate::sqlink_registry::gc_artifacts(conn) {
+        Ok(0) => "gc: nothing to drop\n".to_string(),
+        Ok(n) => format!("gc: dropped {n} unreferenced artifact row{}\n",
+            if n == 1 { "" } else { "s" }),
+        Err(e) => format!("gc: {}\n", e.message),
+    }
+}
+
+fn sqlink_export(conn: &crate::db::Connection, arg: &str) -> String {
+    let mut parts = arg.splitn(2, char::is_whitespace);
+    let name = parts.next().unwrap_or("").trim();
+    let path = parts.next().unwrap_or("").trim();
+    if name.is_empty() || path.is_empty() {
+        return "Usage: .sqlink export NAME PATH\n".to_string();
+    }
+    let Some(meta) = crate::sqlink_registry::dotcmd_meta(conn, name) else {
+        return format!("(no row for {name:?})\n");
+    };
+    let Some(bytes) = crate::sqlink_registry::fetch_artifact_bytes(conn, &meta.digest) else {
+        return format!("{name}: not bundled (digest {})\n", meta.digest);
+    };
+    match std::fs::write(path, &bytes) {
+        Ok(()) => format!("Wrote {} bytes to {path}\n", bytes.len()),
+        Err(e) => format!(".sqlink export {name}: {e}\n"),
+    }
+}
+
+fn sqlink_resolver(conn: &crate::db::Connection, arg: &str) -> String {
+    let mut parts = arg.splitn(2, char::is_whitespace);
+    let sub = parts.next().unwrap_or("").trim();
+    let rest = parts.next().unwrap_or("").trim();
+    match sub {
+        "" | "list" => sqlink_resolver_list(conn),
+        "add" => sqlink_resolver_add(conn, rest),
+        "remove" | "rm" => sqlink_resolver_remove(conn, rest),
+        "set-priority" => sqlink_resolver_set_priority(conn, rest),
+        other => format!(".sqlink resolver: unknown {other:?}\n"),
+    }
+}
+
+fn sqlink_resolver_list(conn: &crate::db::Connection) -> String {
+    let rows = crate::sqlink_registry::resolver_list(conn);
+    if rows.is_empty() {
+        return "(no resolvers configured)\n".to_string();
+    }
+    let mut o = String::new();
+    o.push_str("PRIORITY  KIND    URI\n");
+    for r in rows {
+        o.push_str(&format!("{:<9} {:<7} {}\n", r.priority, r.kind, r.uri));
+    }
+    o
+}
+
+fn sqlink_resolver_add(conn: &crate::db::Connection, arg: &str) -> String {
+    let mut parts = arg.splitn(2, char::is_whitespace);
+    let priority_s = parts.next().unwrap_or("").trim();
+    let uri = parts.next().unwrap_or("").trim();
+    if priority_s.is_empty() || uri.is_empty() {
+        return "Usage: .sqlink resolver add PRIORITY URI\n".to_string();
+    }
+    let Ok(priority) = priority_s.parse::<i64>() else {
+        return format!(".sqlink resolver add: bad priority {priority_s:?}\n");
+    };
+    let kind = if uri.starts_with("file://") || uri.starts_with('/') {
+        "file"
+    } else if uri.starts_with("http://") || uri.starts_with("https://") {
+        "http"
+    } else {
+        return format!(".sqlink resolver add: cannot infer kind from {uri:?}\n");
+    };
+    match crate::sqlink_registry::resolver_add(conn, priority, kind, uri) {
+        Ok(()) => format!("Added resolver: priority={priority} kind={kind} uri={uri}\n"),
+        Err(e) => format!(".sqlink resolver add: {}\n", e.message),
+    }
+}
+
+fn sqlink_resolver_remove(conn: &crate::db::Connection, uri: &str) -> String {
+    if uri.is_empty() {
+        return "Usage: .sqlink resolver remove URI\n".to_string();
+    }
+    match crate::sqlink_registry::resolver_remove(conn, uri) {
+        Ok(0) => format!("(no resolver row for {uri:?})\n"),
+        Ok(_) => format!("Removed resolver {uri}\n"),
+        Err(e) => format!(".sqlink resolver remove: {}\n", e.message),
+    }
+}
+
+fn sqlink_resolver_set_priority(conn: &crate::db::Connection, arg: &str) -> String {
+    let mut parts = arg.splitn(2, char::is_whitespace);
+    let uri = parts.next().unwrap_or("").trim();
+    let n_s = parts.next().unwrap_or("").trim();
+    if uri.is_empty() || n_s.is_empty() {
+        return "Usage: .sqlink resolver set-priority URI N\n".to_string();
+    }
+    let Ok(n) = n_s.parse::<i64>() else {
+        return format!(".sqlink resolver set-priority: bad N {n_s:?}\n");
+    };
+    match crate::sqlink_registry::resolver_set_priority(conn, uri, n) {
+        Ok(0) => format!("(no resolver row for {uri:?})\n"),
+        Ok(_) => format!("{uri}: priority -> {n}\n"),
+        Err(e) => format!(".sqlink resolver set-priority: {}\n", e.message),
+    }
+}
+
+/// Bytes-fetch helper shared by `.sqlink bundle` (re-bundle from
+/// source) and the auto-resolve fallthrough (Phase 4 CAS walk).
+///
+/// Strategy:
+///   1. If `source_uri` is `file://PATH` or a bare path, read directly.
+///   2. Otherwise walk `sqlink_cas_resolver` by priority and try
+///      each (`file` kind only in v1; http kind returns Err with a
+///      "not yet wired" message).
+///
+/// `expected_digest` is provided for the CAS walk (which probes by
+/// digest); the source-URI branch ignores it (caller verifies).
+pub(crate) fn try_fetch_bytes(
+    conn: &crate::db::Connection,
+    source_uri: &str,
+    expected_digest: &str,
+) -> FetchResult {
+    if !source_uri.is_empty() {
+        let path: Option<&str> =
+            if let Some(p) = source_uri.strip_prefix("file://") { Some(p) }
+            else if source_uri.starts_with('/') { Some(source_uri) }
+            else { None };
+        if let Some(p) = path {
+            return match std::fs::read(p) {
+                Ok(b) => FetchResult::Bytes(b),
+                Err(e) => FetchResult::Err(format!("read {p:?}: {e}")),
+            };
+        }
+        // For non-file source_uri we still want to try CAS  fall
+        // through.
+    }
+    walk_cas_resolvers(conn, expected_digest)
+}
+
+pub(crate) enum FetchResult {
+    Bytes(Vec<u8>),
+    NoSource,
+    Err(String),
+}
+
+/// Phase 4 CAS walk. For each `sqlink_cas_resolver` row in
+/// priority order, try to fetch the artifact by digest and return
+/// the first bytes that hash to the expected digest.
+///
+/// v1 supports the `file` kind only  probes
+/// `ROOT/blake3/AA/REST` where `digest = "blake3:AAREST..."`.
+/// `http` kind logs and skips (TODO).
+pub(crate) fn walk_cas_resolvers(
+    conn: &crate::db::Connection,
+    expected_digest: &str,
+) -> FetchResult {
+    let Some(hex) = expected_digest.strip_prefix("blake3:") else {
+        return FetchResult::Err(format!(
+            "unsupported digest scheme {expected_digest:?}  expected blake3:HEX",
+        ));
+    };
+    if hex.len() < 3 {
+        return FetchResult::Err(format!("digest too short: {expected_digest:?}"));
+    }
+    let resolvers = crate::sqlink_registry::resolver_list(conn);
+    if resolvers.is_empty() {
+        return FetchResult::NoSource;
+    }
+    let (aa, rest) = hex.split_at(2);
+    let mut errs: Vec<String> = Vec::new();
+    for r in resolvers {
+        let bytes_opt: Option<Vec<u8>> = match r.kind.as_str() {
+            "file" => {
+                let root = r.uri.strip_prefix("file://").unwrap_or(&r.uri);
+                let path = format!("{root}/blake3/{aa}/{rest}");
+                match std::fs::read(&path) {
+                    Ok(b) => Some(b),
+                    Err(e) => { errs.push(format!("{}: {e}", path)); None }
+                }
+            }
+            "http" => {
+                errs.push(format!("{}: http kind not yet wired (TODO Phase 4.2)", r.uri));
+                None
+            }
+            other => { errs.push(format!("{}: unknown kind {other:?}", r.uri)); None }
+        };
+        if let Some(bytes) = bytes_opt {
+            let got = format!("blake3:{}", blake3::hash(&bytes).to_hex());
+            if got == expected_digest {
+                return FetchResult::Bytes(bytes);
+            } else {
+                errs.push(format!("{}: digest mismatch ({})", r.uri, got));
+            }
+        }
+    }
+    if errs.is_empty() { FetchResult::NoSource } else { FetchResult::Err(errs.join("; ")) }
 }
