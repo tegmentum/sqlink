@@ -198,18 +198,12 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
             "prompt/main"       => if let Some(s) = parse_string(value_json) { g.prompt_main = s; },
             "prompt/cont"       => if let Some(s) = parse_string(value_json) { g.prompt_cont = s; },
             "conn/busy-timeout" => if let Some(ms) = parse_int(value_json) {
-                // Apply to the cli's main connection. Extensions
-                // run their own spi connection; setting busy_timeout
-                // there wouldn't help the cli's user-facing
-                // statements, so the delta path is the only way to
-                // affect what the cli sees.
-                if let Some(conn_ms) = i32::try_from(ms).ok() {
-                    crate::CLI_CONN.with(|c| {
-                        let g = c.borrow();
-                        if let Some(conn) = g.as_ref() {
-                            let _ = conn.busy_timeout(conn_ms);
-                        }
-                    });
+                // PLAN-cli-shared-conn.md Stage 4: now that eval_sql
+                // uses the host's shared connection (Stage 3c), we
+                // set busy_timeout there directly. Skips the cli's
+                // CLI_CONN entirely.
+                if let Ok(conn_ms) = i32::try_from(ms) {
+                    let _ = crate::bindings::sqlite::extension::spi::set_busy_timeout(conn_ms);
                 }
             },
             "params/clear" => {
@@ -223,12 +217,9 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
                     g.parameters.remove(name);
                 } else if let Some(db_name) = other.strip_prefix("conn/deserialize/") {
                     if let Some(bytes) = parse_blob_hex(value_json) {
-                        crate::CLI_CONN.with(|c| {
-                            let cg = c.borrow();
-                            if let Some(conn) = cg.as_ref() {
-                                let _ = conn.deserialize_db(db_name, &bytes);
-                            }
-                        });
+                        let _ = crate::bindings::sqlite::extension::spi::deserialize_db(
+                            db_name, &bytes,
+                        );
                     }
                 } else
                 // Connection-level deltas with a `/<name>` suffix.
@@ -237,24 +228,16 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
                         (crate::limit_code(name), parse_int(value_json))
                     {
                         if let Ok(v) = i32::try_from(n) {
-                            crate::CLI_CONN.with(|c| {
-                                let cg = c.borrow();
-                                if let Some(conn) = cg.as_ref() {
-                                    let _ = conn.limit(code, v);
-                                }
-                            });
+                            crate::bindings::sqlite::extension::spi::limit(code, v);
                         }
                     }
                 } else if let Some(name) = other.strip_prefix("conn/db-config/") {
                     if let (Some(code), Some(b)) =
                         (crate::dbconfig_code(name), parse_bool(value_json))
                     {
-                        crate::CLI_CONN.with(|c| {
-                            let cg = c.borrow();
-                            if let Some(conn) = cg.as_ref() {
-                                let _ = conn.db_config_set_bool(code, b);
-                            }
-                        });
+                        let _ = crate::bindings::sqlite::extension::spi::db_config_bool(
+                            code, true, b,
+                        );
                     }
                 }
                 // Other unknown keys are silently ignored.
