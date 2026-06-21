@@ -3376,21 +3376,19 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
         }
         drop(g);
         // Pull live sqlite3_limit + sqlite3_db_config values off
-        // the cli's connection so `.limit` / `.dbconfig` can
+        // the host's shared connection (Stage 4 migrated the
+        // delta-side setters there). `.limit` / `.dbconfig`
         // surface them via cli_state.get_int.
-        CLI_CONN.with(|c| {
-            let g = c.borrow();
-            let Some(conn) = g.as_ref() else { return };
-            for (name, code) in LIMIT_NAMES {
-                let v = conn.limit(*code, -1);
-                out.push((format!("conn/limit/{name}"), v.to_string()));
+        use bindings::sqlite::extension::spi;
+        for (name, code) in LIMIT_NAMES {
+            let v = spi::limit(*code, -1);
+            out.push((format!("conn/limit/{name}"), v.to_string()));
+        }
+        for (name, code) in DBCONFIG_BOOLEANS {
+            if let Ok(b) = spi::db_config_bool(*code, false, false) {
+                out.push((format!("conn/db-config/{name}"), if b { "1".into() } else { "0".into() }));
             }
-            for (name, code) in DBCONFIG_BOOLEANS {
-                if let Ok(b) = conn.db_config_get_bool(*code) {
-                    out.push((format!("conn/db-config/{name}"), if b { "1".into() } else { "0".into() }));
-                }
-            }
-        });
+        }
         out
     })
 }
