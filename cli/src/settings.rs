@@ -139,3 +139,93 @@ thread_local! {
 thread_local! {
     pub static SETTINGS: RefCell<Settings> = RefCell::new(Settings::new());
 }
+
+/// Apply a single state-delta returned by a dot-command extension.
+/// `value_json` is JSON-encoded (so the wit boundary doesn't have to
+/// track sql-value variants). Keys are slash-namespaced per
+/// PLAN-dotcmd-plugins.md state schema.
+///
+/// Unknown keys are silently ignored  v1 covers the common
+/// session-mode commands. Decode failures log to stderr and
+/// otherwise no-op (a misbehaving extension shouldn't kill the
+/// cli).
+pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
+    SETTINGS.with(|s| {
+        let mut g = s.borrow_mut();
+        match key {
+            "io/echo"        => if let Some(b) = parse_bool(value_json)   { g.echo = b; },
+            "io/headers"     => if let Some(b) = parse_bool(value_json)   { g.headers = b; },
+            "io/timer"       => if let Some(b) = parse_bool(value_json)   { g.show_timer = b; },
+            "io/stats"       => if let Some(b) = parse_bool(value_json)   { g.show_stats = b; },
+            "io/changes"     => if let Some(b) = parse_bool(value_json)   { g.show_changes = b; },
+            "io/binary"      => if let Some(b) = parse_bool(value_json)   { g.binary_output = b; },
+            "io/eqp"         => if let Some(b) = parse_bool(value_json)   { g.eqp = b; },
+            "io/explain"     => if let Some(s) = parse_string(value_json) {
+                g.explain_mode = match s.as_str() {
+                    "on"   => ExplainMode::On,
+                    "auto" => ExplainMode::Auto,
+                    _      => ExplainMode::Off,
+                };
+            },
+            "io/trace"       => if let Some(b) = parse_bool(value_json)   { g.trace_on = b; },
+            "bail/on-error"  => if let Some(b) = parse_bool(value_json)   { g.bail = b; },
+            "display/mode"   => if let Some(s) = parse_string(value_json) {
+                g.mode = match s.as_str() {
+                    "csv"      => Mode::Csv,
+                    "line"     => Mode::Line,
+                    "column"   => Mode::Column,
+                    "table"    => Mode::Table,
+                    "markdown" => Mode::Markdown,
+                    "tabs"     => Mode::Tabs,
+                    "json"     => Mode::Json,
+                    _          => Mode::List,
+                };
+            },
+            "display/nullvalue" => if let Some(s) = parse_string(value_json) { g.null_value = s; },
+            "display/separator" => if let Some(s) = parse_string(value_json) { g.separator = s; },
+            "prompt/main"       => if let Some(s) = parse_string(value_json) { g.prompt_main = s; },
+            "prompt/cont"       => if let Some(s) = parse_string(value_json) { g.prompt_cont = s; },
+            _ => {} // unknown key  ignore.
+        }
+    });
+}
+
+/// Decode a JSON boolean. Accepts the JSON forms `true`/`false`, and
+/// also the integers `0`/`1` (the wasm side often passes booleans
+/// through as Integer 0/1).
+fn parse_bool(json: &str) -> Option<bool> {
+    match json.trim() {
+        "true" | "1" => Some(true),
+        "false" | "0" => Some(false),
+        _ => None,
+    }
+}
+
+/// Decode a JSON string literal. v1 keeps it minimal  unescapes
+/// `\\"`, `\\\\`, `\\n`, `\\r`, `\\t`. Anything else is passed
+/// through verbatim.
+fn parse_string(json: &str) -> Option<String> {
+    let s = json.trim();
+    if !s.starts_with('"') || !s.ends_with('"') || s.len() < 2 {
+        return None;
+    }
+    let inner = &s[1..s.len() - 1];
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('"') => out.push('"'),
+            Some('\\') => out.push('\\'),
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('t') => out.push('\t'),
+            Some(other) => { out.push('\\'); out.push(other); }
+            None => out.push('\\'),
+        }
+    }
+    Some(out)
+}

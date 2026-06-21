@@ -3,6 +3,13 @@
 //! Each `cmd_*` function takes the argument string (everything
 //! after the command name) and returns the formatted output the
 //! cli's `eval` should emit.
+//!
+//! Phase 2.2: state-only commands (.echo, .bail, .timer, .mode, etc.)
+//! moved to the core-dotcmd registry. Their `cmd_*` helpers here are
+//! kept for now as reference  the dispatcher no longer routes to
+//! them, so dead-code warnings are silenced module-wide.
+
+#![allow(dead_code)]
 
 use std::cell::RefCell;
 use std::os::raw::c_int;
@@ -47,19 +54,15 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
     let cmd = parts.next().unwrap_or("");
     let arg = parts.next().unwrap_or("").trim();
     Some(match cmd {
-        ".help" => cmd_help(),
+        // .help  routed through core-dotcmd registry.
         ".show" => cmd_show(),
         // .tables / .schema  routed through core-dotcmd registry.
         // .indexes  routed through the registry (core-dotcmd).
         // .databases  routed through core-dotcmd registry.
-        ".headers" => cmd_headers(arg),
-        ".mode" => cmd_mode(arg),
-        ".nullvalue" => cmd_nullvalue(arg),
-        ".separator" => cmd_separator(arg),
-        ".echo" => cmd_echo(arg),
-        ".prompt" => cmd_prompt(arg),
-        ".print" => format!("{arg}\n"),
-        ".bail" => cmd_bail(arg),
+        // .headers / .mode / .nullvalue / .separator / .echo /
+        // .prompt / .bail  routed through core-dotcmd registry
+        // (Phase 2.2 cli-state writeback).
+        // .print  routed through core-dotcmd registry.
         // .version is now provided by the `core-dotcmd` extension
         // (extensions/core-dotcmd). Phase 2 of PLAN-dotcmd-plugins.md
         // ports built-ins to the registry one at a time. When the
@@ -69,18 +72,15 @@ pub fn dispatch(input: &str, conn: &Connection) -> Option<String> {
         // .version"  preferred over silently shadowing the new
         // registry surface.
         ".width" => cmd_width(arg),
-        ".changes" => cmd_changes(arg),
-        ".timer" => cmd_timer(arg),
+        // .changes / .timer / .explain / .eqp / .stats  routed
+        // through the core-dotcmd registry (Phase 2.2).
         ".timeout" => cmd_timeout(arg, conn),
-        ".explain" => cmd_explain(arg),
-        ".eqp" => cmd_eqp(arg),
-        ".stats" => cmd_stats(arg),
         ".parameter" => cmd_parameter(arg),
         // .fullschema  routed through core-dotcmd registry.
         // .dbinfo  routed through the registry (core-dotcmd).
         ".dbconfig" => cmd_dbconfig(arg, conn),
         ".limit" => cmd_limit(arg, conn),
-        ".binary" => cmd_binary(arg),
+        // .binary  routed through core-dotcmd registry.
         // .log handled in lib.rs (the callback lives there, and
         // it depends on the install-time wiring done before
         // sqlite3 initialized).

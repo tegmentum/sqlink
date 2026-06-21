@@ -1323,6 +1323,46 @@ fn spi_value_to_db(v: loaded::sqlite::extension::types::SqlValue) -> sqlite_wasm
     }
 }
 
+/// Encode a wasm-side sql-value as JSON so the cli can decode it
+/// per-key without knowing the SqlValue variants. Strings become
+/// JSON strings; booleans never appear here (extensions emit them
+/// as Integer 0/1). NaN/Inf collapse to JSON null.
+fn sql_value_to_json(v: loaded::sqlite::extension::types::SqlValue) -> String {
+    use loaded::sqlite::extension::types::SqlValue as V;
+    match v {
+        V::Null => "null".to_string(),
+        V::Integer(i) => i.to_string(),
+        V::Real(r) => {
+            if r.is_finite() {
+                r.to_string()
+            } else {
+                "null".to_string()
+            }
+        }
+        V::Text(s) => {
+            let mut out = String::with_capacity(s.len() + 2);
+            out.push('"');
+            for c in s.chars() {
+                match c {
+                    '"' => out.push_str("\\\""),
+                    '\\' => out.push_str("\\\\"),
+                    '\n' => out.push_str("\\n"),
+                    '\r' => out.push_str("\\r"),
+                    '\t' => out.push_str("\\t"),
+                    c if (c as u32) < 0x20 => {
+                        use core::fmt::Write;
+                        let _ = write!(out, "\\u{:04x}", c as u32);
+                    }
+                    c => out.push(c),
+                }
+            }
+            out.push('"');
+            out
+        }
+        V::Blob(_) => "null".to_string(),
+    }
+}
+
 fn db_value_to_spi(v: sqlite_wasm_core::db::Value) -> loaded::sqlite::extension::types::SqlValue {
     use loaded::sqlite::extension::types::SqlValue as V;
     use sqlite_wasm_core::db;
@@ -1996,6 +2036,27 @@ pub struct DotCommandEntry {
     pub help: String,
     pub requires_write: bool,
     pub no_args: bool,
+}
+
+/// Output of `Host::dispatch_dot_command`. Mirrors the
+/// `dot-command-result` record in extension-loader.wit  the cli
+/// surfaces `text` to the user, then applies `state-deltas` to
+/// its session settings. `exit-code` is consumed by argv-mode
+/// dispatch (rule: zero = success, non-zero = process exit code).
+#[derive(Debug, Clone, Default)]
+pub struct DotCommandOutcome {
+    pub text: String,
+    pub state_deltas: Vec<StateDeltaOut>,
+    pub exit_code: i32,
+}
+
+/// One state delta from an invoke result. `value_json` is the
+/// JSON encoding of the original sql-value  the cli decodes by
+/// key (typed lookup in the consumer's settings applier).
+#[derive(Debug, Clone)]
+pub struct StateDeltaOut {
+    pub key: String,
+    pub value_json: String,
 }
 
 #[derive(Debug, Clone)]
@@ -3353,7 +3414,7 @@ impl Host {
         &self,
         name: &str,
         args: &str,
-    ) -> Result<String> {
+    ) -> Result<DotCommandOutcome> {
         // Find the extension whose manifest registers `name`.
         let (ext_arc, func_id) = {
             let components = self.components.read();
@@ -3399,7 +3460,21 @@ impl Host {
             .await
             .map_err(|e| anyhow!("dot-command.invoke trap: {e}"))?;
         match result {
-            Ok(r) => Ok(r.text),
+            Ok(r) => {
+                let deltas = r
+                    .state_deltas
+                    .into_iter()
+                    .map(|d| StateDeltaOut {
+                        key: d.key,
+                        value_json: sql_value_to_json(d.value),
+                    })
+                    .collect();
+                Ok(DotCommandOutcome {
+                    text: r.text,
+                    state_deltas: deltas,
+                    exit_code: r.exit_code,
+                })
+            }
             Err(e) => Err(anyhow!("{}: {}", e.code, e.message)),
         }
     }
@@ -5018,7 +5093,10 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         &mut self,
         _name: String,
         _args: String,
-    ) -> std::result::Result<String, LoaderError> {
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::DotCommandResult,
+        LoaderError,
+    > {
         Err(loader_stub_err("dispatch-dot-command"))
     }
 
@@ -6165,14 +6243,33 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         &mut self,
         name: String,
         args: String,
-    ) -> std::result::Result<String, LoaderError> {
-        self.host
+    ) -> std::result::Result<
+        bindings::sqlite::wasm::extension_loader::DotCommandResult,
+        LoaderError,
+    > {
+        let outcome = self
+            .host
             .dispatch_dot_command(&name, &args)
             .await
             .map_err(|e| LoaderError {
                 code: if e.to_string().contains("no dot-command") { 404 } else { 500 },
                 message: e.to_string(),
-            })
+            })?;
+        let state_deltas = outcome
+            .state_deltas
+            .into_iter()
+            .map(
+                |d| bindings::sqlite::wasm::extension_loader::StateDelta {
+                    key: d.key,
+                    value_json: d.value_json,
+                },
+            )
+            .collect();
+        Ok(bindings::sqlite::wasm::extension_loader::DotCommandResult {
+            text: outcome.text,
+            state_deltas,
+            exit_code: outcome.exit_code,
+        })
     }
 
     async fn describe_extension(

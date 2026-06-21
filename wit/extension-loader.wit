@@ -68,19 +68,37 @@ interface extension-loader {
     /// Dispatch a dot command by name. Walks loaded extensions
     /// for one whose manifest registered `name` as a
     /// `dot-command-spec`, invokes its `dot-command.invoke`,
-    /// and returns the trailing text from the result. Streamed
-    /// output (via `cli-stdout.write`) lands directly on the
-    /// host's stdout during the invoke.
+    /// and returns a record carrying:
+    ///   - trailing text the extension wrote to invoke-result.text
+    ///     (in addition to any streamed `cli-stdout` writes,
+    ///     which already landed on the host's stdout)
+    ///   - state-deltas the extension proposed  the cli applies
+    ///     these to its own session state after the call returns
+    ///   - exit-code  process exit code for argv-mode dispatch
     ///
     /// Error variants:
     ///   - code = 404, message = "no such dot-command"
     ///     no loaded extension registers that name
     ///   - code = 500, message = invoke error text
     ///     the extension itself returned an error
-    ///
-    /// Wired into the cli's repl dispatcher  see PLAN-dotcmd-
-    /// plugins.md Phase 1 / Phase 2.
-    dispatch-dot-command: func(name: string, args: string) -> result<string, loader-error>;
+    dispatch-dot-command: func(name: string, args: string)
+        -> result<dot-command-result, loader-error>;
+
+    /// State delta the extension proposes  applied by the cli
+    /// after the invoke returns. `value-json` is JSON-encoded so
+    /// the interface doesn't have to track sql-value variants
+    /// across the boundary; the cli decodes by key (and type) in
+    /// the consumer-side state-delta applier.
+    record state-delta {
+        key: string,
+        value-json: string,
+    }
+
+    record dot-command-result {
+        text: string,
+        state-deltas: list<state-delta>,
+        exit-code: s32,
+    }
 
     /// Describe an extension WITHOUT loading it — reads the bytes,
     /// computes the digest, instantiates briefly to call

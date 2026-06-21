@@ -34,7 +34,7 @@ mod wasm_export {
     }
 
     use bindings::exports::sqlite::extension::dot_command::{
-        Guest as DotCommandGuest, InvokeContext, InvokeResult,
+        Guest as DotCommandGuest, InvokeContext, InvokeResult, StateDelta,
     };
     use bindings::exports::sqlite::extension::metadata::{
         DotCommandExample, DotCommandSpec, Guest as MetadataGuest, Manifest,
@@ -53,6 +53,20 @@ mod wasm_export {
     const FID_DBINFO:     u64 = 7;
     const FID_FULLSCHEMA: u64 = 8;
     const FID_LINT:       u64 = 9;
+    const FID_PRINT:      u64 = 10;
+    const FID_ECHO:       u64 = 11;
+    const FID_BAIL:       u64 = 12;
+    const FID_TIMER:      u64 = 13;
+    const FID_HEADERS:    u64 = 14;
+    const FID_MODE:       u64 = 15;
+    const FID_NULLVALUE:  u64 = 16;
+    const FID_SEPARATOR:  u64 = 17;
+    const FID_PROMPT:     u64 = 18;
+    const FID_CHANGES:    u64 = 19;
+    const FID_STATS:      u64 = 20;
+    const FID_EXPLAIN:    u64 = 21;
+    const FID_EQP:        u64 = 22;
+    const FID_BINARY:     u64 = 23;
 
     struct Ext;
 
@@ -113,6 +127,64 @@ mod wasm_export {
                          "Report schema issues",
                          "lint [SUBCOMMAND]",
                          "Today: `lint fkey-indexes` (default) flags foreign keys with no backing index."),
+                    spec(FID_PRINT, "print",
+                         "Echo arguments to stdout",
+                         "print [TEXT...]",
+                         "Writes the verbatim argument string followed by a newline. \
+                          Useful in scripts to annotate output  the cli sees `.print foo bar` \
+                          as TEXT='foo bar' and emits 'foo bar\\n'."),
+                    spec(FID_ECHO, "echo",
+                         "Echo input lines",
+                         "echo on|off",
+                         "When on, each input line is echoed to stdout before execution."),
+                    spec(FID_BAIL, "bail",
+                         "Stop after first error",
+                         "bail on|off",
+                         "When on, a failed SQL statement or dot command aborts the rest of the script."),
+                    spec(FID_TIMER, "timer",
+                         "Show wall-clock time per statement",
+                         "timer on|off",
+                         "Appends a `Run Time: real X.XXX` line after each statement when on."),
+                    spec(FID_HEADERS, "headers",
+                         "Show column headers in result output",
+                         "headers on|off",
+                         "Toggles whether column names render in list/csv/tabs modes."),
+                    spec(FID_MODE, "mode",
+                         "Set the result display mode",
+                         "mode list|csv|line|column|table|markdown|tabs|json",
+                         "Selects the renderer eval_sql uses for SELECT result sets."),
+                    spec(FID_NULLVALUE, "nullvalue",
+                         "Set the rendering for SQL NULL",
+                         "nullvalue STRING",
+                         "Replaces empty NULL cells with STRING in list/csv/tabs modes."),
+                    spec(FID_SEPARATOR, "separator",
+                         "Set the column separator for list/csv/tabs modes",
+                         "separator STRING",
+                         "Default is `|`. CSV and tabs modes use their canonical separator."),
+                    spec(FID_PROMPT, "prompt",
+                         "Set the cli prompts",
+                         "prompt MAIN [CONT]",
+                         "Replaces the default `sqlite> ` and `   ...> ` prompts."),
+                    spec(FID_CHANGES, "changes",
+                         "Show changes count after each statement",
+                         "changes on|off",
+                         "Appends `changes: N total_changes: M` after each statement when on."),
+                    spec(FID_STATS, "stats",
+                         "Show memory stats after each statement",
+                         "stats on|off",
+                         "Appends `Memory Used: N bytes` after each statement when on."),
+                    spec(FID_EXPLAIN, "explain",
+                         "Auto-prefix SELECTs with EXPLAIN",
+                         "explain on|off|auto",
+                         "on: every statement is EXPLAINed. auto: EXPLAIN is applied only when the user typed it."),
+                    spec(FID_EQP, "eqp",
+                         "Show EXPLAIN QUERY PLAN inline",
+                         "eqp on|off",
+                         "Prepends the query plan above the statement output when on."),
+                    spec(FID_BINARY, "binary",
+                         "Print BLOBs as hex literals",
+                         "binary on|off",
+                         "When on, BLOBs render as `X'…'` hex literals; otherwise `<blob:N bytes>`."),
                 ],
                 has_authorizer: false,
                 has_update_hook: false,
@@ -409,6 +481,85 @@ mod wasm_export {
         false
     }
 
+    fn cmd_print(arg: &str) -> InvokeResult {
+        cli_stdout::write(arg);
+        cli_stdout::write("\n");
+        ok()
+    }
+
+    /// Helper: emit a single state-delta carrying `value`.
+    fn delta(key: &str, value: SqlValue) -> InvokeResult {
+        InvokeResult {
+            text: String::new(),
+            state_deltas: alloc::vec![StateDelta { key: key.into(), value }],
+            ok: true,
+            exit_code: 0,
+        }
+    }
+
+    fn parse_onoff(s: &str) -> Option<bool> {
+        match s.to_ascii_lowercase().as_str() {
+            "on"  | "1" | "true"  | "yes" => Some(true),
+            "off" | "0" | "false" | "no"  => Some(false),
+            _ => None,
+        }
+    }
+
+    fn cmd_toggle(key: &str, arg: &str, label: &str) -> InvokeResult {
+        match parse_onoff(arg.trim()) {
+            Some(b) => delta(key, SqlValue::Integer(if b { 1 } else { 0 })),
+            None => err(format!(".{}: expected `on` or `off`, got {:?}", label, arg)),
+        }
+    }
+
+    fn cmd_set_string(key: &str, arg: &str, label: &str) -> InvokeResult {
+        let v = arg.trim();
+        if v.is_empty() {
+            return err(format!(".{}: missing argument", label));
+        }
+        delta(key, SqlValue::Text(v.to_string()))
+    }
+
+    /// `.prompt MAIN [CONT]`  emit one or two deltas. MAIN is the
+    /// first whitespace-delimited token; CONT, if present, is the
+    /// rest. Both are quoted-string literals if surrounded by `"…"`.
+    fn cmd_prompt(arg: &str) -> InvokeResult {
+        let trimmed = arg.trim();
+        if trimmed.is_empty() {
+            return err(".prompt: missing MAIN (and optionally CONT)".to_string());
+        }
+        // For simplicity v1 splits on the first whitespace run.
+        let mut deltas = alloc::vec![];
+        if let Some(idx) = trimmed.find(char::is_whitespace) {
+            let (main, rest) = trimmed.split_at(idx);
+            let cont = rest.trim_start();
+            deltas.push(StateDelta {
+                key: "prompt/main".into(),
+                value: SqlValue::Text(strip_quotes(main).to_string()),
+            });
+            if !cont.is_empty() {
+                deltas.push(StateDelta {
+                    key: "prompt/cont".into(),
+                    value: SqlValue::Text(strip_quotes(cont).to_string()),
+                });
+            }
+        } else {
+            deltas.push(StateDelta {
+                key: "prompt/main".into(),
+                value: SqlValue::Text(strip_quotes(trimmed).to_string()),
+            });
+        }
+        InvokeResult { text: String::new(), state_deltas: deltas, ok: true, exit_code: 0 }
+    }
+
+    fn strip_quotes(s: &str) -> &str {
+        if s.len() >= 2 && s.starts_with('"') && s.ends_with('"') {
+            &s[1..s.len() - 1]
+        } else {
+            s
+        }
+    }
+
     fn cmd_databases() -> InvokeResult {
         let result = match spi::execute("PRAGMA database_list", &[]) {
             Ok(r) => r,
@@ -468,6 +619,20 @@ mod wasm_export {
                 FID_DBINFO    => cmd_dbinfo(),
                 FID_FULLSCHEMA => cmd_fullschema(),
                 FID_LINT      => cmd_lint(arg),
+                FID_PRINT     => cmd_print(arg),
+                FID_ECHO      => cmd_toggle("io/echo",      arg, "echo"),
+                FID_BAIL      => cmd_toggle("bail/on-error",arg, "bail"),
+                FID_TIMER     => cmd_toggle("io/timer",     arg, "timer"),
+                FID_HEADERS   => cmd_toggle("io/headers",   arg, "headers"),
+                FID_CHANGES   => cmd_toggle("io/changes",   arg, "changes"),
+                FID_STATS     => cmd_toggle("io/stats",     arg, "stats"),
+                FID_EQP       => cmd_toggle("io/eqp",       arg, "eqp"),
+                FID_BINARY    => cmd_toggle("io/binary",    arg, "binary"),
+                FID_MODE      => cmd_set_string("display/mode",      arg, "mode"),
+                FID_NULLVALUE => cmd_set_string("display/nullvalue", arg, "nullvalue"),
+                FID_SEPARATOR => cmd_set_string("display/separator", arg, "separator"),
+                FID_EXPLAIN   => cmd_set_string("io/explain",        arg, "explain"),
+                FID_PROMPT    => cmd_prompt(arg),
                 _ => return Err(SqliteError {
                     code: 1,
                     extended_code: 1,

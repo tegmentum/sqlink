@@ -176,8 +176,11 @@ unsafe fn register_dotcmd_sql_surface(db: *mut libsqlite3_sys::sqlite3) {
             }
         }
         match extension_loader::dispatch_dot_command(&name, &joined) {
-            Ok(text) => {
-                let cs = std::ffi::CString::new(text).unwrap_or_default();
+            Ok(out) => {
+                // The SQL surface is read-only by design  state-deltas
+                // would surprise callers of `SELECT dot_command(...)`
+                // (no shell, no settings to mutate). Drop them.
+                let cs = std::ffi::CString::new(out.text).unwrap_or_default();
                 let bytes = cs.as_bytes_with_nul();
                 unsafe {
                     libsqlite3_sys::sqlite3_result_text(
@@ -1277,7 +1280,12 @@ fn eval_input(input: &str) -> String {
         let name = parts.next().unwrap_or("").trim_start_matches('.');
         let args = parts.next().unwrap_or("").trim();
         match extension_loader::dispatch_dot_command(name, args) {
-            Ok(text) => return text,
+            Ok(out) => {
+                for d in &out.state_deltas {
+                    settings::apply_dotcmd_delta(&d.key, &d.value_json);
+                }
+                return out.text;
+            }
             Err(e) if e.code == 404 => {
                 return format!("Unknown command: {trimmed}\n");
             }
