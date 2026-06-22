@@ -96,6 +96,15 @@ host does:
    code resolves + loads them on demand. Tracked in
    [docs/plans/PLAN-browser-runtime.md](docs/plans/PLAN-browser-runtime.md).
 
+   Foundation scaffold lives in `browser/`: jco-transpiled
+   extension components, a `sqlink.js` runtime that drives
+   `sql.js` as the in-browser SQLite and registers extensions'
+   scalar functions through its API, a wasi-polyfill-backed
+   import map (`browser/src/wasi-imports.js`), and a Playwright
+   smoke suite that exercises a curated subset of the same
+   `fixtures.toml` used by scenarios 1+2. Build with
+   `cd browser && npm install && npm run transpile && npm test`.
+
    Sub-option:
      - **Embedded extensions.** Same as scenario 2  ship a
        single bundle with extensions baked in via
