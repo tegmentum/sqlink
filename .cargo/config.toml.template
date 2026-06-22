@@ -11,14 +11,14 @@
 # layer additively over this.
 
 [env]
-CC_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/clang"
-AR_wasm32_wasip2 = "/Users/zacharywhitley/wasi-sdk/bin/ar"
+CC_wasm32_wasip2 = "__WASI_SDK_PATH__/bin/clang"
+AR_wasm32_wasip2 = "__WASI_SDK_PATH__/bin/ar"
 # -msimd128 enables WebAssembly SIMD (v128 ops) for clang-compiled C
 # code  bundled sqlite3.c (libsqlite3-sys), wasivfs, embed extensions
 # that link C. SIMD is a wasmtime baseline feature; emitting it costs
 # nothing at runtime and lets clang's auto-vectorizer hit memcpy /
 # memcmp / strlen / hash inner loops.
-CFLAGS_wasm32_wasip2 = "--sysroot=/Users/zacharywhitley/wasi-sdk/share/wasi-sysroot -target wasm32-wasip2 -msimd128"
+CFLAGS_wasm32_wasip2 = "--sysroot=__WASI_SDK_PATH__/share/wasi-sysroot -target wasm32-wasip2 -msimd128"
 # Extra defines threaded into libsqlite3-sys's bundled compile.
 # libsqlite3-sys 0.30.1's build.rs honors LIBSQLITE3_FLAGS for
 # extra -D/-U flags. The bundled flag set covers FTS5 + RTREE +
