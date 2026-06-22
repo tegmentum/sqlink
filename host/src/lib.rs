@@ -4,7 +4,7 @@
 //! needs at runtime:
 //!
 //!   - WASI Preview 2 (via `wasmtime-wasi`)
-//!   - `sqlite:wasm/extension-loader` — the dynamic `.load` path. The
+//!   - `sqlink:wasm/extension-loader` — the dynamic `.load` path. The
 //!     in-WASM CLI calls into this when SQL executes `.load
 //!     /path/to/ext.wasm`; the host reads the file, instantiates the
 //!     component against the supplied `load-options`, calls
@@ -312,7 +312,7 @@ pub mod run {
 
 /// Bindgen for language-runtime plugins — wasm components that
 /// embed an interpreter (CPython, MicroPython, JVM, R, etc.) and
-/// export `sqlite:wasm/runtime.execute(source-name, source) ->
+/// export `sqlink:wasm/runtime.execute(source-name, source) ->
 /// result<string, string>`. The host instantiates the plugin in
 /// a fresh Store and calls execute() when `.run foo.<ext>` matches
 /// a registered runtime.
@@ -3907,7 +3907,7 @@ fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
     .map_err(|e| anyhow!("fiji compose linker: {e}"))?;
     // Statically-composed runnables (e.g. examples/rust/runnable-sqlite-demo)
     // bundle sqlite-lib at compose time. sqlite-lib itself imports
-    // `sqlite:wasm/extension-loader` because its `library` world
+    // `sqlink:wasm/extension-loader` because its `library` world
     // exposes a programmatic `load-extension` that forwards to the
     // host. The composed binary therefore inherits that import on
     // its outer surface even though the runnable side never touches
@@ -7416,7 +7416,7 @@ impl Host {
 /// Stub impl of the extension-loader Host trait used by
 /// statically-composed runnables. Composed runnables bundle
 /// sqlite-lib at compose time and inherit sqlite-lib's
-/// `sqlite:wasm/extension-loader` import; runnables that never
+/// `sqlink:wasm/extension-loader` import; runnables that never
 /// invoke `library.load-extension` (the common case for the static-
 /// composition pattern) need that import satisfied at instantiation
 /// time but never actually call into it. Composed runnables that

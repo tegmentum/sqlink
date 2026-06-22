@@ -2,7 +2,7 @@
 name = "sqlink-host"
 version = "0.1.0"
 edition = "2021"
-description = "Reference wasmtime-based host for SQLite-in-WebAssembly components. Implements sqlite:wasm/extension-loader using the unified sqlite:extension contract."
+description = "Reference wasmtime-based host for SQLite-in-WebAssembly components. Implements sqlink:wasm/extension-loader using the unified sqlite:extension contract."
 license = "MIT"
 
 [[bin]]

@@ -3,8 +3,8 @@
 //! Targets the `sqlite-library` world — exports the full
 //! `sqlite:extension/*` SPI surface (so a compose-time consumer can
 //! satisfy an extension's spi imports with this component) plus the
-//! `sqlite:wasm/low-level`, `sqlite:wasm/high-level`, and
-//! `sqlite:wasm/library` interfaces for callers that want to embed
+//! `sqlink:wasm/low-level`, `sqlink:wasm/high-level`, and
+//! `sqlink:wasm/library` interfaces for callers that want to embed
 //! SQLite functionality directly.
 //!
 //! Build:
@@ -130,7 +130,7 @@ fn spi_value_to_db(v: SpiSqlValue) -> db::Value {
 }
 
 // The "default connection" shared between sqlite:extension/spi and
-// sqlite:wasm/high-level.default-connection. SPI calls used to open
+// sqlink:wasm/high-level.default-connection. SPI calls used to open
 // their own in-memory connection that nothing else could see — that
 // was a footgun (consumer runs CREATE TABLE through high-level, then
 // SPI queries see an empty database). Now SPI and high-level's
@@ -209,7 +209,7 @@ impl SpiGuest for SqliteLib {
 }
 
 // =========================================================================
-// sqlite:wasm/low-level
+// sqlink:wasm/low-level
 // =========================================================================
 
 fn ll_open_flags(_f: OpenFlags) -> db::OpenFlags {
@@ -362,7 +362,7 @@ impl LowLevelGuest for SqliteLib {
 }
 
 // =========================================================================
-// sqlite:wasm/high-level
+// sqlink:wasm/high-level
 // Resource-based; each Connection wraps a db::Connection.
 // =========================================================================
 
@@ -642,7 +642,7 @@ impl GuestStatement for HlStatement {
 }
 
 // =========================================================================
-// sqlite:wasm/library
+// sqlink:wasm/library
 // Forwards load-extension calls to the host's extension-loader.
 // The library interface's policy/metadata types are structural twins
 // of the canonical sqlite:extension types — see wit/library.wit for

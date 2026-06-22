@@ -77,7 +77,7 @@ struct Args {
     /// name). Routes with `kind='wasm'` and `handler=NAME`
     /// dispatch to this component. Repeatable: `--load
     /// a=x.wasm --load b=y.wasm` loads both. Components must
-    /// target the `sqlite:wasm/language-runtime` WIT world.
+    /// target the `sqlink:wasm/language-runtime` WIT world.
     #[arg(long = "load", value_name = "NAME=PATH")]
     loads: Vec<String>,
 

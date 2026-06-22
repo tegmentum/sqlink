@@ -10,7 +10,7 @@
 //!   - is_loaded / list / unload work
 //!
 //! The wasm-demo extension in sqlink/extensions/wasm-demo/
-//! exports per-slot interfaces (sqlite:wasm/demo-slot etc.) for
+//! exports per-slot interfaces (sqlink:wasm/demo-slot etc.) for
 //! static composition, not the canonical sqlite:extension/metadata.
 //! It can't be Host::load_extension-loaded because the host can't
 //! call describe() on it. For that path, use a canonical-world

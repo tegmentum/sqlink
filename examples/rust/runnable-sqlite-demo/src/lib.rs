@@ -2,7 +2,7 @@
 //!
 //! Imports `sqlite:extension/spi`; at compose time the import gets
 //! satisfied by sqlite-lib's export of the same interface. The
-//! composed binary is self-contained — it exports `sqlite:wasm/run`
+//! composed binary is self-contained — it exports `sqlink:wasm/run`
 //! and has SQLite bundled inside via the linked sqlite-lib.
 //!
 //! Build:
@@ -19,7 +19,7 @@
 //!     -o target/wasm32-wasip2/release/sqlite_lib.component.wasm
 //! wac compose \
 //!     -d sqlite:runnable-sqlite-demo=target/wasm32-wasip2/release/runnable_sqlite_demo.component.wasm \
-//!     -d sqlite:wasm=target/wasm32-wasip2/release/sqlite_lib.component.wasm \
+//!     -d sqlink:wasm=target/wasm32-wasip2/release/sqlite_lib.component.wasm \
 //!     examples/rust/runnable-sqlite-demo/composition.wac \
 //!     -o target/runnable_sqlite_demo.composed.wasm
 //! ```

@@ -38,7 +38,7 @@ clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # Wasm dispatch for route kind='wasm'. Components implement the
-# `language-runtime` WIT world (sqlite:wasm/runtime); httpd hands
+# `language-runtime` WIT world (sqlink:wasm/runtime); httpd hands
 # them the request data as `source` and ships their return string
 # as the HTTP body. Pulls in wasmtime via the host crate  the
 # binary grows accordingly, but pays for itself the moment a

@@ -5,7 +5,7 @@
 //! The runnable lives at `examples/rust/runnable-sqlite-demo/`. It
 //! imports `sqlite:extension/spi@0.1.0` from sqlite-lib via static
 //! composition (wac compose). The composed artifact then exports
-//! only `sqlite:wasm/run@0.1.0` and looks to the host like any
+//! only `sqlink:wasm/run@0.1.0` and looks to the host like any
 //! ordinary runnable, with SQLite bundled inside.
 //!
 //! Two test layers:
@@ -13,7 +13,7 @@
 //!   * `composed_demo_artifact_has_expected_surface` — structural
 //!     check via `wasm-tools component wit`. Pins the composition
 //!     side: SPI import is satisfied by sqlite-lib's SPI export and
-//!     `sqlite:wasm/run@0.1.0` survives as the only relevant export.
+//!     `sqlink:wasm/run@0.1.0` survives as the only relevant export.
 //!   * `composed_demo_runs_against_sqlite_lib` — instantiates the
 //!     composed binary via `Host::run_wasm` and asserts the demo's
 //!     widget rows + `count = 3` appear in the output. That proves
@@ -21,7 +21,7 @@
 //!     through sqlite-lib's bundled SQLite, and validates the
 //!     extension-loader stub `make_run_linker` provides for
 //!     statically-composed runnables (sqlite-lib imports
-//!     `sqlite:wasm/extension-loader`, but a runnable that never
+//!     `sqlink:wasm/extension-loader`, but a runnable that never
 //!     programmatically `.load`s never invokes it).
 //!
 //! Build prerequisites — the test self-skips if any artifact is
@@ -38,7 +38,7 @@
 //!     -o target/wasm32-wasip2/release/sqlite_lib.component.wasm
 //! wac compose \
 //!     -d sqlite:runnable-sqlite-demo=target/wasm32-wasip2/release/runnable_sqlite_demo.component.wasm \
-//!     -d sqlite:wasm=target/wasm32-wasip2/release/sqlite_lib.component.wasm \
+//!     -d sqlink:wasm=target/wasm32-wasip2/release/sqlite_lib.component.wasm \
 //!     examples/rust/runnable-sqlite-demo/composition.wac \
 //!     -o target/runnable_sqlite_demo.composed.wasm
 //! ```
@@ -93,11 +93,11 @@ fn composed_demo_artifact_has_expected_surface() {
         "composed binary should not import sqlite:extension/spi (lib satisfies it); got:\n{wit}"
     );
 
-    // The runnable's `sqlite:wasm/run@0.1.0` export — what the host
+    // The runnable's `sqlink:wasm/run@0.1.0` export — what the host
     // calls to drive the demo — must survive composition.
     assert!(
-        wit.contains("export sqlite:wasm/run@0.1.0;"),
-        "composed binary should export sqlite:wasm/run@0.1.0; got:\n{wit}"
+        wit.contains("export sqlink:wasm/run@0.1.0;"),
+        "composed binary should export sqlink:wasm/run@0.1.0; got:\n{wit}"
     );
 }
 

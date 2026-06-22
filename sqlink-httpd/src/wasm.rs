@@ -13,7 +13,7 @@
 //! stateless across requests, which matches HTTP's contract
 //! (state belongs in the database, not in the handler).
 //!
-//! The component must target the `sqlite:wasm/language-runtime`
+//! The component must target the `sqlink:wasm/language-runtime`
 //! world  i.e. export `runtime.execute(source-name, source) ->
 //! result<string, string>`. The `source-name` field carries
 //! "<METHOD> <PATH>" so the handler can dispatch internally;
