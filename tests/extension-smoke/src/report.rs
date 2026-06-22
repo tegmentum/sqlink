@@ -59,7 +59,7 @@ fn main() {
             ("collation", &entry.collation),
         ] {
             let Some(probe) = probe else { continue };
-            let r = run_probe(plugin, &component, kind_name, probe);
+            let r = run_probe(plugin, &component, kind_name, probe, &entry.grants);
             match r.outcome {
                 ProbeOutcome::Pass => tally.pass += 1,
                 ProbeOutcome::OutputMismatch(got, want) => {

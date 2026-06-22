@@ -51,7 +51,7 @@ fn run_kind(plugin: &str, kind: &'static str, probe: Option<&Probe>) {
             return;
         }
     };
-    let report = run_probe(plugin, &component, kind, probe);
+    let report = run_probe(plugin, &component, kind, probe, &entry.grants);
     match report.outcome {
         ProbeOutcome::Pass => {
             eprintln!("smoke {plugin}/{kind}: PASS");

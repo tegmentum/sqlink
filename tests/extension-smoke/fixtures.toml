@@ -190,8 +190,11 @@ expects = "1"
 [extension.dns]
 grants = ["dns"]
 
+# Network-dependent extension: prove the function registered after
+# `.load --grant=dns` rather than invoking it (a real lookup would
+# need an allowlisted domain + actual network).
 [extension.dns.scalar]
-sql = "SELECT dns_resolve('', '') IS NOT NULL OR dns_resolve('', '') IS NULL"
+sql = "SELECT EXISTS(SELECT 1 FROM pragma_function_list WHERE name='dns_resolve')"
 expects = "1"
 
 [extension."docx-meta".scalar]
@@ -317,8 +320,11 @@ expects = "1"
 [extension.http]
 grants = ["http"]
 
+# Network-dependent extension: prove the function registered after
+# `.load --grant=http` rather than invoking it (a real GET would
+# need an allowlisted host + actual network).
 [extension.http.scalar]
-sql = "SELECT http_get('test') IS NOT NULL OR http_get('test') IS NULL"
+sql = "SELECT EXISTS(SELECT 1 FROM pragma_function_list WHERE name='http_get')"
 expects = "1"
 
 [extension."http-signature".scalar]

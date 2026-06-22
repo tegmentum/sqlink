@@ -89,6 +89,12 @@ pub struct FixtureEntry {
     /// One-line note for the report.
     #[serde(default)]
     pub note: Option<String>,
+    /// Capabilities to grant at `.load` time. Names match the
+    /// cli's `--grant=` parser (http, dns, spi, ...). Extensions
+    /// whose manifest declares a capability MUST list it here
+    /// or `.load` is refused by the trust policy.
+    #[serde(default)]
+    pub grants: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -121,7 +127,13 @@ pub struct ProbeReport {
     pub outcome: ProbeOutcome,
 }
 
-pub fn run_probe(plugin: &str, component: &Path, kind: &'static str, probe: &Probe) -> ProbeReport {
+pub fn run_probe(
+    plugin: &str,
+    component: &Path,
+    kind: &'static str,
+    probe: &Probe,
+    grants: &[String],
+) -> ProbeReport {
     let sqlink = sqlink_bin();
     let cli = cli_component();
     if !sqlink.exists() {
@@ -146,7 +158,13 @@ pub fn run_probe(plugin: &str, component: &Path, kind: &'static str, probe: &Pro
     let tmp = std::env::temp_dir().join(format!("sw_smoke_{plugin}_{kind}.db"));
     let _ = std::fs::remove_file(&tmp);
     let mut stdin_buf = String::new();
-    stdin_buf.push_str(&format!(".load {}\n", component.display()));
+    if grants.is_empty() {
+        stdin_buf.push_str(&format!(".load {}\n", component.display()));
+    } else {
+        // cli's `.load --grant=cap[,cap...]` (see cli/src/lib.rs::parse_grants).
+        let csv = grants.join(",");
+        stdin_buf.push_str(&format!(".load {} --grant={csv}\n", component.display()));
+    }
     for s in &probe.setup {
         stdin_buf.push_str(s);
         stdin_buf.push('\n');
