@@ -20,10 +20,12 @@ struct State {
     wasi: wasmtime_wasi::WasiCtx,
     resources: ResourceTable,
     host: Host,
-    /// TVM region directory. The cli imports tvm:memory because
-    /// sqlite-pcache-tvm + sqlite-vfs-tvm use wit-bindgen-backed
-    /// cold tiers on wasm32 unconditionally  this field is what
-    /// satisfies those imports through `tvm_wasmtime::add_to_linker`.
+    /// TVM region directory. As of Stage 5f the cli itself does
+    /// not import tvm:memory  but the composed `cli + sqlite-lib`
+    /// runnable does (sqlite-lib pulls in sqlite-pcache-tvm and
+    /// sqlite-vfs-tvm, which use wit-bindgen-backed cold tiers on
+    /// wasm32 unconditionally). This field satisfies those imports
+    /// through `tvm_wasmtime::add_to_linker`.
     tvm: tvm_wasmtime::TvmHost,
 }
 
@@ -701,9 +703,11 @@ async fn main() -> Result<()> {
     )
     .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
 
-    // tvm:memory wiring  the cli imports it unconditionally
-    // because sqlite-pcache-tvm + sqlite-vfs-tvm use
-    // wit-bindgen-backed cold tiers on wasm32.
+    // tvm:memory wiring  the cli itself no longer imports
+    // tvm:memory after Stage 5f (it's a pure SPI client), but the
+    // composed `cli + sqlite-lib` runnable does. sqlite-pcache-tvm
+    // and sqlite-vfs-tvm use wit-bindgen-backed cold tiers on
+    // wasm32 unconditionally.
     tvm_wasmtime::add_to_linker(&mut linker)
         .map_err(|e| anyhow!("wire tvm:memory: {e}"))?;
 

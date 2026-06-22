@@ -75,10 +75,13 @@ serde_json = "1.0"
 # CBOR codec for the sqlite-runtime compose provider — see
 # host/COMPOSE-PROTOCOL.md for the wire shape.
 ciborium = "0.2"
-# TVM-track host wiring  every component the host runs (the cli
-# and any runnable composed against sqlite-lib) unconditionally
-# imports tvm:memory now (the sqlite-pcache-tvm + sqlite-vfs-tvm
-# crates always use the wit-bindgen-backed cold tiers on wasm32).
+# TVM-track host wiring. As of Stage 5f the cli component itself
+# is a pure SPI client (no SQLite, no tvm:memory imports). The
+# tvm:memory wiring is still needed because (a) the composed
+# `cli + sqlite-lib` runnable used in scenario-2 smoke imports
+# tvm:memory via sqlite-lib's sqlite-pcache-tvm + sqlite-vfs-tvm,
+# and (b) the host's TVM probe tests (host/tests/tvm_*) instantiate
+# small components that exercise the tvm:memory contract directly.
 # The host's make_run_linker + the main.rs cli runner both wire
 # tvm_wasmtime::add_to_linker so those imports resolve. Path dep
 # against the sibling tvm-wasm checkout.
