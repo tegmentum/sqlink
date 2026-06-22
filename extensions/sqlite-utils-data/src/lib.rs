@@ -23,7 +23,7 @@ mod wasm_export {
         Guest as DotCommandGuest, InvokeContext, InvokeResult,
     };
     use bindings::exports::sqlite::extension::metadata::{
-        DotCommandSpec, Guest as MetadataGuest, Manifest,
+        DotCommandExample, DotCommandSpec, Guest as MetadataGuest, Manifest,
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::sqlite::extension::spi;
@@ -62,10 +62,38 @@ mod wasm_export {
                 collations: alloc::vec![],
                 vtabs: alloc::vec![],
                 dot_commands: alloc::vec![
-                    spec(FID_ROWS, "rows",
-                         "Print rows of a table",
-                         "rows TABLE [LIMIT]",
-                         "SELECT * FROM TABLE LIMIT LIMIT (default 100)."),
+                    DotCommandSpec {
+                        id: FID_ROWS,
+                        name: "rows".into(),
+                        version: v.into(),
+                        summary: "Print rows of a table".into(),
+                        usage: "rows TABLE [LIMIT] [--limit N] [--offset N] [--where SQL] [--order COL [asc|desc]]".into(),
+                        help: "SELECT * FROM TABLE with optional filtering and \
+                               pagination. Positional [LIMIT] and --limit are \
+                               synonyms (default 100); --offset paginates; \
+                               --where appends the supplied predicate; --order \
+                               appends ORDER BY <col> [direction].".into(),
+                        examples: alloc::vec![
+                            DotCommandExample {
+                                description: "Default LIMIT 100".into(),
+                                command: ".rows dogs".into(),
+                            },
+                            DotCommandExample {
+                                description: "Positional limit".into(),
+                                command: ".rows dogs 20".into(),
+                            },
+                            DotCommandExample {
+                                description: "Paginate".into(),
+                                command: ".rows dogs --limit 50 --offset 100".into(),
+                            },
+                            DotCommandExample {
+                                description: "Filter + sort".into(),
+                                command: ".rows dogs --where 'age > 5' --order 'age desc'".into(),
+                            },
+                        ],
+                        requires_write: false,
+                        no_args: false,
+                    },
                     spec(FID_ANALYZE_TABLES, "analyze_tables",
                          "Column-level stats per table",
                          "analyze_tables [TABLE [TABLE ...]]",
@@ -247,25 +275,19 @@ mod wasm_export {
                     flags.insert(k.to_string(), v[1..].to_string());
                 } else {
                     // Lookahead: is the next token a value or another flag?
-                    if i + 1 < toks.len() && !toks[i + 1].starts_with("--") {
-                        // Heuristic: known value-taking flags consume the
-                        // next token. Bare-bool flags don't. We treat all
-                        // unknown flags as bool to keep parsing simple.
-                        let val_flags = ["pk", "csv", "tsv", "nl", "json",
-                                         "alter", "ignore", "replace"];
-                        // Only --pk takes a value among our flags; the
-                        // rest are bool toggles.
-                        if rest == "pk" {
-                            flags.insert(rest.to_string(), toks[i + 1].clone());
-                            i += 2;
-                            continue;
-                        }
-                        // Treat the rest as bools.
-                        let _ = val_flags;
-                        flags.insert(rest.to_string(), String::new());
-                    } else {
-                        flags.insert(rest.to_string(), String::new());
+                    // Known value-taking flags consume the next token.
+                    // Everything else (csv, tsv, nl, json, alter, ignore,
+                    // replace, ...) is a bare-bool toggle.
+                    let value_flags = ["pk", "limit", "offset", "where", "order"];
+                    if value_flags.contains(&rest)
+                        && i + 1 < toks.len()
+                        && !toks[i + 1].starts_with("--")
+                    {
+                        flags.insert(rest.to_string(), toks[i + 1].clone());
+                        i += 2;
+                        continue;
                     }
+                    flags.insert(rest.to_string(), String::new());
                 }
             } else {
                 positionals.push(t.clone());
@@ -368,15 +390,47 @@ mod wasm_export {
     // ──────────────────── .rows ────────────────────
 
     fn cmd_rows(arg: &str) -> InvokeResult {
-        let (positionals, _flags) = parse_args(arg);
+        let (positionals, flags) = parse_args(arg);
         if positionals.is_empty() {
-            return err(".rows TABLE [LIMIT]".into());
+            return err(
+                ".rows TABLE [LIMIT] [--limit N] [--offset N] [--where SQL] \
+                 [--order COL [asc|desc]]".into(),
+            );
         }
         let table = &positionals[0];
-        let limit: i64 = positionals.get(1)
+        // --limit beats the positional; positional [LIMIT] beats the default.
+        let limit: i64 = flags
+            .get("limit")
             .and_then(|s| s.parse().ok())
+            .or_else(|| positionals.get(1).and_then(|s| s.parse().ok()))
             .unwrap_or(100);
-        let sql = format!("SELECT * FROM {} LIMIT {}", quote_ident(table), limit);
+        let offset: i64 = flags.get("offset").and_then(|s| s.parse().ok()).unwrap_or(0);
+        let mut sql = format!("SELECT * FROM {}", quote_ident(table));
+        if let Some(w) = flags.get("where") {
+            if !w.is_empty() {
+                sql.push_str(" WHERE ");
+                sql.push_str(w);
+            }
+        }
+        if let Some(o) = flags.get("order") {
+            if !o.is_empty() {
+                // --order accepts "COL" or "COL asc"/"COL desc". Quote the
+                // first token (column name), pass the rest through.
+                let mut parts = o.splitn(2, char::is_whitespace);
+                let col = parts.next().unwrap_or("");
+                let dir = parts.next().map(|d| d.trim()).unwrap_or("");
+                sql.push_str(" ORDER BY ");
+                sql.push_str(&quote_ident(col));
+                if !dir.is_empty() {
+                    sql.push(' ');
+                    sql.push_str(dir);
+                }
+            }
+        }
+        sql.push_str(&format!(" LIMIT {}", limit));
+        if offset > 0 {
+            sql.push_str(&format!(" OFFSET {}", offset));
+        }
         let res = match spi::execute(&sql, &[]) {
             Ok(r) => r,
             Err(e) => return err(format!(".rows: {}", e.message)),
