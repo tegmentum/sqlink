@@ -152,8 +152,8 @@ sql = "SELECT length(ed25519_keygen())>0"
 expects = "1"
 
 [extension.csscolor.scalar]
-sql = "SELECT (color_hex('red')) IS NOT NULL OR (color_hex('red')) IS NULL"
-expects = "1"
+sql = "SELECT color_red('red')"
+expects = "255"
 
 [extension.currency.scalar]
 sql = "SELECT (currency_name('USD')) IS NOT NULL OR (currency_name('USD')) IS NULL"
