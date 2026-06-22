@@ -254,6 +254,13 @@ SKIP_PLUGINS = {
     "fts5": "bundled vtab; already in libsqlite3-sys",
     "rtree": "bundled vtab; already in libsqlite3-sys",
     "geopoly": "bundled vtab; already in libsqlite3-sys",
+    # Bridge bindings compile against current WIT (see commit
+    # restoring the vendored deps/sqlite-extension/). The standalone
+    # component imports postgis:wasm/* + sfcgal:component/*, so .load
+    # only succeeds after `wac plug` against postgis-composed.wasm
+    # AND sfcgal.component.wasm. Until the smoke harness learns to
+    # compose, this stays skipped. See TRIAGE.md → "postgis-bridge".
+    "postgis-bridge": "needs wac-compose with postgis-composed.wasm + sfcgal-wasm before .load; bindings rebuilt against current sqlite-loader-wit",
 }
 
 
