@@ -2303,7 +2303,13 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
             .map(|n| n.to_string())
             .collect::<Vec<_>>()
             .join(" ");
+        // Current --db path (empty when in-memory). Stored as a
+        // bare string  cli-state.get_text strips the surrounding
+        // quotes that str_v adds, so encode via str_v for parity
+        // with the rest of the snapshot.
+        let db_path_now = DB_PATH.with(|p| p.borrow().clone());
         let mut out: Vec<(String, String)> = vec![
+            ("db/path".into(),         str_v(&db_path_now)),
             ("io/echo".into(),         bool_v(g.echo)),
             ("io/headers".into(),      bool_v(g.headers)),
             ("io/timer".into(),        bool_v(g.show_timer)),
@@ -2441,6 +2447,26 @@ fn embed_core_dotcmd() {
     const SESSION_CLI_BYTES: &[u8] = include_bytes!(
         "../../extensions/session-cli/target/wasm32-wasip2/release/session_cli_extension.component.wasm"
     );
+    /// PLAN-sqlite-utils-port.md Stage 1: schema-shaped sqlite-utils
+    /// commands (.views .triggers .create_table .create_index
+    /// .create_view .drop_table .drop_view .rename_table .duplicate
+    /// .add_column .transform .extract .add_fk .add_fks .index_fks).
+    const SQLITE_UTILS_SCHEMA_BYTES: &[u8] = include_bytes!(
+        "../../extensions/sqlite-utils-schema/target/wasm32-wasip2/release/sqlite_utils_schema_extension.component.wasm"
+    );
+    /// PLAN-sqlite-utils-port.md Stage 3: FTS5 helpers ported from
+    /// the sqlite-utils CLI (.enable_fts / .disable_fts / .rebuild_fts
+    /// / .populate_fts / .search). Pure SQL on the host's shared spi
+    /// connection  no new spi imports required.
+    const SQLITE_UTILS_FTS_BYTES: &[u8] = include_bytes!(
+        "../../extensions/sqlite-utils-fts/target/wasm32-wasip2/release/sqlite_utils_fts_extension.component.wasm"
+    );
+    /// PLAN-sqlite-utils-port.md Stage 4: maintenance commands
+    /// (.vacuum / .analyze / .optimize / .enable_wal / .disable_wal
+    /// / .enable_counts / .reset_counts / .create_database).
+    const SQLITE_UTILS_MAINT_BYTES: &[u8] = include_bytes!(
+        "../../extensions/sqlite-utils-maint/target/wasm32-wasip2/release/sqlite_utils_maint_extension.component.wasm"
+    );
     let options = LoadOptions {
         grant: Vec::new(),
         http_policy: None,
@@ -2524,6 +2550,54 @@ fn embed_core_dotcmd() {
         Err(e) => {
             eprintln!(
                 "auto-load session-cli failed: {} ({}). `.session` will read \"Unknown command\".",
+                e.message, e.code
+            );
+        }
+    }
+    match extension_loader::load_extension_from_bytes(
+        "sqlite-utils-schema",
+        SQLITE_UTILS_SCHEMA_BYTES,
+        &options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load sqlite-utils-schema failed: {} ({}). \
+                 sqlite-utils schema commands (.views, .triggers, .create_table, \
+                 .create_index, .create_view, .drop_table, .drop_view, .rename_table, \
+                 .duplicate, .add_column, .transform, .extract, .add_fk, .add_fks, \
+                 .index_fks) will read \"Unknown command\".",
+                e.message, e.code
+            );
+        }
+    }
+    match extension_loader::load_extension_from_bytes(
+        "sqlite-utils-fts",
+        SQLITE_UTILS_FTS_BYTES,
+        &options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load sqlite-utils-fts failed: {} ({}). \
+                 sqlite-utils FTS commands (.enable_fts, .disable_fts, \
+                 .rebuild_fts, .populate_fts, .search) will read \"Unknown command\".",
+                e.message, e.code
+            );
+        }
+    }
+    match extension_loader::load_extension_from_bytes(
+        "sqlite-utils-maint",
+        SQLITE_UTILS_MAINT_BYTES,
+        &options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load sqlite-utils-maint failed: {} ({}). \
+                 sqlite-utils maintenance commands (.vacuum, .analyze, .optimize, \
+                 .enable_wal, .disable_wal, .enable_counts, .reset_counts, \
+                 .create_database) will read \"Unknown command\".",
                 e.message, e.code
             );
         }

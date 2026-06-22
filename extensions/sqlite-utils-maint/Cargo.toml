@@ -1,0 +1,23 @@
+[package]
+name = "sqlite-utils-maint-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+sqlite-utils-style maintenance dot commands as a wasm extension.
+
+PLAN-sqlite-utils-port.md Stage 4: ports `vacuum`, `analyze`,
+`optimize`, `enable-wal`, `disable-wal`, `enable-counts`,
+`reset-counts`, `create-database` from sqlite-utils. All run as
+straight SQL against the host's shared spi connection.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
