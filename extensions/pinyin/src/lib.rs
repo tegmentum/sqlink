@@ -18,6 +18,7 @@
 //!
 //! See PLAN-more-extensions.md.
 
+extern crate alloc;
 use pinyin::{Pinyin, ToPinyin};
 
 // ─────────────── core helpers ───────────────

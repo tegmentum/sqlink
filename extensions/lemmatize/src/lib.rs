@@ -28,6 +28,8 @@
 //! Snowball stemmer because no lemma dictionary ships for them.
 //! NULL inputs propagate to NULL.
 
+extern crate alloc;
+
 use rust_stemmers::{Algorithm, Stemmer};
 
 // ─────────────── POS ───────────────

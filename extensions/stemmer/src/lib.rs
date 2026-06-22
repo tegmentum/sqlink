@@ -10,6 +10,7 @@
 //! pass mixed-case text without losing matches. The list of
 //! supported languages is the full rust-stemmers 1.2 set.
 
+extern crate alloc;
 use rust_stemmers::{Algorithm, Stemmer};
 
 // ─────────────── language lookup ───────────────
