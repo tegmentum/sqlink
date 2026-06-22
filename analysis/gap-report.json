@@ -1,0 +1,2308 @@
+{
+  "gap_summary": [
+    {
+      "function_name": "ascii",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "Code point of first char",
+      "suggested_extension": "text-utils",
+      "arity": "(text)->int"
+    },
+    {
+      "function_name": "extract",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "EXTRACT(field FROM ts) - canonical SQL date-part extractor",
+      "suggested_extension": "chrono",
+      "arity": "(field FROM ts)->numeric"
+    },
+    {
+      "function_name": "greatest",
+      "category": "conditional",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "Largest of N args (NULL-aware)",
+      "suggested_extension": "new: stdsql (core)",
+      "arity": "(any...)->any"
+    },
+    {
+      "function_name": "least",
+      "category": "conditional",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "Smallest of N args (NULL-aware)",
+      "suggested_extension": "new: stdsql (core)",
+      "arity": "(any...)->any"
+    },
+    {
+      "function_name": "left",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "Leftmost N characters (extfns has leftstr alias)",
+      "suggested_extension": "text-utils",
+      "arity": "(text,int)->text"
+    },
+    {
+      "function_name": "lpad",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "Left-pad string (extfns has padl alias)",
+      "suggested_extension": "text-utils",
+      "arity": "(text,int,text)->text"
+    },
+    {
+      "function_name": "now",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "Current timestamp (SQLite has only current_timestamp keyword)",
+      "suggested_extension": "chrono",
+      "arity": "()->ts"
+    },
+    {
+      "function_name": "position",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "1-based position of substring (SQL POSITION operator); SQLite has instr but not position",
+      "suggested_extension": "text-utils",
+      "arity": "(substr IN text)->int"
+    },
+    {
+      "function_name": "repeat",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "Repeat string N times (extfns has replicate alias)",
+      "suggested_extension": "text-utils",
+      "arity": "(text,int)->text"
+    },
+    {
+      "function_name": "right",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "Rightmost N characters (extfns has rightstr alias)",
+      "suggested_extension": "text-utils",
+      "arity": "(text,int)->text"
+    },
+    {
+      "function_name": "rpad",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 6,
+      "rough_summary": "Right-pad string (extfns has padr alias)",
+      "suggested_extension": "text-utils",
+      "arity": "(text,int,text)->text"
+    },
+    {
+      "function_name": "bit_and",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Bitwise AND aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(int)->int"
+    },
+    {
+      "function_name": "bit_count",
+      "category": "bit",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Population count / popcount",
+      "suggested_extension": "uint",
+      "arity": "(int)->int"
+    },
+    {
+      "function_name": "bit_length",
+      "category": "string",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Length in bits",
+      "suggested_extension": "text-utils",
+      "arity": "(text|blob)->int"
+    },
+    {
+      "function_name": "bit_or",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Bitwise OR aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(int)->int"
+    },
+    {
+      "function_name": "bit_xor",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Bitwise XOR aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(int)->int"
+    },
+    {
+      "function_name": "char_length",
+      "category": "string",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Character count (alias of length in SQLite)",
+      "suggested_extension": "text-utils",
+      "arity": "(text)->int"
+    },
+    {
+      "function_name": "character_length",
+      "category": "string",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Character count (SQL standard name)",
+      "suggested_extension": "text-utils",
+      "arity": "(text)->int"
+    },
+    {
+      "function_name": "cot",
+      "category": "math",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Cotangent (gap in SQLITE_ENABLE_MATH_FUNCTIONS)",
+      "suggested_extension": "math",
+      "arity": "(float)->float"
+    },
+    {
+      "function_name": "current_user",
+      "category": "system",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Current authenticated user (n/a for SQLite, but commonly stubbed)",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "if",
+      "category": "conditional",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Ternary IF(cond,t,f) - SQLite has iif",
+      "suggested_extension": "new: stdsql (core) - alias of iif",
+      "arity": "(bool,any,any)->any"
+    },
+    {
+      "function_name": "json_value",
+      "category": "json",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "SQL/JSON: extract scalar at path",
+      "suggested_extension": "json1 (extend) or new: json-sqlpath",
+      "arity": "(json,path)->text"
+    },
+    {
+      "function_name": "monthname",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "English month name from date",
+      "suggested_extension": "chrono",
+      "arity": "(date)->text"
+    },
+    {
+      "function_name": "session_user",
+      "category": "system",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Session user (n/a for SQLite)",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "stddev",
+      "category": "statistical",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Sample standard deviation aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(numeric)->float"
+    },
+    {
+      "function_name": "stddev_pop",
+      "category": "statistical",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Population stddev aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(numeric)->float"
+    },
+    {
+      "function_name": "stddev_samp",
+      "category": "statistical",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Sample stddev aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(numeric)->float"
+    },
+    {
+      "function_name": "var_pop",
+      "category": "statistical",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Population variance aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(numeric)->float"
+    },
+    {
+      "function_name": "var_samp",
+      "category": "statistical",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Sample variance aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(numeric)->float"
+    },
+    {
+      "function_name": "variance",
+      "category": "statistical",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 5,
+      "rough_summary": "Sample variance (alias)",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(numeric)->float"
+    },
+    {
+      "function_name": "any_value",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "duckdb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Arbitrary non-null value from group",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(any)->any"
+    },
+    {
+      "function_name": "array_to_string",
+      "category": "array",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Join array elements with delimiter",
+      "suggested_extension": "new: list",
+      "arity": "(array,text)->text"
+    },
+    {
+      "function_name": "bin",
+      "category": "conversion",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Binary representation of integer",
+      "suggested_extension": "totype or radix",
+      "arity": "(int)->text"
+    },
+    {
+      "function_name": "cast",
+      "category": "conversion",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Function-form CAST (SQLite supports CAST keyword)",
+      "suggested_extension": "covered: CAST keyword",
+      "arity": "(expr,type)->any"
+    },
+    {
+      "function_name": "chr",
+      "category": "string",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Char from code point (SQLite has char only)",
+      "suggested_extension": "text-utils (alias of char)",
+      "arity": "(int)->text"
+    },
+    {
+      "function_name": "corr",
+      "category": "statistical",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Pearson correlation aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(y,x)->float"
+    },
+    {
+      "function_name": "current_role",
+      "category": "system",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Current role (n/a for SQLite)",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "current_schemas",
+      "category": "system",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Search path schemas",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text[]"
+    },
+    {
+      "function_name": "date_sub",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Subtract interval from date (chrono has date_add but not date_sub)",
+      "suggested_extension": "chrono",
+      "arity": "(date,interval)->date"
+    },
+    {
+      "function_name": "datediff",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Difference in days between two dates (chrono has date_diff)",
+      "suggested_extension": "chrono (alias of date_diff)",
+      "arity": "(date,date)->int"
+    },
+    {
+      "function_name": "dayname",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "English day-of-week name",
+      "suggested_extension": "chrono",
+      "arity": "(date)->text"
+    },
+    {
+      "function_name": "decode",
+      "category": "conversion",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "postgresql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Decode bytea (PG variant; MySQL legacy crypto)",
+      "suggested_extension": "ambiguous: skip",
+      "arity": "(blob,format)->text"
+    },
+    {
+      "function_name": "factorial",
+      "category": "math",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Factorial of integer",
+      "suggested_extension": "math",
+      "arity": "(int)->int"
+    },
+    {
+      "function_name": "format_bytes",
+      "category": "system",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Human-readable byte size (humansize ext likely covers this)",
+      "suggested_extension": "humansize",
+      "arity": "(int)->text"
+    },
+    {
+      "function_name": "from_base64",
+      "category": "conversion",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Base64 decode (SQLite has base64 builtin)",
+      "suggested_extension": "baseN (alias)",
+      "arity": "(text)->blob"
+    },
+    {
+      "function_name": "json_query",
+      "category": "json",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "SQL/JSON: extract array/object at path",
+      "suggested_extension": "json1 (extend) or new: json-sqlpath",
+      "arity": "(json,path)->json"
+    },
+    {
+      "function_name": "last_day",
+      "category": "datetime",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Last day of date's month",
+      "suggested_extension": "chrono",
+      "arity": "(date)->date"
+    },
+    {
+      "function_name": "localtime",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "postgresql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Current local time",
+      "suggested_extension": "chrono",
+      "arity": "()->time"
+    },
+    {
+      "function_name": "median",
+      "category": "statistical",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Median value aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(numeric)->numeric"
+    },
+    {
+      "function_name": "percentile_cont",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Continuous percentile (interpolated)",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(p) WITHIN GROUP (ORDER BY x)->float"
+    },
+    {
+      "function_name": "percentile_disc",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Discrete percentile (actual value)",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(p) WITHIN GROUP (ORDER BY x)->any"
+    },
+    {
+      "function_name": "rand",
+      "category": "math",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Random in [0,1) - SQLite has random returning int",
+      "suggested_extension": "math",
+      "arity": "()->float"
+    },
+    {
+      "function_name": "regexp_instr",
+      "category": "regex",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "1-based position of regex match",
+      "suggested_extension": "regexp",
+      "arity": "(text,pattern)->int"
+    },
+    {
+      "function_name": "space",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "String of N spaces",
+      "suggested_extension": "text-utils",
+      "arity": "(int)->text"
+    },
+    {
+      "function_name": "st_aswkb",
+      "category": "geo",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Geometry to WKB (postgis-bridge has st_asbinary as canonical)",
+      "suggested_extension": "postgis-bridge (add alias)",
+      "arity": "(geom)->blob"
+    },
+    {
+      "function_name": "st_aswkt",
+      "category": "geo",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Geometry to WKT (postgis-bridge has st_astext as canonical)",
+      "suggested_extension": "postgis-bridge (add alias)",
+      "arity": "(geom)->text"
+    },
+    {
+      "function_name": "timestampadd",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Add interval to timestamp (alias of date_add)",
+      "suggested_extension": "chrono (alias)",
+      "arity": "(unit,int,ts)->ts"
+    },
+    {
+      "function_name": "timestampdiff",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Difference between timestamps (alias of date_diff)",
+      "suggested_extension": "chrono (alias)",
+      "arity": "(unit,ts,ts)->int"
+    },
+    {
+      "function_name": "to_base64",
+      "category": "conversion",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Base64 encode (SQLite has base64 builtin)",
+      "suggested_extension": "baseN (alias)",
+      "arity": "(blob)->text"
+    },
+    {
+      "function_name": "translate",
+      "category": "string",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Character-by-character replacement",
+      "suggested_extension": "text-utils",
+      "arity": "(text,from,to)->text"
+    },
+    {
+      "function_name": "truncate",
+      "category": "math",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Truncate decimals (SQLite math has trunc; truncate is alias)",
+      "suggested_extension": "math (add alias)",
+      "arity": "(numeric,int)->numeric"
+    },
+    {
+      "function_name": "user",
+      "category": "system",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "postgresql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "Current user (alias of current_user)",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "version",
+      "category": "system",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql",
+        "postgresql"
+      ],
+      "dbs_count": 4,
+      "rough_summary": "DB server version (SQLite has sqlite_version)",
+      "suggested_extension": "new: sys (compat - alias of sqlite_version)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "adddate",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Add days/interval to date (MySQL-ism, alias of date_add)",
+      "suggested_extension": "chrono (alias)",
+      "arity": "(date,int|interval)->date"
+    },
+    {
+      "function_name": "age",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Interval between two timestamps",
+      "suggested_extension": "chrono",
+      "arity": "(ts[,ts])->interval"
+    },
+    {
+      "function_name": "approx_count_distinct",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "duckdb",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 2,
+      "rough_summary": "HyperLogLog cardinality (covered: hyperloglog ext)",
+      "suggested_extension": "covered: hyperloglog",
+      "arity": "agg(any)->int"
+    },
+    {
+      "function_name": "approx_top_k",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Top-K most frequent values (covered: sketches ext)",
+      "suggested_extension": "sketches (verify exposes this name)",
+      "arity": "agg(any,int)->array"
+    },
+    {
+      "function_name": "array_agg",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Collect values into array",
+      "suggested_extension": "new: list (agg)",
+      "arity": "agg(any)->array"
+    },
+    {
+      "function_name": "array_append",
+      "category": "array",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Append element to array",
+      "suggested_extension": "new: list",
+      "arity": "(array,any)->array"
+    },
+    {
+      "function_name": "array_cat",
+      "category": "array",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Concatenate arrays",
+      "suggested_extension": "new: list",
+      "arity": "(array,array)->array"
+    },
+    {
+      "function_name": "array_length",
+      "category": "array",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Length of array",
+      "suggested_extension": "new: list",
+      "arity": "(array)->int"
+    },
+    {
+      "function_name": "array_position",
+      "category": "array",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "1-based index of element in array",
+      "suggested_extension": "new: list",
+      "arity": "(array,any)->int"
+    },
+    {
+      "function_name": "array_prepend",
+      "category": "array",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Prepend element to array",
+      "suggested_extension": "new: list",
+      "arity": "(any,array)->array"
+    },
+    {
+      "function_name": "array_remove",
+      "category": "array",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Remove all matching elements",
+      "suggested_extension": "new: list",
+      "arity": "(array,any)->array"
+    },
+    {
+      "function_name": "collation",
+      "category": "system",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Collation of expr",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "(expr)->text"
+    },
+    {
+      "function_name": "conv",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Convert number between bases",
+      "suggested_extension": "radix",
+      "arity": "(text|int,int,int)->text"
+    },
+    {
+      "function_name": "convert",
+      "category": "conversion",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Convert between charsets/types",
+      "suggested_extension": "ambiguous; skip",
+      "arity": "(value,type)->any"
+    },
+    {
+      "function_name": "covar_pop",
+      "category": "statistical",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Population covariance aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(y,x)->float"
+    },
+    {
+      "function_name": "covar_samp",
+      "category": "statistical",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Sample covariance aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(y,x)->float"
+    },
+    {
+      "function_name": "current_database",
+      "category": "system",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Current database name",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "current_schema",
+      "category": "system",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Current schema name",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "database",
+      "category": "system",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Current database (MySQL-ism, alias)",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "date_part",
+      "category": "datetime",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Extract date component by name",
+      "suggested_extension": "chrono",
+      "arity": "(part,ts)->numeric"
+    },
+    {
+      "function_name": "day",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Day of month",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    },
+    {
+      "function_name": "dayofmonth",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Day of month (alias of day)",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    },
+    {
+      "function_name": "dayofweek",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Day-of-week index",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    },
+    {
+      "function_name": "dayofyear",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Day of year (1-366)",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    },
+    {
+      "function_name": "div",
+      "category": "math",
+      "dbs_have_it": [
+        "mariadb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Integer division",
+      "suggested_extension": "math",
+      "arity": "(num,num)->num"
+    },
+    {
+      "function_name": "encode",
+      "category": "conversion",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Encode bytea (PG style) / string to bytes",
+      "suggested_extension": "ambiguous; skip",
+      "arity": "(text|blob,format)->text|blob"
+    },
+    {
+      "function_name": "flatten",
+      "category": "array",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Flatten nested array by one level",
+      "suggested_extension": "new: list",
+      "arity": "(array<array>)->array"
+    },
+    {
+      "function_name": "from_days",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Convert day-number to date",
+      "suggested_extension": "chrono",
+      "arity": "(int)->date"
+    },
+    {
+      "function_name": "from_unixtime",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Unix timestamp to datetime",
+      "suggested_extension": "chrono",
+      "arity": "(int)->ts"
+    },
+    {
+      "function_name": "gcd",
+      "category": "math",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Greatest common divisor",
+      "suggested_extension": "math or number-theory",
+      "arity": "(int,int)->int"
+    },
+    {
+      "function_name": "grouping",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 2,
+      "rough_summary": "GROUP BY ROLLUP/CUBE grouping bitmap",
+      "suggested_extension": "core (not yet)",
+      "arity": "(any...)->int"
+    },
+    {
+      "function_name": "hour",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Hour part of time",
+      "suggested_extension": "chrono",
+      "arity": "(time|ts)->int"
+    },
+    {
+      "function_name": "inet6_aton",
+      "category": "network",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "IPv6/IPv4 text to binary (covered: ipaddr likely)",
+      "suggested_extension": "ipaddr (verify alias)",
+      "arity": "(text)->blob"
+    },
+    {
+      "function_name": "inet6_ntoa",
+      "category": "network",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "IPv6 binary to text",
+      "suggested_extension": "ipaddr (verify alias)",
+      "arity": "(blob)->text"
+    },
+    {
+      "function_name": "inet_aton",
+      "category": "network",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "IPv4 text to int",
+      "suggested_extension": "ipaddr (verify alias)",
+      "arity": "(text)->int"
+    },
+    {
+      "function_name": "inet_ntoa",
+      "category": "network",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Int to IPv4 text",
+      "suggested_extension": "ipaddr (verify alias)",
+      "arity": "(int)->text"
+    },
+    {
+      "function_name": "initcap",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Capitalize first letter of each word (extfns has proper)",
+      "suggested_extension": "text-utils (alias of proper)",
+      "arity": "(text)->text"
+    },
+    {
+      "function_name": "insert",
+      "category": "string",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Insert substring at position",
+      "suggested_extension": "text-utils",
+      "arity": "(text,int,int,text)->text"
+    },
+    {
+      "function_name": "isfinite",
+      "category": "datetime",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql"
+      ],
+      "dbs_count": 2,
+      "rough_summary": "Test finite date/timestamp/interval (also math sense)",
+      "suggested_extension": "math",
+      "arity": "(value)->bool"
+    },
+    {
+      "function_name": "json_array_append",
+      "category": "json",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Append to JSON array at path",
+      "suggested_extension": "json1 (extend)",
+      "arity": "(json,path,any)->json"
+    },
+    {
+      "function_name": "json_array_insert",
+      "category": "json",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Insert into JSON array at index",
+      "suggested_extension": "json1 (extend)",
+      "arity": "(json,path,any)->json"
+    },
+    {
+      "function_name": "json_exists",
+      "category": "json",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "SQL/JSON: path exists in document",
+      "suggested_extension": "new: json-sqlpath",
+      "arity": "(json,path)->bool"
+    },
+    {
+      "function_name": "json_keys",
+      "category": "json",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "JSON object keys as array",
+      "suggested_extension": "json1 (extend)",
+      "arity": "(json)->array"
+    },
+    {
+      "function_name": "json_table",
+      "category": "json",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "JSON to relational table (vtab)",
+      "suggested_extension": "new: json-table (vtab)",
+      "arity": "(json,path COLUMNS(...))->table"
+    },
+    {
+      "function_name": "lcase",
+      "category": "string",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 2,
+      "rough_summary": "Lowercase (alias of lower)",
+      "suggested_extension": "text-utils (alias of lower)",
+      "arity": "(text)->text"
+    },
+    {
+      "function_name": "lcm",
+      "category": "math",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Least common multiple",
+      "suggested_extension": "math or number-theory",
+      "arity": "(int,int)->int"
+    },
+    {
+      "function_name": "locate",
+      "category": "string",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Position of substring",
+      "suggested_extension": "text-utils (alias of instr)",
+      "arity": "(needle,haystack[,start])->int"
+    },
+    {
+      "function_name": "make_date",
+      "category": "datetime",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql"
+      ],
+      "dbs_count": 2,
+      "rough_summary": "Construct date from year,month,day",
+      "suggested_extension": "chrono",
+      "arity": "(int,int,int)->date"
+    },
+    {
+      "function_name": "make_time",
+      "category": "datetime",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql"
+      ],
+      "dbs_count": 2,
+      "rough_summary": "Construct time from h,m,s",
+      "suggested_extension": "chrono",
+      "arity": "(int,int,float)->time"
+    },
+    {
+      "function_name": "make_timestamp",
+      "category": "datetime",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql"
+      ],
+      "dbs_count": 2,
+      "rough_summary": "Construct timestamp from parts",
+      "suggested_extension": "chrono",
+      "arity": "(int...)->ts"
+    },
+    {
+      "function_name": "makedate",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Date from year and day-of-year",
+      "suggested_extension": "chrono",
+      "arity": "(int,int)->date"
+    },
+    {
+      "function_name": "maketime",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Time from h,m,s",
+      "suggested_extension": "chrono",
+      "arity": "(int,int,float)->time"
+    },
+    {
+      "function_name": "minute",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Minute part",
+      "suggested_extension": "chrono",
+      "arity": "(time|ts)->int"
+    },
+    {
+      "function_name": "mode",
+      "category": "statistical",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Most frequent value aggregate",
+      "suggested_extension": "new: stats (agg)",
+      "arity": "agg(any)->any"
+    },
+    {
+      "function_name": "month",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Month part",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    },
+    {
+      "function_name": "nextval",
+      "category": "sequence",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Advance and return next sequence value",
+      "suggested_extension": "new: sequence",
+      "arity": "(seq_name)->int"
+    },
+    {
+      "function_name": "polygon",
+      "category": "geo",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Construct polygon",
+      "suggested_extension": "postgis-bridge (verify)",
+      "arity": "(linestring,...)->polygon"
+    },
+    {
+      "function_name": "point",
+      "category": "geo",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Construct point",
+      "suggested_extension": "postgis-bridge (verify)",
+      "arity": "(float,float)->point"
+    },
+    {
+      "function_name": "quarter",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Quarter (1-4)",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    },
+    {
+      "function_name": "schema",
+      "category": "system",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Current schema (alias of database)",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "second",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Second part",
+      "suggested_extension": "chrono",
+      "arity": "(time|ts)->int"
+    },
+    {
+      "function_name": "sha2",
+      "category": "hash",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "SHA-2 family hash (256/384/512). SQLink has sha3; hashes-fast may already do this",
+      "suggested_extension": "hashes-fast (verify)",
+      "arity": "(text,int)->text"
+    },
+    {
+      "function_name": "split_part",
+      "category": "string",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Nth field after splitting by delimiter",
+      "suggested_extension": "text-utils",
+      "arity": "(text,sep,int)->text"
+    },
+    {
+      "function_name": "starts_with",
+      "category": "string",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "String prefix test",
+      "suggested_extension": "text-utils",
+      "arity": "(text,text)->bool"
+    },
+    {
+      "function_name": "str_to_date",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Parse string to date with format (chrono has date_parse)",
+      "suggested_extension": "chrono (alias of date_parse)",
+      "arity": "(text,fmt)->date"
+    },
+    {
+      "function_name": "string_agg",
+      "category": "aggregate",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Concatenate strings with delimiter (sqlite has group_concat)",
+      "suggested_extension": "core/text-utils (alias of group_concat)",
+      "arity": "agg(text,sep)->text"
+    },
+    {
+      "function_name": "subdate",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Subtract interval (alias of date_sub)",
+      "suggested_extension": "chrono",
+      "arity": "(date,int|interval)->date"
+    },
+    {
+      "function_name": "sysdate",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Current datetime at execution",
+      "suggested_extension": "chrono",
+      "arity": "()->ts"
+    },
+    {
+      "function_name": "system_user",
+      "category": "system",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "OS-level user (n/a SQLite)",
+      "suggested_extension": "new: sys (compat)",
+      "arity": "()->text"
+    },
+    {
+      "function_name": "timestamp",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Cast to/construct timestamp",
+      "suggested_extension": "chrono",
+      "arity": "(value)->ts"
+    },
+    {
+      "function_name": "to_char",
+      "category": "conversion",
+      "dbs_have_it": [
+        "mariadb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Format value (typically date/number) to text",
+      "suggested_extension": "totype or chrono",
+      "arity": "(value,fmt)->text"
+    },
+    {
+      "function_name": "to_days",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Days since year zero",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    },
+    {
+      "function_name": "to_hex",
+      "category": "string",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Hex encoding (SQLite has hex builtin)",
+      "suggested_extension": "covered: hex (alias)",
+      "arity": "(value)->text"
+    },
+    {
+      "function_name": "to_number",
+      "category": "conversion",
+      "dbs_have_it": [
+        "mariadb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Parse string to numeric with format",
+      "suggested_extension": "totype",
+      "arity": "(text,fmt)->numeric"
+    },
+    {
+      "function_name": "to_seconds",
+      "category": "datetime",
+      "dbs_have_it": [
+        "duckdb",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Seconds since year zero or interval",
+      "suggested_extension": "chrono",
+      "arity": "(date|int)->int|interval"
+    },
+    {
+      "function_name": "to_timestamp",
+      "category": "datetime",
+      "dbs_have_it": [
+        "duckdb",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Convert epoch/string to timestamp",
+      "suggested_extension": "chrono",
+      "arity": "(value)->ts"
+    },
+    {
+      "function_name": "ucase",
+      "category": "string",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 2,
+      "rough_summary": "Uppercase (alias of upper)",
+      "suggested_extension": "text-utils (alias of upper)",
+      "arity": "(text)->text"
+    },
+    {
+      "function_name": "unnest",
+      "category": "array",
+      "dbs_have_it": [
+        "clickhouse",
+        "duckdb",
+        "postgresql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Expand array into rows",
+      "suggested_extension": "new: list (table-fn)",
+      "arity": "(array)->setof any"
+    },
+    {
+      "function_name": "utc_timestamp",
+      "category": "datetime",
+      "dbs_have_it": [
+        "clickhouse",
+        "mariadb",
+        "mysql"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Current UTC datetime",
+      "suggested_extension": "chrono",
+      "arity": "()->ts"
+    },
+    {
+      "function_name": "week",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Week of year",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    },
+    {
+      "function_name": "weekofyear",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "ISO week of year",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    },
+    {
+      "function_name": "width_bucket",
+      "category": "math",
+      "dbs_have_it": [
+        "clickhouse",
+        "postgresql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Equal-width histogram bucket number",
+      "suggested_extension": "math or new: stats",
+      "arity": "(value,lo,hi,count)->int"
+    },
+    {
+      "function_name": "year",
+      "category": "datetime",
+      "dbs_have_it": [
+        "mariadb",
+        "mysql",
+        "snowflake_bigquery"
+      ],
+      "dbs_count": 3,
+      "rough_summary": "Year part",
+      "suggested_extension": "chrono",
+      "arity": "(date)->int"
+    }
+  ],
+  "high_priority_gaps": [
+    "ascii",
+    "extract",
+    "greatest",
+    "least",
+    "left",
+    "lpad",
+    "now",
+    "position",
+    "repeat",
+    "right",
+    "rpad",
+    "bit_and",
+    "bit_count",
+    "bit_length",
+    "bit_or",
+    "bit_xor",
+    "char_length",
+    "character_length",
+    "cot",
+    "current_user",
+    "if",
+    "json_value",
+    "monthname",
+    "session_user",
+    "stddev",
+    "stddev_pop",
+    "stddev_samp",
+    "var_pop",
+    "var_samp",
+    "variance",
+    "any_value",
+    "array_to_string",
+    "bin",
+    "chr",
+    "corr",
+    "current_role",
+    "current_schemas",
+    "date_sub",
+    "datediff",
+    "dayname",
+    "factorial",
+    "from_base64",
+    "json_query",
+    "last_day",
+    "localtime",
+    "median",
+    "percentile_cont",
+    "percentile_disc",
+    "rand",
+    "regexp_instr",
+    "space",
+    "st_aswkb",
+    "st_aswkt",
+    "timestampadd",
+    "timestampdiff",
+    "to_base64",
+    "translate",
+    "truncate",
+    "user",
+    "version",
+    "adddate",
+    "age",
+    "approx_top_k",
+    "array_agg",
+    "array_append",
+    "array_cat",
+    "array_length",
+    "array_position",
+    "array_prepend",
+    "array_remove",
+    "collation",
+    "conv",
+    "covar_pop",
+    "covar_samp",
+    "current_database",
+    "current_schema",
+    "database",
+    "date_part",
+    "day",
+    "dayofmonth",
+    "dayofweek",
+    "dayofyear",
+    "div",
+    "flatten",
+    "from_days",
+    "from_unixtime",
+    "gcd",
+    "hour",
+    "inet6_aton",
+    "inet6_ntoa",
+    "inet_aton",
+    "inet_ntoa",
+    "initcap",
+    "insert",
+    "json_array_append",
+    "json_array_insert",
+    "json_exists",
+    "json_keys",
+    "json_table",
+    "lcm",
+    "locate",
+    "makedate",
+    "maketime",
+    "minute",
+    "mode",
+    "month",
+    "nextval",
+    "point",
+    "polygon",
+    "quarter",
+    "schema",
+    "second",
+    "sha2",
+    "split_part",
+    "starts_with",
+    "str_to_date",
+    "string_agg",
+    "subdate",
+    "sysdate",
+    "system_user",
+    "timestamp",
+    "to_char",
+    "to_days",
+    "to_hex",
+    "to_number",
+    "to_seconds",
+    "to_timestamp",
+    "unnest",
+    "utc_timestamp",
+    "week",
+    "weekofyear",
+    "width_bucket",
+    "year"
+  ],
+  "new_extensions_proposed": [
+    {
+      "name": "stats",
+      "category": "aggregate/statistical",
+      "functions": [
+        "stddev",
+        "stddev_pop",
+        "stddev_samp",
+        "var_pop",
+        "var_samp",
+        "variance",
+        "covar_pop",
+        "covar_samp",
+        "corr",
+        "median",
+        "mode",
+        "percentile_cont",
+        "percentile_disc",
+        "any_value",
+        "bit_and",
+        "bit_or",
+        "bit_xor",
+        "string_agg",
+        "array_agg",
+        "regr_avgx",
+        "regr_avgy",
+        "regr_count",
+        "regr_intercept",
+        "regr_slope",
+        "regr_r2",
+        "regr_sxx",
+        "regr_sxy",
+        "regr_syy",
+        "grouping",
+        "kurtosis",
+        "skewness"
+      ],
+      "rationale": "Aggregate/statistical functions are the single biggest cluster of missing surface (20+ in 3+ DBs, 6+ ubiquitous). SQLite ships only avg/sum/count/min/max/group_concat/total. PostgreSQL/MySQL/MariaDB/DuckDB/Snowflake/BigQuery all have the full SQL-standard set. We have hyperloglog and sketches for approximate, but no exact aggregates. A 'stats' extension delivering these as create_function_v2 aggregates would close a huge analytics gap with minimal LOC."
+    },
+    {
+      "name": "list",
+      "category": "array",
+      "functions": [
+        "array_agg",
+        "array_append",
+        "array_prepend",
+        "array_cat",
+        "array_length",
+        "array_position",
+        "array_remove",
+        "array_to_string",
+        "array_slice",
+        "array_sort",
+        "array_distinct",
+        "array_contains",
+        "array_concat",
+        "array_reverse",
+        "flatten",
+        "unnest",
+        "list_extract",
+        "list_transform",
+        "list_filter",
+        "list_reduce"
+      ],
+      "rationale": "Array/list functions are documented across all 6 DBs (DuckDB has 80+, PG has 30, Snowflake/BigQuery 20+) but SQLink has zero general-purpose list/array surface. Pick a representation (JSON arrays via json1, or a real ARRAY type via a vtab) and build a Postgres/DuckDB-flavored array library. Especially valuable as the ML/vector world (vec0) increasingly works with embedding lists."
+    },
+    {
+      "name": "stdsql",
+      "category": "core/conditional",
+      "functions": [
+        "greatest",
+        "least",
+        "if",
+        "string_agg",
+        "position",
+        "left",
+        "right",
+        "translate",
+        "to_hex",
+        "from_hex",
+        "char_length",
+        "character_length",
+        "octet_length",
+        "bit_length",
+        "starts_with",
+        "split_part"
+      ],
+      "rationale": "SQL-standard scalar functions that every other DB ships. Many are trivial aliases or 5-line wrappers (e.g., string_agg=group_concat, if=iif, left=substr, char_length=length). Packaging them as a single 'stdsql' or 'compat' extension lets users write portable SQL without rewriting CASE/iif/substr idioms. Could also live as extensions to text-utils/core depending on architecture."
+    },
+    {
+      "name": "sys-compat",
+      "category": "system",
+      "functions": [
+        "current_user",
+        "session_user",
+        "current_role",
+        "current_database",
+        "current_schema",
+        "current_schemas",
+        "database",
+        "schema",
+        "user",
+        "system_user",
+        "version",
+        "collation",
+        "format_bytes"
+      ],
+      "rationale": "Session/identity functions are needed for portability of analytics tooling (BI tools, ORMs) that emit version()/current_user() probes. All return predictable constants or simple PRAGMA-derived values in SQLite. Trivial extension that increases compatibility-testing pass rate dramatically."
+    },
+    {
+      "name": "chrono (extend existing)",
+      "category": "datetime",
+      "functions": [
+        "extract",
+        "now",
+        "monthname",
+        "dayname",
+        "last_day",
+        "localtime",
+        "localtimestamp",
+        "utc_timestamp",
+        "sysdate",
+        "datediff",
+        "timestampdiff",
+        "timestampadd",
+        "adddate",
+        "subdate",
+        "date_sub",
+        "date_part",
+        "age",
+        "year",
+        "month",
+        "day",
+        "dayofmonth",
+        "dayofweek",
+        "dayofyear",
+        "hour",
+        "minute",
+        "second",
+        "quarter",
+        "week",
+        "weekofyear",
+        "from_days",
+        "from_unixtime",
+        "to_days",
+        "to_seconds",
+        "to_timestamp",
+        "make_date",
+        "make_time",
+        "make_timestamp",
+        "makedate",
+        "maketime",
+        "str_to_date",
+        "timestamp"
+      ],
+      "rationale": "chrono today only has date_add/date_diff/date_format/date_parse/duration_*. 38 datetime functions appear in 3+ DBs and are missing; many are aliases of existing chrono functions (datediff -> date_diff, timestampadd -> date_add, str_to_date -> date_parse). Adding these as thin aliases plus a handful of new constructors (make_date, make_time, etc.) and extractors (year, month, day, ...) takes chrono from 'minimal' to 'PostgreSQL-class'."
+    },
+    {
+      "name": "json-sqlpath (or extend json1)",
+      "category": "json",
+      "functions": [
+        "json_value",
+        "json_query",
+        "json_exists",
+        "json_table",
+        "json_keys",
+        "json_array_append",
+        "json_array_insert",
+        "jsonb_path_exists",
+        "jsonb_path_match",
+        "jsonb_path_query"
+      ],
+      "rationale": "SQL/JSON path functions (SQL:2016 standard) are present in 3-5 of the 6 DBs. SQLite's json1 ships json_extract but not the SQL/JSON path family. Either extend json1 with these (preferred) or ship as a sibling. json_table as a vtab would be especially valuable for ELT pipelines."
+    }
+  ],
+  "notes": "Analysis covered 1711 SQLink scalar functions across 219 extensions, plus 172 SQLite native builtins (queried via PRAGMA function_list in this build, which includes the math + json + window functions). 2949 function entries were normalized across the 6 input inventories; 331 names appear in 2+ DBs and are absent from both SQLink and SQLite, 142 in 3+, 63 in 4+, 30 in 5+, 11 in all 6.\n\nMethodology notes:\n- Names were lowercased and matched as identifiers; aliases listed in each inventory were folded into the canonical name and also counted independently when used as a separate first-class name elsewhere.\n- Window functions (cume_dist, dense_rank, first_value, lag, last_value, lead, nth_value, ntile, percent_rank, rank, row_number) appear in every inventory but are SQLite builtins (this build compiled with ENABLE_DBSTAT/JSON1/WINDOWFUNC); excluded from gaps.\n- gen_random_uuid/uuid_v4/uuid_v7/UUID functions: SQLite now ships uuid/uuid_blob/uuid_str natively (per PRAGMA function_list); excluded.\n- json_extract/json_object/json_array/json_set/json_remove/json_replace/json_insert/json_quote/json_valid/json_type/json_array_length/json_patch/json_group_array/json_group_object: all SQLite json1 builtins; excluded.\n\nInventory data-quality observations:\n- The MariaDB inventory lists 'next value for' and 'previous value for' which are SQL keywords, not callable identifiers; filtered out by regex.\n- PostgreSQL's docs include some odd entries like 'json' (one-arg cast) and 'text' (inet to text) that read as functions but are actually casts; included as functions but flagged as ambiguous.\n- ClickHouse's 'isvalidascii' has many CamelCase variants normalized; some normalization may lose information about argument shape.\n- Snowflake/BigQuery share many SQL standard functions but use very different naming for date arithmetic (Snowflake DATEADD/DATEDIFF vs BigQuery DATE_ADD/DATE_DIFF) - I treated DATEADD/DATEDIFF as the canonical and put BQ names in aliases.\n- The SNOW_BQ inventory the previous phase produced collapses two engines; for cluster counts that's slightly optimistic toward 'BigQuery+Snowflake counts as one DB'. If we wanted strict per-engine counts we'd split.\n\nHighest-value, lowest-effort wins (recommendations):\n1. Add a 'stats' extension with the SQL-standard exact aggregates (stddev/variance family + covar + corr + percentile_cont/disc + mode + median + bit_and/or/xor + any_value + string_agg alias for group_concat). Roughly 25 aggregates, all expressible with running-sum or two-pass algorithms; ~600 LOC total.\n2. Extend chrono with the missing 38 datetime functions. Most are 1-3 LOC aliases or extractors over existing julianday/strftime.\n3. Add SQL/JSON path functions (json_value, json_query, json_exists, json_table) to json1. json_table as a vtab is the biggest LOC item; the scalars are wrappers over existing json_extract logic.\n4. Add a small 'sys-compat' shim returning constants/PRAGMA values for current_user/session_user/database/version etc. - 50 LOC, huge compatibility-test win.\n5. Add aliases in existing extensions: chr->char (text-utils), if->iif (core), datediff->date_diff (chrono), timestampadd->date_add (chrono), st_aswkb->st_asbinary (postgis-bridge), st_aswkt->st_astext (postgis-bridge), to_base64/from_base64->base64 (baseN or text-utils). These are pure aliases and could be auto-generated.\n\nItems intentionally excluded from new-extension proposals:\n- Sequence functions (nextval/currval/setval/lastval): 3+ DBs have them but they require persistent state (counter table); deserves its own design discussion before scaffolding an extension.\n- BigQuery AEAD/KMS, Snowflake AI/Cortex/CATBOOST: vendor-specific or stateful; out of scope for portable extensions.\n- ClickHouse hash zoo (xxhash, cityhash, farmhash, metrohash, sip, wy, murmur): individually low usage and partially covered by hashes-fast. If we wanted to expand we'd add to hashes-fast.\n- H3/S2 spatial grids: SQLink already has h3 and s2 extensions; differences are naming (h3_to_cell vs h3_latlng_to_cell). Worth adding aliases.\n\nWhat surprised me:\n- 11 functions are in all 6 DBs and absent from SQLite + SQLink: ascii, extract, greatest, least, left, lpad, now, position, repeat, right, rpad. These are extremely low-hanging fruit. A 200-LOC PR adding them as `stdsql` would close a major portability gap and is independent of any architectural decision.\n- Window functions are universal but already covered by SQLite, so the appearance of huge overlap there is illusory. After excluding SQLite builtins the picture is cleaner.\n- Statistical aggregates are the single most ubiquitously-missing category. Investing in a proper 'stats' aggregate extension would be the biggest portability lift."
+}
