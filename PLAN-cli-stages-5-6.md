@@ -264,7 +264,7 @@ Trivial. The function runs a handful of PRAGMA statements.
 Move it to `host/src/lib.rs`, call from `shared_spi_ensure_open`.
 Drop the cli-side call.
 
-### Stage 5e — purge remaining CLI_CONN usage (in flight)
+### Stage 5e — purge remaining CLI_CONN usage  shipped
 
 Shipped subcommits:
   - 5e.1 (2cfd346): grants module via spi

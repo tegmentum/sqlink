@@ -137,7 +137,7 @@ listing the dot commands with `id` per command, and an
 
 ## Stage breakdown
 
-### Stage 1 — utils-schema (~1.5 days)
+### Stage 1 — utils-schema  shipped (commit `d4aa67f`)
 
 Lowest-risk start: every command is "parse args → emit SQL".
 
@@ -177,7 +177,7 @@ Smokes: round-trip a small db through every command. Verify
 schemas via `PRAGMA table_info` and FK lists via
 `PRAGMA foreign_key_list`.
 
-### Stage 2 — utils-data ✓ shipped (commit `9e01a19`)
+### Stage 2 — utils-data  shipped (commit `9e01a19`)
 
 All 8 commands ported as `extensions/sqlite-utils-data/` (334 KB
 component). Schema inference uses a `Null<Integer<Real<Text`
@@ -190,8 +190,6 @@ fixture (insert → tables → rows → upsert → analyze_tables →
 convert → insert_files).
 
 Plan retained below.
-
-### Stage 2 — utils-data (~2 days)
 
 Phase 2.1 — `.rows` + `.analyze_tables` (~half day)
   - `.rows TABLE [N]` — `SELECT * FROM TABLE LIMIT N`

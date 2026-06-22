@@ -1,0 +1,31 @@
+{
+  "_comment": "Per-extension `upstream_url`  the SQLite plugin (built-in extension or third-party) this one was ported FROM. NOT a docs link, NOT a spec, NOT a reference implementation. Only populate when the Cargo.toml description explicitly states 'port of <upstream>' or the extension is a thin wrapper around an existing SQLite C extension. provenance/scan.py reads this and writes to plugin.upstream_url; build_registry.py surfaces it; the detail page renders the 'upstream' row when populated and hides it when not.",
+
+  "_sqlite_builtin": "Ports of extensions bundled with the SQLite source distribution (ext/misc, ext/fts5, ext/rtree, etc).",
+  "sha3":           "https://www.sqlite.org/src/file/ext/misc/shathree.c",
+  "json1":          "https://www.sqlite.org/json1.html",
+  "fts5":           "https://www.sqlite.org/fts5.html",
+  "rtree":          "https://www.sqlite.org/rtree.html",
+  "geopoly":        "https://www.sqlite.org/geopoly.html",
+  "spellfix1":      "https://www.sqlite.org/spellfix1.html",
+  "series":         "https://www.sqlite.org/series.html",
+  "completion":     "https://www.sqlite.org/completion.html",
+  "totype":         "https://www.sqlite.org/src/file/ext/misc/totype.c",
+  "csv":            "https://www.sqlite.org/csv.html",
+  "closure":        "https://www.sqlite.org/src/file/ext/misc/closure.c",
+  "decimal":        "https://www.sqlite.org/src/file/ext/misc/decimal.c",
+  "eval":           "https://www.sqlite.org/src/file/ext/misc/eval.c",
+  "ieee754":        "https://www.sqlite.org/src/file/ext/misc/ieee754.c",
+  "zorder":         "https://www.sqlite.org/src/file/ext/misc/zorder.c",
+  "zipfile":        "https://www.sqlite.org/zipfile.html",
+  "changeset":      "https://www.sqlite.org/sessionintro.html",
+
+  "_sqlean": "Ports of sqlean extensions (https://github.com/nalgeon/sqlean).",
+  "fileio":         "https://github.com/nalgeon/sqlean/blob/main/docs/fileio.md",
+  "sqlean-vsv":     "https://github.com/nalgeon/sqlean-vsv",
+
+  "_third_party": "Ports of third-party SQLite extensions.",
+  "vec":            "https://github.com/asg017/sqlite-vec",
+  "vec0":           "https://github.com/asg017/sqlite-vec",
+  "vec_each":       "https://github.com/asg017/sqlite-vec"
+}
