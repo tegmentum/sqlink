@@ -177,6 +177,20 @@ Smokes: round-trip a small db through every command. Verify
 schemas via `PRAGMA table_info` and FK lists via
 `PRAGMA foreign_key_list`.
 
+### Stage 2 — utils-data ✓ shipped (commit `9e01a19`)
+
+All 8 commands ported as `extensions/sqlite-utils-data/` (334 KB
+component). Schema inference uses a `Null<Integer<Real<Text`
+widening lattice. JSON, JSONL, CSV, TSV all supported via format
+flag or extension sniff. CSV/TSV cells coerce to numeric per
+inferred column type on the second pass. `.memory` attaches
+`:memory:` as `mem` schema and delegates to `.insert mem.<basename>`
+via schema-qualified identifier paths. Smoke walks the full
+fixture (insert → tables → rows → upsert → analyze_tables →
+convert → insert_files).
+
+Plan retained below.
+
 ### Stage 2 — utils-data (~2 days)
 
 Phase 2.1 — `.rows` + `.analyze_tables` (~half day)
