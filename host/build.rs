@@ -8,7 +8,13 @@ use std::fs;
 use std::path::PathBuf;
 
 fn main() {
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
+    // Read CARGO_MANIFEST_DIR at script-execution time, not at
+    // build.rs compile time. Cargo caches the build-script binary
+    // in target/; `env!` would bake the original path in and panic
+    // after a workspace move (e.g. mv ~/git/sqlite-wasm ~/git/sqlink).
+    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
+        .expect("CARGO_MANIFEST_DIR must be set by cargo");
+    let manifest = PathBuf::from(manifest_dir).join("Cargo.toml");
     println!("cargo:rerun-if-changed={}", manifest.display());
     let text = fs::read_to_string(&manifest).expect("read Cargo.toml");
     let version = extract_wasmtime_version(&text).expect(
