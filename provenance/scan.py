@@ -133,6 +133,36 @@ VTAB_RE = re.compile(
     r'VtabSpec\s*\{[^}]*?name:\s*"([^"]+)"[^}]*?eponymous:\s*(true|false)',
     re.DOTALL,
 )
+# Dot commands declared in the extension's `Manifest::describe()`.
+# Two source patterns ship today:
+#   1. Literal struct: DotCommandSpec { id: X, name: "n".into(),
+#      summary: "s".into(), usage: "u".into(), ... }
+#   2. Closure helper: spec(X, "n", "s", "u", "h") where the
+#      closure body returns a DotCommandSpec with name/summary/
+#      usage filled from those args. utils-* family uses this.
+DOTCMD_RE = re.compile(
+    r'DotCommandSpec\s*\{'
+    r'[^}]*?name:\s*"([^"]+)"\.into\(\)'
+    r'(?:[^}]*?summary:\s*"((?:[^"\\]|\\.)*)"\.into\(\))?'
+    r'(?:[^}]*?usage:\s*"((?:[^"\\]|\\.)*)"\.into\(\))?'
+    r'(?:[^}]*?requires_write:\s*(true|false))?'
+    r'(?:[^}]*?no_args:\s*(true|false))?',
+    re.DOTALL,
+)
+# Closure helpers that return DotCommandSpec. Two flavors ship today:
+#   spec(id, "name", "summary", "usage", "help")  utils-data/fts/schema
+#   cmd (id, "name", "summary", "usage", "help", rw, na)  utils-maint
+# Both put name/summary/usage in the same 1st/2nd/3rd string slots after
+# the id, so a single regex picks up either. The helper name is matched
+# loosely (`spec` or `cmd` today; new helper names can be added without
+# changing this comment too much).
+DOTCMD_HELPER_RE = re.compile(
+    r'\b(?:spec|cmd)\s*\(\s*[A-Za-z_0-9]+\s*,\s*'
+    r'"((?:[^"\\]|\\.)*)"\s*,\s*'
+    r'"((?:[^"\\]|\\.)*)"\s*,\s*'
+    r'"((?:[^"\\]|\\.)*)"',
+    re.DOTALL,
+)
 CAP_RE = re.compile(r'Capability::(\w+)')
 DECLARED_CAPS_RE = re.compile(
     r'declared_capabilities:\s*alloc::vec!\[(.*?)\]',
@@ -178,6 +208,60 @@ def extract_capabilities(src_text: str) -> list[str]:
         return []
     body = m.group(1)
     return CAP_RE.findall(body)
+
+
+def _unescape_rust_literal(s: str) -> str:
+    """Resolve the common Rust escape sequences that show up in
+    DotCommandSpec literals  `\\n`, `\\t`, `\\"`, line
+    continuations. Good enough for catalog summary text."""
+    out: list[str] = []
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "\\" and i + 1 < len(s):
+            nxt = s[i + 1]
+            if nxt == "n":
+                out.append("\n"); i += 2; continue
+            if nxt == "t":
+                out.append("\t"); i += 2; continue
+            if nxt in ('"', "'", "\\"):
+                out.append(nxt); i += 2; continue
+            if nxt == "\n":  # line continuation
+                # Skip leading whitespace on the next line.
+                i += 2
+                while i < len(s) and s[i] in " \t":
+                    i += 1
+                continue
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
+def extract_dot_commands(
+    src_text: str,
+) -> list[tuple[str, Optional[str], Optional[str], bool, bool]]:
+    """Return (name, summary, usage, requires_write, no_args) per
+    dot command declared by the extension.
+
+    Picks up both the literal `DotCommandSpec { ... }` form and the
+    closure-helper `spec(id, "name", "summary", "usage", "help")`
+    form used by the utils-* family. Dedupes by name within the
+    extension (same dot command may appear under both patterns in
+    transitional code)."""
+    out: dict[str, tuple[str, Optional[str], Optional[str], bool, bool]] = {}
+    for m in DOTCMD_RE.finditer(src_text):
+        name = m.group(1)
+        summary = _unescape_rust_literal(m.group(2)) if m.group(2) is not None else None
+        usage = _unescape_rust_literal(m.group(3)) if m.group(3) is not None else None
+        rw = m.group(4) == "true"
+        na = m.group(5) == "true"
+        out.setdefault(name, (name, summary, usage, rw, na))
+    for m in DOTCMD_HELPER_RE.finditer(src_text):
+        name = m.group(1)
+        summary = _unescape_rust_literal(m.group(2))
+        usage = _unescape_rust_literal(m.group(3))
+        out.setdefault(name, (name, summary, usage, False, False))
+    return list(out.values())
 
 
 def read_cargo(path: pathlib.Path) -> dict:
@@ -242,6 +326,7 @@ def scan_c_bundled(plugin_dir: pathlib.Path) -> Optional[dict]:
         "src_byte_count": bytes_total,
         "deps": [],
         "functions": [],
+        "dot_commands": [],
         "capabilities": [],
         "world": None,
         "src_text": "",
@@ -280,6 +365,7 @@ def scan_rust(plugin_dir: pathlib.Path) -> Optional[dict]:
             pass
     world = detect_world(src_text)
     functions = extract_functions(src_text)
+    dot_commands = extract_dot_commands(src_text)
     caps = extract_capabilities(src_text)
     deps = parse_deps(cargo)
     return {
@@ -297,6 +383,7 @@ def scan_rust(plugin_dir: pathlib.Path) -> Optional[dict]:
         "src_byte_count": bytes_total,
         "deps": deps,
         "functions": functions,
+        "dot_commands": dot_commands,
         "capabilities": caps,
         "world": world,
         "src_text": src_text,
@@ -448,6 +535,18 @@ def upsert_plugin(conn: sqlite3.Connection, info: dict, commit_sha: Optional[str
             "INSERT INTO sql_function(plugin_version_id, kind, name, num_args, flags) "
             "VALUES (?, ?, ?, ?, ?)",
             (pv_id, kind, fname, n, flags),
+        )
+
+    # Refresh dot_command rows (schema_version 3 surface  cli's
+    # `.help` discoverability + the dot-command argv entrypoint).
+    cur.execute("DELETE FROM dot_command WHERE plugin_version_id = ?", (pv_id,))
+    for name, summary, usage, rw, na in info.get("dot_commands", []):
+        cur.execute(
+            "INSERT OR REPLACE INTO dot_command("
+            "    plugin_version_id, name, summary, usage,"
+            "    requires_write, no_args"
+            ") VALUES (?, ?, ?, ?, ?, ?)",
+            (pv_id, name, summary, usage, int(rw), int(na)),
         )
 
     # Refresh capabilities.

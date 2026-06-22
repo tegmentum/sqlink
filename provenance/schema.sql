@@ -89,6 +89,23 @@ CREATE TABLE IF NOT EXISTS sql_function (
     flags              TEXT                 -- 'deterministic' etc.
 );
 
+-- Dot commands the plugin registers via the dotcmd-aware world.
+-- One row per `DotCommandSpec` literal (or helper-emitted spec)
+-- in the extension's `Manifest::describe()`. Distinct from
+-- sql_function because dot commands are user-facing cli
+-- subcommands, not SQL surface  surfaced by `.help` + the
+-- `<plugin> NAME ...` argv entrypoint.
+CREATE TABLE IF NOT EXISTS dot_command (
+    id                 INTEGER PRIMARY KEY,
+    plugin_version_id  INTEGER NOT NULL REFERENCES plugin_version(id) ON DELETE CASCADE,
+    name               TEXT NOT NULL,       -- 'create_table', 'insert', etc. (no leading dot)
+    summary            TEXT,                -- one-line description from the spec
+    usage              TEXT,                -- synopsis line, sans leading dot
+    requires_write     INTEGER NOT NULL DEFAULT 0,
+    no_args            INTEGER NOT NULL DEFAULT 0,
+    UNIQUE (plugin_version_id, name)
+);
+
 -- Capabilities the plugin declares (matches
 -- sqlite-loader-wit's policy::Capability enum names).
 CREATE TABLE IF NOT EXISTS capability (
@@ -156,6 +173,20 @@ FROM plugin p
 JOIN plugin_version pv ON pv.plugin_id = p.id
 JOIN sql_function f    ON f.plugin_version_id = pv.id;
 
+-- Joined surface for `.help` / discoverability tooling. One row
+-- per dot command, with owning extension name + version.
+CREATE VIEW IF NOT EXISTS dot_command_surface AS
+SELECT p.name           AS plugin,
+       pv.version,
+       d.name,
+       d.summary,
+       d.usage,
+       d.requires_write,
+       d.no_args
+FROM plugin p
+JOIN plugin_version pv ON pv.plugin_id = p.id
+JOIN dot_command d     ON d.plugin_version_id = pv.id;
+
 -- Survey table: SQLite extensions identified as worth porting to
 -- this catalog but not yet implemented as wasm components. The
 -- shipped catalog lives in `plugin` above; this is the wishlist
@@ -222,3 +253,4 @@ FROM plugin_candidate;
 
 INSERT OR IGNORE INTO schema_version(version, applied_at) VALUES (1, unixepoch());
 INSERT OR IGNORE INTO schema_version(version, applied_at) VALUES (2, unixepoch());
+INSERT OR IGNORE INTO schema_version(version, applied_at) VALUES (3, unixepoch());
