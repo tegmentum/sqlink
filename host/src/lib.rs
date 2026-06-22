@@ -5311,13 +5311,27 @@ impl Host {
         &self,
         path: PathBuf,
     ) -> Result<(String, String)> {
+        let (name, digest, _caps) = self.describe_extension_full(path).await?;
+        Ok((name, digest))
+    }
+
+    /// PLAN-latent-cleanup.md L3a: describe + return declared
+    /// capability names alongside (name, digest). The cli's
+    /// `--trust=prompt` mode renders the cap list before asking
+    /// y/N. Strings are the policy::Capability enum spelling
+    /// (Http, Dns, State, ...) so the cli doesn't need its own
+    /// enum table.
+    pub async fn describe_extension_full(
+        &self,
+        path: PathBuf,
+    ) -> Result<(String, String, Vec<String>)> {
         let bytes = std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))?;
         let hint = path
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("extension")
             .to_string();
-        self.describe_extension_from_bytes(bytes, &hint).await
+        self.describe_extension_from_bytes_full(bytes, &hint).await
     }
 
     pub async fn describe_extension_from_bytes(
@@ -5325,6 +5339,20 @@ impl Host {
         bytes: Vec<u8>,
         name_hint: &str,
     ) -> Result<(String, String)> {
+        let (name, digest, _caps) = self
+            .describe_extension_from_bytes_full(bytes, name_hint)
+            .await?;
+        Ok((name, digest))
+    }
+
+    /// L3a sibling of `describe_extension_from_bytes`  returns the
+    /// declared capability names too. The two helpers share the
+    /// same describe path; this one just doesn't discard the caps.
+    pub async fn describe_extension_from_bytes_full(
+        &self,
+        bytes: Vec<u8>,
+        name_hint: &str,
+    ) -> Result<(String, String, Vec<String>)> {
         let digest = blake3::hash(&bytes).to_hex().to_string();
         // Route through the same C1+C2 cache helper as the
         // real load path. This is what lets describe seed the
@@ -5371,7 +5399,29 @@ impl Host {
         } else {
             manifest.name
         };
-        Ok((name, digest))
+        let declared_caps: Vec<String> = manifest
+            .declared_capabilities
+            .iter()
+            .map(|c| {
+                use loaded::sqlite::extension::policy::Capability as L;
+                match c {
+                    L::Spi => "Spi",
+                    L::Prepared => "Prepared",
+                    L::Transaction => "Transaction",
+                    L::Schema => "Schema",
+                    L::State => "State",
+                    L::Cache => "Cache",
+                    L::Random => "Random",
+                    L::Text => "Text",
+                    L::Hashing => "Hashing",
+                    L::Encoding => "Encoding",
+                    L::Http => "Http",
+                    L::Dns => "Dns",
+                }
+                .to_string()
+            })
+            .collect();
+        Ok((name, digest, declared_caps))
     }
 
     /// As `load_extension` but takes bytes directly. Used by the
@@ -9481,11 +9531,17 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         path: String,
     ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
     {
-        match self.host.describe_extension(PathBuf::from(&path)).await {
-            Ok((name, digest)) => Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
-                name,
-                digest_hex: digest,
-            }),
+        // L3a: full-form describe carries declared_caps so the
+        // cli's --trust=prompt mode can render them before
+        // asking y/N.
+        match self.host.describe_extension_full(PathBuf::from(&path)).await {
+            Ok((name, digest, declared_caps)) => {
+                Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                    name,
+                    digest_hex: digest,
+                    declared_caps,
+                })
+            }
             Err(e) => Err(LoaderError {
                 code: 1,
                 message: e.to_string(),
@@ -9504,20 +9560,23 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             .strip_prefix("file://")
             .or_else(|| uri.strip_prefix("file:"))
         {
-            return match self.host.describe_extension(PathBuf::from(path)).await {
-                Ok((name, digest)) => Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
-                    name,
-                    digest_hex: digest,
-                }),
+            return match self.host.describe_extension_full(PathBuf::from(path)).await {
+                Ok((name, digest, declared_caps)) => {
+                    Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                        name,
+                        digest_hex: digest,
+                        declared_caps,
+                    })
+                }
                 Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
             };
         }
         // PLAN-latent-cleanup.md L3b: every other scheme (blake3:,
         // https:, oci:, ...) goes through the shared
         // resolve_uri_to_bytes path that load_extension_from_uri
-        // uses. Bytes in hand, describe_extension_from_bytes does
-        // the rest. The pre-load enforcement of --trust=stored now
-        // works against URI-loaded extensions, not just file: paths.
+        // uses. Bytes in hand, describe_extension_from_bytes_full
+        // does the rest. --trust=stored / --trust=prompt
+        // enforcement now works against URI-loaded extensions.
         let bytes = match self.host.resolve_uri_to_bytes(&uri).await {
             Ok(b) => b,
             Err(e) => return Err(LoaderError { code: 1, message: e.to_string() }),
@@ -9527,11 +9586,18 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         } else {
             uri.clone()
         };
-        match self.host.describe_extension_from_bytes(bytes, &hint).await {
-            Ok((name, digest)) => Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
-                name,
-                digest_hex: digest,
-            }),
+        match self
+            .host
+            .describe_extension_from_bytes_full(bytes, &hint)
+            .await
+        {
+            Ok((name, digest, declared_caps)) => {
+                Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                    name,
+                    digest_hex: digest,
+                    declared_caps,
+                })
+            }
             Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
         }
     }

@@ -1084,9 +1084,10 @@ fn do_load(input: &str) -> String {
             "--trust" => match v {
                 "manifest" => trust = TrustMode::Manifest,
                 "stored"   => trust = TrustMode::Stored,
+                "prompt"   => trust = TrustMode::Prompt,
                 other => {
                     return format!(
-                        "Error: --trust={other} (expected manifest|stored)\n"
+                        "Error: --trust={other} (expected manifest|stored|prompt)\n"
                     )
                 }
             },
@@ -1186,6 +1187,57 @@ fn do_load(input: &str) -> String {
                 ));
             }
         }
+    } else if matches!(trust, TrustMode::Prompt) {
+        // PLAN-latent-cleanup.md L3a: describe to surface name +
+        // digest + declared_caps, render the block, read y/N.
+        // Yes  fall through to the regular load (TOFU records as
+        // usual). No / EOF  refuse.
+        let preflight = if is_uri {
+            extension_loader::describe_extension_from_uri(path)
+        } else {
+            extension_loader::describe_extension(path)
+        };
+        let described = match preflight {
+            Ok(r) => r,
+            Err(e) => return format!("Error describing {path}: {} (code {})\n", e.message, e.code),
+        };
+        // Render to stderr so piped stdout users don't get the
+        // prompt mixed in with query results.
+        eprintln!();
+        eprintln!("Pending load:");
+        eprintln!("  extension: {}", described.name);
+        eprintln!("  source:    {path}");
+        eprintln!(
+            "  digest:    {} ({})",
+            described.digest_hex,
+            if described.digest_hex.is_empty() { "missing" } else { "blake3" }
+        );
+        if described.declared_caps.is_empty() {
+            eprintln!("  capabilities: (none declared)");
+        } else {
+            eprintln!("  capabilities: {}", described.declared_caps.join(", "));
+        }
+        eprint!("Trust and load? [y/N] ");
+        let mut answer = String::new();
+        let n = std::io::stdin().read_line(&mut answer).unwrap_or(0);
+        if n == 0 {
+            return format!(
+                "Error: --trust=prompt declined (stdin EOF) for '{}'\n",
+                described.name
+            );
+        }
+        let ok = matches!(answer.trim(), "y" | "Y" | "yes" | "YES");
+        if !ok {
+            return format!(
+                "Error: --trust=prompt declined for '{}'\n",
+                described.name
+            );
+        }
+        preload_msg.push_str(&format!(
+            "User-confirmed load for '{}' (digest {}).\n",
+            described.name,
+            &described.digest_hex[..described.digest_hex.len().min(16)],
+        ));
     }
 
     let manifest = if is_uri {
@@ -1337,7 +1389,8 @@ fn do_load(input: &str) -> String {
     if prefix.is_empty() { main } else { format!("{prefix}{main}") }
 }
 
-/// `--trust` flag for `.load`. PLAN-grants-db.md G1.
+/// `--trust` flag for `.load`. PLAN-grants-db.md G1 +
+/// PLAN-latent-cleanup.md L3a.
 #[derive(Debug, Clone, Copy)]
 enum TrustMode {
     /// Default. Apply manifest-declared policy if no stored
@@ -1347,6 +1400,11 @@ enum TrustMode {
     /// Refuse to load anything without a stored grant. For
     /// hardened operation.
     Stored,
+    /// Pre-load: describe the extension, show name + digest +
+    /// declared capabilities, ask y/N. Yes  TOFU-record and
+    /// proceed. No  refuse load. Headless stdin (EOF on prompt)
+    /// declines. Designed for ad-hoc interactive operators.
+    Prompt,
 }
 
 /// TOFU recording for `.load`: write a grant row on first sight

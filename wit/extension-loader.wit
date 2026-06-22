@@ -148,6 +148,13 @@ interface extension-loader {
     record described-result {
         name: string,
         digest-hex: string,
+        /// PLAN-latent-cleanup.md L3a: declared capability names
+        /// from the extension's manifest (matches the
+        /// `policy::Capability` enum spelling, e.g.
+        /// "Http", "State", "Cache", "Random"). Populated by the
+        /// pre-load describe path; `--trust=prompt` renders this
+        /// for the user before asking y/N.
+        declared-caps: list<string>,
     }
 
     /// PLAN-component-cache.md C3: observability snapshot.
