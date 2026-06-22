@@ -1,0 +1,27 @@
+[package]
+name = "sqlink-native"
+version = "0.1.0"
+edition = "2021"
+description = """
+Scenario 1 loader: a native sqlink binary that runs SQLite via
+libsqlite3-sys and loads extensions as wasm components via the
+existing sqlink-host library. No wasm cli component in the
+loop — the binary IS the loader. Goal is parity with the
+Scenario 2 (wasm cli) extension-smoke matrix.
+"""
+license = "MIT"
+
+[[bin]]
+name = "sqlink-native"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util"] }
+parking_lot = "0.12"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+sqlink-host = { path = "../host" }
+sqlite-component-core = { path = "../sqlite-wasm/core" }
+sqlite-extension-policy = { path = "../sqlite-loader-wit" }
+libsqlite3-sys = { version = "0.38", default-features = false }

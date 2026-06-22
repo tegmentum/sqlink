@@ -35,6 +35,30 @@ host does:
    deployments adopt the extension catalog without recompiling
    SQLite itself.
 
+   Sub-option:
+     - **`sqlink-native` standalone binary.** A reference loader
+       that bundles libsqlite3-sys + the sqlink-host wasm runtime
+       into a single executable. Same extension binaries as
+       Scenario 2 (the wasm cli path), but SQLite itself runs
+       natively  no `wasi:cli/run` component on the call stack
+       so extensions calling `spi.execute` back into the host
+       work without the recursive-entry constraint described in
+       `host/SPI.md`. Build with `cargo build --release -p
+       sqlink-native`; usage shape mirrors Scenario 2:
+
+       ```bash
+       printf '.load extensions/sha3/.../sha3_extension.component.wasm
+       SELECT sha3('hello', 256);
+       .exit
+       ' | ./target/release/sqlink-native --db mydata.db
+       ```
+
+       The same `tests/extension-smoke` matrix runs against this
+       binary via `cargo test -p extension-smoke --test
+       extension_smoke_native --release` (Scenario 2's existing
+       `extension_smoke` test still runs the wasm cli path
+       unchanged).
+
 2. **Standalone SQLite-in-wasm + extensions.** This repo's main
    path: the entire SQLite C library is compiled to wasm32-wasip2
    alongside the cli component, hosted by the `sqlink` native

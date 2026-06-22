@@ -76,6 +76,17 @@ pub fn cli_component() -> PathBuf {
     repo_root().join("target/wasm32-wasip2/release/sqlite_cli.component.wasm")
 }
 
+/// Path to the Scenario 1 native loader. Overridable via
+/// `SQLINK_NATIVE_BINARY` for ad-hoc smoke runs against a binary
+/// outside the workspace target.
+pub fn sqlink_native_bin() -> PathBuf {
+    if let Some(p) = std::env::var_os("SQLINK_NATIVE_BINARY") {
+        PathBuf::from(p)
+    } else {
+        repo_root().join("target/release/sqlink-native")
+    }
+}
+
 /// Resolve the .component.wasm artifact for a given plugin.
 /// Plugins put their build output under both
 ///   extensions/<plugin>/target/wasm32-wasip2/release/
@@ -346,6 +357,166 @@ pub fn run_probe(
             .map(|r| r.is_match(&line))
             .unwrap_or(false),
         (None, None) => !line.is_empty(),  // any non-empty output passes
+    };
+    if matched {
+        ProbeReport { kind, outcome: ProbeOutcome::Pass }
+    } else {
+        let want = probe
+            .expects
+            .clone()
+            .or_else(|| probe.expects_regex.clone().map(|r| format!("regex:{r}")))
+            .unwrap_or_else(|| "(non-empty)".into());
+        ProbeReport {
+            kind,
+            outcome: ProbeOutcome::OutputMismatch {
+                got: line.to_string(),
+                want,
+                stderr: stderr.to_string(),
+                stdout: stdout.to_string(),
+            },
+        }
+    }
+}
+
+/// Scenario 1 variant of `run_probe`. Same fixture shape, same
+/// expected output extraction; the only difference is which
+/// binary handles the stdin/stdout. `sqlink-native` doesn't
+/// instantiate a wasm cli component, so the smoke harness
+/// doesn't need to point at one — only at the native binary.
+///
+/// Used by `tests/extension_smoke_native.rs`. Identical pass/
+/// fail semantics as `run_probe`: a probe that passes here AND
+/// in Scenario 2 means the extension behaves the same under
+/// both deployment models.
+pub fn run_probe_native(
+    plugin: &str,
+    component: &Path,
+    kind: &'static str,
+    probe: &Probe,
+    grants: &[String],
+) -> ProbeReport {
+    let bin = sqlink_native_bin();
+    if !bin.exists() {
+        return ProbeReport {
+            kind,
+            outcome: ProbeOutcome::SubprocessError(format!(
+                "sqlink-native binary missing at {} — run `cargo build --release -p sqlink-native` first (or override with SQLINK_NATIVE_BINARY)",
+                bin.display()
+            )),
+        };
+    }
+    let tmp = std::env::temp_dir().join(format!("sw_smoke_native_{plugin}_{kind}.db"));
+    let _ = std::fs::remove_file(&tmp);
+    let mut stdin_buf = String::new();
+    if grants.is_empty() {
+        stdin_buf.push_str(&format!(".load {}\n", component.display()));
+    } else {
+        let csv = grants.join(",");
+        stdin_buf.push_str(&format!(".load {} --grant={csv}\n", component.display()));
+    }
+    for s in &probe.setup {
+        let trimmed = s.trim_end();
+        stdin_buf.push_str(trimmed);
+        if !trimmed.ends_with(';') {
+            stdin_buf.push(';');
+        }
+        stdin_buf.push('\n');
+    }
+    stdin_buf.push_str(probe.sql.trim_end());
+    if !probe.sql.trim_end().ends_with(';') {
+        stdin_buf.push(';');
+    }
+    stdin_buf.push('\n');
+    stdin_buf.push_str(".exit\n");
+
+    let _permit = SUBPROCESS_LIMITER.acquire();
+    let child = Command::new(&bin)
+        .arg("--db")
+        .arg(&tmp)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn();
+    let mut child = match child {
+        Ok(c) => c,
+        Err(e) => {
+            return ProbeReport {
+                kind,
+                outcome: ProbeOutcome::SubprocessError(format!("spawn sqlink-native: {e}")),
+            }
+        }
+    };
+    use std::io::{Read, Write};
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(stdin_buf.as_bytes());
+    }
+    let mut stdout_pipe = child.stdout.take().expect("piped stdout");
+    let mut stderr_pipe = child.stderr.take().expect("piped stderr");
+    let stdout_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let stderr_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let start = std::time::Instant::now();
+    let deadline = std::time::Duration::from_secs(30);
+    let timed_out = loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break false,
+            Ok(None) => {
+                if start.elapsed() > deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break true;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            Err(e) => {
+                return ProbeReport {
+                    kind,
+                    outcome: ProbeOutcome::SubprocessError(format!("try_wait: {e}")),
+                };
+            }
+        }
+    };
+    let stdout_bytes = stdout_handle.join().unwrap_or_default();
+    let stderr_bytes = stderr_handle.join().unwrap_or_default();
+    if timed_out {
+        return ProbeReport {
+            kind,
+            outcome: ProbeOutcome::SubprocessError(format!(
+                "timeout after 30s\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&stdout_bytes),
+                String::from_utf8_lossy(&stderr_bytes),
+            )),
+        };
+    }
+    let stdout = String::from_utf8_lossy(&stdout_bytes);
+    let stderr = String::from_utf8_lossy(&stderr_bytes);
+    if std::env::var_os("SMOKE_DEBUG").is_some() {
+        eprintln!("--- native {} {} ---", plugin, kind);
+        eprintln!("STDOUT: {stdout:?}");
+        eprintln!("STDERR: {stderr:?}");
+    }
+    if stdout.contains("Error loading") || stderr.contains("Error loading") {
+        return ProbeReport {
+            kind,
+            outcome: ProbeOutcome::LoadFailed(format!(
+                "stdout: {stdout}\nstderr: {stderr}"
+            )),
+        };
+    }
+    let line = extract_probe_output(&stdout);
+    let matched = match (&probe.expects, &probe.expects_regex) {
+        (Some(want), _) => line.trim() == want.trim(),
+        (None, Some(rx)) => regex::Regex::new(rx)
+            .map(|r| r.is_match(&line))
+            .unwrap_or(false),
+        (None, None) => !line.is_empty(),
     };
     if matched {
         ProbeReport { kind, outcome: ProbeOutcome::Pass }

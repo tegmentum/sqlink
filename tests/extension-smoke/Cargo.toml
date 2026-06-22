@@ -23,6 +23,13 @@ path = "src/lib.rs"
 name = "extension_smoke"
 path = "src/test.rs"
 
+[[test]]
+# Scenario 1 (native loader) variant. Same fixtures.toml, but
+# routes every probe through `sqlink-native` instead of `sqlink`
+# + the wasm cli component.
+name = "extension_smoke_native"
+path = "src/test_native.rs"
+
 [[bin]]
 name = "extension-smoke-report"
 path = "src/report.rs"
