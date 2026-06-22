@@ -62,7 +62,7 @@ fn main() {
             let r = run_probe(plugin, &component, kind_name, probe, &entry.grants);
             match r.outcome {
                 ProbeOutcome::Pass => tally.pass += 1,
-                ProbeOutcome::OutputMismatch(got, want) => {
+                ProbeOutcome::OutputMismatch { got, want, .. } => {
                     tally.fail += 1;
                     failures.push((
                         plugin.clone(),

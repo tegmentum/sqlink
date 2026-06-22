@@ -14,6 +14,52 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Condvar, Mutex, OnceLock};
+
+/// Concurrency cap on sqlink subprocess spawns. Without this,
+/// cargo's default `--test-threads=ncpu` spawns ~N concurrent
+/// children that race to JIT-compile the ~2.3 MB cli component
+/// on the cold path. The 5s per-test timeout in `run_probe`
+/// trips spuriously under that load. The semaphore lets up to
+/// `SUBPROCESS_CAP` sqlink children run at once; the rest queue.
+const SUBPROCESS_CAP: usize = 6;
+
+static SUBPROCESS_LIMITER: SubprocessLimiter = SubprocessLimiter::new();
+
+struct SubprocessLimiter {
+    state: OnceLock<(Mutex<usize>, Condvar)>,
+}
+
+impl SubprocessLimiter {
+    const fn new() -> Self {
+        Self { state: OnceLock::new() }
+    }
+    fn cell(&self) -> &(Mutex<usize>, Condvar) {
+        self.state.get_or_init(|| (Mutex::new(0), Condvar::new()))
+    }
+    fn acquire(&self) -> SubprocessPermit<'_> {
+        let (lock, cv) = self.cell();
+        let mut active = lock.lock().expect("limiter mutex");
+        while *active >= SUBPROCESS_CAP {
+            active = cv.wait(active).expect("limiter wait");
+        }
+        *active += 1;
+        SubprocessPermit { limiter: self }
+    }
+}
+
+struct SubprocessPermit<'a> {
+    limiter: &'a SubprocessLimiter,
+}
+
+impl Drop for SubprocessPermit<'_> {
+    fn drop(&mut self) {
+        let (lock, cv) = self.limiter.cell();
+        let mut active = lock.lock().expect("limiter mutex");
+        *active -= 1;
+        cv.notify_one();
+    }
+}
 
 pub fn repo_root() -> PathBuf {
     // tests/extension-smoke/ → ../..
@@ -114,7 +160,12 @@ pub fn load_fixtures() -> Fixtures {
 pub enum ProbeOutcome {
     Pass,
     /// (got, expected_literal_or_regex)
-    OutputMismatch(String, String),
+    OutputMismatch {
+        got: String,
+        want: String,
+        stderr: String,
+        stdout: String,
+    },
     /// .load itself failed.
     LoadFailed(String),
     /// Timed-out or other subprocess error.
@@ -186,6 +237,14 @@ pub fn run_probe(
     stdin_buf.push('\n');
     stdin_buf.push_str(".exit\n");
 
+    // Cap concurrent sqlink subprocesses. Without this, cargo's
+    // default `--test-threads=N` (== num cpus) spawns N sqlink
+    // children that all race to JIT-compile the cli component
+    // (~2.3 MB wasm) cold. On contended CPUs the 5s timeout
+    // below trips and tests fail spuriously. The permit is held
+    // for the lifetime of this function (until the subprocess
+    // exits), then dropped, releasing a slot to the next test.
+    let _permit = SUBPROCESS_LIMITER.acquire();
     let child = Command::new(&sqlink)
         .arg("--db")
         .arg(&tmp)
@@ -205,24 +264,40 @@ pub fn run_probe(
         }
     };
 
-    use std::io::Write;
+    use std::io::{Read, Write};
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(stdin_buf.as_bytes());
     }
 
-    // 5s timeout via wait_timeout-ish loop.
+    // Drain stdout/stderr concurrently via reader threads. Without
+    // this, the pipe buffer can interleave oddly under high
+    // parallelism and `wait_with_output()` after `try_wait()` has
+    // been observed returning empty stdout despite the subprocess
+    // having printed to it. Reader threads start before we poll
+    // for exit, so nothing can be lost.
+    let mut stdout_pipe = child.stdout.take().expect("piped stdout");
+    let mut stderr_pipe = child.stderr.take().expect("piped stderr");
+    let stdout_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let stderr_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut buf);
+        buf
+    });
+
     let start = std::time::Instant::now();
-    let deadline = std::time::Duration::from_secs(5);
-    loop {
+    let deadline = std::time::Duration::from_secs(30);
+    let timed_out = loop {
         match child.try_wait() {
-            Ok(Some(_)) => break,
+            Ok(Some(_)) => break false,
             Ok(None) => {
                 if start.elapsed() > deadline {
                     let _ = child.kill();
-                    return ProbeReport {
-                        kind,
-                        outcome: ProbeOutcome::SubprocessError("timeout after 5s".into()),
-                    };
+                    let _ = child.wait();
+                    break true;
                 }
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
@@ -233,23 +308,25 @@ pub fn run_probe(
                 };
             }
         }
-    }
-    let out = match child.wait_with_output() {
-        Ok(o) => o,
-        Err(e) => {
-            return ProbeReport {
-                kind,
-                outcome: ProbeOutcome::SubprocessError(format!("wait_with_output: {e}")),
-            }
-        }
     };
-    let stdout = String::from_utf8_lossy(&out.stdout);
-    let stderr = String::from_utf8_lossy(&out.stderr);
+    let stdout_bytes = stdout_handle.join().unwrap_or_default();
+    let stderr_bytes = stderr_handle.join().unwrap_or_default();
+    if timed_out {
+        return ProbeReport {
+            kind,
+            outcome: ProbeOutcome::SubprocessError(format!(
+                "timeout after 30s\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&stdout_bytes),
+                String::from_utf8_lossy(&stderr_bytes),
+            )),
+        };
+    }
+    let stdout = String::from_utf8_lossy(&stdout_bytes);
+    let stderr = String::from_utf8_lossy(&stderr_bytes);
     if std::env::var_os("SMOKE_DEBUG").is_some() {
         eprintln!("--- {} {} ---", plugin, kind);
         eprintln!("STDOUT: {stdout:?}");
         eprintln!("STDERR: {stderr:?}");
-        eprintln!("EXIT: {:?}", out.status);
     }
     // Loader errors carry "Error loading" — failed .load
     if stdout.contains("Error loading") || stderr.contains("Error loading") {
@@ -280,7 +357,12 @@ pub fn run_probe(
             .unwrap_or_else(|| "(non-empty)".into());
         ProbeReport {
             kind,
-            outcome: ProbeOutcome::OutputMismatch(line.to_string(), want),
+            outcome: ProbeOutcome::OutputMismatch {
+                got: line.to_string(),
+                want,
+                stderr: stderr.to_string(),
+                stdout: stdout.to_string(),
+            },
         }
     }
 }

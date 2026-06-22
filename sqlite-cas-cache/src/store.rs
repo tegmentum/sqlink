@@ -148,8 +148,20 @@ impl SqliteCasStore {
         // FK enforcement is per-connection and off by default;
         // the eviction logic relies on ON DELETE RESTRICT to
         // prevent dropping artifacts still bound by a URI.
+        //
+        // WAL + busy_timeout: when multiple sqlink processes open
+        // the shared external cache concurrently (common in test
+        // matrices and parallel CI shards), CREATE TABLE IF NOT
+        // EXISTS in the legacy rollback journal raced and failed
+        // with SQLITE_BUSY ("database is locked"). WAL lets
+        // readers proceed during writes, and the busy_timeout
+        // gives schema install a fair shot at the write lock.
         self.conn
-            .execute_batch("PRAGMA foreign_keys = ON;")
+            .execute_batch(
+                "PRAGMA journal_mode = WAL;\n\
+                 PRAGMA busy_timeout = 10000;\n\
+                 PRAGMA foreign_keys = ON;",
+            )
             .map_err(|e| anyhow!("enable foreign_keys: {}", e.message))?;
         self.conn
             .execute_batch(INSTALL_SCHEMA)
