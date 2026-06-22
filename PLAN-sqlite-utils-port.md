@@ -219,22 +219,40 @@ Phase 2.4 — `.convert` + `.memory` (~half day)
     Implementation: `ATTACH ':memory:' AS mem`, run
     `.insert mem.t1 FILE` per file.
 
-### Stage 3 — utils-fts (~1 day)
+### Stage 3 — utils-fts (~1 day) — SHIPPED
 
-Phase 3.1 — enable/disable/rebuild (~half day)
-  - `.enable_fts TABLE COL [COL …] [--create-triggers]` —
-    `CREATE VIRTUAL TABLE TABLE_fts USING fts5(...)` external
-    content variant, optional triggers for keep-in-sync.
-  - `.disable_fts TABLE` — drop the fts table and any triggers.
-  - `.rebuild_fts TABLE` — `INSERT INTO TABLE_fts(TABLE_fts)
-    VALUES('rebuild')`.
-  - `.populate_fts TABLE COL [COL …]` — sqlite-utils legacy
-    path (one-shot rebuild). Mostly redundant with rebuild_fts.
+`extensions/sqlite-utils-fts/` ports all 5 commands as a single
+dot-command extension auto-embedded by the cli alongside
+core-dotcmd / session-cli / etc. Pure SQL on the host's shared
+spi connection — no new spi imports required.
 
-Phase 3.2 — `.search` (~half day)
-  - `.search TABLE QUERY [-c COL [-c COL …]] [--limit N]` —
-    `SELECT * FROM TABLE_fts WHERE TABLE_fts MATCH QUERY`,
-    join back to source table if external-content.
+  - `.enable_fts TABLE COL [COL …] [--create-triggers]
+     [--tokenize T]` — creates `<T>_fts` external-content FTS5
+    virtual table indexing the named columns of TABLE.
+    Optional AFTER INSERT/DELETE/UPDATE triggers keep the index
+    in sync; populates immediately. Custom tokenizer via
+    `--tokenize porter` etc.
+  - `.disable_fts TABLE` — drops `<T>_fts` and the
+    `<T>_ai`/`<T>_ad`/`<T>_au` triggers (the convention from
+    sqlite-utils).
+  - `.rebuild_fts [TABLE]` —
+    `INSERT INTO <T>_fts(<T>_fts) VALUES('rebuild')`. Without an
+    arg, rebuilds every `*_fts` table found in `sqlite_master`.
+  - `.populate_fts TABLE COL [COL …]` —
+    `INSERT INTO <T>_fts(rowid, COL…) SELECT rowid, COL… FROM
+    <T>`. Mostly redundant with `.rebuild_fts` for
+    external-content tables; ships for sqlite-utils parity.
+  - `.search TABLE QUERY [--limit N] [--columns col1,col2,…]` —
+    `SELECT … FROM <T> WHERE rowid IN (SELECT rowid FROM <T>_fts
+    WHERE <T>_fts MATCH ?1 ORDER BY rank LIMIT ?2)`. Default
+    LIMIT 20. Query is bound as a param; the user can use
+    FTS5's phrase / prefix / column-filter syntax directly
+    (e.g. `.search articles sql*` for prefix, `.search articles
+    title:hello` for column filter).
+
+Component size: 143 KB. Smoke (CREATE TABLE + INSERT +
+.enable_fts --create-triggers + .search + INSERT-triggers-fire
++ .rebuild_fts + .disable_fts cleanup) all green.
 
 ### Stage 4 — utils-maint (~half day) — SHIPPED
 

@@ -1,0 +1,21 @@
+[package]
+name = "sqlite-utils-fts-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+FTS5 helpers as a dot-command extension  port of sqlite-utils
+enable-fts / disable-fts / rebuild-fts / populate-fts / search.
+
+Stage 3 of PLAN-sqlite-utils-port.md.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
