@@ -14,7 +14,7 @@ use wasmtime::component::{Component, Linker};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{ResourceTable, WasiCtxBuilder};
 
-use sqlite_wasm_host::{bindings as host_bindings, Host, HostWrap, LoaderData};
+use sqlink_host::{bindings as host_bindings, Host, HostWrap, LoaderData};
 
 wasmtime::component::bindgen!({
     path: "../wit",

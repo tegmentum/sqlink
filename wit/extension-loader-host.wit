@@ -1,7 +1,7 @@
 package sqlite:wasm@0.1.0;
 
 /// Minimal world used by the wasmtime-side reference host
-/// (sqlite-wasm-host crate) for `wasmtime::component::bindgen!`.
+/// (sqlink-host crate) for `wasmtime::component::bindgen!`.
 ///
 /// Importing just the extension-loader interface gives the host a
 /// tightly scoped binding surface: the bindgen call generates Host

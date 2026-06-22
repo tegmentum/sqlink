@@ -1,10 +1,10 @@
-# sqlite-wasm-host
+# sqlink-host
 
 Reference wasmtime-based host for `sqlite-cli-unified`-world components.
 
 ## What it does
 
-- **Library (`sqlite_wasm_host`)** — Rust API a host application embeds to run
+- **Library (`sqlink_host`)** — Rust API a host application embeds to run
   SQLite-in-WebAssembly components. Provides:
     - A pre-configured `Engine` (component-model, fuel, epoch interruption,
       cranelift speed) and a background epoch-bumper thread
@@ -34,7 +34,7 @@ host is a drop-in.
 
 ## Architecture cross-link
 
-`sqlite-wasm-host` is the host half of the **dynamic-load deployment** for
+`sqlink-host` is the host half of the **dynamic-load deployment** for
 SQLite-in-WebAssembly. The architecture has three deployment modes
 sharing the same `sqlite:extension` WIT contract:
 

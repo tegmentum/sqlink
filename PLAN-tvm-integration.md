@@ -548,7 +548,7 @@ from the workspace root work too.
 
 ### Host-side support
 
-`sqlite-wasm-host` adds `wasm_memory64(true)` to its wasmtime
+`sqlink-host` adds `wasm_memory64(true)` to its wasmtime
 `Config`. With the feature off, the engine rejects wasm64
 modules (status quo). With on, it accepts both wasm32 and wasm64
 components; the loaded extension can be either.

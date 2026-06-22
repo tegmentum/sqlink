@@ -21,7 +21,7 @@
 
 use std::path::{Path, PathBuf};
 
-use sqlite_wasm_host::{Capability, Host, Policy};
+use sqlink_host::{Capability, Host, Policy};
 use sqlink_core::db;
 
 fn open_db(path: &Path) -> db::Connection {
@@ -87,7 +87,7 @@ async fn double_unload_errors() {
 #[tokio::test]
 async fn run_resolves_sqlite_runtime() {
     use parking_lot::Mutex;
-    use sqlite_wasm_host::compose_provider::ProviderHandle;
+    use sqlink_host::compose_provider::ProviderHandle;
     use std::sync::Arc;
 
     let mut wasm_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -128,7 +128,7 @@ async fn run_resolves_sqlite_runtime() {
 #[tokio::test]
 async fn wasm_component_provider_handles_invoke() {
     use ciborium::value::Value as CborValue;
-    use sqlite_wasm_host::compose_provider::ProviderHandle;
+    use sqlink_host::compose_provider::ProviderHandle;
 
     let mut std_text = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     std_text.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_text.wasm");
@@ -182,7 +182,7 @@ async fn wasm_component_provider_handles_invoke() {
 #[tokio::test]
 async fn run_tenant_scoping_isolates_providers() {
     use parking_lot::Mutex;
-    use sqlite_wasm_host::compose_provider::ProviderHandle;
+    use sqlink_host::compose_provider::ProviderHandle;
     use std::sync::Arc;
 
     let mut wasm_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -261,7 +261,7 @@ async fn run_tenant_scoping_isolates_providers() {
 /// digests.
 #[tokio::test]
 async fn trust_policy_gates_provider_registration() {
-    use sqlite_wasm_host::TrustPolicy;
+    use sqlink_host::TrustPolicy;
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_text.wasm");
@@ -314,7 +314,7 @@ async fn trust_policy_gates_provider_registration() {
 #[tokio::test]
 async fn std_hashing_provider() {
     use ciborium::value::Value as CborValue;
-    use sqlite_wasm_host::compose_provider::ProviderHandle;
+    use sqlink_host::compose_provider::ProviderHandle;
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_hashing.wasm");
@@ -369,7 +369,7 @@ async fn std_hashing_provider() {
 #[tokio::test]
 async fn std_encoding_provider() {
     use ciborium::value::Value as CborValue;
-    use sqlite_wasm_host::compose_provider::ProviderHandle;
+    use sqlink_host::compose_provider::ProviderHandle;
 
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sqlite-wasm-loader/target/wasm32-wasip1/release/std_encoding.wasm");
@@ -450,7 +450,7 @@ async fn std_encoding_provider() {
 #[tokio::test]
 async fn run_composes_sqlite_runtime_and_std_text() {
     use parking_lot::Mutex;
-    use sqlite_wasm_host::compose_provider::ProviderHandle;
+    use sqlink_host::compose_provider::ProviderHandle;
     use std::sync::Arc;
 
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

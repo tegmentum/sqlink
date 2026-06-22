@@ -43,5 +43,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 # as the HTTP body. Pulls in wasmtime via the host crate  the
 # binary grows accordingly, but pays for itself the moment a
 # single wasm route fires.
-sqlite-wasm-host = { path = "../host" }
+sqlink-host = { path = "../host" }
 sqlite-extension-policy = { path = "../sqlite-loader-wit" }

@@ -27,8 +27,8 @@
 
 use std::path::PathBuf;
 
-use sqlite_wasm_host::bindings::sqlite::extension::types::{AuthAction, AuthResult};
-use sqlite_wasm_host::{Capability, Host, Policy};
+use sqlink_host::bindings::sqlite::extension::types::{AuthAction, AuthResult};
+use sqlink_host::{Capability, Host, Policy};
 
 fn auth_ext_path() -> Option<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

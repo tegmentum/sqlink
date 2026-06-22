@@ -39,3 +39,8 @@ extensions/_shared-target/
 
 # Python build artifacts (provenance/ scripts)
 __pycache__/
+
+# Smoke-test scratch dbs (legitimately tracked .db files are
+# provenance/extensions.db + analysis/*.json; extensions/extensions.db
+# is the throwaway artifact from /tmp-style scratchpad sessions).
+extensions/extensions.db

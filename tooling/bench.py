@@ -362,7 +362,7 @@ def main() -> int:
         print(f"Error: {NATIVE_BIN} not found on PATH", file=sys.stderr)
         return 1
     if not WASM_BIN.exists():
-        print(f"Error: {WASM_BIN} not built; run cargo build --release -p sqlite-wasm-host",
+        print(f"Error: {WASM_BIN} not built; run cargo build --release -p sqlink-host",
               file=sys.stderr)
         return 1
     if not WASM_COMPONENT.exists():

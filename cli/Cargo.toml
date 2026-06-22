@@ -12,7 +12,7 @@ crate-type = ["cdylib"]
 # `tvm:memory` regions on wasm32  the cli component therefore
 # always imports tvm:memory/{types,manager,bytes,diagnostics}.
 # Every host running the cli MUST wire tvm-wasmtime's
-# add_to_linker (our reference sqlite-wasm-host does so by
+# add_to_linker (our reference sqlink-host does so by
 # default).
 
 [dependencies]

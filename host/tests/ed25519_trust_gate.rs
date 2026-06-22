@@ -25,7 +25,7 @@ use std::path::PathBuf;
 
 use ed25519_dalek::{Signer, SigningKey};
 use rand::rngs::OsRng;
-use sqlite_wasm_host::{Host, TrustPolicy};
+use sqlink_host::{Host, TrustPolicy};
 
 fn openssl_wasm_path() -> PathBuf {
     if let Ok(p) = std::env::var("OPENSSL_WASM_PATH") {

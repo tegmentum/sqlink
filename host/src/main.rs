@@ -14,7 +14,7 @@ use wasmtime::component::{Component, Linker};
 use wasmtime::Store;
 use wasmtime_wasi::{ResourceTable, WasiCtxBuilder};
 
-use sqlite_wasm_host::{bindings, Host, HostWrap, LoaderData};
+use sqlink_host::{bindings, Host, HostWrap, LoaderData};
 
 struct State {
     wasi: wasmtime_wasi::WasiCtx,
@@ -181,7 +181,7 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
         // engine_run is the engine the runtime path will use to
         // deserialize this .cwasm. Engines with different fuel
         // settings produce mutually-incompatible precompiled blobs.
-        let engine = sqlite_wasm_host::Host::new()?.engine_run().clone();
+        let engine = sqlink_host::Host::new()?.engine_run().clone();
         let precompiled = engine
             .precompile_component(&component_bytes)
             .map_err(|e| anyhow!("precompile: {e}"))?;
@@ -249,7 +249,7 @@ fn run_precompile_subcommand(args: &[String]) -> Result<()> {
     // engine run_wasm uses to load the cli .cwasm; precompiling
     // against the extension engine would produce a blob the loader
     // refuses.
-    let engine = sqlite_wasm_host::Host::new()?.engine_run().clone();
+    let engine = sqlink_host::Host::new()?.engine_run().clone();
     let precompiled = engine
         .precompile_component(&bytes)
         .map_err(|e| anyhow!("precompile: {e}"))?;
@@ -480,9 +480,9 @@ fn changeset_apply(db: *mut libsqlite3_sys::sqlite3, blob: &[u8]) -> Result<()> 
     Ok(())
 }
 
-// session_ffi lives in sqlite_wasm_host::session_ffi (host/src/session_ffi.rs)
+// session_ffi lives in sqlink_host::session_ffi (host/src/session_ffi.rs)
 // so the lib-side spi.session impls can share the same decls.
-use sqlite_wasm_host::session_ffi;
+use sqlink_host::session_ffi;
 
 /// Wrap sqlite3changeset_invert. Returns an owned `Vec<u8>` of the
 /// inverted blob; the sqlite3-allocated output is copied out before
@@ -606,8 +606,8 @@ async fn main() -> Result<()> {
 
     // Open the CAS cache. Default location honors --cache-dir,
     // SQLITE_WASM_CACHE_DIR, XDG_CACHE_HOME, then ~/.cache.
-    let cache_root = sqlite_wasm_host::cache::Cache::default_root(cache_dir.as_deref())?;
-    let cache = sqlite_wasm_host::cache::Cache::open(cache_root)?;
+    let cache_root = sqlink_host::cache::Cache::default_root(cache_dir.as_deref())?;
+    let cache = sqlink_host::cache::Cache::open(cache_root)?;
     host.set_cache(cache);
 
     // Register the sqlite-runtime compose provider so runnable components
@@ -622,7 +622,7 @@ async fn main() -> Result<()> {
         let conn_arc = std::sync::Arc::new(parking_lot::Mutex::new(Some(conn)));
         host.register_compose_provider(
             "sqlite-runtime",
-            sqlite_wasm_host::compose_provider::ProviderHandle::new_sqlite_runtime(conn_arc),
+            sqlink_host::compose_provider::ProviderHandle::new_sqlite_runtime(conn_arc),
         );
     }
 

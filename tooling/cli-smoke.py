@@ -94,7 +94,7 @@ def _detect_cli_marker(raw_text: str) -> str | None:
 
 def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
     if not CLI_BIN.exists():
-        return False, f"cli runner not built: run cargo build --release -p sqlite-wasm-host"
+        return False, f"cli runner not built: run cargo build --release -p sqlink-host"
     sql_path = SMOKES_DIR / f"{name}.sql"
     expected_path = SMOKES_DIR / f"{name}.expected"
     if not sql_path.exists():

@@ -244,7 +244,7 @@ Mechanical migration following Option A:
 4. Call it from `shared_spi_ensure_open` immediately after
    the `Connection::open`.
 5. Verify each crate builds native via:
-   `cargo build -p sqlite-wasm-host --features all-embed`
+   `cargo build -p sqlink-host --features all-embed`
    (where `all-embed` is a meta-feature enabling every
    embed-*). Triage any that don't:
    - wasm-only deps → cfg-gate or remove the embed feature

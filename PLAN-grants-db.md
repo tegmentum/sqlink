@@ -277,7 +277,7 @@ but doesn't implement the orchestrator-side crate.
 This is the integration contract; the storage layer itself
 lives in the orchestrator project.
 
-- Define a trait in sqlite-wasm-host:
+- Define a trait in sqlink-host:
   ```rust
   pub trait OrchestrationStore {
       fn get(&self, conn: &Connection, name: &str)

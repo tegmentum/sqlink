@@ -268,7 +268,7 @@ fn execute_blob(
 }
 
 /// Trait the binary's wasm dispatcher implements. Kept as a trait
-/// object so the router crate doesn't depend on sqlite-wasm-host
+/// object so the router crate doesn't depend on sqlink-host
 /// directly  the host integration lives in `src/wasm.rs` and is
 /// passed in at request time.
 pub trait WasmDispatcher: Send + Sync {

@@ -46,7 +46,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-use sqlite_wasm_host::{Host, Policy};
+use sqlink_host::{Host, Policy};
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

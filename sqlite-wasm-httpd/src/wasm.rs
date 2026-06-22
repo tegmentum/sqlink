@@ -1,7 +1,7 @@
 //! Wasm route dispatcher.
 //!
 //! At server start, `--load NAME=PATH` (repeated) registers each
-//! component with the embedded sqlite-wasm-host as a language
+//! component with the embedded sqlink-host as a language
 //! runtime keyed by `("http", NAME)`. The component is compiled
 //! once (and cached on-disk via the wasmtime compile cache the
 //! host already wires up).
@@ -39,7 +39,7 @@
 
 use anyhow::{anyhow, Result};
 use sqlite_extension_policy::Policy;
-use sqlite_wasm_host::Host;
+use sqlink_host::Host;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::runtime::Handle;

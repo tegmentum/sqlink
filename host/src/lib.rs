@@ -7714,7 +7714,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
 /// `add_to_linker`:
 ///
 /// ```ignore
-/// use sqlite_wasm_host::{bindings, HostWrap, LoaderData};
+/// use sqlink_host::{bindings, HostWrap, LoaderData};
 ///
 /// bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
 ///     &mut linker,
@@ -10091,7 +10091,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
 fn spawn_epoch_bumper(engine: Engine) {
     let weak = std::sync::Weak::clone(&Arc::downgrade(&Arc::new(engine)));
     std::thread::Builder::new()
-        .name("sqlite-wasm-host-epoch".into())
+        .name("sqlink-host-epoch".into())
         .spawn(move || loop {
             std::thread::sleep(EPOCH_TICK);
             match weak.upgrade() {

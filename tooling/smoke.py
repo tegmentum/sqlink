@@ -216,7 +216,7 @@ def _cleanup(tmpdir: str | None, db_tempfile: str | None) -> None:
 def smoke_one(name: str, timeout: int = 30, no_cache: bool = False) -> tuple[bool, str]:
     if not CLI_BIN.exists():
         return (False, f"cli runner not built: {CLI_BIN.relative_to(REPO_ROOT)} missing; "
-                       f"run: cargo build --release -p sqlite-wasm-host")
+                       f"run: cargo build --release -p sqlink-host")
     if not CLI_COMPONENT.exists():
         return (False, f"cli component not built: {CLI_COMPONENT.relative_to(REPO_ROOT)} missing")
 

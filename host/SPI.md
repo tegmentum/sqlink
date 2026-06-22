@@ -1,4 +1,4 @@
-# SPI in `sqlite-wasm-host`
+# SPI in `sqlink-host`
 
 ## TL;DR
 
