@@ -32,3 +32,5 @@ sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }
 # Password hashing.
 argon2 = "0.5"
 password-hash = { version = "0.5", features = ["getrandom"] }
+
+[workspace]

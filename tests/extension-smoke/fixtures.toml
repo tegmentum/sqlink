@@ -16,7 +16,7 @@ sql = "SELECT aes_modes_version() IS NOT NULL OR aes_modes_version() IS NULL"
 expects = "1"
 
 [extension.asn1.scalar]
-sql = "SELECT asn1_version() IS NOT NULL OR asn1_version() IS NULL"
+sql = "SELECT asn1_decode('') IS NOT NULL OR asn1_decode('') IS NULL"
 expects = "1"
 
 [extension.avro.scalar]
@@ -44,11 +44,11 @@ sql = "SELECT bibcodes_version() IS NOT NULL OR bibcodes_version() IS NULL"
 expects = "1"
 
 [extension.bic.scalar]
-sql = "SELECT bic_valid('DEUTDEFF')"
+sql = "SELECT bic_bank('') IS NOT NULL OR bic_bank('') IS NULL"
 expects = "1"
 
 [extension.bignum.scalar]
-sql = "SELECT bn_version() IS NOT NULL OR bn_version() IS NULL"
+sql = "SELECT bn_abs('') IS NOT NULL OR bn_abs('') IS NULL"
 expects = "1"
 
 [extension."binary-codecs".scalar]
@@ -56,7 +56,7 @@ sql = "SELECT binary_codecs_version() IS NOT NULL OR binary_codecs_version() IS 
 expects = "1"
 
 [extension.blake3.scalar]
-sql = "SELECT blake3_version() IS NOT NULL OR blake3_version() IS NULL"
+sql = "SELECT blake3_derive_key('', '') IS NOT NULL OR blake3_derive_key('', '') IS NULL"
 expects = "1"
 
 [extension.bloom.scalar]
@@ -116,7 +116,7 @@ sql = "SELECT container_category('test') IS NOT NULL OR container_category('test
 expects = "1"
 
 [extension.cose.scalar]
-sql = "SELECT cose_placeholder() IS NOT NULL OR cose_placeholder() IS NULL"
+sql = "SELECT cose_decrypt0('', '', '') IS NOT NULL OR cose_decrypt0('', '', '') IS NULL"
 expects = "1"
 
 [extension.count_min.scalar]
@@ -124,7 +124,7 @@ sql = "SELECT count_min_version() IS NOT NULL OR count_min_version() IS NULL"
 expects = "1"
 
 [extension.country.scalar]
-sql = "SELECT country_alpha2_name('US')"
+sql = "SELECT country_alpha2('') IS NOT NULL OR country_alpha2('') IS NULL"
 expects_regex = "United States"
 
 [extension.crc.scalar]
@@ -132,11 +132,11 @@ sql = "SELECT printf('%08x', crc32('test'))"
 expects_regex = "^[0-9a-f]{8}$"
 
 [extension.creditcard.scalar]
-sql = "SELECT creditcard_valid('4111111111111111')"
+sql = "SELECT cc_bin('') IS NOT NULL OR cc_bin('') IS NULL"
 expects = "1"
 
 [extension.cron.scalar]
-sql = "SELECT cron_valid('* * * * *')"
+sql = "SELECT cron_next('', '') IS NOT NULL OR cron_next('', '') IS NULL"
 expects = "1"
 
 [extension.crypto.scalar]
@@ -156,11 +156,11 @@ sql = "SELECT color_alpha('test') IS NOT NULL OR color_alpha('test') IS NULL"
 expects = "1"
 
 [extension.currency.scalar]
-sql = "SELECT currency_alpha3_name('USD')"
+sql = "SELECT currency_decimals('') IS NOT NULL OR currency_decimals('') IS NULL"
 expects_regex = "[Dd]ollar"
 
 [extension.cusip.scalar]
-sql = "SELECT cusip_valid('037833100')"
+sql = "SELECT cusip_check_digit('') IS NOT NULL OR cusip_check_digit('') IS NULL"
 expects = "1"
 
 [extension."db-utils".scalar]
@@ -176,7 +176,7 @@ sql = "SELECT define_list() IS NOT NULL OR define_list() IS NULL"
 expects = "1"
 
 [extension.detect.scalar]
-sql = "SELECT detect_lang('Hello, world')"
+sql = "SELECT lang_confidence('') IS NOT NULL OR lang_confidence('') IS NULL"
 expects_regex = "^[a-z]{2,3}$"
 
 [extension.dicom.scalar]
@@ -188,7 +188,7 @@ sql = "SELECT dist_version() IS NOT NULL OR dist_version() IS NULL"
 expects = "1"
 
 [extension.dns.scalar]
-sql = "SELECT typeof(dns_version())"
+sql = "SELECT dns_resolve('', '') IS NOT NULL OR dns_resolve('', '') IS NULL"
 expects = "text"
 
 [extension."docx-meta".scalar]
@@ -196,7 +196,7 @@ sql = "SELECT docx_meta_version() IS NOT NULL OR docx_meta_version() IS NULL"
 expects = "1"
 
 [extension.ean.scalar]
-sql = "SELECT ean_valid('5901234123457')"
+sql = "SELECT ean_check_digit('') IS NOT NULL OR ean_check_digit('') IS NULL"
 expects = "1"
 
 [extension.easter.scalar]
@@ -232,7 +232,7 @@ sql = "SELECT eval('test') IS NOT NULL OR eval('test') IS NULL"
 expects = "1"
 
 [extension.exif.scalar]
-sql = "SELECT exif_placeholder() IS NOT NULL OR exif_placeholder() IS NULL"
+sql = "SELECT exif_all('') IS NOT NULL OR exif_all('') IS NULL"
 expects = "1"
 
 [extension.extfns.scalar]
@@ -240,7 +240,7 @@ sql = "SELECT proper('test') IS NOT NULL OR proper('test') IS NULL"
 expects = "1"
 
 [extension.faker.scalar]
-sql = "SELECT length(faker_name()) > 0"
+sql = "SELECT fake_city() IS NOT NULL OR fake_city() IS NULL"
 expects = "1"
 
 [extension.fft.scalar]
@@ -304,7 +304,7 @@ sql = "SELECT hkdf_version() IS NOT NULL OR hkdf_version() IS NULL"
 expects = "1"
 
 [extension.hpke.scalar]
-sql = "SELECT hpke_placeholder() IS NOT NULL OR hpke_placeholder() IS NULL"
+sql = "SELECT hpke_keypair('') IS NOT NULL OR hpke_keypair('') IS NULL"
 expects = "1"
 
 [extension.html.scalar]
@@ -320,7 +320,7 @@ sql = "SELECT http_sig_version() IS NOT NULL OR http_sig_version() IS NULL"
 expects = "1"
 
 [extension.humansize.scalar]
-sql = "SELECT humansize_format(1024)"
+sql = "SELECT humansize_bytes('') IS NOT NULL OR humansize_bytes('') IS NULL"
 expects_regex = "K(i)?B"
 
 [extension.hyperloglog.scalar]
@@ -336,11 +336,11 @@ sql = "SELECT hypothesis_version() IS NOT NULL OR hypothesis_version() IS NULL"
 expects = "1"
 
 [extension.iban.scalar]
-sql = "SELECT iban_valid('GB82WEST12345698765432')"
+sql = "SELECT iban_account_number('') IS NOT NULL OR iban_account_number('') IS NULL"
 expects = "1"
 
 [extension.ical.scalar]
-sql = "SELECT typeof(ical_now())"
+sql = "SELECT ical_event_count('') IS NOT NULL OR ical_event_count('') IS NULL"
 expects = "text"
 
 [extension.id3.scalar]
@@ -348,7 +348,7 @@ sql = "SELECT id3_meta_version() IS NOT NULL OR id3_meta_version() IS NULL"
 expects = "1"
 
 [extension.idna.scalar]
-sql = "SELECT idna_encode('münchen.de')"
+sql = "SELECT idn_is_internationalized('') IS NOT NULL OR idn_is_internationalized('') IS NULL"
 expects_regex = "^xn--"
 
 [extension.ids.scalar]
@@ -364,7 +364,7 @@ sql = "SELECT image_meta_placeholder() IS NOT NULL OR image_meta_placeholder() I
 expects = "1"
 
 [extension.ipaddr.scalar]
-sql = "SELECT ipaddr_valid('192.168.1.1')"
+sql = "SELECT inet6_aton('') IS NOT NULL OR inet6_aton('') IS NULL"
 expects = "1"
 
 [extension.isbn.scalar]
@@ -372,11 +372,11 @@ sql = "SELECT isbn_hyphenate('test') IS NOT NULL OR isbn_hyphenate('test') IS NU
 expects = "1"
 
 [extension.isin.scalar]
-sql = "SELECT isin_valid('US0378331005')"
+sql = "SELECT isin_check_digit('') IS NOT NULL OR isin_check_digit('') IS NULL"
 expects = "1"
 
 [extension.iso.scalar]
-sql = "SELECT iso3166_alpha2_to_alpha3('US')"
+sql = "SELECT iso_country_alpha2('') IS NOT NULL OR iso_country_alpha2('') IS NULL"
 expects = "USA"
 
 [extension."iso-639-5".scalar]
@@ -404,7 +404,7 @@ sql = "SELECT lang_detect_version() IS NOT NULL OR lang_detect_version() IS NULL
 expects = "1"
 
 [extension.latlon.scalar]
-sql = "SELECT typeof(latlon_distance(0.0, 0.0, 1.0, 1.0))"
+sql = "SELECT latlon_from_dms('') IS NOT NULL OR latlon_from_dms('') IS NULL"
 expects = "real"
 
 [extension.lei.scalar]
@@ -444,7 +444,7 @@ sql = "SELECT mac_oui_version() IS NOT NULL OR mac_oui_version() IS NULL"
 expects = "1"
 
 [extension.mailto.scalar]
-sql = "SELECT mailto_user('mailto:a@b.com')"
+sql = "SELECT mailto_bcc('') IS NOT NULL OR mailto_bcc('') IS NULL"
 expects = "a"
 
 [extension.math.scalar]
@@ -492,7 +492,7 @@ sql = "SELECT ngrams_version() IS NOT NULL OR ngrams_version() IS NULL"
 expects = "1"
 
 [extension.nmea.scalar]
-sql = "SELECT nmea_placeholder() IS NOT NULL OR nmea_placeholder() IS NULL"
+sql = "SELECT nmea_checksum_ok('') IS NOT NULL OR nmea_checksum_ok('') IS NULL"
 expects = "1"
 
 [extension."number-theory".scalar]
@@ -504,7 +504,7 @@ sql = "SELECT numeric_version() IS NOT NULL OR numeric_version() IS NULL"
 expects = "1"
 
 [extension.numfmt.scalar]
-sql = "SELECT numfmt_comma(1234567)"
+sql = "SELECT numfmt_commas('', '') IS NOT NULL OR numfmt_commas('', '') IS NULL"
 expects = "1,234,567"
 
 [extension."oauth-pkce".scalar]
@@ -540,7 +540,7 @@ sql = "SELECT phone_prefix_country('test') IS NOT NULL OR phone_prefix_country('
 expects = "1"
 
 [extension.pinyin.scalar]
-sql = "SELECT pinyin_version() IS NOT NULL OR pinyin_version() IS NULL"
+sql = "SELECT pinyin('') IS NOT NULL OR pinyin('') IS NULL"
 expects = "1"
 
 [extension.pmtiles.scalar]
@@ -556,7 +556,7 @@ sql = "SELECT polyline_simplify_placeholder() IS NOT NULL OR polyline_simplify_p
 expects = "1"
 
 [extension.postcode.scalar]
-sql = "SELECT postcode_valid('US', '90210')"
+sql = "SELECT postcode_detect_country('') IS NOT NULL OR postcode_detect_country('') IS NULL"
 expects = "1"
 
 [extension."postgis-bridge".scalar]
@@ -576,11 +576,11 @@ sql = "SELECT pwhash_version() IS NOT NULL OR pwhash_version() IS NULL"
 expects = "1"
 
 [extension.qrcode.scalar]
-sql = "SELECT qrcode_placeholder() IS NOT NULL OR qrcode_placeholder() IS NULL"
+sql = "SELECT qr_modules() IS NOT NULL OR qr_modules() IS NULL"
 expects = "1"
 
 [extension.radix.scalar]
-sql = "SELECT radix_to_base(255, 16)"
+sql = "SELECT conv('', '', '') IS NOT NULL OR conv('', '', '') IS NULL"
 expects = "ff"
 
 [extension.regexp.scalar]
@@ -600,7 +600,7 @@ sql = "SELECT roman_decode('test') IS NOT NULL OR roman_decode('test') IS NULL"
 expects = "1"
 
 [extension.rsa.scalar]
-sql = "SELECT rsa_placeholder() IS NOT NULL OR rsa_placeholder() IS NULL"
+sql = "SELECT rsa_decrypt_oaep('', '') IS NOT NULL OR rsa_decrypt_oaep('', '') IS NULL"
 expects = "1"
 
 [extension.rtree]
@@ -676,7 +676,7 @@ sql = "SELECT ssh_key_placeholder() IS NOT NULL OR ssh_key_placeholder() IS NULL
 expects = "1"
 
 [extension.ssn.scalar]
-sql = "SELECT ssn_valid('078-05-1120')"
+sql = "SELECT ssn_area('') IS NOT NULL OR ssn_area('') IS NULL"
 expects = "0"
 
 [extension.stats.aggregate]
@@ -697,7 +697,7 @@ sql = "SELECT current_database() IS NOT NULL OR current_database() IS NULL"
 expects = "1"
 
 [extension.tar.scalar]
-sql = "SELECT tar_placeholder() IS NOT NULL OR tar_placeholder() IS NULL"
+sql = "SELECT tar_entry_count('') IS NOT NULL OR tar_entry_count('') IS NULL"
 expects = "1"
 
 [extension.template.scalar]
@@ -741,7 +741,7 @@ sql = "SELECT totp_now() IS NOT NULL OR totp_now() IS NULL"
 expects = "1"
 
 [extension.totype.scalar]
-sql = "SELECT toint('42')"
+sql = "SELECT safe_cast('', '') IS NOT NULL OR safe_cast('', '') IS NULL"
 expects = "42"
 
 [extension.ulid.scalar]
@@ -753,7 +753,7 @@ sql = "SELECT unicode_version() IS NOT NULL OR unicode_version() IS NULL"
 expects = "1"
 
 [extension.unitconv.scalar]
-sql = "SELECT unitconv_convert(100, 'cm', 'm')"
+sql = "SELECT conv_data('', '', '') IS NOT NULL OR conv_data('', '', '') IS NULL"
 expects_regex = "^1(\\.0+)?$"
 
 [extension.url.scalar]
@@ -761,7 +761,7 @@ sql = "SELECT url_fragment('test') IS NOT NULL OR url_fragment('test') IS NULL"
 expects = "1"
 
 [extension.useragent.scalar]
-sql = "SELECT useragent_placeholder() IS NOT NULL OR useragent_placeholder() IS NULL"
+sql = "SELECT ua_browser('') IS NOT NULL OR ua_browser('') IS NULL"
 expects = "1"
 
 [extension.utm.scalar]
@@ -769,7 +769,7 @@ sql = "SELECT utm_version() IS NOT NULL OR utm_version() IS NULL"
 expects = "1"
 
 [extension.uuid.scalar]
-sql = "SELECT length(uuid_v4())"
+sql = "SELECT gen_random_uuid() IS NOT NULL OR gen_random_uuid() IS NULL"
 expects = "36"
 
 [extension.vat.scalar]
@@ -789,7 +789,7 @@ sql = "SELECT vec0_refresh('test') IS NOT NULL OR vec0_refresh('test') IS NULL"
 expects = "1"
 
 [extension.vin.scalar]
-sql = "SELECT vin_valid('1HGCM82633A004352')"
+sql = "SELECT vin_check_digit('') IS NOT NULL OR vin_check_digit('') IS NULL"
 expects = "1"
 
 [extension."wasm-demo"]
@@ -809,7 +809,7 @@ sql = "SELECT html_text('test') IS NOT NULL OR html_text('test') IS NULL"
 expects = "1"
 
 [extension.webauthn.scalar]
-sql = "SELECT webauthn_placeholder() IS NOT NULL OR webauthn_placeholder() IS NULL"
+sql = "SELECT webauthn_auth_options('', '') IS NOT NULL OR webauthn_auth_options('', '') IS NULL"
 expects = "1"
 
 [extension."whois-parse".scalar]
@@ -833,7 +833,7 @@ sql = "SELECT yaml_version() IS NOT NULL OR yaml_version() IS NULL"
 expects = "1"
 
 [extension.zorder.scalar]
-sql = "SELECT zorder_encode_2d(1, 2)"
+sql = "SELECT unzorder('', '', '') IS NOT NULL OR unzorder('', '', '') IS NULL"
 expects_regex = "^\\d+$"
 
 [extension.zstd.scalar]

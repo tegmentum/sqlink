@@ -34,3 +34,5 @@ nanoid = "0.4"
 getrandom = "0.2"
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
 sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }
+
+[workspace]
