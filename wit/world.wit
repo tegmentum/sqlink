@@ -1,4 +1,4 @@
-package sqlite:wasm@0.1.0;
+package sqlink:wasm@0.1.0;
 
 world sqlite-world {
     // Export both low-level and high-level SQLite APIs

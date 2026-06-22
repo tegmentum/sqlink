@@ -24,7 +24,7 @@ mod bindings {
     });
 }
 
-use bindings::exports::sqlite::wasm::runtime::Guest;
+use bindings::exports::sqlink::wasm::runtime::Guest;
 
 struct EchoHandler;
 

@@ -99,7 +99,7 @@ pub(crate) fn walk_cas_resolvers(expected_digest: &str) -> FetchResult {
             "http" => {
                 let trimmed = r.uri.trim_end_matches('/');
                 let probe = format!("{trimmed}/blake3/{aa}/{rest}");
-                use crate::bindings::sqlite::wasm::extension_loader;
+                use crate::bindings::sqlink::wasm::extension_loader;
                 match extension_loader::fetch_cas_uri(&probe, expected_digest) {
                     Ok(b) => Some(b),
                     Err(e) => {

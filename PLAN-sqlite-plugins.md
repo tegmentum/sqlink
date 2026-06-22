@@ -155,7 +155,7 @@ Total ~4-5 weeks for a substantial extension catalog.
 
 ## Cli integration
 
-- `.load https://extensions.<your-org>.dev/json1.wasm` — fetches
+- `.load https://extensions.tegmentum.dev/json1.wasm` — fetches
   via CAS cache (Plan 1), loads, registers the json1 functions
 - `.extensions` — lists currently loaded extensions
 - All existing `.load` machinery (capability gates, signature

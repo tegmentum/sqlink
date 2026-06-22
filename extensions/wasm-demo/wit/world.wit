@@ -1,4 +1,4 @@
-package sqlite:wasm-demo@0.1.0;
+package sqlink:wasm-demo@0.1.0;
 
 /// Demonstration extension that exercises the unified-WIT dispatch
 /// path end to end.
@@ -10,9 +10,9 @@ package sqlite:wasm-demo@0.1.0;
 /// host import in one shot. The stub slots' manifests are empty —
 /// the host iterates them, finds no functions, and registers nothing.
 world demo-extension {
-    export sqlite:wasm/demo-slot@0.1.0;
-    export sqlite:wasm/fts5-slot@0.1.0;
-    export sqlite:wasm/json1-slot@0.1.0;
-    export sqlite:wasm/rtree-slot@0.1.0;
-    export sqlite:wasm/geopoly-slot@0.1.0;
+    export sqlink:wasm/demo-slot@0.1.0;
+    export sqlink:wasm/fts5-slot@0.1.0;
+    export sqlink:wasm/json1-slot@0.1.0;
+    export sqlink:wasm/rtree-slot@0.1.0;
+    export sqlink:wasm/geopoly-slot@0.1.0;
 }

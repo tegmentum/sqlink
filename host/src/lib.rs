@@ -47,7 +47,7 @@ use wasmtime::{Cache, CacheConfig, Config, Engine};
 pub use policy::{Capability, DnsPolicy, HttpPolicy, Policy};
 
 /// Bindgen against the `extension-loader-host` world. Generates a
-/// `Host` trait (under `sqlite::wasm::extension_loader::Host`) with
+/// `Host` trait (under `sqlink::wasm::extension_loader::Host`) with
 /// one method per loader function, plus typed structs for
 /// `load-options`, `manifest`, `loader-error`. `add_to_linker` wires
 /// them into the wasmtime component linker.
@@ -684,7 +684,7 @@ pub mod loaded_hooked {
 }
 
 use bindings::sqlite::extension::policy::Capability as WitCapability;
-use bindings::sqlite::wasm::extension_loader::{LoaderError, Manifest};
+use bindings::sqlink::wasm::extension_loader::{LoaderError, Manifest};
 
 /// Convert one WIT capability to the host's Rust enum.
 fn from_wit_cap(c: &WitCapability) -> Capability {
@@ -3915,7 +3915,7 @@ fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
     // surfacing the full Host registry: composed runnables that
     // never call .load just work; ones that do get a structured
     // LoaderError instead of an instantiate-time linker failure.
-    bindings::sqlite::wasm::extension_loader::add_to_linker::<_, RunLoaderStubData>(
+    bindings::sqlink::wasm::extension_loader::add_to_linker::<_, RunLoaderStubData>(
         &mut linker,
         |_state: &mut RunState| RunLoaderStub,
     )
@@ -7206,7 +7206,7 @@ impl Host {
             .await
             .map_err(|e| anyhow!("instantiate wasm component: {e}"))?;
         let r = instance
-            .sqlite_wasm_run()
+            .sqlink_wasm_run()
             .call_run(&mut store)
             .await
             .map_err(|e| anyhow!("fiji.run trap: {e}"))?;
@@ -7344,7 +7344,7 @@ impl Host {
         .await
         .map_err(|e| anyhow!("instantiate runtime plugin: {e}"))?;
         let r = instance
-            .sqlite_wasm_runtime()
+            .sqlink_wasm_runtime()
             .call_execute(&mut store, source_name, source)
             .await
             .map_err(|e| anyhow!("runtime.execute trap: {e}"))?;
@@ -7405,7 +7405,7 @@ impl Host {
         .await
         .map_err(|e| anyhow!("instantiate runtime plugin: {e}"))?;
         let r = instance
-            .sqlite_wasm_runtime()
+            .sqlink_wasm_runtime()
             .call_execute(&mut store, &source_name, &source)
             .await
             .map_err(|e| anyhow!("runtime.execute trap: {e}"))?;
@@ -7451,7 +7451,7 @@ fn cache_err(msg: impl Into<String>) -> LoaderError {
     }
 }
 
-impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
+impl bindings::sqlink::wasm::extension_loader::Host for RunLoaderStub {
     async fn load_extension(
         &mut self,
         _path: String,
@@ -7474,7 +7474,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         _args: String,
         _cli_state: Vec<(String, String)>,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::DotCommandResult,
+        bindings::sqlink::wasm::extension_loader::DotCommandResult,
         LoaderError,
     > {
         Err(loader_stub_err("dispatch-dot-command"))
@@ -7492,7 +7492,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
     async fn describe_extension(
         &mut self,
         _path: String,
-    ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DescribedResult, LoaderError>
     {
         Err(loader_stub_err("describe-extension"))
     }
@@ -7500,15 +7500,15 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
     async fn describe_extension_from_uri(
         &mut self,
         _uri: String,
-    ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DescribedResult, LoaderError>
     {
         Err(loader_stub_err("describe-extension-from-uri"))
     }
 
     async fn component_cache_stats(
         &mut self,
-    ) -> bindings::sqlite::wasm::extension_loader::ComponentCacheStatsSnapshot {
-        bindings::sqlite::wasm::extension_loader::ComponentCacheStatsSnapshot {
+    ) -> bindings::sqlink::wasm::extension_loader::ComponentCacheStatsSnapshot {
+        bindings::sqlink::wasm::extension_loader::ComponentCacheStatsSnapshot {
             c1_hits: 0,
             c2_hits: 0,
             cold_parses: 0,
@@ -7572,7 +7572,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
 
     async fn list_cache_uris(
         &mut self,
-    ) -> Vec<bindings::sqlite::wasm::extension_loader::UriCacheEntry> {
+    ) -> Vec<bindings::sqlink::wasm::extension_loader::UriCacheEntry> {
         Vec::new()
     }
 
@@ -7583,7 +7583,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
     async fn get_cache_stats(
         &mut self,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::CacheStats,
+        bindings::sqlink::wasm::extension_loader::CacheStats,
         LoaderError,
     > {
         Err(loader_stub_err("get-cache-stats"))
@@ -7618,7 +7618,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         &mut self,
         _path: String,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
         LoaderError,
     > {
         Err(loader_stub_err("do-cache-import"))
@@ -7642,7 +7642,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         &mut self,
         _path: String,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
         LoaderError,
     > {
         Err(loader_stub_err("cache-migrate-to-external"))
@@ -7652,7 +7652,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
         &mut self,
         _db_path: String,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
         LoaderError,
     > {
         Err(loader_stub_err("cache-migrate-to-internal"))
@@ -7716,7 +7716,7 @@ impl bindings::sqlite::wasm::extension_loader::Host for RunLoaderStub {
 /// ```ignore
 /// use sqlink_host::{bindings, HostWrap, LoaderData};
 ///
-/// bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
+/// bindings::sqlink::wasm::extension_loader::add_to_linker::<_, LoaderData>(
 ///     &mut linker,
 ///     |state: &mut MyState| HostWrap { host: &mut state.host },
 /// )?;
@@ -8865,7 +8865,7 @@ fn execute_multi_impl_bindings(
     Ok(results)
 }
 
-impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
+impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
     async fn scalar_call(
         &mut self,
         ext_name: String,
@@ -9223,7 +9223,7 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         cursor_id: u64,
         max_rows: u32,
     ) -> std::result::Result<
-        Vec<bindings::sqlite::wasm::dispatch::VtabRow>,
+        Vec<bindings::sqlink::wasm::dispatch::VtabRow>,
         String,
     > {
         let res = self
@@ -9233,7 +9233,7 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
         match res {
             Ok(Ok(rows)) => Ok(rows
                 .into_iter()
-                .map(|r| bindings::sqlite::wasm::dispatch::VtabRow {
+                .map(|r| bindings::sqlink::wasm::dispatch::VtabRow {
                     rowid: r.rowid,
                     columns: r
                         .columns
@@ -9424,7 +9424,7 @@ impl<'a> bindings::sqlite::wasm::dispatch::Host for HostWrap<'a> {
     }
 }
 
-impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
+impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     async fn load_extension(
         &mut self,
         path: String,
@@ -9498,7 +9498,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         args: String,
         cli_state: Vec<(String, String)>,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::DotCommandResult,
+        bindings::sqlink::wasm::extension_loader::DotCommandResult,
         LoaderError,
     > {
         let outcome = self
@@ -9513,13 +9513,13 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             .state_deltas
             .into_iter()
             .map(
-                |d| bindings::sqlite::wasm::extension_loader::StateDelta {
+                |d| bindings::sqlink::wasm::extension_loader::StateDelta {
                     key: d.key,
                     value_json: d.value_json,
                 },
             )
             .collect();
-        Ok(bindings::sqlite::wasm::extension_loader::DotCommandResult {
+        Ok(bindings::sqlink::wasm::extension_loader::DotCommandResult {
             text: outcome.text,
             state_deltas,
             exit_code: outcome.exit_code,
@@ -9529,14 +9529,14 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
     async fn describe_extension(
         &mut self,
         path: String,
-    ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DescribedResult, LoaderError>
     {
         // L3a: full-form describe carries declared_caps so the
         // cli's --trust=prompt mode can render them before
         // asking y/N.
         match self.host.describe_extension_full(PathBuf::from(&path)).await {
             Ok((name, digest, declared_caps)) => {
-                Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                Ok(bindings::sqlink::wasm::extension_loader::DescribedResult {
                     name,
                     digest_hex: digest,
                     declared_caps,
@@ -9552,7 +9552,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
     async fn describe_extension_from_uri(
         &mut self,
         uri: String,
-    ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DescribedResult, LoaderError>
     {
         // file: stays a direct describe  no cache round-trip
         // makes sense for a local path.
@@ -9562,7 +9562,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         {
             return match self.host.describe_extension_full(PathBuf::from(path)).await {
                 Ok((name, digest, declared_caps)) => {
-                    Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                    Ok(bindings::sqlink::wasm::extension_loader::DescribedResult {
                         name,
                         digest_hex: digest,
                         declared_caps,
@@ -9592,7 +9592,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             .await
         {
             Ok((name, digest, declared_caps)) => {
-                Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                Ok(bindings::sqlink::wasm::extension_loader::DescribedResult {
                     name,
                     digest_hex: digest,
                     declared_caps,
@@ -9604,9 +9604,9 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
 
     async fn component_cache_stats(
         &mut self,
-    ) -> bindings::sqlite::wasm::extension_loader::ComponentCacheStatsSnapshot {
+    ) -> bindings::sqlink::wasm::extension_loader::ComponentCacheStatsSnapshot {
         let s = self.host.component_cache_stats();
-        bindings::sqlite::wasm::extension_loader::ComponentCacheStatsSnapshot {
+        bindings::sqlink::wasm::extension_loader::ComponentCacheStatsSnapshot {
             c1_hits: s.c1_hits,
             c2_hits: s.c2_hits,
             cold_parses: s.cold_parses,
@@ -9732,7 +9732,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
 
     async fn list_cache_uris(
         &mut self,
-    ) -> Vec<bindings::sqlite::wasm::extension_loader::UriCacheEntry> {
+    ) -> Vec<bindings::sqlink::wasm::extension_loader::UriCacheEntry> {
         let g = self.host.cache.read();
         let Some(cache) = g.as_ref() else {
             return Vec::new();
@@ -9741,7 +9741,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             .list_uris()
             .into_iter()
             .map(
-                |e| bindings::sqlite::wasm::extension_loader::UriCacheEntry {
+                |e| bindings::sqlink::wasm::extension_loader::UriCacheEntry {
                     uri: e.uri,
                     hash: e.hash,
                     fetched_at: e.fetched_at,
@@ -9761,7 +9761,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
     async fn get_cache_stats(
         &mut self,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::CacheStats,
+        bindings::sqlink::wasm::extension_loader::CacheStats,
         LoaderError,
     > {
         let cache = {
@@ -9788,7 +9788,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
             sqlite_cas_cache::StoreMode::Internal => "internal".to_string(),
         };
         let max_bytes = store.config().max_bytes;
-        Ok(bindings::sqlite::wasm::extension_loader::CacheStats {
+        Ok(bindings::sqlink::wasm::extension_loader::CacheStats {
             artifact_count,
             uri_count,
             total_bytes,
@@ -9865,7 +9865,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         &mut self,
         path: String,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
         LoaderError,
     > {
         let cache = {
@@ -9879,7 +9879,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         let stats = store
             .merge_from(PathBuf::from(path))
             .map_err(|e| cache_err(format!("import: {e}")))?;
-        Ok(bindings::sqlite::wasm::extension_loader::CacheMergeStats {
+        Ok(bindings::sqlink::wasm::extension_loader::CacheMergeStats {
             artifacts_added: stats.artifacts_added,
             uris_net_change: stats.uris_net_change,
         })
@@ -9909,7 +9909,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         &mut self,
         path: String,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
         LoaderError,
     > {
         let target = PathBuf::from(&path);
@@ -9953,7 +9953,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         let new_cache = cache::Cache::open_external(target)
             .map_err(|e| cache_err(format!("reopen external: {e}")))?;
         self.host.set_cache(new_cache);
-        Ok(bindings::sqlite::wasm::extension_loader::CacheMergeStats {
+        Ok(bindings::sqlink::wasm::extension_loader::CacheMergeStats {
             artifacts_added: artifacts,
             uris_net_change: uris as i64,
         })
@@ -9963,7 +9963,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         &mut self,
         db_path: String,
     ) -> std::result::Result<
-        bindings::sqlite::wasm::extension_loader::CacheMergeStats,
+        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
         LoaderError,
     > {
         let cache = {
@@ -9994,7 +9994,7 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
                 .map_err(|e| cache_err(format!("merge: {e}")))?
         };
         self.host.set_cache(new_cache);
-        Ok(bindings::sqlite::wasm::extension_loader::CacheMergeStats {
+        Ok(bindings::sqlink::wasm::extension_loader::CacheMergeStats {
             artifacts_added: stats.artifacts_added,
             uris_net_change: stats.uris_net_change,
         })

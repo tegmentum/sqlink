@@ -30,7 +30,7 @@ mod bindings {
     });
 }
 
-use bindings::exports::sqlite::wasm::runtime::Guest;
+use bindings::exports::sqlink::wasm::runtime::Guest;
 use serde_json::Value;
 
 const REGISTRY_RAW: &str = include_str!("../../../../registry/index.json");

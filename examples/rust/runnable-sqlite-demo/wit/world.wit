@@ -5,7 +5,7 @@ package sqlite:runnable-sqlite-demo@0.1.0;
 /// Imports `sqlite:extension/spi` (and the `types` interface it
 /// depends on); at compose time those imports get satisfied by
 /// sqlite-lib's exports of the same interfaces. The resulting
-/// composed wasm is self-contained — exports `sqlite:wasm/run` and
+/// composed wasm is self-contained — exports `sqlink:wasm/run` and
 /// has SQLite bundled inside via the linked sqlite-lib component.
 ///
 /// Validates that sqlite-lib's SPI surface actually works as a
@@ -15,5 +15,5 @@ package sqlite:runnable-sqlite-demo@0.1.0;
 world impl {
     import sqlite:extension/types@0.1.0;
     import sqlite:extension/spi@0.1.0;
-    export sqlite:wasm/run@0.1.0;
+    export sqlink:wasm/run@0.1.0;
 }

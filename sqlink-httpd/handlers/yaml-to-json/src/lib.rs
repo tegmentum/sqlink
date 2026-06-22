@@ -34,7 +34,7 @@ mod bindings {
     });
 }
 
-use bindings::exports::sqlite::wasm::runtime::Guest;
+use bindings::exports::sqlink::wasm::runtime::Guest;
 use serde_json::Value as JsonValue;
 
 struct YamlJsonHandler;

@@ -46,7 +46,7 @@ mod bindings {
     });
 }
 
-use bindings::exports::sqlite::wasm::runtime::Guest;
+use bindings::exports::sqlink::wasm::runtime::Guest;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use hmac::{Hmac, Mac};

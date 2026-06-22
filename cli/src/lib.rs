@@ -536,7 +536,7 @@ fn eval_input(input: &str) -> String {
         // No built-in matched  walk the loaded-extension registry
         // for an extension that registered this dot command. See
         // PLAN-dotcmd-plugins.md Phase 1 dispatcher.
-        use bindings::sqlite::wasm::extension_loader;
+        use bindings::sqlink::wasm::extension_loader;
         let mut parts = trimmed.splitn(2, char::is_whitespace);
         let name = parts.next().unwrap_or("").trim_start_matches('.');
         let args = parts.next().unwrap_or("").trim();
@@ -579,7 +579,7 @@ fn eval_input(input: &str) -> String {
 /// manifest for dot commands, render either a sorted listing or one
 /// command's detail page.
 fn do_help(arg: &str) -> String {
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     let mut out = String::new();
     let manifests = extension_loader::list_extensions();
     if arg.is_empty() {
@@ -654,7 +654,7 @@ fn do_help(arg: &str) -> String {
 /// Phase 4 will extend the bytes-fetch with `sqlink_cas_resolver`
 /// walks when the artifact row is absent.
 fn try_db_registry_resolve(name: &str, args: &str) -> Option<String> {
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     use dot::{try_fetch_bytes, FetchResult};
 
     // First step is the same as the previous v1: lookup the row,
@@ -1035,7 +1035,7 @@ fn parse_grants(s: &str) -> Result<Vec<bindings::sqlite::extension::policy::Capa
 /// in. Matches the security-first defaults of the native loader.
 fn do_load(input: &str) -> String {
     use bindings::sqlite::extension::policy::{DnsPolicy, HttpPolicy, LoadOptions, Method};
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
 
     let mut parts = input.split_whitespace();
     let path = match parts.next() {
@@ -1470,7 +1470,7 @@ fn looks_like_uri(s: &str) -> bool {
 /// invocation creates a fresh Store; no state carries between calls.
 fn do_run(arg: &str) -> String {
     use bindings::sqlite::extension::policy::{Capability, LoadOptions};
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     if arg.is_empty() {
         return "Usage: .run PATH [FLAVOR]\n".to_string();
     }
@@ -1514,7 +1514,7 @@ fn do_run(arg: &str) -> String {
 /// FLAVOR distinguishes multiple runtimes for the same EXT.
 fn do_register_runtime(arg: &str) -> String {
     use bindings::sqlite::extension::policy::LoadOptions;
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     let mut parts = arg.split_whitespace();
     let p1 = parts.next().unwrap_or("");
     let p2 = parts.next().unwrap_or("");
@@ -1552,7 +1552,7 @@ fn do_register_runtime(arg: &str) -> String {
 }
 
 fn do_unregister_runtime(arg: &str) -> String {
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     let mut parts = arg.split_whitespace();
     let ext = parts.next().unwrap_or("");
     let flavor = parts.next().unwrap_or("");
@@ -1567,7 +1567,7 @@ fn do_unregister_runtime(arg: &str) -> String {
 }
 
 fn do_list_runtimes() -> String {
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     let runtimes = extension_loader::list_runtimes();
     if runtimes.is_empty() {
         return "(no runtimes registered)\n".to_string();
@@ -1586,7 +1586,7 @@ fn do_list_runtimes() -> String {
 
 fn do_register_resolver(arg: &str) -> String {
     use bindings::sqlite::extension::policy::{Capability, LoadOptions};
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     let mut parts = arg.splitn(2, char::is_whitespace);
     let scheme = parts.next().unwrap_or("").trim();
     let path = parts.next().unwrap_or("").trim();
@@ -1611,7 +1611,7 @@ fn do_register_resolver(arg: &str) -> String {
 /// `.register-provider ID PATH` — register a wasm-component compose
 /// provider. PATH must target compose:dynlink/dynlink-provider.
 fn do_register_provider(arg: &str) -> String {
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     let mut parts = arg.splitn(2, char::is_whitespace);
     let id = parts.next().unwrap_or("").trim();
     let path = parts.next().unwrap_or("").trim();
@@ -1625,7 +1625,7 @@ fn do_register_provider(arg: &str) -> String {
 }
 
 fn do_unregister_resolver(arg: &str) -> String {
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     match extension_loader::unregister_resolver(arg) {
         Ok(()) => format!("Unregistered resolver: {arg}\n"),
         Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
@@ -1633,7 +1633,7 @@ fn do_unregister_resolver(arg: &str) -> String {
 }
 
 fn do_list_resolvers() -> String {
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     let resolvers = extension_loader::list_resolvers();
     if resolvers.is_empty() {
         return "(no resolvers registered)\n".to_string();
@@ -1646,7 +1646,7 @@ fn do_list_resolvers() -> String {
 }
 
 fn do_cache(arg: &str) -> String {
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     let (sub, rest) = match arg.split_once(char::is_whitespace) {
         Some((s, r)) => (s, r.trim()),
         None => (arg, ""),
@@ -2110,7 +2110,7 @@ fn do_reload(input: &str) -> String {
 }
 
 fn do_unload(name: &str) -> String {
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
     let host_result = extension_loader::unload_extension(name);
 
     // Stage 5e.10: every registration type (scalars / aggregates /
@@ -2620,7 +2620,7 @@ pub(crate) fn dbconfig_code(name: &str) -> Option<std::os::raw::c_int> {
 
 fn embed_core_dotcmd() {
     use bindings::sqlite::extension::policy::LoadOptions;
-    use bindings::sqlite::wasm::extension_loader;
+    use bindings::sqlink::wasm::extension_loader;
 
     const CORE_DOTCMD_BYTES: &[u8] = include_bytes!(
         "../../extensions/core-dotcmd/target/wasm32-wasip2/release/core_dotcmd_extension.component.wasm"

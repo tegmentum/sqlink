@@ -41,13 +41,13 @@ use bindings::exports::sqlite::extension::spi::{
     Guest as SpiGuest, QueryResult as SpiQueryResult, SqlValue as SpiSqlValue,
     SqliteError as SpiSqliteError,
 };
-use bindings::exports::sqlite::wasm::high_level::{
+use bindings::exports::sqlink::wasm::high_level::{
     Connection, DatabaseError as HlDatabaseError, ExecResult, Guest as HighLevelGuest,
     GuestConnection, GuestStatement, OpenMode, QueryResult as HlQueryResult, Statement,
     Value as HlValue,
 };
-use bindings::exports::sqlite::wasm::library::Guest as LibraryGuest;
-use bindings::exports::sqlite::wasm::low_level::{
+use bindings::exports::sqlink::wasm::library::Guest as LibraryGuest;
+use bindings::exports::sqlink::wasm::low_level::{
     ColumnType, DbHandle, Guest as LowLevelGuest, OpenFlags, ResultCode, StmtHandle,
 };
 
@@ -483,9 +483,9 @@ impl GuestConnection for HlConnection {
         let dbs: Vec<db::Value> = params.into_iter().map(hl_value_to_db).collect();
         stmt.bind_all(&dbs).map_err(|e| hl_err(&e))?;
         let rows_vals = stmt.collect_rows().map_err(|e| hl_err(&e))?;
-        let out_rows: Vec<bindings::exports::sqlite::wasm::high_level::Row> = rows_vals
+        let out_rows: Vec<bindings::exports::sqlink::wasm::high_level::Row> = rows_vals
             .into_iter()
-            .map(|r| bindings::exports::sqlite::wasm::high_level::Row {
+            .map(|r| bindings::exports::sqlink::wasm::high_level::Row {
                 columns: r.into_iter().map(db_to_hl_value).collect(),
             })
             .collect();
@@ -564,16 +564,16 @@ impl GuestStatement for HlStatement {
         *self.column_names.borrow_mut() = column_names.clone();
         stmt.bind_all(&self.bound_params()).map_err(|e| hl_err(&e))?;
         let rows_vals = stmt.collect_rows().map_err(|e| hl_err(&e))?;
-        let out_rows: Vec<bindings::exports::sqlite::wasm::high_level::Row> = rows_vals
+        let out_rows: Vec<bindings::exports::sqlink::wasm::high_level::Row> = rows_vals
             .into_iter()
-            .map(|r| bindings::exports::sqlite::wasm::high_level::Row {
+            .map(|r| bindings::exports::sqlink::wasm::high_level::Row {
                 columns: r.into_iter().map(db_to_hl_value).collect(),
             })
             .collect();
         Ok(HlQueryResult { column_names, rows: out_rows })
     }
 
-    fn step(&self) -> Result<Option<bindings::exports::sqlite::wasm::high_level::Row>, HlDatabaseError> {
+    fn step(&self) -> Result<Option<bindings::exports::sqlink::wasm::high_level::Row>, HlDatabaseError> {
         let needs_init = self.cursor_buf.borrow().is_none();
         if needs_init {
             let conn = self.conn.borrow();
@@ -586,7 +586,7 @@ impl GuestStatement for HlStatement {
         }
         let mut g = self.cursor_buf.borrow_mut();
         let buf = g.as_mut().unwrap();
-        Ok(buf.pop_front().map(|raw| bindings::exports::sqlite::wasm::high_level::Row {
+        Ok(buf.pop_front().map(|raw| bindings::exports::sqlink::wasm::high_level::Row {
             columns: raw.into_iter().map(db_to_hl_value).collect(),
         }))
     }
@@ -651,7 +651,7 @@ impl GuestStatement for HlStatement {
 
 mod lib_load {
     use super::bindings;
-    use bindings::exports::sqlite::wasm::library::{
+    use bindings::exports::sqlink::wasm::library::{
         AggregateFunctionSpec as LibAggSpec, Capability as LibCap, CollationSpec as LibCollSpec,
         DnsPolicy as LibDnsPolicy, FsPolicy as LibFsPolicy, FunctionFlags as LibFlags,
         HttpMethod as LibMethod, HttpPolicy as LibHttpPolicy, LoadOptions as LibOpts,
@@ -661,7 +661,7 @@ mod lib_load {
     use bindings::sqlite::extension::metadata as md;
     use bindings::sqlite::extension::policy as pol;
     use bindings::sqlite::extension::types as ty;
-    use bindings::sqlite::wasm::extension_loader as loader;
+    use bindings::sqlink::wasm::extension_loader as loader;
 
     fn cap_to_pol(c: LibCap) -> pol::Capability {
         match c {
@@ -806,34 +806,34 @@ impl LibraryGuest for SqliteLib {
 
     fn load_extension(
         path: String,
-        opts: bindings::exports::sqlite::wasm::library::LoadOptions,
+        opts: bindings::exports::sqlink::wasm::library::LoadOptions,
     ) -> Result<
-        bindings::exports::sqlite::wasm::library::Manifest,
-        bindings::exports::sqlite::wasm::library::LoaderError,
+        bindings::exports::sqlink::wasm::library::Manifest,
+        bindings::exports::sqlink::wasm::library::LoaderError,
     > {
         let pol_opts = lib_load::opts_to_pol(opts);
-        bindings::sqlite::wasm::extension_loader::load_extension(&path, &pol_opts)
+        bindings::sqlink::wasm::extension_loader::load_extension(&path, &pol_opts)
             .map(lib_load::manifest_to_lib)
             .map_err(lib_load::loader_err_to_lib)
     }
 
     fn load_extension_from_uri(
         uri: String,
-        opts: bindings::exports::sqlite::wasm::library::LoadOptions,
+        opts: bindings::exports::sqlink::wasm::library::LoadOptions,
     ) -> Result<
-        bindings::exports::sqlite::wasm::library::Manifest,
-        bindings::exports::sqlite::wasm::library::LoaderError,
+        bindings::exports::sqlink::wasm::library::Manifest,
+        bindings::exports::sqlink::wasm::library::LoaderError,
     > {
         let pol_opts = lib_load::opts_to_pol(opts);
-        bindings::sqlite::wasm::extension_loader::load_extension_from_uri(&uri, &pol_opts)
+        bindings::sqlink::wasm::extension_loader::load_extension_from_uri(&uri, &pol_opts)
             .map(lib_load::manifest_to_lib)
             .map_err(lib_load::loader_err_to_lib)
     }
 
     fn unload_extension(
         name: String,
-    ) -> Result<(), bindings::exports::sqlite::wasm::library::LoaderError> {
-        bindings::sqlite::wasm::extension_loader::unload_extension(&name)
+    ) -> Result<(), bindings::exports::sqlink::wasm::library::LoaderError> {
+        bindings::sqlink::wasm::extension_loader::unload_extension(&name)
             .map_err(lib_load::loader_err_to_lib)
     }
 }

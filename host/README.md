@@ -44,7 +44,7 @@ sharing the same `sqlite:extension` WIT contract:
 | SQLite-in-WASM + composed extension | wac plug at build time | `.wasm` component | `.wasm` component, statically linked |
 | SQLite-in-WASM + dynamic `.load` | this crate | `.wasm` component | `.wasm` component, loaded at runtime via the host's `extension-loader` impl |
 
-[`sqlite-wasm-loader`]: https://github.com/<your-org>/sqlite-wasm-loader
+[`sqlite-wasm-loader`]: https://github.com/tegmentum/sqlite-wasm-loader
 
 The same `Policy` value type works across all three. The same
 `metadata.describe()` produces the manifest in all three. The same

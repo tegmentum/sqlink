@@ -656,7 +656,7 @@ async fn main() -> Result<()> {
     let mut linker: Linker<State> = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(|e| anyhow!("wire WASI: {e}"))?;
 
-    bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
+    bindings::sqlink::wasm::extension_loader::add_to_linker::<_, LoaderData>(
         &mut linker,
         |state: &mut State| HostWrap {
             host: &mut state.host,
@@ -665,7 +665,7 @@ async fn main() -> Result<()> {
     )
     .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
 
-    bindings::sqlite::wasm::dispatch::add_to_linker::<_, LoaderData>(
+    bindings::sqlink::wasm::dispatch::add_to_linker::<_, LoaderData>(
         &mut linker,
         |state: &mut State| HostWrap {
             host: &mut state.host,

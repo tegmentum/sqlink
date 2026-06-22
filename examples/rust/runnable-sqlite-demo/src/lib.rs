@@ -32,7 +32,7 @@ mod bindings {
     });
 }
 
-use bindings::exports::sqlite::wasm::run::Guest;
+use bindings::exports::sqlink::wasm::run::Guest;
 use bindings::sqlite::extension::spi;
 use bindings::sqlite::extension::types::SqlValue;
 

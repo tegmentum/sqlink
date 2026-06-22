@@ -82,14 +82,14 @@ async fn instantiate() -> Result<Option<(Store<State>, SqliteLibrary)>> {
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
 
     let host = Host::new()?;
-    host_bindings::sqlite::wasm::extension_loader::add_to_linker::<_, LoaderData>(
+    host_bindings::sqlink::wasm::extension_loader::add_to_linker::<_, LoaderData>(
         &mut linker,
         |state: &mut State| HostWrap {
             host: &mut state.host,
             resources: Some(&mut state.resources),
         },
     )?;
-    host_bindings::sqlite::wasm::dispatch::add_to_linker::<_, LoaderData>(
+    host_bindings::sqlink::wasm::dispatch::add_to_linker::<_, LoaderData>(
         &mut linker,
         |state: &mut State| HostWrap {
             host: &mut state.host,
@@ -233,7 +233,7 @@ async fn library_load_extension_round_trip() {
     };
     let library = lib.sqlink_library();
 
-    use exports::sqlite::wasm::library::{Capability, LoadOptions};
+    use exports::sqlink::wasm::library::{Capability, LoadOptions};
     let opts = LoadOptions {
         grant: vec![Capability::Text],
         http_policy: None,
