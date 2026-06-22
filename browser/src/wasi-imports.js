@@ -1,0 +1,176 @@
+// Build the "imports" object that jco's transpiled-with-
+// `--instantiation async` extension wants, satisfying each
+// `wasi:*` interface from @tegmentum/wasi-polyfill plugins.
+//
+// The sqlink extensions we ship are pure-compute scalars; they
+// genuinely import wasi:cli/stdio + clocks + random + io because
+// rust's wit-bindgen always emits the full WASI surface, but they
+// don't actually exercise stdio (no .write()), they just need the
+// import resolved so instantiation can complete. So we wire the
+// real wasi-polyfill providers where they exist (random, clocks,
+// io) and stub the cli surface to noops.
+
+import { createPolyfill, AllowAllPolicy } from '@tegmentum/wasi-polyfill/wasip2'
+import {
+  randomPlugin,
+  insecureRandomPlugin,
+  insecureSeedPlugin,
+} from '@tegmentum/wasi-polyfill/wasip2/plugins/random'
+import {
+  monotonicClockPlugin,
+  wallClockPlugin,
+} from '@tegmentum/wasi-polyfill/wasip2/plugins/clocks'
+import {
+  errorPlugin,
+  pollPlugin,
+  streamsPlugin,
+} from '@tegmentum/wasi-polyfill/wasip2/plugins/io'
+import {
+  filesystemTypesPlugin,
+  filesystemPreopensPlugin,
+} from '@tegmentum/wasi-polyfill/wasip2/plugins/filesystem'
+
+let cachedPolyfill = null
+let cachedImports = null
+
+/**
+ * Build the imports map jco's async-mode transpile expects.
+ *
+ * Cached across all extensions: every extension imports the same
+ * WASI surface, so we instantiate once and reuse. (The polyfill
+ * itself dedupes plugin instances internally, but caching the
+ * imports object too avoids the per-call build cost.)
+ */
+export async function buildExtensionImports() {
+  if (cachedImports) return cachedImports
+
+  // AllowAllPolicy is fine here: the policy gate decides which
+  // interface the polyfill EXPOSES; what the extension actually
+  // gets is determined by what we register below. CLI imports we
+  // don't register fall through to the stubs.
+  const polyfill = createPolyfill({
+    policy: new AllowAllPolicy(),
+  })
+  polyfill.registerPlugin(randomPlugin)
+  polyfill.registerPlugin(insecureRandomPlugin)
+  polyfill.registerPlugin(insecureSeedPlugin)
+  polyfill.registerPlugin(monotonicClockPlugin)
+  polyfill.registerPlugin(wallClockPlugin)
+  polyfill.registerPlugin(errorPlugin)
+  polyfill.registerPlugin(pollPlugin)
+  polyfill.registerPlugin(streamsPlugin)
+  polyfill.registerPlugin(filesystemTypesPlugin)
+  polyfill.registerPlugin(filesystemPreopensPlugin)
+  cachedPolyfill = polyfill
+
+  // jcoCompat: true => un-versioned keys ('wasi:random/random'),
+  // which is what jco's --instantiation async emits.
+  const { imports } = await polyfill.forInterfaces(
+    [
+      'wasi:random/random@0.2.0',
+      'wasi:random/insecure@0.2.0',
+      'wasi:random/insecure-seed@0.2.0',
+      'wasi:clocks/monotonic-clock@0.2.0',
+      'wasi:clocks/wall-clock@0.2.0',
+      'wasi:io/error@0.2.0',
+      'wasi:io/poll@0.2.0',
+      'wasi:io/streams@0.2.0',
+      'wasi:filesystem/types@0.2.0',
+      'wasi:filesystem/preopens@0.2.0',
+    ],
+    { jcoCompat: true, throwOnMissing: false, throwOnDenied: false },
+  )
+
+  // Stub the rest. Most sqlink extensions import the entire wasi:cli
+  // surface even when they don't use it (rust wit-bindgen `generate_all`
+  // emits the full world). Each function body throws if called — the
+  // scalar code paths don't hit them, so we only pay if an extension
+  // actually misbehaves, in which case loud is better than silent.
+  function noop(name) {
+    return new Proxy(
+      {},
+      {
+        get(_t, key) {
+          if (typeof key === 'symbol') return undefined
+          // wit-bindgen + jco emit "TerminalInput" / "TerminalOutput"
+          // / "Pollable" / etc. as class-bearing fields. Returning a
+          // dummy class lets the bindgen-side `new` calls succeed if
+          // they happen during eager construction; instance methods
+          // throw on use.
+          if (/^[A-Z]/.test(String(key))) {
+            return class StubResource {}
+          }
+          // For host functions whose host-impl returns
+          // `result<T, sqlite-error>`, jco wraps a thrown
+          // payload-bearing object into the err arm. We emit a
+          // shape-matched sqlite-error so the extension can
+          // either fall through gracefully OR see a structured
+          // failure — instead of getting a JS Error rethrown
+          // which it'd interpret as a trap.
+          return (..._args) => {
+            const err = new Object()
+            err.payload = {
+              code: 1, // SQLITE_ERROR
+              extendedCode: 1,
+              message: `sqlink-browser scenario-3: ${name}.${String(key)} not implemented`,
+            }
+            throw err
+          }
+        },
+      },
+    )
+  }
+  const cliStubs = [
+    'wasi:cli/environment',
+    'wasi:cli/exit',
+    'wasi:cli/stderr',
+    'wasi:cli/stdin',
+    'wasi:cli/stdout',
+    'wasi:cli/terminal-input',
+    'wasi:cli/terminal-output',
+    'wasi:cli/terminal-stderr',
+    'wasi:cli/terminal-stdin',
+    'wasi:cli/terminal-stdout',
+  ]
+  for (const k of cliStubs) {
+    if (!imports[k]) imports[k] = noop(k)
+  }
+  // Stub the sqlink-shaped imports that show up in extensions that
+  // declare extra capabilities — they're not used by the pure-compute
+  // surface but bindgen emits them.
+  for (const k of [
+    'sqlite:extension/spi',
+    'sqlite:extension/session',
+    'sqlite:extension/logging',
+    'sqlite:extension/config',
+    'sqlite:extension/http',
+    'sqlite:extension/dns',
+    'sqlite:extension/cache',
+    'sqlite:extension/state',
+    'sqlite:extension/random',
+    'sqlite:extension/text',
+    'sqlite:extension/hashing',
+    'sqlite:extension/encoding',
+    'sqlite:extension/prepared',
+    'sqlite:extension/transaction',
+    'sqlite:extension/schema',
+  ]) {
+    if (!imports[k]) imports[k] = noop(k)
+  }
+
+  cachedImports = imports
+  return imports
+}
+
+/** Tear down the cached polyfill (test cleanup). */
+export function destroyExtensionImports() {
+  cachedImports = null
+  if (cachedPolyfill) {
+    try {
+      cachedPolyfill.destroy()
+    } catch {
+      // ignore
+    }
+    cachedPolyfill = null
+  }
+}

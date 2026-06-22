@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser — embed demo runner</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { runEmbedDemo } from '../src/embed-demo.js'
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      try {
+        const r = await runEmbedDemo({ statusEl: status, outEl: out })
+        window.__embedResult = r
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        window.__embedResult = { error: String(e) }
+      } finally {
+        window.__embedDone = true
+      }
+    </script>
+  </body>
+</html>
