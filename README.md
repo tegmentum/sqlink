@@ -46,9 +46,13 @@ host does:
 
 3. **Browser-side SQLite-in-wasm + extensions.** Same wasm-side
    SQLite + extension components, but the host is a
-   browser-resident wasm runtime instead of wasmtime. A jsdelivr
-   / unpkg-shaped CDN serves extensions; the page's host code
-   resolves + loads them on demand. Tracked in
+   browser-resident wasm runtime instead of wasmtime. The browser
+   host is built on
+   [`@tegmentum/wasi-polyfill`](https://github.com/tegmentum/wasi-polyfill)
+    a capability-based JS plugin framework for wasi-p1/p2/p3
+   plus Web Platform host imports (DOM, fetch, WebGPU, ...). A
+   jsdelivr / unpkg-shaped CDN serves extensions; the page's host
+   code resolves + loads them on demand. Tracked in
    [docs/plans/PLAN-browser-runtime.md](docs/plans/PLAN-browser-runtime.md).
 
 The WIT contract in `sqlite-loader-wit/` is the single point of
