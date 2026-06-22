@@ -14,7 +14,6 @@ resolver = "2"
 # depend on them via path = "../sqlite-wasm/<crate>".
 members = [
     "cli",
-    "sqlite-lib",
     "host",
     "sqlite-cas-cache",
     "sqlink-httpd",
