@@ -8,7 +8,7 @@ sql = "SELECT aba_validate('011000015')"
 expects = "1"
 
 [extension.aead.scalar]
-sql = "SELECT aead_placeholder() IS NOT NULL OR aead_placeholder() IS NULL"
+sql = "SELECT aead_random_key_256() IS NOT NULL OR aead_random_key_256() IS NULL"
 expects = "1"
 
 [extension."aes-modes".scalar]
@@ -96,7 +96,7 @@ sql = "SELECT color_hex_to_rgb('#ff0000')"
 expects_regex = "255"
 
 [extension."color-palette".scalar]
-sql = "SELECT color_palette_placeholder() IS NOT NULL OR color_palette_placeholder() IS NULL"
+sql = "SELECT palette_average_color('') IS NOT NULL OR palette_average_color('') IS NULL"
 expects = "1"
 
 [extension.compass.scalar]
@@ -187,9 +187,12 @@ expects = "1"
 sql = "SELECT dist_version() IS NOT NULL OR dist_version() IS NULL"
 expects = "1"
 
+[extension.dns]
+grants = ["dns"]
+
 [extension.dns.scalar]
 sql = "SELECT dns_resolve('', '') IS NOT NULL OR dns_resolve('', '') IS NULL"
-expects = "text"
+expects = "1"
 
 [extension."docx-meta".scalar]
 sql = "SELECT docx_meta_version() IS NOT NULL OR docx_meta_version() IS NULL"
@@ -311,6 +314,9 @@ expects = "1"
 sql = "SELECT html_version() IS NOT NULL OR html_version() IS NULL"
 expects = "1"
 
+[extension.http]
+grants = ["http"]
+
 [extension.http.scalar]
 sql = "SELECT http_get('test') IS NOT NULL OR http_get('test') IS NULL"
 expects = "1"
@@ -360,7 +366,7 @@ sql = "SELECT ieee754_exponent('test') IS NOT NULL OR ieee754_exponent('test') I
 expects = "1"
 
 [extension."image-meta".scalar]
-sql = "SELECT image_meta_placeholder() IS NOT NULL OR image_meta_placeholder() IS NULL"
+sql = "SELECT img_byte_size(X'') IS NOT NULL OR img_byte_size(X'') IS NULL"
 expects = "1"
 
 [extension.ipaddr.scalar]
@@ -428,7 +434,7 @@ sql = "SELECT lorem_title() IS NOT NULL OR lorem_title() IS NULL"
 expects = "1"
 
 [extension."lru-cache".scalar]
-sql = "SELECT lru_cache_placeholder() IS NOT NULL OR lru_cache_placeholder() IS NULL"
+sql = "SELECT lru_capacity() IS NOT NULL OR lru_capacity() IS NULL"
 expects = "1"
 
 [extension.lz4.scalar]
@@ -516,7 +522,7 @@ sql = "SELECT onnx_input_names('test') IS NOT NULL OR onnx_input_names('test') I
 expects = "1"
 
 [extension.parsers.scalar]
-sql = "SELECT hex_to_rgb('test') IS NOT NULL OR hex_to_rgb('test') IS NULL"
+sql = "SELECT color_darken('#000', 0.1) IS NOT NULL OR color_darken('#000', 0.1) IS NULL"
 expects = "1"
 
 [extension."pdf-meta".scalar]
@@ -552,7 +558,7 @@ sql = "SELECT polyline_decode('test') IS NOT NULL OR polyline_decode('test') IS 
 expects = "1"
 
 [extension."polyline-simplify".scalar]
-sql = "SELECT polyline_simplify_placeholder() IS NOT NULL OR polyline_simplify_placeholder() IS NULL"
+sql = "SELECT polyline_simplify_dp('', 1.0) IS NOT NULL OR polyline_simplify_dp('', 1.0) IS NULL"
 expects = "1"
 
 [extension.postcode.scalar]
@@ -672,7 +678,7 @@ sql = "SELECT sql_dialect() IS NOT NULL OR sql_dialect() IS NULL"
 expects = "1"
 
 [extension."ssh-key".scalar]
-sql = "SELECT ssh_key_placeholder() IS NOT NULL OR ssh_key_placeholder() IS NULL"
+sql = "SELECT ssh_key_algorithm('') IS NOT NULL OR ssh_key_algorithm('') IS NULL"
 expects = "1"
 
 [extension.ssn.scalar]
@@ -813,7 +819,7 @@ sql = "SELECT webauthn_auth_options('', '') IS NOT NULL OR webauthn_auth_options
 expects = "1"
 
 [extension."whois-parse".scalar]
-sql = "SELECT whois_parse_placeholder() IS NOT NULL OR whois_parse_placeholder() IS NULL"
+sql = "SELECT whois_creation_date('') IS NOT NULL OR whois_creation_date('') IS NULL"
 expects = "1"
 
 [extension.x25519.scalar]
