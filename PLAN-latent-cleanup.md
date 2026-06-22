@@ -1,9 +1,13 @@
 # Plan: latent cleanup items
 
-> **Status: L1a + L1b + L2b + L3c shipped in `5c66503`.**
-> L2a (cached Connection; profile-gated) + L3a (--trust=prompt;
-> ask-gated) + L3b (URI describe; ask-gated) remain per the
-> plan's own gates.
+> **Status: all items shipped.**
+>
+> | Item | Commit |
+> |---|---|
+> | L1a / L1b / L2b / L3c | 5c66503 |
+> | L2a  cache the user-db Connection on Host | 827cead |
+> | L3b  describe-extension-from-uri shares load's resolver | 9c7b0ba |
+> | L3a  `--trust=prompt` mode + declared_caps surface | 8eaa51f |
 
 > Small tail of items flagged during the grants / component-
 > cache / wasmMachine work that don't have a complaint behind
