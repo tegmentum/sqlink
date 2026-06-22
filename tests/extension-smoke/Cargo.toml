@@ -1,0 +1,37 @@
+[package]
+name = "extension-smoke"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = """
+Per-extension smoke matrix for sqlink scenario 2 (the standalone
+SQLite-in-wasm + cli + loader path). Each extension's
+`.component.wasm` is loaded via `sqlink --db ... cli.component.wasm`
+and exercised with a small fixed SQL probe; output is compared
+against an expected pattern.
+
+Task #395 in the release-readiness sequence. The fixture data
+this crate carries (tests/extension-smoke/fixtures.toml) is the
+reusable input that scenarios 1 (native loader) and 3 (browser
+runtime) will eventually run the same assertions against.
+"""
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "extension_smoke"
+path = "src/test.rs"
+
+[[bin]]
+name = "extension-smoke-report"
+path = "src/report.rs"
+
+[dependencies]
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+regex = "1"
+once_cell = "1"
+
+[dev-dependencies]

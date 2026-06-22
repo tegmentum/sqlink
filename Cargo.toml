@@ -26,6 +26,7 @@ members = [
     "extensions/stats",
     "extensions/postgis-bridge",
     "examples/rust/runnable-sqlite-demo",
+    "tests/extension-smoke",
 ]
 exclude = [
     # extensions/* with their own [workspace] are intentionally
