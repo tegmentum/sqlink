@@ -1,0 +1,31 @@
+[package]
+name = "sqlite-utils-schema-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+sqlite-utils schema commands as wasm dot commands.
+
+Ports the schema-shaped CLI surface of Simon Willison's
+sqlite-utils (https://github.com/simonw/sqlite-utils) onto the
+SQLink dotcmd-aware world. 14 dot commands: .views .triggers
+.create_table .create_index .create_view .drop_table .drop_view
+.rename_table .duplicate .add_column .transform .extract .add_fk
+.add_fks .index_fks.
+
+Every command parses positional args + a small flag set and
+emits SQL through the host's shared spi connection. The
+transform/extract path uses the copy-and-swap pattern sqlite-
+utils uses in Python: build a new table with the desired shape,
+INSERT ... SELECT from the old, DROP + RENAME, all in one tx.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
