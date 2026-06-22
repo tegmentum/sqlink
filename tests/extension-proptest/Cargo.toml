@@ -1,0 +1,31 @@
+[package]
+name = "extension-proptest"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = """
+Property-based (proptest) tests for sqlink's SQL-surface
+extensions. Where extension-smoke (#395) checks one known input
+per extension, this crate throws arbitrary inputs at parsers /
+validators / encoders / hashes and asserts invariants (no
+crash; round-trip; determinism; symmetry).
+
+Reuses extension-smoke's `run_probe` driver so a single
+subprocess-throttling pathway covers both crates. Each
+property runs 32-64 cases (capped) — the per-case subprocess
+spawn cost makes uncapped proptest defaults too slow.
+
+Task #396 in the release-readiness sequence.
+"""
+
+[lib]
+path = "src/lib.rs"
+
+[[test]]
+name = "extension_proptest"
+path = "src/test.rs"
+
+[dependencies]
+extension-smoke = { path = "../extension-smoke" }
+proptest = "1"
+regex = "1"
