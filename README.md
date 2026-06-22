@@ -44,6 +44,23 @@ host does:
    in this repo are this configuration. Sandboxed by default,
    capability-gated, portable across OSes.
 
+   Sub-options:
+     - **AOT compilation.** `wasmtime compile cli.component.wasm`
+       produces a `.cwasm` that loads in milliseconds instead of
+       paying JIT cost on every invocation. The component-blob
+       cache in `sqlite-cas-cache/` does this on the hot path
+       automatically; standalone `.cwasm` artifacts can be
+       shipped for cold-start-sensitive deployments (CLI tools,
+       serverless functions, edge runtimes).
+     - **Embedded extensions.** Instead of dynamic `.load`,
+       extensions can be baked into the cli component at build
+       time via `include_bytes!` + auto-register. The shipped
+       cli already does this for core-dotcmd + all sqlite-utils-*
+       (10 extensions, 73 dot commands). Same pattern works for
+       any extension — produces a self-contained single-file
+       distribution with zero runtime dependencies on the
+       extension catalog.
+
 3. **Browser-side SQLite-in-wasm + extensions.** Same wasm-side
    SQLite + extension components, but the host is a
    browser-resident wasm runtime instead of wasmtime. The browser
@@ -55,8 +72,20 @@ host does:
    code resolves + loads them on demand. Tracked in
    [docs/plans/PLAN-browser-runtime.md](docs/plans/PLAN-browser-runtime.md).
 
+   Sub-option:
+     - **Embedded extensions.** Same as scenario 2  ship a
+       single bundle with extensions baked in via
+       `include_bytes!`-equivalent at the JS side (a single
+       webpack/rollup chunk containing the cli wasm + selected
+       extensions). Zero runtime fetches; ideal for offline-
+       capable PWAs, embedded docs / playgrounds, or any context
+       where deferring extension load to a CDN round-trip isn't
+       acceptable.
+
 The WIT contract in `sqlite-loader-wit/` is the single point of
-truth that lets the same extension binary work in all three.
+truth that lets the same extension binary work in all three
+scenarios; the same `.component.wasm` is interchangeable between
+dynamic-`.load` and static-embed modes within scenarios 2 and 3.
 
 ## What's here
 
