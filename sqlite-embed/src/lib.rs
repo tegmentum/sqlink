@@ -1,4 +1,4 @@
-//! Centralized FFI glue for embedded sqlite-wasm extensions.
+//! Centralized FFI glue for embedded sqlink extensions.
 //!
 //! Each extension's `src/embed.rs` becomes a tiny module: a
 //! `call_scalar(fid, args)` body (reuses the WIT path's logic)

@@ -15,7 +15,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Canonical Policy / Capability / HttpPolicy / PolicyError types,
-# shared with sqlite-wasm-loader/runtimes/{wasmtime,wamr}.
+# shared with sqlink-loader/runtimes/{wasmtime,wamr}.
 sqlite-extension-policy = { path = "../sqlite-loader-wit" }
 
 anyhow = "1.0"
@@ -30,7 +30,7 @@ wasmtime = { version = "45.0.1", features = [
     # configured directory; subsequent `Engine::precompile_component`
     # / `Component::new` calls hit the cache. See Host::new for the
     # directory wiring (env `SQLITE_WASM_COMPILE_CACHE` or default
-    # `~/.cache/sqlite-wasm/compile-cache`).
+    # `~/.cache/sqlink/compile-cache`).
     "cache",
 ] }
 wasmtime-wasi = "45.0.1"
@@ -55,7 +55,7 @@ hickory-resolver = { version = "0.24", default-features = false, features = ["to
 # Used to be `rusqlite`; dropped because (a) the host had two
 # SQLite stacks and (b) every type swap was paid twice.
 sqlink-core = { path = "../core" }
-# Direct dep so the sqlite-wasm-run binary can call the
+# Direct dep so the sqlink-run binary can call the
 # session/changeset FFI for its `changeset` subcommand. The
 # bundled sqlite3 is compiled with SESSION via LIBSQLITE3_FLAGS
 # (.cargo/config.toml); we declare sqlite3session_* / sqlite3changeset_*

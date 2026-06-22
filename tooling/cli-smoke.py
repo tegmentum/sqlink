@@ -118,7 +118,7 @@ def smoke_one(name: str, timeout: int = 30) -> tuple[bool, str]:
         if not line.lstrip().startswith("--")
     )
     sql = ".nullvalue <NULL>\n" + sql
-    tmpdir = tempfile.mkdtemp(prefix="sqlite-wasm-cli-smoke-")
+    tmpdir = tempfile.mkdtemp(prefix="sqlink-cli-smoke-")
     try:
         # Smokes that `.load extensions/<NAME>/...` expect that
         # relative path to resolve. The cli's wasi preopens only

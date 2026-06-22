@@ -3,7 +3,7 @@ name = "sqlink-httpd"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Native HTTP/HTTPS server that executes SQL against a sqlite database and returns JSON. Sibling to sqlite-wasm-run; talks the same `--db PATH` contract and links libsqlite3-sys directly (no wasm runtime in the hot path)."
+description = "Native HTTP/HTTPS server that executes SQL against a sqlite database and returns JSON. Sibling to sqlink-run; talks the same `--db PATH` contract and links libsqlite3-sys directly (no wasm runtime in the hot path)."
 
 [[bin]]
 name = "sqlink-httpd"

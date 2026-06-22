@@ -15,7 +15,7 @@
 //
 // Returning `manifest` (and accepting `load-options`) keeps the
 // dynamic-load and static-compose deployments speaking the same
-// vocabulary as the native loader in sqlite-wasm-loader: an extension
+// vocabulary as the native loader in sqlink-loader: an extension
 // is fully described by its manifest, and a load is fully constrained
 // by its load-options. No bespoke loader-side type duplicates the
 // fields already in metadata.manifest.

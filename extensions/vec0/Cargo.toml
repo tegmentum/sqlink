@@ -60,7 +60,7 @@ table after the first query are invisible to the cached index.
 host via `spi.execute` to scan the source table; the host's
 spi connection is a separate sqlite3 instance from the cli's
 in-wasm one and `:memory:` dbs can't be shared between the
-two. Pass `--db PATH` to `sqlite-wasm-run`.
+two. Pass `--db PATH` to `sqlink-run`.
 
 Tier-3 vtab port per PLAN-sqlite-plugins.md. Sibling to
 sqlite-vec's vec0 in spirit, but trades dimension-enforcement-

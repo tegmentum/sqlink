@@ -1,6 +1,6 @@
-//! Integration test driver for the `./sqlite-wasm` shell wrapper.
+//! Integration test driver for the `./sqlink` shell wrapper.
 //!
-//! Spawns `tests/cli/sqlite-wasm-wrapper.sh`. Skips if either the
+//! Spawns `tests/cli/sqlink-wrapper.sh`. Skips if either the
 //! wrapper or the wasm component artifact is missing so the suite
 //! stays green on environments without the wasm toolchain.
 
@@ -13,7 +13,7 @@ fn wrapper_invocation_shapes() {
         .parent()
         .expect("host has a parent dir")
         .to_path_buf();
-    let script = repo_root.join("tests/cli/sqlite-wasm-wrapper.sh");
+    let script = repo_root.join("tests/cli/sqlink-wrapper.sh");
     let component = repo_root
         .join("target/wasm32-wasip2/release/sqlite_cli.component.wasm");
     if !script.exists() {

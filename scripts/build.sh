@@ -17,7 +17,7 @@ fi
 
 JOBS=$(nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-echo "Building sqlite-wasm..."
+echo "Building sqlink..."
 echo "WASI SDK: ${WASI_SDK_PREFIX}"
 
 [[ ! -f "${PROJECT_DIR}/deps/sqlite/sqlite3.c" ]] && "${SCRIPT_DIR}/download-sqlite.sh"

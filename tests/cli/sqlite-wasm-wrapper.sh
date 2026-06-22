@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Integration test for the ./sqlite-wasm shell wrapper.
+# Integration test for the ./sqlink shell wrapper.
 #
 # Exercises every invocation shape and asserts on stdout. Run
 # directly:
 #
-#     ./tests/cli/sqlite-wasm-wrapper.sh
+#     ./tests/cli/sqlink-wrapper.sh
 #
-# Or under cargo test via host/tests/sqlite_wasm_wrapper.rs.
+# Or under cargo test via host/tests/sqlink_wrapper.rs.
 
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-wrapper="$repo_root/sqlite-wasm"
+wrapper="$repo_root/sqlink"
 component="$repo_root/target/wasm32-wasip2/release/sqlite_cli.component.wasm"
 runner="$repo_root/target/debug/sqlink"
 

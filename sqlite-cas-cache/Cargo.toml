@@ -8,7 +8,7 @@ filesystem-based extension cache (host/src/cache.rs) with a
 two-mode store:
 
   - External mode: shared SQLite db at a well-known path (default
-    ~/.cache/sqlite-wasm/cas.sqlite). Dedups by blake3 hash
+    ~/.cache/sqlink/cas.sqlite). Dedups by blake3 hash
     across cli invocations on the same machine.
   - Internal mode: __cas_* tables embedded in the user's working
     db. Self-contained for shipping; the .db file carries its

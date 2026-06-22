@@ -87,8 +87,8 @@ impl Cache {
     /// Resolve the cas db file location, highest precedence first:
     /// 1. `--cache-dir <path>` flag (the explicit `cli_arg`)
     /// 2. `$SQLITE_WASM_CACHE_DIR`
-    /// 3. `$XDG_CACHE_HOME/sqlite-wasm/cas.sqlite`
-    /// 4. `$HOME/.cache/sqlite-wasm/cas.sqlite`
+    /// 3. `$XDG_CACHE_HOME/sqlink/cas.sqlite`
+    /// 4. `$HOME/.cache/sqlink/cas.sqlite`
     ///
     /// The flag is named `--cache-dir` for historical reasons;
     /// callers may pass either a file path or a directory. A
@@ -108,13 +108,13 @@ impl Cache {
             }
         } else if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
             if !xdg.is_empty() {
-                Some(PathBuf::from(xdg).join("sqlite-wasm"))
+                Some(PathBuf::from(xdg).join("sqlink"))
             } else {
                 None
             }
         } else {
             let home = std::env::var("HOME").map_err(|_| anyhow!("HOME not set"))?;
-            Some(PathBuf::from(home).join(".cache").join("sqlite-wasm"))
+            Some(PathBuf::from(home).join(".cache").join("sqlink"))
         };
         let raw = raw.ok_or_else(|| anyhow!("no cache path resolvable"))?;
         // Accept either "<dir>" (append cas.sqlite) or

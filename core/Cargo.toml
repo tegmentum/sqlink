@@ -3,7 +3,7 @@ name = "sqlink-core"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Shared SQLite wrapper for sqlite-wasm crates (cli + sqlite-lib)."
+description = "Shared SQLite wrapper for sqlink crates (cli + sqlite-lib)."
 
 [lib]
 crate-type = ["rlib"]

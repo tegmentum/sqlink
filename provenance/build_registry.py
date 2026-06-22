@@ -3,7 +3,7 @@
 
 The provenance DB is the source of truth for what lives in extensions/.
 The registry/index.json is the install-time manifest consumed by
-tools/sqlite-wasm-ext and tests/cli/test-cli.sh. Until now the registry
+tools/sqlink-ext and tests/cli/test-cli.sh. Until now the registry
 had 9 hand-curated stub entries from before any extension shipped; this
 script regenerates the file from the scanned source data so it stays
 in sync as the catalog grows.
@@ -31,7 +31,7 @@ from pathlib import Path
 
 REGISTRY_VERSION = "1.0.0"
 REGISTRY_URL = (
-    "https://raw.githubusercontent.com/user/sqlite-wasm-extensions/main/registry/index.json"
+    "https://raw.githubusercontent.com/user/sqlink-extensions/main/registry/index.json"
 )
 MIN_SQLITE_VERSION = "3.39.0"
 
@@ -40,7 +40,7 @@ MIN_SQLITE_VERSION = "3.39.0"
 # /asset/<name> returns the raw .component.wasm bytes via the
 # httpd's `blob` route kind. The empty base means artifact_url is
 # emitted as a relative path; consumers that need an absolute URL
-# (the cli's `tools/sqlite-wasm-ext` installer, programmatic clients)
+# (the cli's `tools/sqlink-ext` installer, programmatic clients)
 # override with --artifact-base https://extensions.example.com.
 DEFAULT_ARTIFACT_BASE = ""
 
@@ -365,7 +365,7 @@ def build_entry(
     authors_field = plugin_row["authors"] or ""
     authors = [a.strip() for a in authors_field.split(";") if a.strip()]
     if not authors:
-        authors = ["sqlite-wasm contributors"]
+        authors = ["sqlink contributors"]
 
     # Exports: distinct scalar/aggregate names + vtab table names.
     exports_cur = conn.execute(
@@ -404,7 +404,7 @@ def build_entry(
               AND optional = 0
               AND dep_name NOT IN ('wit-bindgen', 'wit-bindgen-rt',
                                    'libsqlite3-sys', 'sqlite-embed',
-                                   'sqlite-wasm-core')
+                                   'sqlink-core')
         ORDER BY dep_name
         """,
         (name, version),
@@ -417,8 +417,8 @@ def build_entry(
         "description": description,
         "license": license_,
         "authors": authors,
-        "repository": "https://github.com/tegmentum/sqlite-wasm",
-        "homepage": f"https://github.com/tegmentum/sqlite-wasm/tree/main/extensions/{name}",
+        "repository": "https://github.com/tegmentum/sqlink",
+        "homepage": f"https://github.com/tegmentum/sqlink/tree/main/extensions/{name}",
         "keywords": derive_keywords(name, description),
         "categories": categorize(name, plugin_row["declared_world"]),
         "source": "builtin",
@@ -449,7 +449,7 @@ def build_registry(db_path: Path, repo: Path, artifact_base: str) -> dict:
 
     # Keep the extension-manager pseudo-entry at the top  it's the
     # consumer of the registry, not a real entry in the DB, but the
-    # `tools/sqlite-wasm-ext` CLI expects it as the first record.
+    # `tools/sqlink-ext` CLI expects it as the first record.
     entries = [
         {
             "name": "extension-manager",
@@ -457,12 +457,12 @@ def build_registry(db_path: Path, repo: Path, artifact_base: str) -> dict:
             "description": "SQL interface for managing SQLite WASM extensions",
             "license": "MIT",
             "authors": ["SQLite WASM Team"],
-            "repository": "https://github.com/tegmentum/sqlite-wasm",
-            "homepage": "https://github.com/tegmentum/sqlite-wasm#readme",
+            "repository": "https://github.com/tegmentum/sqlink",
+            "homepage": "https://github.com/tegmentum/sqlink#readme",
             "keywords": ["extension", "manager", "registry", "install"],
             "categories": ["utility"],
             "source": "builtin",
-            "oci_artifact": "ghcr.io/anthropics/sqlite-wasm-extensions/extension-manager:0.1.0",
+            "oci_artifact": "ghcr.io/anthropics/sqlink-extensions/extension-manager:0.1.0",
             "checksum": "sha256:builtin",
             "size_bytes": 0,
             "min_sqlite_version": MIN_SQLITE_VERSION,

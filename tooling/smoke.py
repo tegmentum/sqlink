@@ -189,11 +189,11 @@ def _build_argv(marker: str | None, no_cache: bool) -> tuple[list[str], str | No
     tmpdir = None
     db_tempfile = None
     if no_cache:
-        tmpdir = tempfile.mkdtemp(prefix="sqlite-wasm-smoke-")
+        tmpdir = tempfile.mkdtemp(prefix="sqlink-smoke-")
         argv += ["--cache-dir", tmpdir, "--no-component-cache"]
     # T-40: pick db path  marker overrides default.
     if marker == "tempfile":
-        fd, db_path = tempfile.mkstemp(prefix="sqlite-wasm-smoke-", suffix=".db")
+        fd, db_path = tempfile.mkstemp(prefix="sqlink-smoke-", suffix=".db")
         os.close(fd)
         os.unlink(db_path)  # remove empty file; sqlite creates it on open
         db_tempfile = db_path

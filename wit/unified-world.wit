@@ -4,7 +4,7 @@ package sqlite:wasm@0.1.0;
 ///
 /// Targeted by the C CLI binary `build/sqlite-cli-unified.wasm`
 /// (built from `src/cli/sqlite_cli.c` via the Makefile's
-/// `bindings-unified` target). The host (sqlite-wasm itself,
+/// `bindings-unified` target). The host (sqlink itself,
 /// internally) calls each composed extension's per-slot
 /// `describe()` at startup, registers the manifest entries with
 /// SQLite, and dispatches by calling the slot's `call()` when SQL

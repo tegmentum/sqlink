@@ -1,7 +1,7 @@
 // Build script for sqlink-core.
 //
 // On wasm32 targets, compiles src/vfs/vfs_wasi.c (from the parent
-// `sqlite-wasm` repo, shared with the C CLI build) into the core
+// `sqlink` repo, shared with the C CLI build) into the core
 // crate. The wasivfs registers itself via `sqlite3_wasivfs_register`
 // and bridges sqlite3's VFS calls onto WASI's filesystem syscalls,
 // so a file-backed open under a host-preopened directory writes to
@@ -44,5 +44,5 @@ fn main() {
     if let Some(inc) = sqlite3_include {
         build.include(inc);
     }
-    build.compile("sqlite_wasm_wasivfs");
+    build.compile("sqlink_wasivfs");
 }

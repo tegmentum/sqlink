@@ -1,6 +1,6 @@
 //! sqlink-httpd  HTTP/HTTPS server that executes SQL.
 //!
-//! Sibling to sqlite-wasm-run: same `--db PATH` contract, same
+//! Sibling to sqlink-run: same `--db PATH` contract, same
 //! sqlite defaults. Native binary, links libsqlite3-sys directly,
 //! no wasm runtime in the hot path.
 
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
 
     // Wasm dispatcher  None until --load wires something up.
     // Each --load NAME=PATH (or just PATH; stem becomes name)
-    // pre-compiles the component via the embedded sqlite-wasm-
+    // pre-compiles the component via the embedded sqlink-
     // host's compile cache. Per-request dispatch goes through
     // wasm::HostDispatcher (see src/wasm.rs).
     let wasm: Option<Arc<dyn router::WasmDispatcher>> = if !args.loads.is_empty() {

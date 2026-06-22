@@ -3,7 +3,7 @@
 //! Why scalars (not a vtab):
 //!   A vtab needs persistent rowid identity + a destructor hooked
 //!   into the connection lifecycle, which is awkward in the
-//!   sqlite-wasm extension world (no per-connection guest state
+//!   sqlink extension world (no per-connection guest state
 //!   handle). A thread-local `LruCache` reaches the same usable
 //!   shape — one cache per host VM instance — with a fraction of
 //!   the surface area. This is the shape the brief calls for in

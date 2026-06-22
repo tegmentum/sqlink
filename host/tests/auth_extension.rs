@@ -1,7 +1,7 @@
 //! T2.6 from PLAN-final-threads — acceptance test for the
 //! authorizer dispatch path via a real loaded extension.
 //!
-//! The extension lives in `sqlite-wasm-loader/runtimes/wasmtime/
+//! The extension lives in `sqlink-loader/runtimes/wasmtime/
 //! auth-extension/`. It targets the canonical `authorizing` world,
 //! declares `has_authorizer: true`, and DENIES `CreateTable` +
 //! `DropTable` while letting everything else through.
@@ -22,7 +22,7 @@
 //! of T2.4.
 //!
 //! Test skips if `auth_extension.wasm` isn't built in the sibling
-//! `sqlite-wasm-loader` repo, matching the convention in
+//! `sqlink-loader` repo, matching the convention in
 //! `host/tests/load.rs`.
 
 use std::path::PathBuf;
@@ -33,8 +33,8 @@ use sqlink_host::{Capability, Host, Policy};
 fn auth_ext_path() -> Option<PathBuf> {
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let candidates = [
-        "../../sqlite-wasm-loader/target/wasm32-wasip1/release/auth_extension.wasm",
-        "../sqlite-wasm-loader/target/wasm32-wasip1/release/auth_extension.wasm",
+        "../../sqlink-loader/target/wasm32-wasip1/release/auth_extension.wasm",
+        "../sqlink-loader/target/wasm32-wasip1/release/auth_extension.wasm",
     ];
     for c in candidates {
         let p = manifest_dir.join(c);
@@ -48,7 +48,7 @@ fn auth_ext_path() -> Option<PathBuf> {
 #[tokio::test]
 async fn dispatches_authorize_through_loaded_extension() {
     let Some(path) = auth_ext_path() else {
-        eprintln!("skipping: auth_extension.wasm not found (build sqlite-wasm-loader's auth-extension)");
+        eprintln!("skipping: auth_extension.wasm not found (build sqlink-loader's auth-extension)");
         return;
     };
 

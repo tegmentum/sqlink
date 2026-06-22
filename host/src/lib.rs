@@ -14,7 +14,7 @@
 //!
 //! Resource-limit knobs (fuel-per-call, memory cap, epoch deadline)
 //! apply to every loaded extension's `Store` identically to how the
-//! native `sqlite-wasm-loader` applies them.
+//! native `sqlink-loader` applies them.
 //!
 //! The component-side dispatch (the in-WASM CLI calling back into
 //! loaded extensions' `scalar-function.call`) is the next iteration
@@ -705,7 +705,7 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
 }
 
 /// Translate the WIT `load-options` record into the host's
-/// `Policy`. Mirrors `sqlite-wasm-loader`'s `Policy::from_wit` so
+/// `Policy`. Mirrors `sqlink-loader`'s `Policy::from_wit` so
 /// values port directly across deployment modes.
 fn policy_from_load_options(opts: &bindings::sqlite::extension::policy::LoadOptions) -> Policy {
     let mut policy = Policy::deny_all();
@@ -832,7 +832,7 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
 }
 
 /// Default epoch-bumper tick interval; matches the
-/// `sqlite-wasm-loader` setting so policy values port directly.
+/// `sqlink-loader` setting so policy values port directly.
 const EPOCH_TICK: Duration = Duration::from_millis(1);
 
 /// Per-extension key/value backing for the `state` + `cache`
@@ -4394,7 +4394,7 @@ pub struct Host {
     component_cache: Arc<Mutex<ComponentCache>>,
     /// PLAN-component-cache.md C2: host-local HMAC secret for
     /// the precompiled-blob cache. Lazy-loaded from
-    /// `~/.sqlite-wasm/cache-hmac.key` on first access; absent
+    /// `~/.sqlink/cache-hmac.key` on first access; absent
     /// on platforms where it can't be created (the cache then
     /// degrades to a no-op).
     blob_cache_key: Arc<std::sync::OnceLock<Option<Vec<u8>>>>,
@@ -4591,8 +4591,8 @@ impl TrustPolicy {
 ///
 /// Priority:
 ///   1. `SQLITE_WASM_COMPILE_CACHE` env var (absolute path)
-///   2. `$XDG_CACHE_HOME/sqlite-wasm/compile-cache`
-///   3. `$HOME/.cache/sqlite-wasm/compile-cache`
+///   2. `$XDG_CACHE_HOME/sqlink/compile-cache`
+///   3. `$HOME/.cache/sqlink/compile-cache`
 ///
 /// Returns `None` when neither HOME nor XDG_CACHE_HOME is set
 /// (e.g. minimal CI containers), which disables the cache rather
@@ -4605,12 +4605,12 @@ fn compile_cache_dir() -> Option<std::path::PathBuf> {
     }
     if let Ok(xdg) = std::env::var("XDG_CACHE_HOME") {
         if !xdg.is_empty() {
-            return Some(std::path::PathBuf::from(xdg).join("sqlite-wasm/compile-cache"));
+            return Some(std::path::PathBuf::from(xdg).join("sqlink/compile-cache"));
         }
     }
     if let Ok(home) = std::env::var("HOME") {
         if !home.is_empty() {
-            return Some(std::path::PathBuf::from(home).join(".cache/sqlite-wasm/compile-cache"));
+            return Some(std::path::PathBuf::from(home).join(".cache/sqlink/compile-cache"));
         }
     }
     None
@@ -5282,7 +5282,7 @@ impl Host {
     /// verify the manifest, and store the loaded component. Returns
     /// the manifest's name on success.
     ///
-    /// This is the runtime mirror of `sqlite-wasm-loader`'s
+    /// This is the runtime mirror of `sqlink-loader`'s
     /// `Registry::load_with_policy`: same gates, same shape, same
     /// outcome. The in-WASM `.load` command will route here via the
     /// `extension-loader` WIT interface (wiring lives in a host impl

@@ -1,10 +1,10 @@
 #!/bin/bash
-# Test script for sqlite-wasm-ext CLI
+# Test script for sqlink-ext CLI
 
 set -e
 
-CLI="./tools/sqlite-wasm-ext"
-TEST_DIR="/tmp/sqlite-wasm-cli-test"
+CLI="./tools/sqlink-ext"
+TEST_DIR="/tmp/sqlink-cli-test"
 REGISTRY_FILE="$(pwd)/registry/index.json"
 
 # Colors for output

@@ -1,7 +1,7 @@
 //! Thin Connection wrapper over libsqlite3-sys. Mirrors the cli's
 //! pragma defaults (cache_size=-262144, temp_store=MEMORY,
 //! synchronous=NORMAL) so behaviour stays the same across the two
-//! binaries; the schema a user sees through `sqlite-wasm-run` is
+//! binaries; the schema a user sees through `sqlink-run` is
 //! the schema they see through `sqlink-httpd`.
 
 use anyhow::{anyhow, bail, Result};

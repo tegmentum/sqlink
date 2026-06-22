@@ -108,7 +108,7 @@ jobs:
 # Future jobs (held until the wasm-side build is moved into CI):
 #
 #   wasm-builds:
-#     Build cli-rust, fiji-hello, sqlite-wasm-loader extensions.
+#     Build cli-rust, fiji-hello, sqlink-loader extensions.
 #     Needs wasi-sdk in the container (~150 MB download) and
 #     cargo-component (cargo install). The wasi-sdk + rusqlite-bundled
 #     combination is the load-bearing thing — proves the C-toolchain

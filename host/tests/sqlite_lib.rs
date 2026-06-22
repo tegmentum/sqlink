@@ -54,12 +54,12 @@ fn sqlite_lib_path() -> Option<PathBuf> {
     None
 }
 
-/// Path to a canonical-world wasm extension (sqlite-wasm-loader's
+/// Path to a canonical-world wasm extension (sqlink-loader's
 /// `test_extension.wasm`). Same artifact load.rs uses.
 fn canonical_ext_path() -> Option<PathBuf> {
     let candidates = [
-        "../../sqlite-wasm-loader/target/wasm32-wasip1/release/test_extension.wasm",
-        "../sqlite-wasm-loader/target/wasm32-wasip1/release/test_extension.wasm",
+        "../../sqlink-loader/target/wasm32-wasip1/release/test_extension.wasm",
+        "../sqlink-loader/target/wasm32-wasip1/release/test_extension.wasm",
     ];
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     for c in candidates {
@@ -113,7 +113,7 @@ async fn library_version_and_sqlite_version() {
         eprintln!("skipping: sqlite-lib not built");
         return;
     };
-    let library = lib.sqlite_wasm_library();
+    let library = lib.sqlink_library();
 
     let lib_v = library.call_library_version(&mut store).await.expect("library_version");
     assert!(!lib_v.is_empty(), "library_version returns something");
@@ -128,7 +128,7 @@ async fn library_is_statement_complete() {
         eprintln!("skipping: sqlite-lib not built");
         return;
     };
-    let library = lib.sqlite_wasm_library();
+    let library = lib.sqlink_library();
 
     let complete = library.call_is_statement_complete(&mut store, "SELECT 1;").await.unwrap();
     assert!(complete, "complete statement registers as complete");
@@ -143,7 +143,7 @@ async fn high_level_open_memory_runs_a_query() {
         eprintln!("skipping: sqlite-lib not built");
         return;
     };
-    let high = lib.sqlite_wasm_high_level();
+    let high = lib.sqlink_high_level();
 
     let conn = high
         .call_open_memory(&mut store)
@@ -186,7 +186,7 @@ async fn spi_sees_high_level_writes_through_default_connection() {
         eprintln!("skipping: sqlite-lib not built");
         return;
     };
-    let high = lib.sqlite_wasm_high_level();
+    let high = lib.sqlink_high_level();
     let spi = lib.sqlite_extension_spi();
 
     let conn = high
@@ -228,10 +228,10 @@ async fn library_load_extension_round_trip() {
         return;
     };
     let Some(ext_path) = canonical_ext_path() else {
-        eprintln!("skipping: test_extension.wasm not built (sqlite-wasm-loader)");
+        eprintln!("skipping: test_extension.wasm not built (sqlink-loader)");
         return;
     };
-    let library = lib.sqlite_wasm_library();
+    let library = lib.sqlink_library();
 
     use exports::sqlite::wasm::library::{Capability, LoadOptions};
     let opts = LoadOptions {

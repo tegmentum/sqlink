@@ -25,7 +25,7 @@ pub type Hash = blake3::Hash;
 #[derive(Debug, Clone)]
 pub enum StoreMode {
     /// Separate db file at this path. Default
-    /// `~/.cache/sqlite-wasm/cas.sqlite`.
+    /// `~/.cache/sqlink/cas.sqlite`.
     External(PathBuf),
     /// The store's tables live inside the caller's connection.
     /// `__cas_*` prefix guarantees no collision with user
@@ -118,12 +118,12 @@ impl SqliteCasStore {
         Ok(store)
     }
 
-    /// Default external location: `~/.cache/sqlite-wasm/cas.sqlite`.
+    /// Default external location: `~/.cache/sqlink/cas.sqlite`.
     pub fn default_external_path() -> PathBuf {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
         Path::new(&home)
             .join(".cache")
-            .join("sqlite-wasm")
+            .join("sqlink")
             .join("cas.sqlite")
     }
 

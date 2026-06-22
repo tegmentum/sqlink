@@ -5,7 +5,7 @@ edition = "2021"
 description = """
 Database introspection helpers over the spi.execute import.
 All scalars query the host db via spi; works only with a
-file-backed db (--db PATH on sqlite-wasm-run).
+file-backed db (--db PATH on sqlink-run).
 
 Functions:
   schema_tables()             TEXT  JSON array of table names

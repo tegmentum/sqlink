@@ -15,7 +15,7 @@ sqlite's connection-free changeset operations as SQL:
 
 Capture (sqlite3session_*) and apply (sqlite3changeset_apply)
 are NOT in this extension; the cli already exposes them via the
-`.session` dot-command and `sqlite-wasm-run changeset` CLI
+`.session` dot-command and `sqlink-run changeset` CLI
 subcommands. Phase 2/3 of PLAN-tooling-and-session.md cover
 WIT-level capture/apply only when a concrete consumer needs
 them at the SQL layer.

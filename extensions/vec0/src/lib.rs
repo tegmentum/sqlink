@@ -3067,7 +3067,7 @@ mod wasm_export {
                 .ok_or_else(|| "vec0: instance not connected".to_string())?;
 
             // spi.execute requires a file-backed db (--db PATH on the
-            // sqlite-wasm-run invocation). The host runs spi calls
+            // sqlink-run invocation). The host runs spi calls
             // through a SEPARATE sqlite3 connection from the cli's
             // in-wasm one; :memory: dbs aren't shareable across
             // those two libraries, and the host errors immediately

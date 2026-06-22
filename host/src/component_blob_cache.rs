@@ -5,7 +5,7 @@
 //!
 //! Owned by the host (not the cli) because:
 //!   - the wasm cli's WASI sandbox can't reliably reach
-//!     `~/.sqlite-wasm/cache-hmac.key`;
+//!     `~/.sqlink/cache-hmac.key`;
 //!   - `Component::deserialize` is `unsafe` and the trust
 //!     boundary belongs to the host;
 //!   - integrating into the same code path as C1's in-process
@@ -16,7 +16,7 @@
 //! attacker with db write access could swap blobs and own the
 //! host on the next `.load`. To prevent that we HMAC every
 //! cached blob with a host-local secret held at
-//! `~/.sqlite-wasm/cache-hmac.key` (mode 0600 on unix). Cache
+//! `~/.sqlink/cache-hmac.key` (mode 0600 on unix). Cache
 //! hits verify the HMAC before deserializing; mismatches are
 //! treated as a hard miss.
 
@@ -295,7 +295,7 @@ fn unix_now() -> i64 {
 }
 
 /// Read (or create on first use) the host-local HMAC secret at
-/// `~/.sqlite-wasm/cache-hmac.key`. Returns None if /dev/urandom
+/// `~/.sqlink/cache-hmac.key`. Returns None if /dev/urandom
 /// or the file path is unreadable — the caller MUST gracefully
 /// degrade to a no-cache path when this happens.
 ///
@@ -321,7 +321,7 @@ pub fn load_or_create_hmac_key() -> Option<Vec<u8>> {
         return None;
     };
     let mut path = PathBuf::from(home);
-    path.push(".sqlite-wasm");
+    path.push(".sqlink");
     if let Err(e) = std::fs::create_dir_all(&path) {
         warn_once(&format!("create_dir_all {}: {e}", path.display()));
         return None;

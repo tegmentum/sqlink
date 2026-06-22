@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 publish = false
 description = """
-Centralized FFI glue for embedded sqlite-wasm extensions.
+Centralized FFI glue for embedded sqlink extensions.
 Each extension's src/embed.rs becomes a thin call_scalar() body
 plus a static ScalarSpec table; this crate provides the
 sqlite3_create_function_v2 thunks + arg/result conversions so

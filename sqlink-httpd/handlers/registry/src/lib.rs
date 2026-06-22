@@ -1,6 +1,6 @@
 //! Registry-serving wasm handler.
 //!
-//! Serves the sqlite-wasm extension registry over HTTP:
+//! Serves the sqlink extension registry over HTTP:
 //!
 //!   GET  /                      ->  the whole index (registry/index.json)
 //!   GET  /candidates            ->  the wishlist (registry/candidates.json)
