@@ -1,5 +1,12 @@
 # Plan: interactive changeset capture (daemon vs WIT-extension)
 
+> **Status (2026-06-22): deferred, awaiting consumer.** This is
+> a design-rationale doc; the recommendation at the bottom is
+> "ship neither yet" until a concrete external-tool caller
+> materializes. Kept so the conversation can pick up where it
+> left off when a consumer asks. Tracked alongside item 2 of
+> `PLAN-speculative.md` (Session Phase 2/3).
+
 Phase 3 of the session port (capture + apply) landed in commit
 910afc2 via subcommands on `sqlite-wasm-run`. Trade-off:
 **no interactive capture**  the user has to provide changes as

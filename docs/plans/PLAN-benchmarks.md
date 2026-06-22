@@ -1,5 +1,10 @@
 # Benchmarks: sqlite-wasm-run vs native sqlite3
 
+> **Status (2026-06-22): living benchmark record.** Both the
+> pre-perf-push and post-perf-push snapshots are kept here as
+> the canonical reference. Re-run via `make bench` after any
+> perf-relevant change to refresh.
+
 First numbers on the table. Until now the project's perf claims
 ("you can ship a 50 MB wasm cli that runs anywhere") were
 unverified  this doc establishes the actual cost of running
