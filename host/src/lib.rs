@@ -5182,8 +5182,36 @@ impl Host {
                 .unwrap_or(uri);
             return self.load_extension(PathBuf::from(path), policy).await;
         }
-        // blake3: pinned hash — refuse if not cached. Scope the
-        // cache read so the guard doesn't span the .await.
+        // blake3: + other schemes go through resolve_uri_to_bytes,
+        // which deals with the cache and the resolver chain in one
+        // place. PLAN-latent-cleanup.md L3b: this used to be inlined
+        // here; extracted so describe_extension_from_uri can share it.
+        let bytes = self.resolve_uri_to_bytes(uri).await?;
+        let hint = if let Some(hex) = uri.strip_prefix("blake3:") {
+            format!("blake3:{}", &hex[..hex.len().min(8)])
+        } else {
+            uri.to_string()
+        };
+        self.load_extension_from_bytes(bytes, &hint, policy).await
+    }
+
+    /// PLAN-latent-cleanup.md L3b: shared "URI → bytes" path. Used
+    /// by both `load_extension_from_uri` and
+    /// `describe_extension_from_uri` so describe gets the same
+    /// resolver-chain coverage load already has (https:, oci:, etc.,
+    /// whatever the registered resolvers handle).
+    ///
+    /// Behavior:
+    ///   * `blake3:<hex>`  cache.lookup_by_hash; refuses if no
+    ///     `--cache-dir` or the hash is uncached.
+    ///   * Any other URI  cache.lookup_by_uri first; on miss
+    ///     resolve_uri (resolver chain) then cache.put so future
+    ///     calls hit the cache. Resolution failure propagates.
+    ///
+    /// `file:` is NOT handled here  callers fast-path it because
+    /// it doesn't need the cache machinery (a `std::fs::read` is
+    /// already the fastest thing we can do).
+    pub async fn resolve_uri_to_bytes(&self, uri: &str) -> Result<Vec<u8>> {
         if let Some(hex) = uri.strip_prefix("blake3:") {
             let bytes = {
                 let g = self.cache.read();
@@ -5194,22 +5222,15 @@ impl Host {
                     .lookup_by_hash(hex)
                     .ok_or_else(|| anyhow!("blake3:{hex} not in cache"))?
             };
-            return self
-                .load_extension_from_bytes(bytes, &format!("blake3:{}", &hex[..8]), policy)
-                .await;
+            return Ok(bytes);
         }
-        // Regular URI: check cache first. Scope the read guard so
-        // it doesn't span an .await.
         let cached = {
             let g = self.cache.read();
             g.as_ref().and_then(|c| c.lookup_by_uri(uri))
         };
         if let Some((_hash, bytes)) = cached {
-            return self
-                .load_extension_from_bytes(bytes, uri, policy)
-                .await;
+            return Ok(bytes);
         }
-        // Miss: resolve, cache, load.
         let bytes = self.resolve_uri(uri).await?;
         {
             let g = self.cache.read();
@@ -5218,7 +5239,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("uri load needs --cache-dir or default"))?;
             cache.put(uri, &bytes)?;
         }
-        self.load_extension_from_bytes(bytes, uri, policy).await
+        Ok(bytes)
     }
 
     /// Snapshot ref to the components map. Internal — kept available
@@ -9477,13 +9498,8 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
         uri: String,
     ) -> std::result::Result<bindings::sqlite::wasm::extension_loader::DescribedResult, LoaderError>
     {
-        // v1: short-circuit file: and blake3: (the schemes
-        // load_extension_from_uri handles in-host). Other schemes
-        // need a resolver round-trip and aren't wired into the
-        // describe path yet — callers that need them can fall
-        // back to load_extension_from_uri without pre-load
-        // enforcement, or fetch + cache first via `.cache import`
-        // / a normal load and then describe by file: path.
+        // file: stays a direct describe  no cache round-trip
+        // makes sense for a local path.
         if let Some(path) = uri
             .strip_prefix("file://")
             .or_else(|| uri.strip_prefix("file:"))
@@ -9496,38 +9512,28 @@ impl<'a> bindings::sqlite::wasm::extension_loader::Host for HostWrap<'a> {
                 Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
             };
         }
-        if let Some(hex) = uri.strip_prefix("blake3:") {
-            let bytes = {
-                let g = self.host.cache.read();
-                match g.as_ref().and_then(|c| c.lookup_by_hash(hex)) {
-                    Some(b) => b,
-                    None => {
-                        return Err(LoaderError {
-                            code: 1,
-                            message: format!("blake3:{hex} not in cache"),
-                        });
-                    }
-                }
-            };
-            return match self
-                .host
-                .describe_extension_from_bytes(bytes, &format!("blake3:{}", &hex[..hex.len().min(8)]))
-                .await
-            {
-                Ok((name, digest)) => Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
-                    name,
-                    digest_hex: digest,
-                }),
-                Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
-            };
+        // PLAN-latent-cleanup.md L3b: every other scheme (blake3:,
+        // https:, oci:, ...) goes through the shared
+        // resolve_uri_to_bytes path that load_extension_from_uri
+        // uses. Bytes in hand, describe_extension_from_bytes does
+        // the rest. The pre-load enforcement of --trust=stored now
+        // works against URI-loaded extensions, not just file: paths.
+        let bytes = match self.host.resolve_uri_to_bytes(&uri).await {
+            Ok(b) => b,
+            Err(e) => return Err(LoaderError { code: 1, message: e.to_string() }),
+        };
+        let hint = if let Some(hex) = uri.strip_prefix("blake3:") {
+            format!("blake3:{}", &hex[..hex.len().min(8)])
+        } else {
+            uri.clone()
+        };
+        match self.host.describe_extension_from_bytes(bytes, &hint).await {
+            Ok((name, digest)) => Ok(bindings::sqlite::wasm::extension_loader::DescribedResult {
+                name,
+                digest_hex: digest,
+            }),
+            Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
         }
-        Err(LoaderError {
-            code: 1,
-            message: format!(
-                "described-extension-from-uri only supports file: and blake3: schemes \
-                 in v1 (got {uri})"
-            ),
-        })
     }
 
     async fn component_cache_stats(
