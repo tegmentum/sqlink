@@ -31,7 +31,7 @@ pub fn probe_raw(
     let report = run_probe(plugin, &component, "proptest", &probe, grants);
     match report.outcome {
         ProbeOutcome::Pass => Err("matcher unexpectedly matched impossible regex".into()),
-        ProbeOutcome::OutputMismatch(got, _) => Ok(got),
+        ProbeOutcome::OutputMismatch { got, .. } => Ok(got),
         ProbeOutcome::LoadFailed(msg) => Err(format!("load failed: {msg}")),
         ProbeOutcome::SubprocessError(msg) => Err(format!("subprocess: {msg}")),
     }
