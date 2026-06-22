@@ -3128,129 +3128,16 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         })
     }
 
-    async fn set_stmt_trace(&mut self, _on: bool) {
-        // .trace targets the cli's shared connection only. No-op
-        // for extension callers; the trace buffer lives on Host.
-    }
 
-    async fn drain_trace_buf(&mut self) -> Vec<String> {
-        // Always empty for extension callers  see set_stmt_trace.
-        Vec::new()
-    }
 
-    async fn set_auth_log(
-        &mut self,
-        _on: bool,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.set-auth-log is only available on the cli's shared connection"
-                .to_string(),
-        })
-    }
 
-    async fn register_scalar(
-        &mut self,
-        _ext_name: String,
-        _name: String,
-        _num_args: i32,
-        _func_id: u64,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.register-scalar is only available on the cli's shared connection"
-                .to_string(),
-        })
-    }
 
-    async fn unregister_extension(&mut self, _ext_name: String) {
-        // No-op on LoadedState (extension callers).
-    }
 
-    async fn register_collation(
-        &mut self,
-        _ext_name: String,
-        _name: String,
-        _coll_id: u64,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.register-collation is only available on the cli's shared connection"
-                .to_string(),
-        })
-    }
 
-    async fn register_aggregate(
-        &mut self,
-        _ext_name: String,
-        _name: String,
-        _num_args: i32,
-        _func_id: u64,
-        _window: bool,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.register-aggregate is only available on the cli's shared connection"
-                .to_string(),
-        })
-    }
 
-    async fn register_authorizer(
-        &mut self,
-        _ext_name: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.register-authorizer is only available on the cli's shared connection"
-                .to_string(),
-        })
-    }
 
-    async fn register_update_hook(
-        &mut self,
-        _ext_name: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.register-update-hook is only available on the cli's shared connection"
-                .to_string(),
-        })
-    }
 
-    async fn register_commit_hook(
-        &mut self,
-        _ext_name: String,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.register-commit-hook is only available on the cli's shared connection"
-                .to_string(),
-        })
-    }
 
-    async fn register_vtab(
-        &mut self,
-        _ext_name: String,
-        _name: String,
-        _vtab_id: u64,
-        _eponymous: bool,
-        _mutable: bool,
-        _batched: bool,
-    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi.register-vtab is only available on the cli's shared connection"
-                .to_string(),
-        })
-    }
 }
 
 /// Stage 6: LoadedState (extension callers) delegates to the
@@ -8224,6 +8111,49 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         execute_multi_impl_bindings(conn, &sql, &named_params)
     }
 
+
+
+
+
+
+
+
+
+
+
+
+    async fn open_db(
+        &mut self,
+        path: String,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        // Drop the existing shared connection and update the host's
+        // db_path so the next spi call lazy-reopens against the new
+        // target. Empty path is the cli convention for `:memory:`.
+        let new_path = if path.is_empty() || path == ":memory:" {
+            ":memory:".to_string()
+        } else {
+            path
+        };
+        // Drop the old connection first  if the user is switching
+        // away from a WAL file, we want sqlite to flush before we
+        // throw away the handle. L2a: also drop the cached
+        // user_conn so the next component_cache_* / try_c2_*
+        // access lazy-reopens against the new path.
+        {
+            let g = self.host.shared_spi_conn.lock();
+            let mut r = g.borrow_mut();
+            *r = None;
+        }
+        self.host.invalidate_user_conn();
+        *self.host.db_path.write() = new_path;
+        // shared_spi_ensure_open refuses `:memory:` with a clear
+        // error; preserve that for `.open` (with no arg) so the
+        // user sees the same diagnostic as a startup `--db ""`.
+        shared_spi_ensure_open(self.host)
+    }
+}
+
+impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
     async fn set_stmt_trace(&mut self, on: bool) {
         if shared_spi_ensure_open(self.host).is_err() {
             return;
@@ -8321,81 +8251,89 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         Ok(())
     }
 
-    async fn unregister_extension(&mut self, ext_name: String) {
-        let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
-        let colls = self.host.ext_collation_registrations.lock().remove(&ext_name);
-        let aggs = self.host.ext_aggregate_registrations.lock().remove(&ext_name);
-        let vtabs = self.host.ext_vtab_registrations.lock().remove(&ext_name);
-        // Clear hook ownership only if THIS extension owned the slot.
-        let drop_authorizer = {
-            let mut g = self.host.ext_authorizer_owner.lock();
-            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
-        };
-        let drop_update_hook = {
-            let mut g = self.host.ext_update_hook_owner.lock();
-            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
-        };
-        let drop_commit_hook = {
-            let mut g = self.host.ext_commit_hook_owner.lock();
-            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
-        };
-        if scalars.is_none()
-            && colls.is_none()
-            && aggs.is_none()
-            && vtabs.is_none()
-            && !drop_authorizer
-            && !drop_update_hook
-            && !drop_commit_hook
-        {
-            return;
-        }
+    async fn register_collation(
+        &mut self,
+        ext_name: String,
+        name: String,
+        coll_id: u64,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
-        let Some(conn) = r.as_ref() else { return };
-        if let Some(entries) = scalars {
-            for (name, num_args) in entries {
-                let _ = unsafe {
-                    unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
-                };
-            }
+        let conn = r.as_ref().expect("ensured open");
+        let rc = unsafe {
+            register_host_loaded_collation(
+                conn.raw_handle(),
+                self.host.clone(),
+                ext_name.clone(),
+                &name,
+                coll_id,
+            )
+        };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(bindings::sqlite::extension::types::SqliteError {
+                code: rc,
+                extended_code: rc,
+                message: format!("register collation {name}: rc={rc}"),
+            });
         }
-        if let Some(entries) = colls {
-            for name in entries {
-                let _ = unsafe {
-                    unregister_host_loaded_collation(conn.raw_handle(), &name)
-                };
-            }
+        self.host
+            .ext_collation_registrations
+            .lock()
+            .entry(ext_name)
+            .or_default()
+            .push(name);
+        Ok(())
+    }
+
+    async fn register_aggregate(
+        &mut self,
+        ext_name: String,
+        name: String,
+        num_args: i32,
+        func_id: u64,
+        window: bool,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        let agg = HostLoadedAggregate {
+            host: self.host.clone(),
+            ext_name: ext_name.clone(),
+            func_id,
+        };
+        let result = if window {
+            conn.create_window_function(
+                &name,
+                num_args,
+                sqlite_component_core::db::FunctionFlags::UTF8
+                    | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                agg,
+            )
+        } else {
+            conn.create_aggregate_function(
+                &name,
+                num_args,
+                sqlite_component_core::db::FunctionFlags::UTF8
+                    | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                agg,
+            )
+        };
+        if let Err(e) = result {
+            return Err(bindings::sqlite::extension::types::SqliteError {
+                code: e.code,
+                extended_code: e.extended_code,
+                message: format!("register aggregate {name}/{num_args}: {}", e.message),
+            });
         }
-        if let Some(entries) = aggs {
-            // Aggregates use the same FFI removal path as scalars
-            // (sqlite3_create_function_v2 with null callbacks).
-            for (name, num_args) in entries {
-                let _ = unsafe {
-                    unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
-                };
-            }
-        }
-        if let Some(entries) = vtabs {
-            for name in entries {
-                let _ = unsafe { crate::vtab::unregister_vtab_module(conn.raw_handle(), &name) };
-            }
-        }
-        if drop_authorizer {
-            let _ = conn.set_authorizer::<fn(
-                i32,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-                Option<String>,
-            ) -> sqlite_component_core::db::AuthResult>(None);
-        }
-        if drop_update_hook {
-            conn.update_hook::<fn(sqlite_component_core::db::UpdateAction, &str, &str, i64)>(None);
-        }
-        if drop_commit_hook {
-            conn.commit_hook::<fn() -> bool>(None);
-            conn.rollback_hook::<fn()>(None);
-        }
+        self.host
+            .ext_aggregate_registrations
+            .lock()
+            .entry(ext_name)
+            .or_default()
+            .push((name, num_args));
+        Ok(())
     }
 
     async fn register_authorizer(
@@ -8496,91 +8434,6 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         Ok(())
     }
 
-    async fn register_aggregate(
-        &mut self,
-        ext_name: String,
-        name: String,
-        num_args: i32,
-        func_id: u64,
-        window: bool,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let g = self.host.shared_spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        let agg = HostLoadedAggregate {
-            host: self.host.clone(),
-            ext_name: ext_name.clone(),
-            func_id,
-        };
-        let result = if window {
-            conn.create_window_function(
-                &name,
-                num_args,
-                sqlite_component_core::db::FunctionFlags::UTF8
-                    | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                agg,
-            )
-        } else {
-            conn.create_aggregate_function(
-                &name,
-                num_args,
-                sqlite_component_core::db::FunctionFlags::UTF8
-                    | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                agg,
-            )
-        };
-        if let Err(e) = result {
-            return Err(bindings::sqlite::extension::types::SqliteError {
-                code: e.code,
-                extended_code: e.extended_code,
-                message: format!("register aggregate {name}/{num_args}: {}", e.message),
-            });
-        }
-        self.host
-            .ext_aggregate_registrations
-            .lock()
-            .entry(ext_name)
-            .or_default()
-            .push((name, num_args));
-        Ok(())
-    }
-
-    async fn register_collation(
-        &mut self,
-        ext_name: String,
-        name: String,
-        coll_id: u64,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
-        shared_spi_ensure_open(self.host)?;
-        let g = self.host.shared_spi_conn.lock();
-        let r = g.borrow();
-        let conn = r.as_ref().expect("ensured open");
-        let rc = unsafe {
-            register_host_loaded_collation(
-                conn.raw_handle(),
-                self.host.clone(),
-                ext_name.clone(),
-                &name,
-                coll_id,
-            )
-        };
-        if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(bindings::sqlite::extension::types::SqliteError {
-                code: rc,
-                extended_code: rc,
-                message: format!("register collation {name}: rc={rc}"),
-            });
-        }
-        self.host
-            .ext_collation_registrations
-            .lock()
-            .entry(ext_name)
-            .or_default()
-            .push(name);
-        Ok(())
-    }
-
     async fn register_vtab(
         &mut self,
         ext_name: String,
@@ -8622,35 +8475,83 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         Ok(())
     }
 
-    async fn open_db(
-        &mut self,
-        path: String,
-    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
-        // Drop the existing shared connection and update the host's
-        // db_path so the next spi call lazy-reopens against the new
-        // target. Empty path is the cli convention for `:memory:`.
-        let new_path = if path.is_empty() || path == ":memory:" {
-            ":memory:".to_string()
-        } else {
-            path
+    async fn unregister_extension(&mut self, ext_name: String) {
+        let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
+        let colls = self.host.ext_collation_registrations.lock().remove(&ext_name);
+        let aggs = self.host.ext_aggregate_registrations.lock().remove(&ext_name);
+        let vtabs = self.host.ext_vtab_registrations.lock().remove(&ext_name);
+        // Clear hook ownership only if THIS extension owned the slot.
+        let drop_authorizer = {
+            let mut g = self.host.ext_authorizer_owner.lock();
+            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
         };
-        // Drop the old connection first  if the user is switching
-        // away from a WAL file, we want sqlite to flush before we
-        // throw away the handle. L2a: also drop the cached
-        // user_conn so the next component_cache_* / try_c2_*
-        // access lazy-reopens against the new path.
+        let drop_update_hook = {
+            let mut g = self.host.ext_update_hook_owner.lock();
+            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
+        };
+        let drop_commit_hook = {
+            let mut g = self.host.ext_commit_hook_owner.lock();
+            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
+        };
+        if scalars.is_none()
+            && colls.is_none()
+            && aggs.is_none()
+            && vtabs.is_none()
+            && !drop_authorizer
+            && !drop_update_hook
+            && !drop_commit_hook
         {
-            let g = self.host.shared_spi_conn.lock();
-            let mut r = g.borrow_mut();
-            *r = None;
+            return;
         }
-        self.host.invalidate_user_conn();
-        *self.host.db_path.write() = new_path;
-        // shared_spi_ensure_open refuses `:memory:` with a clear
-        // error; preserve that for `.open` (with no arg) so the
-        // user sees the same diagnostic as a startup `--db ""`.
-        shared_spi_ensure_open(self.host)
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let Some(conn) = r.as_ref() else { return };
+        if let Some(entries) = scalars {
+            for (name, num_args) in entries {
+                let _ = unsafe {
+                    unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
+                };
+            }
+        }
+        if let Some(entries) = colls {
+            for name in entries {
+                let _ = unsafe {
+                    unregister_host_loaded_collation(conn.raw_handle(), &name)
+                };
+            }
+        }
+        if let Some(entries) = aggs {
+            // Aggregates use the same FFI removal path as scalars
+            // (sqlite3_create_function_v2 with null callbacks).
+            for (name, num_args) in entries {
+                let _ = unsafe {
+                    unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
+                };
+            }
+        }
+        if let Some(entries) = vtabs {
+            for name in entries {
+                let _ = unsafe { crate::vtab::unregister_vtab_module(conn.raw_handle(), &name) };
+            }
+        }
+        if drop_authorizer {
+            let _ = conn.set_authorizer::<fn(
+                i32,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+                Option<String>,
+            ) -> sqlite_component_core::db::AuthResult>(None);
+        }
+        if drop_update_hook {
+            conn.update_hook::<fn(sqlite_component_core::db::UpdateAction, &str, &str, i64)>(None);
+        }
+        if drop_commit_hook {
+            conn.commit_hook::<fn() -> bool>(None);
+            conn.rollback_hook::<fn()>(None);
+        }
     }
+
 }
 
 /// Stage 6: cli-facing session impl. Sessions attach to

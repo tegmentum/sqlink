@@ -81,6 +81,7 @@ world sqlite-cli-command {
     /// eval_sql + dot.rs callers off the local connection one
     /// path at a time.
     import sqlite:extension/spi@0.1.0;
+    import sqlite:extension/spi-loader@0.1.0;
     import sqlite:extension/prepared@0.1.0;
     import sqlite:extension/session@0.1.0;
 }

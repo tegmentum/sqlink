@@ -689,6 +689,18 @@ async fn main() -> Result<()> {
     )
     .map_err(|e| anyhow!("wire spi: {e}"))?;
 
+    // spi-loader: register-* trampolines + cli debug toggles. Split
+    // out of `spi` so a pure SQLite library (sqlite-lib in the
+    // sqlite-wasm repo) doesn't have to implement them.
+    bindings::sqlite::extension::spi_loader::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |state: &mut State| HostWrap {
+            host: &mut state.host,
+            resources: Some(&mut state.resources),
+        },
+    )
+    .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
+
     // tvm:memory wiring  the cli imports it unconditionally
     // because sqlite-pcache-tvm + sqlite-vfs-tvm use
     // wit-bindgen-backed cold tiers on wasm32.

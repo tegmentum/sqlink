@@ -810,7 +810,7 @@ fn eval_sql_inner(sql: &str) -> String {
     // this statement was running. The buffer lives on the host
     // now (Stage 5e.8); spi.drain-trace-buf returns + clears it.
     let traced: Vec<String> = if settings::SETTINGS.with(|s| s.borrow().trace_on) {
-        bindings::sqlite::extension::spi::drain_trace_buf()
+        bindings::sqlite::extension::spi_loader::drain_trace_buf()
     } else {
         Vec::new()
     };
@@ -844,7 +844,7 @@ fn do_trace(arg: &str) -> String {
             _ => return "Usage: .trace on|off\n".to_string(),
         }
     };
-    bindings::sqlite::extension::spi::set_stmt_trace(on);
+    bindings::sqlite::extension::spi_loader::set_stmt_trace(on);
     settings::SETTINGS.with(|s| s.borrow_mut().trace_on = on);
     String::new()
 }
@@ -870,7 +870,7 @@ fn do_auth(arg: &str) -> String {
         "off" => false,
         _ => return "Usage: .auth on|off\n".to_string(),
     };
-    match bindings::sqlite::extension::spi::set_auth_log(on) {
+    match bindings::sqlite::extension::spi_loader::set_auth_log(on) {
         Ok(()) => String::new(),
         Err(e) => format!("Error: {}\n", e.message),
     }
@@ -1276,7 +1276,7 @@ fn do_load(input: &str) -> String {
     // below  follow-up commits move those one type at a time.
     let mut s_count = 0;
     for spec in &manifest.scalar_functions {
-        let r = bindings::sqlite::extension::spi::register_scalar(
+        let r = bindings::sqlite::extension::spi_loader::register_scalar(
             &ext_name,
             &spec.name,
             spec.num_args,
@@ -1293,7 +1293,7 @@ fn do_load(input: &str) -> String {
     }
     let mut c_count_host = 0;
     for spec in &manifest.collations {
-        let r = bindings::sqlite::extension::spi::register_collation(
+        let r = bindings::sqlite::extension::spi_loader::register_collation(
             &ext_name,
             &spec.name,
             spec.id,
@@ -1309,7 +1309,7 @@ fn do_load(input: &str) -> String {
     }
     let mut a_count_host = 0;
     for spec in &manifest.aggregate_functions {
-        let r = bindings::sqlite::extension::spi::register_aggregate(
+        let r = bindings::sqlite::extension::spi_loader::register_aggregate(
             &ext_name,
             &spec.name,
             spec.num_args,
@@ -1327,26 +1327,26 @@ fn do_load(input: &str) -> String {
     }
     let mut h_count_host = 0;
     if manifest.has_authorizer {
-        match bindings::sqlite::extension::spi::register_authorizer(&ext_name) {
+        match bindings::sqlite::extension::spi_loader::register_authorizer(&ext_name) {
             Ok(()) => h_count_host += 1,
             Err(e) => eprintln!("register authorizer: {} (code {})", e.message, e.code),
         }
     }
     if manifest.has_update_hook {
-        match bindings::sqlite::extension::spi::register_update_hook(&ext_name) {
+        match bindings::sqlite::extension::spi_loader::register_update_hook(&ext_name) {
             Ok(()) => h_count_host += 1,
             Err(e) => eprintln!("register update_hook: {} (code {})", e.message, e.code),
         }
     }
     if manifest.has_commit_hook {
-        match bindings::sqlite::extension::spi::register_commit_hook(&ext_name) {
+        match bindings::sqlite::extension::spi_loader::register_commit_hook(&ext_name) {
             Ok(()) => h_count_host += 1,
             Err(e) => eprintln!("register commit_hook: {} (code {})", e.message, e.code),
         }
     }
     let mut v_count_host = 0;
     for spec in &manifest.vtabs {
-        match bindings::sqlite::extension::spi::register_vtab(
+        match bindings::sqlite::extension::spi_loader::register_vtab(
             &ext_name,
             &spec.name,
             spec.id,
@@ -2118,7 +2118,7 @@ fn do_unload(name: &str) -> String {
     // connection now; spi.unregister-extension is the single
     // teardown call. The cli's own connection has nothing to
     // clean up.
-    bindings::sqlite::extension::spi::unregister_extension(name);
+    bindings::sqlite::extension::spi_loader::unregister_extension(name);
     let _ = RELOAD_SOURCES.with(|m| m.borrow_mut().remove(name));
 
     match host_result {
