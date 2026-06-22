@@ -5153,6 +5153,28 @@ impl Host {
         self.db_path.read().clone()
     }
 
+    /// Open (if not already) and run a closure against the
+    /// host's shared SPI connection. Trampolines installed by
+    /// `install_loaded_extension` live on this connection, so SQL
+    /// run here sees every registered extension function. Used by
+    /// `sqlink-native` (Scenario 1) to drive the REPL/stdin loop
+    /// against the same connection the extensions registered on.
+    ///
+    /// Errors if the db path is empty or `:memory:`. For ephemeral
+    /// dbs, pass an explicit tmp file via `--db`.
+    pub fn with_shared_spi_conn_open<F, R>(&self, op: F) -> Result<R>
+    where
+        F: FnOnce(&sqlite_component_core::db::Connection) -> R,
+    {
+        shared_spi_ensure_open(self).map_err(|e| {
+            anyhow!("open shared spi: {} (code {})", e.message, e.code)
+        })?;
+        let g = self.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("shared_spi_conn opened above");
+        Ok(op(conn))
+    }
+
     pub fn engine(&self) -> &Engine {
         &self.engine
     }
@@ -5645,6 +5667,294 @@ impl Host {
         );
 
         Ok(name)
+    }
+
+    /// Walk a loaded extension's manifest and register every scalar,
+    /// aggregate, collation, vtab, and hook on the host's shared
+    /// connection. Mirrors what the in-WASM cli's `do_load` does after
+    /// `load_extension` returns — splitting it out lets a native
+    /// loader (Scenario 1) drive the same registrations without going
+    /// through wasm.
+    ///
+    /// Returns counts of (scalars, aggregates, collations, hooks, vtabs).
+    /// Errors are logged via tracing and counted as zero; the
+    /// installation is best-effort per-entry so a single bad
+    /// registration doesn't abort the rest.
+    pub async fn install_loaded_extension(
+        &self,
+        ext_name: &str,
+    ) -> Result<(u32, u32, u32, u32, u32)> {
+        let ext = {
+            let comps = self.components.read();
+            comps
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("install_loaded_extension: extension {ext_name} not loaded"))?
+        };
+        // The registration code paths need a live shared_spi_conn.
+        // shared_spi_ensure_open mirrors what the WIT register-*
+        // methods do at the top of each call.
+        shared_spi_ensure_open(self).map_err(|e| {
+            anyhow!("install_loaded_extension: open shared spi: {} (code {})", e.message, e.code)
+        })?;
+
+        let mut scalars = 0u32;
+        let mut aggregates = 0u32;
+        let mut collations = 0u32;
+        let mut hooks = 0u32;
+        let mut vtabs = 0u32;
+
+        // Scalars.
+        for spec in &ext.scalar_functions {
+            let r = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                unsafe {
+                    register_host_loaded_scalar(
+                        conn.raw_handle(),
+                        self.clone(),
+                        ext_name.to_string(),
+                        &spec.name,
+                        spec.num_args,
+                        spec.id,
+                    )
+                }
+            };
+            if r == libsqlite3_sys::SQLITE_OK {
+                scalars += 1;
+                self.ext_scalar_registrations
+                    .lock()
+                    .entry(ext_name.to_string())
+                    .or_default()
+                    .push((spec.name.clone(), spec.num_args));
+            } else {
+                tracing::warn!(
+                    extension = ext_name,
+                    func = %spec.name,
+                    arity = spec.num_args,
+                    rc = r,
+                    "register_scalar failed"
+                );
+            }
+        }
+
+        // Collations.
+        for spec in &ext.collations {
+            let r = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                unsafe {
+                    register_host_loaded_collation(
+                        conn.raw_handle(),
+                        self.clone(),
+                        ext_name.to_string(),
+                        &spec.name,
+                        spec.id,
+                    )
+                }
+            };
+            if r == libsqlite3_sys::SQLITE_OK {
+                collations += 1;
+                self.ext_collation_registrations
+                    .lock()
+                    .entry(ext_name.to_string())
+                    .or_default()
+                    .push(spec.name.clone());
+            } else {
+                tracing::warn!(
+                    extension = ext_name,
+                    coll = %spec.name,
+                    rc = r,
+                    "register_collation failed"
+                );
+            }
+        }
+
+        // Aggregates.
+        for spec in &ext.aggregate_functions {
+            let agg = HostLoadedAggregate {
+                host: self.clone(),
+                ext_name: ext_name.to_string(),
+                func_id: spec.id,
+            };
+            let res = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                if spec.is_window {
+                    conn.create_window_function(
+                        &spec.name,
+                        spec.num_args,
+                        sqlite_component_core::db::FunctionFlags::UTF8
+                            | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                        agg,
+                    )
+                } else {
+                    conn.create_aggregate_function(
+                        &spec.name,
+                        spec.num_args,
+                        sqlite_component_core::db::FunctionFlags::UTF8
+                            | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                        agg,
+                    )
+                }
+            };
+            match res {
+                Ok(()) => {
+                    aggregates += 1;
+                    self.ext_aggregate_registrations
+                        .lock()
+                        .entry(ext_name.to_string())
+                        .or_default()
+                        .push((spec.name.clone(), spec.num_args));
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        extension = ext_name,
+                        func = %spec.name,
+                        arity = spec.num_args,
+                        err = %e.message,
+                        "register_aggregate failed"
+                    );
+                }
+            }
+        }
+
+        // Vtabs.
+        for spec in &ext.vtabs {
+            let res = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                unsafe {
+                    crate::vtab::register_vtab_module(
+                        conn.raw_handle(),
+                        self.clone(),
+                        &spec.name,
+                        ext_name,
+                        spec.id,
+                        spec.eponymous,
+                        spec.mutable,
+                        spec.batched,
+                    )
+                }
+            };
+            match res {
+                Ok(()) => {
+                    vtabs += 1;
+                    self.ext_vtab_registrations
+                        .lock()
+                        .entry(ext_name.to_string())
+                        .or_default()
+                        .push(spec.name.clone());
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        extension = ext_name,
+                        vtab = %spec.name,
+                        err = %e,
+                        "register_vtab failed"
+                    );
+                }
+            }
+        }
+
+        // Authorizer / update / commit hooks. Each replaces the
+        // currently-installed hook on shared_spi_conn — the cli's
+        // do_load behaves the same.
+        if ext.has_authorizer {
+            let host_c = self.clone();
+            let ext_n = ext_name.to_string();
+            let result = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                conn.set_authorizer(Some(
+                    move |action: i32,
+                          a1: Option<String>,
+                          a2: Option<String>,
+                          a3: Option<String>,
+                          a4: Option<String>| {
+                        let wit_action = sqlite_code_to_auth_action(action);
+                        match sync_dispatch_authorize(
+                            &host_c, &ext_n, wit_action, a1, a2, a3, a4,
+                        ) {
+                            Ok(bindings::sqlite::extension::types::AuthResult::Ok) => {
+                                sqlite_component_core::db::AuthResult::Allow
+                            }
+                            Ok(bindings::sqlite::extension::types::AuthResult::Deny) => {
+                                sqlite_component_core::db::AuthResult::Deny
+                            }
+                            Ok(bindings::sqlite::extension::types::AuthResult::Ignore) => {
+                                sqlite_component_core::db::AuthResult::Ignore
+                            }
+                            Err(_) => sqlite_component_core::db::AuthResult::Allow,
+                        }
+                    },
+                ))
+            };
+            match result {
+                Ok(()) => {
+                    hooks += 1;
+                    *self.ext_authorizer_owner.lock() = Some(ext_name.to_string());
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        extension = ext_name,
+                        err = %e.message,
+                        "set_authorizer failed"
+                    );
+                }
+            }
+        }
+        if ext.has_update_hook {
+            let host_c = self.clone();
+            let ext_n = ext_name.to_string();
+            let g = self.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("shared_spi_conn open");
+            conn.update_hook(Some(
+                move |action: sqlite_component_core::db::UpdateAction,
+                      db_name: &str,
+                      table: &str,
+                      rowid: i64| {
+                    use bindings::sqlite::extension::types::UpdateOperation as Op;
+                    let op = match action {
+                        sqlite_component_core::db::UpdateAction::Insert => Op::Insert,
+                        sqlite_component_core::db::UpdateAction::Update => Op::Update,
+                        sqlite_component_core::db::UpdateAction::Delete => Op::Delete,
+                        sqlite_component_core::db::UpdateAction::Unknown => return,
+                    };
+                    let _ = sync_dispatch_on_update(&host_c, &ext_n, op, db_name, table, rowid);
+                },
+            ));
+            *self.ext_update_hook_owner.lock() = Some(ext_name.to_string());
+            hooks += 1;
+        }
+        if ext.has_commit_hook {
+            let host_c = self.clone();
+            let ext_c = ext_name.to_string();
+            let host_r = self.clone();
+            let ext_r = ext_name.to_string();
+            let g = self.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("shared_spi_conn open");
+            conn.commit_hook(Some(move || {
+                match sync_dispatch_on_commit(&host_c, &ext_c) {
+                    Ok(proceed) => !proceed,
+                    Err(_) => false,
+                }
+            }));
+            conn.rollback_hook(Some(move || {
+                let _ = sync_dispatch_on_rollback(&host_r, &ext_r);
+            }));
+            *self.ext_commit_hook_owner.lock() = Some(ext_name.to_string());
+            hooks += 1;
+        }
+
+        Ok((scalars, aggregates, collations, hooks, vtabs))
     }
 
     /// Dispatch a dot command by name. Walks every loaded

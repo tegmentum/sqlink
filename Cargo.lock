@@ -4887,6 +4887,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlink-native"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "libsqlite3-sys",
+ "parking_lot",
+ "sqlink-host",
+ "sqlite-component-core",
+ "sqlite-extension-policy",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "sqlite-cas-cache"
 version = "0.1.0"
 dependencies = [
