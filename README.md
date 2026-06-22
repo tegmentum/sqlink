@@ -1,46 +1,56 @@
 <p align="center">
-  <img src="sqlink_logo.png" alt="SQLink" width="320">
+  <img src="extensions-site/sqlink_logo.png" alt="SQLink" width="320">
 </p>
 
-# sqlite-wasm
+# SQLink
 
-SQLite + an extension ecosystem, distributed as
+SQLite + a portable extension ecosystem, distributed as
 [WebAssembly Components](https://component-model.bytecodealliance.org/).
 The full SQLite C library compiles to WASI Preview 2 alongside a
 cli, a host runtime, ~110 extension components, and a contract
 (`sqlite-loader-wit`) that says how any wasm component becomes
-an extension.
+an extension — scalar function, aggregate, collation, virtual
+table, authorizer, or interactive dot command.
 
 The point: you can write a SQLite extension in any language that
 targets wasm (Rust, C, AssemblyScript, ...), publish it as a
-`.wasm` file, and load it into the cli with `.load FILE`  the
-same shape a C-side `sqlite3_load_extension` call has, but
-sandboxed and portable.
+`.wasm` file, and load it into the cli with `.load FILE` — the
+same shape `sqlite3_load_extension()` has, but sandboxed,
+portable, and language-agnostic.
 
 ## What's here
 
 ```
-core/                 Rust wrapper over libsqlite3-sys; the sqlite3 the
-                      cli and host both use.
+core/                 Rust wrapper over libsqlite3-sys. The host's
+                      sqlite3 connection lives here; the cli no
+                      longer carries one of its own (Stage 5f
+                      purged libsqlite3-sys from the cli crate).
 cli/                  The cli  a wasm component that loads other
-                      components via `.load`. Implements ~57 sqlite3-
-                      cli-compatible dot-commands (.tables, .schema,
-                      .dump, .backup, .session, ...).
-host/                 The runtime that loads + runs the cli component
-                      (and any extension components it `.load`s).
+                      components via `.load`. Hot-path SQL goes
+                      through the host's connection via spi;
+                      dot-commands route to dotcmd-aware extensions.
+host/                 The runtime. Loads + runs the cli component
+                      and any extension components it `.load`s.
                       Ships as the `sqlink` binary.
-sqlite-loader-wit/    The WIT contract every extension speaks. Defines
-                      worlds for scalar-only, vtab, collation, stateful
-                      aggregate, and authorizer extensions.
+sqlite-loader-wit/    The WIT contract every extension speaks.
+                      Defines worlds for scalar-only, aggregate,
+                      collation, vtab (read-only + mutable +
+                      batched), authorizer, dot-command, and the
+                      shared `spi` interface for back-channel SQL.
 extensions/           ~110 extension components. Mix of ports of
-                      well-known SQLite extensions (json1, fts5, rtree,
-                      regexp, math, crypto, sha3, totype, uint, eval,
-                      zorder, completion, ...) plus general scalar
-                      packs (ipaddr, ulid, isin, vin, currency, ...).
-tooling/              Build + test infrastructure for new extensions.
-                      Scaffold, smoke harness, lessons-learned doc,
-                      cli cheatsheet, extension shape catalog.
+                      well-known SQLite extensions (json1, fts5,
+                      rtree, regexp, math, crypto, sha3, totype,
+                      uint, eval, zorder, ...), general scalar
+                      packs (ipaddr, ulid, isin, vin, ...), and
+                      dot-command extensions (sqlite-utils-*,
+                      core-dotcmd, session-cli, archive-cli, ...).
+tooling/              Build + test infra. Scaffold script, smoke
+                      harness, cli cheatsheet, lessons-learned doc.
 provenance/           Per-extension version-tracking db.
+examples/             Walk-through scripts (sqlite-utils-tour.sql
+                      drives every shipped sqlite-utils command).
+analysis/             Function-catalogue gap analysis vs PostgreSQL,
+                      MySQL, DuckDB, ClickHouse, Snowflake, BigQuery.
 ```
 
 ## Quick taste
@@ -48,11 +58,11 @@ provenance/           Per-extension version-tracking db.
 Build the host + cli once:
 
 ```bash
-cargo build --release -p sqlite-wasm-host
-cd cli && cargo build --release --target wasm32-wasip2 && cd ..
+cargo build --release                                 # builds host (sqlink)
+cargo build -p sqlite-cli --target wasm32-wasip2 \
+            --release                                 # builds cli wasm
 wasm-tools component new \
-    cli/target/wasm32-wasip2/release/sqlite_cli.wasm \
-    --adapt wasi_snapshot_preview1=$HOME/.cache/xtran/wasi_snapshot_preview1.reactor.wasm \
+    target/wasm32-wasip2/release/sqlite_cli.wasm \
     -o target/wasm32-wasip2/release/sqlite_cli.component.wasm
 ```
 
@@ -60,15 +70,16 @@ Run a SQL session:
 
 ```bash
 ./target/release/sqlink \
-    target/wasm32-wasip2/release/sqlite_cli.component.wasm \
-    --db mydata.db
+    --db mydata.db \
+    target/wasm32-wasip2/release/sqlite_cli.component.wasm
 sqlite> CREATE TABLE t(id INTEGER, name TEXT);
 sqlite> INSERT INTO t VALUES (1, 'alice');
 sqlite> .tables
-sqlite> .dump
+sqlite> .help                  -- list all available dot commands
+sqlite> .help insert           -- detail for a specific command
 ```
 
-The CLI is the `sqlink` binary  named after the loadable-extension
+The CLI is the `sqlink` binary — named after the loadable-extension
 contract it ships. If you prefer the familiar `sqlite` command name,
 symlink it onto your PATH:
 
@@ -87,6 +98,18 @@ sqlite> SELECT sha3('hello', 256);
 sqlite> SELECT sha3_256('hello');
 ```
 
+Ingest, transform, and search à la
+[sqlite-utils](https://github.com/simonw/sqlite-utils):
+
+```bash
+sqlite> .insert dogs dogs.json --pk id
+sqlite> .add_column dogs adopted bool
+sqlite> .transform dogs --type age real --rename age age_years
+sqlite> .enable_fts dogs name breed --create-triggers
+sqlite> .search dogs labrador
+sqlite> .analyze_tables dogs
+```
+
 Build a new extension end-to-end:
 
 ```bash
@@ -97,21 +120,30 @@ python3 tooling/scaffold.py myext \
 make ext-ship NAME=myext   # build + smoke + regression-test the catalog
 ```
 
-## Where to go next
+## Dot-command extensions
 
-Documentation, by depth:
+Dot commands aren't baked into the cli — they live in
+`dotcmd-aware` wasm extensions that the cli auto-embeds (or that
+the user `.load`s explicitly). 73 commands ship across 10
+extensions today; `.help` enumerates them all.
 
-| Doc | Purpose |
+| Extension | Commands |
 |---|---|
-| `tooling/cli-cheatsheet.md` | Every dot-command + when it's useful in tests |
-| `tooling/extension-patterns.md` | Shape catalog for new extensions (classifier, validator, parser-union, vtab, collation, ...) |
-| `tooling/snippets/README.md` | Paste-and-own code helpers shared across extensions |
-| `tooling/lessons-learned.md` | Per-ship retrospectives; "why we made this choice" archive |
-| `.claude/commands/new-extension.md` | Step-by-step workflow for shipping a new extension |
-| `PLAN-sqlite-plugins.md` | Catalog of what's shipped, by source (ports vs general packs) |
-| `PLAN-gaps.md` | What's NOT shipped, what's next |
-| `PLAN-interactive-capture.md` | Architectural plan for the session capture half (deferred) |
-| `PLAN-tooling-and-session.md` | Tooling + session deferred work |
+| `core-dotcmd` | `.tables`, `.schema`, `.indexes`, `.dbinfo`, `.dbconfig`, `.fullschema`, `.lint`, `.changes`, `.timer`, `.parameter`, `.width`, `.timeout`, `.show`, `.print`, `.echo`, `.bail`, `.headers`, `.mode`, `.databases`, `.limit`, `.help`, ... |
+| `sqlite-utils-schema` | `.create_table`, `.create_index`, `.create_view`, `.drop_table`, `.drop_view`, `.rename_table`, `.duplicate`, `.add_column`, `.transform`, `.extract`, `.add_fk`, `.add_fks`, `.index_fks`, `.views`, `.triggers` |
+| `sqlite-utils-data` | `.insert`, `.upsert`, `.bulk`, `.insert_files`, `.rows`, `.analyze_tables`, `.convert`, `.memory` |
+| `sqlite-utils-fts` | `.enable_fts`, `.disable_fts`, `.rebuild_fts`, `.populate_fts`, `.search` |
+| `sqlite-utils-maint` | `.vacuum`, `.analyze`, `.optimize`, `.enable_wal`, `.disable_wal`, `.enable_counts`, `.reset_counts`, `.create_database` |
+| `sqlink-meta-cli` | `.sqlink list / show / install / uninstall / bundle / unbundle / verify / gc / export` + resolver subcommands |
+| `archive-cli` | `.archive` |
+| `serialize-cli` | `.serialize`, `.deserialize` |
+| `session-cli` | `.session create / attach / changeset / patchset / list / delete / ...` |
+| `sha3sum-cli` | `.sha3sum` |
+
+Every command is discoverable: `.help` lists them, `.help <cmd>`
+renders usage, prose help, and worked examples drawn from the
+extension's own manifest. Authoring guide:
+[AUTHORING-DOTCMD-COMPONENTS.md](AUTHORING-DOTCMD-COMPONENTS.md).
 
 ## Extension catalog highlights
 
@@ -123,16 +155,49 @@ Documentation, by depth:
 | Identifier validators | vin, isin, cusip, aba, bic, ean, creditcard, postcode, ssn, mac, iban, container |
 | Reference data | currency (ISO 4217), country (ISO 3166), iban (ISO 13616) |
 | Utility scalar packs | color, unitconv, humansize, latlon, numfmt, radix, natsort, setops, geo-distance |
+| Dot-command extensions | sqlite-utils-{schema,data,fts,maint}, core-dotcmd, session-cli, archive-cli, sqlink-meta-cli (see above) |
 
 Total: ~110 wasm component extensions.
 
+## Where to go next
+
+| Doc | Purpose |
+|---|---|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Bird's-eye view: which piece does what, why |
+| [AUTHORING-DOTCMD-COMPONENTS.md](AUTHORING-DOTCMD-COMPONENTS.md) | Step-by-step: build a new `.command` |
+| [AUTHORING-RUN-COMPONENTS.md](AUTHORING-RUN-COMPONENTS.md) | Step-by-step: build a new runnable component |
+| `tooling/cli-cheatsheet.md` | Every dot-command + when it's useful in tests |
+| `tooling/extension-patterns.md` | Shape catalog for scalar/agg/vtab/etc. |
+| `tooling/lessons-learned.md` | Per-ship retrospectives |
+| [PLAN-sqlite-plugins.md](PLAN-sqlite-plugins.md) | Catalog of shipped extensions |
+| [PLAN-gaps.md](PLAN-gaps.md) | What's NOT shipped + ranked next-up |
+| [PLAN-sqlite-utils-port.md](PLAN-sqlite-utils-port.md) | Stage-by-stage: porting sqlite-utils as dot commands |
+| [PLAN-cli-stages-5-6.md](PLAN-cli-stages-5-6.md) | The CLI_CONN purge + `.session` port |
+| [analysis/README.md](analysis/README.md) | Function-catalog gap analysis (6 DBs) |
+
 ## Status
 
-This is an active project. Working surface (cli + host + most
-extensions + tooling) is shippable today. Known gaps documented
-in `PLAN-gaps.md`; the big ones are WAL mode (wasivfs missing
-shared-memory file support), hot-reload of extensions, and
-stack-trace propagation from wasm panics.
+Active project. Working surface (cli + host + ~110 extensions +
+73 dot commands + tooling) is shippable today.
+
+Recent milestones:
+  - **CLI_CONN purge** (Stage 5f): the cli no longer carries its own
+    libsqlite3-sys connection. All function/agg/coll/vtab/hook
+    registration routes through the host's shared spi connection.
+    Cli wasm component dropped from 2.4 MB → 1.3 MB.
+  - **`.session` port** (Stage 6): changesets / patchsets ride the
+    same shared connection via a new `sqlite:extension/session`
+    WIT interface.
+  - **sqlite-utils port**: 35 dot commands across 4 new extensions
+    (schema / data / fts / maint), driven by
+    [PLAN-sqlite-utils-port.md](PLAN-sqlite-utils-port.md).
+  - **`.help` discoverability**: enumerates every registered dot
+    command across every loaded extension, surfaces per-command
+    usage + worked examples.
+
+Known gaps documented in [PLAN-gaps.md](PLAN-gaps.md); the big
+ones are hot-reload of extensions, stack-trace propagation from
+wasm panics, and SpatiaLite-grade geospatial.
 
 ## License
 
