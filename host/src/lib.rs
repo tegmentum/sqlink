@@ -4296,6 +4296,16 @@ pub struct Host {
     /// observe the same sqlite3 handle. Lazy-opened by
     /// `spi_ensure_open` on first spi call.
     shared_spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_wasm_core::db::Connection>>>>,
+    /// PLAN-latent-cleanup.md L2a: cached user-db `Connection`
+    /// used by `component_cache_*` and `try_c2_lookup` / `_store`.
+    /// Before L2a each of those re-ran `open_user_conn(path)` +
+    /// `execute_batch(SCHEMA_DDL)`; for `.cache stats components`
+    /// that's 2 opens per invocation. Stored as `Option<(path,
+    /// conn)>` so a `spi.open-db` swap invalidates by emptying
+    /// the option, and the next access keys against the current
+    /// `db_path()` (lazy re-open if it's been swapped without
+    /// going through us).
+    user_conn: Arc<Mutex<Option<(String, sqlite_wasm_core::db::Connection)>>>,
     /// PLAN-cli-stages-5-6.md Stage 5e.8: buffer for sqlite3's
     /// statement-level trace callback. The cli toggles it via
     /// `spi.set-stmt-trace`; lines accumulate on the host while a
@@ -4734,6 +4744,7 @@ impl Host {
             components: Arc::new(RwLock::new(HashMap::new())),
             db_path: Arc::new(RwLock::new(String::new())),
             shared_spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
+            user_conn: Arc::new(Mutex::new(None)),
             trace_buf: Arc::new(Mutex::new(Vec::new())),
             ext_scalar_registrations: Arc::new(Mutex::new(HashMap::new())),
             ext_collation_registrations: Arc::new(Mutex::new(HashMap::new())),
@@ -4773,41 +4784,63 @@ impl Host {
             .unwrap_or(false)
     }
 
+    /// PLAN-latent-cleanup.md L2a: run `op` against the user-db
+    /// `Connection`, lazy-opening + schema-ensuring on first call
+    /// and re-using the cached handle on subsequent calls.
+    /// Re-opens transparently if `db_path()` differs from the
+    /// cached path (e.g. after `spi.open-db` swapped target).
+    /// Returns `None` (without invoking `op`) when the active
+    /// db_path is empty  the in-memory case has nothing to
+    /// cache against.
+    fn with_user_conn<F, R>(&self, op: F) -> Option<R>
+    where
+        F: FnOnce(&sqlite_wasm_core::db::Connection) -> R,
+    {
+        let db_path = self.db_path();
+        if db_path.is_empty() {
+            return None;
+        }
+        let mut g = self.user_conn.lock();
+        let needs_open = match g.as_ref() {
+            None => true,
+            Some((p, _)) => p != &db_path,
+        };
+        if needs_open {
+            match component_blob_cache::open_user_conn(&db_path) {
+                Ok(c) => *g = Some((db_path.clone(), c)),
+                Err(_) => return None,
+            }
+        }
+        let conn = g.as_ref().map(|(_, c)| c).expect("just-opened");
+        Some(op(conn))
+    }
+
+    /// L2a: invalidate the cached user_conn. Called by
+    /// `spi.open-db`'s HostWrap impl when the cli swaps target;
+    /// next access lazy-reopens against the new path.
+    fn invalidate_user_conn(&self) {
+        *self.user_conn.lock() = None;
+    }
+
     /// E1: drop every `_component_cache` row from the user db.
     /// Returns bytes freed. Used by `.cache gc components`.
     pub fn component_cache_purge(&self) -> Result<u64> {
-        let db_path = self.db_path();
-        if db_path.is_empty() {
-            return Ok(0);
+        match self.with_user_conn(|conn| component_blob_cache::purge_all(conn)) {
+            Some(r) => r,
+            None => Ok(0),
         }
-        let conn = component_blob_cache::open_user_conn(&db_path)?;
-        component_blob_cache::purge_all(&conn)
     }
 
     /// E1: total bytes of C2 blobs across all cached rows.
     pub fn component_cache_total_bytes(&self) -> u64 {
-        let db_path = self.db_path();
-        if db_path.is_empty() {
-            return 0;
-        }
-        let conn = match component_blob_cache::open_user_conn(&db_path) {
-            Ok(c) => c,
-            Err(_) => return 0,
-        };
-        component_blob_cache::total_bytes(&conn).unwrap_or(0)
+        self.with_user_conn(|conn| component_blob_cache::total_bytes(conn).unwrap_or(0))
+            .unwrap_or(0)
     }
 
     /// E1: row count in `_component_cache`. Stats display only.
     pub fn component_cache_row_count(&self) -> u64 {
-        let db_path = self.db_path();
-        if db_path.is_empty() {
-            return 0;
-        }
-        let conn = match component_blob_cache::open_user_conn(&db_path) {
-            Ok(c) => c,
-            Err(_) => return 0,
-        };
-        component_blob_cache::row_count(&conn).unwrap_or(0)
+        self.with_user_conn(|conn| component_blob_cache::row_count(conn).unwrap_or(0))
+            .unwrap_or(0)
     }
 
     /// C2 HMAC key accessor — lazily initializes the cache key
@@ -5199,8 +5232,12 @@ impl Host {
     /// Set the database path the cli is using. Called by sqlink
     /// before instantiating the component; loaded extensions' spi.execute
     /// reads this when opening their own core::db connection.
+    /// L2a: invalidates the cached user_conn so the next access
+    /// reopens against the new path  matters when the same
+    /// process serves multiple sessions (httpd).
     pub fn set_db_path(&self, path: &str) {
         *self.db_path.write() = path.to_string();
+        self.invalidate_user_conn();
     }
 
     /// Current db path (empty if `:memory:`).
@@ -5404,12 +5441,9 @@ impl Host {
 
     fn try_c2_lookup(&self, digest: &str) -> Option<Component> {
         let key = self.blob_cache_key()?;
-        let db_path = self.db_path();
-        if db_path.is_empty() {
-            return None;
-        }
-        let conn = component_blob_cache::open_user_conn(&db_path).ok()?;
-        let blob = component_blob_cache::lookup(&conn, digest, key).ok()??;
+        let blob = self
+            .with_user_conn(|conn| component_blob_cache::lookup(conn, digest, key).ok().flatten())
+            .flatten()?;
         tracing::debug!(
             target: "component_cache",
             digest = %&digest[..16],
@@ -5440,10 +5474,6 @@ impl Host {
         let Some(key) = self.blob_cache_key() else {
             return;
         };
-        let db_path = self.db_path();
-        if db_path.is_empty() {
-            return;
-        }
         let t0 = std::time::Instant::now();
         let blob = match component.serialize() {
             Ok(b) => b,
@@ -5455,25 +5485,25 @@ impl Host {
         self.component_cache_stats
             .serialize_ms
             .fetch_add(t0.elapsed().as_millis() as u64, Ordering::Relaxed);
-        let conn = match component_blob_cache::open_user_conn(&db_path) {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-        if let Err(e) = component_blob_cache::store(&conn, digest, &blob, key) {
-            tracing::warn!(error = %e, "component_cache: store failed");
-            return;
-        }
-        // E1 LRU eviction: bound the cache so a workload that
-        // touches many distinct bundles doesn't fill disk. Default
-        // cap is 4 GiB (a handful of postgis-sized bundles);
-        // override via SQLITE_WASM_COMPONENT_CACHE_MAX_BYTES (0
-        // disables the cap entirely).
+        // L2a: store + evict against the cached user_conn; bails
+        // out when db_path is empty (no `--db` arg) since there's
+        // nothing to persist into.
         let cap = component_cache_max_bytes();
-        if cap > 0 {
-            if let Err(e) = component_blob_cache::evict_to(&conn, cap) {
-                tracing::warn!(error = %e, "component_cache: evict failed");
+        self.with_user_conn(|conn| {
+            if let Err(e) = component_blob_cache::store(conn, digest, &blob, key) {
+                tracing::warn!(error = %e, "component_cache: store failed");
+                return;
             }
-        }
+            // E1 LRU eviction: bound the cache so a workload that
+            // touches many distinct bundles doesn't fill disk.
+            // Default cap is 4 GiB; override via
+            // SQLITE_WASM_COMPONENT_CACHE_MAX_BYTES (0 disables).
+            if cap > 0 {
+                if let Err(e) = component_blob_cache::evict_to(conn, cap) {
+                    tracing::warn!(error = %e, "component_cache: evict failed");
+                }
+            }
+        });
     }
 
     async fn register_component(
@@ -8535,12 +8565,15 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         };
         // Drop the old connection first  if the user is switching
         // away from a WAL file, we want sqlite to flush before we
-        // throw away the handle.
+        // throw away the handle. L2a: also drop the cached
+        // user_conn so the next component_cache_* / try_c2_*
+        // access lazy-reopens against the new path.
         {
             let g = self.host.shared_spi_conn.lock();
             let mut r = g.borrow_mut();
             *r = None;
         }
+        self.host.invalidate_user_conn();
         *self.host.db_path.write() = new_path;
         // shared_spi_ensure_open refuses `:memory:` with a clear
         // error; preserve that for `.open` (with no arg) so the
