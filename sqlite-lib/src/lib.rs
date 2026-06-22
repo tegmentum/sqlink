@@ -29,7 +29,7 @@ mod bindings {
     });
 }
 
-pub use sqlink_core::db;
+pub use sqlite_component_core::db;
 
 mod state;
 

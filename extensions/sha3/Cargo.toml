@@ -34,4 +34,4 @@ hex = { version = "0.4", default-features = false, features = ["alloc"] }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
 # Shared FFI glue  generic thunk + arg/result conversions. Lets
 # embed.rs be ~30 lines instead of ~150.
-sqlite-embed = { path = "../../sqlite-embed", optional = true }
+sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }

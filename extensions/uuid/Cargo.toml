@@ -39,4 +39,4 @@ getrandom = { version = "0.2", default-features = false, features = ["js"] }
 # with the cli's bundled compile (which already provides the symbols).
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
 # Shared FFI glue. See sha3-extension's Cargo.toml.
-sqlite-embed = { path = "../../sqlite-embed", optional = true }
+sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }

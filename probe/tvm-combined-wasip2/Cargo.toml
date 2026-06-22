@@ -46,7 +46,7 @@ crate-type = ["cdylib"]
 # of those probes. Don't repeat that mistake here.
 sqlite-pcache-tvm = { path = "../../sqlite-pcache-tvm" }
 sqlite-vfs-tvm    = { path = "../../sqlite-vfs-tvm" }
-sqlink-core  = { path = "../../core" }
+sqlite-component-core  = { path = "../../sqlite-wasm/core" }
 # Both pcache and vfs crates declare extern blocks for the same
 # tvm:memory imports  rust-lld dedupes them at link time, same
 # as the per-subsystem probes already do.

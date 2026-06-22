@@ -39,4 +39,4 @@ csscolorparser = { version = "0.8", default-features = false, features = [
     "named-colors",
 ] }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
-sqlite-embed = { path = "../../sqlite-embed", optional = true }
+sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }

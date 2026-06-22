@@ -56,4 +56,4 @@ serde_json = "1"
 # with the cli's bundled compile (which already provides the symbols).
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
 # Shared FFI glue for the embed path.
-sqlite-embed = { path = "../../sqlite-embed", optional = true }
+sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }

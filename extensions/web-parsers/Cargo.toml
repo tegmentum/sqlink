@@ -40,4 +40,4 @@ serde_json_path = "0.7"
 # HTML5 parsing + CSS selection.
 scraper = { version = "0.21", default-features = false }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
-sqlite-embed = { path = "../../sqlite-embed", optional = true }
+sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }

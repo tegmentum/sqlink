@@ -22,7 +22,7 @@
 use std::path::{Path, PathBuf};
 
 use sqlink_host::{Capability, Host, Policy};
-use sqlink_core::db;
+use sqlite_component_core::db;
 
 fn open_db(path: &Path) -> db::Connection {
     db::Connection::open(

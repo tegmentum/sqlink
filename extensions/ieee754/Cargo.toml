@@ -46,5 +46,5 @@ optional = true
 default-features = false
 
 [dependencies.sqlite-embed]
-path = "../../sqlite-embed"
+path = "../../sqlite-wasm/sqlite-embed"
 optional = true

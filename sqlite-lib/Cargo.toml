@@ -14,7 +14,7 @@ crate-type = ["cdylib"]
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 wit-bindgen = { version = "0.44", features = ["macros"] }
 # Shared SQLite wrapper.
-sqlink-core = { path = "../core" }
+sqlite-component-core = { path = "../sqlite-wasm/core" }
 # Direct libsqlite3-sys reference for sqlite3_complete + SQLITE_*
 # action codes used by the in-WASM authorizer dispatch.
 libsqlite3-sys = { version = "0.38" }

@@ -1,21 +1,22 @@
 [workspace]
 resolver = "2"
 
-# In-repo crates. `sqlite-loader-wit` lives in a git submodule
-# (https://github.com/tegmentum/sqlite-loader-wit); host consumes
-# it via path dep but it's not a workspace member — we don't own
-# that tree.
+# Submodules (NOT workspace members — they own their own
+# Cargo.toml):
+#   * `sqlite-loader-wit/`  the WIT contract every extension
+#     speaks. https://github.com/tegmentum/sqlite-loader-wit
+#   * `sqlite-wasm/`  componentized SQLite building blocks
+#     (sqlite-component-core + the TVM modules + sqlite-embed).
+#     https://github.com/tegmentum/sqlite-wasm
+#
+# sqlite-wasm/* crates are NOT workspace members of sqlink;
+# they're members of sqlite-wasm's own workspace. sqlink crates
+# depend on them via path = "../sqlite-wasm/<crate>".
 members = [
-    "core",
     "cli",
     "sqlite-lib",
     "host",
-    "sqlite-pcache-tvm",
-    "sqlite-mem-tvm",
-    "sqlite-vfs-tvm",
-    "sqlite-tvm-bindings",
     "sqlite-cas-cache",
-    "sqlite-embed",
     "sqlink-httpd",
     "extensions/json1",
     "extensions/csv",
@@ -47,7 +48,7 @@ exclude = [
 #
 #   cd cli && cargo build --release           # uses per-crate .cargo/config.toml
 #   cargo build -p sqlite-cli --target wasm32-wasip2  # from root
-default-members = ["core", "host"]
+default-members = ["host"]
 
 # Workspace-level release-profile tuning. LTO collapses sqlite3 +
 # rust glue + extension thunks across crate boundaries; codegen-units=1

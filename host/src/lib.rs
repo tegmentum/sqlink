@@ -888,7 +888,7 @@ pub struct LoadedExtension {
     /// zero. core::db::Connection is Send (not Sync) per the
     /// `unsafe impl Send` on the type; Mutex serializes per-extension
     /// concurrent SPI calls.
-    pub spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlink_core::db::Connection>>>>,
+    pub spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_component_core::db::Connection>>>>,
     /// Cached `tabular`-world (Store, Instance) for vtab dispatch.
     /// Vtab semantics require per-instance / per-cursor state to
     /// persist across xCreate  xOpen  xColumn — a fresh
@@ -1037,7 +1037,7 @@ pub struct LoadedState {
     /// Pooled connection borrowed from the owning LoadedExtension.
     /// Cloned Arc<Mutex<…>> so it survives across the per-call
     /// Stores each dispatch builds (mirror of state/cache).
-    spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlink_core::db::Connection>>>>,
+    spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_component_core::db::Connection>>>>,
     /// Outbound HTTP policy cloned from `ext.policy.http`. The
     /// `http::Host::handle` impl gates every request on this:
     /// `allowed_hosts` (with `*.suffix` wildcard support) and the
@@ -1329,7 +1329,7 @@ impl loaded_minimal_dns::sqlite::extension::dns::Host for LoadedState {
 fn spi_ensure_open(
     state: &LoadedState,
 ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-    use sqlink_core::db;
+    use sqlite_component_core::db;
     if state.db_path.is_empty() || state.db_path == ":memory:" {
         return Err(loaded::sqlite::extension::types::SqliteError {
             code: 1,
@@ -1362,7 +1362,7 @@ fn spi_ensure_open(
     Ok(())
 }
 
-fn db_err_to_spi(e: sqlink_core::db::Error) -> loaded::sqlite::extension::types::SqliteError {
+fn db_err_to_spi(e: sqlite_component_core::db::Error) -> loaded::sqlite::extension::types::SqliteError {
     loaded::sqlite::extension::types::SqliteError {
         code: e.code,
         extended_code: e.extended_code,
@@ -1370,9 +1370,9 @@ fn db_err_to_spi(e: sqlink_core::db::Error) -> loaded::sqlite::extension::types:
     }
 }
 
-fn spi_value_to_db(v: loaded::sqlite::extension::types::SqlValue) -> sqlink_core::db::Value {
+fn spi_value_to_db(v: loaded::sqlite::extension::types::SqlValue) -> sqlite_component_core::db::Value {
     use loaded::sqlite::extension::types::SqlValue as V;
-    use sqlink_core::db;
+    use sqlite_component_core::db;
     match v {
         V::Null => db::Value::Null,
         V::Integer(i) => db::Value::Integer(i),
@@ -1437,9 +1437,9 @@ fn sql_value_to_json(v: loaded::sqlite::extension::types::SqlValue) -> String {
     }
 }
 
-fn db_value_to_spi(v: sqlink_core::db::Value) -> loaded::sqlite::extension::types::SqlValue {
+fn db_value_to_spi(v: sqlite_component_core::db::Value) -> loaded::sqlite::extension::types::SqlValue {
     use loaded::sqlite::extension::types::SqlValue as V;
-    use sqlink_core::db;
+    use sqlite_component_core::db;
     match v {
         db::Value::Null => V::Null,
         db::Value::Integer(i) => V::Integer(i),
@@ -1454,9 +1454,9 @@ fn db_value_to_spi(v: sqlink_core::db::Value) -> loaded::sqlite::extension::type
 /// against the host's `bindings::sqlite::extension::types`. The
 /// cli's spi imports live on that side; LoadedState's impls
 /// stay on the `loaded` side.
-fn bindings_value_to_db(v: bindings::sqlite::extension::types::SqlValue) -> sqlink_core::db::Value {
+fn bindings_value_to_db(v: bindings::sqlite::extension::types::SqlValue) -> sqlite_component_core::db::Value {
     use bindings::sqlite::extension::types::SqlValue as V;
-    use sqlink_core::db;
+    use sqlite_component_core::db;
     match v {
         V::Null => db::Value::Null,
         V::Integer(i) => db::Value::Integer(i),
@@ -1466,9 +1466,9 @@ fn bindings_value_to_db(v: bindings::sqlite::extension::types::SqlValue) -> sqli
     }
 }
 
-fn db_value_to_bindings(v: sqlink_core::db::Value) -> bindings::sqlite::extension::types::SqlValue {
+fn db_value_to_bindings(v: sqlite_component_core::db::Value) -> bindings::sqlite::extension::types::SqlValue {
     use bindings::sqlite::extension::types::SqlValue as V;
-    use sqlink_core::db;
+    use sqlite_component_core::db;
     match v {
         db::Value::Null => V::Null,
         db::Value::Integer(i) => V::Integer(i),
@@ -1478,7 +1478,7 @@ fn db_value_to_bindings(v: sqlink_core::db::Value) -> bindings::sqlite::extensio
     }
 }
 
-fn db_err_to_bindings(e: sqlink_core::db::Error) -> bindings::sqlite::extension::types::SqliteError {
+fn db_err_to_bindings(e: sqlite_component_core::db::Error) -> bindings::sqlite::extension::types::SqliteError {
     bindings::sqlite::extension::types::SqliteError {
         code: e.code,
         extended_code: e.extended_code,
@@ -1490,7 +1490,7 @@ fn db_err_to_bindings(e: sqlink_core::db::Error) -> bindings::sqlite::extension:
 /// semantics as `spi_ensure_open` on LoadedState but the
 /// connection lives on Host (one per cli session).
 fn shared_spi_ensure_open(host: &Host) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
-    use sqlink_core::db;
+    use sqlite_component_core::db;
     let path = host.db_path.read().clone();
     if path.is_empty() || path == ":memory:" {
         return Err(bindings::sqlite::extension::types::SqliteError {
@@ -1977,10 +1977,10 @@ fn sync_dispatch_aggregate_inverse(
 /// Convert a core db::Value to the bindings SqlValue used by
 /// dispatch_aggregate_*. Mirrors db_to_wit on the cli side.
 fn db_value_to_bindings_sql(
-    v: sqlink_core::db::Value,
+    v: sqlite_component_core::db::Value,
 ) -> bindings::sqlite::extension::types::SqlValue {
     use bindings::sqlite::extension::types::SqlValue as V;
-    use sqlink_core::db;
+    use sqlite_component_core::db;
     match v {
         db::Value::Null => V::Null,
         db::Value::Integer(i) => V::Integer(i),
@@ -1992,9 +1992,9 @@ fn db_value_to_bindings_sql(
 
 fn bindings_sql_to_db_value(
     v: bindings::sqlite::extension::types::SqlValue,
-) -> sqlink_core::db::Value {
+) -> sqlite_component_core::db::Value {
     use bindings::sqlite::extension::types::SqlValue as V;
-    use sqlink_core::db;
+    use sqlite_component_core::db;
     match v {
         V::Null => db::Value::Null,
         V::Integer(i) => db::Value::Integer(i),
@@ -2014,7 +2014,7 @@ struct HostLoadedAggregate {
     func_id: u64,
 }
 
-impl sqlink_core::db::Aggregate<u64> for HostLoadedAggregate {
+impl sqlite_component_core::db::Aggregate<u64> for HostLoadedAggregate {
     fn init(&self) -> u64 {
         self.host.agg_ctx_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
@@ -2022,18 +2022,18 @@ impl sqlink_core::db::Aggregate<u64> for HostLoadedAggregate {
     fn step(
         &self,
         acc: &mut u64,
-        args: &[sqlink_core::db::Value],
-    ) -> std::result::Result<(), sqlink_core::db::Error> {
+        args: &[sqlite_component_core::db::Value],
+    ) -> std::result::Result<(), sqlite_component_core::db::Error> {
         let wit_args: Vec<_> = args.iter().cloned().map(db_value_to_bindings_sql).collect();
         match sync_dispatch_aggregate_step(&self.host, &self.ext_name, self.func_id, *acc, wit_args)
         {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(e)) => Err(sqlink_core::db::Error {
+            Ok(Err(e)) => Err(sqlite_component_core::db::Error {
                 code: 1,
                 extended_code: 1,
                 message: e,
             }),
-            Err(e) => Err(sqlink_core::db::Error {
+            Err(e) => Err(sqlite_component_core::db::Error {
                 code: 1,
                 extended_code: 1,
                 message: e.to_string(),
@@ -2044,16 +2044,16 @@ impl sqlink_core::db::Aggregate<u64> for HostLoadedAggregate {
     fn finalize(
         &self,
         acc: Option<u64>,
-    ) -> std::result::Result<sqlink_core::db::Value, sqlink_core::db::Error> {
+    ) -> std::result::Result<sqlite_component_core::db::Value, sqlite_component_core::db::Error> {
         let ctx_id = acc.unwrap_or(0);
         match sync_dispatch_aggregate_finalize(&self.host, &self.ext_name, self.func_id, ctx_id) {
             Ok(Ok(v)) => Ok(bindings_sql_to_db_value(v)),
-            Ok(Err(e)) => Err(sqlink_core::db::Error {
+            Ok(Err(e)) => Err(sqlite_component_core::db::Error {
                 code: 1,
                 extended_code: 1,
                 message: e,
             }),
-            Err(e) => Err(sqlink_core::db::Error {
+            Err(e) => Err(sqlite_component_core::db::Error {
                 code: 1,
                 extended_code: 1,
                 message: e.to_string(),
@@ -2062,19 +2062,19 @@ impl sqlink_core::db::Aggregate<u64> for HostLoadedAggregate {
     }
 }
 
-impl sqlink_core::db::WindowAggregate<u64> for HostLoadedAggregate {
+impl sqlite_component_core::db::WindowAggregate<u64> for HostLoadedAggregate {
     fn value(
         &self,
         ctx: &u64,
-    ) -> std::result::Result<sqlink_core::db::Value, sqlink_core::db::Error> {
+    ) -> std::result::Result<sqlite_component_core::db::Value, sqlite_component_core::db::Error> {
         match sync_dispatch_aggregate_value(&self.host, &self.ext_name, self.func_id, *ctx) {
             Ok(Ok(v)) => Ok(bindings_sql_to_db_value(v)),
-            Ok(Err(e)) => Err(sqlink_core::db::Error {
+            Ok(Err(e)) => Err(sqlite_component_core::db::Error {
                 code: 1,
                 extended_code: 1,
                 message: e,
             }),
-            Err(e) => Err(sqlink_core::db::Error {
+            Err(e) => Err(sqlite_component_core::db::Error {
                 code: 1,
                 extended_code: 1,
                 message: e.to_string(),
@@ -2085,8 +2085,8 @@ impl sqlink_core::db::WindowAggregate<u64> for HostLoadedAggregate {
     fn inverse(
         &self,
         ctx: &mut u64,
-        args: &[sqlink_core::db::Value],
-    ) -> std::result::Result<(), sqlink_core::db::Error> {
+        args: &[sqlite_component_core::db::Value],
+    ) -> std::result::Result<(), sqlite_component_core::db::Error> {
         let wit_args: Vec<_> = args.iter().cloned().map(db_value_to_bindings_sql).collect();
         match sync_dispatch_aggregate_inverse(
             &self.host,
@@ -2096,12 +2096,12 @@ impl sqlink_core::db::WindowAggregate<u64> for HostLoadedAggregate {
             wit_args,
         ) {
             Ok(Ok(())) => Ok(()),
-            Ok(Err(e)) => Err(sqlink_core::db::Error {
+            Ok(Err(e)) => Err(sqlite_component_core::db::Error {
                 code: 1,
                 extended_code: 1,
                 message: e,
             }),
-            Err(e) => Err(sqlink_core::db::Error {
+            Err(e) => Err(sqlite_component_core::db::Error {
                 code: 1,
                 extended_code: 1,
                 message: e.to_string(),
@@ -2964,7 +2964,7 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     }
 
     async fn list_vfs(&mut self) -> Vec<String> {
-        sqlink_core::db::Connection::list_vfses()
+        sqlite_component_core::db::Connection::list_vfses()
     }
 
     async fn vfs_name(
@@ -3011,7 +3011,7 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     }
 
     async fn current_memory_used(&mut self) -> i64 {
-        sqlink_core::db::Connection::current_memory_used()
+        sqlite_component_core::db::Connection::current_memory_used()
     }
 
     async fn backup_into(
@@ -3024,9 +3024,9 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         let src_g = self.spi_conn.lock();
         let src_r = src_g.borrow();
         let src = src_r.as_ref().expect("ensured open");
-        let dst = sqlink_core::db::Connection::open(
+        let dst = sqlite_component_core::db::Connection::open(
             &dst_path,
-            sqlink_core::db::OpenFlags::DEFAULT,
+            sqlite_component_core::db::OpenFlags::DEFAULT,
         )
         .map_err(db_err_to_spi)?;
         src.backup_into(&src_db, &dst, &dst_db).map_err(db_err_to_spi)
@@ -3039,9 +3039,9 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         dst_db: String,
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
         spi_ensure_open(self)?;
-        let src = sqlink_core::db::Connection::open(
+        let src = sqlite_component_core::db::Connection::open(
             &src_path,
-            sqlink_core::db::OpenFlags::READONLY,
+            sqlite_component_core::db::OpenFlags::READONLY,
         )
         .map_err(db_err_to_spi)?;
         let dst_g = self.spi_conn.lock();
@@ -3449,7 +3449,7 @@ fn shared_spi_ensure_open_loaded(
 /// `execute_multi_impl_bindings`  same logic, different type
 /// universes.
 fn execute_multi_impl_loaded(
-    conn: &sqlink_core::db::Connection,
+    conn: &sqlite_component_core::db::Connection,
     sql: &str,
     named_params: &[loaded::sqlite::extension::spi::NamedParam],
 ) -> std::result::Result<
@@ -4295,7 +4295,7 @@ pub struct Host {
     /// this Arc, so all extensions (and, in Stage 3+, the cli)
     /// observe the same sqlite3 handle. Lazy-opened by
     /// `spi_ensure_open` on first spi call.
-    shared_spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlink_core::db::Connection>>>>,
+    shared_spi_conn: Arc<ReentrantMutex<RefCell<Option<sqlite_component_core::db::Connection>>>>,
     /// PLAN-latent-cleanup.md L2a: cached user-db `Connection`
     /// used by `component_cache_*` and `try_c2_lookup` / `_store`.
     /// Before L2a each of those re-ran `open_user_conn(path)` +
@@ -4305,7 +4305,7 @@ pub struct Host {
     /// the option, and the next access keys against the current
     /// `db_path()` (lazy re-open if it's been swapped without
     /// going through us).
-    user_conn: Arc<Mutex<Option<(String, sqlink_core::db::Connection)>>>,
+    user_conn: Arc<Mutex<Option<(String, sqlite_component_core::db::Connection)>>>,
     /// PLAN-cli-stages-5-6.md Stage 5e.8: buffer for sqlite3's
     /// statement-level trace callback. The cli toggles it via
     /// `spi.set-stmt-trace`; lines accumulate on the host while a
@@ -4794,7 +4794,7 @@ impl Host {
     /// cache against.
     fn with_user_conn<F, R>(&self, op: F) -> Option<R>
     where
-        F: FnOnce(&sqlink_core::db::Connection) -> R,
+        F: FnOnce(&sqlite_component_core::db::Connection) -> R,
     {
         let db_path = self.db_path();
         if db_path.is_empty() {
@@ -8076,7 +8076,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     }
 
     async fn list_vfs(&mut self) -> Vec<String> {
-        sqlink_core::db::Connection::list_vfses()
+        sqlite_component_core::db::Connection::list_vfses()
     }
 
     async fn vfs_name(
@@ -8123,7 +8123,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
     }
 
     async fn current_memory_used(&mut self) -> i64 {
-        sqlink_core::db::Connection::current_memory_used()
+        sqlite_component_core::db::Connection::current_memory_used()
     }
 
     async fn backup_into(
@@ -8136,9 +8136,9 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
         let src = r.as_ref().expect("ensured open");
-        let dst = sqlink_core::db::Connection::open(
+        let dst = sqlite_component_core::db::Connection::open(
             &dst_path,
-            sqlink_core::db::OpenFlags::DEFAULT,
+            sqlite_component_core::db::OpenFlags::DEFAULT,
         )
         .map_err(db_err_to_bindings)?;
         src.backup_into(&src_db, &dst, &dst_db).map_err(db_err_to_bindings)
@@ -8151,9 +8151,9 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         dst_db: String,
     ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
-        let src = sqlink_core::db::Connection::open(
+        let src = sqlite_component_core::db::Connection::open(
             &src_path,
-            sqlink_core::db::OpenFlags::READONLY,
+            sqlite_component_core::db::OpenFlags::READONLY,
         )
         .map_err(db_err_to_bindings)?;
         let g = self.host.shared_spi_conn.lock();
@@ -8268,7 +8268,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
                         a3.as_deref(),
                         a4.as_deref()
                     );
-                    sqlink_core::db::AuthResult::Allow
+                    sqlite_component_core::db::AuthResult::Allow
                 },
             ))
             .map_err(db_err_to_bindings)
@@ -8279,7 +8279,7 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
                 Option<String>,
                 Option<String>,
                 Option<String>,
-            ) -> sqlink_core::db::AuthResult>(None)
+            ) -> sqlite_component_core::db::AuthResult>(None)
                 .map_err(db_err_to_bindings)
         }
     }
@@ -8387,10 +8387,10 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
                 Option<String>,
                 Option<String>,
                 Option<String>,
-            ) -> sqlink_core::db::AuthResult>(None);
+            ) -> sqlite_component_core::db::AuthResult>(None);
         }
         if drop_update_hook {
-            conn.update_hook::<fn(sqlink_core::db::UpdateAction, &str, &str, i64)>(None);
+            conn.update_hook::<fn(sqlite_component_core::db::UpdateAction, &str, &str, i64)>(None);
         }
         if drop_commit_hook {
             conn.commit_hook::<fn() -> bool>(None);
@@ -8417,15 +8417,15 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
                 let wit_action = sqlite_code_to_auth_action(action);
                 match sync_dispatch_authorize(&host, &ext_n, wit_action, a1, a2, a3, a4) {
                     Ok(bindings::sqlite::extension::types::AuthResult::Ok) => {
-                        sqlink_core::db::AuthResult::Allow
+                        sqlite_component_core::db::AuthResult::Allow
                     }
                     Ok(bindings::sqlite::extension::types::AuthResult::Deny) => {
-                        sqlink_core::db::AuthResult::Deny
+                        sqlite_component_core::db::AuthResult::Deny
                     }
                     Ok(bindings::sqlite::extension::types::AuthResult::Ignore) => {
-                        sqlink_core::db::AuthResult::Ignore
+                        sqlite_component_core::db::AuthResult::Ignore
                     }
-                    Err(_) => sqlink_core::db::AuthResult::Allow,
+                    Err(_) => sqlite_component_core::db::AuthResult::Allow,
                 }
             },
         ));
@@ -8451,16 +8451,16 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let host = self.host.clone();
         let ext_n = ext_name.clone();
         conn.update_hook(Some(
-            move |action: sqlink_core::db::UpdateAction,
+            move |action: sqlite_component_core::db::UpdateAction,
                   db_name: &str,
                   table: &str,
                   rowid: i64| {
                 use bindings::sqlite::extension::types::UpdateOperation as Op;
                 let op = match action {
-                    sqlink_core::db::UpdateAction::Insert => Op::Insert,
-                    sqlink_core::db::UpdateAction::Update => Op::Update,
-                    sqlink_core::db::UpdateAction::Delete => Op::Delete,
-                    sqlink_core::db::UpdateAction::Unknown => return,
+                    sqlite_component_core::db::UpdateAction::Insert => Op::Insert,
+                    sqlite_component_core::db::UpdateAction::Update => Op::Update,
+                    sqlite_component_core::db::UpdateAction::Delete => Op::Delete,
+                    sqlite_component_core::db::UpdateAction::Unknown => return,
                 };
                 let _ = sync_dispatch_on_update(&host, &ext_n, op, db_name, table, rowid);
             },
@@ -8517,16 +8517,16 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
             conn.create_window_function(
                 &name,
                 num_args,
-                sqlink_core::db::FunctionFlags::UTF8
-                    | sqlink_core::db::FunctionFlags::DIRECTONLY,
+                sqlite_component_core::db::FunctionFlags::UTF8
+                    | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
                 agg,
             )
         } else {
             conn.create_aggregate_function(
                 &name,
                 num_args,
-                sqlink_core::db::FunctionFlags::UTF8
-                    | sqlink_core::db::FunctionFlags::DIRECTONLY,
+                sqlite_component_core::db::FunctionFlags::UTF8
+                    | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
                 agg,
             )
         };
@@ -8812,7 +8812,7 @@ fn session_err(msg: String) -> bindings::sqlite::extension::types::SqliteError {
 }
 
 fn execute_multi_impl_bindings(
-    conn: &sqlink_core::db::Connection,
+    conn: &sqlite_component_core::db::Connection,
     sql: &str,
     named_params: &[bindings::sqlite::extension::spi::NamedParam],
 ) -> std::result::Result<

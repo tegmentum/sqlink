@@ -21,7 +21,7 @@
 //! treated as a hard miss.
 
 use anyhow::{anyhow, Result};
-use sqlink_core::db::{Connection, OpenFlags, StepResult, Value};
+use sqlite_component_core::db::{Connection, OpenFlags, StepResult, Value};
 use std::path::PathBuf;
 
 const SCHEMA_DDL: &str = "\

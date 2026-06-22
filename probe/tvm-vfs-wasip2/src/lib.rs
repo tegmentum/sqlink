@@ -14,7 +14,7 @@ mod bindings {
     });
 }
 
-use sqlink_core::db::{Connection, OpenFlags, StepResult, Value};
+use sqlite_component_core::db::{Connection, OpenFlags, StepResult, Value};
 
 struct Probe;
 

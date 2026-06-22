@@ -26,4 +26,4 @@ wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 libm = "0.2"
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
-sqlite-embed = { path = "../../sqlite-embed", optional = true }
+sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }

@@ -9,7 +9,7 @@ component that:
 
   - links sqlite-pcache-tvm with the `tvm` feature on (cold tier
     is wit-bindgen-backed against tvm:memory@0.1.0)
-  - links sqlink-core (bundled libsqlite3-sys), which drags
+  - links sqlite-component-core (bundled libsqlite3-sys), which drags
     in the bundled SQLite compile against wasi-sdk
   - exports run-test  installs the pcache, opens an in-memory db,
     runs INSERT/SELECT, returns the row count
@@ -30,7 +30,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 sqlite-pcache-tvm = { path = "../../sqlite-pcache-tvm", features = ["tvm"] }
-sqlink-core = { path = "../../core" }
+sqlite-component-core = { path = "../../sqlite-wasm/core" }
 # Same wit-bindgen the probe/tvm-substrate uses. The probe and
 # sqlite-pcache-tvm each declare extern blocks for the same
 # tvm:memory imports  rust-lld dedupes them at link time.

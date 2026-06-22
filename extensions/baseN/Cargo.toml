@@ -49,4 +49,4 @@ base32 = { version = "0.5", default-features = false }
 bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
 base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
-sqlite-embed = { path = "../../sqlite-embed", optional = true }
+sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }

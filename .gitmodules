@@ -1,3 +1,6 @@
 [submodule "sqlite-loader-wit"]
 	path = sqlite-loader-wit
 	url = https://github.com/tegmentum/sqlite-loader-wit.git
+[submodule "sqlite-wasm"]
+	path = sqlite-wasm
+	url = git@github.com:tegmentum/sqlite-wasm.git
