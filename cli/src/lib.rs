@@ -464,6 +464,16 @@ fn eval_input(input: &str) -> String {
         if let Some(out) = dot::dispatch(trimmed) {
             return out;
         }
+        // PLAN-sqlite-utils-port.md Stage 5: cli-level `.help` walks
+        // the loaded-extension manifests so every dotcmd-aware
+        // extension's commands show up. Beats core-dotcmd's hardcoded
+        // 5-entry list  it doesn't see anything loaded after the
+        // cli starts. `.help <name>` renders that command's
+        // DotCommandSpec (usage / help / examples).
+        if trimmed == ".help" || trimmed.starts_with(".help ") {
+            let rest = trimmed[".help".len()..].trim();
+            return do_help(rest);
+        }
         // No built-in matched  walk the loaded-extension registry
         // for an extension that registered this dot command. See
         // PLAN-dotcmd-plugins.md Phase 1 dispatcher.
@@ -506,6 +516,82 @@ fn eval_input(input: &str) -> String {
 /// dispatch. Returns `Some(output)` on a successful round-trip,
 /// `None` to let the caller emit "Unknown command".
 ///
+/// PLAN-sqlite-utils-port.md Stage 5: walk every loaded extension's
+/// manifest for dot commands, render either a sorted listing or one
+/// command's detail page.
+fn do_help(arg: &str) -> String {
+    use bindings::sqlite::wasm::extension_loader;
+    let mut out = String::new();
+    let manifests = extension_loader::list_extensions();
+    if arg.is_empty() {
+        // Listing mode: command name + summary + owning extension,
+        // sorted by command name. Each row is "  .name  summary".
+        let mut rows: Vec<(String, String, String)> = Vec::new();
+        for m in &manifests {
+            for dc in &m.dot_commands {
+                rows.push((dc.name.clone(), dc.summary.clone(), m.name.clone()));
+            }
+        }
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+        if rows.is_empty() {
+            return "No dot commands loaded.\n".to_string();
+        }
+        let max_name = rows.iter().map(|r| r.0.len()).max().unwrap_or(0).min(24);
+        out.push_str("Available dot commands (use `.help <name>` for detail):\n");
+        for (n, s, _ext) in &rows {
+            out.push_str(&format!("  .{:<width$}  {}\n", n, s, width = max_name));
+        }
+        out.push_str(&format!(
+            "\n({} commands across {} extensions)\n",
+            rows.len(),
+            manifests.len()
+        ));
+    } else {
+        // Detail mode: find by exact name; render usage / help /
+        // examples from the DotCommandSpec.
+        let q = arg.trim_start_matches('.');
+        for m in &manifests {
+            for dc in &m.dot_commands {
+                if dc.name == q {
+                    if !dc.usage.is_empty() {
+                        out.push_str(".");
+                        out.push_str(&dc.usage);
+                        out.push('\n');
+                    } else {
+                        out.push_str(&format!(".{}\n", dc.name));
+                    }
+                    if !dc.summary.is_empty() {
+                        out.push('\n');
+                        out.push_str(&dc.summary);
+                        out.push('\n');
+                    }
+                    if !dc.help.is_empty() {
+                        out.push('\n');
+                        out.push_str(&dc.help);
+                        if !dc.help.ends_with('\n') {
+                            out.push('\n');
+                        }
+                    }
+                    if !dc.examples.is_empty() {
+                        out.push_str("\nExamples:\n");
+                        for ex in &dc.examples {
+                            if !ex.description.is_empty() {
+                                out.push_str(&format!("  # {}\n", ex.description));
+                            }
+                            out.push_str(&format!("  {}\n", ex.command));
+                        }
+                    }
+                    out.push_str(&format!("\n(from extension `{}` v{})\n", m.name, m.version));
+                    return out;
+                }
+            }
+        }
+        out.push_str(&format!("Unknown command: .{}\n", q));
+        out.push_str("Run `.help` (no arg) for the list.\n");
+    }
+    out
+}
+
 /// Phase 4 will extend the bytes-fetch with `sqlink_cas_resolver`
 /// walks when the artifact row is absent.
 fn try_db_registry_resolve(name: &str, args: &str) -> Option<String> {

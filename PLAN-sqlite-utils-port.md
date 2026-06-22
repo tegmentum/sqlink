@@ -291,16 +291,30 @@ path (was missing from build_cli_state_snapshot).
     `--db PATH`; print the path. Exists for sqlite-utils
     parity.
 
-### Stage 5 — polish + parity (~1 day)
+### Stage 5 — polish + parity  shipped
 
-  - `.help <cmd>` long-form text matching sqlite-utils `--help`
-    where it provides usable extra context (especially for
-    `transform` and `extract`).
-  - Top-N flag coverage: `--csv`/`--tsv`/`--nl` on ingest,
-    `--limit`/`--offset` on query-like commands.
-  - Smoke regression: a small fixture db (analog to
-    sqlite-utils's `dogs.db` examples) walked through every
-    command.
+  - `.help` and `.help <name>` now route through a cli-level
+    intercept that walks every loaded extension's manifest. The
+    bare listing enumerates 73 dot commands across 10 extensions
+    (the four sqlite-utils-* + core-dotcmd + sqlink-meta-cli +
+    sha3sum-cli + serialize-cli + archive-cli + session-cli),
+    sorted by name. `.help <name>` renders the DotCommandSpec
+    fields (usage / summary / help / examples) plus the owning
+    extension. Implemented in `cli/src/lib.rs::do_help`.
+  - Flag coverage: `--csv` / `--tsv` / `--nl` / `--json` on
+    `.insert` / `.upsert`; `.rows TABLE [N]` accepts a
+    positional limit. Wider flag matrix is incremental polish
+    rather than a single landing.
+  - `examples/sqlite-utils-tour.sql` + `scripts/sqlite-utils-tour.sh`
+    walk every shipped sqlite-utils command exactly once
+    against a fresh db. Final smoke: 0 errors, 73-command
+    `.help` listing.
+
+Known cli quirk surfaced (out of scope): a leading `-- SQL comment`
+on adjacent lines confuses the statement assembler into glueing
+the comment to the next dot command. The tour script avoids this
+by putting all docs in `scripts/sqlite-utils-tour.sh` rather than
+inline in the .sql.
 
 ## Dependencies
 
