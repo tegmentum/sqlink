@@ -24,7 +24,7 @@ imports need an implementation. Two paths considered:
 
 ### Option A  JS implementation of `tvm:memory` (host-side)
 
-Build a wasi-polyfill plugin: `@tegmentum/wasi-polyfill/plugins/
+Build a wasi-polyfill plugin: `@<your-org>/wasi-polyfill/plugins/
 tvm-memory`. Regions backed by `Uint8Array` / `SharedArrayBuffer`
 / `IndexedDB`. Maps to wit-bindgen extern calls the same way the
 existing filesystem plugin handles `wasi:filesystem` extern calls.

@@ -282,7 +282,7 @@ in this repo grows a matching `BUNDLE=slim|full` env.
 **Q3.3. How does the CLI choose?**
 
 For users who download via the CAS cache (`.load
-https://extensions.tegmentum.dev/postgis-slim.wasm`), URLs
+https://extensions.<your-org>.dev/postgis-slim.wasm`), URLs
 distinguish. For local builds, env at compose time. No
 runtime selection.
 

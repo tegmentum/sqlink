@@ -2,7 +2,7 @@
 resolver = "2"
 
 # In-repo crates. `sqlite-loader-wit` lives in a git submodule
-# (https://github.com/tegmentum/sqlite-loader-wit); host consumes
+# (https://github.com/<your-org>/sqlite-loader-wit); host consumes
 # it via path dep but it's not a workspace member — we don't own
 # that tree.
 members = [

@@ -256,7 +256,7 @@ registration. Users wire whichever runtime plugins they care
 about; they can also point at a custom plugin for a language not
 on anyone's roadmap.
 
-No dependency on `tegmentum-webassembly-sdk`. The SDK is one way
+No dependency on `<your-org>-webassembly-sdk`. The SDK is one way
 to build / publish / discover these plugins, but `.run` only
 needs the wasm file. The SDK's registry, signing, manifests, and
 dependency resolution are layered on top and aren't required for
