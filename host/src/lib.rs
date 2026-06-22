@@ -29,6 +29,7 @@ pub mod cache;
 pub mod component_blob_cache;
 pub mod compose_provider;
 pub mod policy;
+pub mod session_ffi;
 pub mod vtab;
 
 use std::collections::HashMap;
@@ -89,6 +90,7 @@ pub mod loaded_minimal_http {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -110,6 +112,7 @@ pub mod loaded_minimal_dns {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -132,6 +135,7 @@ pub mod loaded_stateful {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -153,6 +157,7 @@ pub mod loaded_dotcmd_aware {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -174,6 +179,7 @@ pub mod loaded_collating {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -195,6 +201,7 @@ pub mod loaded_tabular {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -225,6 +232,7 @@ pub mod loaded_tabular_mutating {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -245,6 +253,7 @@ pub mod loaded_authorizing {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -643,6 +652,7 @@ pub mod loaded_resolving {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -664,6 +674,7 @@ pub mod loaded_hooked {
         with: {
             "sqlite:extension/types":   super::loaded::sqlite::extension::types,
             "sqlite:extension/spi":     super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
             "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
@@ -3233,6 +3244,197 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
     }
 }
 
+/// Stage 6: LoadedState (extension callers) delegates to the
+/// host's session_handles map when `host_ref` is wired (dotcmd-aware
+/// Stores get one). The cli's session-cli extension is the primary
+/// consumer; other extensions that import session but don't have
+/// host_ref see the "session is cli-only" error.
+impl loaded::sqlite::extension::session::Host for LoadedState {
+    async fn session_create(
+        &mut self,
+        name: String,
+        db_name: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let host = host_ref_required(self)?;
+        if host.session_handles.lock().contains_key(&name) {
+            return Err(loaded_session_err(format!("session {name:?} already exists")));
+        }
+        shared_spi_ensure_open_loaded(host)?;
+        let db_c = std::ffi::CString::new(db_name.clone())
+            .map_err(|_| loaded_session_err(format!("db name {db_name:?} has interior NUL")))?;
+        let raw_db = {
+            let g = host.shared_spi_conn.lock();
+            let r = g.borrow();
+            r.as_ref().expect("ensured open").raw_handle()
+        };
+        let mut sess: *mut session_ffi::sqlite3_session = std::ptr::null_mut();
+        let rc = unsafe { session_ffi::sqlite3session_create(raw_db, db_c.as_ptr(), &mut sess) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(loaded_session_err(format!("sqlite3session_create returned {rc}")));
+        }
+        host.session_handles.lock().insert(name, sess as usize);
+        Ok(())
+    }
+
+    async fn session_attach(
+        &mut self,
+        name: String,
+        table: Option<String>,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let host = host_ref_required(self)?;
+        let sess = lookup_session_loaded(host, &name)?;
+        let table_c = match table {
+            Some(t) if !t.is_empty() && t != "*" => Some(
+                std::ffi::CString::new(t.clone())
+                    .map_err(|_| loaded_session_err(format!("table {t:?} has interior NUL")))?,
+            ),
+            _ => None,
+        };
+        let ptr = table_c.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+        let rc = unsafe { session_ffi::sqlite3session_attach(sess, ptr) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(loaded_session_err(format!("sqlite3session_attach returned {rc}")));
+        }
+        Ok(())
+    }
+
+    async fn session_enable(
+        &mut self,
+        name: String,
+        on: bool,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let host = host_ref_required(self)?;
+        let sess = lookup_session_loaded(host, &name)?;
+        let _ = unsafe { session_ffi::sqlite3session_enable(sess, if on { 1 } else { 0 }) };
+        Ok(())
+    }
+
+    async fn session_indirect(
+        &mut self,
+        name: String,
+        on: bool,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let host = host_ref_required(self)?;
+        let sess = lookup_session_loaded(host, &name)?;
+        let _ = unsafe { session_ffi::sqlite3session_indirect(sess, if on { 1 } else { 0 }) };
+        Ok(())
+    }
+
+    async fn session_isempty(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
+        let host = host_ref_required(self)?;
+        let sess = lookup_session_loaded(host, &name)?;
+        let n = unsafe { session_ffi::sqlite3session_isempty(sess) };
+        Ok(n != 0)
+    }
+
+    async fn session_changeset(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
+        let host = host_ref_required(self)?;
+        let sess = lookup_session_loaded(host, &name)?;
+        let mut n: std::os::raw::c_int = 0;
+        let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
+        let rc = unsafe { session_ffi::sqlite3session_changeset(sess, &mut n, &mut p) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(loaded_session_err(format!("sqlite3session_changeset returned {rc}")));
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
+        unsafe { libsqlite3_sys::sqlite3_free(p) };
+        Ok(bytes)
+    }
+
+    async fn session_patchset(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
+        let host = host_ref_required(self)?;
+        let sess = lookup_session_loaded(host, &name)?;
+        let mut n: std::os::raw::c_int = 0;
+        let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
+        let rc = unsafe { session_ffi::sqlite3session_patchset(sess, &mut n, &mut p) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(loaded_session_err(format!("sqlite3session_patchset returned {rc}")));
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
+        unsafe { libsqlite3_sys::sqlite3_free(p) };
+        Ok(bytes)
+    }
+
+    async fn session_delete(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let host = host_ref_required(self)?;
+        let raw = host
+            .session_handles
+            .lock()
+            .remove(&name)
+            .ok_or_else(|| loaded_session_err(format!("no session named {name:?}")))?;
+        unsafe { session_ffi::sqlite3session_delete(raw as *mut session_ffi::sqlite3_session) };
+        Ok(())
+    }
+
+    async fn session_list(&mut self) -> Vec<String> {
+        match self.host_ref.as_ref() {
+            Some(host) => {
+                let mut names: Vec<String> = host.session_handles.lock().keys().cloned().collect();
+                names.sort();
+                names
+            }
+            None => Vec::new(),
+        }
+    }
+}
+
+fn host_ref_required(
+    state: &LoadedState,
+) -> std::result::Result<&Host, loaded::sqlite::extension::types::SqliteError> {
+    state.host_ref.as_ref().ok_or_else(|| {
+        loaded_session_err(
+            "spi.session-* requires the dotcmd-aware host_ref (cli auto-embed only)".into(),
+        )
+    })
+}
+
+fn lookup_session_loaded(
+    host: &Host,
+    name: &str,
+) -> std::result::Result<
+    *mut session_ffi::sqlite3_session,
+    loaded::sqlite::extension::types::SqliteError,
+> {
+    host.session_handles
+        .lock()
+        .get(name)
+        .copied()
+        .map(|u| u as *mut session_ffi::sqlite3_session)
+        .ok_or_else(|| loaded_session_err(format!("no session named {name:?}")))
+}
+
+fn loaded_session_err(msg: String) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: 1,
+        extended_code: 1,
+        message: msg,
+    }
+}
+
+/// Open shared_spi_conn from a LoadedState context. Same logic as
+/// shared_spi_ensure_open but returns the LoadedState error type.
+fn shared_spi_ensure_open_loaded(
+    host: &Host,
+) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+    shared_spi_ensure_open(host).map_err(|e| loaded::sqlite::extension::types::SqliteError {
+        code: e.code,
+        extended_code: e.extended_code,
+        message: e.message,
+    })
+}
+
 /// Shared implementation of spi.execute_multi for the LoadedState
 /// (extensions) view. The HostWrap view uses
 /// `execute_multi_impl_bindings`  same logic, different type
@@ -4123,6 +4325,12 @@ pub struct Host {
     /// connection. Same lifecycle as the scalar/aggregate maps;
     /// cleared by unregister-extension.
     ext_vtab_registrations: Arc<Mutex<HashMap<String, Vec<String>>>>,
+    /// PLAN-cli-stages-5-6.md Stage 6: named sqlite3_session
+    /// handles. usize stores `*mut session_ffi::sqlite3_session`
+    /// (the raw pointer isn't Send; the cast hides it inside the
+    /// Mutex). Sessions are tied to shared_spi_conn's lifetime;
+    /// open/close them via the spi.session-* methods.
+    session_handles: Arc<Mutex<HashMap<String, usize>>>,
     /// scheme → registered resolver extension. `.load <uri>` looks
     /// up the URI's scheme and instantiates the matching resolver
     /// as a `resolving`-world component. `file` and `blake3` schemes
@@ -4522,6 +4730,7 @@ impl Host {
             ext_update_hook_owner: Arc::new(Mutex::new(None)),
             ext_commit_hook_owner: Arc::new(Mutex::new(None)),
             ext_vtab_registrations: Arc::new(Mutex::new(HashMap::new())),
+            session_handles: Arc::new(Mutex::new(HashMap::new())),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache: Arc::new(RwLock::new(None)),
             compose_providers: Arc::new(RwLock::new(HashMap::new())),
@@ -8319,6 +8528,164 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         // error; preserve that for `.open` (with no arg) so the
         // user sees the same diagnostic as a startup `--db ""`.
         shared_spi_ensure_open(self.host)
+    }
+}
+
+/// Stage 6: cli-facing session impl. Sessions attach to
+/// `shared_spi_conn`'s raw handle; the host's session_handles map
+/// keys them by user-chosen name. Pointers stored as usize so the
+/// `*mut sqlite3_session` doesn't infect the map with !Send.
+impl<'a> bindings::sqlite::extension::session::Host for HostWrap<'a> {
+    async fn session_create(
+        &mut self,
+        name: String,
+        db_name: String,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        if self.host.session_handles.lock().contains_key(&name) {
+            return Err(session_err(format!("session {name:?} already exists")));
+        }
+        let db_c = std::ffi::CString::new(db_name.clone())
+            .map_err(|_| session_err(format!("db name {db_name:?} has interior NUL")))?;
+        let raw_db = {
+            let g = self.host.shared_spi_conn.lock();
+            let r = g.borrow();
+            r.as_ref().expect("ensured open").raw_handle()
+        };
+        let mut sess: *mut session_ffi::sqlite3_session = std::ptr::null_mut();
+        let rc = unsafe { session_ffi::sqlite3session_create(raw_db, db_c.as_ptr(), &mut sess) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(session_err(format!("sqlite3session_create returned {rc}")));
+        }
+        self.host.session_handles.lock().insert(name, sess as usize);
+        Ok(())
+    }
+
+    async fn session_attach(
+        &mut self,
+        name: String,
+        table: Option<String>,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        let sess = lookup_session(self.host, &name)?;
+        let table_c = match table {
+            Some(t) if !t.is_empty() && t != "*" => Some(
+                std::ffi::CString::new(t.clone())
+                    .map_err(|_| session_err(format!("table {t:?} has interior NUL")))?,
+            ),
+            _ => None,
+        };
+        let ptr = table_c.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+        let rc = unsafe { session_ffi::sqlite3session_attach(sess, ptr) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(session_err(format!("sqlite3session_attach returned {rc}")));
+        }
+        Ok(())
+    }
+
+    async fn session_enable(
+        &mut self,
+        name: String,
+        on: bool,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        let sess = lookup_session(self.host, &name)?;
+        // The C API ignores negative values (queries current state);
+        // 0 disables, 1+ enables. We don't surface the prior state.
+        let _ = unsafe { session_ffi::sqlite3session_enable(sess, if on { 1 } else { 0 }) };
+        Ok(())
+    }
+
+    async fn session_indirect(
+        &mut self,
+        name: String,
+        on: bool,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        let sess = lookup_session(self.host, &name)?;
+        let _ = unsafe { session_ffi::sqlite3session_indirect(sess, if on { 1 } else { 0 }) };
+        Ok(())
+    }
+
+    async fn session_isempty(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<bool, bindings::sqlite::extension::types::SqliteError> {
+        let sess = lookup_session(self.host, &name)?;
+        let n = unsafe { session_ffi::sqlite3session_isempty(sess) };
+        Ok(n != 0)
+    }
+
+    async fn session_changeset(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<Vec<u8>, bindings::sqlite::extension::types::SqliteError> {
+        let sess = lookup_session(self.host, &name)?;
+        let mut n: std::os::raw::c_int = 0;
+        let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
+        let rc = unsafe { session_ffi::sqlite3session_changeset(sess, &mut n, &mut p) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(session_err(format!("sqlite3session_changeset returned {rc}")));
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
+        unsafe { libsqlite3_sys::sqlite3_free(p) };
+        Ok(bytes)
+    }
+
+    async fn session_patchset(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<Vec<u8>, bindings::sqlite::extension::types::SqliteError> {
+        let sess = lookup_session(self.host, &name)?;
+        let mut n: std::os::raw::c_int = 0;
+        let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
+        let rc = unsafe { session_ffi::sqlite3session_patchset(sess, &mut n, &mut p) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(session_err(format!("sqlite3session_patchset returned {rc}")));
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
+        unsafe { libsqlite3_sys::sqlite3_free(p) };
+        Ok(bytes)
+    }
+
+    async fn session_delete(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        let raw = self
+            .host
+            .session_handles
+            .lock()
+            .remove(&name)
+            .ok_or_else(|| session_err(format!("no session named {name:?}")))?;
+        unsafe { session_ffi::sqlite3session_delete(raw as *mut session_ffi::sqlite3_session) };
+        Ok(())
+    }
+
+    async fn session_list(&mut self) -> Vec<String> {
+        let mut names: Vec<String> = self.host.session_handles.lock().keys().cloned().collect();
+        names.sort();
+        names
+    }
+}
+
+fn lookup_session(
+    host: &Host,
+    name: &str,
+) -> std::result::Result<
+    *mut session_ffi::sqlite3_session,
+    bindings::sqlite::extension::types::SqliteError,
+> {
+    host.session_handles
+        .lock()
+        .get(name)
+        .copied()
+        .map(|u| u as *mut session_ffi::sqlite3_session)
+        .ok_or_else(|| session_err(format!("no session named {name:?}")))
+}
+
+fn session_err(msg: String) -> bindings::sqlite::extension::types::SqliteError {
+    bindings::sqlite::extension::types::SqliteError {
+        code: 1,
+        extended_code: 1,
+        message: msg,
     }
 }
 

@@ -25,15 +25,11 @@ pub fn dispatch(input: &str) -> Option<String> {
     let mut parts = trimmed.splitn(2, char::is_whitespace);
     let cmd = parts.next().unwrap_or("");
     let _arg = parts.next().unwrap_or("").trim();
-    match cmd {
-        ".session" => Some(
-            "Error: .session is pending Stage 6 (sqlite:extension/session port). \
-             The cli's legacy CLI_CONN-based session capture was a no-op since \
-             Stage 3c moved eval_sql onto the host's shared connection.\n"
-                .to_string(),
-        ),
-        _ => None,
-    }
+    // Stage 6: `.session` migrated to extensions/session-cli; no
+    // built-in dot commands remain in the cli. Everything routes
+    // through the loaded-extension fallthrough.
+    let _ = cmd;
+    None
 }
 
 /// Result variants for `try_fetch_bytes` / `walk_cas_resolvers`.

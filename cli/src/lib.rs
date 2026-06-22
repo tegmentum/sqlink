@@ -2433,6 +2433,14 @@ fn embed_core_dotcmd() {
     const ARCHIVE_CLI_BYTES: &[u8] = include_bytes!(
         "../../extensions/archive-cli/target/wasm32-wasip2/release/archive_cli_extension.component.wasm"
     );
+    /// Stage 6: `.session` migrated from `cli/src/dot.rs` to its own
+    /// dot-command extension targeting the new
+    /// `bindings::sqlite::extension::session` host import. The
+    /// extension keys session handles by user-chosen name; the
+    /// `sqlite3_session` state lives host-side in Host::session_handles.
+    const SESSION_CLI_BYTES: &[u8] = include_bytes!(
+        "../../extensions/session-cli/target/wasm32-wasip2/release/session_cli_extension.component.wasm"
+    );
     let options = LoadOptions {
         grant: Vec::new(),
         http_policy: None,
@@ -2503,6 +2511,19 @@ fn embed_core_dotcmd() {
         Err(e) => {
             eprintln!(
                 "auto-load archive-cli failed: {} ({}). `.archive` will read \"Unknown command\".",
+                e.message, e.code
+            );
+        }
+    }
+    match extension_loader::load_extension_from_bytes(
+        "session-cli",
+        SESSION_CLI_BYTES,
+        &options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load session-cli failed: {} ({}). `.session` will read \"Unknown command\".",
                 e.message, e.code
             );
         }

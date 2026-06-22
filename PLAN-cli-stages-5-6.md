@@ -382,10 +382,48 @@ Smoke (case + stats round-trip): scalars, aggregates, .load /
 .unload cycle all work. `.session` returns the Stage 6
 diagnostic stub.
 
-## Stage 6 — `.session` port
+## Stage 6 — `.session` port (SHIPPED)
 
 Depends on Stage 5 (specifically: the cli's connection must
 be the host's connection, so sessions track cli writes).
+
+Shipped:
+  - 6a (submodule 7dec366): `sqlite:extension/session`
+    interface in host-spi.wit + `import session` in every
+    world that imports spi.
+  - 6b: host impls. host/src/session_ffi.rs split out of
+    main.rs; extended with sqlite3session_enable / _indirect
+    / _isempty / _patchset extern decls. Host::session_handles
+    field (Arc<Mutex<HashMap<String, usize>>>; usize hides
+    the raw *mut sqlite3_session). HostWrap + LoadedState
+    both impl session::Host  LoadedState routes via
+    host_ref (dotcmd-aware extensions get one), so the
+    session-cli extension reaches the same handle map the
+    cli would use.
+  - 6c: extensions/session-cli/ scaffolded from
+    serialize-cli precedent. One dot command (id 1) named
+    `session` with full subcommand dispatch inside invoke().
+  - 6d: cli auto-embeds session_cli_extension.component.wasm
+    alongside core-dotcmd / archive-cli / etc. dot.rs's
+    `.session` stub dropped (the loader fallthrough hits
+    the new extension instead).
+  - 6e: dot::dispatch reduced to a single `None` return; the
+    FetchResult / try_fetch_bytes / walk_cas_resolvers
+    helpers stay (CAS auto-resolve fallthrough still uses
+    them).
+
+Smoke (verified):
+  `CREATE TABLE t(x INTEGER PRIMARY KEY);
+   .session s1 create main; .session s1 attach;
+   INSERT INTO t VALUES (1),(2),(3);
+   .session s1 isempty   -> 0
+   .session s1 changeset /tmp/cs.bin  -> wrote 38 bytes
+   .session list  -> s1
+   .session s1 delete; .session list  -> (no active sessions)`
+
+Note: sqlite3_session requires tables to have a PRIMARY KEY
+to track changes  this is a sqlite library constraint,
+not a cli limitation. Without a PK, isempty stays 1.
 
 ### Stage 6a — `sqlite:extension/session` WIT interface (~1 hour)
 
