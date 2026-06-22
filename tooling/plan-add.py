@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PLAN = REPO_ROOT / "PLAN-sqlite-plugins.md"
+PLAN = REPO_ROOT / "docs" / "plans" / "PLAN-sqlite-plugins.md"
 
 # Column widths copied from existing rows
 NAME_W = 31

@@ -169,10 +169,10 @@ Total: ~110 wasm component extensions.
 | `tooling/cli-cheatsheet.md` | Every dot-command + when it's useful in tests |
 | `tooling/extension-patterns.md` | Shape catalog for scalar/agg/vtab/etc. |
 | `tooling/lessons-learned.md` | Per-ship retrospectives |
-| [PLAN-sqlite-plugins.md](PLAN-sqlite-plugins.md) | Catalog of shipped extensions |
-| [PLAN-gaps.md](PLAN-gaps.md) | What's NOT shipped + ranked next-up |
-| [PLAN-sqlite-utils-port.md](PLAN-sqlite-utils-port.md) | Stage-by-stage: porting sqlite-utils as dot commands |
-| [PLAN-cli-stages-5-6.md](PLAN-cli-stages-5-6.md) | The CLI_CONN purge + `.session` port |
+| [PLAN-sqlite-plugins.md](docs/plans/PLAN-sqlite-plugins.md) | Catalog of shipped extensions |
+| [PLAN-gaps.md](docs/plans/PLAN-gaps.md) | What's NOT shipped + ranked next-up |
+| [PLAN-sqlite-utils-port.md](docs/plans/PLAN-sqlite-utils-port.md) | Stage-by-stage: porting sqlite-utils as dot commands |
+| [PLAN-cli-stages-5-6.md](docs/plans/PLAN-cli-stages-5-6.md) | The CLI_CONN purge + `.session` port |
 | [analysis/README.md](analysis/README.md) | Function-catalog gap analysis (6 DBs) |
 
 ## Status
@@ -190,12 +190,12 @@ Recent milestones:
     WIT interface.
   - **sqlite-utils port**: 35 dot commands across 4 new extensions
     (schema / data / fts / maint), driven by
-    [PLAN-sqlite-utils-port.md](PLAN-sqlite-utils-port.md).
+    [PLAN-sqlite-utils-port.md](docs/plans/PLAN-sqlite-utils-port.md).
   - **`.help` discoverability**: enumerates every registered dot
     command across every loaded extension, surfaces per-command
     usage + worked examples.
 
-Known gaps documented in [PLAN-gaps.md](PLAN-gaps.md); the big
+Known gaps documented in [PLAN-gaps.md](docs/plans/PLAN-gaps.md); the big
 ones are hot-reload of extensions, stack-trace propagation from
 wasm panics, and SpatiaLite-grade geospatial.
 

@@ -41,7 +41,7 @@ trust boundaries:
   - **Capability policy.** Each extension declares the host
     capabilities it needs (http, filesystem, state, etc) in its
     manifest. The host enforces a capability allow-list at load
-    time (see [PLAN-grants-db.md](PLAN-grants-db.md) for the trust
+    time (see [PLAN-grants-db.md](docs/plans/PLAN-grants-db.md) for the trust
     model: `--trust=manifest`, `--trust=stored`, `--trust=prompt`).
   - **Filesystem.** wasm components don't get host filesystem
     access by default. The cli passes specific files via wasi
@@ -63,7 +63,7 @@ trust boundaries:
 
 ## Known sharp edges
 
-Tracked in [PLAN-gaps.md](PLAN-gaps.md). Notable:
+Tracked in [PLAN-gaps.md](docs/plans/PLAN-gaps.md). Notable:
 
   - Wasm panic stack traces don't propagate cleanly to the host.
   - Extension hot-reload is not yet supported.
