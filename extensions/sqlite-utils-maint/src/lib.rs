@@ -404,12 +404,31 @@ mod wasm_export {
     }
 
     fn user_tables() -> Result<Vec<String>, String> {
-        // Exclude sqlite_* and _-prefixed bookkeeping tables.
+        // Exclude:
+        //   * sqlite_* internal tables
+        //   * _-prefixed bookkeeping tables (e.g. _counts itself)
+        //   * virtual tables (their sql starts with CREATE VIRTUAL TABLE
+        //     and sqlite forbids triggers on them)
+        //   * virtual-table shadow tables (e.g. fts5's
+        //     <vtab>_data / _idx / _docsize / _config). Despite being
+        //     created by the vtab module, sqlite STILL writes a fake
+        //     `CREATE TABLE '<name>_kind'(...)` row to sqlite_master.
+        //     Detect them via the correlated EXISTS clause: a row is
+        //     a shadow iff there's a CREATE VIRTUAL TABLE row whose
+        //     name is a prefix of this row's name.
         let qr = spi::execute(
-            "SELECT name FROM sqlite_master WHERE type='table' \
-             AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' \
-             AND name NOT LIKE '\\_%' ESCAPE '\\' \
-             ORDER BY name",
+            "SELECT t1.name FROM sqlite_master t1 \
+             WHERE t1.type='table' \
+               AND t1.name NOT LIKE 'sqlite\\_%' ESCAPE '\\' \
+               AND t1.name NOT LIKE '\\_%' ESCAPE '\\' \
+               AND (t1.sql IS NULL OR t1.sql NOT LIKE 'CREATE VIRTUAL%') \
+               AND NOT EXISTS ( \
+                   SELECT 1 FROM sqlite_master t2 \
+                   WHERE t2.type='table' \
+                     AND t2.sql LIKE 'CREATE VIRTUAL%' \
+                     AND t1.name LIKE t2.name || '\\_%' ESCAPE '\\' \
+               ) \
+             ORDER BY t1.name",
             &[],
         )
         .map_err(|e| format!("list tables: {} (code {})", e.message, e.code))?;
