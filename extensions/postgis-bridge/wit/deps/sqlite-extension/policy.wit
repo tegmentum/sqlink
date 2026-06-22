@@ -37,6 +37,8 @@ interface policy {
         encoding,
         /// Outbound HTTP (sqlite:extension/http).
         http,
+        /// Outbound DNS resolution (sqlite:extension/dns).
+        dns,
     }
 
     /// Outbound HTTP policy. Applied by the host's `http::handle`
@@ -53,6 +55,19 @@ interface policy {
         max-body-bytes: option<u64>,
         /// Per-request wall-clock timeout. Overrides any timeout the
         /// extension passes in the request.
+        timeout-ms: option<u32>,
+    }
+
+    /// Outbound DNS policy. Applied by the host's `dns::resolve`
+    /// implementation to every lookup the extension makes.
+    record dns-policy {
+        /// Allowlist of domain suffixes the extension may resolve.
+        /// Entries may use a leading `*.` for a wildcard suffix
+        /// (same semantics as http-policy.allowed-hosts). Empty list
+        /// means no domains permitted.
+        allowed-domains: list<string>,
+        /// Per-request wall-clock timeout. Overrides any timeout the
+        /// extension passes.
         timeout-ms: option<u32>,
     }
 
@@ -81,6 +96,8 @@ interface policy {
         epoch-deadline-ms: option<u64>,
         /// HTTP policy. Required if `grant` contains `capability::http`.
         http-policy: option<http-policy>,
+        /// DNS policy. Required if `grant` contains `capability::dns`.
+        dns-policy: option<dns-policy>,
         /// Filesystem policy. Reserved.
         fs-policy: option<fs-policy>,
         /// Allow-list of capabilities granted to this extension.
@@ -101,6 +118,10 @@ interface policy {
         method-not-allowed(method),
         /// `grant` includes `http` but `http-policy` was None.
         missing-http-policy,
+        /// A DNS query targeted a domain outside `dns-policy.allowed-domains`.
+        dns-domain-not-allowed(string),
+        /// `grant` includes `dns` but `dns-policy` was None.
+        missing-dns-policy,
         /// Resource limit reached.
         fuel-exhausted,
         memory-limit-exceeded,

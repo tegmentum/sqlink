@@ -53,6 +53,33 @@ These 5 extensions' bindings are still stale post-refactor. Need source-level fi
 
 (Down from the 14 the rebuild commit warned about — some made it through.)
 
+### COMPOSE_REQUIRED (1) — extension is a bridge crate
+
+#### postgis-bridge
+
+The bridge component imports `postgis:wasm/*` (32 interfaces) and
+`sfcgal:component/*` (2 interfaces) on top of the standard
+`sqlite:extension/*` surface. Loading the bridge wasm standalone
+fails instantiation because those imports are unsatisfied.
+
+Bindings were rebuilt against the current sqlite-loader-wit
+contract (see phase3-postgis-bridge branch). The fixture stays
+skipped until one of these lands:
+
+1. Smoke harness learns a `compose = [...]` fixture key that runs
+   `wac plug` against listed plugs before `.load`. Cheapest if we
+   keep `postgis-composed.wasm` + `sfcgal.component.wasm` cached
+   somewhere both CI and dev environments can read.
+2. A separate prebuilt `postgis.full.component.wasm` artifact gets
+   committed (or fetched) into the extension's target dir before
+   smoke runs. ~99-113 MB, so probably out-of-band rather than in
+   git.
+
+V1 surface to probe once smoke can load:
+- `SELECT st_astext(st_makepoint(1.0, 2.5))` → `"POINT(1 2.5)"`
+- `SELECT st_distance(st_makepoint(0,0), st_makepoint(3,4))` → `5`
+- `SELECT st_area(st_geomfromtext('POLYGON((0 0,4 0,4 3,0 3,0 0))'))` → `12`
+
 ## Recommended order
 
 1. Hand-roll fixtures for the 8 placeholder-stuck extensions (cheap).
@@ -60,3 +87,4 @@ These 5 extensions' bindings are still stale post-refactor. Need source-level fi
 3. Hand-roll fixtures for arg-type mismatches (~20 lines per fixture).
 4. Wire capability flags through the smoke runner (architectural).
 5. Bucket-4 WIT-bindgen fixes are per-extension code work; not in scope.
+6. Add `compose` fixture key and activate postgis-bridge smoke.

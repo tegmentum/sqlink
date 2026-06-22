@@ -571,7 +571,7 @@ expects = "1"
 
 [extension."postgis-bridge"]
 skip = true
-note = "5 compile errors after WIT refactor; needs source rework #403"
+note = "bindings rebuilt against current sqlite-loader-wit; standalone .load needs compose with postgis-composed.wasm + sfcgal-wasm before this fixture can be activated (see TRIAGE.md)"
 
 [extension."priority-queue".scalar]
 sql = "SELECT pq_version() IS NOT NULL OR pq_version() IS NULL"
