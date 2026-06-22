@@ -18,6 +18,42 @@ targets wasm (Rust, C, AssemblyScript, ...), publish it as a
 same shape `sqlite3_load_extension()` has, but sandboxed,
 portable, and language-agnostic.
 
+## Three deployment scenarios
+
+The same WIT-shaped `.wasm` extension runs against three
+different SQLite hosts. The extension binary doesn't change; the
+host does:
+
+1. **Native SQLite + sqlink loader.** A traditional SQLite
+   installation loaded as a system library, with a sqlink-shaped
+   sqlite extension that embeds a wasm runtime (wasmtime, wamr,
+   ...). `sqlite3_load_extension("sqlink_loader")` from any
+   SQLite-linked program; subsequent `.load <ext>.wasm` calls
+   bootstrap the wasm runtime, host the extension, and bridge
+   its scalar / aggregate / vtab / hook surface back into the
+   native SQLite connection. Lets existing native-SQLite
+   deployments adopt the extension catalog without recompiling
+   SQLite itself.
+
+2. **Standalone SQLite-in-wasm + extensions.** This repo's main
+   path: the entire SQLite C library is compiled to wasm32-wasip2
+   alongside the cli component, hosted by the `sqlink` native
+   binary (a wasmtime-based runtime). `.load <ext>.wasm` loads
+   another wasm component and wires it into the same wasm-side
+   SQLite. The shipped 110-extension catalog and 73 dot commands
+   in this repo are this configuration. Sandboxed by default,
+   capability-gated, portable across OSes.
+
+3. **Browser-side SQLite-in-wasm + extensions.** Same wasm-side
+   SQLite + extension components, but the host is a
+   browser-resident wasm runtime instead of wasmtime. A jsdelivr
+   / unpkg-shaped CDN serves extensions; the page's host code
+   resolves + loads them on demand. Tracked in
+   [docs/plans/PLAN-browser-runtime.md](docs/plans/PLAN-browser-runtime.md).
+
+The WIT contract in `sqlite-loader-wit/` is the single point of
+truth that lets the same extension binary work in all three.
+
 ## What's here
 
 ```
