@@ -166,7 +166,14 @@ pub fn run_probe(
         stdin_buf.push_str(&format!(".load {} --grant={csv}\n", component.display()));
     }
     for s in &probe.setup {
-        stdin_buf.push_str(s);
+        let trimmed = s.trim_end();
+        stdin_buf.push_str(trimmed);
+        // Setup statements need trailing `;` for the cli's statement
+        // assembler to flush them; without it the next setup line or
+        // the main `sql` gets buffered into a pending statement.
+        if !trimmed.ends_with(';') {
+            stdin_buf.push(';');
+        }
         stdin_buf.push('\n');
     }
     // Ensure the SQL ends with `;` so the cli's statement
