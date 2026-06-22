@@ -59,6 +59,27 @@ host does:
        `extension_smoke` test still runs the wasm cli path
        unchanged).
 
+     - **`sqlink-loader` SQLite loadable extension** (scaffolded,
+       not yet wired). Same dispatch surface as `sqlink-native`,
+       but packaged as a cdylib that vanilla `sqlite3` can side-
+       load:
+
+       ```bash
+       cargo build --release -p sqlink-loader
+       sqlite3 :memory: \
+           '.load ./target/release/libsqlink_loader' \
+           'SELECT uuid()'
+       ```
+
+       The crate (`sqlink-loader/`) builds cleanly and exports the
+       canonical `sqlite3_sqlinkloader_init` entry point. A full
+       working implementation is blocked behind a workspace-wide
+       refactor of `libsqlite3-sys` consumption — the bundled +
+       loadable-extension features are mutually exclusive at
+       Cargo feature-unification time. See
+       [`sqlink-loader/DESIGN.md`](sqlink-loader/DESIGN.md) for
+       the full analysis and the recommended path forward.
+
 2. **Standalone SQLite-in-wasm + extensions.** This repo's main
    path: the entire SQLite C library is compiled to wasm32-wasip2
    alongside the cli component, hosted by the `sqlink` native
