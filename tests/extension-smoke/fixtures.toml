@@ -237,6 +237,12 @@ expects = "1"
 sql = "SELECT eval('SELECT 1+1')"
 expects = "2"
 
+
+[extension.excel.scalar]
+sql = "SELECT EXISTS(SELECT 1 FROM pragma_module_list WHERE name='excel')"
+expects = "1"
+note = "vtab; needs xlsx fixture for full smoke. Build with RUSTC_BOOTSTRAP=1 to work around typed-path nightly gate."
+
 [extension.exif.scalar]
 sql = "SELECT exif_all('') IS NOT NULL OR exif_all('') IS NULL"
 expects = "1"
@@ -379,17 +385,9 @@ expects = "1"
 sql = "SELECT (inet6_aton('::1')) IS NOT NULL OR (inet6_aton('::1')) IS NULL"
 expects = "1"
 
-[extension.isbn]
-skip = true
-note = "wit-bindgen function-type mismatch at .load; needs source rework #403"
-
 [extension.isin.scalar]
 sql = "SELECT isin_check_digit('') IS NOT NULL OR isin_check_digit('') IS NULL"
 expects = "1"
-
-[extension.iso]
-skip = true
-note = "wit-bindgen function-type mismatch at .load; needs source rework #403"
 
 [extension."iso-639-5".scalar]
 sql = "SELECT iso639_5_list() IS NOT NULL OR iso639_5_list() IS NULL"
