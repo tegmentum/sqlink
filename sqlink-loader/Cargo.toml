@@ -1,0 +1,31 @@
+[package]
+name = "sqlink-loader"
+version = "0.1.0"
+edition = "2021"
+description = """
+Scenario 1 sub-option: SQLite loadable extension (.so / .dylib) that
+vanilla sqlite3 can `SELECT load_extension('./sqlink-loader.so')` to
+gain access to the sqlink wasm extension catalog. Sister to
+`sqlink-native` (a standalone binary that opens its own connection);
+this one registers trampolines on the host process's existing
+sqlite3* handle and brings wasmtime + the sqlink-host runtime along
+inside the .so.
+
+STATUS: scaffolded. The trampoline + SPI plumbing required for a
+working .so is documented in `sqlink-loader/DESIGN.md`. The blocker
+called out in the phase-4 brief is real and tracked there.
+"""
+license = "MIT"
+
+[lib]
+name = "sqlink_loader"
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[dependencies]
+# No libsqlite3-sys dep yet. The production-ready version of this
+# crate needs `libsqlite3-sys = { features = ["loadable_extension"] }`
+# but that feature is mutually exclusive with the `bundled` feature
+# that sqlite-component-core + sqlink-host depend on. See
+# DESIGN.md "The blocker" for the resolution path. Until then,
+# this scaffold uses raw C ABI types only — no sqlite3 calls.

@@ -4887,6 +4887,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlink-loader"
+version = "0.1.0"
+
+[[package]]
 name = "sqlink-native"
 version = "0.1.0"
 dependencies = [
