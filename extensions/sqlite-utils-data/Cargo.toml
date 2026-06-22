@@ -1,0 +1,29 @@
+[package]
+name = "sqlite-utils-data-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+sqlite-utils data-manipulation surface as SQLink dot commands.
+
+PLAN-sqlite-utils-port.md Stage 2: ports 8 of the sqlite-utils
+CLI subcommands focused on getting data INTO and OUT OF tables.
+Subcommands: .rows .analyze_tables .insert .upsert .bulk
+.insert_files .convert .memory.
+
+JSON / JSONL / CSV / TSV ingest with schema inference and
+optional auto-ALTER. Every command runs against the host's
+shared spi connection (Stage 5e+).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+serde_json = { version = "1", default-features = false, features = ["alloc"] }
+csv = { version = "1.3", default-features = false }
