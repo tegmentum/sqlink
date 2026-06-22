@@ -810,7 +810,16 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
                 summary: d.summary.clone(),
                 usage: d.usage.clone(),
                 help: d.help.clone(),
-                examples: vec![],
+                examples: d
+                    .examples
+                    .iter()
+                    .map(|(desc, cmd)| {
+                        bindings::sqlite::extension::metadata::DotCommandExample {
+                            description: desc.clone(),
+                            command: cmd.clone(),
+                        }
+                    })
+                    .collect(),
                 requires_write: d.requires_write,
                 no_args: d.no_args,
             })
@@ -4205,6 +4214,10 @@ pub struct DotCommandEntry {
     pub summary: String,
     pub usage: String,
     pub help: String,
+    /// (description, command) pairs from the extension's manifest.
+    /// Surfaced by the cli's `.help <name>` renderer; was dropped
+    /// on the floor before this entry carried it.
+    pub examples: Vec<(String, String)>,
     pub requires_write: bool,
     pub no_args: bool,
 }
@@ -5605,6 +5618,11 @@ impl Host {
                 summary: d.summary.clone(),
                 usage: d.usage.clone(),
                 help: d.help.clone(),
+                examples: d
+                    .examples
+                    .iter()
+                    .map(|e| (e.description.clone(), e.command.clone()))
+                    .collect(),
                 requires_write: d.requires_write,
                 no_args: d.no_args,
             })
