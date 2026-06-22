@@ -1,7 +1,7 @@
 # extensions-site
 
 A SQLite-driven landing site for the sqlite-wasm extension registry,
-served by `sqlite-wasm-httpd`. Lists 220+ shipped extensions with a
+served by `sqlink-httpd`. Lists 220+ shipped extensions with a
 client-side search bar and a per-extension detail page; also exposes
 the catalog as a JSON API.
 
@@ -36,8 +36,8 @@ python3 extensions-site/build.py
 # -> wrote extensions-site/registry.db  226 extensions, 421888 bytes
 
 # 3. Serve locally on http://localhost:8080
-cargo build --release -p sqlite-wasm-httpd
-./target/release/sqlite-wasm-httpd \
+cargo build --release -p sqlink-httpd
+./target/release/sqlink-httpd \
     --db extensions-site/registry.db \
     --port 8080
 ```
@@ -53,7 +53,7 @@ docker run --rm -p 8080:8080 -e PORT=8080 extensions-site
 ```
 
 The image is two stages:
-1. **builder**  rust:1.83-bookworm; compiles `sqlite-wasm-httpd`
+1. **builder**  rust:1.83-bookworm; compiles `sqlink-httpd`
 2. **db-builder**  python:3.12-slim; runs `build.py` to generate
    `registry.db` from the catalog data
 3. **runtime**  debian:bookworm-slim; just the binary + the DB.
@@ -179,7 +179,7 @@ artifact; loop over the catalog in CI to build the full set.
 
 ### How the `blob` route kind works
 
-`sqlite-wasm-httpd`'s router supports four kinds (sql, static,
+`sqlink-httpd`'s router supports four kinds (sql, static,
 wasm, blob). The blob kind takes a SQL handler that returns ONE
 blob value (first column of first row) and streams it back as
 the response body without going through the Value-type conversion

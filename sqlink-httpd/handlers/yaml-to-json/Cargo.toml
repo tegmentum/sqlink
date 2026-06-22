@@ -3,7 +3,7 @@ name = "wasm-yaml-to-json-handler"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Bidirectional YAML <-> JSON converter handler for sqlite-wasm-httpd. Two endpoints in one component: POST /yaml2json parses YAML and emits JSON, POST /json2yaml parses JSON and emits YAML. The endpoint is chosen by the request path passed in the dispatcher's request JSON."
+description = "Bidirectional YAML <-> JSON converter handler for sqlink-httpd. Two endpoints in one component: POST /yaml2json parses YAML and emits JSON, POST /json2yaml parses JSON and emits YAML. The endpoint is chosen by the request path passed in the dispatcher's request JSON."
 
 # Standalone workspace: parent workspace builds for native; this
 # crate builds for wasm32-wasip2 only.

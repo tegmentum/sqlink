@@ -1,4 +1,4 @@
-//! sqlite-wasm-httpd  HTTP/HTTPS server that executes SQL.
+//! sqlink-httpd  HTTP/HTTPS server that executes SQL.
 //!
 //! Sibling to sqlite-wasm-run: same `--db PATH` contract, same
 //! sqlite defaults. Native binary, links libsqlite3-sys directly,
@@ -24,7 +24,7 @@ use crate::db::{Connection, SharedConn};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "sqlite-wasm-httpd",
+    name = "sqlink-httpd",
     about = "HTTP/HTTPS server that executes SQL against a sqlite database and returns JSON",
     version
 )]

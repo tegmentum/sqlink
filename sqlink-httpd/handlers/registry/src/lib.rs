@@ -19,7 +19,7 @@
 //! -> redeploy.
 //!
 //! Routing happens off the request `path` field of the dispatcher
-//! JSON  same shape sqlite-wasm-httpd hands to every handler:
+//! JSON  same shape sqlink-httpd hands to every handler:
 //!   { "method", "path", "query", "remote", "headers"?, "body" }
 
 mod bindings {

@@ -4780,6 +4780,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlink-httpd"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "clap",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "libsqlite3-sys",
+ "rcgen",
+ "rustls",
+ "rustls-pemfile",
+ "serde",
+ "serde_json",
+ "sqlink-host",
+ "sqlite-extension-policy",
+ "tokio",
+ "tokio-rustls",
+ "tracing",
+ "tracing-subscriber",
+ "urlencoding",
+]
+
+[[package]]
 name = "sqlite-cas-cache"
 version = "0.1.0"
 dependencies = [
@@ -4955,31 +4980,6 @@ dependencies = [
  "parking_lot",
  "sqlink-core",
  "sqlite-tvm-bindings",
-]
-
-[[package]]
-name = "sqlite-wasm-httpd"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "bytes",
- "clap",
- "http-body-util",
- "hyper",
- "hyper-util",
- "libsqlite3-sys",
- "rcgen",
- "rustls",
- "rustls-pemfile",
- "serde",
- "serde_json",
- "sqlink-host",
- "sqlite-extension-policy",
- "tokio",
- "tokio-rustls",
- "tracing",
- "tracing-subscriber",
- "urlencoding",
 ]
 
 [[package]]

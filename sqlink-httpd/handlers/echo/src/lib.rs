@@ -1,5 +1,5 @@
 //! Minimal `language-runtime` component that smoke-tests
-//! sqlite-wasm-httpd's wasm route dispatch.
+//! sqlink-httpd's wasm route dispatch.
 //!
 //! Receives the request as JSON (per the dispatcher's contract):
 //!

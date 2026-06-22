@@ -3,7 +3,7 @@ name = "wasm-registry-handler"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Serves the sqlite-wasm extension registry  /registry/index.json (shipped catalog) + /registry/candidates.json (planned ports)  as an HTTP API. Loaded into sqlite-wasm-httpd as a wasm handler component."
+description = "Serves the sqlite-wasm extension registry  /registry/index.json (shipped catalog) + /registry/candidates.json (planned ports)  as an HTTP API. Loaded into sqlink-httpd as a wasm handler component."
 
 # Standalone workspace; parent workspace builds native, this builds
 # for wasm32-wasip2 only.

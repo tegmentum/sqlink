@@ -2,7 +2,7 @@
 //! pragma defaults (cache_size=-262144, temp_store=MEMORY,
 //! synchronous=NORMAL) so behaviour stays the same across the two
 //! binaries; the schema a user sees through `sqlite-wasm-run` is
-//! the schema they see through `sqlite-wasm-httpd`.
+//! the schema they see through `sqlink-httpd`.
 
 use anyhow::{anyhow, bail, Result};
 use libsqlite3_sys as ffi;

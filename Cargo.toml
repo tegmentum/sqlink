@@ -16,7 +16,7 @@ members = [
     "sqlite-tvm-bindings",
     "sqlite-cas-cache",
     "sqlite-embed",
-    "sqlite-wasm-httpd",
+    "sqlink-httpd",
     "extensions/json1",
     "extensions/csv",
     "extensions/math",

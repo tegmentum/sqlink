@@ -1,7 +1,7 @@
 # registry handler
 
 Serves the sqlite-wasm extension registry over HTTP. Loaded as a
-wasm component into `sqlite-wasm-httpd` (sibling to handlers/echo,
+wasm component into `sqlink-httpd` (sibling to handlers/echo,
 handlers/sql, handlers/markdown).
 
 Two source files baked in at build time via `include_str!`:
@@ -31,7 +31,7 @@ Rebuilding the handler picks up the latest registry state.
 $ ./build.sh
 wrote target/wasm32-wasip2/release/wasm_registry_handler.component.wasm
 
-$ sqlite-wasm-httpd --db api.db --init-routes \
+$ sqlink-httpd --db api.db --init-routes \
     --load registry=.../wasm_registry_handler.component.wasm
 ```
 
@@ -56,8 +56,8 @@ The registry data is captured at component build time. To refresh:
 ```
 $ make ext NAME=<anything>             # any catalog change triggers
                                        # scan + build_registry
-$ ./sqlite-wasm-httpd/handlers/registry/build.sh
-$ # restart sqlite-wasm-httpd
+$ ./sqlink-httpd/handlers/registry/build.sh
+$ # restart sqlink-httpd
 ```
 
 `build.sh` calls `provenance/build_registry.py` first so the

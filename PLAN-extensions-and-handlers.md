@@ -1,7 +1,7 @@
 # Plan: extensions + handlers expansion
 
 > **Status: drafted 2026-06-20, ready to execute.**
-> Eight new SQLite extensions and three new sqlite-wasm-httpd
+> Eight new SQLite extensions and three new sqlink-httpd
 > handlers. Each item sized S (<3h) / M (half-day) / L (~1d).
 > JWT is the only hard dependency  the auth handler builds on
 > it, so order matters there; everything else can run in any
@@ -29,7 +29,7 @@ For SQLite extensions:
   `sqlite-cli-embedded/Cargo.toml` + the embed registry
 
 For wasm handlers:
-- New crate `sqlite-wasm-httpd/handlers/NAME/` (standalone
+- New crate `sqlink-httpd/handlers/NAME/` (standalone
   workspace) with `Cargo.toml`, `.cargo/config.toml` (target
   wasm32-wasip2), `build.sh` (cargo build + wasm-tools component
   new + wasi-p1 reactor adapter)

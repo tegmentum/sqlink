@@ -19,7 +19,7 @@
 //! Method/path matter only enough to pick the SQL source: the
 //! body is the SQL when POST, the `q=` query param when GET.
 //!
-//! Response: a JSON object  the same shape sqlite-wasm-httpd's
+//! Response: a JSON object  the same shape sqlink-httpd's
 //! built-in /sql endpoint emits, so consumers can swap between
 //! built-in and wasm SQL without changing parsing code:
 //!

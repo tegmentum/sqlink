@@ -269,7 +269,7 @@ fn error_response(status: u16, msg: &str) -> String {
 }
 
 /// The dispatcher recognises this shape and applies status/ctype
-/// to the outer HTTP response; see sqlite-wasm-httpd/src/wasm.rs.
+/// to the outer HTTP response; see sqlink-httpd/src/wasm.rs.
 fn structured_response(status: u16, ctype: &str, body: &str) -> String {
     let mut out = String::with_capacity(body.len() + 64);
     out.push_str("{\"status\":");

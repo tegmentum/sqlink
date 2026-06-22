@@ -3,7 +3,7 @@
 #
 # wasm32-wasip2 by itself emits a core module; we wrap with
 # wasm-tools component new + the wasi-p1 reactor adapter to get
-# a true component. The exact path the host (and sqlite-wasm-httpd
+# a true component. The exact path the host (and sqlink-httpd
 # via --load) expects.
 #
 # Outputs (under target/wasm32-wasip2/release/):

@@ -1,4 +1,4 @@
-# sqlite-wasm-httpd
+# sqlink-httpd
 
 HTTP/HTTPS server that executes SQL against a sqlite database and
 returns JSON. Sibling to `sqlite-wasm-run`: same `--db PATH`
@@ -89,7 +89,7 @@ Return a JSON object `{ "status": 201, "body": "...", "ctype":
 the raw body string.
 
 ```
-sqlite-wasm-httpd --db api.db --load upper=upper.component.wasm
+sqlink-httpd --db api.db --load upper=upper.component.wasm
 ```
 
 ```sql
@@ -132,7 +132,7 @@ the same way: `cd handlers/NAME && ./build.sh`. The result is
 ## Quickstart
 
 ```
-$ sqlite-wasm-httpd --db /tmp/api.db --init-routes
+$ sqlink-httpd --db /tmp/api.db --init-routes
 INFO routes table `routes` ready
 INFO http://127.0.0.1:8080  db=/tmp/api.db  POST /sql | GET /sql?q=...
 
@@ -160,13 +160,13 @@ Three modes, mutually exclusive:
 
 ```
 # Plain HTTP (default)
-sqlite-wasm-httpd
+sqlink-httpd
 
 # HTTPS with a self-signed cert (handy for dev / smoke)
-sqlite-wasm-httpd --tls-self-signed
+sqlink-httpd --tls-self-signed
 
 # HTTPS with operator-supplied PEMs
-sqlite-wasm-httpd --tls-cert server.crt --tls-key server.key
+sqlink-httpd --tls-cert server.crt --tls-key server.key
 ```
 
 ## Why not regex path patterns?

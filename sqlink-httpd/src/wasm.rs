@@ -105,7 +105,7 @@ impl WasmDispatcher for HostDispatcher {
         // block_in_place tells the multi-threaded runtime to
         // promote a replacement worker; the current thread is
         // then free to drive the future to completion. Requires
-        // a multi-threaded runtime, which sqlite-wasm-httpd is
+        // a multi-threaded runtime, which sqlink-httpd is
         // (#[tokio::main] without specifying flavor).
         let host = self.host.clone();
         let name = name.to_string();

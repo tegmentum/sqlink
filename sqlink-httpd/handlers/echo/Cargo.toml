@@ -3,7 +3,7 @@ name = "wasm-echo-handler"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "Smoke fixture for sqlite-wasm-httpd's wasm route dispatch  echoes the request as the response body."
+description = "Smoke fixture for sqlink-httpd's wasm route dispatch  echoes the request as the response body."
 
 # Standalone workspace: parent workspace builds for native; this
 # crate builds for wasm32-wasip2 only.

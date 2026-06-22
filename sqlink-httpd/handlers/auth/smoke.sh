@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # End-to-end smoke for the auth wasm handler.
 #
-# Starts sqlite-wasm-httpd with this handler loaded, registers a
+# Starts sqlink-httpd with this handler loaded, registers a
 # /auth route, and curls through it with valid + invalid JWTs.
 # Prints PASS / FAIL per case; exits nonzero on any failure.
 #
 # Assumes:
 #   - ./build.sh has produced target/wasm32-wasip2/release/wasm_auth_handler.component.wasm
-#   - sqlite-wasm-httpd built at ../../../target/debug/sqlite-wasm-httpd
+#   - sqlink-httpd built at ../../../target/debug/sqlink-httpd
 #   - python3 available (test JWT generation)
 set -uo pipefail
 cd "$(dirname "$0")"
 
-HTTPD="${HTTPD:-../../../target/debug/sqlite-wasm-httpd}"
+HTTPD="${HTTPD:-../../../target/debug/sqlink-httpd}"
 COMP="target/wasm32-wasip2/release/wasm_auth_handler.component.wasm"
 DB="/tmp/auth_smoke.db"
 PORT="${PORT:-18099}"

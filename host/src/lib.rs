@@ -7290,7 +7290,7 @@ impl Host {
     /// Store construction, fuel/epoch policy, bindgen path)  the
     /// only delta is where `source` and `source_name` come from.
     ///
-    /// Used by callers (e.g. `sqlite-wasm-httpd`'s wasm route
+    /// Used by callers (e.g. `sqlink-httpd`'s wasm route
     /// dispatcher) that already have the request data in RAM and
     /// don't want to round-trip through the filesystem just to
     /// reuse the runtime plumbing.

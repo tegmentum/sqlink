@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Build extensions-site/registry.db  the SQLite-driven extension
-registry site, served by sqlite-wasm-httpd.
+registry site, served by sqlink-httpd.
 
 Reads:
   provenance/extensions.db   (canonical shipped catalog)
@@ -11,7 +11,7 @@ Reads:
 Writes:
   extensions-site/registry.db
 
-The output DB contains the `routes` table sqlite-wasm-httpd needs +
+The output DB contains the `routes` table sqlink-httpd needs +
 a denormalized `extensions` table powering the page handlers. Routes
 are SQL handlers that concat HTML using values from `extensions`.
 
@@ -19,7 +19,7 @@ Run:
     python3 extensions-site/build.py
 
 Then serve locally:
-    ./target/release/sqlite-wasm-httpd --db extensions-site/registry.db --port 8080
+    ./target/release/sqlink-httpd --db extensions-site/registry.db --port 8080
     open http://localhost:8080
 """
 
@@ -104,7 +104,7 @@ def sql_str(s: str) -> str:
 
 
 def install_routes(conn: sqlite3.Connection) -> None:
-    """The sqlite-wasm-httpd routes table (per its --init-routes
+    """The sqlink-httpd routes table (per its --init-routes
     schema) drives every request. Each row is one route; handler
     text is SQL that builds the response body. Built-in /sql and
     /tables endpoints from the httpd binary take precedence over
