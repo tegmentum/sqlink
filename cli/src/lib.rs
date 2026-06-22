@@ -242,13 +242,67 @@ fn current_prompt(buffered: &str) -> String {
     })
 }
 
+/// Skip leading whitespace, `-- line` comments, and `/* block */`
+/// comments. Returns the slice from the first non-trivia byte to
+/// the end. An empty return means the input was pure trivia.
+///
+/// Both `is_statement_complete` and `eval_input` use this so a
+/// `-- comment` line followed by `.tables` correctly dispatches
+/// as a dot command rather than getting glued into an incomplete
+/// SQL statement and waiting forever for a `;`.
+fn skip_leading_trivia(s: &str) -> &str {
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    let n = bytes.len();
+    loop {
+        // ASCII whitespace
+        while i < n && bytes[i].is_ascii_whitespace() {
+            i += 1;
+        }
+        // -- line comment
+        if i + 1 < n && bytes[i] == b'-' && bytes[i + 1] == b'-' {
+            while i < n && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        // /* block comment */  unterminated blocks fall through
+        // so the SQL-side parser sees them and reports "incomplete".
+        if i + 1 < n && bytes[i] == b'/' && bytes[i + 1] == b'*' {
+            i += 2;
+            let mut terminated = false;
+            while i + 1 < n {
+                if bytes[i] == b'*' && bytes[i + 1] == b'/' {
+                    i += 2;
+                    terminated = true;
+                    break;
+                }
+                i += 1;
+            }
+            if !terminated {
+                break;
+            }
+            continue;
+        }
+        break;
+    }
+    &s[i.min(n)..]
+}
+
 fn is_statement_complete(buffered: &str) -> bool {
     let trimmed = buffered.trim();
     if trimmed.is_empty() {
         return true;
     }
+    // Peel leading comments so `-- comment\n.tables` dispatches as
+    // a dot-command (otherwise the dot check below misses and the
+    // SQL parser waits for a trailing `;` that never comes).
+    let effective = skip_leading_trivia(buffered);
+    if effective.is_empty() {
+        return true;
+    }
     // Dot-commands are complete as soon as their line ends.
-    if trimmed.starts_with('.') {
+    if effective.starts_with('.') {
         return true;
     }
     // PLAN-cli-stages-5-6.md Stage 5f: replace sqlite3_complete with
@@ -353,7 +407,12 @@ fn trailing_trivial_start(bytes: &[u8]) -> usize {
 }
 
 fn eval_input(input: &str) -> String {
-    let trimmed = input.trim();
+    // Strip leading whitespace + comments so a buffer like
+    // `-- comment\n.tables` dispatches as the dot command rather
+    // than as SQL (where the unterminated comment would just be
+    // an empty statement).
+    let leading_skipped = skip_leading_trivia(input);
+    let trimmed = leading_skipped.trim();
     if trimmed.is_empty() {
         return String::new();
     }
