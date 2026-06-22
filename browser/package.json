@@ -6,13 +6,15 @@
   "type": "module",
   "scripts": {
     "transpile": "node scripts/transpile-extensions.mjs",
+    "fixtures": "node scripts/build-fixtures.mjs",
+    "pretest": "npm run fixtures",
     "build": "vite build",
     "dev": "vite",
     "test": "playwright test",
     "test:install": "playwright install chromium"
   },
   "dependencies": {
-    "@tegmentum/wasi-polyfill": "file:/Users/zacharywhitley/git/wasi-polyfill",
+    "@tegmentum/wasi-polyfill": "file:../../wasi-polyfill",
     "sql.js": "^1.10.3"
   },
   "devDependencies": {

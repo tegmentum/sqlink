@@ -1,5 +1,25 @@
 # Plan: Run sqlite-cli in the browser via wasi-polyfill
 
+## Status (2026-06-22)
+
+**MVP scaffold landed in `browser/`** (commit f23b3c8). That
+scaffold uses sql.js as the in-browser SQLite and jco-transpiled
+extension components for the scalar surface  39/42 fixtures
+pass in headless Chrome. It's deliberately the simpler shape:
+no TVM, no multi-memory, no OPFS.
+
+This plan describes the **next-step shape**: running the actual
+`sqlite-cli-demo.wasm` component in browser through
+`@tegmentum/wasi-polyfill`, with `tvm-guest-mm` providing the
+substrate and OPFS providing persistence. That gives parity
+with the wasmtime-hosted scenario 2 (full SQLite + full
+extension surface including aggregates, vtabs, hooks) rather
+than the scalar-only sql.js subset.
+
+The work in "Order of operations" below remains to be done.
+Steps 4-5 specifically supersede the existing `browser/`
+scaffold once the cli substrate is ready.
+
 ## Goal
 
 Prove the cli runs in a browser  WASI-p2 component instantiated
