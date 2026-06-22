@@ -96,9 +96,39 @@ function resolveTargetDir() {
   )
 }
 
+// Resolve the freshest .component.wasm for `name`. Most extensions
+// are standalone workspaces (Cargo.toml has its own [workspace]) so
+// their cargo output lands in `extensions/<name>/target/...` and the
+// workspace-shared `target/...` directory only mirrors them for
+// extensions that DO participate in the parent workspace. When both
+// exist, the standalone one is the source of truth (the workspace
+// copy can lag if a `cargo build --release` at the workspace root
+// happened against an older WIT contract). Prefer per-extension
+// target; fall back to workspace target.
+function resolveWasmFor(name, workspaceTargetDir) {
+  const perExtPath = resolve(
+    ROOT,
+    'extensions',
+    name,
+    'target',
+    'wasm32-wasip2',
+    'release',
+    `${name}_extension.component.wasm`,
+  )
+  const workspacePath = join(workspaceTargetDir, `${name}_extension.component.wasm`)
+  if (existsSync(perExtPath)) {
+    if (!existsSync(workspacePath) || statSync(perExtPath).mtimeMs >= statSync(workspacePath).mtimeMs) {
+      return perExtPath
+    }
+  }
+  if (existsSync(workspacePath)) return workspacePath
+  if (existsSync(perExtPath)) return perExtPath
+  return null
+}
+
 function transpileOne(name, srcDir) {
-  const wasmPath = join(srcDir, `${name}_extension.component.wasm`)
-  if (!existsSync(wasmPath)) {
+  const wasmPath = resolveWasmFor(name, srcDir)
+  if (!wasmPath) {
     return { name, skipped: 'no-component-wasm' }
   }
   const outDir = join(OUT_DIR, name)
