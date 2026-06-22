@@ -1,24 +1,32 @@
-# Plan: Run sqlite-cli in the browser via wasi-polyfill
+# Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill
 
-## Status (2026-06-22)
+## Status (2026-06-22  Path 3)
 
-**MVP scaffold landed in `browser/`** (commit f23b3c8). That
-scaffold uses sql.js as the in-browser SQLite and jco-transpiled
-extension components for the scalar surface  39/42 fixtures
-pass in headless Chrome. It's deliberately the simpler shape:
-no TVM, no multi-memory, no OPFS.
+**MVP scaffold landed in `browser/`** (commit f23b3c8) and is being
+superseded by the Path 3 work tracked in this branch. The scaffold
+uses sql.js as the in-browser SQLite and jco-transpiled extension
+components for the scalar surface  39/42 fixtures pass in headless
+Chrome. It's deliberately the simpler shape: no TVM, no
+multi-memory, no OPFS.
 
-This plan describes the **next-step shape**: running the actual
-`sqlite-cli-demo.wasm` component in browser through
-`@tegmentum/wasi-polyfill`, with `tvm-guest-mm` providing the
-substrate and OPFS providing persistence. That gives parity
-with the wasmtime-hosted scenario 2 (full SQLite + full
-extension surface including aggregates, vtabs, hooks) rather
-than the scalar-only sql.js subset.
+**Important update** following Stage 5f of `PLAN-cli-stages-5-6.md`:
+the cli no longer contains SQLite. It is a SPI client against
+`sqlite:extension/spi@0.1.0`. The cli component does NOT import
+`tvm:memory`  it imports `sqlite:extension/{types,http,policy,
+metadata,spi,spi-loader}`, `sqlink:wasm/extension-loader`, and the
+usual `wasi:cli/*` set. The TVM substrate concern moved one layer
+down: it is **`sqlite-lib`** (the SPI implementation that owns the
+in-wasm SQLite) which imports `tvm:memory` today.
 
-The work in "Order of operations" below remains to be done.
-Steps 4-5 specifically supersede the existing `browser/`
-scaffold once the cli substrate is ready.
+This plan now describes the **Path 3 shape**: compose `cli` +
+`sqlite-lib` + the embedded extension set into a single browser-
+deliverable component (`cli_with_sqlite.component.wasm`), then run
+it in browser through `@tegmentum/wasi-polyfill`, with
+`tvm-guest-mm` providing the substrate (inside the composed
+component) and OPFS providing persistence. That gives parity with
+the wasmtime-hosted scenario 2 (full SQLite + full extension
+surface including aggregates, vtabs, hooks) rather than the
+scalar-only sql.js subset.
 
 ## Goal
 
@@ -36,11 +44,12 @@ component and the WASI imports resolve.
 
 ## The gap
 
-After last commit, the cli unconditionally imports
-`tvm:memory/{types,manager,bytes,diagnostics}` because
-`sqlite-pcache-tvm` and `sqlite-vfs-tvm` always use the
-wit-bindgen-backed cold tiers on wasm32. In a browser host, those
-imports need an implementation. Two paths considered:
+The composed `cli + sqlite-lib` component will unconditionally
+import `tvm:memory/{types,manager,bytes,diagnostics}` because
+`sqlite-lib` pulls in `sqlite-pcache-tvm` and `sqlite-vfs-tvm`,
+which always use the wit-bindgen-backed cold tiers on wasm32. In
+a browser host, those imports need an implementation. Two paths
+considered:
 
 ### Option A  JS implementation of `tvm:memory` (host-side)
 
@@ -87,19 +96,19 @@ tier implementation file changes.
 
 ## Concrete deliverables
 
-- **`examples/browser/`**  demo page:
-  - `index.html`: text area for REPL input/output, "run" button
-  - `index.ts`: loads the jco-transpiled cli + wasi-polyfill,
-    wires stdio to the DOM, runs the REPL loop
-  - `vite.config.ts` or similar: dev server, copies the
-    component wasm into the served assets
-- **`extensions/browser-test/`**  Playwright test:
-  - Loads the demo page, types `CREATE TABLE t(x);` etc.,
-    asserts the result panel updates with expected output
-- **`Makefile` target** `make browser-demo`  builds the cli,
-  jco-transpiles it, sets up the demo page, opens it in a
-  local dev server
-- **CI step**  Playwright headless test as part of host's CI
+- **Composed component build**  `cli_with_sqlite.component.wasm`
+  built via `wac plug` from `cli` + `sqlite-lib` + the embedded
+  extension set. Pattern follows
+  `examples/rust/runnable-sqlite-demo/composition.wac`.
+- **`browser/`**  rewrite of the existing scaffold:
+  - jco-transpile the composed component into
+    `browser/src/generated/cli_with_sqlite/`
+  - load it via `@tegmentum/wasi-polyfill` (replacing sql.js)
+  - keep the JS API (`loadExtension` + `exec`) backward-
+    compatible so existing tests pass
+- **Persistence** via `tvm-wasm`'s `tvm-web-cold` OPFS spill for
+  cas-cache + db files.
+- **CI step**  Playwright headless smoke as part of host's CI.
 
 ## Decisions locked in
 

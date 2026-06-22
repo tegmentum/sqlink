@@ -4539,6 +4539,14 @@ impl Host {
         // buildable wasm64-wasip2 sqlite-lib exists, the mem64 path
         // works without further host changes.
         config.wasm_memory64(true);
+        // PLAN-browser-runtime Path 3: enable the multi-memory
+        // proposal so the host can run wasm modules that declare
+        // multiple linear memories. Required by the tvm-guest-mm
+        // substrate (multi-pool layout) used by the composed
+        // cli+sqlite-lib component. Enabling is free for single-
+        // memory modules; the engine just gains the ability to ALSO
+        // instantiate multi-memory ones.
+        config.wasm_multi_memory(true);
         config.consume_fuel(true);
         config.epoch_interruption(true);
         config.cranelift_opt_level(wasmtime::OptLevel::Speed);

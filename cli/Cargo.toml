@@ -8,12 +8,14 @@ description = "Command-mode SQLite CLI for wasm32-wasip2. Exports wasi:cli/run; 
 [lib]
 crate-type = ["cdylib"]
 
-# The cli's TVM-track deps unconditionally use wit-bindgen-backed
-# `tvm:memory` regions on wasm32  the cli component therefore
-# always imports tvm:memory/{types,manager,bytes,diagnostics}.
-# Every host running the cli MUST wire tvm-wasmtime's
-# add_to_linker (our reference sqlink-host does so by
-# default).
+# As of Stage 5f the cli is a pure SPI client: every SQL call
+# routes through `bindings::sqlite::extension::spi::*` against the
+# host's shared connection. The cli no longer ships SQLite, no
+# longer pulls in sqlite-pcache-tvm / sqlite-vfs-tvm / sqlite-
+# mem-tvm, and therefore no longer imports tvm:memory. Hosts only
+# need to wire tvm:memory for components that DO embed SQLite (the
+# composed cli+sqlite-lib runnable, or any standalone sqlite-lib
+# build).
 
 [dependencies]
 # wit-bindgen-rt provides the runtime support functions the
