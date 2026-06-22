@@ -268,7 +268,7 @@ sql = "SELECT geohash_bbox('test') IS NOT NULL OR geohash_bbox('test') IS NULL"
 expects = "1"
 
 [extension."geo-distance".scalar]
-sql = "SELECT typeof(geo_distance_haversine(0, 0, 1, 1))"
+sql = "SELECT typeof(bearing(0, 0, 1, 1))"
 expects = "real"
 
 [extension.geohash.scalar]
