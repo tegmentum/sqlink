@@ -14,7 +14,7 @@ mod bindings {
     });
 }
 
-use sqlite_wasm_core::db::{Connection, StepResult, Value};
+use sqlink_core::db::{Connection, StepResult, Value};
 
 struct Probe;
 
@@ -71,12 +71,12 @@ impl bindings::Guest for Probe {
         // cache where xUnpin enables eviction, which is what we
         // need to exercise the TVM write path. The host preopens
         // a tempdir as "/" so this path resolves through wasivfs.
-        if sqlite_wasm_core::db::init_wasivfs().is_err() {
+        if sqlink_core::db::init_wasivfs().is_err() {
             return 8012;
         }
         let conn = match Connection::open(
             "/capacity-test.db",
-            sqlite_wasm_core::db::OpenFlags::DEFAULT,
+            sqlink_core::db::OpenFlags::DEFAULT,
         ) {
             Ok(c) => c,
             Err(_) => return 8002,

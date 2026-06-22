@@ -4656,6 +4656,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlink-core"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "libsqlite3-sys",
+]
+
+[[package]]
 name = "sqlite-cas-cache"
 version = "0.1.0"
 dependencies = [
@@ -4663,7 +4671,7 @@ dependencies = [
  "blake3",
  "reqwest",
  "sha2",
- "sqlite-wasm-core",
+ "sqlink-core",
  "tempfile",
 ]
 
@@ -4792,7 +4800,7 @@ name = "sqlite-lib"
 version = "0.1.0"
 dependencies = [
  "libsqlite3-sys",
- "sqlite-wasm-core",
+ "sqlink-core",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",
 ]
@@ -4802,7 +4810,7 @@ name = "sqlite-mem-tvm"
 version = "0.1.0"
 dependencies = [
  "libsqlite3-sys",
- "sqlite-wasm-core",
+ "sqlink-core",
 ]
 
 [[package]]
@@ -4810,8 +4818,8 @@ name = "sqlite-pcache-tvm"
 version = "0.1.0"
 dependencies = [
  "libsqlite3-sys",
+ "sqlink-core",
  "sqlite-tvm-bindings",
- "sqlite-wasm-core",
 ]
 
 [[package]]
@@ -4829,16 +4837,8 @@ dependencies = [
  "libsqlite3-sys",
  "once_cell",
  "parking_lot",
+ "sqlink-core",
  "sqlite-tvm-bindings",
- "sqlite-wasm-core",
-]
-
-[[package]]
-name = "sqlite-wasm-core"
-version = "0.1.0"
-dependencies = [
- "cc",
- "libsqlite3-sys",
 ]
 
 [[package]]
@@ -4931,9 +4931,9 @@ dependencies = [
  "setops-extension",
  "sha3-extension",
  "sketches-extension",
+ "sqlink-core",
  "sqlite-cas-cache",
  "sqlite-extension-policy",
- "sqlite-wasm-core",
  "sqlparse-extension",
  "ssn-extension",
  "stats-extension",

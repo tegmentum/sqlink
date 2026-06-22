@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use ciborium::value::Value as CborValue;
 use parking_lot::Mutex;
-use sqlite_wasm_core::db;
+use sqlink_core::db;
 use wasmtime::component::{Component, Linker};
 use wasmtime::Engine;
 

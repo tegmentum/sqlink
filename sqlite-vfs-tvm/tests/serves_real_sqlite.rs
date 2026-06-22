@@ -18,7 +18,7 @@
 
 use std::sync::{Mutex, Once};
 
-use sqlite_wasm_core::db::{Connection, OpenFlags, StepResult, Value};
+use sqlink_core::db::{Connection, OpenFlags, StepResult, Value};
 
 static INSTALL: Once = Once::new();
 

@@ -29,7 +29,7 @@ mod bindings {
     });
 }
 
-pub use sqlite_wasm_core::db;
+pub use sqlink_core::db;
 
 mod state;
 

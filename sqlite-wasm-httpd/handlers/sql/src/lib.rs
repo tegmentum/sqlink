@@ -35,7 +35,7 @@ mod bindings {
 }
 
 use bindings::exports::sqlite::wasm::runtime::Guest;
-use sqlite_wasm_core::db::{Connection, OpenFlags, StepResult, Value};
+use sqlink_core::db::{Connection, OpenFlags, StepResult, Value};
 
 struct SqlHandler;
 

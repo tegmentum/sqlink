@@ -346,7 +346,7 @@ fn run_changeset_capture(args: &[String]) -> Result<()> {
     let out_path = flags.get("output").ok_or_else(|| anyhow!("capture: --output FILE required"))?;
     let table = flags.get("table");
 
-    use sqlite_wasm_core::db;
+    use sqlink_core::db;
     let conn = db::Connection::open(db_path, db::OpenFlags::DEFAULT)
         .map_err(|e| anyhow!("open {db_path}: {}", e.message))?;
     let raw_db = conn.raw_handle();
@@ -367,7 +367,7 @@ fn run_changeset_apply(args: &[String]) -> Result<()> {
     let db_path = flags.get("db").ok_or_else(|| anyhow!("apply: --db PATH required"))?;
     let in_path = flags.get("input").ok_or_else(|| anyhow!("apply: --input FILE required"))?;
 
-    use sqlite_wasm_core::db;
+    use sqlink_core::db;
     let conn = db::Connection::open(db_path, db::OpenFlags::DEFAULT)
         .map_err(|e| anyhow!("open {db_path}: {}", e.message))?;
     let raw_db = conn.raw_handle();
@@ -616,7 +616,7 @@ async fn main() -> Result<()> {
     // separate-connection semantics as spi.execute. None if no --db:
     // runnable components then get an error.
     if !db_path.is_empty() && db_path != ":memory:" {
-        use sqlite_wasm_core::db;
+        use sqlink_core::db;
         let conn = db::Connection::open(&db_path, db::OpenFlags::DEFAULT)
             .map_err(|e| anyhow!("open {db_path}: {}", e.message))?;
         let conn_arc = std::sync::Arc::new(parking_lot::Mutex::new(Some(conn)));

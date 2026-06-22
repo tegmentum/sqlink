@@ -10,7 +10,7 @@ component that:
   - links sqlite-vfs-tvm with the `tvm` feature on (file storage
     is wit-bindgen-backed against tvm:memory@0.1.0; each "file"
     gets its own 256 MiB TVM region with 4 KB chunked allocs)
-  - links sqlite-wasm-core (bundled libsqlite3-sys), which drags
+  - links sqlink-core (bundled libsqlite3-sys), which drags
     in the bundled SQLite compile against wasi-sdk
   - exports run-test  installs the VFS as default, opens a
     file-backed db at an in-VFS path, runs INSERT/SELECT,
@@ -33,7 +33,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 sqlite-vfs-tvm = { path = "../../sqlite-vfs-tvm", features = ["tvm"] }
-sqlite-wasm-core = { path = "../../core" }
+sqlink-core = { path = "../../core" }
 # Same wit-bindgen the pcache probe pins. Both this crate and
 # sqlite-vfs-tvm declare extern blocks for the same tvm:memory
 # imports  rust-lld dedupes them at link time.

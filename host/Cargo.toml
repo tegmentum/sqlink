@@ -54,7 +54,7 @@ hickory-resolver = { version = "0.24", default-features = false, features = ["to
 # host and the wasm components share one SQLite story end to end.
 # Used to be `rusqlite`; dropped because (a) the host had two
 # SQLite stacks and (b) every type swap was paid twice.
-sqlite-wasm-core = { path = "../core" }
+sqlink-core = { path = "../core" }
 # Direct dep so the sqlite-wasm-run binary can call the
 # session/changeset FFI for its `changeset` subcommand. The
 # bundled sqlite3 is compiled with SESSION via LIBSQLITE3_FLAGS

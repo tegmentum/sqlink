@@ -1,4 +1,4 @@
-// Build script for sqlite-wasm-core.
+// Build script for sqlink-core.
 //
 // On wasm32 targets, compiles src/vfs/vfs_wasi.c (from the parent
 // `sqlite-wasm` repo, shared with the C CLI build) into the core

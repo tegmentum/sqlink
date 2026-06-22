@@ -19,7 +19,7 @@
 
 use std::sync::Once;
 
-use sqlite_wasm_core::db::{Connection, StepResult, Value};
+use sqlink_core::db::{Connection, StepResult, Value};
 
 static INSTALL: Once = Once::new();
 

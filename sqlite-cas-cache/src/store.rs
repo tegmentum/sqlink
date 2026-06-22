@@ -3,7 +3,7 @@
 //! The store owns a `Connection` (external mode: db file at the
 //! configured path; internal mode: caller-supplied connection
 //! pointing at the user's working db) and runs all queries
-//! through `sqlite-wasm-core::db`. Same code path on native and
+//! through `sqlink-core::db`. Same code path on native and
 //! wasm32 so the browser CAS (PLAN-browser-runtime.md) just
 //! changes the storage location of cas.sqlite, not the impl.
 
@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Context, Result};
-use sqlite_wasm_core::db::{Connection, OpenFlags, StepResult, Value};
+use sqlink_core::db::{Connection, OpenFlags, StepResult, Value};
 
 use crate::resolver::{ArtifactRef, ResolverRegistry, Source};
 use crate::schema::{INSTALL_SCHEMA, MIGRATE_V1_TO_V2, SCHEMA_VERSION};

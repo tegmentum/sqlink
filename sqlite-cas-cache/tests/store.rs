@@ -1,7 +1,7 @@
 //! Unit tests for `SqliteCasStore` in external mode + internal mode.
 
 use sqlite_cas_cache::{Hash, SqliteCasStore};
-use sqlite_wasm_core::db::{Connection, OpenFlags};
+use sqlink_core::db::{Connection, OpenFlags};
 
 fn fresh_external() -> (tempfile::TempDir, SqliteCasStore) {
     let dir = tempfile::tempdir().unwrap();

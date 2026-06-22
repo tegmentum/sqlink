@@ -20,7 +20,7 @@ use std::sync::Arc;
 use anyhow::{anyhow, Context, Result};
 use parking_lot::Mutex;
 use sqlite_cas_cache::SqliteCasStore;
-use sqlite_wasm_core::db::{Connection, OpenFlags};
+use sqlink_core::db::{Connection, OpenFlags};
 
 /// One uri  hash binding as returned by `list_uris`. The
 /// `sha256` field stays in the struct for ABI compatibility
@@ -311,9 +311,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let db_path = dir.path().join("user.db");
         {
-            let conn = sqlite_wasm_core::db::Connection::open(
+            let conn = sqlink_core::db::Connection::open(
                 db_path.to_str().unwrap(),
-                sqlite_wasm_core::db::OpenFlags::DEFAULT,
+                sqlink_core::db::OpenFlags::DEFAULT,
             )
             .unwrap();
             conn.execute_batch("CREATE TABLE user_t(x INTEGER); INSERT INTO user_t VALUES (42);")
@@ -324,18 +324,18 @@ mod tests {
         let (_hash, bytes) = cache.lookup_by_uri("u:internal").unwrap();
         assert_eq!(bytes, b"payload");
         // User table still readable in a fresh connection.
-        let conn = sqlite_wasm_core::db::Connection::open(
+        let conn = sqlink_core::db::Connection::open(
             db_path.to_str().unwrap(),
-            sqlite_wasm_core::db::OpenFlags::DEFAULT,
+            sqlink_core::db::OpenFlags::DEFAULT,
         )
         .unwrap();
         let mut stmt = conn.prepare("SELECT x FROM user_t").unwrap();
         match stmt.step().unwrap() {
-            sqlite_wasm_core::db::StepResult::Row => assert!(matches!(
+            sqlink_core::db::StepResult::Row => assert!(matches!(
                 stmt.column_value(0),
-                sqlite_wasm_core::db::Value::Integer(42)
+                sqlink_core::db::Value::Integer(42)
             )),
-            sqlite_wasm_core::db::StepResult::Done => panic!("no row"),
+            sqlink_core::db::StepResult::Done => panic!("no row"),
         }
     }
 }

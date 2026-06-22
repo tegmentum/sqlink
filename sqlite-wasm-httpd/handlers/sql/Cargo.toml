@@ -3,7 +3,7 @@ name = "wasm-sql-handler"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "SQL-aware wasm handler  the component carries its own SQLite (sqlite-wasm-core / bundled libsqlite3-sys) and runs the request body as SQL against a fresh :memory: db per request. Demonstrates the sandboxed-SQL-endpoint use case."
+description = "SQL-aware wasm handler  the component carries its own SQLite (sqlink-core / bundled libsqlite3-sys) and runs the request body as SQL against a fresh :memory: db per request. Demonstrates the sandboxed-SQL-endpoint use case."
 
 # Standalone workspace: this crate compiles for wasm32-wasip2,
 # not for the parent's native targets.
@@ -18,4 +18,4 @@ wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 # Brings libsqlite3-sys (bundled) along  the wasm component
 # embeds sqlite3.c inside its linear memory. Same SQLite build
 # the cli uses; same defaults; SESSION on at the C level.
-sqlite-wasm-core = { path = "../../../core" }
+sqlink-core = { path = "../../../core" }

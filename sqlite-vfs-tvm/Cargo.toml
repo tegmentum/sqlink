@@ -28,7 +28,7 @@ license = "MIT"
 libsqlite3-sys = { version = "0.38", default-features = false }
 # core brings in the bundled sqlite3 build; transitively linking
 # it satisfies our extern symbols.
-sqlite-wasm-core = { path = "../core" }
+sqlink-core = { path = "../core" }
 # Used for the shared file table + per-file storage  the table
 # is a Mutex<HashMap<String, Arc<Mutex<dyn FileStorage>>>>, and
 # parking_lot's Mutex is what core/host already pull in.

@@ -22,7 +22,7 @@
 use std::path::{Path, PathBuf};
 
 use sqlite_wasm_host::{Capability, Host, Policy};
-use sqlite_wasm_core::db;
+use sqlink_core::db;
 
 fn open_db(path: &Path) -> db::Connection {
     db::Connection::open(

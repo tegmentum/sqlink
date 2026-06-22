@@ -35,7 +35,7 @@ https = ["dep:reqwest"]
 # builds (the latter for the eventual browser-side CAS in
 # PLAN-browser-runtime.md, where the same SqliteCasStore code
 # runs against OPFS-backed SQLite).
-sqlite-wasm-core = { path = "../core" }
+sqlink-core = { path = "../core" }
 # Hash primitive. The host already pins this version.
 blake3 = "1.5"
 # SHA-256 mirror column (CP8) — compose providers identify

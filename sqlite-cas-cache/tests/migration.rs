@@ -1,7 +1,7 @@
 //! Tests for export_to / merge_from / drop_schema.
 
 use sqlite_cas_cache::SqliteCasStore;
-use sqlite_wasm_core::db::{Connection, OpenFlags};
+use sqlink_core::db::{Connection, OpenFlags};
 
 #[test]
 fn export_to_round_trips_artifacts_and_uris() {
@@ -116,12 +116,12 @@ fn drop_schema_clears_cas_tables_only() {
     let conn2 = Connection::open(db_path.to_str().unwrap(), OpenFlags::DEFAULT).unwrap();
     let mut stmt = conn2.prepare("SELECT x FROM user_tbl").unwrap();
     let row = match stmt.step().unwrap() {
-        sqlite_wasm_core::db::StepResult::Row => stmt.column_value(0),
-        sqlite_wasm_core::db::StepResult::Done => panic!("no row"),
+        sqlink_core::db::StepResult::Row => stmt.column_value(0),
+        sqlink_core::db::StepResult::Done => panic!("no row"),
     };
     assert!(matches!(
         row,
-        sqlite_wasm_core::db::Value::Integer(1)
+        sqlink_core::db::Value::Integer(1)
     ));
     // And the __cas_* tables are gone.
     let probe = conn2.prepare("SELECT 1 FROM __cas_uri LIMIT 1");
