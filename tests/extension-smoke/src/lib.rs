@@ -69,10 +69,23 @@ pub fn repo_root() -> PathBuf {
 }
 
 pub fn sqlink_bin() -> PathBuf {
+    if let Some(p) = std::env::var_os("SQLINK_BIN") {
+        return PathBuf::from(p);
+    }
+    if let Some(root) = std::env::var_os("EXTENSION_SMOKE_REPO_ROOT") {
+        return PathBuf::from(root).join("target/release/sqlink");
+    }
     repo_root().join("target/release/sqlink")
 }
 
 pub fn cli_component() -> PathBuf {
+    if let Some(p) = std::env::var_os("SQLINK_CLI_COMPONENT") {
+        return PathBuf::from(p);
+    }
+    if let Some(root) = std::env::var_os("EXTENSION_SMOKE_REPO_ROOT") {
+        return PathBuf::from(root)
+            .join("target/wasm32-wasip2/release/sqlite_cli.component.wasm");
+    }
     repo_root().join("target/wasm32-wasip2/release/sqlite_cli.component.wasm")
 }
 
@@ -81,10 +94,66 @@ pub fn cli_component() -> PathBuf {
 /// outside the workspace target.
 pub fn sqlink_native_bin() -> PathBuf {
     if let Some(p) = std::env::var_os("SQLINK_NATIVE_BINARY") {
-        PathBuf::from(p)
-    } else {
-        repo_root().join("target/release/sqlink-native")
+        return PathBuf::from(p);
     }
+    if let Some(root) = std::env::var_os("EXTENSION_SMOKE_REPO_ROOT") {
+        return PathBuf::from(root).join("target/release/sqlink-native");
+    }
+    repo_root().join("target/release/sqlink-native")
+}
+
+/// Path to the Scenario 1 sub-option .so/.dylib. Overridable via
+/// `SQLINK_LOADER_SO`. The test_loader harness gates on this
+/// existing  if not built, every loader probe SKIPs.
+pub fn sqlink_loader_so() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("SQLINK_LOADER_SO") {
+        let path = PathBuf::from(p);
+        return path.exists().then_some(path);
+    }
+    let cand = if cfg!(target_os = "macos") {
+        repo_root().join("target/release/libsqlink_loader.dylib")
+    } else if cfg!(target_os = "windows") {
+        repo_root().join("target/release/sqlink_loader.dll")
+    } else {
+        repo_root().join("target/release/libsqlink_loader.so")
+    };
+    cand.exists().then_some(cand)
+}
+
+/// Path to a host-process `sqlite3` shell with load_extension
+/// enabled. Overridable via `SQLINK_LOADER_SQLITE3`. macOS's
+/// system shell ships with load_extension disabled  homebrew's
+/// sqlite has it on. We try /opt/homebrew/.../bin/sqlite3 first,
+/// then /usr/local/.../bin/sqlite3, then PATH `sqlite3`. If none
+/// support load_extension, the loader harness will SKIP every
+/// fixture and the test reports the unavailability.
+pub fn sqlite3_bin_for_loader() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("SQLINK_LOADER_SQLITE3") {
+        let path = PathBuf::from(p);
+        return path.exists().then_some(path);
+    }
+    // Highest-priority well-known paths first; both brews land
+    // here on M-series macs. Linux distros ship enable-load on the
+    // default sqlite3 binary; PATH works.
+    let candidates = [
+        "/opt/homebrew/opt/sqlite/bin/sqlite3",
+        "/usr/local/opt/sqlite/bin/sqlite3",
+    ];
+    for c in candidates {
+        let p = PathBuf::from(c);
+        if p.exists() {
+            return Some(p);
+        }
+    }
+    if let Ok(out) = Command::new("which").arg("sqlite3").output() {
+        if out.status.success() {
+            let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !s.is_empty() {
+                return Some(PathBuf::from(s));
+            }
+        }
+    }
+    None
 }
 
 /// Resolve the .component.wasm artifact for a given plugin.
@@ -93,20 +162,36 @@ pub fn sqlink_native_bin() -> PathBuf {
 ///   target/wasm32-wasip2/release/ (workspace-shared)
 /// Underscore vs dash: cargo emits `<crate_name>_extension`,
 /// where crate_name often replaces dashes with underscores.
+///
+/// Search order:
+///   1. `EXTENSION_SMOKE_REPO_ROOT` (env): for build-side runs in
+///      a worktree that doesn't carry the wasm artifacts but
+///      shares them with another tree.
+///   2. `repo_root()` (the cargo manifest dir's grandparent).
 pub fn component_path(plugin: &str) -> Option<PathBuf> {
-    let root = repo_root();
-    let candidates = [
-        // Per-extension target
-        format!("extensions/{plugin}/target/wasm32-wasip2/release/{plugin}_extension.component.wasm"),
-        format!("extensions/{plugin}/target/wasm32-wasip2/release/{}_extension.component.wasm", plugin.replace('-', "_")),
-        // Workspace-shared target
-        format!("target/wasm32-wasip2/release/{plugin}_extension.component.wasm"),
-        format!("target/wasm32-wasip2/release/{}_extension.component.wasm", plugin.replace('-', "_")),
+    let roots: Vec<PathBuf> = std::env::var_os("EXTENSION_SMOKE_REPO_ROOT")
+        .map(PathBuf::from)
+        .into_iter()
+        .chain(std::iter::once(repo_root()))
+        .collect();
+    let und = plugin.replace('-', "_");
+    let names = [
+        format!("{plugin}_extension.component.wasm"),
+        format!("{und}_extension.component.wasm"),
     ];
-    for rel in &candidates {
-        let p = root.join(rel);
-        if p.exists() {
-            return Some(p);
+    for root in &roots {
+        for name in &names {
+            let candidates = [
+                root.join(format!(
+                    "extensions/{plugin}/target/wasm32-wasip2/release/{name}"
+                )),
+                root.join(format!("target/wasm32-wasip2/release/{name}")),
+            ];
+            for p in &candidates {
+                if p.exists() {
+                    return Some(p.clone());
+                }
+            }
         }
     }
     None
@@ -536,6 +621,207 @@ pub fn run_probe_native(
             },
         }
     }
+}
+
+/// Scenario 1 sub-option variant: drive the probe through a
+/// vanilla `sqlite3` shell + the sqlink-loader .so/.dylib instead
+/// of the sqlink-native binary or the wasm cli component. The
+/// shell's stdout is parsed the same way the native path parses
+/// it; we just take the first content line.
+///
+/// SKIPs (returning `None`) when either `sqlite3` (with
+/// load_extension enabled) or the loader .so is missing. Callers
+/// in `test_loader.rs` interpret None as SKIP, not a failure.
+pub fn run_probe_loader(
+    plugin: &str,
+    component: &Path,
+    kind: &'static str,
+    probe: &Probe,
+    _grants: &[String],
+) -> Option<ProbeReport> {
+    let so = sqlink_loader_so()?;
+    let shell = sqlite3_bin_for_loader()?;
+
+    // Pass the component path AND the plugin name via env so the
+    // .so resolves the right artifact. We don't lean on the
+    // shell's `.load` because macOS sqlite3 (system) has it
+    // disabled; SELECT load_extension() works on brews and most
+    // linuxes.
+    let tmp = std::env::temp_dir().join(format!("sw_smoke_loader_{plugin}_{kind}.db"));
+    let _ = std::fs::remove_file(&tmp);
+
+    let mut sql = String::new();
+    // load the .so first.
+    sql.push_str(&format!(
+        "SELECT load_extension('{}');\n",
+        so.display()
+    ));
+    // load the wasm extension via our sqlink_load_ext() registered
+    // SQL function. Both args literal-quoted; component paths from
+    // the workspace don't have single-quotes.
+    sql.push_str(&format!(
+        "SELECT sqlink_load_ext('{plugin}', '{}');\n",
+        component.display()
+    ));
+    for s in &probe.setup {
+        let trimmed = s.trim_end();
+        sql.push_str(trimmed);
+        if !trimmed.ends_with(';') {
+            sql.push(';');
+        }
+        sql.push('\n');
+    }
+    sql.push_str(probe.sql.trim_end());
+    if !probe.sql.trim_end().ends_with(';') {
+        sql.push(';');
+    }
+    sql.push('\n');
+    sql.push_str(".exit\n");
+
+    let _permit = SUBPROCESS_LIMITER.acquire();
+    let child = Command::new(&shell)
+        .arg(&tmp)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        // Match the test_native env footprint: pass DB_PATH so
+        // SPI-using extensions open the secondary connection
+        // against the same file. (Not material for scalar-only
+        // probes, but consistent with the loader's contract.)
+        .env("SQLINK_LOADER_DB_PATH", &tmp)
+        .spawn();
+    let mut child = match child {
+        Ok(c) => c,
+        Err(e) => {
+            return Some(ProbeReport {
+                kind,
+                outcome: ProbeOutcome::SubprocessError(format!(
+                    "spawn {}: {e}",
+                    shell.display()
+                )),
+            })
+        }
+    };
+    use std::io::{Read, Write};
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(sql.as_bytes());
+    }
+    let mut stdout_pipe = child.stdout.take().expect("piped stdout");
+    let mut stderr_pipe = child.stderr.take().expect("piped stderr");
+    let stdout_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let stderr_handle = std::thread::spawn(move || {
+        let mut buf = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut buf);
+        buf
+    });
+    let start = std::time::Instant::now();
+    let deadline = std::time::Duration::from_secs(30);
+    let timed_out = loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break false,
+            Ok(None) => {
+                if start.elapsed() > deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break true;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            Err(e) => {
+                return Some(ProbeReport {
+                    kind,
+                    outcome: ProbeOutcome::SubprocessError(format!("try_wait: {e}")),
+                });
+            }
+        }
+    };
+    let stdout_bytes = stdout_handle.join().unwrap_or_default();
+    let stderr_bytes = stderr_handle.join().unwrap_or_default();
+    if timed_out {
+        return Some(ProbeReport {
+            kind,
+            outcome: ProbeOutcome::SubprocessError(format!(
+                "timeout after 30s\nstdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&stdout_bytes),
+                String::from_utf8_lossy(&stderr_bytes),
+            )),
+        });
+    }
+    let stdout = String::from_utf8_lossy(&stdout_bytes);
+    let stderr = String::from_utf8_lossy(&stderr_bytes);
+    if std::env::var_os("SMOKE_DEBUG").is_some() {
+        eprintln!("--- loader {} {} ---", plugin, kind);
+        eprintln!("STDOUT: {stdout:?}");
+        eprintln!("STDERR: {stderr:?}");
+    }
+    if stderr.contains("Error: ") || stderr.contains("sqlink-loader: failed") {
+        // If the .so itself failed to load (e.g. SQL function
+        // sqlink_load_ext returned an error), surface as LoadFailed.
+        // We deliberately don't pattern-match on every load-error
+        // shape  the stderr text is the diagnostic.
+        if stderr.contains("could not resolve")
+            || stderr.contains("load_extension")
+            || stderr.contains("sqlink_load_ext")
+        {
+            return Some(ProbeReport {
+                kind,
+                outcome: ProbeOutcome::LoadFailed(format!(
+                    "stdout: {stdout}\nstderr: {stderr}"
+                )),
+            });
+        }
+    }
+    let line = extract_loader_probe_output(&stdout);
+    let matched = match (&probe.expects, &probe.expects_regex) {
+        (Some(want), _) => line.trim() == want.trim(),
+        (None, Some(rx)) => regex::Regex::new(rx)
+            .map(|r| r.is_match(&line))
+            .unwrap_or(false),
+        (None, None) => !line.is_empty(),
+    };
+    Some(if matched {
+        ProbeReport { kind, outcome: ProbeOutcome::Pass }
+    } else {
+        let want = probe
+            .expects
+            .clone()
+            .or_else(|| probe.expects_regex.clone().map(|r| format!("regex:{r}")))
+            .unwrap_or_else(|| "(non-empty)".into());
+        ProbeReport {
+            kind,
+            outcome: ProbeOutcome::OutputMismatch {
+                got: line.to_string(),
+                want,
+                stderr: stderr.to_string(),
+                stdout: stdout.to_string(),
+            },
+        }
+    })
+}
+
+/// First content line in the loader path's stdout. Our pipeline
+/// puts two diagnostic outputs before the probe: the `null` from
+/// load_extension() and the `loaded <name>: N scalar, ...` from
+/// sqlink_load_ext. Skip both.
+fn extract_loader_probe_output(stdout: &str) -> String {
+    for raw in stdout.lines() {
+        let line = raw.trim();
+        if line.is_empty() {
+            continue;
+        }
+        if line.starts_with("loaded ") && line.contains(" scalar") {
+            // sqlink_load_ext returned its diagnostic string.
+            continue;
+        }
+        // load_extension() returns NULL; the cli renders it as
+        // empty. Skip empty lines too (already handled above).
+        return line.to_string();
+    }
+    String::new()
 }
 
 /// Find the first useful output line after the .load echo +

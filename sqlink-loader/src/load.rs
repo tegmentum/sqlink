@@ -101,6 +101,12 @@ pub fn resolve_extension_path(hint: &str) -> Result<PathBuf> {
 /// We grant a broad-but-not-dangerous set; finer-grained control
 /// is via the SQL `sqlink_load_ext(name, path, policy_json)`
 /// variant (TBD; v1 uses this baseline).
+///
+/// Spi/Prepared/Schema/Transaction are granted so extensions that
+/// call `spi.execute()` work against the secondary in-.so
+/// connection (Phase B2). The secondary connection is the host's
+/// shared_spi_conn  it opens against `SQLINK_LOADER_DB_PATH` if
+/// set, else fails at the spi.execute boundary with a clear error.
 pub fn default_policy() -> Policy {
     Policy::deny_all().with_grants(vec![
         Capability::Random,
@@ -109,6 +115,10 @@ pub fn default_policy() -> Policy {
         Capability::Text,
         Capability::Cache,
         Capability::State,
+        Capability::Spi,
+        Capability::Prepared,
+        Capability::Schema,
+        Capability::Transaction,
     ])
 }
 
