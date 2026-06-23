@@ -9037,7 +9037,23 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             conn.rollback_hook::<fn()>(None);
         }
         if drop_wal_hook {
-            conn.wal_hook::<fn(&str, i32) -> i32>(None);
+            // db::Connection::wal_hook is generic on F; passing
+            // None requires committing to *some* F type, and the
+            // closure-typed installer will then Box::drop the
+            // previously-installed closure as if it were that F.
+            // The installer captured Host + String + u64 — a
+            // different F type per install — so the wrong-type
+            // drop is UB. Clear via the raw FFI instead, which
+            // sets the slot to (NULL, NULL) and intentionally
+            // leaks the prior Box<F>. The leak is per-extension-
+            // unload and is reclaimed at process exit.
+            let _ = unsafe {
+                libsqlite3_sys::sqlite3_wal_hook(
+                    conn.raw_handle(),
+                    None,
+                    std::ptr::null_mut(),
+                )
+            };
         }
     }
 
