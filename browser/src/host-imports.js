@@ -53,7 +53,7 @@ import {
   terminalStderrPlugin,
 } from '@tegmentum/wasi-polyfill/wasip2/plugins/cli'
 
-import { buildExtensionLoader } from './extension-loader.js'
+import { buildExtensionLoader, buildSpiLoader, buildDispatch } from './extension-loader.js'
 
 /**
  * Build a wired-up Polyfill (no pre-resolved imports map) plus the
@@ -75,6 +75,7 @@ import { buildExtensionLoader } from './extension-loader.js'
  * @returns {{
  *   polyfill: import('@tegmentum/wasi-polyfill/wasip2').Polyfill,
  *   additionalImports: Record<string, Record<string, unknown>>,
+ *   spiLoader: ReturnType<typeof buildSpiLoader>,
  * }}
  */
 export function buildCliPolyfill(opts) {
@@ -123,20 +124,35 @@ export function buildCliPolyfill(opts) {
   polyfill.registerPlugin(terminalStdoutPlugin)
   polyfill.registerPlugin(terminalStderrPlugin)
 
+  // Real spi-loader impl. The cli's `.load` walks the extension
+  // manifest and calls register-scalar / register-aggregate /
+  // register-collation; we wire those to the JS registry and
+  // (for scalars) re-enter the composed binary via dispatch-bridge.
+  // The bridge handle is only available AFTER bindgen.instantiate(),
+  // so the caller must invoke `spiLoader._setBindgenResult(result)`
+  // before running the cli — see sqlink-composed.js.
+  const spiLoader = buildSpiLoader(opts.registry)
+
   const additionalImports = {
     'sqlink:wasm/extension-loader': buildExtensionLoader(opts.registry),
+    'sqlite:extension/spi-loader': spiLoader.impl,
+    // dispatch is the inverse direction: the composed binary's
+    // dispatch-bridge installs a sqlite3 trampoline that calls
+    // back into the host via this imported interface. The host
+    // looks up the registered (ext-name, func-id) in the registry
+    // and invokes the transpiled extension's scalar-function.call.
+    'sqlink:wasm/dispatch': buildDispatch(opts.registry),
   }
   for (const k of [
     'sqlite:extension/http',
     'sqlite:extension/policy',
     'sqlite:extension/types',
     'sqlite:extension/metadata',
-    'sqlite:extension/spi-loader',
   ]) {
     additionalImports[k] = stubInterface(k)
   }
 
-  return { polyfill, additionalImports }
+  return { polyfill, additionalImports, spiLoader }
 }
 
 /**
@@ -157,7 +173,7 @@ export function buildCliPolyfill(opts) {
  * @returns {Promise<{ imports: Record<string, unknown>, polyfill: import('@tegmentum/wasi-polyfill/wasip2').Polyfill }>}
  */
 export async function buildCliHostImports(opts) {
-  const { polyfill, additionalImports } = buildCliPolyfill(opts)
+  const { polyfill, additionalImports, spiLoader } = buildCliPolyfill(opts)
 
   const { imports } = await polyfill.forInterfaces(
     [
@@ -187,7 +203,7 @@ export async function buildCliHostImports(opts) {
     if (!imports[k]) imports[k] = v
   }
 
-  return { imports, polyfill }
+  return { imports, polyfill, spiLoader }
 }
 
 /**

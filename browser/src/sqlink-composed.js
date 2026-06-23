@@ -28,6 +28,7 @@
 import { createRuntimeBindgen } from '@tegmentum/wasi-polyfill/wasip2'
 import { ExtensionRegistry } from './extension-loader.js'
 import { buildCliPolyfill } from './host-imports.js'
+import { buildExtensionImports } from './wasi-imports.js'
 
 const COMPOSED_WASM_URL = '/cli_with_sqlite.single_memory.component.wasm'
 
@@ -125,7 +126,7 @@ class ComposedDatabase {
 
     const stdoutChunks = []
     const stderrChunks = []
-    const { polyfill, additionalImports } = buildCliPolyfill({
+    const { polyfill, additionalImports, spiLoader } = buildCliPolyfill({
       registry: this._registry,
       stdinContent: stdinScript,
       onStdout: (data) => stdoutChunks.push(data),
@@ -146,6 +147,13 @@ class ComposedDatabase {
     let result
     try {
       result = await bindgen.instantiate(wasmBytes)
+
+      // Wire the dispatch-bridge handle into the spi-loader impl
+      // BEFORE running the cli. The cli's `.load` flow calls
+      // register-scalar synchronously, which re-enters
+      // dispatch-bridge.register-host-scalar on the composed
+      // binary; that path requires the bridge handle to be live.
+      spiLoader._setBindgenResult(result)
 
       // jco's async-instantiation surface exposes the exported
       // `wasi:cli/run@0.2.6` instance under both the dashed alias
@@ -189,14 +197,39 @@ class ComposedDatabase {
     return { stdout, stderr }
   }
 
-  async loadExtension(name, bytes) {
+  async loadExtension(name, bytesOrModule, transpiledOpt) {
     if (this._registry.has(name)) return this._registry.get(name).manifest
-    if (!bytes) {
+    // Two call shapes:
+    //   loadExtension(name, bytes)
+    //     — caller has the raw .component.wasm; runtime-transpile
+    //       would be required (not in v1). Currently rejected so
+    //       the caller picks one of the supported paths below.
+    //   loadExtension(name, bytes, transpiledModule)
+    //     — caller has both: pass `bytes` for the blake3 digest
+    //       (used by the cli's grant-pin lookup) and the already-
+    //       transpiled jco module so dispatch.scalar-call can route.
+    //   loadExtension(name, null, transpiledModule)
+    //     — caller has only the transpiled module (no digest path).
+    //   loadExtension(name, transpiledModule)
+    //     — shorthand: first arg after name IS the transpiled
+    //       module if it doesn't smell like raw bytes.
+    let bytes = null
+    let transpiledModule = transpiledOpt ?? null
+    if (
+      bytesOrModule &&
+      (bytesOrModule instanceof Uint8Array || bytesOrModule instanceof ArrayBuffer)
+    ) {
+      bytes = bytesOrModule
+    } else if (bytesOrModule && typeof bytesOrModule === 'object') {
+      transpiledModule = transpiledModule ?? bytesOrModule
+    }
+    if (!transpiledModule) {
       throw new Error(
-        `loadExtension(${JSON.stringify(name)}): composed runtime needs bytes`,
+        `loadExtension(${JSON.stringify(name)}): composed runtime needs a ` +
+          `jco-transpiled module (runtime-transpile of raw bytes is a follow-up).`,
       )
     }
-    this._registry.add(name, bytes)
+    await this._registry.add(name, bytes, transpiledModule)
     return this._registry.get(name)?.manifest
   }
 
@@ -244,10 +277,43 @@ class ComposedDatabase {
  */
 export async function openDatabaseComposed(opts = {}) {
   const registry = new ExtensionRegistry()
+  // Lazy instantiate factory: jco's async-mode transpile output
+  // exposes `instantiate(getCoreModule, imports)`. Each extension
+  // shares the same WASI surface, satisfied by ./wasi-imports.js's
+  // cached polyfill.
+  registry.instantiate = async (transpiledModule) => {
+    const imports = await buildExtensionImports()
+    return transpiledModule.instantiate(undefined, imports)
+  }
+
   const embedNames = []
+  // opts.embed entries may be:
+  //   - string name with EXTENSION_LOADERS pre-import (handled by
+  //     the static loader in sqlink.js — for composed we accept
+  //     only objects with explicit module)
+  //   - { name, bytes?, module }: caller pre-imported the
+  //     transpiled module (the recommended composed-path shape).
+  //   - { name, loader }: caller provides an async loader
+  //     returning the transpiled module — preferred for embed:
+  //     since it lets the bundler lazy-load the module bytes.
   for (const e of opts.embed ?? []) {
-    registry.add(e.name, e.bytes)
-    embedNames.push(e.name)
+    if (typeof e === 'string') {
+      throw new Error(
+        `openDatabaseComposed: embed entry ${JSON.stringify(e)} is a bare ` +
+          `name — pass { name, module } or { name, loader: () => import(...) } ` +
+          `so the registry has the transpiled module.`,
+      )
+    }
+    const { name, bytes, module, loader } = e
+    const transpiled = module ?? (loader ? await loader() : null)
+    if (!transpiled) {
+      throw new Error(
+        `openDatabaseComposed: embed ${JSON.stringify(name)} has no ` +
+          `module/loader.`,
+      )
+    }
+    await registry.add(name, bytes ?? null, transpiled)
+    embedNames.push(name)
   }
 
   return new ComposedDatabase({
