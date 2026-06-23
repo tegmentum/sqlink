@@ -2234,6 +2234,23 @@ fn sync_dispatch_on_wal_hook(
     })
 }
 
+/// SQLite ships with a default WAL hook wired to its
+/// auto-checkpoint machinery (PRAGMA wal_autocheckpoint defaults
+/// to 1000). The default hook's user-data pointer is internal
+/// SQLite state, NOT a Rust `Box<F>` — so the first call to
+/// `conn.wal_hook(Some(F))` would have the closure-style
+/// `Box::from_raw(prev as *mut F)` cleanup misinterpret SQLite's
+/// internal pointer as a Rust closure and segfault on drop.
+///
+/// Call this once before installing the extension's wal hook to
+/// clear SQLite's default. `sqlite3_wal_autocheckpoint(db, 0)`
+/// internally invokes `sqlite3_wal_hook(db, NULL, NULL)` per the
+/// official docs, returning the wal-hook slot to a clean (null
+/// user-data) state.
+unsafe fn clear_default_wal_autocheckpoint(db: *mut libsqlite3_sys::sqlite3) {
+    let _ = libsqlite3_sys::sqlite3_wal_autocheckpoint(db, 0);
+}
+
 unsafe fn unregister_host_loaded_collation(
     db: *mut libsqlite3_sys::sqlite3,
     coll_name: &str,
@@ -6029,6 +6046,7 @@ impl Host {
             let g = self.shared_spi_conn.lock();
             let r = g.borrow();
             let conn = r.as_ref().expect("shared_spi_conn open");
+            unsafe { clear_default_wal_autocheckpoint(conn.raw_handle()) };
             conn.wal_hook(Some(move |db_name: &str, n_frames: i32| {
                 let n = if n_frames < 0 { 0u32 } else { n_frames as u32 };
                 match sync_dispatch_on_wal_hook(&host_c, &ext_n, hook_id, db_name, n) {
@@ -8872,6 +8890,11 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
+        // SQLite installs an internal wal-hook for the
+        // auto-checkpoint machinery by default; clear it before
+        // wiring our own so db::Connection::wal_hook doesn't try to
+        // Box::from_raw SQLite's opaque internal pointer (segfault).
+        unsafe { clear_default_wal_autocheckpoint(conn.raw_handle()) };
         let host_c = self.host.clone();
         let ext_c = ext_name.clone();
         // sqlite's wal_hook takes (db_name: &str, n_frames: i32) ->
