@@ -34,10 +34,15 @@ wasm-tools component new \
     "$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.wasm" \
     -o "$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.component.wasm"
 
-echo "[3/3] wac plug cli  sqlite-lib (single-memory)"
-wac plug \
-    --plug "$SQLITE_WASM_ROOT/target/wasm32-wasip2/release/sqlite_lib.single_memory.component.wasm" \
-    "$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.component.wasm" \
+echo "[3/3] wac compose cli  sqlite-lib (single-memory)"
+# Switched from `wac plug` to `wac compose` with an explicit recipe
+# so the composed binary re-exports sqlite-lib's dispatch-bridge.
+# wac plug auto-strips exports the outer world doesn't declare;
+# the recipe lets us explicitly surface dispatch-bridge for the JS
+# host's spi-loader.register-scalar impl to call.
+wac compose "$REPO_ROOT/composition-cli-sqlite-lib.wac" \
+    -d "sqlite:wasm-lib=$SQLITE_WASM_ROOT/target/wasm32-wasip2/release/sqlite_lib.single_memory.component.wasm" \
+    -d "sqlite:cli=$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.component.wasm" \
     -o "$REPO_ROOT/target/wasm32-wasip2/release/cli_with_sqlite.single_memory.component.wasm"
 
 OUT="$REPO_ROOT/target/wasm32-wasip2/release/cli_with_sqlite.single_memory.component.wasm"
