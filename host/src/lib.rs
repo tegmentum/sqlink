@@ -1330,17 +1330,6 @@ fn spi_ensure_open(
     state: &LoadedState,
 ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
     use sqlite_component_core::db;
-    if state.db_path.is_empty() || state.db_path == ":memory:" {
-        return Err(loaded::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi requires a file-backed database. Pass --db <path> to sqlink; \
-                 :memory: dbs aren't shareable between the cli's wasm-internal sqlite3 \
-                 instance and the host's sqlite3 instance (separate libraries with \
-                 separate page caches even though they run in one process)."
-                .to_string(),
-        });
-    }
     let g = state.spi_conn.lock();
     // Fast path: if a connection is already open, exit without
     // mutably borrowing the RefCell. SQL callbacks re-enter here
@@ -1350,13 +1339,31 @@ fn spi_ensure_open(
     if g.borrow().is_some() { return Ok(()); }
     let mut r = g.borrow_mut();
     if r.is_none() {
-        let conn = db::Connection::open(&state.db_path, db::OpenFlags::DEFAULT).map_err(|e| {
-            loaded::sqlite::extension::types::SqliteError {
-                code: 1,
-                extended_code: 1,
-                message: format!("open {}: {}", state.db_path, e.message),
-            }
-        })?;
+        // `:memory:` (or empty) opens an isolated in-memory db for
+        // this extension. Each loaded extension's spi_conn is
+        // independent  the cli's wasm-internal sqlite3 sees a
+        // different db, but every SPI call this extension makes
+        // through `state.spi_conn` sees a coherent view across the
+        // session. Tests that don't care about cross-instance
+        // sharing (the common case for unit fixtures) now run
+        // without forcing the caller to pass a tempfile.
+        let conn = if state.db_path.is_empty() || state.db_path == ":memory:" {
+            db::Connection::open_in_memory().map_err(|e| {
+                loaded::sqlite::extension::types::SqliteError {
+                    code: 1,
+                    extended_code: 1,
+                    message: format!("open :memory:: {}", e.message),
+                }
+            })?
+        } else {
+            db::Connection::open(&state.db_path, db::OpenFlags::DEFAULT).map_err(|e| {
+                loaded::sqlite::extension::types::SqliteError {
+                    code: 1,
+                    extended_code: 1,
+                    message: format!("open {}: {}", state.db_path, e.message),
+                }
+            })?
+        };
         *r = Some(conn);
     }
     Ok(())
@@ -1489,23 +1496,29 @@ fn db_err_to_bindings(e: sqlite_component_core::db::Error) -> bindings::sqlite::
 /// Ensure the shared spi connection is open; same lazy-open
 /// semantics as `spi_ensure_open` on LoadedState but the
 /// connection lives on Host (one per cli session).
+///
+/// `:memory:` (or an empty path) now opens a real in-memory
+/// connection via `Connection::open_in_memory` instead of returning
+/// the "spi requires a file-backed database" error. Caveat: the
+/// in-memory db is **not** the same instance as the cli component's
+/// internal SQLite handle  cross-component data sharing still
+/// requires a file path. But every host-side SPI call routed through
+/// this connection (eval_sql, register-host-*, etc.) sees a coherent
+/// in-memory state across the lifetime of the cli session, which is
+/// what the `:memory:` test fixtures expect.
 fn shared_spi_ensure_open(host: &Host) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
     use sqlite_component_core::db;
     let path = host.db_path.read().clone();
-    if path.is_empty() || path == ":memory:" {
-        return Err(bindings::sqlite::extension::types::SqliteError {
-            code: 1,
-            extended_code: 1,
-            message: "spi requires a file-backed database. Pass --db <path> to sqlink."
-                .to_string(),
-        });
-    }
     let g = host.shared_spi_conn.lock();
     if g.borrow().is_some() { return Ok(()); }
     let mut r = g.borrow_mut();
     if r.is_none() {
-        let conn = db::Connection::open(&path, db::OpenFlags::DEFAULT)
-            .map_err(db_err_to_bindings)?;
+        let conn = if path.is_empty() || path == ":memory:" {
+            db::Connection::open_in_memory().map_err(db_err_to_bindings)?
+        } else {
+            db::Connection::open(&path, db::OpenFlags::DEFAULT)
+                .map_err(db_err_to_bindings)?
+        };
         // PLAN-cli-stages-5-6.md Stage 5c: register each enabled
         // embed-* extension on the host's connection. Native Rust
         // callbacks (no wasm crossing)  the SQL function call
