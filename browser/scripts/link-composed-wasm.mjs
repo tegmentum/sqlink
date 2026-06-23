@@ -23,6 +23,13 @@ const FALLBACK_TARGET = '/Users/zacharywhitley/git/sqlink/target/wasm32-wasip2/r
 const WASM_NAME = 'cli_with_sqlite.single_memory.component.wasm'
 const PUBLIC_DIR = resolve(__dirname, '..', 'public')
 
+// Per-extension component bytes the runtime-bindgen path serves
+// statically (so the composed-runtime-ext test can fetch them).
+// We mirror the resolveWasmFor() lookup pattern from transpile-
+// extensions.mjs but only for the names used by browser tests.
+const FALLBACK_EXTENSIONS_ROOT = '/Users/zacharywhitley/git/sqlink/extensions'
+const EXTENSION_BYTES_TO_LINK = ['uuid']
+
 function resolveSource() {
   const primary = resolve(PRIMARY_TARGET, WASM_NAME)
   if (existsSync(primary)) return primary
@@ -37,17 +44,39 @@ function resolveSource() {
   )
 }
 
-function main() {
-  const src = resolveSource()
-  mkdirSync(PUBLIC_DIR, { recursive: true })
-  const dst = resolve(PUBLIC_DIR, WASM_NAME)
+function resolveExtensionSource(name) {
+  const wasmName = `${name}_extension.component.wasm`
+  const perExt = resolve(
+    ROOT,
+    'extensions',
+    name,
+    'target',
+    'wasm32-wasip2',
+    'release',
+    wasmName,
+  )
+  const workspace = resolve(PRIMARY_TARGET, wasmName)
+  const fallbackWorkspace = resolve(FALLBACK_TARGET, wasmName)
+  const fallbackPerExt = resolve(
+    FALLBACK_EXTENSIONS_ROOT,
+    name,
+    'target',
+    'wasm32-wasip2',
+    'release',
+    wasmName,
+  )
+  for (const p of [perExt, workspace, fallbackWorkspace, fallbackPerExt]) {
+    if (existsSync(p)) return p
+  }
+  return null
+}
 
+function linkOne(src, dst) {
   if (existsSync(dst) || lstatSync(dst, { throwIfNoEntry: false })) {
-    // Already a symlink — only replace if the target has changed.
     try {
       const current = readlinkSync(dst)
       if (current === src) {
-        console.log(`[link-composed-wasm] already linked to ${src}`)
+        console.log(`[link-composed-wasm] already linked: ${dst}`)
         return
       }
     } catch {
@@ -57,6 +86,27 @@ function main() {
   }
   symlinkSync(src, dst)
   console.log(`[link-composed-wasm] ${dst} -> ${src}`)
+}
+
+function main() {
+  mkdirSync(PUBLIC_DIR, { recursive: true })
+
+  const src = resolveSource()
+  const dst = resolve(PUBLIC_DIR, WASM_NAME)
+  linkOne(src, dst)
+
+  for (const name of EXTENSION_BYTES_TO_LINK) {
+    const extSrc = resolveExtensionSource(name)
+    if (!extSrc) {
+      console.warn(
+        `[link-composed-wasm] skip ${name}: component.wasm not found ` +
+          `(build with \`cargo build --release --target wasm32-wasip2\` from extensions/${name}).`,
+      )
+      continue
+    }
+    const extDst = resolve(PUBLIC_DIR, `${name}_extension.component.wasm`)
+    linkOne(extSrc, extDst)
+  }
 }
 
 main()
