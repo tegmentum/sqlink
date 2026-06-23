@@ -1,24 +1,30 @@
 // Compose `sqlite-cli-command` with `sqlite-library` (sqlite-lib)
 // so the cli's `sqlite:extension/spi*` imports get satisfied by
 // sqlite-lib's exports, producing a single component that
-// exports `wasi:cli/run` and contains SQLite + the multi-memory
-// cold-tier substrate.
+// exports `wasi:cli/run` AND `sqlink:wasm/dispatch-bridge` and
+// contains SQLite + the multi-memory cold-tier substrate.
 //
 // Run with:
 //
-//   wac plug \
-//     --plug sqlite-wasm/target/wasm32-wasip2/release/sqlite_lib.component.wasm \
-//     target/wasm32-wasip2/release/sqlite_cli.component.wasm \
+//   wac compose composition-cli-sqlite-lib.wac \
+//     -d sqlite:wasm-lib=sqlite-wasm/target/wasm32-wasip2/release/sqlite_lib.component.wasm \
+//     -d sqlite:cli=target/wasm32-wasip2/release/sqlite_cli.component.wasm \
 //     -o target/wasm32-wasip2/release/cli_with_sqlite.component.wasm
 //
-// `wac plug` infers the wiring: every interface sqlite-lib exports
-// that matches one the cli imports gets connected.
+// `wac plug` is no longer sufficient: it auto-strips exports the
+// outer world doesn't declare, which silently drops sqlite-lib's
+// `dispatch-bridge`. Compose-with-recipe lets us explicitly re-
+// export the bridge so the JS host's spi-loader.register-scalar
+// impl can call into it.
 //
 // Imports the output STILL needs the embedder to satisfy:
 //
 //   * sqlite:extension/{http, policy, types, metadata}@0.1.0
 //     (host-side capability gates the cli + extensions consume)
 //   * sqlink:wasm/extension-loader@0.1.0
+//   * sqlink:wasm/dispatch@0.1.0
+//     (host  the JS host implements this; sqlite-lib's
+//      dispatch-bridge trampoline re-enters via this import)
 //   * sqlite:extension/spi-loader@0.1.0
 //   * the wasi:cli + wasi:io + wasi:clocks + wasi:filesystem +
 //     wasi:random preview-2 set
@@ -30,11 +36,21 @@ package sqlite:composed-runtime@0.1.0;
 
 let lib = new sqlite:wasm-lib { ... };
 let cli = new sqlite:cli {
-    "sqlite:extension/types@0.1.0":   lib["sqlite:extension/types@0.1.0"],
-    "sqlite:extension/spi@0.1.0":     lib["sqlite:extension/spi@0.1.0"],
-    "sqlite:extension/logging@0.1.0": lib["sqlite:extension/logging@0.1.0"],
-    "sqlite:extension/config@0.1.0":  lib["sqlite:extension/config@0.1.0"],
+    // Explicit cli  lib wiring. `wac plug` auto-strips the
+    // dispatch-bridge export when there's no matching cli import,
+    // and `wac compose`'s `...` form left `sqlite:extension/spi`
+    // unwired in our setup. Spell out the spi handoff explicitly
+    // so the composed binary internally satisfies it from sqlite-
+    // lib's export rather than re-importing from the host.
+    "sqlite:extension/spi@0.1.0": lib["sqlite:extension/spi@0.1.0"],
     ...
 };
 
 export cli["wasi:cli/run@0.2.6"];
+
+// Re-export sqlite-lib's dispatch-bridge so the JS host's
+// `spi-loader.register-scalar` impl can install a sqlite3 scalar
+// trampoline on sqlite-lib's connection. Without this, the
+// composed binary's outer world wouldn't expose the bridge
+// (the cli's own world doesn't declare it).
+export lib["sqlink:wasm/dispatch-bridge@0.1.0"];
