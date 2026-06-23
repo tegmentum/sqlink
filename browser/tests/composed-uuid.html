@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser — composed cli + uuid extension</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { openDatabaseComposed } from '../src/sqlink-composed.js'
+
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      try {
+        // The transpiled uuid extension lives under src/generated/uuid/.
+        // Use a dynamic import so Vite can code-split it and so the
+        // module's `instantiate(getCoreModule, imports)` shape is
+        // intact (the static graph wouldn't change anything but
+        // keeping it dynamic mirrors what the AOT-embedded sub-
+        // option's loader would do).
+        const uuidMod = await import('../src/generated/uuid/uuid_extension.js')
+
+        const db = await openDatabaseComposed({
+          embed: [{ name: 'uuid', module: uuidMod }],
+        })
+        log('opened composed db; uuid pre-registered')
+
+        const rows = await db.exec('SELECT uuid();')
+        log('SELECT uuid(); -> ' + JSON.stringify(rows))
+
+        const scalar = await db.execScalar('SELECT uuid();')
+        log('execScalar uuid() -> ' + scalar)
+
+        db.close()
+        status.textContent = 'done'
+        window.__uuidResult = { rows, scalar }
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        log(String(e?.stack ?? e))
+        window.__uuidResult = { error: String(e?.stack ?? e) }
+      } finally {
+        window.__uuidDone = true
+      }
+    </script>
+  </body>
+</html>

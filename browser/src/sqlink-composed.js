@@ -104,10 +104,20 @@ function parseCliOutput(text, sql) {
   )
   sqlLines.add('.quit')
 
+  // The cli prints status lines for `.load` (and other dot-cmds) that
+  // we want to suppress so the parsed rows reflect only SELECT output.
+  // The patterns are stable enough to match by prefix.
+  const CLI_INFO_PREFIXES = [
+    'Loaded extension:',
+    'Unloaded extension:',
+    'Error:', // surfaced separately via stderr in practice
+  ]
+
   const valueRows = []
   for (const raw of lines) {
     const line = raw.replace(/\r$/, '')
     if (line === '' || sqlLines.has(line.trim())) continue
+    if (CLI_INFO_PREFIXES.some((p) => line.startsWith(p))) continue
     valueRows.push(line.split('|'))
   }
   if (valueRows.length === 0) return []
