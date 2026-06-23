@@ -751,17 +751,18 @@ export function buildDispatch(registry) {
       // eslint-disable-next-line no-console
       console.warn(
         `dispatch.authorize: extension '${extName}' has no authorizer.authorize export; ` +
-          `permitting action ${action?.tag ?? action}`,
+          `permitting action ${action}`,
       )
-      return { tag: 'ok' }
+      return 'ok'
     }
     try {
       const r = ext.authorize(action, arg1, arg2, database, trigger)
-      // jco lowers `enum auth-result { ok, deny, ignore }` to a
-      // tagged object `{ tag: 'ok' | 'deny' | 'ignore' }`. Validate
-      // and pass through; default to ok on unexpected shapes so a
+      // jco lowers WIT enums (as distinct from variants) to plain
+      // lowercase-dash strings: `enum auth-result { ok, deny,
+      // ignore }` becomes `'ok' | 'deny' | 'ignore'`. Validate +
+      // pass through; default to ok on unexpected shapes so a
       // buggy extension can't lock the user out.
-      if (r && (r.tag === 'ok' || r.tag === 'deny' || r.tag === 'ignore')) {
+      if (r === 'ok' || r === 'deny' || r === 'ignore') {
         return r
       }
       // eslint-disable-next-line no-console
@@ -769,14 +770,14 @@ export function buildDispatch(registry) {
         `dispatch.authorize: extension '${extName}' returned unexpected ${JSON.stringify(r)}; ` +
           `defaulting to ok`,
       )
-      return { tag: 'ok' }
+      return 'ok'
     } catch (e) {
       // eslint-disable-next-line no-console
       console.warn(
         `dispatch.authorize: extension '${extName}' threw: ${e?.message ?? String(e)}; ` +
           `defaulting to ok`,
       )
-      return { tag: 'ok' }
+      return 'ok'
     }
   }
 
