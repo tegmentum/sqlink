@@ -1,8 +1,17 @@
 # Composed cli+sqlite-lib component — import surface
 
-Snapshot of `wasm-tools component wit target/wasm32-wasip2/release/cli_with_sqlite.component.wasm`
-after `INITIAL_PAGES=4096 ./scripts/build-composed-runtime.sh`.
-Component size: ~4.2 MB.
+Two flavors live side-by-side:
+
+* `cli_with_sqlite.component.wasm` — multi-memory build. Used by
+  scenarios 1 + 2 under native wasmtime; 256 MiB-per-pool cold tier
+  via tvm-mm-link. CANNOT be jco-transpiled today (see "blocker
+  resolution" below).
+* `cli_with_sqlite.single_memory.component.wasm` — single-memory
+  build. Used by the browser; one inner linear memory total, jco
+  transpiles it cleanly.
+
+Snapshot below is of the single-memory flavor (component size
+~4.3 MB) produced by `./scripts/build-composed-runtime-single-memory.sh`.
 
 ## Top-level world
 
@@ -89,40 +98,56 @@ For browser scenario 3, the smallest viable subset is:
   - dispatch_dot_command       (only if dot-commands needed)
 Everything else can return loader-error initially.
 
-## Open blocker — jco multi-memory
+## Blocker resolution — single-memory flavor
 
+Original blocker:
 ```
 jco transpile cli_with_sqlite.component.wasm --instantiation async
   → ComponentError: unsupported section found in module using
     multiple memories
 ```
 
-The composed component contains multi-memory core modules (4096
-8192 pages × 4 memories per the inner sqlite-lib, plus the cli's
-own memory). `wasm-tools print --skeleton` shows:
+The composed multi-memory component contains 4 pool memories from
+the inner sqlite-lib plus the cli's own default memory. jco does
+not support multi-memory inner core modules.
 
-  (memory (;0;) 4096 8192)
-  (memory (;1;) 4096 8192)
-  (memory (;2;) 4096 8192)
-  (memory (;3;) 4096 8192)
-  (memory (;0;) 46)         ; the cli's own memory
+Fix landed: sqlite-pcache-tvm + sqlite-vfs-tvm + sqlite-lib each
+gained a `single-memory` Cargo feature that selects the in-proc
+HashMap/Vec<u8> backends on wasm32 instead of the multi-memory
+ones. The browser flavor (`build-composed-runtime-single-memory.sh`)
+turns the feature on; the resulting cdylib has exactly ONE linear
+memory and zero `tvm_mm` imports. `wasm-tools component new` wraps
+it directly (no tvm-mm-link). jco transpile now succeeds.
 
-`@bytecodealliance/jco-transpile` does not currently support
-multi-memory. This blocks the entire Stage 8 transpile + browser
-load pipeline.
+Scenarios 1 + 2 keep using the multi-memory build because pool
+capacity matters there. Both flavors live side-by-side in
+`target/wasm32-wasip2/release/`.
 
-Possible paths forward (none implemented in this stage):
+## Open follow-up — REPL stdin/stdout marshalling under polyfill
 
-  1. Build sqlite-lib in single-memory mode for the browser
-     target (drop tvm multi-memory cold-tier in this build flavor).
-     The CLI smoke under wasmtime would continue using the multi-
-     memory build.
-  2. Upstream multi-memory support in jco / js-component-bindgen.
-     This is a real ask, not a quick fix.
-  3. Use Wasmtime's `--allow-multi-memory` in the browser via
-     a different transpile (e.g. wasm-bindgen / wamr) — major
-     scope change.
+The composed component instantiates cleanly under @tegmentum/wasi-
+polyfill (verified manually). Calling its `wasi:cli/run` runs the
+CLI's `embed_core_dotcmd()` (which logs 10 auto-load 404s to stderr
+because no extensions are in the JS registry — expected today) and
+then prints `sqlite> `. After one stdin chunk is read containing
+both the user query and `.quit`, the CLI's REPL exits without
+emitting the query result or a second prompt.
 
-Recommend #1 for the next attempt. A `sqlite-lib-single-memory`
-build flavor would let the composed component target the browser
-without losing the multi-memory cold-tier on native runtimes.
+Repro: feed `SELECT 1+1;\n.quit\n` via a `QueueInputStream` to
+the polyfill's stdin plugin; collect stdout; observe only the
+first prompt and one `tryRead` call. Under native wasmtime the
+same input produces `sqlite> 2\nsqlite> \n` correctly.
+
+That gap is the integration work for Stage H. It is NOT a
+multi-memory issue — both jco transpile and instantiate work.
+Either:
+
+  - the BufReader-backed stdin path interacts with the polyfill
+    blockingRead in a way that signals EOF after the first chunk,
+    OR
+  - `spi::execute_multi` traps silently (somehow translating to
+    an empty `out` string in `eval_sql_inner`) without surfacing
+    a JS exception.
+
+Until that's resolved, `openDatabase()` keeps `DEFAULT_USE_COMPOSED_CLI
+= false` and the 43-fixture baseline rides on sql.js.
