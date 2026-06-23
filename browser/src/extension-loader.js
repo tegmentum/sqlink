@@ -312,6 +312,18 @@ export class ExtensionRegistry {
       scalars: new Map(),
       aggregates: new Map(),
       collations: new Map(),
+      // Per-extension "this ext owns its sqlite slot" flags for the
+      // four singleton-per-connection hook kinds. v1 last-write-wins:
+      // a later register-* call from a different extension flips its
+      // own flag and SQLite re-routes to its trampoline; the previous
+      // extension's flag stays set but is dead-code (the wasm-side
+      // HOOK_OWNERS map is the source of truth, not these flags).
+      hooks: {
+        authorizer: false,
+        updateHook: false,
+        commitHook: false,
+        rollbackHook: false,
+      },
     }
     this._byName.set(name, entry)
     return { manifest, digestHex }
@@ -380,6 +392,13 @@ export class ExtensionRegistry {
       scalars: new Map(),
       aggregates: new Map(),
       collations: new Map(),
+      // See add()'s docstring on `hooks` — same shape.
+      hooks: {
+        authorizer: false,
+        updateHook: false,
+        commitHook: false,
+        rollbackHook: false,
+      },
     }
     this._byName.set(name, entry)
     return { manifest, digestHex }
@@ -422,8 +441,24 @@ export class ExtensionRegistry {
   }
 
   /**
+   * Flag this extension as owning one of the four singleton-per-
+   * connection hook kinds: `'authorizer'`, `'updateHook'`,
+   * `'commitHook'`, or `'rollbackHook'`. Used by `buildDispatch` to
+   * skip the lookup-by-export-shape sanity check on extensions that
+   * never declared the corresponding `has-*-hook` flag in their
+   * manifest. No-ops on unknown kinds.
+   */
+  recordHook(extName, kind) {
+    const entry = this._byName.get(extName)
+    if (!entry) return
+    if (!Object.prototype.hasOwnProperty.call(entry.hooks, kind)) return
+    entry.hooks[kind] = true
+  }
+
+  /**
    * Drop every registered function for `extName` (scalars,
-   * aggregates, collations). Mirrors spi-loader.unregister-extension.
+   * aggregates, collations, hooks). Mirrors spi-loader.unregister-
+   * extension.
    */
   forgetRegistrations(extName) {
     const entry = this._byName.get(extName)
@@ -431,6 +466,10 @@ export class ExtensionRegistry {
     entry.scalars.clear()
     entry.aggregates.clear()
     entry.collations.clear()
+    entry.hooks.authorizer = false
+    entry.hooks.updateHook = false
+    entry.hooks.commitHook = false
+    entry.hooks.rollbackHook = false
   }
 
   get(name) {
@@ -677,6 +716,116 @@ export function buildDispatch(registry) {
     }
   }
 
+  /**
+   * Find the authorizer / update-hook / commit-hook export on a
+   * loaded extension. Returns `null` if the extension was never
+   * recorded, or if its transpiled instance has no matching
+   * interface export. jco lowers WIT package paths to dash-cased
+   * camelCase property names (e.g. `update-hook` ->
+   * `updateHook`); we accept both the camelCase + the fully
+   * qualified package path for robustness.
+   */
+  function hookExports(extName, propName, qualifiedPath) {
+    const entry = registry.get(extName)
+    if (!entry) return null
+    const inst = entry.instance
+    if (!inst) return null
+    return (
+      inst[propName] ??
+      inst[`sqlite:extension/${qualifiedPath}`] ??
+      inst[`sqlite:extension/${qualifiedPath}@0.1.0`] ??
+      null
+    )
+  }
+
+  function authorizeImpl(extName, action, arg1, arg2, database, trigger) {
+    const ext = hookExports(extName, 'authorizer', 'authorizer')
+    if (!ext || typeof ext.authorize !== 'function') {
+      // No authorizer wired (or extension dropped) -> permit. This
+      // is the safe default: a missing authorizer means "trust
+      // SQLite's own checks." The dispatch-bridge trampoline only
+      // fires when register-host-authorizer ran for some ext-name,
+      // so reaching here means the JS host registered without
+      // backing the extension; surface as a warning so it isn't
+      // silent.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.authorize: extension '${extName}' has no authorizer.authorize export; ` +
+          `permitting action ${action}`,
+      )
+      return 'ok'
+    }
+    try {
+      const r = ext.authorize(action, arg1, arg2, database, trigger)
+      // jco lowers WIT enums (as distinct from variants) to plain
+      // lowercase-dash strings: `enum auth-result { ok, deny,
+      // ignore }` becomes `'ok' | 'deny' | 'ignore'`. Validate +
+      // pass through; default to ok on unexpected shapes so a
+      // buggy extension can't lock the user out.
+      if (r === 'ok' || r === 'deny' || r === 'ignore') {
+        return r
+      }
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.authorize: extension '${extName}' returned unexpected ${JSON.stringify(r)}; ` +
+          `defaulting to ok`,
+      )
+      return 'ok'
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.authorize: extension '${extName}' threw: ${e?.message ?? String(e)}; ` +
+          `defaulting to ok`,
+      )
+      return 'ok'
+    }
+  }
+
+  function onUpdateImpl(extName, operation, database, table, rowid) {
+    const ext = hookExports(extName, 'updateHook', 'update-hook')
+    if (!ext || typeof ext.onUpdate !== 'function') return
+    try {
+      ext.onUpdate(operation, database, table, rowid)
+    } catch (e) {
+      // Update-hook errors cannot be reported back to SQL (the row
+      // already committed to the page cache); log and continue.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.on-update: extension '${extName}' threw: ${e?.message ?? String(e)}`,
+      )
+    }
+  }
+
+  function onCommitImpl(extName) {
+    const ext = hookExports(extName, 'commitHook', 'commit-hook')
+    if (!ext || typeof ext.onCommit !== 'function') return true
+    try {
+      // Extension returns bool: true = allow, false = abort.
+      const r = ext.onCommit()
+      return r !== false
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.on-commit: extension '${extName}' threw: ${e?.message ?? String(e)}; ` +
+          `aborting commit`,
+      )
+      return false
+    }
+  }
+
+  function onRollbackImpl(extName) {
+    const ext = hookExports(extName, 'commitHook', 'commit-hook')
+    if (!ext || typeof ext.onRollback !== 'function') return
+    try {
+      ext.onRollback()
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.on-rollback: extension '${extName}' threw: ${e?.message ?? String(e)}`,
+      )
+    }
+  }
+
   return {
     scalarCall: scalarCallImpl,
     aggregateStep: aggregateStepImpl,
@@ -684,16 +833,10 @@ export function buildDispatch(registry) {
     aggregateValue: aggregateValueImpl,
     aggregateInverse: aggregateInverseImpl,
     collationCompare: collationCompareImpl,
-    authorize(_extName, _action, _arg1, _arg2, _database, _trigger) {
-      // SQLite auth-result is a variant with `ok | deny | ignore`.
-      // Return `ok` so the absence of an authorizer is a no-op.
-      return { tag: 'ok' }
-    },
-    onUpdate() {},
-    onCommit() {
-      return true
-    },
-    onRollback() {},
+    authorize: authorizeImpl,
+    onUpdate: onUpdateImpl,
+    onCommit: onCommitImpl,
+    onRollback: onRollbackImpl,
     vtabCreate: notImplemented('vtab-create'),
     vtabConnect: notImplemented('vtab-connect'),
     vtabDestroy: notImplemented('vtab-destroy'),
@@ -864,19 +1007,57 @@ export function buildSpiLoader(registry) {
         return undefined
       },
 
-      // The remaining surface — register-authorizer / update-hook /
-      // commit-hook / vtab — all need dispatch-bridge extensions to
-      // do anything meaningful. v1 returns OK so the cli's .load
-      // walk doesn't error; if SQL ever invokes one of these
-      // callbacks the dispatch-side stubs surface the gap with a
-      // structured error.
-      registerAuthorizer(_extName) {
+      // Hooks: the spi-loader exposes three register-* calls
+      // (authorizer / update-hook / commit-hook) but SQLite has
+      // four singleton-per-connection slots — commit-hook + rollback-
+      // hook are paired via spi-loader.register-commit-hook (per
+      // its docstring). The dispatch-bridge exposes the rollback
+      // hook as its own slot for symmetry; we install both when
+      // register-commit-hook fires.
+      //
+      // Each registration:
+      //   1. Verifies the extension is in the JS registry.
+      //   2. Flags the extension's `hooks.<kind>` so dispatch can
+      //      route (and forgetRegistrations knows what to clear).
+      //   3. Re-enters dispatch-bridge to install the wasm-side
+      //      trampoline. dispatch-bridge throws a payload-bearing
+      //      sqlite-error on the err arm; propagate unchanged.
+      registerAuthorizer(extName) {
+        if (!registry.has(extName)) {
+          structuredErr(
+            `spi-loader.register-authorizer: extension '${extName}' not in JS registry. ` +
+              `Pre-register via openDatabase({embed: ...}) or db.loadExtension().`,
+          )
+        }
+        registry.recordHook(extName, 'authorizer')
+        const b = getBridge()
+        b.registerHostAuthorizer(extName)
         return undefined
       },
-      registerUpdateHook(_extName) {
+      registerUpdateHook(extName) {
+        if (!registry.has(extName)) {
+          structuredErr(
+            `spi-loader.register-update-hook: extension '${extName}' not in JS registry. ` +
+              `Pre-register via openDatabase({embed: ...}) or db.loadExtension().`,
+          )
+        }
+        registry.recordHook(extName, 'updateHook')
+        const b = getBridge()
+        b.registerHostUpdateHook(extName)
         return undefined
       },
-      registerCommitHook(_extName) {
+      registerCommitHook(extName) {
+        if (!registry.has(extName)) {
+          structuredErr(
+            `spi-loader.register-commit-hook: extension '${extName}' not in JS registry. ` +
+              `Pre-register via openDatabase({embed: ...}) or db.loadExtension().`,
+          )
+        }
+        registry.recordHook(extName, 'commitHook')
+        registry.recordHook(extName, 'rollbackHook')
+        const b = getBridge()
+        b.registerHostCommitHook(extName)
+        b.registerHostRollbackHook(extName)
         return undefined
       },
       registerVtab(_extName, _name, _vtabId, _eponymous, _mutable, _batched) {
@@ -910,6 +1091,10 @@ export function buildSpiLoader(registry) {
         'registerHostScalar',
         'registerHostAggregate',
         'registerHostCollation',
+        'registerHostAuthorizer',
+        'registerHostUpdateHook',
+        'registerHostCommitHook',
+        'registerHostRollbackHook',
         'unregisterExtension',
       ]) {
         if (typeof dispatchBridge?.[k] !== 'function') missing.push(k)

@@ -1,0 +1,22 @@
+[package]
+name = "hookprobe-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Test-bench extension for the dispatch-bridge hook trampolines.
+Exports authorizer + update-hook + commit-hook so the composed
+cli's spi-loader.register-{authorizer,update-hook,commit-hook}
+calls have a real component to route to. Used by the browser
+spec composed-hooks.spec.js to exercise the end-to-end path.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
