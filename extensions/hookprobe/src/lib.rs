@@ -55,6 +55,7 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::update_hook::Guest as UpdateHookGuest;
+    use bindings::exports::sqlite::extension::wal_hook::Guest as WalHookGuest;
     use bindings::sqlite::extension::types::{
         AuthAction, AuthResult, FunctionFlags, SqlValue, UpdateOperation,
     };
@@ -279,6 +280,24 @@ mod wasm_export {
 
         fn on_rollback() {
             push("rollback".to_string());
+        }
+    }
+
+    /// WAL hook id the browser spec installs via spi-loader.register-
+    /// wal-hook. Hookprobe declares no manifest list for wal hooks
+    /// (the substrate doesn't require one  the spec drives
+    /// registration explicitly), so any non-zero id is fine.
+    #[allow(dead_code)]
+    const WAL_HOOK_ID: u64 = 42;
+
+    impl WalHookGuest for Ext {
+        fn on_wal_hook(hook_id: u64, db_name: String, n_frames_in_wal: u32) -> i32 {
+            // Record the event for the spec to assert on. n_frames is
+            // SQLite's `nFrames` argument  the number of frames just
+            // appended to the WAL for `db_name`.
+            push(format!("wal:{}:{}:{}", hook_id, db_name, n_frames_in_wal));
+            // SQLITE_OK  let the calling SQL statement proceed.
+            0
         }
     }
 

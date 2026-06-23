@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser  composed cli + hookprobe WAL hook</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { openDatabaseComposed } from '../src/sqlink-composed.js'
+
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      try {
+        // hookprobe exports the wal-hook interface alongside its
+        // authorizer / update-hook / commit-hook surface. Unlike
+        // the other three (which the cli's `.load` flow auto-
+        // registers off manifest flags), the wal-hook is wired
+        // explicitly via db.registerWalHook(extName, hookId) — the
+        // substrate primitive consumers like wal-archive drive the
+        // same way.
+        const hookMod = await import(
+          '../src/generated/hookprobe/hookprobe_extension.js'
+        )
+
+        const db = await openDatabaseComposed({
+          embed: [{ name: 'hookprobe', module: hookMod }],
+        })
+        log('opened composed db; hookprobe pre-registered')
+
+        const drain = async () => {
+          const v = await db.execScalar('SELECT hookprobe_drain_log();')
+          try {
+            return JSON.parse(v)
+          } catch {
+            return null
+          }
+        }
+
+        // Drain any events the .load itself produced so the
+        // assertions below see a clean baseline.
+        await drain()
+
+        // Hookprobe's wal-hook declares WAL_HOOK_ID = 42 in the
+        // extension; we register it on the cli's shared connection.
+        db.registerWalHook('hookprobe', 42)
+        log('registered wal-hook for hookprobe (hook-id=42)')
+
+        // Enable WAL on the cli's shared connection. The default
+        // for the composed-cli's :memory: db is `memory` journal
+        // mode; without this explicit toggle there is no WAL and
+        // the hook never fires.
+        const journalMode = await db.execScalar(
+          'PRAGMA journal_mode=WAL;',
+        )
+        log(`journal_mode -> ${journalMode}`)
+
+        // Drain anything the PRAGMA may have produced.
+        await drain()
+
+        // Drive WAL-commit traffic. Each statement is an implicit
+        // auto-commit which (with WAL journal_mode active) appends
+        // frames to the WAL and fires the wal-hook with the frame
+        // count.
+        await db.exec('CREATE TABLE t(x);')
+        await db.exec('INSERT INTO t VALUES (1), (2), (3);')
+        const rows = await db.exec('SELECT * FROM t ORDER BY x;')
+        log(`rows -> ${JSON.stringify(rows)}`)
+
+        const walEvents = await drain()
+        log('wal events -> ' + JSON.stringify(walEvents))
+
+        db.close()
+        status.textContent = 'done'
+        window.__walHookResult = {
+          journalMode,
+          walEvents,
+          rows,
+        }
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        log(String(e?.stack ?? e))
+        window.__walHookResult = { error: String(e?.stack ?? e) }
+      } finally {
+        window.__walHookDone = true
+      }
+    </script>
+  </body>
+</html>
