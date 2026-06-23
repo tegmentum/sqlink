@@ -4889,6 +4889,14 @@ dependencies = [
 [[package]]
 name = "sqlink-loader"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "once_cell",
+ "sqlink-host",
+ "sqlite-extension-policy",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "sqlink-native"

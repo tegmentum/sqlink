@@ -5195,6 +5195,18 @@ impl Host {
         &self.engine_run
     }
 
+    /// Look up a previously-loaded extension's manifest entry by
+    /// name. Returns `None` if no extension by that name has been
+    /// loaded yet (or if it was unloaded).
+    ///
+    /// Used by `sqlink-loader` to walk the scalar / aggregate /
+    /// collation specs after `load_extension` returns the name
+    /// the loader's pApi-based trampolines register one sqlite3
+    /// function per spec on the user-process db handle.
+    pub fn get_loaded_extension(&self, ext_name: &str) -> Option<Arc<LoadedExtension>> {
+        self.components.read().get(ext_name).cloned()
+    }
+
     /// Load an extension component from a host path, apply the policy,
     /// verify the manifest, and store the loaded component. Returns
     /// the manifest's name on success.

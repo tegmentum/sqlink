@@ -11,9 +11,21 @@ this one registers trampolines on the host process's existing
 sqlite3* handle and brings wasmtime + the sqlink-host runtime along
 inside the .so.
 
-STATUS: scaffolded. The trampoline + SPI plumbing required for a
-working .so is documented in `sqlink-loader/DESIGN.md`. The blocker
-called out in the phase-4 brief is real and tracked there.
+Implementation: option B from sqlink-loader/DESIGN.md. The .so does
+NOT use libsqlite3-sys's `loadable_extension` feature (which would
+clash with `bundled` everywhere else in the workspace). Instead we
+hand-roll the `sqlite3_api_routines` indirection — the pApi argument
+passed to the init function is captured into a `#[repr(C)]` table,
+and every sqlite3_* call from this crate goes through it. That way
+the .so reaches the host process's SQLite (not its own bundled
+copy) without unifying any libsqlite3-sys feature flag.
+
+SPI back-channel (extensions calling spi.execute) routes through a
+separate bundled-sqlite3 connection that this .so opens internally,
+brought in via sqlink-host's existing `with_shared_spi_conn_open`
+path. That connection is distinct from the user's; consistent state
+across SPI is only available when both sides target the same file
+db. See DESIGN.md for the full rationale.
 """
 license = "MIT"
 
@@ -23,9 +35,19 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
-# No libsqlite3-sys dep yet. The production-ready version of this
-# crate needs `libsqlite3-sys = { features = ["loadable_extension"] }`
-# but that feature is mutually exclusive with the `bundled` feature
-# that sqlite-component-core + sqlink-host depend on. See
-# DESIGN.md "The blocker" for the resolution path. Until then,
-# this scaffold uses raw C ABI types only — no sqlite3 calls.
+# The host carries the wasmtime engine + the dispatch surface. We
+# call its public async dispatch methods (`dispatch_scalar`,
+# `dispatch_aggregate_*`, ...) from our pApi-backed C trampolines.
+sqlink-host = { path = "../host" }
+# Capability / Policy types  the env-var path needs to compose a
+# Policy for each extension we load.
+sqlite-extension-policy = { path = "../sqlite-loader-wit" }
+
+anyhow = "1"
+once_cell = "1"
+# Multi-thread runtime for driving the host's async dispatch APIs
+# from sync C trampoline callbacks. block_on directly on a held
+# runtime, not block_in_place + Handle::current  the caller's
+# thread is owned by the host process's sqlite3, not by tokio.
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+tracing = "0.1"
