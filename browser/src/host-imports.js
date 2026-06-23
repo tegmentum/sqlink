@@ -9,10 +9,17 @@
 //     "missing imports" report at load time, the composition recipe
 //     needs fixing (see browser/src/IMPORTS.md).
 //
-// The shape jco's async-mode `instantiate(getCoreModule, imports)`
-// wants is an object keyed by un-versioned import names
-// (`'wasi:cli/stdin'`, not `'wasi:cli/stdin@0.2.6'`) when
-// `jcoCompat: true`. We pass that through forInterfaces().
+// Two consumption shapes:
+//
+//   - `buildCliHostImports({...})`: legacy pre-resolved imports object
+//     for jco's async-mode `instantiate(getCoreModule, imports)`. Keyed
+//     by un-versioned import names (`'wasi:cli/stdin'`, not
+//     `'wasi:cli/stdin@0.2.6'`) — `jcoCompat: true`.
+//   - `buildCliPolyfill({...})`: just the wired-up `Polyfill` plus the
+//     non-WASI additional imports (`sqlink:wasm/extension-loader` and
+//     the `sqlite:extension/*` stubs). For consumption by
+//     `createRuntimeBindgen` which resolves WASI imports off the
+//     polyfill itself.
 
 import { createPolyfill, createPolicy } from '@tegmentum/wasi-polyfill/wasip2'
 import {
@@ -49,14 +56,13 @@ import {
 import { buildExtensionLoader } from './extension-loader.js'
 
 /**
- * Build the imports object jco's async-mode transpile wants for the
- * composed cli+sqlite-lib component.
+ * Build a wired-up Polyfill (no pre-resolved imports map) plus the
+ * non-WASI extras (`sqlink:wasm/extension-loader` and the
+ * `sqlite:extension/*` stubs) for runtime-bindgen consumption.
  *
- * `stdinContent` pre-loads the cli's stdin with a script (typically
- * SQL + ".quit"); `onStdout` / `onStderr` capture the cli's writes
- * for the host to parse. Without these the polyfill's default stdin
- * is `EmptyInputStream` (immediate EOF) and the cli exits before
- * processing any SQL.
+ * `createRuntimeBindgen({ polyfill, additionalImports })` calls
+ * `polyfill.getImports(...)` itself once it has parsed the component;
+ * it merges `additionalImports` over the WASI map.
  *
  * @param {{
  *   registry: import('./extension-loader.js').ExtensionRegistry,
@@ -66,14 +72,14 @@ import { buildExtensionLoader } from './extension-loader.js'
  *   env?: Record<string, string>,
  *   args?: string[],
  * }} opts
- * @returns {Promise<{ imports: Record<string, unknown>, polyfill: import('@tegmentum/wasi-polyfill/wasip2').Polyfill }>}
+ * @returns {{
+ *   polyfill: import('@tegmentum/wasi-polyfill/wasip2').Polyfill,
+ *   additionalImports: Record<string, Record<string, unknown>>,
+ * }}
  */
-export async function buildCliHostImports(opts) {
+export function buildCliPolyfill(opts) {
   // ConfigurablePolicy (via createPolicy) is what makes per-interface
   // options actually flow into the plugin Implementation factories.
-  // AllowAllPolicy.configure() returns `{}` and silently drops every
-  // option, which is why scripted stdin / stdout-capture never worked
-  // until this fix.
   const overrides = []
   if (opts.stdinContent !== undefined) {
     overrides.push({
@@ -117,6 +123,42 @@ export async function buildCliHostImports(opts) {
   polyfill.registerPlugin(terminalStdoutPlugin)
   polyfill.registerPlugin(terminalStderrPlugin)
 
+  const additionalImports = {
+    'sqlink:wasm/extension-loader': buildExtensionLoader(opts.registry),
+  }
+  for (const k of [
+    'sqlite:extension/http',
+    'sqlite:extension/policy',
+    'sqlite:extension/types',
+    'sqlite:extension/metadata',
+    'sqlite:extension/spi-loader',
+  ]) {
+    additionalImports[k] = stubInterface(k)
+  }
+
+  return { polyfill, additionalImports }
+}
+
+/**
+ * Legacy: build the fully-resolved imports object jco's async-mode
+ * transpile wanted for the composed cli+sqlite-lib component. Kept
+ * for the old pre-transpile path; the runtime-bindgen path uses
+ * `buildCliPolyfill` instead and lets the bindgen resolve WASI
+ * imports off the polyfill once it has parsed the component.
+ *
+ * @param {{
+ *   registry: import('./extension-loader.js').ExtensionRegistry,
+ *   stdinContent?: string | Uint8Array,
+ *   onStdout?: (data: Uint8Array) => void,
+ *   onStderr?: (data: Uint8Array) => void,
+ *   env?: Record<string, string>,
+ *   args?: string[],
+ * }} opts
+ * @returns {Promise<{ imports: Record<string, unknown>, polyfill: import('@tegmentum/wasi-polyfill/wasip2').Polyfill }>}
+ */
+export async function buildCliHostImports(opts) {
+  const { polyfill, additionalImports } = buildCliPolyfill(opts)
+
   const { imports } = await polyfill.forInterfaces(
     [
       'wasi:cli/environment@0.2.6',
@@ -141,47 +183,37 @@ export async function buildCliHostImports(opts) {
     { jcoCompat: true, throwOnMissing: false, throwOnDenied: false },
   )
 
-  // sqlink:wasm/extension-loader — host-implemented dynamic loader.
-  imports['sqlink:wasm/extension-loader'] = buildExtensionLoader(opts.registry)
-
-  // STAGE 8 NOTE: the composed component currently lists
-  // sqlite:extension/* (http, policy, types, metadata, spi-loader)
-  // as top-level imports — see browser/src/IMPORTS.md. These should
-  // be wired internally by the wac composition recipe; if they're
-  // not, the cli traps when it calls into spi-loader. Provide
-  // structured-error stubs so the failure mode is "loader-error"
-  // not "JS Error rethrown as trap".
-  function stubInterface(name) {
-    return new Proxy(
-      {},
-      {
-        get(_t, key) {
-          if (typeof key === 'symbol') return undefined
-          if (/^[A-Z]/.test(String(key))) {
-            return class StubResource {}
-          }
-          return (..._args) => {
-            const err = new Object()
-            err.payload = {
-              code: 1,
-              extendedCode: 1,
-              message: `${name}.${String(key)} not implemented in browser scenario 3 v1`,
-            }
-            throw err
-          }
-        },
-      },
-    )
-  }
-  for (const k of [
-    'sqlite:extension/http',
-    'sqlite:extension/policy',
-    'sqlite:extension/types',
-    'sqlite:extension/metadata',
-    'sqlite:extension/spi-loader',
-  ]) {
-    if (!imports[k]) imports[k] = stubInterface(k)
+  for (const [k, v] of Object.entries(additionalImports)) {
+    if (!imports[k]) imports[k] = v
   }
 
   return { imports, polyfill }
+}
+
+/**
+ * Stub object for an interface we don't actually wire up — every
+ * method throws a structured loader-error so the failure mode is
+ * "interface not implemented" rather than an opaque trap.
+ */
+function stubInterface(name) {
+  return new Proxy(
+    {},
+    {
+      get(_t, key) {
+        if (typeof key === 'symbol') return undefined
+        if (/^[A-Z]/.test(String(key))) {
+          return class StubResource {}
+        }
+        return (..._args) => {
+          const err = new Object()
+          err.payload = {
+            code: 1,
+            extendedCode: 1,
+            message: `${name}.${String(key)} not implemented in browser scenario 3 v1`,
+          }
+          throw err
+        }
+      },
+    },
+  )
 }

@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "transpile": "node scripts/transpile-extensions.mjs",
-    "transpile-cli": "node scripts/transpile-cli.mjs",
     "fixtures": "node scripts/build-fixtures.mjs",
-    "pretest": "npm run fixtures",
+    "link-composed-wasm": "node scripts/link-composed-wasm.mjs",
+    "pretest": "npm run fixtures && npm run link-composed-wasm",
     "build": "vite build",
     "dev": "vite",
     "test": "playwright test",
