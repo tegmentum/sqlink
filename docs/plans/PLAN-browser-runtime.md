@@ -1,13 +1,56 @@
 # Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill
 
-## Status (2026-06-22  Path 3)
+## Status (2026-06-22  Path 3 — cold-tier substrate landed, browser bundle pending)
 
-**MVP scaffold landed in `browser/`** (commit f23b3c8) and is being
-superseded by the Path 3 work tracked in this branch. The scaffold
-uses sql.js as the in-browser SQLite and jco-transpiled extension
-components for the scalar surface  39/42 fixtures pass in headless
-Chrome. It's deliberately the simpler shape: no TVM, no
-multi-memory, no OPFS.
+**Cold-tier substrate swap landed** on branch `path3-cold-tier`.
+`sqlite-pcache-tvm` and `sqlite-vfs-tvm` no longer import
+`tvm:memory` via wit-bindgen — they consume `tvm-guest-mm-rt`
+(multi-memory pool helpers) instead. `sqlite-lib`'s build pipeline
+now goes:
+
+  cargo build  → core wasm with `tvm_mm.*` + WASI + SPI imports
+  tvm-mm-link  → pool memories baked in, `tvm_mm.*` internal,
+                  WASI + SPI forwarded
+  postlink-fixup → re-attach wit-bindgen `component-type:*`
+                  custom sections + `(export "memory" (memory 0))`
+                  alias dropped by the linker
+  wasm-tools component new → final `sqlite_lib.component.wasm`
+
+The resulting component has **zero `tvm_mm.*` imports** — the
+substrate is fully internal to the composed runnable. Pool layout:
+pool 0 = workload heap, pool 1 = pcache cold tier, pool 2 = VFS
+cold tier, pool 3 = spare.
+
+Scenarios 1 (sqlink-native loader) + 2 (sqlink + cli component)
+**stay at 208/208**. The cold-tier changes are invisible to
+those scenarios because the cli component never embeds sqlite-lib
+— it talks to the host's native SQLite through the SPI.
+
+**MVP scaffold landed in `browser/`** (commit f23b3c8) and is
+being superseded by Path 3. The scaffold uses sql.js as the
+in-browser SQLite and jco-transpiled extension components for
+the scalar surface — 39/42 fixtures pass in headless Chrome.
+
+**Composition `cli + sqlite-lib` exports `wasi:cli/run`** —
+`composition-cli-sqlite-lib.wac` + `scripts/build-composed-
+runtime.sh` produce a 4.2 MB component that structurally
+validates and inspects cleanly via `wasm-tools component wit`.
+However instantiation against wasmtime currently traps before
+user code runs:
+
+```
+Error: instantiate: wasm trap: undefined element: out of
+bounds table access
+```
+
+The trap is in the post-link merged module's init path — most
+likely an element-segment renumbering edge case in `tvm-mm-link`
+that misses a `call_indirect` target in the wit-bindgen
+canonical-ABI shim. Reproducing minimally + extending the linker
+(or the postlink-fixup pass) to handle it is the next milestone.
+
+The composition pipeline + the cold-tier swap together unblock
+Stage 8 (the browser bundle) once the runtime trap is sorted.
 
 **Important update** following Stage 5f of `PLAN-cli-stages-5-6.md`:
 the cli no longer contains SQLite. It is a SPI client against
