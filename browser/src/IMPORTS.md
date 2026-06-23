@@ -138,16 +138,14 @@ the polyfill's stdin plugin; collect stdout; observe only the
 first prompt and one `tryRead` call. Under native wasmtime the
 same input produces `sqlite> 2\nsqlite> \n` correctly.
 
-That gap is the integration work for Stage H. It is NOT a
-multi-memory issue — both jco transpile and instantiate work.
-Either:
+RESOLVED (Phase C persistent-session landing): the polyfill's
+`WasiInputStreamWrapper.blockingRead` returns a synchronous empty
+Uint8Array when the underlying queue is empty, which the wasip1
+adapter reads as EOF — the cli exits on first idle. host-imports.js
+now monkey-patches that wrapper so blockingRead awaits the impl's
+async `read()`. Under JSPI the wasm caller suspends until the host
+pushes the next exec()'s SQL into the QueueInputStream.
 
-  - the BufReader-backed stdin path interacts with the polyfill
-    blockingRead in a way that signals EOF after the first chunk,
-    OR
-  - `spi::execute_multi` traps silently (somehow translating to
-    an empty `out` string in `eval_sql_inner`) without surfacing
-    a JS exception.
-
-Until that's resolved, `openDatabase()` keeps `DEFAULT_USE_COMPOSED_CLI
-= false` and the 43-fixture baseline rides on sql.js.
+sql.js has been dropped and `openDatabase()` is now hard-wired to
+the composed runtime. See sqlink-composed.js's ComposedDatabase
+for the session lifecycle and sentinel-framed exec().

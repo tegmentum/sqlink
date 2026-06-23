@@ -135,33 +135,22 @@ host does:
    code resolves + loads them on demand. Tracked in
    [docs/plans/PLAN-browser-runtime.md](docs/plans/PLAN-browser-runtime.md).
 
-   Foundation scaffold lives in `browser/`: jco-transpiled
-   extension components, a `sqlink.js` runtime that drives
-   `sql.js` as the in-browser SQLite and registers extensions'
-   scalar functions through its API, a wasi-polyfill-backed
-   import map (`browser/src/wasi-imports.js`), and a Playwright
-   smoke suite that exercises a curated subset of the same
-   `fixtures.toml` used by scenarios 1+2. Build with
-   `cd browser && npm install && npm run transpile && npm test`.
-
-   **Phase C / Stage H: composed-cli runtime via JSPI.** The
-   long-term browser target replaces `sql.js` with the *composed*
-   `cli + sqlite-lib` component (one wasm, real SQLite) loaded at
-   runtime via `@tegmentum/wasi-polyfill`'s `createRuntimeBindgen`
-   and transpiled by jco's browser build. Blocking WASI imports
-   (`pollable.block`, `input-stream.blocking-read`,
-   `output-stream.blocking-write-and-flush`, ...) are wrapped under
-   JSPI (`WebAssembly.Suspending`/`promising`; Chrome 137+, Node
-   22+); the reachable `wasi:cli/run.run` export becomes a true
-   `async` function. See `browser/src/sqlink-composed.js` and the
-   smoke at `browser/tests/composed.spec.js` for the working
-   end-to-end. Opt in with
-   `openDatabase({ useComposedCli: true })`; the default still
-   uses `sql.js` because the composed cli's
-   `sqlite:extension/spi-loader` is currently stubbed in the
-   browser host  the next step is wiring host-resident scalar
-   dispatch back into the cli's `register-scalar` so extension-
-   using fixtures can flip too.
+   The browser runtime lives in `browser/`: the composed
+   `cli + sqlite-lib + single-memory` component (one wasm, real
+   SQLite) is fetched at runtime, transpiled by jco's browser build
+   inside `@tegmentum/wasi-polyfill`'s `createRuntimeBindgen`,
+   and driven via JSPI (`WebAssembly.Suspending`/`promising`;
+   Chrome 137+ / Node 22+). The cli's REPL stays alive across
+   `db.exec()` calls  a long-lived `QueueInputStream` feeds stdin
+   and a sentinel `SELECT` frames each call's stdout window. DDL,
+   INSERTs, and host-registered scalars all persist across calls.
+   Build with `cd browser && npm install && npm run transpile &&
+   npm test`. **Phase C is fully landed**: composed runtime +
+   persistent session + dispatch-bridge wiring; sql.js is gone.
+   See `browser/src/sqlink-composed.js`, the cross-spec test set
+   (composed / composed-uuid / composed-persistent / demo /
+   embed / smoke), and
+   [docs/plans/PLAN-browser-runtime.md](docs/plans/PLAN-browser-runtime.md).
 
    Sub-option:
      - **Embedded extensions.** Same as scenario 2  ship a

@@ -51,7 +51,86 @@ import {
   terminalStdinPlugin,
   terminalStdoutPlugin,
   terminalStderrPlugin,
+  QueueInputStream,
+  createCustomStdio,
+  resetGlobalStdioState,
+  WasiInputStreamWrapper,
 } from '@tegmentum/wasi-polyfill/wasip2/plugins/cli'
+// Monkey-patch the polyfill's WasiInputStreamWrapper.blockingRead so
+// it actually WAITS for data via the underlying impl's async `read()`
+// instead of returning empty (which the wasip1 adapter interprets as
+// EOF, causing the cli to exit on first idle).
+//
+// The polyfill's stock blockingRead only calls sync `tryRead` +
+// `waitForData`; if the impl is a vanilla QueueInputStream (no
+// waitForData, since SharedArrayBuffer is not available without COOP/
+// COEP headers) and the queue is empty, blockingRead returns
+// `new Uint8Array(0)` → EOF.
+//
+// Under JSPI the wasi:io/streams plugin's `inputStreamBlockingRead`
+// already awaits the wrapper's return value. So we make the wrapper
+// return a Promise that resolves when the impl's `read()` does. Under
+// JSPI the wasm caller suspends until data lands.
+//
+// Guard: only patch once per page (idempotent).
+if (!WasiInputStreamWrapper.__sqlinkBlockingPatched) {
+  const originalBlockingRead = WasiInputStreamWrapper.prototype.blockingRead
+  WasiInputStreamWrapper.prototype.blockingRead = function patchedBlockingRead(len) {
+    if (this.closed) return { tag: 'closed' }
+    // Fast path: stock behaviour for tryRead-bearing streams that
+    // have data ready (e.g. the legacy stdinContent path).
+    if (this.impl.tryRead) {
+      const data = this.impl.tryRead(Number(len))
+      if (data !== null) {
+        if (data.length === 0) return { tag: 'closed' }
+        return data
+      }
+    }
+    if (this.impl.waitForData) {
+      const data = this.impl.waitForData(Number(len))
+      if (data !== null) {
+        if (data.length === 0) return { tag: 'closed' }
+        return data
+      }
+    }
+    // Slow path: await the impl's async `read()`. Under JSPI the
+    // wasi:io/streams plugin awaits this Promise — wasm suspends
+    // until the impl pushes data.
+    if (typeof this.impl.read === 'function') {
+      return Promise.resolve(this.impl.read(Number(len))).then((data) => {
+        if (!(data instanceof Uint8Array)) return data
+        if (data.length === 0) return { tag: 'closed' }
+        return data
+      })
+    }
+    // No async path — preserve the legacy EOF behaviour.
+    return originalBlockingRead.call(this, len)
+  }
+  WasiInputStreamWrapper.__sqlinkBlockingPatched = true
+}
+
+// Re-export for callers (sqlink-composed.js) so the persistent
+// session can construct its own queue without taking a direct
+// dep on @tegmentum/wasi-polyfill.
+export { QueueInputStream, resetGlobalStdioState }
+
+/**
+ * A no-op OutputStreamLike: implements the polyfill's
+ * `OutputStreamLike` shape but discards all writes. We pair it
+ * with the stdoutPlugin's `onStdout` / stderrPlugin's `onStderr`
+ * callback for actual capture — the callback fires alongside the
+ * provider's `write()` so duplicating into a sink is harmless.
+ */
+class DiscardOutputStream {
+  constructor() {
+    this.isTTY = false
+  }
+  async write(_chunk) {
+    // discard
+  }
+  async flush() {}
+  async close() {}
+}
 
 import { buildExtensionLoader, buildSpiLoader, buildDispatch } from './extension-loader.js'
 
@@ -64,9 +143,24 @@ import { buildExtensionLoader, buildSpiLoader, buildDispatch } from './extension
  * `polyfill.getImports(...)` itself once it has parsed the component;
  * it merges `additionalImports` over the WASI map.
  *
+ * Two stdin modes:
+ *
+ *   - `stdinContent` (legacy / one-shot): the polyfill makes a
+ *     single-shot QueueInputStream pre-loaded with the content,
+ *     closed after — the cli reads until EOF and exits. Used by
+ *     the per-exec re-instantiation path (no longer the default).
+ *   - `persistentStdin: true` (persistent session): we hand the
+ *     cli stdin plugin a long-lived `QueueInputStream` via the
+ *     polyfill's `stdioProvider` extension point. Combined with
+ *     the `WasiInputStreamWrapper.blockingRead` monkey-patch above,
+ *     `blocking-read` actually awaits the queue's async `read()` —
+ *     under JSPI the wasm suspends until the caller pushes more
+ *     data. Returned in the result as `persistentQueue`.
+ *
  * @param {{
  *   registry: import('./extension-loader.js').ExtensionRegistry,
  *   stdinContent?: string | Uint8Array,
+ *   persistentStdin?: boolean,
  *   onStdout?: (data: Uint8Array) => void,
  *   onStderr?: (data: Uint8Array) => void,
  *   env?: Record<string, string>,
@@ -76,13 +170,33 @@ import { buildExtensionLoader, buildSpiLoader, buildDispatch } from './extension
  *   polyfill: import('@tegmentum/wasi-polyfill/wasip2').Polyfill,
  *   additionalImports: Record<string, Record<string, unknown>>,
  *   spiLoader: ReturnType<typeof buildSpiLoader>,
+ *   persistentQueue?: import('@tegmentum/wasi-polyfill/wasip2/plugins/cli').QueueInputStream,
  * }}
  */
 export function buildCliPolyfill(opts) {
   // ConfigurablePolicy (via createPolicy) is what makes per-interface
   // options actually flow into the plugin Implementation factories.
   const overrides = []
-  if (opts.stdinContent !== undefined) {
+  let persistentQueue = null
+  if (opts.persistentStdin) {
+    // Persistent path: hand the cli stdin plugin a long-lived
+    // QueueInputStream via the polyfill's `stdioProvider` config
+    // option (createCustomStdio). The blockingRead monkey-patch
+    // above makes the wrapper's blockingRead actually await the
+    // queue's async `read()` — under JSPI the wasm suspends until
+    // we push the next SQL line.
+    persistentQueue = new QueueInputStream(false)
+    const stdioProvider = createCustomStdio(
+      persistentQueue,
+      new DiscardOutputStream(),
+      new DiscardOutputStream(),
+      { isTTY: false },
+    )
+    overrides.push({
+      interface: 'wasi:cli/stdin@0.2.6',
+      options: { stdioProvider },
+    })
+  } else if (opts.stdinContent !== undefined) {
     overrides.push({
       interface: 'wasi:cli/stdin@0.2.6',
       options: { stdinContent: opts.stdinContent },
@@ -152,7 +266,7 @@ export function buildCliPolyfill(opts) {
     additionalImports[k] = stubInterface(k)
   }
 
-  return { polyfill, additionalImports, spiLoader }
+  return { polyfill, additionalImports, spiLoader, persistentQueue }
 }
 
 /**

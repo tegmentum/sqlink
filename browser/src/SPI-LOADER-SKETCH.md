@@ -1,5 +1,18 @@
 # `sqlite:extension/spi-loader` browser implementation sketch
 
+**STATUS: RESOLVED (Phase C, persistent-session landing).** The
+spi-loader + dispatch-bridge wiring landed in #427 Task 2+3 and
+the persistent-session integration carried it the rest of the way
+end-to-end. The JS-side impl now lives in
+`browser/src/extension-loader.js::buildSpiLoader`; it records
+`(ext_name, func_id)` in a registry and re-enters the composed
+binary via `dispatch-bridge.register-host-scalar` to install the
+sqlite3 trampoline. See PLAN-browser-runtime.md for the closeout.
+
+The sketch below is preserved for historical context.
+
+---
+
 Planning doc for the JS-side `spi-loader` impl that replaces the
 stub in `host-imports.js`. **STATUS (updated): the architectural
 blocker described below was Option A. It LANDED on the

@@ -23,7 +23,7 @@ async function runOne(db, fixture) {
   await db.loadExtension(fixture.extension)
   let value
   try {
-    value = db.execScalar(fixture.sql)
+    value = await db.execScalar(fixture.sql)
   } catch (e) {
     return { ok: false, error: `exec: ${e.message ?? e}` }
   }
@@ -44,25 +44,28 @@ async function runOne(db, fixture) {
 
 async function main() {
   const results = []
-  // Each extension gets its own fresh db — registers the scalar
-  // names cleanly without cross-contamination. (sql.js's
-  // create_function would silently overwrite duplicates; we want
-  // the per-extension test isolation anyway.)
-  for (const f of FIXTURES) {
-    let db
-    try {
-      db = await openDatabase()
-      const r = await runOne(db, f)
-      results.push({ fixture: f, ...r })
-      appendOut(`${r.ok ? 'ok  ' : 'FAIL'} ${f.extension.padEnd(20)} ${f.sql}`)
-      if (!r.ok) appendOut(`        ${r.error}`)
-    } catch (e) {
-      results.push({ fixture: f, ok: false, error: `load: ${e.message ?? e}` })
-      appendOut(`FAIL ${f.extension.padEnd(20)} ${f.sql}`)
-      appendOut(`        load: ${e.message ?? e}`)
-    } finally {
-      try { db?.close() } catch {}
+  // ONE persistent composed-cli session for the whole matrix. Each
+  // extension declares unique scalar names, so loading them into a
+  // shared SQLite session is the cli's normal behaviour. Sharing
+  // also sidesteps the wasi-polyfill's SharedStdioState singleton
+  // (which a per-fixture open/close would trip).
+  let db
+  try {
+    db = await openDatabase()
+    for (const f of FIXTURES) {
+      try {
+        const r = await runOne(db, f)
+        results.push({ fixture: f, ...r })
+        appendOut(`${r.ok ? 'ok  ' : 'FAIL'} ${f.extension.padEnd(20)} ${f.sql}`)
+        if (!r.ok) appendOut(`        ${r.error}`)
+      } catch (e) {
+        results.push({ fixture: f, ok: false, error: `load: ${e.message ?? e}` })
+        appendOut(`FAIL ${f.extension.padEnd(20)} ${f.sql}`)
+        appendOut(`        load: ${e.message ?? e}`)
+      }
     }
+  } finally {
+    try { await db?.close() } catch {}
   }
 
   const pass = results.filter((r) => r.ok).length

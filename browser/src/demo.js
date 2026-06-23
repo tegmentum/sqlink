@@ -19,13 +19,13 @@ async function main() {
   const db = await openDatabase({ embed: ['uuid', 'crypto', 'case'] })
   log(`loaded: ${db.loadedExtensions().join(', ')}`)
 
-  const v = db.execScalar('SELECT uuid()')
+  const v = await db.execScalar('SELECT uuid()')
   log(`uuid() = ${v}`)
 
-  const h = db.execScalar("SELECT length(md5('hello'))")
+  const h = await db.execScalar("SELECT length(md5('hello'))")
   log(`length(md5('hello')) = ${h}`)
 
-  const s = db.execScalar("SELECT to_snake_case('HelloWorld')")
+  const s = await db.execScalar("SELECT to_snake_case('HelloWorld')")
   log(`to_snake_case('HelloWorld') = ${s}`)
 
   // Show the manifest of the uuid extension.
@@ -38,7 +38,7 @@ async function main() {
     scalarFunctions: (m.scalarFunctions ?? []).map((f) => f.name),
   })
 
-  db.close()
+  await db.close()
 
   // AOT-embed sub-demo. This is the same code path the embed test
   // exercises — running it from the index page provides a quick
