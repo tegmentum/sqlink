@@ -23,7 +23,6 @@ async function runOne(db, fixture) {
   await db.loadExtension(fixture.extension)
   let value
   try {
-    // Await: composed-cli returns a Promise; sql.js returns a value.
     value = await db.execScalar(fixture.sql)
   } catch (e) {
     return { ok: false, error: `exec: ${e.message ?? e}` }
@@ -45,13 +44,11 @@ async function runOne(db, fixture) {
 
 async function main() {
   const results = []
-  // Composed-cli path: ONE persistent session for the whole matrix.
-  // sql.js's per-extension isolation is no longer needed because
-  // each extension declares unique scalar names; loading them into
-  // the same SQLite session is the cli's normal behaviour. Sharing
-  // one db also sidesteps the wasi-polyfill's known
-  // SharedStdioState singleton (which the per-fixture path tripped
-  // over after the first close()).
+  // ONE persistent composed-cli session for the whole matrix. Each
+  // extension declares unique scalar names, so loading them into a
+  // shared SQLite session is the cli's normal behaviour. Sharing
+  // also sidesteps the wasi-polyfill's SharedStdioState singleton
+  // (which a per-fixture open/close would trip).
   let db
   try {
     db = await openDatabase()

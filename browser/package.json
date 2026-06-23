@@ -15,8 +15,7 @@
     "test:install": "playwright install chromium"
   },
   "dependencies": {
-    "@tegmentum/wasi-polyfill": "file:../../wasi-polyfill",
-    "sql.js": "^1.10.3"
+    "@tegmentum/wasi-polyfill": "file:../../wasi-polyfill"
   },
   "devDependencies": {
     "@bytecodealliance/jco": "^1.10.0",

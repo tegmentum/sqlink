@@ -19,8 +19,6 @@ async function main() {
   const db = await openDatabase({ embed: ['uuid', 'crypto', 'case'] })
   log(`loaded: ${db.loadedExtensions().join(', ')}`)
 
-  // `await` makes this work whether openDatabase returned the
-  // sql.js synchronous Database or the composed-cli async one.
   const v = await db.execScalar('SELECT uuid()')
   log(`uuid() = ${v}`)
 
@@ -40,8 +38,6 @@ async function main() {
     scalarFunctions: (m.scalarFunctions ?? []).map((f) => f.name),
   })
 
-  // close() may be sync (sql.js) or async (composed) — await is
-  // a no-op on a plain return.
   await db.close()
 
   // AOT-embed sub-demo. This is the same code path the embed test
