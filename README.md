@@ -59,26 +59,44 @@ host does:
        `extension_smoke` test still runs the wasm cli path
        unchanged).
 
-     - **`sqlink-loader` SQLite loadable extension** (scaffolded,
-       not yet wired). Same dispatch surface as `sqlink-native`,
-       but packaged as a cdylib that vanilla `sqlite3` can side-
-       load:
+     - **`sqlink-loader` SQLite loadable extension**. Same
+       dispatch surface as `sqlink-native`, but packaged as a
+       cdylib that vanilla `sqlite3` can side-load. Working for
+       scalars and aggregates as of option B's first cut; see
+       [`sqlink-loader/DESIGN.md`](sqlink-loader/DESIGN.md) for
+       the full surface inventory.
 
        ```bash
        cargo build --release -p sqlink-loader
+       # Resolve extension names against the workspace target.
+       export SQLINK_LOADER_REPO_ROOT=$PWD
+       # Eager-load via env, no per-extension SQL calls needed.
+       export SQLINK_LOADER_EXTS=uuid
        sqlite3 :memory: \
-           '.load ./target/release/libsqlink_loader' \
-           'SELECT uuid()'
+           "SELECT load_extension('./target/release/libsqlink_loader');" \
+           "SELECT uuid();"
+       # Or load at runtime once the .so is in:
+       sqlite3 :memory: \
+           "SELECT load_extension('./target/release/libsqlink_loader');" \
+           "SELECT sqlink_load_ext('uuid', './extensions/uuid/target/wasm32-wasip2/release/uuid_extension.component.wasm');" \
+           "SELECT uuid();"
        ```
 
-       The crate (`sqlink-loader/`) builds cleanly and exports the
-       canonical `sqlite3_sqlinkloader_init` entry point. A full
-       working implementation is blocked behind a workspace-wide
-       refactor of `libsqlite3-sys` consumption — the bundled +
-       loadable-extension features are mutually exclusive at
-       Cargo feature-unification time. See
-       [`sqlink-loader/DESIGN.md`](sqlink-loader/DESIGN.md) for
-       the full analysis and the recommended path forward.
+       The `libsqlite3-sys` feature conflict between `bundled`
+       and `loadable_extension` is sidestepped by hand-rolling the
+       `sqlite3_api_routines` indirection in `src/api.rs`  the .so
+       reaches the host process's sqlite3 via pApi without
+       unifying any feature flag across the workspace.
+
+       SPI back-channel: extensions calling `spi.execute(...)`
+       route through a secondary in-.so SQLite connection. Set
+       `SQLINK_LOADER_DB_PATH=<file.db>` to make it point at the
+       same file the user opened (WAL mode recommended). With
+       `:memory:` the two SQLites are necessarily distinct;
+       SPI-using extensions can still load but will operate on an
+       empty schema. Vtab modules / collations / hooks are tracked
+       as follow-up work  the v1 cut covers scalars + aggregates,
+       which is the majority of the catalog.
 
 2. **Standalone SQLite-in-wasm + extensions.** This repo's main
    path: the entire SQLite C library is compiled to wasm32-wasip2

@@ -30,6 +30,15 @@ path = "src/test.rs"
 name = "extension_smoke_native"
 path = "src/test_native.rs"
 
+[[test]]
+# Scenario 1 sub-option (loader .so) variant. Drives every probe
+# through a vanilla `sqlite3` shell + the sqlink-loader .so/.dylib.
+# Auto-SKIPs every fixture when either the .so or a usable
+# sqlite3 (one with load_extension enabled) is missing  CI runs
+# stay cheap in cold configurations.
+name = "extension_smoke_loader"
+path = "src/test_loader.rs"
+
 [[bin]]
 name = "extension-smoke-report"
 path = "src/report.rs"
