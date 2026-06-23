@@ -55,6 +55,10 @@ const PICK = [
   //            in-scope for browser scenario 3 today. See host/SPI.md.
   'detect',
   'ean',
+  // hookprobe — test-bench extension exercising the dispatch-bridge
+  //             hook trampolines (authorizer + update/commit/rollback).
+  //             Loaded by composed-hooks.spec.js.
+  'hookprobe',
   // 'eval' — needs SPI to run user-supplied SQL.
   'extn',
   'fileio',

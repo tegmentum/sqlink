@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser  composed cli + hookprobe extension</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { openDatabaseComposed } from '../src/sqlink-composed.js'
+
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      try {
+        // hookprobe exports an authorizer + update-hook + commit-hook
+        // and three scalar helpers (hookprobe_drain_log /
+        // hookprobe_deny_table / hookprobe_veto_commit). The cli's
+        // .load triggered by openDatabaseComposed walks its manifest
+        // and calls the spi-loader.register-{authorizer,update-hook,
+        // commit-hook} surface, which routes to dispatch-bridge.
+        //
+        // NOTE on transactions: the cli's REPL completes statements
+        // via a Rust-side approximation of sqlite3_complete that
+        // treats every `BEGIN` keyword as a trigger-body opener
+        // (cli/src/lib.rs::is_statement_complete). Bare BEGIN /
+        // COMMIT statements in the REPL would never close, so this
+        // test relies on **implicit auto-commit** instead  every
+        // single-statement exec implicitly commits and fires the
+        // commit-hook. The veto path uses an INSERT that would
+        // succeed on its own, but a queued veto flag makes the
+        // commit-hook return false; SQLite converts the implicit
+        // commit to a rollback and surfaces a constraint error.
+        const hookMod = await import(
+          '../src/generated/hookprobe/hookprobe_extension.js'
+        )
+
+        const db = await openDatabaseComposed({
+          embed: [{ name: 'hookprobe', module: hookMod }],
+        })
+        log('opened composed db; hookprobe pre-registered')
+
+        const drain = async () => {
+          const v = await db.execScalar('SELECT hookprobe_drain_log();')
+          try {
+            return JSON.parse(v)
+          } catch {
+            return null
+          }
+        }
+
+        // Drain any events the .load itself produced so the assertions
+        // below see a clean baseline.
+        await drain()
+
+        // --- Update-hook + (implicit) commit-hook checks ---
+        await db.exec(
+          'CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT);',
+        )
+        await drain()
+        await db.exec("INSERT INTO t(id, name) VALUES (1, 'one');")
+        await db.exec("INSERT INTO t(id, name) VALUES (2, 'two');")
+        await db.exec("UPDATE t SET name = 'TWO' WHERE id = 2;")
+        await db.exec('DELETE FROM t WHERE id = 1;')
+        const txEvents = await drain()
+        log('tx events -> ' + JSON.stringify(txEvents))
+
+        // --- Commit-hook veto path ---
+        // Tell hookprobe to abort the NEXT commit. The INSERT below
+        // would normally succeed at the implicit commit point;
+        // instead the commit-hook returns false, sqlite aborts +
+        // rolls back, and the exec() rejects.
+        await drain()
+        await db.exec('SELECT hookprobe_veto_commit(1);')
+        let vetoErr = null
+        try {
+          await db.exec("INSERT INTO t(id, name) VALUES (99, 'ninety-nine');")
+        } catch (e) {
+          vetoErr = String(e?.message ?? e)
+        }
+        const vetoEvents = await drain()
+        log('veto events -> ' + JSON.stringify(vetoEvents))
+
+        // Row 99 must not be present after the veto.
+        const rowsAfter = await db.exec('SELECT id FROM t ORDER BY id;')
+        log('rows after veto -> ' + JSON.stringify(rowsAfter))
+
+        // --- Authorizer check (deny path) ---
+        // Ask hookprobe to deny reads from the `secrets` table, then
+        // try to SELECT from it. SQLite raises "not authorized" during
+        // statement compilation; the surrounding exec should reject.
+        await db.exec('CREATE TABLE secrets(k TEXT, v TEXT);')
+        await db.exec("INSERT INTO secrets VALUES ('apikey', 'shhhh');")
+        await drain()
+        await db.exec("SELECT hookprobe_deny_table('secrets');")
+        let authErr = null
+        try {
+          await db.exec('SELECT k FROM secrets;')
+        } catch (e) {
+          authErr = String(e?.message ?? e)
+        }
+        const denyEvents = await drain()
+        log('deny events -> ' + JSON.stringify(denyEvents))
+
+        // Clear the denylist and the same SELECT should succeed.
+        await db.exec('SELECT hookprobe_deny_table(NULL);')
+        const allowed = await db.exec('SELECT k FROM secrets;')
+        log('allowed after clear -> ' + JSON.stringify(allowed))
+
+        db.close()
+        status.textContent = 'done'
+        window.__hooksResult = {
+          txEvents,
+          vetoEvents,
+          vetoErr,
+          rowsAfter,
+          denyEvents,
+          authErr,
+          allowed,
+        }
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        log(String(e?.stack ?? e))
+        window.__hooksResult = { error: String(e?.stack ?? e) }
+      } finally {
+        window.__hooksDone = true
+      }
+    </script>
+  </body>
+</html>
