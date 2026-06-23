@@ -49,6 +49,6 @@ echo
 echo "Composition world:"
 wasm-tools component wit "$OUT" | grep -E '^\s*(import|export)' | head -30
 echo
-echo "Note: instantiation against wasmtime currently traps with"
-echo "  'undefined element: out of bounds table access' — see"
-echo "  docs/plans/PLAN-browser-runtime.md for the known follow-up."
+echo "Note: instantiates under sqlink (which provides the"
+echo "  sqlink:wasm/extension-loader@0.1.0 imports). Direct"
+echo "  wasmtime run will error on those imports; that's expected."
