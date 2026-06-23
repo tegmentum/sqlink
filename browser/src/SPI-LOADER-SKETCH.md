@@ -1,13 +1,16 @@
 # `sqlite:extension/spi-loader` browser implementation sketch
 
-**STATUS: RESOLVED (Phase C, persistent-session landing).** The
+**STATUS: RESOLVED (Phase C, aggregates + collations landing).** The
 spi-loader + dispatch-bridge wiring landed in #427 Task 2+3 and
 the persistent-session integration carried it the rest of the way
-end-to-end. The JS-side impl now lives in
-`browser/src/extension-loader.js::buildSpiLoader`; it records
-`(ext_name, func_id)` in a registry and re-enters the composed
-binary via `dispatch-bridge.register-host-scalar` to install the
-sqlite3 trampoline. See PLAN-browser-runtime.md for the closeout.
+end-to-end for scalars. Aggregates + collations followed in #432:
+the dispatch-bridge gained `register-host-aggregate` +
+`register-host-collation`, the JS impl in
+`browser/src/extension-loader.js::buildSpiLoader` and
+`buildDispatch` was extended to wire both ends, and
+`composed-aggregate.spec.js` + `composed-collation.spec.js`
+exercise the end-to-end path. See PLAN-browser-runtime.md for the
+closeout.
 
 The sketch below is preserved for historical context.
 
@@ -24,14 +27,28 @@ blocker described below was Option A. It LANDED on the
   installs a `sqlite3_create_function_v2` trampoline on
   sqlite-lib's connection whose body re-enters the host via the
   imported `dispatch.scalar-call` (commit 4b33184 in sqlite-wasm).
-- The composed `cli + sqlite-lib` binary now re-exports
+- `register-host-aggregate(ext_name, name, num_args, func_id,
+  is_window)` installs xStep+xFinal (and xValue+xInverse when
+  `is_window=true`) trampolines via `create_aggregate_function` /
+  `create_window_function`. Per-aggregation state is keyed by a
+  `context-id` the wasm-side init() pulls from a thread-local
+  AtomicU64 counter and threads through every dispatch call
+  (commit bd080be in sqlite-wasm).
+- `register-host-collation(ext_name, name, coll_id)` installs a
+  stateless compare trampoline via `sqlite3_create_collation_v2`
+  whose body forwards to `dispatch.collation-compare` (commit
+  bd080be in sqlite-wasm).
+- The composed `cli + sqlite-lib` binary re-exports
   `dispatch-bridge` so the JS host can call into it from its
-  `spi-loader.register-scalar` impl (commit 4ba4d30 in sqlink
-  composition-cli-sqlite-lib.wac + the build scripts).
+  `spi-loader.register-{scalar,aggregate,collation}` impls (commit
+  4ba4d30 in sqlink composition-cli-sqlite-lib.wac + the build
+  scripts).
 - Verified: the composed binary's WIT surface exposes
-  `export sqlink:wasm/dispatch-bridge@0.1.0` and
-  `import sqlink:wasm/dispatch@0.1.0`. Scenarios 1+2 smoke
-  208/208.
+  `export sqlink:wasm/dispatch-bridge@0.1.0` with all four
+  register-host-* methods + unregister-extension, and
+  `import sqlink:wasm/dispatch@0.1.0` with scalar-call +
+  aggregate-step/finalize/value/inverse + collation-compare.
+  Scenarios 1+2 smoke 208/208; browser specs 9/9.
 
 **JS host work (Tasks 2-8 below) can now land.** The JS impl of
 `spi-loader.register-scalar` records `(ext_name, func_id, module)`
@@ -52,10 +69,10 @@ From `sqlite-loader-wit/wit/host-spi.wit` (interface `spi-loader`):
 | `set-stmt-trace` | `(on: bool) -> ()` | `.trace` dot-cmd only — can stub |
 | `drain-trace-buf` | `() -> list<string>` | `.trace` dot-cmd only — can stub |
 | `set-auth-log` | `(on: bool) -> result<_, sqlite-error>` | `.auth` only — can stub |
-| `register-scalar` | `(ext, name, num-args, func-id) -> result<_, err>` | **Required** |
-| `unregister-extension` | `(ext) -> ()` | Required for `.unload` |
-| `register-collation` | `(ext, name, coll-id) -> result<_, err>` | Defer |
-| `register-aggregate` | `(ext, name, num-args, func-id, window) -> result<_, err>` | Defer |
+| `register-scalar` | `(ext, name, num-args, func-id) -> result<_, err>` | **LANDED** (#427) |
+| `unregister-extension` | `(ext) -> ()` | **LANDED** — drops scalars + aggregates + collations |
+| `register-collation` | `(ext, name, coll-id) -> result<_, err>` | **LANDED** (#432) |
+| `register-aggregate` | `(ext, name, num-args, func-id, window) -> result<_, err>` | **LANDED** (#432) — covers both plain + window |
 | `register-authorizer` | `(ext) -> result<_, err>` | Defer |
 | `register-update-hook` | `(ext) -> result<_, err>` | Defer |
 | `register-commit-hook` | `(ext) -> result<_, err>` | Defer |

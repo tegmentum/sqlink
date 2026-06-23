@@ -143,13 +143,18 @@ host does:
    Chrome 137+ / Node 22+). The cli's REPL stays alive across
    `db.exec()` calls  a long-lived `QueueInputStream` feeds stdin
    and a sentinel `SELECT` frames each call's stdout window. DDL,
-   INSERTs, and host-registered scalars all persist across calls.
-   Build with `cd browser && npm install && npm run transpile &&
-   npm test`. **Phase C is fully landed**: composed runtime +
-   persistent session + dispatch-bridge wiring; sql.js is gone.
+   INSERTs, and host-registered scalars/aggregates/collations all
+   persist across calls. Build with `cd browser && npm install &&
+   npm run transpile && npm test`. **Phase C is fully landed**:
+   composed runtime + persistent session + dispatch-bridge wiring
+   for scalar, aggregate, and collation functions; sql.js is gone.
+   The SQL function surface a loaded extension can register is
+   identical to scenarios 1+2 within those three categories
+   (authorizers, update/commit hooks, and vtabs still deferred).
    See `browser/src/sqlink-composed.js`, the cross-spec test set
-   (composed / composed-uuid / composed-persistent / composed-
-   runtime-ext / demo / embed / smoke), and
+   (composed / composed-uuid / composed-aggregate / composed-
+   collation / composed-persistent / composed-runtime-ext / demo /
+   embed / smoke), and
    [docs/plans/PLAN-browser-runtime.md](docs/plans/PLAN-browser-runtime.md).
 
    Sub-options:
