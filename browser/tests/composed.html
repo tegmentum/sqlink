@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser — composed cli smoke</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { openDatabaseComposed } from '../src/sqlink-composed.js'
+
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      try {
+        const db = await openDatabaseComposed()
+        log('opened composed db')
+        const rows = await db.exec('SELECT 1+1;')
+        log('SELECT 1+1; → ' + JSON.stringify(rows))
+        const scalar = await db.execScalar('SELECT 2+2;')
+        log('SELECT 2+2; → ' + scalar)
+        db.close()
+        status.textContent = 'done'
+        window.__composedResult = { rows, scalar }
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        log(String(e?.stack ?? e))
+        window.__composedResult = { error: String(e?.stack ?? e) }
+      } finally {
+        window.__composedDone = true
+      }
+    </script>
+  </body>
+</html>

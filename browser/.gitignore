@@ -2,6 +2,8 @@ node_modules/
 dist/
 .vite/
 src/generated/
+src/generated
+public/cli_with_sqlite.single_memory.component.wasm
 test-results/
 playwright-report/
 *.log

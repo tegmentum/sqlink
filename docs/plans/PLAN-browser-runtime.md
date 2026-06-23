@@ -1,5 +1,45 @@
 # Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill
 
+## Status (2026-06-23  Stage H — JSPI runtime-bindgen END-TO-END)
+
+The composed `cli + sqlite-lib` single-memory component now runs in
+the browser end-to-end via JSPI:
+
+  - `browser/src/sqlink-composed.js` swapped the build-time
+    `jco transpile` step for `createRuntimeBindgen({ jcoOptions: {
+    asyncMode: 'jspi', ... } })` from `@tegmentum/wasi-polyfill`.
+  - `wasi:io/poll.pollable.block`,
+    `wasi:io/streams.input-stream.blocking-read`, and
+    `wasi:io/streams.output-stream.blocking-write-and-flush` are
+    wrapped with `WebAssembly.Suspending`; `wasi:cli/run.run` is
+    wrapped with `WebAssembly.promising`. The cli can actually
+    await the polyfill's async plugins (which is what kept stdin
+    reading "EOF" through Stage 8G).
+  - `browser/tests/composed.spec.js` proves it:
+    `db.exec('SELECT 1+1;')` yields
+    `[{ columns: [], values: [['2']] }]` and
+    `db.execScalar('SELECT 2+2;')` yields `'4'`.
+  - Playwright's chromium 149.x ships JSPI on by default  no
+    launch flag needed. Documented in
+    `browser/playwright.config.js` and verified via
+    `browser/scripts/jspi-probe.mjs`.
+  - The composed `.wasm` is symlinked into `browser/public/` by
+    `browser/scripts/link-composed-wasm.mjs` so Vite serves it at
+    `/cli_with_sqlite.single_memory.component.wasm` for the
+    runtime `fetch()`.
+
+The default still uses `sql.js`. The blocker is *not* JSPI any more
+ it's the host-resident wiring of `sqlite:extension/spi-loader`.
+The composed cli registers scalar functions through that interface,
+and the browser host currently stubs it. Until each
+`register-scalar` re-enters JS and dispatches to the extension's
+already-transpiled component, extension-using fixtures (demo,
+embed, smoke) can't flip to the composed path. Once that lands,
+`sql.js` (and `buildAritied`-style monkey-patching) goes away.
+
+The 43/43 baseline (demo + embed + smoke) still passes; the new
+composed smoke makes it 44/44 (4 specs in the Playwright run).
+
 ## Status (2026-06-22  Path 3 — cold-tier substrate landed, browser bundle pending)
 
 **Cold-tier substrate swap landed** on branch `path3-cold-tier`.

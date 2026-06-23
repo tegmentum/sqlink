@@ -105,10 +105,23 @@ function resolveTargetDir() {
 // copy can lag if a `cargo build --release` at the workspace root
 // happened against an older WIT contract). Prefer per-extension
 // target; fall back to workspace target.
+// Fallback to the canonical sqlink checkout's per-extension target —
+// matters when this code runs in a worktree that doesn't have the
+// extensions built locally.
+const FALLBACK_EXTENSIONS_ROOT = '/Users/zacharywhitley/git/sqlink/extensions'
+
 function resolveWasmFor(name, workspaceTargetDir) {
   const perExtPath = resolve(
     ROOT,
     'extensions',
+    name,
+    'target',
+    'wasm32-wasip2',
+    'release',
+    `${name}_extension.component.wasm`,
+  )
+  const perExtFallback = resolve(
+    FALLBACK_EXTENSIONS_ROOT,
     name,
     'target',
     'wasm32-wasip2',
@@ -123,6 +136,7 @@ function resolveWasmFor(name, workspaceTargetDir) {
   }
   if (existsSync(workspacePath)) return workspacePath
   if (existsSync(perExtPath)) return perExtPath
+  if (existsSync(perExtFallback)) return perExtFallback
   return null
 }
 

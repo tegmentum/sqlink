@@ -1,39 +1,74 @@
-// Composed-cli openDatabase path  Stage 8 H landing.
+// Composed-cli openDatabase path — Stage 8 H landing.
 //
-// Loads the jco-transpiled cli+sqlite-lib runtime
-// (browser/src/generated/cli_with_sqlite/) and drives one SQL
-// statement at a time by reinstantiating per `exec()` call. Per-
-// exec instantiation keeps the implementation simple: the cli is a
-// classic wasi:cli/run entry point that reads stdin until EOF and
-// exits  no resumable session. Each `exec()` builds a fresh
+// Loads the composed `cli + sqlite-lib` single-memory component at
+// RUNTIME via `@tegmentum/wasi-polyfill`'s `createRuntimeBindgen`
+// (which delegates the actual transpile to jco's browser build) and
+// drives one SQL statement at a time by re-instantiating per `exec()`
+// call. Per-exec instantiation keeps the implementation simple: the
+// cli is a classic wasi:cli/run entry point that reads stdin until
+// EOF and exits — no resumable session. Each `exec()` builds a fresh
 // instance with `stdinContent = sql + "\n.quit\n"`, runs it, then
 // parses the captured stdout for results.
 //
-// Trade-off: per-exec re-init costs ~50-200 ms (jco's async
-// instantiate of the multi-core module plus tvm-mem set-up). For
-// the smoke-matrix shape (one or two statements per fixture) this
-// is fine; for an interactive REPL we'd need to switch to a
-// persistent stdin queue (`QueueInputStream`) and keep the cli
-// alive across calls.
+// JSPI (JavaScript Promise Integration) is required: several WASI
+// imports the cli blocks on (`wasi:io/poll.pollable.block`,
+// `wasi:io/streams.input-stream.blocking-read`,
+// `wasi:io/streams.output-stream.blocking-write-and-flush`) are async
+// in the polyfill, and the sync-mode jco trampoline cannot await
+// them. Under JSPI the suspend is real — the imports are wrapped
+// with `WebAssembly.Suspending` and the export is wrapped with
+// `WebAssembly.promising`. Requires Chrome 137+ / Node 22+.
+//
+// Trade-off: per-exec re-init costs ~100-200 ms (jco's runtime
+// transpile of the multi-core module plus polyfill set-up). For the
+// smoke-matrix shape (one or two statements per fixture) this is
+// fine; for an interactive REPL we'd need to keep the cli alive
+// across calls and feed stdin via a `QueueInputStream`. See Stage 9.
 
+import { createRuntimeBindgen } from '@tegmentum/wasi-polyfill/wasip2'
 import { ExtensionRegistry } from './extension-loader.js'
-import { buildCliHostImports } from './host-imports.js'
+import { buildCliPolyfill } from './host-imports.js'
 
-let cachedTranspile = null
+const COMPOSED_WASM_URL = '/cli_with_sqlite.single_memory.component.wasm'
 
-async function loadTranspiledCli() {
-  if (cachedTranspile) return cachedTranspile
-  const specifier =
-    './' + 'generated' + '/' + 'cli_with_sqlite' + '/' + 'cli_with_sqlite.js'
-  try {
-    cachedTranspile = await import(/* @vite-ignore */ specifier)
-  } catch (e) {
+// Imports the cli blocks on / exports that (transitively) reach a
+// blocking import. Under JSPI the polyfill wraps these with
+// `WebAssembly.Suspending` / `WebAssembly.promising` respectively.
+//
+// Streams: blocking-read for stdin script consumption,
+// blocking-write-and-flush / blocking-flush for stdout/stderr drain.
+// Poll: pollable.block for any subscribe-then-block loop the cli
+// builds (rare in this code path but harmless to include).
+// `wasi:cli/run#run`: the top-level reachable export.
+const ASYNC_IMPORTS = [
+  'wasi:io/poll@0.2.6#[method]pollable.block',
+  'wasi:io/poll@0.2.6#poll',
+  'wasi:io/streams@0.2.6#[method]input-stream.blocking-read',
+  'wasi:io/streams@0.2.6#[method]input-stream.blocking-skip',
+  'wasi:io/streams@0.2.6#[method]output-stream.blocking-write-and-flush',
+  'wasi:io/streams@0.2.6#[method]output-stream.blocking-flush',
+  'wasi:io/streams@0.2.6#[method]output-stream.blocking-splice',
+]
+const ASYNC_EXPORTS = ['wasi:cli/run@0.2.6#run']
+
+// Cache the fetched .wasm bytes across exec() calls — only the
+// per-call polyfill/bindgen are rebuilt. Saves ~5 MB of refetch per
+// statement at the cost of a closure-scoped Uint8Array (cleaned up
+// on first `unmount` or page-reload).
+let cachedWasmBytes = null
+async function loadComposedWasm() {
+  if (cachedWasmBytes) return cachedWasmBytes
+  const response = await fetch(COMPOSED_WASM_URL)
+  if (!response.ok) {
     throw new Error(
-      `Failed to import the jco-transpiled cli component. ` +
-        `Run \`npm run transpile-cli\` first. Underlying error: ${e?.message ?? e}`,
+      `failed to fetch composed cli .wasm from ${COMPOSED_WASM_URL}: ` +
+        `${response.status} ${response.statusText}. ` +
+        `Ensure the file is symlinked under browser/public/ — see ` +
+        `scripts/link-composed-wasm.mjs.`,
     )
   }
-  return cachedTranspile
+  cachedWasmBytes = new Uint8Array(await response.arrayBuffer())
+  return cachedWasmBytes
 }
 
 /**
@@ -52,18 +87,14 @@ async function loadTranspiledCli() {
  * For "no columns" output (DDL like CREATE TABLE), we return an
  * empty array. Columns aren't recoverable from list mode without
  * a `.headers on` toggle, so the columns array is always empty
- * for now  callers that need column names should use the
+ * for now — callers that need column names should use the
  * structured exec-batch SPI directly (a follow-up).
  */
 function parseCliOutput(text, sql) {
-  // Remove prompts. The cli emits `sqlite> ` at the start of every
-  // line where it expects input (statement-start) or `   ...> ` for
-  // continuation lines. Both get stripped.
   const lines = text
     .split('\n')
     .map((line) => line.replace(/^sqlite> /, '').replace(/^\s*\.\.\.> /, ''))
 
-  // Skip any line that's echo of the input SQL or the final .quit.
   const sqlLines = new Set(
     sql
       .split('\n')
@@ -90,43 +121,62 @@ class ComposedDatabase {
   }
 
   async _runOnce(stdinScript) {
-    const transpile = await loadTranspiledCli()
+    const wasmBytes = await loadComposedWasm()
+
     const stdoutChunks = []
     const stderrChunks = []
-    const { imports, polyfill } = await buildCliHostImports({
+    const { polyfill, additionalImports } = buildCliPolyfill({
       registry: this._registry,
       stdinContent: stdinScript,
       onStdout: (data) => stdoutChunks.push(data),
       onStderr: (data) => stderrChunks.push(data),
     })
+
+    const bindgen = createRuntimeBindgen({
+      polyfill,
+      additionalImports,
+      jcoOptions: {
+        name: 'cli_with_sqlite',
+        asyncMode: 'jspi',
+        asyncImports: ASYNC_IMPORTS,
+        asyncExports: ASYNC_EXPORTS,
+      },
+    })
+
+    let result
     try {
-      const instance = await transpile.instantiate(undefined, imports)
-      // The composed component exports `wasi:cli/run@0.2.6` whose
-      // `run()` returns Ok/Err; jco surfaces Err as a thrown
-      // exception. For our purposes we treat both as "cli ran";
-      // the meaningful output is in stdout chunks.
+      result = await bindgen.instantiate(wasmBytes)
+
+      // jco's async-instantiation surface exposes the exported
+      // `wasi:cli/run@0.2.6` instance under both the dashed alias
+      // and the versioned key. Under JSPI the inner `run` function
+      // is wrapped with `WebAssembly.promising`, so `await` is
+      // mandatory.
+      const exports = result.exports
+      const runFn =
+        exports.run?.run ??
+        exports['wasi:cli/run@0.2.6']?.run ??
+        exports['wasi:cli/run']?.run
+      if (typeof runFn !== 'function') {
+        throw new Error(
+          'composed component does not export wasi:cli/run.run',
+        )
+      }
       try {
-        // jco's instance shape: `instance.run` is a namespace
-        // object `{ run: fn }`, not the function itself.
-        const runFn =
-          instance.run?.run ??
-          instance['wasi:cli/run@0.2.6']?.run ??
-          instance['wasi:cli/run']?.run
-        if (typeof runFn !== 'function') {
-          throw new Error(
-            'composed component does not export wasi:cli/run.run',
-          )
-        }
         await runFn()
       } catch (e) {
-        // Non-zero exit / `.quit` is normal; only propagate if
-        // stdout/stderr are empty (= real instantiation failure).
+        // The cli always calls `wasi:cli/exit.exit(0)` after .quit;
+        // jco's polyfill surfaces that as a thrown ExitError. As
+        // long as we got SOMETHING on stdout/stderr, treat it as a
+        // normal exit. Empty output means the run trapped before
+        // any IO — propagate.
         if (stdoutChunks.length === 0 && stderrChunks.length === 0) {
           throw e
         }
       }
     } finally {
       try {
+        result?.destroy()
         polyfill.destroy()
       } catch {
         // ignore
@@ -152,8 +202,6 @@ class ComposedDatabase {
 
   async exec(sql, _params) {
     if (this._closed) throw new Error('database is closed')
-    // Build stdin script. Pre-load every embedded extension via
-    // `.load <name>` so subsequent SQL sees the registered functions.
     const lines = []
     for (const name of this._embedExtensions) {
       if (this._registry.has(name)) lines.push(`.load ${name}`)
@@ -188,11 +236,14 @@ class ComposedDatabase {
 
 /**
  * Open a database backed by the composed cli+sqlite-lib runtime.
+ *
+ * Requires JSPI in the host (Chrome 137+ / Node 22+). The cli is
+ * fetched as a single .component.wasm and runtime-transpiled by jco
+ * (via `createRuntimeBindgen`) per-process; instantiation is per
+ * `exec()` call so each statement gets a fresh in-memory db.
  */
 export async function openDatabaseComposed(opts = {}) {
   const registry = new ExtensionRegistry()
-  // Caller pre-registers extensions via opts.embed = [{ name, bytes }]
-  // or via subsequent db.loadExtension(name, bytes) calls.
   const embedNames = []
   for (const e of opts.embed ?? []) {
     registry.add(e.name, e.bytes)
