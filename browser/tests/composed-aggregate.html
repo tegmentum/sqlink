@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser  composed cli + stats aggregate extension</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { openDatabaseComposed } from '../src/sqlink-composed.js'
+
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      try {
+        // stats is a pure-aggregate extension (14+ aggregates, 0
+        // scalars). Median + var_pop + stddev_pop exercise the
+        // step/finalize trampoline path on sqlite-lib's connection.
+        const statsMod = await import('../src/generated/stats/stats_extension.js')
+
+        const db = await openDatabaseComposed({
+          embed: [{ name: 'stats', module: statsMod }],
+        })
+        log('opened composed db; stats pre-registered')
+
+        await db.exec('CREATE TABLE n(x);')
+        await db.exec('INSERT INTO n VALUES (1),(2),(3),(4),(5);')
+
+        const varPop = await db.execScalar('SELECT var_pop(x) FROM n;')
+        log('var_pop(1..5) -> ' + varPop)
+
+        const varSamp = await db.execScalar('SELECT var_samp(x) FROM n;')
+        log('var_samp(1..5) -> ' + varSamp)
+
+        const median = await db.execScalar('SELECT median(x) FROM n;')
+        log('median(1..5) -> ' + median)
+
+        // Empty-set finalize path: SELECT median(x) FROM n WHERE 0
+        // should produce NULL (or empty). Exercises the
+        // "no rows  finalize without prior step" code path.
+        const emptyRows = await db.exec('SELECT median(x) FROM n WHERE 0;')
+        log('median empty -> ' + JSON.stringify(emptyRows))
+
+        db.close()
+        status.textContent = 'done'
+        window.__aggregateResult = { varPop, varSamp, median, emptyRows }
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        log(String(e?.stack ?? e))
+        window.__aggregateResult = { error: String(e?.stack ?? e) }
+      } finally {
+        window.__aggregateDone = true
+      }
+    </script>
+  </body>
+</html>

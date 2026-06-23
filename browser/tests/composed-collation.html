@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser  composed cli + uint collation</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { openDatabaseComposed } from '../src/sqlink-composed.js'
+
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      try {
+        // uint exports a single collation that compares strings by
+        // their embedded numeric runs ("file2" < "file10" < "file100"
+        // instead of lexicographic byte order).
+        const uintMod = await import('../src/generated/uint/uint_extension.js')
+
+        const db = await openDatabaseComposed({
+          embed: [{ name: 'uint', module: uintMod }],
+        })
+        log('opened composed db; uint pre-registered')
+
+        await db.exec('CREATE TABLE t(s TEXT);')
+        await db.exec(
+          "INSERT INTO t VALUES ('file2'),('file10'),('file1'),('file100');",
+        )
+
+        // Lexicographic order  byte-wise: file1, file10, file100, file2.
+        const lex = await db.exec('SELECT s FROM t ORDER BY s;')
+        log('lex order -> ' + JSON.stringify(lex))
+
+        // uint collation  numeric: file1, file2, file10, file100.
+        const num = await db.exec('SELECT s FROM t ORDER BY s COLLATE uint;')
+        log('uint order -> ' + JSON.stringify(num))
+
+        db.close()
+        status.textContent = 'done'
+        window.__collationResult = { lex, num }
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        log(String(e?.stack ?? e))
+        window.__collationResult = { error: String(e?.stack ?? e) }
+      } finally {
+        window.__collationDone = true
+      }
+    </script>
+  </body>
+</html>
