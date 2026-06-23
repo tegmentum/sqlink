@@ -23,7 +23,8 @@ async function runOne(db, fixture) {
   await db.loadExtension(fixture.extension)
   let value
   try {
-    value = db.execScalar(fixture.sql)
+    // Await: composed-cli returns a Promise; sql.js returns a value.
+    value = await db.execScalar(fixture.sql)
   } catch (e) {
     return { ok: false, error: `exec: ${e.message ?? e}` }
   }
@@ -44,25 +45,30 @@ async function runOne(db, fixture) {
 
 async function main() {
   const results = []
-  // Each extension gets its own fresh db — registers the scalar
-  // names cleanly without cross-contamination. (sql.js's
-  // create_function would silently overwrite duplicates; we want
-  // the per-extension test isolation anyway.)
-  for (const f of FIXTURES) {
-    let db
-    try {
-      db = await openDatabase()
-      const r = await runOne(db, f)
-      results.push({ fixture: f, ...r })
-      appendOut(`${r.ok ? 'ok  ' : 'FAIL'} ${f.extension.padEnd(20)} ${f.sql}`)
-      if (!r.ok) appendOut(`        ${r.error}`)
-    } catch (e) {
-      results.push({ fixture: f, ok: false, error: `load: ${e.message ?? e}` })
-      appendOut(`FAIL ${f.extension.padEnd(20)} ${f.sql}`)
-      appendOut(`        load: ${e.message ?? e}`)
-    } finally {
-      try { db?.close() } catch {}
+  // Composed-cli path: ONE persistent session for the whole matrix.
+  // sql.js's per-extension isolation is no longer needed because
+  // each extension declares unique scalar names; loading them into
+  // the same SQLite session is the cli's normal behaviour. Sharing
+  // one db also sidesteps the wasi-polyfill's known
+  // SharedStdioState singleton (which the per-fixture path tripped
+  // over after the first close()).
+  let db
+  try {
+    db = await openDatabase()
+    for (const f of FIXTURES) {
+      try {
+        const r = await runOne(db, f)
+        results.push({ fixture: f, ...r })
+        appendOut(`${r.ok ? 'ok  ' : 'FAIL'} ${f.extension.padEnd(20)} ${f.sql}`)
+        if (!r.ok) appendOut(`        ${r.error}`)
+      } catch (e) {
+        results.push({ fixture: f, ok: false, error: `load: ${e.message ?? e}` })
+        appendOut(`FAIL ${f.extension.padEnd(20)} ${f.sql}`)
+        appendOut(`        load: ${e.message ?? e}`)
+      }
     }
+  } finally {
+    try { await db?.close() } catch {}
   }
 
   const pass = results.filter((r) => r.ok).length

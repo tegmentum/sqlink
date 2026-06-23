@@ -34,24 +34,20 @@ import { buildExtensionImports } from './wasi-imports.js'
 import { EXTENSION_LOADERS, EXTENSION_NAMES } from './generated/index.js'
 import { openDatabaseComposed } from './sqlink-composed.js'
 
-// Stage 8 transitional flag. The composed cli+sqlite-lib runtime is
-// the long-term browser target (one wasm component, no sql.js, real
-// SQLite under the wasi-polyfill). Stage H landed the JSPI runtime-
-// bindgen path so `SELECT 1+1;` and other extension-free SQL work
-// end-to-end (see tests/composed.spec.js).
+// Phase C landing. The composed cli+sqlite-lib runtime is the
+// browser default: one wasm component, no sql.js, real SQLite
+// running under @tegmentum/wasi-polyfill. The persistent-session
+// landing (composed-persistent.spec.js) closed the last gap by
+// keeping the cli's REPL alive across exec() calls via a
+// QueueInputStream + sentinel framing — DDL persists, attached
+// dbs persist, host-resident scalar registrations work
+// end-to-end via dispatch-bridge.
 //
-// Default REMAINS sql.js for one reason only: the composed cli's
-// `sqlite:extension/spi-loader` (where `.load NAME` ultimately
-// registers scalar function pointers into SQLite) is stubbed in the
-// browser host. Until that interface is wired to actually re-enter
-// JS for each scalar call, extension-using tests can't be retargeted
-// to the composed path — the demo/embed/smoke specs all require at
-// least one extension to register.
-//
-// Opt in per call with `openDatabase({ useComposedCli: true })`; the
-// flag pulls in ./sqlink-composed.js which uses ./host-imports.js +
-// ./extension-loader.js to drive the composed runtime via JSPI.
-const DEFAULT_USE_COMPOSED_CLI = false
+// Opt out per call with `openDatabase({ useComposedCli: false })`
+// to fall back on the legacy sql.js path. Slated for removal in
+// Task 7 once smoke + embed are confirmed green on the composed
+// path.
+const DEFAULT_USE_COMPOSED_CLI = true
 
 let SQL = null
 

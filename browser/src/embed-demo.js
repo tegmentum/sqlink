@@ -52,12 +52,13 @@ export async function runEmbedDemo({ statusEl, outEl } = {}) {
   ]
   const results = {}
   for (const c of cases) {
-    const v = db.execScalar(c.sql)
+    // Await: works for both sql.js (sync return) and composed (Promise).
+    const v = await db.execScalar(c.sql)
     results[c.label] = v
     log(`${c.label} = ${v}`)
   }
 
-  db.close()
+  await db.close()
   if (statusEl) statusEl.textContent = 'embed demo done.'
   return { embedded, results }
 }

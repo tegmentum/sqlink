@@ -36,7 +36,6 @@ import { createRuntimeBindgen } from '@tegmentum/wasi-polyfill/wasip2'
 import { ExtensionRegistry } from './extension-loader.js'
 import {
   buildCliPolyfill,
-  QueueInputStream,
   resetGlobalStdioState,
 } from './host-imports.js'
 import { buildExtensionImports } from './wasi-imports.js'
@@ -181,15 +180,13 @@ class ComposedDatabase {
     const wasmBytes = await loadComposedWasm()
 
     // The polyfill's globalStdioState is a singleton — clear any
-    // leftovers from a prior session so setGlobalStdioProvider()
-    // doesn't throw.
+    // leftovers from a prior session.
     try {
       resetGlobalStdioState()
     } catch {
       // ignore — first session has nothing to reset.
     }
 
-    this._stdinQueue = new QueueInputStream(false)
     const decoder = new TextDecoder()
     const onStdout = (data) => {
       this._stdoutBuffer += decoder.decode(data, { stream: true })
@@ -199,14 +196,16 @@ class ComposedDatabase {
       this._stderrBuffer += decoder.decode(data, { stream: true })
     }
 
-    const { polyfill, additionalImports, spiLoader } = buildCliPolyfill({
-      registry: this._registry,
-      stdinQueue: this._stdinQueue,
-      onStdout,
-      onStderr,
-    })
+    const { polyfill, additionalImports, spiLoader, persistentQueue } =
+      buildCliPolyfill({
+        registry: this._registry,
+        persistentStdin: true,
+        onStdout,
+        onStderr,
+      })
     this._polyfill = polyfill
     this._spiLoader = spiLoader
+    this._stdinQueue = persistentQueue
 
     const bindgen = createRuntimeBindgen({
       polyfill,
@@ -343,17 +342,19 @@ class ComposedDatabase {
 
   async loadExtension(name, bytesOrModule, transpiledOpt) {
     if (this._registry.has(name)) return this._registry.get(name).manifest
-    // Two call shapes:
+    // Call shapes:
+    //   loadExtension(name)
+    //     — looks up `name` in EXTENSION_LOADERS (./generated/
+    //       index.js) and pulls in the pre-bundled transpile.
+    //       Mirrors the sql.js path's bare-name shorthand.
     //   loadExtension(name, bytes)
     //     — caller has the raw .component.wasm; runtime-transpile
-    //       would be required (not in v1). Currently rejected so
-    //       the caller picks one of the supported paths below.
+    //       would be required (not in v1). Currently rejected.
     //   loadExtension(name, bytes, transpiledModule)
     //     — caller has both: pass `bytes` for the blake3 digest
-    //       (used by the cli's grant-pin lookup) and the already-
-    //       transpiled jco module so dispatch.scalar-call can route.
+    //       and the already-transpiled jco module.
     //   loadExtension(name, null, transpiledModule)
-    //     — caller has only the transpiled module (no digest path).
+    //     — caller has only the transpiled module.
     //   loadExtension(name, transpiledModule)
     //     — shorthand: first arg after name IS the transpiled
     //       module if it doesn't smell like raw bytes.
@@ -368,10 +369,16 @@ class ComposedDatabase {
       transpiledModule = transpiledModule ?? bytesOrModule
     }
     if (!transpiledModule) {
-      throw new Error(
-        `loadExtension(${JSON.stringify(name)}): composed runtime needs a ` +
-          `jco-transpiled module (runtime-transpile of raw bytes is a follow-up).`,
-      )
+      // Bare-name path: resolve from EXTENSION_LOADERS.
+      const mod = await import('./generated/index.js')
+      const loader = mod.EXTENSION_LOADERS?.[name]
+      if (!loader) {
+        throw new Error(
+          `loadExtension(${JSON.stringify(name)}): unknown extension and no ` +
+            `module passed. Available: ${(mod.EXTENSION_NAMES ?? []).join(', ')}.`,
+        )
+      }
+      transpiledModule = await loader()
     }
     await this._registry.add(name, bytes, transpiledModule)
     // The cli needs an explicit `.load` to invoke the extension's
@@ -462,7 +469,11 @@ class ComposedDatabase {
     try {
       if (this._stdinQueue && !this._runFinished) {
         this._stdinQueue.push('.quit\n')
-        this._stdinQueue.close()
+        // QueueInputStream.close() flips its `closed` flag and
+        // unblocks any pending read() with EOF.
+        if (typeof this._stdinQueue.close === 'function') {
+          try { await this._stdinQueue.close() } catch {}
+        }
       }
     } catch {
       // ignore
