@@ -93,6 +93,7 @@ From `sqlite-loader-wit/wit/host-spi.wit` (interface `spi-loader`):
 | `register-authorizer` | `(ext) -> result<_, err>` | **LANDED** (this branch) |
 | `register-update-hook` | `(ext) -> result<_, err>` | **LANDED** (this branch) |
 | `register-commit-hook` | `(ext) -> result<_, err>` | **LANDED** (this branch)  also installs rollback-hook |
+| `register-wal-hook` | `(ext, hook-id) -> result<_, err>` | **LANDED** (wal-hook-bridge)  substrate for wal-archive |
 | `register-vtab` | `(ext, name, vtab-id, eponymous, mutable, batched) -> result<_, err>` | Defer |
 
 For smoke-spec coverage, only `register-scalar` and
