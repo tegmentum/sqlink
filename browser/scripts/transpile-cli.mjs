@@ -1,10 +1,14 @@
 // Pre-transpile the composed `cli + sqlite-lib` runtime component to
 // JS so it can be loaded in the browser via @tegmentum/wasi-polyfill.
-// The composed component is the output of
-//   scripts/build-composed-runtime.sh
+// The composed component is the SINGLE-MEMORY flavor produced by
+//   scripts/build-composed-runtime-single-memory.sh
 // and lands at
-//   target/wasm32-wasip2/release/cli_with_sqlite.component.wasm
+//   target/wasm32-wasip2/release/cli_with_sqlite.single_memory.component.wasm
 // (~4.4 MB).
+//
+// We use the single-memory flavor because jco does not yet support
+// multi-memory inner core modules; the multi-memory variant (used
+// by scenarios 1 + 2 on native wasmtime) cannot be transpiled.
 //
 // We jco-transpile it in `--instantiation async` mode so the output
 // exposes an `instantiate(getCoreModule, imports)` function whose
@@ -29,7 +33,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const ROOT = resolve(__dirname, '..', '..')
 const TARGET_DIR = resolve(ROOT, 'target', 'wasm32-wasip2', 'release')
 const FALLBACK_TARGET_DIR = '/Users/zacharywhitley/git/sqlink/target/wasm32-wasip2/release'
-const WASM_NAME = 'cli_with_sqlite.component.wasm'
+const WASM_NAME = 'cli_with_sqlite.single_memory.component.wasm'
 const OUT_DIR = resolve(__dirname, '..', 'src', 'generated', 'cli_with_sqlite')
 
 function resolveWasm() {
@@ -42,7 +46,7 @@ function resolveWasm() {
   }
   throw new Error(
     `Could not find ${WASM_NAME}. Looked in:\n  ${local}\n  ${fallback}\n` +
-      `Run \`INITIAL_PAGES=4096 ./scripts/build-composed-runtime.sh\` first.`,
+      `Run \`./scripts/build-composed-runtime-single-memory.sh\` first.`,
   )
 }
 
