@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser — composed cli persistent session</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { openDatabaseComposed } from '../src/sqlink-composed.js'
+
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      const results = { steps: [] }
+
+      try {
+        const db = await openDatabaseComposed()
+        log('opened persistent composed db')
+
+        // 1. CREATE TABLE: no rows expected.
+        const createRows = await db.exec('CREATE TABLE t(x);')
+        log('CREATE TABLE t(x); -> ' + JSON.stringify(createRows))
+        results.steps.push({ step: 'create', rows: createRows })
+
+        // 2. INSERT 3 rows: no SELECT rows expected.
+        const insertRows = await db.exec('INSERT INTO t VALUES (1), (2), (3);')
+        log('INSERT INTO t VALUES ...; -> ' + JSON.stringify(insertRows))
+        results.steps.push({ step: 'insert', rows: insertRows })
+
+        // 3. SELECT every row.
+        const selectRows = await db.exec('SELECT * FROM t;')
+        log('SELECT * FROM t; -> ' + JSON.stringify(selectRows))
+        results.steps.push({ step: 'select', rows: selectRows })
+
+        // 4. SELECT COUNT to make sure the prior INSERT persisted.
+        const countRows = await db.exec('SELECT COUNT(*) FROM t;')
+        log('SELECT COUNT(*) FROM t; -> ' + JSON.stringify(countRows))
+        results.steps.push({ step: 'count', rows: countRows })
+
+        // 5. A second INSERT, then SELECT, to confirm subsequent
+        //    mutations also persist.
+        await db.exec("INSERT INTO t VALUES (10);")
+        const afterRows = await db.exec('SELECT COUNT(*) FROM t;')
+        log('after second insert: ' + JSON.stringify(afterRows))
+        results.steps.push({ step: 'count2', rows: afterRows })
+
+        await db.close()
+        status.textContent = 'done'
+      } catch (e) {
+        results.error = String(e?.stack ?? e)
+        log(String(e?.stack ?? e))
+        status.textContent = 'error: ' + (e?.message ?? String(e))
+      } finally {
+        window.__persistentResult = results
+        window.__persistentDone = true
+      }
+    </script>
+  </body>
+</html>
