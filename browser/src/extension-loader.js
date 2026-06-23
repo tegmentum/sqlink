@@ -236,6 +236,18 @@ export class ExtensionRegistry {
      * Signature: (transpiledModule) => Promise<instance>
      */
     this.instantiate = null
+    /**
+     * Factory invoked to runtime-transpile + instantiate raw
+     * .component.wasm bytes via the polyfill's `createRuntimeBindgen`.
+     * Set by the consumer so the registry stays decoupled from the
+     * polyfill API surface.
+     *
+     * Signature: (bytes: Uint8Array | ArrayBuffer) => Promise<{
+     *   instance: object,            // exports namespace (metadata.describe etc.)
+     *   bindgenResult?: object,      // raw BindgenResult, kept for destroy()
+     * }>
+     */
+    this.instantiateFromBytes = null
   }
 
   /**
@@ -306,6 +318,74 @@ export class ExtensionRegistry {
   }
 
   /**
+   * Register an extension from raw `.component.wasm` bytes. Unlike
+   * `add`, the caller does NOT supply a pre-transpiled jco namespace:
+   * the registry runtime-transpiles + instantiates via the
+   * `instantiateFromBytes` factory (set by sqlink-composed.js to
+   * delegate to `createRuntimeBindgen`).
+   *
+   * After this resolves, the entry shape matches `add` so dispatch
+   * (scalar-call) can route by `(ext-name, func-id)` without caring
+   * about provenance.
+   *
+   * @param {string} name
+   * @param {Uint8Array | ArrayBuffer} bytes
+   * @param {{}} [_opts]  reserved for future per-extension knobs
+   *   (capability grants, async-mode override, etc.).
+   */
+  async addFromBytes(name, bytes, _opts) {
+    if (!bytes || !(bytes instanceof Uint8Array || bytes instanceof ArrayBuffer)) {
+      throw new Error(
+        `ExtensionRegistry.addFromBytes(${JSON.stringify(name)}): ` +
+          `bytes must be Uint8Array or ArrayBuffer.`,
+      )
+    }
+    if (typeof this.instantiateFromBytes !== 'function') {
+      throw new Error(
+        `ExtensionRegistry.addFromBytes(${JSON.stringify(name)}): ` +
+          `registry.instantiateFromBytes factory not set. ` +
+          `Set it before calling addFromBytes() — typically wired by ` +
+          `openDatabaseComposed() to delegate to createRuntimeBindgen.`,
+      )
+    }
+
+    const digestHex = await hashBlake3Hex(bytes)
+
+    const { instance, bindgenResult } = await this.instantiateFromBytes(bytes)
+    if (!instance) {
+      throw new Error(
+        `ExtensionRegistry.addFromBytes(${JSON.stringify(name)}): ` +
+          `instantiateFromBytes factory returned no instance.`,
+      )
+    }
+
+    const metadata =
+      instance.metadata ??
+      instance['sqlite:extension/metadata'] ??
+      instance['sqlite:extension/metadata@0.1.0']
+    if (!metadata?.describe) {
+      throw new Error(
+        `extension ${name}: instantiated component has no metadata.describe export. ` +
+          `Available keys: ${Object.keys(instance).join(', ')}.`,
+      )
+    }
+    const manifest = metadata.describe()
+
+    const entry = {
+      manifest,
+      digestHex,
+      module: null,
+      instance,
+      bindgenResult: bindgenResult ?? null,
+      scalars: new Map(),
+      aggregates: new Map(),
+      collations: new Map(),
+    }
+    this._byName.set(name, entry)
+    return { manifest, digestHex }
+  }
+
+  /**
    * Record a scalar-function registration so dispatch.scalar-call
    * can route a wasm-side trampoline hit back to the extension.
    * Idempotent: re-registering replaces the previous entry.
@@ -362,6 +442,14 @@ export class ExtensionRegistry {
   }
 
   delete(name) {
+    const entry = this._byName.get(name)
+    if (entry?.bindgenResult && typeof entry.bindgenResult.destroy === 'function') {
+      try {
+        entry.bindgenResult.destroy()
+      } catch {
+        // ignore — destroy is best-effort
+      }
+    }
     return this._byName.delete(name)
   }
 
