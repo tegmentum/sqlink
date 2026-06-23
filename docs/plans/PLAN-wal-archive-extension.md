@@ -41,10 +41,94 @@ aggregates, and collations  one new WAL-hook surface added to
 | **Distributed SQLite** (Marmot/rqlite shape) | The storage sink isn't S3-specific  with the right backend it's another sqlink instance. Peer-to-peer WAL shipping without external infra. |
 | **Complement to session/changeset** | Logical replication (changesets, cross-version, cross-schema) and physical replication (WAL segments, byte-identical PITR) are both useful for different things. Having both as sqlink extensions beats running Litestream + a separate changeset tool. |
 
-## Substrate prerequisite
+## Substrate prerequisites (revised 2026-06-23 after design conversation)
 
-`dispatch-bridge` (sqlite-wasm/sqlite-lib) needs one new export +
-one new dispatch import:
+Four substrate pieces land before the extension itself  the
+original plan assumed all four were in place, they weren't. Each
+is ~1-2 days; total ~5 days of substrate before the extension's
+~12 days.
+
+### Substrate 1 (#438): native cli wal-hook wiring
+
+`#436` wired the dispatch-bridge browser-side only. The native cli
+(`cli/src/lib.rs`) registers six hook kinds during extension load
+but no `register_wal_hook` call. Add it + a `has-wal-hook` field
+on the manifest record in `sqlite-loader-wit/wit/guest.wit`
+(referenced in a comment but never declared). ~1 day.
+
+### Substrate 2 (#439): wal-frames + backup SPI interfaces
+
+Two new SPI interfaces in `sqlite-loader-wit/wit/`:
+
+```wit
+package sqlite:extension@0.1.0;
+
+interface wal-frames {
+  use types.{sqlite-error};
+
+  /// 32-byte WAL file header. None when journal_mode  wal.
+  get-wal-header: func(db-name: string)
+    -> result<option<list<u8>>, sqlite-error>;
+
+  /// N frames starting at `start-frame` (1-based per SQLite's
+  /// WAL format). Each frame is 24 + page_size bytes. Caller
+  /// uses the WAL header to derive page_size first.
+  read-frames: func(db-name: string, start-frame: u32, n-frames: u32)
+    -> result<list<u8>, sqlite-error>;
+}
+
+interface backup {
+  use types.{sqlite-error};
+
+  /// One-shot serialize. Briefly holds the write lock during
+  /// sqlite3_serialize(). Allocates the full db in wasm memory 
+  /// fine for the wal-archive snapshot cadence (default 24h).
+  /// Incremental sqlite3_backup_* + streaming variants are v2.
+  serialize-db: func(db-name: string) -> result<list<u8>, sqlite-error>;
+}
+```
+
+Extensions request these interfaces in their world; host serves
+them via the existing SPI dispatcher. Capability gating: each
+interface separate so an extension that only needs backup doesn't
+have to be granted wal-frame access. ~1-2 days.
+
+### Substrate 3 (#440): host-resident `s3-base` SPI bridge
+
+Define `sqlite:extension/s3-base@0.1.0` in `sqlite-loader-wit`,
+mirroring `~/git/s3-wasm`'s `s3-base` interface (get/put/delete/
+head/list/copy-object). Extensions import this interface like
+they import spi/types/policy. The host provides the impl:
+
+- **Native (scenarios 1+2 + sqlink-loader.so)**: bridges to
+  `~/git/s3-wasm` via wasmtime (host instantiates s3-wasm once
+  and routes extension calls to it).
+- **Browser** (when #437 vfs-tvm WAL lands): bridges to
+  `fetch` + a SigV4 JS impl via the polyfill. Cheaper than
+  running s3-wasm in JS-land.
+
+Three reasons this beats build-time `wac plug` baking or runtime
+composition:
+
+1. **Security model**: extensions don't bring their own
+   credentials. The host injects credentials via the bridge.
+   AWS keys / R2 tokens live with the host, not in extension
+   code. Same shape as policy/grants for capability-restricted
+   operations.
+2. **Pattern reuse**: mirrors the dispatch-bridge work from
+   #429/#432/#433/#436  one more flavor of "host-resident
+   capability surface."
+3. **Per-platform flexibility**: native can use the heavyweight
+   s3-wasm component directly; browser can route to fetch
+   (smaller, native to the platform).
+
+~2-3 days (including the per-platform impl).
+
+### Substrate 4 (#436): dispatch-bridge WAL hook
+
+Already done. Browser-side only; #438 completes the native side.
+
+### `dispatch-bridge` core methods (already done in #429/#432/#433/#436)
 
 ```wit
 // sqlite-wasm/wit/library.wit (dispatch-bridge interface):
@@ -66,10 +150,20 @@ Rust impl in sqlite-lib mirrors the scalar/aggregate/collation
 pattern (#429, #432). ~30 lines WIT, ~40 lines Rust. **Half a
 day.** Track as **#436 dispatch-bridge: WAL hook**.
 
-## Storage layer: use `~/git/s3-wasm` directly
+## Storage layer: host-resident `s3-base` via SPI bridge (substrate #440)
 
-The existing `~/git/s3-wasm` component is exactly the substrate
-this plan needs:
+After the design conversation on 2026-06-23, the extension does
+NOT import `component:s3-wasm/s3-base@0.1.0` directly. Instead it
+imports `sqlite:extension/s3-base@0.1.0` (the host-resident SPI
+bridge). The host's impl bridges to `~/git/s3-wasm` natively or
+to fetch+SigV4 in browser. See substrate #440 above.
+
+The underlying capability  any S3-compatible service (AWS, R2,
+Spaces, MinIO, Backblaze B2)  is unchanged from the original
+design. What changed is the wire shape: extensions never see
+S3 credentials; the host injects them at the bridge layer.
+
+For reference, `~/git/s3-wasm` exposes:
 
 ```
 interface s3-base {
@@ -168,9 +262,10 @@ world wal-archive-extension {
   import sqlite:extension/spi@0.1.0;
   import sqlite:extension/types@0.1.0;
   import sqlite:extension/metadata@0.1.0;
-  import component:s3-wasm/s3-base@0.1.0;
+  import sqlite:extension/wal-frames@0.1.0;   // substrate #439
+  import sqlite:extension/backup@0.1.0;       // substrate #439
+  import sqlite:extension/s3-base@0.1.0;      // substrate #440 (host-resident)
   import wasi:clocks/wall-clock@0.2.0;
-  import wasi:filesystem/types@0.2.0;
   export replicator;
 }
 ```
