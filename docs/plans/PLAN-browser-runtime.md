@@ -1,44 +1,51 @@
 # Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill
 
-## Status (2026-06-23  Stage H — JSPI runtime-bindgen END-TO-END)
+## Status (2026-06-23  Path 3 FULLY LANDED  persistent session)
 
-The composed `cli + sqlite-lib` single-memory component now runs in
-the browser end-to-end via JSPI:
+The composed `cli + sqlite-lib + single-memory` runtime is now the
+browser default. sql.js is gone. The Phase C close-out runs:
 
-  - `browser/src/sqlink-composed.js` swapped the build-time
-    `jco transpile` step for `createRuntimeBindgen({ jcoOptions: {
-    asyncMode: 'jspi', ... } })` from `@tegmentum/wasi-polyfill`.
-  - `wasi:io/poll.pollable.block`,
-    `wasi:io/streams.input-stream.blocking-read`, and
-    `wasi:io/streams.output-stream.blocking-write-and-flush` are
-    wrapped with `WebAssembly.Suspending`; `wasi:cli/run.run` is
-    wrapped with `WebAssembly.promising`. The cli can actually
-    await the polyfill's async plugins (which is what kept stdin
-    reading "EOF" through Stage 8G).
-  - `browser/tests/composed.spec.js` proves it:
-    `db.exec('SELECT 1+1;')` yields
-    `[{ columns: [], values: [['2']] }]` and
-    `db.execScalar('SELECT 2+2;')` yields `'4'`.
-  - Playwright's chromium 149.x ships JSPI on by default  no
-    launch flag needed. Documented in
-    `browser/playwright.config.js` and verified via
-    `browser/scripts/jspi-probe.mjs`.
-  - The composed `.wasm` is symlinked into `browser/public/` by
-    `browser/scripts/link-composed-wasm.mjs` so Vite serves it at
-    `/cli_with_sqlite.single_memory.component.wasm` for the
-    runtime `fetch()`.
+  - **Persistent REPL session.** `browser/src/sqlink-composed.js`'s
+    `ComposedDatabase` keeps one cli instance alive across
+    `db.exec()` calls. A long-lived `QueueInputStream` feeds stdin;
+    each `exec(sql)` pushes `<sql>; SELECT '<sentinel>';` and
+    awaits the sentinel value to frame the per-call stdout window.
+    DDL, INSERTs, attached dbs, and host-registered scalars all
+    persist across calls. Proof: `composed-persistent.spec.js`'s
+    CREATE / INSERT / SELECT / COUNT / INSERT / COUNT chain.
+  - **blockingRead monkey-patch.** The wasi-polyfill ships a
+    sync-only `WasiInputStreamWrapper.blockingRead` that returns
+    empty (= EOF to the wasip1 adapter) when the underlying queue
+    is empty  the cli used to exit on first idle read.
+    `browser/src/host-imports.js` patches the wrapper so its
+    `blockingRead` actually awaits the impl's async `read()`.
+    Under JSPI the wasm caller suspends; once we push, it resumes.
+  - **dispatch-bridge.** Already-landed in #427 Task 2+3: the
+    cli's `.load NAME` calls `spi-loader.register-scalar`, which
+    re-enters the composed binary via `dispatch-bridge.
+    register-host-scalar` to install a sqlite3 trampoline. SQL
+    calls to that scalar fire host-side `dispatch.scalar-call`,
+    which routes to the transpiled extension's
+    `scalar-function.call`. uuid / md5 / to-snake-case all roundtrip
+    end-to-end.
+  - **Default flip + sql.js drop.** `DEFAULT_USE_COMPOSED_CLI` is
+    gone; `openDatabase()` is now a thin re-export of
+    `openDatabaseComposed()`. `sql.js` is removed from
+    `browser/package.json`; the `buildAritied` arity-dispatch
+    machinery + cell converters are gone.
+  - **All Playwright specs pass.** demo + embed + composed +
+    composed-uuid + composed-persistent + smoke (43/43 fixtures)
+    = 6/6 green.
 
-The default still uses `sql.js`. The blocker is *not* JSPI any more
- it's the host-resident wiring of `sqlite:extension/spi-loader`.
-The composed cli registers scalar functions through that interface,
-and the browser host currently stubs it. Until each
-`register-scalar` re-enters JS and dispatches to the extension's
-already-transpiled component, extension-using fixtures (demo,
-embed, smoke) can't flip to the composed path. Once that lands,
-`sql.js` (and `buildAritied`-style monkey-patching) goes away.
-
-The 43/43 baseline (demo + embed + smoke) still passes; the new
-composed smoke makes it 44/44 (4 specs in the Playwright run).
+Follow-ups (not Phase C):
+  - jco's runtime-transpile of extension .component.wasm bytes
+    (today `loadExtension` requires a pre-transpiled module).
+  - Per-session isolation: the wasi-polyfill's `SharedStdioState`
+    singleton makes a per-fixture open/close pattern fail after
+    the first close. Smoke shares ONE composed session across
+    all 43 fixtures as a workaround.
+  - `register-aggregate` / `register-collation` host-side
+    trampolines (dispatch-bridge exposes scalars only).
 
 ## Status (2026-06-22  Path 3 — cold-tier substrate landed, browser bundle pending)
 
