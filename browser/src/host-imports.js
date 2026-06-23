@@ -54,60 +54,7 @@ import {
   QueueInputStream,
   createCustomStdio,
   resetGlobalStdioState,
-  WasiInputStreamWrapper,
 } from '@tegmentum/wasi-polyfill/wasip2/plugins/cli'
-// Monkey-patch the polyfill's WasiInputStreamWrapper.blockingRead so
-// it actually WAITS for data via the underlying impl's async `read()`
-// instead of returning empty (which the wasip1 adapter interprets as
-// EOF, causing the cli to exit on first idle).
-//
-// The polyfill's stock blockingRead only calls sync `tryRead` +
-// `waitForData`; if the impl is a vanilla QueueInputStream (no
-// waitForData, since SharedArrayBuffer is not available without COOP/
-// COEP headers) and the queue is empty, blockingRead returns
-// `new Uint8Array(0)` → EOF.
-//
-// Under JSPI the wasi:io/streams plugin's `inputStreamBlockingRead`
-// already awaits the wrapper's return value. So we make the wrapper
-// return a Promise that resolves when the impl's `read()` does. Under
-// JSPI the wasm caller suspends until data lands.
-//
-// Guard: only patch once per page (idempotent).
-if (!WasiInputStreamWrapper.__sqlinkBlockingPatched) {
-  const originalBlockingRead = WasiInputStreamWrapper.prototype.blockingRead
-  WasiInputStreamWrapper.prototype.blockingRead = function patchedBlockingRead(len) {
-    if (this.closed) return { tag: 'closed' }
-    // Fast path: stock behaviour for tryRead-bearing streams that
-    // have data ready (e.g. the legacy stdinContent path).
-    if (this.impl.tryRead) {
-      const data = this.impl.tryRead(Number(len))
-      if (data !== null) {
-        if (data.length === 0) return { tag: 'closed' }
-        return data
-      }
-    }
-    if (this.impl.waitForData) {
-      const data = this.impl.waitForData(Number(len))
-      if (data !== null) {
-        if (data.length === 0) return { tag: 'closed' }
-        return data
-      }
-    }
-    // Slow path: await the impl's async `read()`. Under JSPI the
-    // wasi:io/streams plugin awaits this Promise — wasm suspends
-    // until the impl pushes data.
-    if (typeof this.impl.read === 'function') {
-      return Promise.resolve(this.impl.read(Number(len))).then((data) => {
-        if (!(data instanceof Uint8Array)) return data
-        if (data.length === 0) return { tag: 'closed' }
-        return data
-      })
-    }
-    // No async path — preserve the legacy EOF behaviour.
-    return originalBlockingRead.call(this, len)
-  }
-  WasiInputStreamWrapper.__sqlinkBlockingPatched = true
-}
 
 // Re-export for callers (sqlink-composed.js) so the persistent
 // session can construct its own queue without taking a direct
