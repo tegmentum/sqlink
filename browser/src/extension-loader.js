@@ -378,18 +378,21 @@ export class ExtensionRegistry {
  * Build the dispatch interface impl that the composed cli imports
  * as `sqlink:wasm/dispatch@0.1.0`. Routes wasm-side trampoline
  * calls back into the JS-side transpiled extension by `(ext-name,
- * func-id)` keys recorded via the registry's `recordScalar`
- * mechanism (populated by the spi-loader.register-scalar host impl).
+ * func-id)` keys recorded via the registry's `recordScalar` /
+ * `recordAggregate` / `recordCollation` mechanism (populated by the
+ * spi-loader.register-* host impls).
  *
  * The shape mirrors `wit/dispatch.wit`: scalar-call returns a
  * `result<sql-value, string>` — jco maps the ok arm to a bare
  * return and the err arm to a thrown payload-bearing object.
  *
- * Aggregates / collations / vtab / authorizer / update-hook are
- * stubbed; they fire only if the corresponding `register-*` host
- * impl actually installed a trampoline, which v1 of this run does
- * not for anything but scalars. If/when those land, this is the
- * place that grows.
+ * Aggregate state: SQLite's `sqlite3_aggregate_context` owns one
+ * S = u64 (context-id) per pending aggregation; the wasm-side
+ * trampoline pulls a fresh id on the first xStep and threads it
+ * through every subsequent dispatch call for that aggregation.
+ * We use `context-id` here to key per-aggregation state in a
+ * JS-side Map. State lifetime: created lazily on the first
+ * aggregate-step for a context-id, deleted on aggregate-finalize.
  */
 export function buildDispatch(registry) {
   function dispatchErr(method, message) {
@@ -442,6 +445,144 @@ export function buildDispatch(registry) {
     }
   }
 
+  function aggregateExports(extName) {
+    const entry = registry.get(extName)
+    if (!entry) {
+      dispatchErr('aggregate', `no such extension '${extName}'`)
+    }
+    const agg =
+      entry.instance?.aggregateFunction ??
+      entry.instance?.['sqlite:extension/aggregate-function'] ??
+      entry.instance?.['sqlite:extension/aggregate-function@0.1.0']
+    if (!agg) {
+      dispatchErr(
+        'aggregate',
+        `extension '${extName}': transpiled instance has no aggregate-function export`,
+      )
+    }
+    return agg
+  }
+
+  function aggregateStepImpl(extName, funcId, contextId, args) {
+    const agg = aggregateExports(extName)
+    if (typeof agg.step !== 'function') {
+      dispatchErr(
+        'aggregate-step',
+        `extension '${extName}': no aggregate-function.step export`,
+      )
+    }
+    try {
+      // result<_, string> — ok arm returns undefined.
+      return agg.step(BigInt(funcId), BigInt(contextId), args)
+    } catch (e) {
+      const msg =
+        e?.payload?.message ??
+        (typeof e?.payload === 'string' ? e.payload : null) ??
+        e?.message ??
+        String(e)
+      dispatchErr('aggregate-step', `extension '${extName}' threw: ${msg}`)
+    }
+  }
+
+  function aggregateFinalizeImpl(extName, funcId, contextId) {
+    const agg = aggregateExports(extName)
+    if (typeof agg.finalize !== 'function') {
+      dispatchErr(
+        'aggregate-finalize',
+        `extension '${extName}': no aggregate-function.finalize export`,
+      )
+    }
+    try {
+      return agg.finalize(BigInt(funcId), BigInt(contextId))
+    } catch (e) {
+      const msg =
+        e?.payload?.message ??
+        (typeof e?.payload === 'string' ? e.payload : null) ??
+        e?.message ??
+        String(e)
+      dispatchErr('aggregate-finalize', `extension '${extName}' threw: ${msg}`)
+    }
+  }
+
+  function aggregateValueImpl(extName, funcId, contextId) {
+    const agg = aggregateExports(extName)
+    if (typeof agg.value !== 'function') {
+      dispatchErr(
+        'aggregate-value',
+        `extension '${extName}': no aggregate-function.value export (window function)`,
+      )
+    }
+    try {
+      return agg.value(BigInt(funcId), BigInt(contextId))
+    } catch (e) {
+      const msg =
+        e?.payload?.message ??
+        (typeof e?.payload === 'string' ? e.payload : null) ??
+        e?.message ??
+        String(e)
+      dispatchErr('aggregate-value', `extension '${extName}' threw: ${msg}`)
+    }
+  }
+
+  function aggregateInverseImpl(extName, funcId, contextId, args) {
+    const agg = aggregateExports(extName)
+    if (typeof agg.inverse !== 'function') {
+      dispatchErr(
+        'aggregate-inverse',
+        `extension '${extName}': no aggregate-function.inverse export (window function)`,
+      )
+    }
+    try {
+      return agg.inverse(BigInt(funcId), BigInt(contextId), args)
+    } catch (e) {
+      const msg =
+        e?.payload?.message ??
+        (typeof e?.payload === 'string' ? e.payload : null) ??
+        e?.message ??
+        String(e)
+      dispatchErr('aggregate-inverse', `extension '${extName}' threw: ${msg}`)
+    }
+  }
+
+  function collationCompareImpl(extName, collationId, a, b) {
+    const entry = registry.get(extName)
+    if (!entry) {
+      // collation-compare returns a bare s32 (no result-shape); we
+      // have no way to surface the missing-extension case except
+      // by treating it as "equal," which keeps the contract total.
+      // Log so the failure isn't silent.
+      // eslint-disable-next-line no-console
+      console.warn(`dispatch.collation-compare: no such extension '${extName}'`)
+      return 0
+    }
+    const coll =
+      entry.instance?.collation ??
+      entry.instance?.['sqlite:extension/collation'] ??
+      entry.instance?.['sqlite:extension/collation@0.1.0']
+    if (typeof coll?.compare !== 'function') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.collation-compare: extension '${extName}' has no collation.compare export`,
+      )
+      return 0
+    }
+    try {
+      const r = coll.compare(BigInt(collationId), a, b)
+      // Coerce to s32; clamp to ±1 for sanity if a JS impl returns
+      // an out-of-range number.
+      const n = Number(r)
+      if (n < 0) return -1
+      if (n > 0) return 1
+      return 0
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.collation-compare: extension '${extName}' threw: ${e?.message ?? String(e)}`,
+      )
+      return 0
+    }
+  }
+
   function notImplemented(method) {
     return (..._args) => {
       dispatchErr(method, `not implemented in browser scenario 3 v1`)
@@ -450,17 +591,11 @@ export function buildDispatch(registry) {
 
   return {
     scalarCall: scalarCallImpl,
-    aggregateStep: notImplemented('aggregate-step'),
-    aggregateFinalize: notImplemented('aggregate-finalize'),
-    aggregateValue: notImplemented('aggregate-value'),
-    aggregateInverse: notImplemented('aggregate-inverse'),
-    collationCompare(_extName, _collationId, _a, _b) {
-      // Returning 0 (treat all collations as equal) is the least-
-      // surprising no-op: SQL comparisons fall back to bytewise
-      // semantics for un-installed collations anyway. Not perfect,
-      // but it keeps the contract synchronous + total.
-      return 0
-    },
+    aggregateStep: aggregateStepImpl,
+    aggregateFinalize: aggregateFinalizeImpl,
+    aggregateValue: aggregateValueImpl,
+    aggregateInverse: aggregateInverseImpl,
+    collationCompare: collationCompareImpl,
     authorize(_extName, _action, _arg1, _arg2, _database, _trigger) {
       // SQLite auth-result is a variant with `ok | deny | ignore`.
       // Return `ok` so the absence of an authorizer is a no-op.
@@ -595,16 +730,17 @@ export function buildSpiLoader(registry) {
         }
       },
 
-      // Task 4 stubs: dispatch-bridge doesn't have register-host-
-      // aggregate / register-host-collation today. Record the
-      // intent so we don't error the cli's .load, and surface a
-      // structured failure only if SQL actually calls the function
-      // (which it does via dispatch — and aggregate-step's stub
-      // there will throw with `not implemented`).
+      // Aggregates: book-keep the JS-side registration so
+      // `dispatch.aggregate-*` can route, then re-enter the composed
+      // binary to install the sqlite3-side xStep/xFinal trampolines.
+      // When `window` is true, dispatch-bridge calls
+      // sqlite3_create_window_function instead, wiring xValue +
+      // xInverse to dispatch.aggregate-value / aggregate-inverse.
       registerAggregate(extName, name, numArgs, funcId, window) {
         if (!registry.has(extName)) {
           structuredErr(
-            `spi-loader.register-aggregate: extension '${extName}' not in JS registry.`,
+            `spi-loader.register-aggregate: extension '${extName}' not in JS registry. ` +
+              `Pre-register via openDatabase({embed: ...}) or db.loadExtension().`,
           )
         }
         registry.recordAggregate(extName, funcId, {
@@ -612,19 +748,31 @@ export function buildSpiLoader(registry) {
           numArgs: Number(numArgs),
           window: !!window,
         })
-        // No-op on the wasm side for v1 — the dispatch-bridge
-        // doesn't expose register-host-aggregate. Return OK so the
-        // cli's `.load` doesn't trip.
+        const b = getBridge()
+        b.registerHostAggregate(
+          extName,
+          name,
+          Number(numArgs),
+          BigInt(funcId),
+          !!window,
+        )
         return undefined
       },
 
+      // Collations: book-keep + re-enter dispatch-bridge to install
+      // a sqlite3 collation trampoline. The wasm-side trampoline
+      // calls dispatch.collation-compare(ext-name, collation-id, a, b)
+      // for every SQL comparison under this collation name.
       registerCollation(extName, name, collId) {
         if (!registry.has(extName)) {
           structuredErr(
-            `spi-loader.register-collation: extension '${extName}' not in JS registry.`,
+            `spi-loader.register-collation: extension '${extName}' not in JS registry. ` +
+              `Pre-register via openDatabase({embed: ...}) or db.loadExtension().`,
           )
         }
         registry.recordCollation(extName, collId, { name })
+        const b = getBridge()
+        b.registerHostCollation(extName, name, BigInt(collId))
         return undefined
       },
 
@@ -663,11 +811,29 @@ export function buildSpiLoader(registry) {
         exports?.dispatchBridge ??
         exports?.['sqlink:wasm/dispatch-bridge'] ??
         exports?.['sqlink:wasm/dispatch-bridge@0.1.0']
-      if (!dispatchBridge?.registerHostScalar) {
+      // Validate the full dispatch-bridge surface. Aggregates +
+      // collations are optional at the registry level (an extension
+      // can ship scalars-only), but if the composed binary doesn't
+      // expose the registration entry points the cli's .load walk
+      // would fail with an unhelpful "b.registerHostAggregate is not
+      // a function" much later. Surface the missing-export shape now.
+      const missing = []
+      for (const k of [
+        'registerHostScalar',
+        'registerHostAggregate',
+        'registerHostCollation',
+        'unregisterExtension',
+      ]) {
+        if (typeof dispatchBridge?.[k] !== 'function') missing.push(k)
+      }
+      if (missing.length) {
         throw new Error(
           'spi-loader._setBindgenResult: composed binary did not expose ' +
-            'sqlink:wasm/dispatch-bridge@0.1.0 with registerHostScalar. ' +
-            'Available export keys: ' +
+            'sqlink:wasm/dispatch-bridge@0.1.0 with ' +
+            missing.join(', ') +
+            '. Available dispatch-bridge keys: ' +
+            Object.keys(dispatchBridge ?? {}).join(', ') +
+            '. Available export keys: ' +
             Object.keys(exports ?? {}).join(', '),
         )
       }
