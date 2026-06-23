@@ -148,11 +148,11 @@ host does:
    npm test`. **Phase C is fully landed**: composed runtime +
    persistent session + dispatch-bridge wiring; sql.js is gone.
    See `browser/src/sqlink-composed.js`, the cross-spec test set
-   (composed / composed-uuid / composed-persistent / demo /
-   embed / smoke), and
+   (composed / composed-uuid / composed-persistent / composed-
+   runtime-ext / demo / embed / smoke), and
    [docs/plans/PLAN-browser-runtime.md](docs/plans/PLAN-browser-runtime.md).
 
-   Sub-option:
+   Sub-options:
      - **Embedded extensions.** Same as scenario 2  ship a
        single bundle with extensions baked in via
        `include_bytes!`-equivalent at the JS side (a single
@@ -161,6 +161,16 @@ host does:
        capable PWAs, embedded docs / playgrounds, or any context
        where deferring extension load to a CDN round-trip isn't
        acceptable.
+     - **Dynamic load from raw bytes.** `db.loadExtension(name,
+       bytes)` accepts a `Uint8Array` of an extension's
+       `.component.wasm` and instantiates it in-browser via
+       `createRuntimeBindgen` no `npm run transpile` step
+       required. The build-time `transpile-extensions.mjs`
+       remains useful for AOT-bundled / code-split extensions,
+       but is no longer mandatory: a page can fetch an
+       extension's component bytes from a CDN, an uploaded file,
+       or `import.meta.url`-relative asset and pass them
+       straight in.
 
 The WIT contract in `sqlite-loader-wit/` is the single point of
 truth that lets the same extension binary work in all three
