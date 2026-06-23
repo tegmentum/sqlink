@@ -466,6 +466,23 @@ class ComposedDatabase {
     return this._registry.names()
   }
 
+  /// Install the loaded extension's `wal-hook.on-wal-hook` callback
+  /// (selected by `hookId`) as the active WAL hook on the cli's
+  /// shared connection. Calls the spi-loader's register-wal-hook
+  /// impl directly from JS  the cli's `.load` flow doesn't drive
+  /// wal-hook registration off any manifest flag (unlike
+  /// authorizer/update-hook/commit-hook), so the test fixture wires
+  /// it explicitly. Substrate primitive used by the wal-archive
+  /// extension.
+  registerWalHook(extName, hookId) {
+    if (!this._spiLoader || !this._spiLoader.impl) {
+      throw new Error(
+        'registerWalHook: spi-loader is not initialized yet  open() must resolve first.',
+      )
+    }
+    return this._spiLoader.impl.registerWalHook(extName, hookId)
+  }
+
   manifest(name) {
     return this._registry.get(name)?.manifest
   }

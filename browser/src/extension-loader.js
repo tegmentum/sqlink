@@ -323,6 +323,7 @@ export class ExtensionRegistry {
         updateHook: false,
         commitHook: false,
         rollbackHook: false,
+        walHook: false,
       },
     }
     this._byName.set(name, entry)
@@ -398,6 +399,7 @@ export class ExtensionRegistry {
         updateHook: false,
         commitHook: false,
         rollbackHook: false,
+        walHook: false,
       },
     }
     this._byName.set(name, entry)
@@ -441,12 +443,12 @@ export class ExtensionRegistry {
   }
 
   /**
-   * Flag this extension as owning one of the four singleton-per-
+   * Flag this extension as owning one of the singleton-per-
    * connection hook kinds: `'authorizer'`, `'updateHook'`,
-   * `'commitHook'`, or `'rollbackHook'`. Used by `buildDispatch` to
-   * skip the lookup-by-export-shape sanity check on extensions that
-   * never declared the corresponding `has-*-hook` flag in their
-   * manifest. No-ops on unknown kinds.
+   * `'commitHook'`, `'rollbackHook'`, or `'walHook'`. Used by
+   * `buildDispatch` to skip the lookup-by-export-shape sanity check
+   * on extensions that never declared the corresponding `has-*-hook`
+   * flag in their manifest. No-ops on unknown kinds.
    */
   recordHook(extName, kind) {
     const entry = this._byName.get(extName)
@@ -470,6 +472,7 @@ export class ExtensionRegistry {
     entry.hooks.updateHook = false
     entry.hooks.commitHook = false
     entry.hooks.rollbackHook = false
+    entry.hooks.walHook = false
   }
 
   get(name) {
@@ -826,6 +829,40 @@ export function buildDispatch(registry) {
     }
   }
 
+  function walHookImpl(extName, hookId, dbName, nFramesInWal) {
+    const ext = hookExports(extName, 'walHook', 'wal-hook')
+    if (!ext || typeof ext.onWalHook !== 'function') {
+      // No wal-hook export but a register-host-wal-hook trampoline
+      // fired — log + return SQLITE_OK so the SQL statement keeps
+      // going. The dispatch-bridge trampoline only installs when
+      // register-host-wal-hook ran for this ext-name, so reaching
+      // here means the JS host registered without backing the
+      // extension; surface as a warning so it isn't silent.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.wal-hook: extension '${extName}' has no wal-hook.onWalHook export; ` +
+          `returning SQLITE_OK`,
+      )
+      return 0
+    }
+    try {
+      const r = ext.onWalHook(BigInt(hookId), dbName, Number(nFramesInWal))
+      // Extension returns the raw sqlite result code (0 = SQLITE_OK).
+      // Normalize to a number; non-finite or non-integer values fall
+      // back to 0 so a buggy extension can't trap the SQL statement.
+      const n = Number(r)
+      if (!Number.isFinite(n)) return 0
+      return n | 0
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.wal-hook: extension '${extName}' threw: ${e?.message ?? String(e)}; ` +
+          `returning SQLITE_OK`,
+      )
+      return 0
+    }
+  }
+
   return {
     scalarCall: scalarCallImpl,
     aggregateStep: aggregateStepImpl,
@@ -837,6 +874,7 @@ export function buildDispatch(registry) {
     onUpdate: onUpdateImpl,
     onCommit: onCommitImpl,
     onRollback: onRollbackImpl,
+    walHook: walHookImpl,
     vtabCreate: notImplemented('vtab-create'),
     vtabConnect: notImplemented('vtab-connect'),
     vtabDestroy: notImplemented('vtab-destroy'),
@@ -1060,6 +1098,23 @@ export function buildSpiLoader(registry) {
         b.registerHostRollbackHook(extName)
         return undefined
       },
+      // WAL hooks: substrate primitive for the wal-archive extension.
+      // SQLite fires the wal-hook AFTER a WAL commit has appended
+      // frames to the WAL; the extension's wal-hook.on-wal-hook
+      // returns SQLITE_OK or a non-zero result code to propagate.
+      // Last-write-wins per the other singleton-per-connection slots.
+      registerWalHook(extName, hookId) {
+        if (!registry.has(extName)) {
+          structuredErr(
+            `spi-loader.register-wal-hook: extension '${extName}' not in JS registry. ` +
+              `Pre-register via openDatabase({embed: ...}) or db.loadExtension().`,
+          )
+        }
+        registry.recordHook(extName, 'walHook')
+        const b = getBridge()
+        b.registerHostWalHook(extName, BigInt(hookId))
+        return undefined
+      },
       registerVtab(_extName, _name, _vtabId, _eponymous, _mutable, _batched) {
         return undefined
       },
@@ -1095,6 +1150,7 @@ export function buildSpiLoader(registry) {
         'registerHostUpdateHook',
         'registerHostCommitHook',
         'registerHostRollbackHook',
+        'registerHostWalHook',
         'unregisterExtension',
       ]) {
         if (typeof dispatchBridge?.[k] !== 'function') missing.push(k)
