@@ -163,6 +163,8 @@ mod wasm_export {
                 has_authorizer: true,
                 has_update_hook: true,
                 has_commit_hook: true,
+                has_wal_hook: true,
+                wal_hook_id: WAL_HOOK_ID,
                 dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
             }
@@ -283,11 +285,13 @@ mod wasm_export {
         }
     }
 
-    /// WAL hook id the browser spec installs via spi-loader.register-
-    /// wal-hook. Hookprobe declares no manifest list for wal hooks
-    /// (the substrate doesn't require one  the spec drives
-    /// registration explicitly), so any non-zero id is fine.
-    #[allow(dead_code)]
+    /// WAL hook id the host echoes back to `wal-hook.on-wal-hook`.
+    /// Declared in the manifest's `wal-hook-id` field; the native
+    /// cli wires it via spi-loader.register-wal-hook(ext_name, 42)
+    /// when it sees `has-wal-hook: true`. The browser spec
+    /// explicitly calls `db.registerWalHook(ext_name, 42)` with the
+    /// same constant so both deployment paths drive the same id
+    /// through `on_wal_hook`.
     const WAL_HOOK_ID: u64 = 42;
 
     impl WalHookGuest for Ext {
