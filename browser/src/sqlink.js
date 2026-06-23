@@ -34,18 +34,23 @@ import { buildExtensionImports } from './wasi-imports.js'
 import { EXTENSION_LOADERS, EXTENSION_NAMES } from './generated/index.js'
 import { openDatabaseComposed } from './sqlink-composed.js'
 
-// Stage 8 transitional flag. The composed cli+sqlite-lib runtime
-// is the long-term browser target (one wasm component, no sql.js,
-// real SQLite under the wasi-polyfill). The transpile of that
-// runtime is currently blocked by jco's lack of multi-memory
-// support — see browser/src/IMPORTS.md for the blocker and the
-// path forward. Until it clears, the default stays on the sql.js
-// path so the 3 Playwright tests keep their existing baseline.
+// Stage 8 transitional flag. The composed cli+sqlite-lib runtime is
+// the long-term browser target (one wasm component, no sql.js, real
+// SQLite under the wasi-polyfill). Stage H landed the JSPI runtime-
+// bindgen path so `SELECT 1+1;` and other extension-free SQL work
+// end-to-end (see tests/composed.spec.js).
 //
-// Opt in with `openDatabase({ useComposedCli: true })` once the
-// blocker clears; the wiring under that flag pulls in
-// ./sqlink-composed.js which uses ./host-imports.js +
-// ./extension-loader.js to drive the composed runtime.
+// Default REMAINS sql.js for one reason only: the composed cli's
+// `sqlite:extension/spi-loader` (where `.load NAME` ultimately
+// registers scalar function pointers into SQLite) is stubbed in the
+// browser host. Until that interface is wired to actually re-enter
+// JS for each scalar call, extension-using tests can't be retargeted
+// to the composed path — the demo/embed/smoke specs all require at
+// least one extension to register.
+//
+// Opt in per call with `openDatabase({ useComposedCli: true })`; the
+// flag pulls in ./sqlink-composed.js which uses ./host-imports.js +
+// ./extension-loader.js to drive the composed runtime via JSPI.
 const DEFAULT_USE_COMPOSED_CLI = false
 
 let SQL = null
