@@ -1,0 +1,40 @@
+// Compose `sqlite-cli-command` with `sqlite-library` (sqlite-lib)
+// so the cli's `sqlite:extension/spi*` imports get satisfied by
+// sqlite-lib's exports, producing a single component that
+// exports `wasi:cli/run` and contains SQLite + the multi-memory
+// cold-tier substrate.
+//
+// Run with:
+//
+//   wac plug \
+//     --plug sqlite-wasm/target/wasm32-wasip2/release/sqlite_lib.component.wasm \
+//     target/wasm32-wasip2/release/sqlite_cli.component.wasm \
+//     -o target/wasm32-wasip2/release/cli_with_sqlite.component.wasm
+//
+// `wac plug` infers the wiring: every interface sqlite-lib exports
+// that matches one the cli imports gets connected.
+//
+// Imports the output STILL needs the embedder to satisfy:
+//
+//   * sqlite:extension/{http, policy, types, metadata}@0.1.0
+//     (host-side capability gates the cli + extensions consume)
+//   * sqlink:wasm/extension-loader@0.1.0
+//   * sqlite:extension/spi-loader@0.1.0
+//   * the wasi:cli + wasi:io + wasi:clocks + wasi:filesystem +
+//     wasi:random preview-2 set
+//
+// Production wiring of those (browser polyfill, embedded
+// extensions, …) lives in scripts/build-composed-runtime.sh.
+
+package sqlite:composed-runtime@0.1.0;
+
+let lib = new sqlite:wasm-lib { ... };
+let cli = new sqlite:cli {
+    "sqlite:extension/types@0.1.0":   lib["sqlite:extension/types@0.1.0"],
+    "sqlite:extension/spi@0.1.0":     lib["sqlite:extension/spi@0.1.0"],
+    "sqlite:extension/logging@0.1.0": lib["sqlite:extension/logging@0.1.0"],
+    "sqlite:extension/config@0.1.0":  lib["sqlite:extension/config@0.1.0"],
+    ...
+};
+
+export cli["wasi:cli/run@0.2.6"];

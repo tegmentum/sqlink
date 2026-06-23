@@ -75,6 +75,11 @@ async fn instantiate() -> Result<Option<(Store<State>, SqliteLibrary)>> {
     let Some(path) = sqlite_lib_path() else { return Ok(None); };
     let mut config = Config::new();
     config.wasm_component_model(true);
+    // Path 3: sqlite-lib.component.wasm is now a multi-memory
+    // module — pool 1 is the pcache cold tier, pool 2 is the VFS
+    // cold tier. The wasm-multi-memory proposal must be enabled
+    // for `Component::from_binary` to accept the module section.
+    config.wasm_multi_memory(true);
     let engine = Engine::new(&config)?;
     let bytes = std::fs::read(&path)?;
     let component = Component::from_binary(&engine, &bytes)?;
