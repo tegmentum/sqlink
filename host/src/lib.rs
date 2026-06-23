@@ -827,6 +827,8 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
         has_authorizer: ext.has_authorizer,
         has_update_hook: ext.has_update_hook,
         has_commit_hook: ext.has_commit_hook,
+        has_wal_hook: ext.has_wal_hook,
+        wal_hook_id: ext.wal_hook_id,
         declared_capabilities: vec![],
     }
 }
@@ -876,6 +878,15 @@ pub struct LoadedExtension {
     /// paired with commit on the wasm side; SQLite separates them but
     /// our WIT keeps them together).
     pub has_commit_hook: bool,
+    /// Whether the extension exports a `wal-hook`. The host's spi-
+    /// loader installs a wal_hook trampoline on the shared connection
+    /// when this is true.
+    pub has_wal_hook: bool,
+    /// Identifier the host echoes back to the extension's
+    /// `wal-hook.on-wal-hook` callback. Only meaningful when
+    /// `has_wal_hook` is true; the extension picked it in
+    /// `manifest.wal-hook-id`.
+    pub wal_hook_id: u64,
     /// Persistent per-extension state backing the `state` interface.
     pub state: SharedKv,
     /// In-memory cache backing the `cache` interface. TTLs from the
@@ -2207,6 +2218,37 @@ fn sync_dispatch_on_rollback(host: &Host, ext_name: &str) -> anyhow::Result<()> 
     tokio::task::block_in_place(|| {
         tokio::runtime::Handle::current().block_on(host.dispatch_on_rollback(ext_name))
     })
+}
+
+fn sync_dispatch_on_wal_hook(
+    host: &Host,
+    ext_name: &str,
+    hook_id: u64,
+    db_name: &str,
+    n_frames: u32,
+) -> anyhow::Result<i32> {
+    tokio::task::block_in_place(|| {
+        tokio::runtime::Handle::current().block_on(host.dispatch_on_wal_hook(
+            ext_name, hook_id, db_name, n_frames,
+        ))
+    })
+}
+
+/// SQLite ships with a default WAL hook wired to its
+/// auto-checkpoint machinery (PRAGMA wal_autocheckpoint defaults
+/// to 1000). The default hook's user-data pointer is internal
+/// SQLite state, NOT a Rust `Box<F>` — so the first call to
+/// `conn.wal_hook(Some(F))` would have the closure-style
+/// `Box::from_raw(prev as *mut F)` cleanup misinterpret SQLite's
+/// internal pointer as a Rust closure and segfault on drop.
+///
+/// Call this once before installing the extension's wal hook to
+/// clear SQLite's default. `sqlite3_wal_autocheckpoint(db, 0)`
+/// internally invokes `sqlite3_wal_hook(db, NULL, NULL)` per the
+/// official docs, returning the wal-hook slot to a clean (null
+/// user-data) state.
+unsafe fn clear_default_wal_autocheckpoint(db: *mut libsqlite3_sys::sqlite3) {
+    let _ = libsqlite3_sys::sqlite3_wal_autocheckpoint(db, 0);
 }
 
 unsafe fn unregister_host_loaded_collation(
@@ -4243,6 +4285,10 @@ pub struct Host {
     ext_authorizer_owner: Arc<Mutex<Option<String>>>,
     ext_update_hook_owner: Arc<Mutex<Option<String>>>,
     ext_commit_hook_owner: Arc<Mutex<Option<String>>>,
+    /// Active wal-hook owner + the manifest-declared hook-id the
+    /// host echoes back to `wal-hook.on-wal-hook`. None when no
+    /// extension has installed a wal-hook on the shared connection.
+    ext_wal_hook_owner: Arc<Mutex<Option<(String, u64)>>>,
     /// PLAN-cli-stages-5-6.md Stage 5e.10e: per-extension list of
     /// vtab module names the host registered on the shared spi
     /// connection. Same lifecycle as the scalar/aggregate maps;
@@ -4661,6 +4707,7 @@ impl Host {
             ext_authorizer_owner: Arc::new(Mutex::new(None)),
             ext_update_hook_owner: Arc::new(Mutex::new(None)),
             ext_commit_hook_owner: Arc::new(Mutex::new(None)),
+            ext_wal_hook_owner: Arc::new(Mutex::new(None)),
             ext_vtab_registrations: Arc::new(Mutex::new(HashMap::new())),
             session_handles: Arc::new(Mutex::new(HashMap::new())),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
@@ -5315,6 +5362,8 @@ impl Host {
             has_authorizer: false,
             has_update_hook: false,
             has_commit_hook: false,
+            has_wal_hook: false,
+            wal_hook_id: 0,
             state: Arc::new(Mutex::new(HashMap::new())),
             cache: Arc::new(Mutex::new(HashMap::new())),
             spi_conn: self.shared_spi_conn.clone(),
@@ -5546,6 +5595,8 @@ impl Host {
             has_authorizer: false,
             has_update_hook: false,
             has_commit_hook: false,
+            has_wal_hook: false,
+            wal_hook_id: 0,
             state: Arc::new(Mutex::new(HashMap::new())),
             cache: Arc::new(Mutex::new(HashMap::new())),
             spi_conn: self.shared_spi_conn.clone(),
@@ -5685,6 +5736,8 @@ impl Host {
                 has_authorizer: manifest.has_authorizer,
                 has_update_hook: manifest.has_update_hook,
                 has_commit_hook: manifest.has_commit_hook,
+                has_wal_hook: manifest.has_wal_hook,
+                wal_hook_id: manifest.wal_hook_id,
                 state: Arc::new(Mutex::new(HashMap::new())),
                 cache: Arc::new(Mutex::new(HashMap::new())),
                 spi_conn: self.shared_spi_conn.clone(),
@@ -5984,6 +6037,24 @@ impl Host {
                 let _ = sync_dispatch_on_rollback(&host_r, &ext_r);
             }));
             *self.ext_commit_hook_owner.lock() = Some(ext_name.to_string());
+            hooks += 1;
+        }
+        if ext.has_wal_hook {
+            let host_c = self.clone();
+            let ext_n = ext_name.to_string();
+            let hook_id = ext.wal_hook_id;
+            let g = self.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("shared_spi_conn open");
+            unsafe { clear_default_wal_autocheckpoint(conn.raw_handle()) };
+            conn.wal_hook(Some(move |db_name: &str, n_frames: i32| {
+                let n = if n_frames < 0 { 0u32 } else { n_frames as u32 };
+                match sync_dispatch_on_wal_hook(&host_c, &ext_n, hook_id, db_name, n) {
+                    Ok(rc) => rc,
+                    Err(_) => 0,
+                }
+            }));
+            *self.ext_wal_hook_owner.lock() = Some((ext_name.to_string(), hook_id));
             hooks += 1;
         }
 
@@ -7393,6 +7464,39 @@ impl Host {
             .map_err(|e| anyhow!("call_on_rollback: {e}"))
     }
 
+    /// Route a WAL-commit callback. SQLite fires the wal-hook after
+    /// each WAL commit has appended `n_frames` frames to the WAL for
+    /// `db_name`. Returns the s32 result code from the extension (0 =
+    /// SQLITE_OK; non-zero propagates as an error to the calling
+    /// statement).
+    pub async fn dispatch_on_wal_hook(
+        &self,
+        ext_name: &str,
+        hook_id: u64,
+        db_name: &str,
+        n_frames: u32,
+    ) -> Result<i32> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
+        let linker = make_loaded_hooked_linker(&self.engine)?;
+        let mut store =
+            build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let instance =
+            loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
+                .await
+                .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
+        instance
+            .sqlite_extension_wal_hook()
+            .call_on_wal_hook(&mut store, hook_id, db_name, n_frames)
+            .await
+            .map_err(|e| anyhow!("call_on_wal_hook: {e}"))
+    }
+
     /// Load + run a runnable component. Instantiates the component
     /// against the host's compose-linker wiring, calls fiji.run(),
     /// returns the output string. Each call gets a fresh Store —
@@ -8777,6 +8881,39 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         Ok(())
     }
 
+    async fn register_wal_hook(
+        &mut self,
+        ext_name: String,
+        hook_id: u64,
+    ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+        shared_spi_ensure_open(self.host)?;
+        let g = self.host.shared_spi_conn.lock();
+        let r = g.borrow();
+        let conn = r.as_ref().expect("ensured open");
+        // SQLite installs an internal wal-hook for the
+        // auto-checkpoint machinery by default; clear it before
+        // wiring our own so db::Connection::wal_hook doesn't try to
+        // Box::from_raw SQLite's opaque internal pointer (segfault).
+        unsafe { clear_default_wal_autocheckpoint(conn.raw_handle()) };
+        let host_c = self.host.clone();
+        let ext_c = ext_name.clone();
+        // sqlite's wal_hook takes (db_name: &str, n_frames: i32) ->
+        // i32. The WIT on-wal-hook signature widens n_frames to u32
+        // (SQLite never returns negative frame counts). Errors from
+        // the dispatch tunnel become SQLITE_OK on the C side — the
+        // alternative would be to abort the calling statement on
+        // tunnel hiccups, which is worse than a missed event.
+        conn.wal_hook(Some(move |db_name: &str, n_frames: i32| {
+            let n = if n_frames < 0 { 0u32 } else { n_frames as u32 };
+            match sync_dispatch_on_wal_hook(&host_c, &ext_c, hook_id, db_name, n) {
+                Ok(rc) => rc,
+                Err(_) => 0,
+            }
+        }));
+        *self.host.ext_wal_hook_owner.lock() = Some((ext_name, hook_id));
+        Ok(())
+    }
+
     async fn register_vtab(
         &mut self,
         ext_name: String,
@@ -8836,6 +8973,11 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             let mut g = self.host.ext_commit_hook_owner.lock();
             if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
         };
+        let drop_wal_hook = {
+            let mut g = self.host.ext_wal_hook_owner.lock();
+            let owned = g.as_ref().is_some_and(|(n, _)| n == &ext_name);
+            if owned { *g = None; true } else { false }
+        };
         if scalars.is_none()
             && colls.is_none()
             && aggs.is_none()
@@ -8843,6 +8985,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             && !drop_authorizer
             && !drop_update_hook
             && !drop_commit_hook
+            && !drop_wal_hook
         {
             return;
         }
@@ -8892,6 +9035,25 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         if drop_commit_hook {
             conn.commit_hook::<fn() -> bool>(None);
             conn.rollback_hook::<fn()>(None);
+        }
+        if drop_wal_hook {
+            // db::Connection::wal_hook is generic on F; passing
+            // None requires committing to *some* F type, and the
+            // closure-typed installer will then Box::drop the
+            // previously-installed closure as if it were that F.
+            // The installer captured Host + String + u64 — a
+            // different F type per install — so the wrong-type
+            // drop is UB. Clear via the raw FFI instead, which
+            // sets the slot to (NULL, NULL) and intentionally
+            // leaks the prior Box<F>. The leak is per-extension-
+            // unload and is reclaimed at process exit.
+            let _ = unsafe {
+                libsqlite3_sys::sqlite3_wal_hook(
+                    conn.raw_handle(),
+                    None,
+                    std::ptr::null_mut(),
+                )
+            };
         }
     }
 

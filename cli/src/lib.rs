@@ -1344,6 +1344,15 @@ fn do_load(input: &str) -> String {
             Err(e) => eprintln!("register commit_hook: {} (code {})", e.message, e.code),
         }
     }
+    if manifest.has_wal_hook {
+        match bindings::sqlite::extension::spi_loader::register_wal_hook(
+            &ext_name,
+            manifest.wal_hook_id,
+        ) {
+            Ok(()) => h_count_host += 1,
+            Err(e) => eprintln!("register wal_hook: {} (code {})", e.message, e.code),
+        }
+    }
     let mut v_count_host = 0;
     for spec in &manifest.vtabs {
         match bindings::sqlite::extension::spi_loader::register_vtab(

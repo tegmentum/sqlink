@@ -138,6 +138,8 @@ mod wasm_export {
                 has_authorizer: false,
                 has_update_hook: false,
                 has_commit_hook: false,
+                has_wal_hook: false,
+                wal_hook_id: 0,
                 declared_capabilities: alloc::vec![],
             }
         }

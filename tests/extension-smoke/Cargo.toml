@@ -39,6 +39,16 @@ path = "src/test_native.rs"
 name = "extension_smoke_loader"
 path = "src/test_loader.rs"
 
+[[test]]
+# Native mirror of browser/tests/composed-wal-hook.spec.js. One
+# #[test] per deployment path (sqlink-native + sqlink+wasm-cli);
+# both load hookprobe, toggle journal_mode=WAL on a file-backed
+# db, INSERT a few rows, and assert the extension's drain-log
+# carries at least one `wal:42:main:<n>` event proving the WAL-
+# hook substrate fired end-to-end.
+name = "extension_smoke_wal_hook"
+path = "src/test_wal_hook.rs"
+
 [[bin]]
 name = "extension-smoke-report"
 path = "src/report.rs"

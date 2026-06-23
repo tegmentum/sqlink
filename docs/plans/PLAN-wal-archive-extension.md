@@ -48,13 +48,29 @@ original plan assumed all four were in place, they weren't. Each
 is ~1-2 days; total ~5 days of substrate before the extension's
 ~12 days.
 
-### Substrate 1 (#438): native cli wal-hook wiring
+### Substrate 1 (#438): native cli wal-hook wiring — RESOLVED
 
-`#436` wired the dispatch-bridge browser-side only. The native cli
-(`cli/src/lib.rs`) registers six hook kinds during extension load
-but no `register_wal_hook` call. Add it + a `has-wal-hook` field
-on the manifest record in `sqlite-loader-wit/wit/guest.wit`
-(referenced in a comment but never declared). ~1 day.
+Landed on branch `cli-wal-hook-wiring` (sqlink) + sqlite-loader-wit
+`main` (ab3576f). The native side now mirrors the browser-side
+substrate that `#436` shipped:
+
+  - `sqlite-loader-wit/wit/guest.wit`: `manifest.has-wal-hook: bool`
+    + `manifest.wal-hook-id: u64`; `hooked` world also exports
+    `wal-hook` so a single loader linker dispatches all four hook
+    surfaces.
+  - `host/src/lib.rs`: `register_wal_hook` impl on the spi-loader
+    trait + `dispatch_on_wal_hook` async dispatcher. Clears
+    SQLite's default `wal_autocheckpoint` wal-hook before installing
+    the extension's (avoids a UB drop of SQLite's internal pointer).
+  - `cli/src/lib.rs`: parallel `if manifest.has_wal_hook { register_wal_hook(...) }`
+    block alongside the existing `has-authorizer` / `has-update-hook` /
+    `has-commit-hook` walks.
+  - `extensions/hookprobe`: manifest declares `has-wal-hook: true` /
+    `wal-hook-id: 42`.
+  - `tests/extension-smoke/src/test_wal_hook.rs`: native mirror of
+    `browser/tests/composed-wal-hook.spec.js`, asserts a
+    `wal:42:main:<n>` event in hookprobe's drain log after a
+    `PRAGMA journal_mode=WAL` + a handful of INSERTs.
 
 ### Substrate 2 (#439): wal-frames + backup SPI interfaces
 
