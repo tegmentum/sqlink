@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "transpile": "node scripts/transpile-extensions.mjs",
+    "transpile-cli": "node scripts/transpile-cli.mjs",
     "fixtures": "node scripts/build-fixtures.mjs",
     "pretest": "npm run fixtures",
     "build": "vite build",
