@@ -56,6 +56,14 @@ import {
   resetGlobalStdioState,
 } from '@tegmentum/wasi-polyfill/wasip2/plugins/cli'
 
+// Note: WasiInputStreamWrapper.blockingRead previously needed a
+// monkey-patch here so it would await the impl's async `read()`
+// when both sync paths (tryRead, waitForData) returned null. That
+// fix is now upstream in @tegmentum/wasi-polyfill — see the
+// `blocking-read-async-suspend` branch / commit on stdio.ts. The
+// wasi:io/streams dispatch awaits the wrapper's return value, so
+// under JSPI the wasm caller suspends until data lands.
+
 // Re-export for callers (sqlink-composed.js) so the persistent
 // session can construct its own queue without taking a direct
 // dep on @tegmentum/wasi-polyfill.
@@ -98,11 +106,11 @@ import { buildExtensionLoader, buildSpiLoader, buildDispatch } from './extension
  *     the per-exec re-instantiation path (no longer the default).
  *   - `persistentStdin: true` (persistent session): we hand the
  *     cli stdin plugin a long-lived `QueueInputStream` via the
- *     polyfill's `stdioProvider` extension point. Combined with
- *     the `WasiInputStreamWrapper.blockingRead` monkey-patch above,
- *     `blocking-read` actually awaits the queue's async `read()` —
- *     under JSPI the wasm suspends until the caller pushes more
- *     data. Returned in the result as `persistentQueue`.
+ *     polyfill's `stdioProvider` extension point. The polyfill's
+ *     `WasiInputStreamWrapper.blockingRead` awaits the queue's
+ *     async `read()` when sync paths produce no data — under JSPI
+ *     the wasm suspends until the caller pushes more data.
+ *     Returned in the result as `persistentQueue`.
  *
  * @param {{
  *   registry: import('./extension-loader.js').ExtensionRegistry,
@@ -128,10 +136,10 @@ export function buildCliPolyfill(opts) {
   if (opts.persistentStdin) {
     // Persistent path: hand the cli stdin plugin a long-lived
     // QueueInputStream via the polyfill's `stdioProvider` config
-    // option (createCustomStdio). The blockingRead monkey-patch
-    // above makes the wrapper's blockingRead actually await the
-    // queue's async `read()` — under JSPI the wasm suspends until
-    // we push the next SQL line.
+    // option (createCustomStdio). The polyfill's
+    // `WasiInputStreamWrapper.blockingRead` awaits the queue's
+    // async `read()` when sync paths produce no data — under JSPI
+    // the wasm suspends until we push the next SQL line.
     persistentQueue = new QueueInputStream(false)
     const stdioProvider = createCustomStdio(
       persistentQueue,
