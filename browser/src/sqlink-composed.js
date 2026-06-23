@@ -1,14 +1,27 @@
-// Composed-cli openDatabase path — Stage 8 H landing.
+// Composed-cli openDatabase path — persistent-session landing.
 //
 // Loads the composed `cli + sqlite-lib` single-memory component at
 // RUNTIME via `@tegmentum/wasi-polyfill`'s `createRuntimeBindgen`
 // (which delegates the actual transpile to jco's browser build) and
-// drives one SQL statement at a time by re-instantiating per `exec()`
-// call. Per-exec instantiation keeps the implementation simple: the
-// cli is a classic wasi:cli/run entry point that reads stdin until
-// EOF and exits — no resumable session. Each `exec()` builds a fresh
-// instance with `stdinContent = sql + "\n.quit\n"`, runs it, then
-// parses the captured stdout for results.
+// drives a persistent SQLite REPL session via a long-lived
+// QueueInputStream pipe. Each `db.exec(sql)` call:
+//
+//   1. acquires an async mutex (serialises concurrent exec()),
+//   2. pushes `<sql>; SELECT '<sentinel>';` into stdin,
+//   3. awaits stdout containing the sentinel value,
+//   4. slices the per-call window of stdout and parses it.
+//
+// The cli's `wasi:cli/run.run` is started ONCE (not awaited until
+// close), so the SQLite connection (DDL, in-memory state, attached
+// dbs) is shared across exec() calls. JSPI handles the stdin-empty
+// suspension between calls.
+//
+// Why a sentinel instead of waiting for the next prompt: the cli
+// prints `sqlite> ` BEFORE blocking on input, so detecting "end
+// of my result" by counting prompts is fragile (single-statement
+// vs. multi-statement input split). A SELECT-emitted sentinel
+// value is unambiguous because SQLite only prints it after the
+// preceding statements finished.
 //
 // JSPI (JavaScript Promise Integration) is required: several WASI
 // imports the cli blocks on (`wasi:io/poll.pollable.block`,
@@ -18,16 +31,14 @@
 // them. Under JSPI the suspend is real — the imports are wrapped
 // with `WebAssembly.Suspending` and the export is wrapped with
 // `WebAssembly.promising`. Requires Chrome 137+ / Node 22+.
-//
-// Trade-off: per-exec re-init costs ~100-200 ms (jco's runtime
-// transpile of the multi-core module plus polyfill set-up). For the
-// smoke-matrix shape (one or two statements per fixture) this is
-// fine; for an interactive REPL we'd need to keep the cli alive
-// across calls and feed stdin via a `QueueInputStream`. See Stage 9.
 
 import { createRuntimeBindgen } from '@tegmentum/wasi-polyfill/wasip2'
 import { ExtensionRegistry } from './extension-loader.js'
-import { buildCliPolyfill } from './host-imports.js'
+import {
+  buildCliPolyfill,
+  QueueInputStream,
+  resetGlobalStdioState,
+} from './host-imports.js'
 import { buildExtensionImports } from './wasi-imports.js'
 
 const COMPOSED_WASM_URL = '/cli_with_sqlite.single_memory.component.wasm'
@@ -52,10 +63,10 @@ const ASYNC_IMPORTS = [
 ]
 const ASYNC_EXPORTS = ['wasi:cli/run@0.2.6#run']
 
-// Cache the fetched .wasm bytes across exec() calls — only the
-// per-call polyfill/bindgen are rebuilt. Saves ~5 MB of refetch per
-// statement at the cost of a closure-scoped Uint8Array (cleaned up
-// on first `unmount` or page-reload).
+// Cache the fetched .wasm bytes across openDatabase() calls — only
+// the polyfill/bindgen is rebuilt per session. Saves ~5 MB of refetch
+// on the second open at the cost of a closure-scoped Uint8Array
+// (cleaned up on page-reload).
 let cachedWasmBytes = null
 async function loadComposedWasm() {
   if (cachedWasmBytes) return cachedWasmBytes
@@ -72,18 +83,22 @@ async function loadComposedWasm() {
   return cachedWasmBytes
 }
 
+const SENTINEL_PREFIX = '__SQLINK_SENT_'
+
 /**
- * Parse cli stdout into sql.js-shape rows.
+ * Parse a per-exec window of cli stdout into sql.js-shape rows.
  *
  * The cli prints results in `--mode list` style (the default):
  *
  *     sqlite> SELECT 1+1;
  *     2
- *     sqlite> .quit
+ *     sqlite> SELECT '__SQLINK_SENT_3__';
+ *     __SQLINK_SENT_3__
+ *     sqlite>
  *
- * with `sqlite> ` prompts interleaved on the same lines as the
- * input echo. We strip prompts, the input echo, and `.quit`'s line,
- * and split rows on `|` (the cli's default column separator).
+ * We strip prompts and `.load`/`.quit` echo lines, drop empty
+ * lines, and split on `|`. The sentinel row itself is stripped
+ * before parsing (the caller already used it for framing).
  *
  * For "no columns" output (DDL like CREATE TABLE), we return an
  * empty array. Columns aren't recoverable from list mode without
@@ -91,18 +106,10 @@ async function loadComposedWasm() {
  * for now — callers that need column names should use the
  * structured exec-batch SPI directly (a follow-up).
  */
-function parseCliOutput(text, sql) {
+function parseCliWindow(text, sentinelValue) {
   const lines = text
     .split('\n')
-    .map((line) => line.replace(/^sqlite> /, '').replace(/^\s*\.\.\.> /, ''))
-
-  const sqlLines = new Set(
-    sql
-      .split('\n')
-      .map((l) => l.trim())
-      .filter(Boolean),
-  )
-  sqlLines.add('.quit')
+    .map((line) => line.replace(/^(?:sqlite> |\s*\.\.\.> )+/, ''))
 
   // The cli prints status lines for `.load` (and other dot-cmds) that
   // we want to suppress so the parsed rows reflect only SELECT output.
@@ -110,13 +117,18 @@ function parseCliOutput(text, sql) {
   const CLI_INFO_PREFIXES = [
     'Loaded extension:',
     'Unloaded extension:',
-    'Error:', // surfaced separately via stderr in practice
   ]
 
   const valueRows = []
   for (const raw of lines) {
     const line = raw.replace(/\r$/, '')
-    if (line === '' || sqlLines.has(line.trim())) continue
+    if (line === '') continue
+    if (line === sentinelValue) continue
+    // Skip the SQL echo lines that the cli prints when interactive
+    // mode is on. The sentinel statement we inject ends with a
+    // marker so it's unambiguous to filter; any "SELECT '<sentinel>"
+    // input echo from the cli is dropped too.
+    if (line.includes(SENTINEL_PREFIX)) continue
     if (CLI_INFO_PREFIXES.some((p) => line.startsWith(p))) continue
     valueRows.push(line.split('|'))
   }
@@ -124,24 +136,77 @@ function parseCliOutput(text, sql) {
   return [{ columns: [], values: valueRows }]
 }
 
+/**
+ * Tiny async mutex — serialises concurrent exec() calls so two
+ * SQL statements don't get interleaved in stdin. Each exec() acquires
+ * via `await lock.acquire()` which returns a release function.
+ */
+function makeLock() {
+  let p = Promise.resolve()
+  return {
+    acquire() {
+      let release
+      const next = new Promise((resolve) => {
+        release = resolve
+      })
+      const wait = p.then(() => release)
+      p = next
+      return wait
+    },
+  }
+}
+
 class ComposedDatabase {
   constructor({ registry, embedExtensions }) {
     this._registry = registry
     this._embedExtensions = embedExtensions ?? []
     this._closed = false
+    this._stdinQueue = null
+    this._stdoutBuffer = ''
+    this._stderrBuffer = ''
+    this._runPromise = null
+    this._bindgenResult = null
+    this._polyfill = null
+    this._spiLoader = null
+    this._lock = makeLock()
+    this._execCount = 0
+    this._stdoutWaiters = [] // [{ test, resolve, reject }]
+    // Latch: set once `_runPromise` settles. exec() rejects if the
+    // run is already done.
+    this._runFinished = false
+    this._runError = null
   }
 
-  async _runOnce(stdinScript) {
+  async open() {
     const wasmBytes = await loadComposedWasm()
 
-    const stdoutChunks = []
-    const stderrChunks = []
+    // The polyfill's globalStdioState is a singleton — clear any
+    // leftovers from a prior session so setGlobalStdioProvider()
+    // doesn't throw.
+    try {
+      resetGlobalStdioState()
+    } catch {
+      // ignore — first session has nothing to reset.
+    }
+
+    this._stdinQueue = new QueueInputStream(false)
+    const decoder = new TextDecoder()
+    const onStdout = (data) => {
+      this._stdoutBuffer += decoder.decode(data, { stream: true })
+      this._wakeStdoutWaiters()
+    }
+    const onStderr = (data) => {
+      this._stderrBuffer += decoder.decode(data, { stream: true })
+    }
+
     const { polyfill, additionalImports, spiLoader } = buildCliPolyfill({
       registry: this._registry,
-      stdinContent: stdinScript,
-      onStdout: (data) => stdoutChunks.push(data),
-      onStderr: (data) => stderrChunks.push(data),
+      stdinQueue: this._stdinQueue,
+      onStdout,
+      onStderr,
     })
+    this._polyfill = polyfill
+    this._spiLoader = spiLoader
 
     const bindgen = createRuntimeBindgen({
       polyfill,
@@ -154,57 +219,126 @@ class ComposedDatabase {
       },
     })
 
-    let result
-    try {
-      result = await bindgen.instantiate(wasmBytes)
+    const result = await bindgen.instantiate(wasmBytes)
+    this._bindgenResult = result
 
-      // Wire the dispatch-bridge handle into the spi-loader impl
-      // BEFORE running the cli. The cli's `.load` flow calls
-      // register-scalar synchronously, which re-enters
-      // dispatch-bridge.register-host-scalar on the composed
-      // binary; that path requires the bridge handle to be live.
-      spiLoader._setBindgenResult(result)
+    // Wire the dispatch-bridge handle into the spi-loader impl
+    // BEFORE running the cli. The cli's `.load` flow calls
+    // register-scalar synchronously, which re-enters
+    // dispatch-bridge.register-host-scalar on the composed
+    // binary; that path requires the bridge handle to be live.
+    spiLoader._setBindgenResult(result)
 
-      // jco's async-instantiation surface exposes the exported
-      // `wasi:cli/run@0.2.6` instance under both the dashed alias
-      // and the versioned key. Under JSPI the inner `run` function
-      // is wrapped with `WebAssembly.promising`, so `await` is
-      // mandatory.
-      const exports = result.exports
-      const runFn =
-        exports.run?.run ??
-        exports['wasi:cli/run@0.2.6']?.run ??
-        exports['wasi:cli/run']?.run
-      if (typeof runFn !== 'function') {
-        throw new Error(
-          'composed component does not export wasi:cli/run.run',
-        )
-      }
+    const exports = result.exports
+    const runFn =
+      exports.run?.run ??
+      exports['wasi:cli/run@0.2.6']?.run ??
+      exports['wasi:cli/run']?.run
+    if (typeof runFn !== 'function') {
+      throw new Error('composed component does not export wasi:cli/run.run')
+    }
+
+    // Fire-and-forget: the cli's REPL stays alive on stdin until
+    // we push `.quit` or close the queue. The promise resolves
+    // when the cli calls wasi:cli/exit.exit; we keep a reference
+    // so close() can `await` it for an orderly shutdown.
+    this._runPromise = (async () => {
       try {
         await runFn()
       } catch (e) {
         // The cli always calls `wasi:cli/exit.exit(0)` after .quit;
-        // jco's polyfill surfaces that as a thrown ExitError. As
-        // long as we got SOMETHING on stdout/stderr, treat it as a
-        // normal exit. Empty output means the run trapped before
-        // any IO — propagate.
-        if (stdoutChunks.length === 0 && stderrChunks.length === 0) {
-          throw e
+        // jco's polyfill surfaces that as a thrown ExitError. Don't
+        // propagate it — it's the expected shape.
+        if (this._stdoutBuffer.length === 0 && this._stderrBuffer.length === 0) {
+          this._runError = e
         }
+      } finally {
+        this._runFinished = true
+        this._wakeStdoutWaiters()
       }
-    } finally {
-      try {
-        result?.destroy()
-        polyfill.destroy()
-      } catch {
-        // ignore
-      }
-    }
+    })()
 
-    const decoder = new TextDecoder()
-    const stdout = stdoutChunks.map((c) => decoder.decode(c)).join('')
-    const stderr = stderrChunks.map((c) => decoder.decode(c)).join('')
-    return { stdout, stderr }
+    // Wait for the cli to print its first `sqlite> ` prompt before
+    // returning — gives `.load` and the first exec() something to
+    // race against, and confirms the runtime actually booted. If
+    // the prompt never lands the open just times out (60 s soft
+    // limit matches Playwright's spec timeout).
+    await this._waitForStdout((buf) => buf.includes('sqlite>'), {
+      timeoutMs: 60_000,
+      label: 'open: initial prompt',
+    })
+
+    return this
+  }
+
+  /**
+   * Block until the stdout buffer satisfies `predicate(buffer)`.
+   * Wakes are driven by `_wakeStdoutWaiters()` from the onStdout
+   * callback. Rejects on cli exit or timeout.
+   */
+  _waitForStdout(predicate, { timeoutMs = 60_000, label = 'wait' } = {}) {
+    return new Promise((resolve, reject) => {
+      const start = performance.now()
+      const waiter = {
+        test: () => {
+          if (predicate(this._stdoutBuffer)) {
+            resolve()
+            return true
+          }
+          if (this._runFinished) {
+            const tailErr = this._runError
+              ? String(this._runError?.stack ?? this._runError)
+              : ''
+            reject(
+              new Error(
+                `${label}: cli exited before predicate matched. ` +
+                  `stdout=${JSON.stringify(this._stdoutBuffer.slice(-200))} ` +
+                  `stderr=${JSON.stringify(this._stderrBuffer.slice(-200))} ` +
+                  (tailErr ? `runError=${tailErr}` : ''),
+              ),
+            )
+            return true
+          }
+          if (performance.now() - start > timeoutMs) {
+            reject(
+              new Error(
+                `${label}: timed out after ${timeoutMs}ms. ` +
+                  `stdout=${JSON.stringify(this._stdoutBuffer.slice(-200))} ` +
+                  `stderr=${JSON.stringify(this._stderrBuffer.slice(-200))}`,
+              ),
+            )
+            return true
+          }
+          return false
+        },
+      }
+      // Test immediately in case data already arrived.
+      if (waiter.test()) return
+      this._stdoutWaiters.push(waiter)
+
+      // Periodic re-check in case the timeout fires without any
+      // new stdout. Cheap enough.
+      const interval = setInterval(() => {
+        if (waiter.done) {
+          clearInterval(interval)
+          return
+        }
+        if (waiter.test()) {
+          waiter.done = true
+          clearInterval(interval)
+        }
+      }, 100)
+    })
+  }
+
+  _wakeStdoutWaiters() {
+    if (this._stdoutWaiters.length === 0) return
+    const next = []
+    for (const w of this._stdoutWaiters) {
+      if (!w.test()) next.push(w)
+      else w.done = true
+    }
+    this._stdoutWaiters = next
   }
 
   async loadExtension(name, bytesOrModule, transpiledOpt) {
@@ -240,22 +374,70 @@ class ComposedDatabase {
       )
     }
     await this._registry.add(name, bytes, transpiledModule)
+    // The cli needs an explicit `.load` to invoke the extension's
+    // spi-loader.register-scalar registration. Push it into the
+    // session NOW so subsequent exec() calls can use the extension's
+    // functions without each one re-loading.
+    if (!this._closed && this._stdinQueue && !this._runFinished) {
+      await this._issueDotLoad(name)
+    }
     return this._registry.get(name)?.manifest
+  }
+
+  async _issueDotLoad(name) {
+    // Same framing approach as exec(): send the .load + a sentinel
+    // and drain stdout until the sentinel value appears. Keeps the
+    // session in a known state before the next exec().
+    const release = await this._lock.acquire()
+    try {
+      const id = ++this._execCount
+      const sentinelValue = `${SENTINEL_PREFIX}${id}__`
+      const sentinelSelect = `SELECT '${sentinelValue}';`
+      const cursorBefore = this._stdoutBuffer.length
+      const script = `.load ${name}\n${sentinelSelect}\n`
+      this._stdinQueue.push(script)
+      await this._waitForStdout(
+        (buf) => buf.indexOf(sentinelValue, cursorBefore) >= 0,
+        { timeoutMs: 30_000, label: `loadExtension(${name})` },
+      )
+    } finally {
+      release()
+    }
   }
 
   async exec(sql, _params) {
     if (this._closed) throw new Error('database is closed')
-    const lines = []
-    for (const name of this._embedExtensions) {
-      if (this._registry.has(name)) lines.push(`.load ${name}`)
+    if (!this._stdinQueue || this._runFinished) {
+      throw new Error('composed cli session is not running')
     }
-    const trimmed = sql.trimEnd()
-    lines.push(trimmed.endsWith(';') ? trimmed : `${trimmed};`)
-    lines.push('.quit')
-    const script = lines.join('\n') + '\n'
-
-    const { stdout } = await this._runOnce(script)
-    return parseCliOutput(stdout, lines.slice(0, -1).join('\n'))
+    const release = await this._lock.acquire()
+    try {
+      const id = ++this._execCount
+      const sentinelValue = `${SENTINEL_PREFIX}${id}__`
+      const sentinelSelect = `SELECT '${sentinelValue}';`
+      const trimmed = sql.trimEnd()
+      const userLine = trimmed.endsWith(';') ? trimmed : `${trimmed};`
+      const cursorBefore = this._stdoutBuffer.length
+      // Push user SQL + sentinel SELECT. Newlines separate
+      // statements; the cli accepts both `;\n` and `\n` to dispatch.
+      this._stdinQueue.push(`${userLine}\n${sentinelSelect}\n`)
+      await this._waitForStdout(
+        (buf) => buf.indexOf(sentinelValue, cursorBefore) >= 0,
+        { timeoutMs: 60_000, label: `exec #${id}` },
+      )
+      // Slice the window: from `cursorBefore` to just past the
+      // sentinel line. The sentinel line itself is filtered out by
+      // parseCliWindow's SENTINEL_PREFIX check.
+      const sentinelIdx = this._stdoutBuffer.indexOf(sentinelValue, cursorBefore)
+      // include the rest of the sentinel line + trailing prompt
+      let endIdx = this._stdoutBuffer.indexOf('\n', sentinelIdx)
+      if (endIdx < 0) endIdx = this._stdoutBuffer.length
+      else endIdx += 1
+      const window = this._stdoutBuffer.slice(cursorBefore, endIdx)
+      return parseCliWindow(window, sentinelValue)
+    } finally {
+      release()
+    }
   }
 
   async execScalar(sql, params) {
@@ -271,9 +453,43 @@ class ComposedDatabase {
     return this._registry.get(name)?.manifest
   }
 
-  close() {
+  async close() {
     if (this._closed) return
     this._closed = true
+    // Tell the cli to exit cleanly. `.quit` is the dot-cmd it
+    // recognises; closing the queue separately is the EOF fallback
+    // for any cli that doesn't see `.quit` for whatever reason.
+    try {
+      if (this._stdinQueue && !this._runFinished) {
+        this._stdinQueue.push('.quit\n')
+        this._stdinQueue.close()
+      }
+    } catch {
+      // ignore
+    }
+    // Wait for the cli to finish (it'll throw an ExitError that
+    // _runPromise swallows). Bound the wait so a stuck cli doesn't
+    // hang the test.
+    if (this._runPromise) {
+      const settle = Promise.race([
+        this._runPromise,
+        new Promise((resolve) => setTimeout(resolve, 5000)),
+      ])
+      await settle
+    }
+    // Wake any pending waiters with a "closed" error.
+    this._wakeStdoutWaiters()
+    try {
+      this._bindgenResult?.destroy()
+      this._polyfill?.destroy()
+    } catch {
+      // ignore
+    }
+    try {
+      resetGlobalStdioState()
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -282,8 +498,9 @@ class ComposedDatabase {
  *
  * Requires JSPI in the host (Chrome 137+ / Node 22+). The cli is
  * fetched as a single .component.wasm and runtime-transpiled by jco
- * (via `createRuntimeBindgen`) per-process; instantiation is per
- * `exec()` call so each statement gets a fresh in-memory db.
+ * (via `createRuntimeBindgen`) per-process. The cli's REPL stays
+ * alive across exec() calls — DDL persists, attached dbs persist,
+ * the in-memory page cache survives.
  */
 export async function openDatabaseComposed(opts = {}) {
   const registry = new ExtensionRegistry()
@@ -298,24 +515,40 @@ export async function openDatabaseComposed(opts = {}) {
 
   const embedNames = []
   // opts.embed entries may be:
-  //   - string name with EXTENSION_LOADERS pre-import (handled by
-  //     the static loader in sqlink.js — for composed we accept
-  //     only objects with explicit module)
   //   - { name, bytes?, module }: caller pre-imported the
   //     transpiled module (the recommended composed-path shape).
   //   - { name, loader }: caller provides an async loader
   //     returning the transpiled module — preferred for embed:
   //     since it lets the bundler lazy-load the module bytes.
+  //   - string name: looked up via the EXTENSION_LOADERS map in
+  //     ./generated/index.js so callers can pass bare names like
+  //     the sql.js path does.
+  let extensionLoaders = null
   for (const e of opts.embed ?? []) {
+    let name, bytes, transpiled
     if (typeof e === 'string') {
-      throw new Error(
-        `openDatabaseComposed: embed entry ${JSON.stringify(e)} is a bare ` +
-          `name — pass { name, module } or { name, loader: () => import(...) } ` +
-          `so the registry has the transpiled module.`,
-      )
+      name = e
+      if (!extensionLoaders) {
+        const mod = await import('./generated/index.js')
+        extensionLoaders = mod.EXTENSION_LOADERS
+      }
+      const loader = extensionLoaders[name]
+      if (!loader) {
+        throw new Error(
+          `openDatabaseComposed: unknown extension '${name}' — ` +
+            `not in EXTENSION_LOADERS. Pass { name, module } or ` +
+            `{ name, loader } instead.`,
+        )
+      }
+      transpiled = await loader()
+    } else {
+      name = e.name
+      bytes = e.bytes
+      transpiled = e.module ?? (e.loader ? await e.loader() : null)
     }
-    const { name, bytes, module, loader } = e
-    const transpiled = module ?? (loader ? await loader() : null)
+    if (!name) {
+      throw new Error(`openDatabaseComposed: embed entry missing name`)
+    }
     if (!transpiled) {
       throw new Error(
         `openDatabaseComposed: embed ${JSON.stringify(name)} has no ` +
@@ -326,8 +559,15 @@ export async function openDatabaseComposed(opts = {}) {
     embedNames.push(name)
   }
 
-  return new ComposedDatabase({
+  const db = new ComposedDatabase({
     registry,
     embedExtensions: embedNames,
   })
+  await db.open()
+  // Issue `.load` for each pre-registered extension so its
+  // scalars are wired into SQLite before the first user exec().
+  for (const name of embedNames) {
+    await db._issueDotLoad(name)
+  }
+  return db
 }
