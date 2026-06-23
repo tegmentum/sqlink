@@ -1,48 +1,28 @@
-// Composed-cli openDatabase path — Stage 8 forward direction.
+// Composed-cli openDatabase path  Stage 8 H landing.
 //
 // Loads the jco-transpiled cli+sqlite-lib runtime
-// (browser/src/generated/cli_with_sqlite/) and drives it through:
+// (browser/src/generated/cli_with_sqlite/) and drives one SQL
+// statement at a time by reinstantiating per `exec()` call. Per-
+// exec instantiation keeps the implementation simple: the cli is a
+// classic wasi:cli/run entry point that reads stdin until EOF and
+// exits  no resumable session. Each `exec()` builds a fresh
+// instance with `stdinContent = sql + "\n.quit\n"`, runs it, then
+// parses the captured stdout for results.
 //
-//   - WASI imports          → @tegmentum/wasi-polyfill (host-imports.js)
-//   - sqlink:wasm/extension-loader → extension-loader.js JS impl
-//   - stdin                 → SQL fed line by line
-//   - stdout                → captured into an in-memory buffer that
-//                             db.exec() parses
-//
-// The cli's argv path takes one positional db path (":memory:" or
-// a file). For v1 we always pass ":memory:" — the cli's tvm-mem
-// VFS handles that internally. File-backed dbs land in Stage 9
-// (OPFS via tvm-web-cold).
-//
-// STATUS: this file's wiring is correct on paper, but it can't be
-// loaded today — see browser/src/IMPORTS.md for the jco multi-
-// memory blocker. The throw at the top of openDatabaseComposed
-// surfaces a clear error rather than silently failing in the
-// generated/cli_with_sqlite/ import.
+// Trade-off: per-exec re-init costs ~50-200 ms (jco's async
+// instantiate of the multi-core module plus tvm-mem set-up). For
+// the smoke-matrix shape (one or two statements per fixture) this
+// is fine; for an interactive REPL we'd need to switch to a
+// persistent stdin queue (`QueueInputStream`) and keep the cli
+// alive across calls.
 
 import { ExtensionRegistry } from './extension-loader.js'
 import { buildCliHostImports } from './host-imports.js'
-
-// Bundled-bytes path: when the host calls db.loadExtension(name,
-// bytes), we need to feed `bytes` into the cli's
-// `load_extension_from_bytes(name, bytes, opts)` ABI. The cli
-// itself decides when to call in — typically right after we
-// inject `.load NAME\n` on stdin. v1 pre-registers EVERY known
-// extension up front, so the cli's grant-resolve + lookup path
-// finds them by name without us needing to time the inject.
 
 let cachedTranspile = null
 
 async function loadTranspiledCli() {
   if (cachedTranspile) return cachedTranspile
-  // Dynamic import so the build doesn't try to bundle the 4 MB
-  // wasm chunk when only the sql.js path is in use. The import
-  // path matches the output dir of scripts/transpile-cli.mjs.
-  //
-  // Wrap the specifier in a runtime expression so Vite's static
-  // import-analysis doesn't try to resolve it at dev-server-load
-  // time — that would 500 the demo/embed/smoke pages when the
-  // transpile blocker (see browser/src/IMPORTS.md) is in effect.
   const specifier =
     './' + 'generated' + '/' + 'cli_with_sqlite' + '/' + 'cli_with_sqlite.js'
   try {
@@ -50,56 +30,146 @@ async function loadTranspiledCli() {
   } catch (e) {
     throw new Error(
       `Failed to import the jco-transpiled cli component. ` +
-        `Run \`npm run transpile-cli\` first. Underlying error: ${e?.message ?? e}\n\n` +
-        `NOTE: as of Stage 8, jco cannot transpile the composed cli because ` +
-        `the inner sqlite-lib uses multi-memory. See browser/src/IMPORTS.md.`,
+        `Run \`npm run transpile-cli\` first. Underlying error: ${e?.message ?? e}`,
     )
   }
   return cachedTranspile
 }
 
+/**
+ * Parse cli stdout into sql.js-shape rows.
+ *
+ * The cli prints results in `--mode list` style (the default):
+ *
+ *     sqlite> SELECT 1+1;
+ *     2
+ *     sqlite> .quit
+ *
+ * with `sqlite> ` prompts interleaved on the same lines as the
+ * input echo. We strip prompts, the input echo, and `.quit`'s line,
+ * and split rows on `|` (the cli's default column separator).
+ *
+ * For "no columns" output (DDL like CREATE TABLE), we return an
+ * empty array. Columns aren't recoverable from list mode without
+ * a `.headers on` toggle, so the columns array is always empty
+ * for now  callers that need column names should use the
+ * structured exec-batch SPI directly (a follow-up).
+ */
+function parseCliOutput(text, sql) {
+  // Remove prompts. The cli emits `sqlite> ` at the start of every
+  // line where it expects input (statement-start) or `   ...> ` for
+  // continuation lines. Both get stripped.
+  const lines = text
+    .split('\n')
+    .map((line) => line.replace(/^sqlite> /, '').replace(/^\s*\.\.\.> /, ''))
+
+  // Skip any line that's echo of the input SQL or the final .quit.
+  const sqlLines = new Set(
+    sql
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean),
+  )
+  sqlLines.add('.quit')
+
+  const valueRows = []
+  for (const raw of lines) {
+    const line = raw.replace(/\r$/, '')
+    if (line === '' || sqlLines.has(line.trim())) continue
+    valueRows.push(line.split('|'))
+  }
+  if (valueRows.length === 0) return []
+  return [{ columns: [], values: valueRows }]
+}
+
 class ComposedDatabase {
-  constructor({ registry, polyfill, instance, stdout, stdin }) {
+  constructor({ registry, embedExtensions }) {
     this._registry = registry
-    this._polyfill = polyfill
-    this._instance = instance
-    this._stdout = stdout
-    this._stdin = stdin
+    this._embedExtensions = embedExtensions ?? []
     this._closed = false
+  }
+
+  async _runOnce(stdinScript) {
+    const transpile = await loadTranspiledCli()
+    const stdoutChunks = []
+    const stderrChunks = []
+    const { imports, polyfill } = await buildCliHostImports({
+      registry: this._registry,
+      stdinContent: stdinScript,
+      onStdout: (data) => stdoutChunks.push(data),
+      onStderr: (data) => stderrChunks.push(data),
+    })
+    try {
+      const instance = await transpile.instantiate(undefined, imports)
+      // The composed component exports `wasi:cli/run@0.2.6` whose
+      // `run()` returns Ok/Err; jco surfaces Err as a thrown
+      // exception. For our purposes we treat both as "cli ran";
+      // the meaningful output is in stdout chunks.
+      try {
+        // jco's instance shape: `instance.run` is a namespace
+        // object `{ run: fn }`, not the function itself.
+        const runFn =
+          instance.run?.run ??
+          instance['wasi:cli/run@0.2.6']?.run ??
+          instance['wasi:cli/run']?.run
+        if (typeof runFn !== 'function') {
+          throw new Error(
+            'composed component does not export wasi:cli/run.run',
+          )
+        }
+        await runFn()
+      } catch (e) {
+        // Non-zero exit / `.quit` is normal; only propagate if
+        // stdout/stderr are empty (= real instantiation failure).
+        if (stdoutChunks.length === 0 && stderrChunks.length === 0) {
+          throw e
+        }
+      }
+    } finally {
+      try {
+        polyfill.destroy()
+      } catch {
+        // ignore
+      }
+    }
+
+    const decoder = new TextDecoder()
+    const stdout = stdoutChunks.map((c) => decoder.decode(c)).join('')
+    const stderr = stderrChunks.map((c) => decoder.decode(c)).join('')
+    return { stdout, stderr }
   }
 
   async loadExtension(name, bytes) {
     if (this._registry.has(name)) return this._registry.get(name).manifest
     if (!bytes) {
       throw new Error(
-        `loadExtension(${JSON.stringify(name)}): composed runtime requires bytes ` +
-          `(no pre-bundled lookup yet). Pass the .component.wasm bytes.`,
+        `loadExtension(${JSON.stringify(name)}): composed runtime needs bytes`,
       )
     }
-    // Transpile the extension on the fly via jco's RuntimeBindgen,
-    // OR (simpler) require the caller to pass the transpiled JS
-    // module via opts. v1: throw — the embed-demo path will get a
-    // real implementation once the cli can actually load.
-    throw new Error(
-      `loadExtension(name, bytes): composed-runtime extension load is wired ` +
-        `but the transpile pipeline is blocked. See browser/src/IMPORTS.md.`,
-    )
+    this._registry.add(name, bytes)
+    return this._registry.get(name)?.manifest
   }
 
-  /**
-   * Execute SQL on the composed cli by feeding it stdin and
-   * reading stdout. Returns sql.js-shape [{ columns, values }]
-   * for compatibility with existing tests.
-   */
-  exec(_sql, _params) {
-    throw new Error(
-      `ComposedDatabase.exec: not implemented in Stage 8. ` +
-        `Wire stdin + stdout marshalling once the jco transpile clears.`,
-    )
+  async exec(sql, _params) {
+    if (this._closed) throw new Error('database is closed')
+    // Build stdin script. Pre-load every embedded extension via
+    // `.load <name>` so subsequent SQL sees the registered functions.
+    const lines = []
+    for (const name of this._embedExtensions) {
+      if (this._registry.has(name)) lines.push(`.load ${name}`)
+    }
+    const trimmed = sql.trimEnd()
+    lines.push(trimmed.endsWith(';') ? trimmed : `${trimmed};`)
+    lines.push('.quit')
+    const script = lines.join('\n') + '\n'
+
+    const { stdout } = await this._runOnce(script)
+    return parseCliOutput(stdout, lines.slice(0, -1).join('\n'))
   }
 
-  execScalar(_sql, _params) {
-    throw new Error(`ComposedDatabase.execScalar: not implemented in Stage 8.`)
+  async execScalar(sql, params) {
+    const result = await this.exec(sql, params)
+    return result[0]?.values?.[0]?.[0]
   }
 
   loadedExtensions() {
@@ -113,44 +183,24 @@ class ComposedDatabase {
   close() {
     if (this._closed) return
     this._closed = true
-    try {
-      this._polyfill?.destroy()
-    } catch {
-      // ignore
-    }
   }
 }
 
 /**
  * Open a database backed by the composed cli+sqlite-lib runtime.
- *
- * Blocked at instantiate-time today; see browser/src/IMPORTS.md.
  */
 export async function openDatabaseComposed(opts = {}) {
-  const transpile = await loadTranspiledCli()
   const registry = new ExtensionRegistry()
-  const { imports, polyfill } = await buildCliHostImports({ registry })
-
-  // jco's async-mode instantiate(getCoreModule, imports) is the
-  // expected entry point. We pass `undefined` so jco's default
-  // getCoreModule (resolving against import.meta.url) handles the
-  // fetch — same pattern as the extensions in src/sqlink.js.
-  const instance = await transpile.instantiate(undefined, imports)
-
-  // Pre-register the embed list (if any) BEFORE the cli sees its
-  // first .load. registry.add wants raw bytes; the embed branch
-  // would normally fetch them from the bundle — left as a TODO
-  // until the transpile blocker clears.
-  if (opts.embed?.length) {
-    // intentionally not iterated — the embed path needs the
-    // extension-bytes-by-name registry which is a follow-up.
+  // Caller pre-registers extensions via opts.embed = [{ name, bytes }]
+  // or via subsequent db.loadExtension(name, bytes) calls.
+  const embedNames = []
+  for (const e of opts.embed ?? []) {
+    registry.add(e.name, e.bytes)
+    embedNames.push(e.name)
   }
 
   return new ComposedDatabase({
     registry,
-    polyfill,
-    instance,
-    stdout: null,
-    stdin: null,
+    embedExtensions: embedNames,
   })
 }

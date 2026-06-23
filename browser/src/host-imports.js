@@ -14,7 +14,7 @@
 // (`'wasi:cli/stdin'`, not `'wasi:cli/stdin@0.2.6'`) when
 // `jcoCompat: true`. We pass that through forInterfaces().
 
-import { createPolyfill, AllowAllPolicy } from '@tegmentum/wasi-polyfill/wasip2'
+import { createPolyfill, createPolicy } from '@tegmentum/wasi-polyfill/wasip2'
 import {
   randomPlugin,
   insecureRandomPlugin,
@@ -52,16 +52,49 @@ import { buildExtensionLoader } from './extension-loader.js'
  * Build the imports object jco's async-mode transpile wants for the
  * composed cli+sqlite-lib component.
  *
+ * `stdinContent` pre-loads the cli's stdin with a script (typically
+ * SQL + ".quit"); `onStdout` / `onStderr` capture the cli's writes
+ * for the host to parse. Without these the polyfill's default stdin
+ * is `EmptyInputStream` (immediate EOF) and the cli exits before
+ * processing any SQL.
+ *
  * @param {{
  *   registry: import('./extension-loader.js').ExtensionRegistry,
- *   stdio?: import('@tegmentum/wasi-polyfill/wasip2/plugins/cli').StdioProvider,
+ *   stdinContent?: string | Uint8Array,
+ *   onStdout?: (data: Uint8Array) => void,
+ *   onStderr?: (data: Uint8Array) => void,
  *   env?: Record<string, string>,
  *   args?: string[],
  * }} opts
  * @returns {Promise<{ imports: Record<string, unknown>, polyfill: import('@tegmentum/wasi-polyfill/wasip2').Polyfill }>}
  */
 export async function buildCliHostImports(opts) {
-  const polyfill = createPolyfill({ policy: new AllowAllPolicy() })
+  // ConfigurablePolicy (via createPolicy) is what makes per-interface
+  // options actually flow into the plugin Implementation factories.
+  // AllowAllPolicy.configure() returns `{}` and silently drops every
+  // option, which is why scripted stdin / stdout-capture never worked
+  // until this fix.
+  const overrides = []
+  if (opts.stdinContent !== undefined) {
+    overrides.push({
+      interface: 'wasi:cli/stdin@0.2.6',
+      options: { stdinContent: opts.stdinContent },
+    })
+  }
+  if (opts.onStdout) {
+    overrides.push({
+      interface: 'wasi:cli/stdout@0.2.6',
+      options: { onStdout: opts.onStdout },
+    })
+  }
+  if (opts.onStderr) {
+    overrides.push({
+      interface: 'wasi:cli/stderr@0.2.6',
+      options: { onStderr: opts.onStderr },
+    })
+  }
+  const policy = createPolicy({ defaultAllow: true, overrides })
+  const polyfill = createPolyfill({ policy })
 
   polyfill.registerPlugin(randomPlugin)
   polyfill.registerPlugin(insecureRandomPlugin)
