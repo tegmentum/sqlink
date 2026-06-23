@@ -1,6 +1,6 @@
 # `sqlite:extension/spi-loader` browser implementation sketch
 
-**STATUS: RESOLVED (Phase C, aggregates + collations landing).** The
+**STATUS: RESOLVED (Phase C, hooks landing).** The
 spi-loader + dispatch-bridge wiring landed in #427 Task 2+3 and
 the persistent-session integration carried it the rest of the way
 end-to-end for scalars. Aggregates + collations followed in #432:
@@ -11,6 +11,23 @@ the dispatch-bridge gained `register-host-aggregate` +
 `composed-aggregate.spec.js` + `composed-collation.spec.js`
 exercise the end-to-end path. See PLAN-browser-runtime.md for the
 closeout.
+
+#432-followups (this branch): the four singleton-per-connection
+hooks  authorizer, update-hook, commit-hook, rollback-hook 
+landed via the same dispatch-bridge pattern. dispatch-bridge gained
+`register-host-authorizer` / `register-host-update-hook` /
+`register-host-commit-hook` / `register-host-rollback-hook`; the JS
+side in `buildSpiLoader` calls them, `buildDispatch` routes the
+matching `authorize` / `on-update` / `on-commit` / `on-rollback`
+imports to the loaded extension's exported authorizer / update-hook
+/ commit-hook interfaces; `composed-hooks.spec.js` exercises every
+slot end-to-end with the `hookprobe` test extension. v1 semantic:
+last-write-wins on re-registration from a different ext-name (SQLite
+permits exactly one of each per connection; multi-extension fan-out
+is a future enhancement).
+
+vtabs remain the only outstanding spi-loader surface  tracked
+separately.
 
 The sketch below is preserved for historical context.
 
@@ -73,9 +90,9 @@ From `sqlite-loader-wit/wit/host-spi.wit` (interface `spi-loader`):
 | `unregister-extension` | `(ext) -> ()` | **LANDED** — drops scalars + aggregates + collations |
 | `register-collation` | `(ext, name, coll-id) -> result<_, err>` | **LANDED** (#432) |
 | `register-aggregate` | `(ext, name, num-args, func-id, window) -> result<_, err>` | **LANDED** (#432) — covers both plain + window |
-| `register-authorizer` | `(ext) -> result<_, err>` | Defer |
-| `register-update-hook` | `(ext) -> result<_, err>` | Defer |
-| `register-commit-hook` | `(ext) -> result<_, err>` | Defer |
+| `register-authorizer` | `(ext) -> result<_, err>` | **LANDED** (this branch) |
+| `register-update-hook` | `(ext) -> result<_, err>` | **LANDED** (this branch) |
+| `register-commit-hook` | `(ext) -> result<_, err>` | **LANDED** (this branch)  also installs rollback-hook |
 | `register-vtab` | `(ext, name, vtab-id, eponymous, mutable, batched) -> result<_, err>` | Defer |
 
 For smoke-spec coverage, only `register-scalar` and
