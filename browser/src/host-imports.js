@@ -51,7 +51,33 @@ import {
   terminalStdinPlugin,
   terminalStdoutPlugin,
   terminalStderrPlugin,
+  QueueInputStream,
+  createCustomStdio,
+  resetGlobalStdioState,
 } from '@tegmentum/wasi-polyfill/wasip2/plugins/cli'
+
+// Re-export for callers (sqlink-composed.js) so the persistent
+// session can construct its own queue without taking a direct
+// dep on @tegmentum/wasi-polyfill.
+export { QueueInputStream, resetGlobalStdioState }
+
+/**
+ * A no-op OutputStreamLike: implements the polyfill's
+ * `OutputStreamLike` shape but discards all writes. We pair it
+ * with the stdoutPlugin's `onStdout` / stderrPlugin's `onStderr`
+ * callback for actual capture — the callback fires alongside the
+ * provider's `write()` so duplicating into a sink is harmless.
+ */
+class DiscardOutputStream {
+  constructor() {
+    this.isTTY = false
+  }
+  async write(_chunk) {
+    // discard
+  }
+  async flush() {}
+  async close() {}
+}
 
 import { buildExtensionLoader, buildSpiLoader, buildDispatch } from './extension-loader.js'
 
@@ -64,9 +90,29 @@ import { buildExtensionLoader, buildSpiLoader, buildDispatch } from './extension
  * `polyfill.getImports(...)` itself once it has parsed the component;
  * it merges `additionalImports` over the WASI map.
  *
+ * Two stdin modes:
+ *
+ *   - `stdinContent` (legacy / one-shot): the polyfill makes a
+ *     single-shot QueueInputStream pre-loaded with the content,
+ *     closed after — the cli reads until EOF and exits. Used by
+ *     `_runOnce` re-instantiation path. DDL doesn't persist
+ *     across calls because each call is a fresh instance.
+ *   - `stdinQueue` (persistent session): caller provides a long-
+ *     lived `QueueInputStream` instance and pushes SQL into it as
+ *     `exec()` calls land. The polyfill's stdin reads from this
+ *     queue and JSPI suspends the wasm when the queue is empty —
+ *     so the cli's REPL loop stays alive between statements. Used
+ *     by the persistent ComposedDatabase path.
+ *
+ * IMPORTANT: the polyfill keeps a module-level `globalStdioState`
+ * singleton; spawning a new persistent session while a previous
+ * one still owns the global state will throw. Call
+ * `resetGlobalStdioState()` (re-exported above) on close().
+ *
  * @param {{
  *   registry: import('./extension-loader.js').ExtensionRegistry,
  *   stdinContent?: string | Uint8Array,
+ *   stdinQueue?: import('@tegmentum/wasi-polyfill/wasip2/plugins/cli').QueueInputStream,
  *   onStdout?: (data: Uint8Array) => void,
  *   onStderr?: (data: Uint8Array) => void,
  *   env?: Record<string, string>,
@@ -82,7 +128,29 @@ export function buildCliPolyfill(opts) {
   // ConfigurablePolicy (via createPolicy) is what makes per-interface
   // options actually flow into the plugin Implementation factories.
   const overrides = []
-  if (opts.stdinContent !== undefined) {
+  if (opts.stdinQueue) {
+    // Persistent path: hand the QueueInputStream to the stdin plugin
+    // by way of a custom stdio provider. The provider's stdout/
+    // stderr are no-ops (DiscardOutputStream) — actual capture
+    // happens via the onStdout / onStderr callbacks on the stdout/
+    // stderr plugins (the WasiOutputStreamWrapper fires the callback
+    // alongside the impl write).
+    //
+    // setGlobalStdioProvider (called inside stdinPlugin.create when
+    // it sees `stdioProvider`) is rejected if a previous session
+    // didn't reset; the caller is responsible for invoking
+    // resetGlobalStdioState() before re-opening.
+    const stdioProvider = createCustomStdio(
+      opts.stdinQueue,
+      new DiscardOutputStream(),
+      new DiscardOutputStream(),
+      { isTTY: false },
+    )
+    overrides.push({
+      interface: 'wasi:cli/stdin@0.2.6',
+      options: { stdioProvider },
+    })
+  } else if (opts.stdinContent !== undefined) {
     overrides.push({
       interface: 'wasi:cli/stdin@0.2.6',
       options: { stdinContent: opts.stdinContent },
