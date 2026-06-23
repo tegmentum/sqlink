@@ -322,6 +322,23 @@ Known gaps documented in [PLAN-gaps.md](docs/plans/PLAN-gaps.md); the big
 ones are hot-reload of extensions, stack-trace propagation from
 wasm panics, and SpatiaLite-grade geospatial.
 
+## Acknowledgements
+
+The `sqlite-utils-*` family of dot-command extensions
+(`sqlite-utils-schema`, `sqlite-utils-data`, `sqlite-utils-fts`,
+`sqlite-utils-maint`) is a wasm-component port of the dot-command
+surface from **[sqlite-utils](https://github.com/simonw/sqlite-utils)**
+by **[Simon Willison](https://simonwillison.net/)**. The shape,
+naming, and ergonomics of `.insert`, `.transform`, `.extract`,
+`.enable_fts`, `.search`, and the other 30+ commands all trace
+directly back to sqlite-utils' Python CLI. Where the semantics
+match the upstream tool's docs, the upstream tool got there
+first  if anything reads as familiar, that's why.
+
+`examples/sqlite-utils-tour.sql` walks the full ported surface
+and is the most direct way to verify the port behaves like the
+original.
+
 ## License
 
 SQLite itself is in the public domain. The wrapping code in this
