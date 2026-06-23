@@ -1,10 +1,34 @@
 # `sqlite:extension/spi-loader` browser implementation sketch
 
 Planning doc for the JS-side `spi-loader` impl that replaces the
-stub in `host-imports.js`. **STATUS: Task 1 of PLAN; identifies an
-architectural blocker that prevents Tasks 2-8 from landing without
-a wasm-side change in either `sqlite-lib` or the cli/sqlite-lib
-composition.**
+stub in `host-imports.js`. **STATUS (updated): the architectural
+blocker described below was Option A. It LANDED on the
+`sqlite-lib-dispatch-bridge` branch:**
+
+- `sqlink:wasm/dispatch-bridge@0.1.0` is a new WIT interface
+  exported from `sqlite-lib` (commit 8de824c in sqlite-wasm).
+- `register-host-scalar(ext_name, name, num_args, func_id)`
+  installs a `sqlite3_create_function_v2` trampoline on
+  sqlite-lib's connection whose body re-enters the host via the
+  imported `dispatch.scalar-call` (commit 4b33184 in sqlite-wasm).
+- The composed `cli + sqlite-lib` binary now re-exports
+  `dispatch-bridge` so the JS host can call into it from its
+  `spi-loader.register-scalar` impl (commit 4ba4d30 in sqlink
+  composition-cli-sqlite-lib.wac + the build scripts).
+- Verified: the composed binary's WIT surface exposes
+  `export sqlink:wasm/dispatch-bridge@0.1.0` and
+  `import sqlink:wasm/dispatch@0.1.0`. Scenarios 1+2 smoke
+  208/208.
+
+**JS host work (Tasks 2-8 below) can now land.** The JS impl of
+`spi-loader.register-scalar` records `(ext_name, func_id, module)`
+in a registry keyed for `dispatch.scalar-call` lookup, then calls
+the composed binary's exported `dispatch-bridge.register-host-scalar`
+to install the wasm-side trampoline. `unregister-extension` mirrors
+the shape: drop the JS registry entries + call the bridge's
+unregister-extension.
+
+The original "blocker" analysis below is kept for context.
 
 ## 1. Methods declared by `spi-loader`
 
