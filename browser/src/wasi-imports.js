@@ -10,7 +10,11 @@
 // real wasi-polyfill providers where they exist (random, clocks,
 // io) and stub the cli surface to noops.
 
-import { createPolyfill, AllowAllPolicy } from '@tegmentum/wasi-polyfill/wasip2'
+import {
+  createPolyfill,
+  AllowAllPolicy,
+  createRuntimeBindgen,
+} from '@tegmentum/wasi-polyfill/wasip2'
 import {
   randomPlugin,
   insecureRandomPlugin,
@@ -173,4 +177,146 @@ export function destroyExtensionImports() {
     }
     cachedPolyfill = null
   }
+}
+
+/**
+ * Build the additionalImports map an extension component needs that
+ * are NOT satisfied by the WASI polyfill itself. The same set of
+ * stubs we install for the pre-transpiled `instantiate()` path —
+ * sqlite-extension subworlds that wit-bindgen emits but extensions
+ * don't actually use at runtime.
+ *
+ * Used by the runtime-bindgen path: `createRuntimeBindgen` lets the
+ * polyfill resolve WASI imports on demand and merges this map for
+ * the non-WASI ones.
+ */
+export function buildExtensionAdditionalImports() {
+  function noop(name) {
+    return new Proxy(
+      {},
+      {
+        get(_t, key) {
+          if (typeof key === 'symbol') return undefined
+          if (/^[A-Z]/.test(String(key))) {
+            return class StubResource {}
+          }
+          return (..._args) => {
+            const err = new Object()
+            err.payload = {
+              code: 1,
+              extendedCode: 1,
+              message: `sqlink-browser scenario-3: ${name}.${String(key)} not implemented`,
+            }
+            throw err
+          }
+        },
+      },
+    )
+  }
+  // Keep this set in sync with the stub list in `buildExtensionImports`
+  // above. Versioned key shape (sqlite:extension/foo@0.1.0) matches
+  // what jco's runtime transpile emits when the component declares
+  // versioned imports — different from the unversioned shape the
+  // build-time --instantiation async path uses. We register BOTH so
+  // either consumer wires through.
+  const stubNames = [
+    'sqlite:extension/types',
+    'sqlite:extension/policy',
+    'sqlite:extension/spi',
+    'sqlite:extension/session',
+    'sqlite:extension/logging',
+    'sqlite:extension/config',
+    'sqlite:extension/http',
+    'sqlite:extension/dns',
+    'sqlite:extension/cache',
+    'sqlite:extension/state',
+    'sqlite:extension/random',
+    'sqlite:extension/text',
+    'sqlite:extension/hashing',
+    'sqlite:extension/encoding',
+    'sqlite:extension/prepared',
+    'sqlite:extension/transaction',
+    'sqlite:extension/schema',
+  ]
+  const out = {}
+  for (const k of stubNames) {
+    const stub = noop(k)
+    out[k] = stub
+    // Versioned key as well — runtime jco emits 'sqlite:extension/types@0.1.0'
+    // for components that declared the versioned import. Both keys point at
+    // the same proxy.
+    out[`${k}@0.1.0`] = stub
+  }
+  return out
+}
+
+/**
+ * Build a Polyfill instance suitable for instantiating sqlink
+ * extension components at runtime via `createRuntimeBindgen`. Mirrors
+ * `buildExtensionImports`'s plugin registrations but exposes the
+ * polyfill rather than a pre-resolved imports map, so the bindgen
+ * can ask the polyfill for the exact WASI interfaces it needs from
+ * the parsed component bytes.
+ *
+ * AllowAllPolicy because extensions don't run an opt-in capability
+ * check at this layer — what they get is decided by what we register
+ * here. Anything wit-bindgen emits but we DON'T register falls
+ * through to the additionalImports stubs.
+ */
+function createExtensionPolyfill() {
+  const polyfill = createPolyfill({
+    policy: new AllowAllPolicy(),
+  })
+  polyfill.registerPlugin(randomPlugin)
+  polyfill.registerPlugin(insecureRandomPlugin)
+  polyfill.registerPlugin(insecureSeedPlugin)
+  polyfill.registerPlugin(monotonicClockPlugin)
+  polyfill.registerPlugin(wallClockPlugin)
+  polyfill.registerPlugin(errorPlugin)
+  polyfill.registerPlugin(pollPlugin)
+  polyfill.registerPlugin(streamsPlugin)
+  polyfill.registerPlugin(filesystemTypesPlugin)
+  polyfill.registerPlugin(filesystemPreopensPlugin)
+  return polyfill
+}
+
+/**
+ * Runtime transpile + instantiate a sqlink extension's
+ * `.component.wasm` bytes. Builds a per-call Polyfill instance and
+ * lets the polyfill resolve WASI imports from the parsed component;
+ * non-WASI imports (sqlite:extension/*) are satisfied by
+ * `buildExtensionAdditionalImports`.
+ *
+ * Returns `{ instance, bindgenResult }` — the same shape
+ * `ExtensionRegistry.instantiateFromBytes` expects. The caller is
+ * responsible for calling `bindgenResult.destroy()` on unload (the
+ * registry's `delete()` does this).
+ *
+ * Why per-call (not cached): each extension's polyfill instance owns
+ * resources (resource tables, plugin state). Sharing across all
+ * extensions would conflate lifecycles — destroying one extension's
+ * polyfill would invalidate others. Cheap enough: createPolyfill
+ * itself is just object construction; the heavy work is jco's
+ * transpile and that runs on bytes regardless.
+ *
+ * @param {Uint8Array | ArrayBuffer} bytes
+ * @returns {Promise<{ instance: object, bindgenResult: object }>}
+ */
+export async function instantiateExtensionFromBytes(bytes) {
+  const polyfill = createExtensionPolyfill()
+  const bindgen = createRuntimeBindgen({
+    polyfill,
+    additionalImports: buildExtensionAdditionalImports(),
+    jcoOptions: {
+      name: 'extension',
+      // Scalars are pure compute — no suspending imports today, so
+      // sync mode is correct and avoids a JSPI dependency for the
+      // (likely) common case. If a runtime extension ever needs
+      // to block, this is where to flip to 'jspi' + async{Imports,
+      // Exports}; pure-compute scalars stay sync.
+      asyncMode: 'sync',
+    },
+  })
+  const bindgenResult = await bindgen.instantiate(bytes)
+  return { instance: bindgenResult.exports, bindgenResult }
 }

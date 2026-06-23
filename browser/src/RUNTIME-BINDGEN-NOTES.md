@@ -113,3 +113,19 @@ polyfill makes no attempt to fall back.
   suspending import. For the composed cli, `wasi:cli/run@0.2.6#run` is reachable
   to `blocking-read`, `blocking-write-and-flush`, and `pollable.block`, so it
   must be in the list.
+
+## Two sqlink consumers
+
+The browser bundle drives `createRuntimeBindgen` in two distinct places:
+
+1. **The composed cli + sqlite-lib runtime** (`sqlink-composed.js`). One per
+   `openDatabaseComposed()` call. `asyncMode: 'jspi'` is mandatory: the cli's
+   REPL blocks on stdin/stdout via the polyfill streams plugin, so the JSPI
+   suspension is what keeps the session alive across `db.exec()` calls.
+2. **Runtime-loaded extension components** (`wasi-imports.js
+   instantiateExtensionFromBytes`). One per `db.loadExtension(name, bytes)`
+   call. `asyncMode: 'sync'` is the right default for sqlink scalar
+   extensions today — they're pure-compute and never block. A future
+   extension that needs to block (HTTP, SPI) would flip to JSPI and supply
+   `asyncImports`/`asyncExports`; the registry's
+   `instantiateFromBytes` factory is the single override point.

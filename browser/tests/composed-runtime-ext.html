@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser — composed cli + runtime-loaded uuid extension</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { openDatabaseComposed } from '../src/sqlink-composed.js'
+
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      try {
+        // Runtime-bindgen path: fetch the extension's raw
+        // .component.wasm bytes at runtime (no jco transpile at
+        // build time) and hand them to db.loadExtension(). The host
+        // delegates to the polyfill's createRuntimeBindgen to
+        // transpile + instantiate in-browser.
+        const wasmUrl = '/uuid_extension.component.wasm'
+        const response = await fetch(wasmUrl)
+        if (!response.ok) {
+          throw new Error(
+            `failed to fetch ${wasmUrl}: ${response.status} ${response.statusText}`,
+          )
+        }
+        const bytes = new Uint8Array(await response.arrayBuffer())
+        log(`fetched ${wasmUrl} (${bytes.byteLength} bytes)`)
+
+        const db = await openDatabaseComposed()
+        log('opened composed db (no embed; runtime-load only)')
+
+        await db.loadExtension('uuid', bytes)
+        log('loaded uuid extension from bytes via runtime bindgen')
+
+        const rows = await db.exec('SELECT uuid();')
+        log('SELECT uuid(); -> ' + JSON.stringify(rows))
+
+        const scalar = await db.execScalar('SELECT uuid();')
+        log('execScalar uuid() -> ' + scalar)
+
+        db.close()
+        status.textContent = 'done'
+        window.__runtimeExtResult = { rows, scalar }
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        log(String(e?.stack ?? e))
+        window.__runtimeExtResult = { error: String(e?.stack ?? e) }
+      } finally {
+        window.__runtimeExtDone = true
+      }
+    </script>
+  </body>
+</html>

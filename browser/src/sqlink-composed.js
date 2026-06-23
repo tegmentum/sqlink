@@ -38,7 +38,10 @@ import {
   buildCliPolyfill,
   resetGlobalStdioState,
 } from './host-imports.js'
-import { buildExtensionImports } from './wasi-imports.js'
+import {
+  buildExtensionImports,
+  instantiateExtensionFromBytes,
+} from './wasi-imports.js'
 
 const COMPOSED_WASM_URL = '/cli_with_sqlite.single_memory.component.wasm'
 
@@ -348,8 +351,9 @@ class ComposedDatabase {
     //       index.js) and pulls in the pre-bundled transpile.
     //       Mirrors the sql.js path's bare-name shorthand.
     //   loadExtension(name, bytes)
-    //     — caller has the raw .component.wasm; runtime-transpile
-    //       would be required (not in v1). Currently rejected.
+    //     — caller has the raw .component.wasm; the registry's
+    //       instantiateFromBytes factory runtime-transpiles via
+    //       createRuntimeBindgen. No pre-bundled module needed.
     //   loadExtension(name, bytes, transpiledModule)
     //     — caller has both: pass `bytes` for the blake3 digest
     //       and the already-transpiled jco module.
@@ -368,19 +372,25 @@ class ComposedDatabase {
     } else if (bytesOrModule && typeof bytesOrModule === 'object') {
       transpiledModule = transpiledModule ?? bytesOrModule
     }
-    if (!transpiledModule) {
-      // Bare-name path: resolve from EXTENSION_LOADERS.
-      const mod = await import('./generated/index.js')
-      const loader = mod.EXTENSION_LOADERS?.[name]
-      if (!loader) {
-        throw new Error(
-          `loadExtension(${JSON.stringify(name)}): unknown extension and no ` +
-            `module passed. Available: ${(mod.EXTENSION_NAMES ?? []).join(', ')}.`,
-        )
+    if (!transpiledModule && bytes) {
+      // Bytes-only path: runtime-transpile + instantiate via the
+      // polyfill's createRuntimeBindgen.
+      await this._registry.addFromBytes(name, bytes)
+    } else {
+      if (!transpiledModule) {
+        // Bare-name path: resolve from EXTENSION_LOADERS.
+        const mod = await import('./generated/index.js')
+        const loader = mod.EXTENSION_LOADERS?.[name]
+        if (!loader) {
+          throw new Error(
+            `loadExtension(${JSON.stringify(name)}): unknown extension and no ` +
+              `module passed. Available: ${(mod.EXTENSION_NAMES ?? []).join(', ')}.`,
+          )
+        }
+        transpiledModule = await loader()
       }
-      transpiledModule = await loader()
+      await this._registry.add(name, bytes, transpiledModule)
     }
-    await this._registry.add(name, bytes, transpiledModule)
     // The cli needs an explicit `.load` to invoke the extension's
     // spi-loader.register-scalar registration. Push it into the
     // session NOW so subsequent exec() calls can use the extension's
@@ -523,6 +533,11 @@ export async function openDatabaseComposed(opts = {}) {
     const imports = await buildExtensionImports()
     return transpiledModule.instantiate(undefined, imports)
   }
+  // Runtime-bindgen factory: lets db.loadExtension(name, bytes) work
+  // without a pre-transpiled module. Delegates to the polyfill's
+  // createRuntimeBindgen via wasi-imports.js so extension-loader.js
+  // stays decoupled from the polyfill API.
+  registry.instantiateFromBytes = (bytes) => instantiateExtensionFromBytes(bytes)
 
   const embedNames = []
   // opts.embed entries may be:
