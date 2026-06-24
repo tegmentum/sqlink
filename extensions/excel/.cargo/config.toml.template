@@ -1,0 +1,21 @@
+# Per-extension cargo config. Lets `cargo build --target
+# wasm32-wasip2 --release` (or `make ext NAME=excel`, or any
+# bulk-rebuild loop that doesn't set BOOTSTRAP=1) succeed on
+# stable rustc.
+#
+# Why: the transitive `typed-path` dep (via zip 7.2.0, via
+# calamine 0.35) uses `std::os::wasi` directly without a
+# `#![feature(wasip2)]` attribute. `std::os::wasi` is itself
+# nightly-gated on stable rustc, so the build fails with
+# `error[E0658]: use of unstable library feature 'wasip2'`.
+# `RUSTC_BOOTSTRAP=1` lets stable rustc accept the gate.
+# Tracked in tooling/compat-registry.json under typed-path /
+# calamine; drop this file once the upstream fix lands.
+#
+# Without this, excel silently fell off the #439 / #440 bulk
+# rebuilds (which don't set BOOTSTRAP=1), shipping stale
+# .wasm bytes that predated the policy.wit `s3` capability
+# addition  the wasmtime instantiate "failed to convert
+# function to given type" load failure caught by smoke_excel.
+[env]
+RUSTC_BOOTSTRAP = { value = "1", force = true }

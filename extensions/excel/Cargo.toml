@@ -30,12 +30,14 @@ streams sheets internally so memory peak is one Range at a
 time, then we keep just the chosen sheet's cells.
 
 Build requires `RUSTC_BOOTSTRAP=1` until the upstream
-typed-path crate (transitive dep via zip 7.2.0) drops its
-unconditional `#![feature(wasip2)]` gate for wasm targets.
-The feature is a no-op on stable; the bootstrap env var
-permits stable rustc to compile it. Tracked upstream:
-chipsenkbeil/typed-path#?  remove once a patched release
-lands.
+typed-path crate (transitive dep via zip 7.2.0) stops using
+`std::os::wasi` directly (gated on stable as feature
+`wasip2`). The bootstrap env var permits stable rustc to
+compile it; `.cargo/config.toml.template` sets it
+automatically so no explicit flag is needed at the call
+site, which keeps the extension inside the standard bulk-
+rebuild loop. Tracked upstream: chipsenkbeil/typed-path
+remove the template once a patched release lands.
 """
 license = "MIT"
 publish = false
