@@ -77,14 +77,17 @@ mod wasm_export {
                 has_commit_hook: false,
                 has_wal_hook: false,
                 wal_hook_id: 0,
-                // v1: only Bundles  every CRUD call routes through
-                // the bundles SPI dispatcher. v1.1 will also declare
-                // Spi (for SQL projections off bundle metadata) and
-                // SpawnBuild (for the build path); both stay out of
-                // the v1 manifest because declaring them with no
-                // grant from the operator would fail the load.
+                // Required: Bundles  every CRUD dot-cmd routes
+                // through the bundles SPI dispatcher.
                 declared_capabilities: alloc::vec![Capability::Bundles],
-                optional_capabilities: alloc::vec![],
+                // Optional: SpawnBuild  only `.bundle build` needs
+                // it; calling without the grant returns SQLITE_PERM
+                // which the build path translates into the Gap C
+                // user-facing message. Declared as optional so
+                // bundle-cli still loads in the default cli (where
+                // SpawnBuild is not granted) and lets .bundle save /
+                // list / show / delete / gc work normally.
+                optional_capabilities: alloc::vec![Capability::SpawnBuild],
             }
         }
     }
