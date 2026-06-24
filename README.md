@@ -304,6 +304,64 @@ extensions today; `.help` enumerates them all.
 | `serialize-cli` | `.serialize`, `.deserialize` |
 | `session-cli` | `.session create / attach / changeset / patchset / list / delete / ...` |
 | `sha3sum-cli` | `.sha3sum` |
+| `bundle-cli` | `.bundle save / list / show / delete / gc / build` |
+
+### Bundles  named extension sets
+
+A **bundle** is a named, content-addressed set of `(extension-name,
+content-hash)` tuples backed by the cas-cache. The typical
+workflow: open a db, dynamically `.load` some extensions to
+explore, then capture that configuration so a future session can
+reload it in one command.
+
+```
+sqlite> .load uuid.component.wasm
+sqlite> .load json1.component.wasm
+sqlite> .bundle save myset --no-build
+bundle 'myset' saved (id=1, set_hash=110535dcc1139a7c, members=2)
+  9e4abf277d3ddc52  uuid
+  d606de418b9d7b8d  json1
+
+sqlite> .bundle list
+NAME                 SET-HASH         MEMBERS  BINARIES  LAST-USED
+myset                110535dcc1139a7c       2         0  1782330713
+
+sqlite> .bundle show myset
+bundle myset (id=1)
+  set_hash:   110535dcc1139a7cb882cdaf5eaaf9de7a2b8f550aa22ad228c137a08954aa15
+  ...
+```
+
+Re-launching with the bundle preloads its members from cas-cache
+before the cli prompt appears:
+
+```
+$ sqlink --bundle-load myset cli.component.wasm --db file.sqlite
+[bundle] 'myset': dynamic-loaded uuid (9e4abf277d3d)
+[bundle] 'myset': dynamic-loaded json1 (d606de418b9d)
+sqlite>
+```
+
+Launch flags:
+
+| Flag | Behavior |
+|---|---|
+| `--bundle NAME` | Auto: exec baked binary for current target if present, else fall back to dynamic-load. |
+| `--bundle-baked NAME` | Force baked path; error if no binary for current target. |
+| `--bundle-load NAME` | Force dynamic-load; skip any baked binary. |
+
+`NAME` accepts either an exact bundle name or a `set_hash` prefix
+(ambiguous prefixes error rather than guess).
+
+v1 ships the metadata-only path  `.bundle save / list / show /
+delete / gc` and `--bundle-load`. The build path (`.bundle build`,
+`--bundle-baked` exec, true name-aliasing) is v1.1: it needs a
+design call on how to drive `sqlink compose` from inside a wasm
+extension, plus a `__cas_bundle_alias` table for multi-name
+support. The substrate (`spi.spawn-build` from #445) is wired
+and ready when v1.1 lands.
+
+
 
 Every command is discoverable: `.help` lists them, `.help <cmd>`
 renders usage, prose help, and worked examples drawn from the
