@@ -86,7 +86,7 @@ mod wasm_export {
                             )
                         }
                     };
-                    match build::spawn_build(&crate_root, None, &[]) {
+                    match build::spawn_build(&crate_root, None, &[], None, &[]) {
                         Ok(out) => Ok(SqlValue::Text(out.binary_path)),
                         Err(e) => Ok(SqlValue::Text(format!("ERR: {}", e.message))),
                     }

@@ -3628,6 +3628,8 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
         crate_root: String,
         target_triple: Option<String>,
         env: Vec<(String, String)>,
+        cargo_package: Option<String>,
+        features: Vec<String>,
     ) -> std::result::Result<
         loaded::sqlite::extension::build::BuildOut,
         loaded::sqlite::extension::types::SqliteError,
@@ -3656,6 +3658,8 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
 
         let triple = target_triple.clone();
         let env_clone = env.clone();
+        let package_clone = cargo_package.clone();
+        let features_clone = features.clone();
         let join: std::result::Result<
             std::result::Result<
                 loaded::sqlite::extension::build::BuildOut,
@@ -3665,6 +3669,12 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
         > = tokio::task::spawn_blocking(move || {
             let mut cmd = std::process::Command::new("cargo");
             cmd.arg("build").arg("--release");
+            if let Some(p) = package_clone.as_deref() {
+                cmd.arg("-p").arg(p);
+            }
+            if !features_clone.is_empty() {
+                cmd.arg("--features").arg(features_clone.join(","));
+            }
             if let Some(t) = triple.as_deref() {
                 cmd.arg("--target").arg(t);
             }
@@ -3696,12 +3706,18 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
             }
             // Resolve binary path. We honor the explicit target if
             // one was provided; otherwise we look under the default
-            // `target/release/` directory.
+            // `target/release/` directory. When `package` was set,
+            // prefer the binary whose stem matches the package name
+            // (cargo uses underscores in the artifact name when the
+            // package has a hyphen, so try both).
             let release_dir = match triple.as_deref() {
                 Some(t) => crate_root_path.join("target").join(t).join("release"),
                 None => crate_root_path.join("target").join("release"),
             };
-            let binary_path = find_release_binary(&release_dir).ok_or_else(|| {
+            let binary_path = find_release_binary(
+                &release_dir,
+                package_clone.as_deref(),
+            ).ok_or_else(|| {
                 loaded::sqlite::extension::types::SqliteError {
                     code: libsqlite3_sys::SQLITE_NOTFOUND,
                     extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
@@ -3986,8 +4002,16 @@ fn tail_lines(s: &str, n: usize) -> String {
 /// extension. Cargo emits the main binary at the top level of
 /// `target/<triple>/release/` alongside `.d` / `.rlib` / `.rmeta`
 /// artifacts; we pick the first one that looks executable.
-fn find_release_binary(release_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+fn find_release_binary(
+    release_dir: &std::path::Path,
+    package_hint: Option<&str>,
+) -> Option<std::path::PathBuf> {
     let entries = std::fs::read_dir(release_dir).ok()?;
+    // Cargo replaces hyphens with underscores in binary stems, so the
+    // hint and its underscored sibling are both valid matches.
+    let hint_norm = package_hint.map(|p| p.replace('-', "_"));
+    let mut hint_match: Option<std::path::PathBuf> = None;
+    let mut exec_candidates: Vec<std::path::PathBuf> = Vec::new();
     let mut candidates: Vec<std::path::PathBuf> = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
@@ -4000,15 +4024,39 @@ fn find_release_binary(release_dir: &std::path::Path) -> Option<std::path::PathB
             Some("d") | Some("rlib") | Some("rmeta") | Some("rcgu.o") => continue,
             _ => {}
         }
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let stem_matches_hint = match (&hint_norm, package_hint) {
+            (Some(n), Some(h)) => stem == n || stem == h,
+            _ => false,
+        };
         // On unix, prefer files with the executable bit set.
         #[cfg(unix)]
-        {
+        let is_exec = {
             use std::os::unix::fs::PermissionsExt;
-            if meta.permissions().mode() & 0o111 != 0 {
-                return Some(path);
-            }
+            meta.permissions().mode() & 0o111 != 0
+        };
+        #[cfg(not(unix))]
+        let is_exec = false;
+
+        if stem_matches_hint && is_exec {
+            return Some(path);
+        }
+        if stem_matches_hint {
+            hint_match = Some(path.clone());
+        }
+        if is_exec {
+            exec_candidates.push(path);
+            continue;
         }
         candidates.push(path);
+    }
+    // Hint match (even without exec bit, e.g. plain .wasm) wins next.
+    if let Some(p) = hint_match {
+        return Some(p);
+    }
+    // Then any executable.
+    if let Some(p) = exec_candidates.into_iter().next() {
+        return Some(p);
     }
     // Fallback: first non-intermediate file (covers windows + plain
     // .wasm artifacts that don't carry the exec bit).
@@ -4585,6 +4633,18 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
             .collect();
         out.sort_by(|a, b| a.name.cmp(&b.name));
         out
+    }
+
+    async fn host_target_triple(&mut self) -> String {
+        let arch = std::env::consts::ARCH;
+        let os = std::env::consts::OS;
+        let family = std::env::consts::FAMILY;
+        match os {
+            "macos" => format!("{arch}-apple-darwin"),
+            "linux" => format!("{arch}-unknown-linux-gnu"),
+            "windows" => format!("{arch}-pc-windows-msvc"),
+            other => format!("{arch}-unknown-{other}-{family}"),
+        }
     }
 }
 
