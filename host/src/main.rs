@@ -45,7 +45,7 @@ impl wasmtime_wasi::WasiView for State {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: sqlink [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wasm|.cwasm> [-- guest-args...]");
+    eprintln!("usage: sqlink [--db PATH] [--cache-dir DIR] [--no-component-cache] [--grant CAP[,CAP...]] <component.wasm|.cwasm> [-- guest-args...]");
     eprintln!("       sqlink changeset {{invert|concat}} <in1> [in2] <out>");
     eprintln!("       sqlink changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
     eprintln!("       sqlink changeset apply --db PATH --input FILE");
@@ -703,6 +703,7 @@ async fn main() -> Result<()> {
     // the baked path (errors if no binary). `--bundle-load` forces
     // dynamic-load (skips any baked binary).
     let mut bundle_request: Option<(String, BundleMode)> = None;
+    let mut extra_guest_grants: Vec<String> = Vec::new();
     let mut i = 1;
     while i < args.len() {
         let a = &args[i];
@@ -740,6 +741,28 @@ async fn main() -> Result<()> {
                 eprintln!("{a} expects a NAME or HASH-PREFIX");
                 usage();
             }
+        } else if a == "--grant" {
+            // PLAN-bundles.md Gap C: `sqlink --grant CAP[,CAP...]`
+            // augments the grant set the cli applies to its auto-
+            // loaded embedded extensions. For v1 the only grant
+            // the cli's auto-load consults is `spawn-build` (which
+            // unlocks bundle-cli's `.bundle build` path). We
+            // translate that into the guest-side `--bundle-grant-
+            // spawn-build` flag that cli/src/lib.rs's
+            // embed_core_dotcmd reads. The flag is appended to
+            // guest_args after positional resolution below.
+            i += 1;
+            if i < args.len() {
+                for cap in args[i].split(',') {
+                    let cap = cap.trim().to_ascii_lowercase();
+                    if cap == "spawn-build" || cap == "spawn_build" {
+                        extra_guest_grants.push("--bundle-grant-spawn-build".to_string());
+                    }
+                }
+            } else {
+                eprintln!("--grant expects CAP[,CAP...]");
+                usage();
+            }
         } else if a == "--no-component-cache" {
             // PLAN-component-cache.md C3: cli flag plumbing.
             // Set the env var the host's component_cache_disabled()
@@ -754,7 +777,14 @@ async fn main() -> Result<()> {
         usage();
     }
     let mut component_path = PathBuf::from(&positional[0]);
-    let guest_args: Vec<String> = positional.iter().skip(1).cloned().collect();
+    let mut guest_args: Vec<String> = positional.iter().skip(1).cloned().collect();
+    // Prepend host-level grant flags so the cli sees them before
+    // its embed_core_dotcmd runs (Gap C plumbing  the cli reads
+    // `--bundle-grant-spawn-build` and lifts it into bundle-cli's
+    // auto-load grant list).
+    for g in extra_guest_grants.into_iter().rev() {
+        guest_args.insert(0, g);
+    }
 
     let host = Host::new()?;
     host.set_db_path(&db_path);

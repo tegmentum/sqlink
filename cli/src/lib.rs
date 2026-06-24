@@ -101,7 +101,16 @@ impl RunGuest for CliCommand {
         // BEFORE the user types anything. Failure is non-fatal
         // (we degrade to "no built-in commands" rather than
         // aborting the session).
-        embed_core_dotcmd();
+        //
+        // `--bundle-grant-spawn-build` (Gap C plumbing): when
+        // present in argv, the auto-load grants bundle-cli the
+        // SpawnBuild capability so `.bundle build` can drive
+        // cargo via spi.spawn-build. Sourced from sqlink-level
+        // `sqlink --grant spawn-build` (host translates).
+        let bundle_grant_spawn_build = argv
+            .iter()
+            .any(|a| a == "--bundle-grant-spawn-build");
+        embed_core_dotcmd(bundle_grant_spawn_build);
 
         // Phase 1.5 argv entry point. Argv shape:
         //   sqlite_cli.component.wasm <db_path>
@@ -2630,8 +2639,8 @@ pub(crate) fn dbconfig_code(name: &str) -> Option<std::os::raw::c_int> {
     DBCONFIG_BOOLEANS.iter().find(|(n, _)| *n == name).map(|(_, c)| *c)
 }
 
-fn embed_core_dotcmd() {
-    use bindings::sqlite::extension::policy::LoadOptions;
+fn embed_core_dotcmd(grant_spawn_build: bool) {
+    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     use bindings::sqlink::wasm::extension_loader;
 
     const CORE_DOTCMD_BYTES: &[u8] = include_bytes!(
@@ -2704,8 +2713,12 @@ fn embed_core_dotcmd() {
         memory_limit_bytes: None,
         epoch_deadline_ms: None,
     };
+    let mut bundle_grants = vec![Capability::Bundles];
+    if grant_spawn_build {
+        bundle_grants.push(Capability::SpawnBuild);
+    }
     let bundle_options = LoadOptions {
-        grant: vec![bindings::sqlite::extension::policy::Capability::Bundles],
+        grant: bundle_grants,
         http_policy: None,
         dns_policy: None,
         fs_policy: None,
