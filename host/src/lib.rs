@@ -3613,6 +3613,13 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
 /// `target/<triple-or-default>/release/` by looking for the first
 /// regular executable file there.
 ///
+/// For wasm-component targets (target triple contains
+/// `wasm32-wasi`) the cargo step produces a core wasm module; we
+/// then run `wasm-tools component new` to wrap it as a wasi-
+/// preview2 component and return that path instead. spawn-build's
+/// contract is "produce the buildable artifact for the requested
+/// target" (Gap F resolution in PLAN-bundles.md).
+///
 /// Capability-gated via `LoadedState::spawn_build_granted`; without
 /// the grant we return `SQLITE_PERM` with a clear "spawn-build
 /// capability not granted" message. Substrate for
@@ -3728,10 +3735,67 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                     ),
                 }
             })?;
+            // Gap F: for wasm-component targets, cargo produces a
+            // core wasm module; the canonical embed/load pipeline
+            // expects a wasi-preview2 component. Run `wasm-tools
+            // component new` here so spawn-build's contract is
+            // "produce the buildable artifact for the requested
+            // target" rather than "wrap cargo verbatim".
+            let is_wasm_component_target = triple
+                .as_deref()
+                .map(|t| t.contains("wasm32-wasi"))
+                .unwrap_or(false);
+            let (final_path, mut combined_stdout, mut combined_stderr) =
+                (binary_path, stdout, stderr);
+            if is_wasm_component_target {
+                let component_path = final_path.with_extension("component.wasm");
+                let mut wt = std::process::Command::new("wasm-tools");
+                wt.arg("component")
+                    .arg("new")
+                    .arg(&final_path)
+                    .arg("-o")
+                    .arg(&component_path);
+                let wt_out = wt.output().map_err(|e| {
+                    loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_ERROR,
+                        extended_code: libsqlite3_sys::SQLITE_ERROR,
+                        message: format!(
+                            "build.spawn-build: wasm-tools not found in PATH; \
+                             required to component-encode wasm target output: {e}"
+                        ),
+                    }
+                })?;
+                combined_stdout.push_str("\n--- wasm-tools stdout ---\n");
+                combined_stdout
+                    .push_str(&String::from_utf8_lossy(&wt_out.stdout));
+                combined_stderr.push_str("\n--- wasm-tools stderr ---\n");
+                combined_stderr
+                    .push_str(&String::from_utf8_lossy(&wt_out.stderr));
+                if !wt_out.status.success() {
+                    return Err(loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_ERROR,
+                        extended_code: libsqlite3_sys::SQLITE_ERROR,
+                        message: format!(
+                            "build.spawn-build: wasm-tools component new exited {}\n\
+                             stderr tail:\n{}",
+                            wt_out.status,
+                            tail_lines(
+                                &String::from_utf8_lossy(&wt_out.stderr),
+                                40
+                            ),
+                        ),
+                    });
+                }
+                return Ok(loaded::sqlite::extension::build::BuildOut {
+                    binary_path: component_path.to_string_lossy().into_owned(),
+                    stdout: combined_stdout,
+                    stderr: combined_stderr,
+                });
+            }
             Ok(loaded::sqlite::extension::build::BuildOut {
-                binary_path: binary_path.to_string_lossy().into_owned(),
-                stdout,
-                stderr,
+                binary_path: final_path.to_string_lossy().into_owned(),
+                stdout: combined_stdout,
+                stderr: combined_stderr,
             })
         })
         .await;
