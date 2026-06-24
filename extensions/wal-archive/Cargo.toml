@@ -1,0 +1,59 @@
+[package]
+name = "wal-archive-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Continuous WAL-frame shipping + on-demand snapshot extension for
+sqlink (any deployment: native, browser, edge, mobile, embedded).
+
+Design heavily inspired by Litestream (Ben Johnson); credited in
+the project README's Acknowledgements section. Separate
+implementation in a different runtime model: in-process inside a
+WASM component rather than a Go daemon.
+
+Architecture (per docs/plans/PLAN-wal-archive-extension.md):
+
+  - WAL-hook callback (wal-hook world) drains new frames via
+    sqlite:extension/wal-frames@0.1.0 (host SPI #439) into an
+    in-memory ring buffer, compresses with lz4_flex, and ships
+    each segment to S3 via sqlite:extension/s3-base@0.1.0 (host
+    SPI #440).
+  - State is persisted in S3 as `<prefix>/<db>/state.json` so
+    crash-recovery on the next start() can resume from the last
+    uploaded frame.
+  - On-demand snapshots (wal_archive_snapshot_now()) call
+    sqlite:extension/spi.serialize-db("main") and ship the
+    compressed serialization to S3, then GC older WAL segments.
+  - wal_archive_restore() reverses: get the latest snapshot, then
+    list-and-replay the WAL segments past the snapshot frame.
+
+The extension's per-Store state (the in-memory ring buffer +
+segment counter + cached WAL header) persists across hook firings
+because the host caches the wasmtime Store per extension (#441).
+Pre-#441 the host re-instantiated per dispatch, which made this
+design impossible.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Same wit-bindgen pair every sqlink extension uses; bindings are
+# generated against the wal-aware world in ../../sqlite-loader-wit/
+# wit/world.wit (exports metadata + scalar-function + update-hook +
+# commit-hook + wal-hook; imports spi + wal-frames + s3-base + types
+# + session + logging + config).
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Pure-Rust, no_std-friendly LZ4 codec. ~30 KB; ratio is fine for
+# WAL frames (page bytes compress well). zstd is a follow-up when
+# ratio matters more than code size.
+lz4_flex = { version = "0.11", default-features = false }
+# Pure-Rust JSON parser for parsing wal_archive_start's opts arg
+# and serializing the sidecar state.json. alloc-only build keeps
+# the wasm artifact lean.
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
