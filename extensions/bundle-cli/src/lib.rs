@@ -532,16 +532,25 @@ underlying set-hash row.";
     }
 
     /// Resolve the sqlink workspace root for the cargo invocation.
-    /// V1 uses the compile-time workspace path baked at bundle-cli
-    /// build time (`extensions/bundle-cli/`  `../../`). The
-    /// `$SQLINK_DEV_ROOT` override from the plan's open-question
-    /// decision #2 needs a loader-bridge env-var lookup that v1
-    /// substrate doesn't provide; for installed binaries on a
-    /// clean machine where the compile-time path is meaningless,
-    /// a future bridge call will surface the env var to the
-    /// extension. For dev (cargo build from the workspace) the
-    /// compile-time path is always correct.
+    ///
+    /// Resolution order (plan's open-question decision #2 +
+    /// v1.1 `loader-bridge.env-var` substrate):
+    ///   1. `$SQLINK_DEV_ROOT` if set and non-empty (via the
+    ///      loader-bridge env-var bridge call). Honored as-is
+    ///      if the user explicitly set it, a typo should fail
+    ///      cargo-loudly, not silently fall back.
+    ///   2. Compile-time path derived from `CARGO_MANIFEST_DIR`:
+    ///      strip `/extensions/bundle-cli` to recover the workspace
+    ///      root. Always correct in dev (sqlink built from its
+    ///      own workspace).
+    ///
+    /// On a clean install where neither resolves, the error names
+    /// both the env var and the expected compile-time path so the
+    /// operator can pick whichever they prefer.
     fn resolve_crate_root() -> Result<String, String> {
+        if let Some(dev_root) = loader_bridge::env_var("SQLINK_DEV_ROOT") {
+            return Ok(dev_root);
+        }
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let mut buf = manifest_dir.to_string();
         for needle in ["/extensions/bundle-cli", "\\extensions\\bundle-cli"] {
@@ -551,11 +560,11 @@ underlying set-hash row.";
             }
         }
         Err(format!(
-            ".bundle build: cannot resolve sqlink workspace root: \
-             the compile-time path {manifest_dir:?} does not look like \
-             extensions/bundle-cli/ (bundle-cli was built from an \
-             unexpected location). Rebuild bundle-cli from the sqlink \
-             workspace."
+            ".bundle build: SQLINK_DEV_ROOT unset and compile-time \
+             workspace path missing (expected: {manifest_dir:?} ending \
+             in extensions/bundle-cli/). Set SQLINK_DEV_ROOT to your \
+             sqlink source checkout, or rebuild bundle-cli from the \
+             sqlink workspace."
         ))
     }
 
