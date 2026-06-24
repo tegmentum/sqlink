@@ -72,17 +72,26 @@ substrate that `#436` shipped:
     `wal:42:main:<n>` event in hookprobe's drain log after a
     `PRAGMA journal_mode=WAL` + a handful of INSERTs.
 
-### Substrate 2 (#439): wal-frames + backup SPI interfaces
+### Substrate 2 (#439): wal-frames SPI interface  **LANDED 2026-06-23 (option A)**
 
-Two new SPI interfaces in `sqlite-loader-wit/wit/`:
+Original plan called for TWO new SPI interfaces  `wal-frames` AND
+`backup`. The design checkpoint at the head of this work picked
+**option A**: drop the new `backup` interface and reuse the
+existing `spi.serialize-db` (which has been there since the
+initial spi cut, gated by `capability::spi`). Reduces the substrate
+surface by ~30% with no functional loss: wal-archive's snapshot
+cadence (default 24h) is the only `serialize-db` consumer the
+extension needs.
+
+What actually landed:
 
 ```wit
-package sqlite:extension@0.1.0;
-
+// sqlite-loader-wit/wit/host-spi.wit
 interface wal-frames {
   use types.{sqlite-error};
 
-  /// 32-byte WAL file header. None when journal_mode  wal.
+  /// 32-byte WAL file header. None when journal_mode  wal or
+  /// the WAL file doesn't exist yet.
   get-wal-header: func(db-name: string)
     -> result<option<list<u8>>, sqlite-error>;
 
@@ -93,21 +102,47 @@ interface wal-frames {
     -> result<list<u8>, sqlite-error>;
 }
 
-interface backup {
-  use types.{sqlite-error};
-
-  /// One-shot serialize. Briefly holds the write lock during
-  /// sqlite3_serialize(). Allocates the full db in wasm memory 
-  /// fine for the wal-archive snapshot cadence (default 24h).
-  /// Incremental sqlite3_backup_* + streaming variants are v2.
-  serialize-db: func(db-name: string) -> result<list<u8>, sqlite-error>;
-}
+// sqlite-loader-wit/wit/policy.wit  capability enum gained:
+//   wal-frames,
 ```
 
-Extensions request these interfaces in their world; host serves
-them via the existing SPI dispatcher. Capability gating: each
-interface separate so an extension that only needs backup doesn't
-have to be granted wal-frame access. ~1-2 days.
+Snapshot serialize: just call the existing
+`sqlite:extension/spi.serialize-db(db-name)`  no separate
+interface needed. The wal-archive snapshot cadence path is
+`grant.contains(Capability::Spi) ? spi::serialize_db("main") : err`.
+
+Other landed pieces:
+
+- `Capability::WalFrames` variant on `sqlite-loader-wit/src/lib.rs`
+  (the Rust source of truth shared across host / loader / native).
+- `wal-frames` imported into every world (minimal, minimal-http,
+  minimal-dns, stateful, lifecycle-aware, resolving, collating,
+  authorizing, hooked, tabular, tabular-mutating, dotcmd-aware,
+  wal-aware, hookprobe, full)  the per-shape host bindgens
+  (`Hooked::add_to_linker`, `Authorizing::add_to_linker`, ...) all
+  install the same `wal_frames::Host` impl via `with:` clauses, so
+  the wal-archive-shaped extension can be dispatched against any
+  world the host instantiates it as.
+- Native host dispatcher (`host/src/lib.rs`): both methods open
+  the on-disk `<sqlite3_db_filename(db-name)>-wal` sidecar with a
+  `std::fs::read`, return the requested bytes. Fail-closed on
+  `Capability::WalFrames` not granted at load time (SQLITE_PERM
+  with a "wal-frames capability not granted" message).
+- Browser-side stub in `sqlite-wasm/sqlite-lib`: returns the
+  documented sentinel (None / SQLITE_NOTFOUND) until vfs-tvm
+  grows WAL support (#437). The WIT contract stays honored so a
+  wal-archive-shaped extension can compose with sqlite-lib in the
+  browser today, even though the live data isn't reachable yet.
+- New test-bench scalars on hookprobe (`hookprobe_wal_header`,
+  `hookprobe_read_frames`, `hookprobe_serialize_main`) and a
+  native end-to-end smoke
+  (`tests/extension-smoke/src/test_wal_frames.rs`, scenarios 1+2)
+  asserting WAL magic + frame size + "SQLite format 3\0" header
+  on the serialized snapshot.
+
+The `backup` interface and `backup-aware` world that briefly
+appeared in `sqlite-loader-wit` f66bdca were reverted in 522645e
+once the design call landed.
 
 ### Substrate 3 (#440): host-resident `s3-base` SPI bridge
 
@@ -275,16 +310,21 @@ interface replicator {
 }
 
 world wal-archive-extension {
-  import sqlite:extension/spi@0.1.0;
+  import sqlite:extension/spi@0.1.0;          // serialize-db (snapshots)
   import sqlite:extension/types@0.1.0;
   import sqlite:extension/metadata@0.1.0;
-  import sqlite:extension/wal-frames@0.1.0;   // substrate #439
-  import sqlite:extension/backup@0.1.0;       // substrate #439
+  import sqlite:extension/wal-frames@0.1.0;   // substrate #439 (landed)
   import sqlite:extension/s3-base@0.1.0;      // substrate #440 (host-resident)
   import wasi:clocks/wall-clock@0.2.0;
   export replicator;
 }
 ```
+
+The earlier sketch imported a separate `sqlite:extension/backup`
+interface here. Per substrate-#439's design checkpoint it was
+dropped: the existing `spi.serialize-db` covers the one-shot
+serialize the snapshot path needs (it shipped in the initial spi
+cut and is already gated by `capability::spi`).
 
 ## Mechanics
 
