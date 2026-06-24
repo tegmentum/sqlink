@@ -18,25 +18,37 @@ paths (sqlink-native + sqlink+wasm-cli) via a mock S3 server:
     spi.serialize-db, compresses, ships to S3, GCs older WAL
     segments.
   * `wal_archive_restore()` pulls latest.snap.lz4 + the sidecar,
-    deserializes into the spi connection's main via
-    spi.deserialize-db, and (best-effort) tries
-    spi.backup-into(target_path). WAL replay past the snapshot is
-    deferred to v2 (see below).
+    patches the snapshot's journal-mode header bytes from WAL
+    (`02 02`) to legacy (`01 01`), deserializes into the spi
+    connection's main via spi.deserialize-db, and writes the
+    deserialized image to `target_path` via spi.backup-into.
+    The new `wal_archive_roundtrip_{native,wasm_cli}` smoke
+    tests exercise the full S3-to-disk path end-to-end and
+    verify the target_path file opens cleanly under the system
+    sqlite3 with all source rows present. WAL replay past the
+    snapshot is deferred to v2 (see below); the v1 loss window
+    is < 1 s of writes at the default flush threshold.
 
 **v2 follow-ups** (none of which block v1 shipping):
 
   1. **WAL replay past the snapshot.** v1 surfaces a count of
-     skipped segments but doesn't actually apply them. Two
-     wedges block it under sqlink-native today: (a)
-     wasmtime-wasi's `in_tokio` does `block_on` without
-     `block_in_place`, so wasi:filesystem ops after async Host
-     calls (s3-base) in the same scalar dispatch panic with
-     "Cannot start a runtime from within a runtime"; (b)
-     `spi::backup_into` after `spi::deserialize-db` currently
-     returns SQLITE_CANTOPEN under sqlink-native + sqlink+wasm-
-     cli  needs investigation. Either route through a different
-     IO bridge OR a `spi::write-file` substrate addition could
-     close this.
+     skipped segments but doesn't actually apply them. The
+     two earlier wedges that blocked this  (a) wasmtime-wasi
+     45.0.1's `in_tokio` doing `block_on` without
+     `block_in_place` (which panics when wasi:filesystem ops
+     follow async host calls in the same scalar dispatch),
+     and (b) `spi::backup_into` returning SQLITE_CANTOPEN
+     after `spi::deserialize-db` of a WAL-mode snapshot  are
+     resolved as of #443: (b) was a journal-mode-byte issue
+     in the snapshot payload itself (sqlite3_deserialize on a
+     WAL-mode image tried to open the non-existent WAL
+     sidecar), fixed by a two-byte patch (offsets 18/19) on
+     the decompressed snap bytes before deserialize-db. (a)
+     is sidestepped by the same fix because the v1 restore
+     path no longer needs any wasi:filesystem ops from the
+     guest  spi.backup_into materializes target_path through
+     the host's tokio context. WAL replay past the snapshot
+     can now build on this same shape.
   2. **Timer-driven snapshots.** v1 ships with on-demand
      `snapshot_now()` only. The opts JSON's
      `snapshot_interval_seconds` field is parsed + stored for the
