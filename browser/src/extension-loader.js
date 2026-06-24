@@ -1476,7 +1476,30 @@ export function buildSpiLoader(registry) {
         b.registerHostWalHook(extName, BigInt(hookId))
         return undefined
       },
-      registerVtab(_extName, _name, _vtabId, _eponymous, _mutable, _batched) {
+      // Vtab modules: re-enter dispatch-bridge to install a
+      // sqlite3_module trampoline on sqlite-lib's shared
+      // connection. The wasm-side trampoline's xMethod callbacks
+      // call back out via dispatch.vtab-* (handled in buildDispatch
+      // above). No JS-side recordVtab is needed today — the
+      // wasm-side host_vtabs.rs holds the (ext-name, vtab-id) map
+      // keyed by module name, and JS-side dispatch routes by
+      // ext-name + vtab-id on each xMethod call.
+      registerVtab(extName, name, vtabId, eponymous, mutable, batched) {
+        if (!registry.has(extName)) {
+          structuredErr(
+            `spi-loader.register-vtab: extension '${extName}' not in JS registry. ` +
+              `Pre-register via openDatabase({embed: ...}) or db.loadExtension().`,
+          )
+        }
+        const b = getBridge()
+        b.registerHostVtab(
+          extName,
+          name,
+          BigInt(vtabId),
+          !!eponymous,
+          !!mutable,
+          !!batched,
+        )
         return undefined
       },
     },
@@ -1512,6 +1535,7 @@ export function buildSpiLoader(registry) {
         'registerHostCommitHook',
         'registerHostRollbackHook',
         'registerHostWalHook',
+        'registerHostVtab',
         'unregisterExtension',
       ]) {
         if (typeof dispatchBridge?.[k] !== 'function') missing.push(k)
