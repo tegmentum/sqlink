@@ -1,13 +1,14 @@
 //! `.bundle`  named extension sets + cached baked binaries on
-//! the host's cas-cache. v1 covers the metadata-only path
-//! end-to-end; the with-build path is wired to the substrate
-//! (spi.spawn-build) but returns a clear "v1.1: build
-//! orchestration deferred" message pending the design call on
-//! how to drive `sqlink compose` from a wasm extension.
+//! the host's cas-cache. v1 covers the full metadata + build
+//! round-trip: save the current connection's loaded extensions
+//! as a named bundle, then build or auto-build a per-target
+//! binary via `spi.spawn-build` (which under the hood drives
+//! `cargo build -p sqlite-cli --features embed-X,embed-Y,...`
+//! and  for wasm targets  `wasm-tools component new`).
 //!
 //! Subcommands:
 //!   .bundle save NAME [--no-build]   record live-connection's loaded exts
-//!   .bundle build NAME [--target X]  (v1.1) build baked binary
+//!   .bundle build NAME [--target X]  build baked binary for target
 //!   .bundle list                     all bundles, last-used desc
 //!   .bundle show NAME|HASH           members + binaries
 //!   .bundle delete NAME              drop bundle row + cascade
@@ -42,11 +43,18 @@ mod wasm_export {
         DotCommandSpec, Guest as MetadataGuest, Manifest,
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
+    use bindings::sqlite::extension::build;
     use bindings::sqlite::extension::bundles;
     use bindings::sqlite::extension::cli_stdout;
     use bindings::sqlite::extension::loader_bridge;
     use bindings::sqlite::extension::policy::Capability;
     use bindings::sqlite::extension::types::{SqlValue, SqliteError};
+
+    // SQLite primary result code returned by spi.spawn-build when
+    // SpawnBuild is declared but not granted at load time. Used
+    // to translate the host-side perm error into the Gap C user-
+    // facing message.
+    const SQLITE_PERM: i32 = 3;
 
     const FID_BUNDLE: u64 = 1;
 
@@ -116,9 +124,9 @@ mod wasm_export {
 
   save NAME [--no-build]   Record currently-loaded extensions as
                            bundle NAME. Without --no-build, also
-                           builds a per-target binary (v1.1; v1
-                           always behaves as --no-build with a
-                           note).
+                           builds a per-target binary for the
+                           current host triple (requires
+                           --grant spawn-build).
   list                     Show every bundle, last-used descending.
   show NAME|HASH           Members + binaries for one bundle.
                            NAME is an exact-match; HASH does
@@ -126,8 +134,11 @@ mod wasm_export {
   delete NAME              Drop the bundle and its members /
                            binaries. Cas-cache artifacts (the
                            extension bytes) are NOT removed.
-  build NAME [--target X]  (v1.1) Build a baked binary for the
-                           current or specified target.
+  build NAME [--target X]  Build a baked binary for the current
+                           or specified target. Requires
+                           --grant spawn-build. Cache-hit if
+                           the (bundle, target) binary already
+                           exists.
   gc [--keep N | --older-than 30d]
                            Prune via LRU or age policy.
 
@@ -224,12 +235,46 @@ underlying set-hash row.";
             out.push_str(&format!("  {}  {}\n", &m.digest[..16.min(m.digest.len())], m.name));
         }
         if !no_build {
-            out.push_str(
-                "\nnote: build path not yet wired in v1 (PLAN-bundles.md #446 \
-                 punted on cargo-orchestration design); treating --no-build implicitly. \
-                 Use `sqlink --bundle ");
-            out.push_str(&name);
-            out.push_str(" db.sqlite` to dynamic-load this set on next launch.\n");
+            // Cache-hit: if a binary for the current host target
+            // already exists (e.g. a prior `.bundle save` for an
+            // identical set under a different name), skip cargo.
+            let host_target = loader_bridge::host_target_triple();
+            let detail = match bundles::bundle_show(id) {
+                Ok(d) => d,
+                Err(e) => {
+                    cli_stdout::write(&out);
+                    return err(format!(
+                        ".bundle save: build follow-on failed loading bundle: {}",
+                        e.message
+                    ));
+                }
+            };
+            if let Some(existing) = detail
+                .binaries
+                .iter()
+                .find(|b| b.target_triple == host_target)
+            {
+                out.push_str(&format!(
+                    "\nbinary already cached for {host_target}: {}\n",
+                    existing.binary_path
+                ));
+            } else {
+                match do_build(&name, id, &detail.members, &host_target) {
+                    Ok(path) => {
+                        out.push_str(&format!(
+                            "\nbuilt binary for {host_target}: {path}\n"
+                        ));
+                    }
+                    Err(e) => {
+                        // Print the metadata-save success first so
+                        // the operator can see the bundle was
+                        // recorded; the build failure is a
+                        // secondary error.
+                        cli_stdout::write(&out);
+                        return err(e);
+                    }
+                }
+            }
         }
         cli_stdout::write(&out);
         ok()
@@ -331,15 +376,152 @@ underlying set-hash row.";
         }
     }
 
-    fn sub_build(_args: &[&str]) -> InvokeResult {
-        err(".bundle build: build orchestration not yet wired in v1 \
-             (PLAN-bundles.md #446 deferred the design call on how to \
-              drive `sqlink compose` from inside a wasm extension). The \
-              substrate is ready (spi.spawn-build from #445); v1.1 will \
-              land the generated-crate template + cargo invocation. For \
-              now, use `sqlink --bundle NAME db.sqlite` to dynamic-load \
-              the bundle's extensions on next launch."
-            .into())
+    fn sub_build(args: &[&str]) -> InvokeResult {
+        let mut name: Option<String> = None;
+        let mut target_override: Option<String> = None;
+        let mut i = 0;
+        while i < args.len() {
+            match args[i] {
+                "--target" => {
+                    i += 1;
+                    if i >= args.len() {
+                        return err(".bundle build: --target expects a triple".into());
+                    }
+                    target_override = Some(args[i].to_string());
+                }
+                other if other.starts_with("--") => {
+                    return err(format!(".bundle build: unknown flag {other:?}"));
+                }
+                other => {
+                    if name.is_some() {
+                        return err(".bundle build: only one NAME positional accepted".into());
+                    }
+                    name = Some(other.to_string());
+                }
+            }
+            i += 1;
+        }
+        let name = match name {
+            Some(n) => n,
+            None => return err(".bundle build: NAME required (usage: .bundle build NAME [--target TRIPLE])".into()),
+        };
+        let summary = match bundles::bundle_find_by_name(&name) {
+            Ok(Some(s)) => s,
+            Ok(None) => return err(format!(".bundle build: bundle {name:?} not found")),
+            Err(e) => return err(format!(".bundle build: {}", e.message)),
+        };
+        let detail = match bundles::bundle_show(summary.id) {
+            Ok(d) => d,
+            Err(e) => return err(format!(".bundle build: {}", e.message)),
+        };
+        let target = target_override
+            .unwrap_or_else(loader_bridge::host_target_triple);
+        // Cache-hit: if a binary for this (bundle, target) already
+        // exists, return it without re-invoking cargo. Same-set
+        // bundles share `set_hash` and therefore share their
+        // bundle_binaries rows.
+        if let Some(existing) = detail
+            .binaries
+            .iter()
+            .find(|b| b.target_triple == target)
+        {
+            bundles::bundle_touch(summary.id);
+            cli_stdout::write(&format!(
+                "bundle '{name}' already built for {target}: {}\n",
+                existing.binary_path
+            ));
+            return ok();
+        }
+        match do_build(&name, summary.id, &detail.members, &target) {
+            Ok(path) => {
+                cli_stdout::write(&format!(
+                    "bundle '{name}' built for {target}: {path}\n"
+                ));
+                ok()
+            }
+            Err(e) => err(e),
+        }
+    }
+
+    /// Shared build logic used by `.bundle build` and the with-build
+    /// path of `.bundle save`. Returns the absolute host path of the
+    /// produced binary (or component, for wasm targets) on success;
+    /// returns a user-facing error string on failure  including the
+    /// Gap C translation when spawn-build's host returns SQLITE_PERM.
+    fn do_build(
+        name: &str,
+        bundle_id: u64,
+        members: &[bundles::BundleMember],
+        target: &str,
+    ) -> Result<String, String> {
+        let crate_root = resolve_crate_root()?;
+        // Feature naming convention mirrors `sqlink compose --embed`:
+        // each extension name X with underscores normalized to
+        // hyphens becomes feature `embed-X`. See
+        // host/src/main.rs run_compose_subcommand for the source
+        // of truth.
+        let features: Vec<String> = members
+            .iter()
+            .map(|m| format!("embed-{}", m.extension_name.replace('_', "-")))
+            .collect();
+        let out = match build::spawn_build(
+            &crate_root,
+            Some(target),
+            &[],
+            Some("sqlite-cli"),
+            &features,
+        ) {
+            Ok(o) => o,
+            Err(e) => {
+                if e.code == SQLITE_PERM {
+                    return Err(format!(
+                        ".bundle build: spawn-build capability not granted. \
+                         Re-run with `sqlink --grant spawn-build`, or use \
+                         `.bundle save {name} --no-build` to record metadata only."
+                    ));
+                }
+                return Err(format!(".bundle build: {}", e.message));
+            }
+        };
+        if let Err(e) = bundles::bundle_record_binary(
+            bundle_id,
+            target,
+            &out.binary_path,
+        ) {
+            return Err(format!(
+                ".bundle build: produced {} but bundle-record-binary failed: {}",
+                out.binary_path, e.message
+            ));
+        }
+        Ok(out.binary_path)
+    }
+
+    /// Resolve the sqlink workspace root for the cargo invocation.
+    /// V1 uses the compile-time workspace path baked at bundle-cli
+    /// build time (`extensions/bundle-cli/`  `../../`). The
+    /// `$SQLINK_DEV_ROOT` override from the plan's open-question
+    /// decision #2 needs a loader-bridge env-var lookup that v1
+    /// substrate doesn't provide; for installed binaries on a
+    /// clean machine where the compile-time path is meaningless,
+    /// a future bridge call will surface the env var to the
+    /// extension. For dev (cargo build from the workspace) the
+    /// compile-time path is always correct.
+    fn resolve_crate_root() -> Result<String, String> {
+        let manifest_dir = env!("CARGO_MANIFEST_DIR");
+        let mut buf = manifest_dir.to_string();
+        for needle in ["/extensions/bundle-cli", "\\extensions\\bundle-cli"] {
+            if let Some(idx) = buf.rfind(needle) {
+                buf.truncate(idx);
+                return Ok(buf);
+            }
+        }
+        Err(format!(
+            ".bundle build: cannot resolve sqlink workspace root: \
+             the compile-time path {manifest_dir:?} does not look like \
+             extensions/bundle-cli/ (bundle-cli was built from an \
+             unexpected location). Rebuild bundle-cli from the sqlink \
+             workspace."
+        ))
     }
 
     fn sub_gc(args: &[&str]) -> InvokeResult {
