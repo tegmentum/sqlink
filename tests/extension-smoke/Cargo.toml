@@ -49,6 +49,17 @@ path = "src/test_loader.rs"
 name = "extension_smoke_wal_hook"
 path = "src/test_wal_hook.rs"
 
+[[test]]
+# Substrate-companion to test_wal_hook (#438). Exercises the
+# wal-frames host SPI dispatcher (get-wal-header + read-frames)
+# AND the existing spi.serialize-db, all wired through the
+# capability-gated wal-frames + spi grants. Asserts WAL magic
+# in get-wal-header(), correct frame size in read-frames(1,1),
+# and "SQLite format 3\0" magic in serialize-db(). Substrate
+# for PLAN-wal-archive-extension.md (#439).
+name = "extension_smoke_wal_frames"
+path = "src/test_wal_frames.rs"
+
 [[bin]]
 name = "extension-smoke-report"
 path = "src/report.rs"

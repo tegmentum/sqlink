@@ -107,8 +107,14 @@ fn script(component: &Path) -> String {
     // The cli renders SELECT results in Mode::List by default.
     // hookprobe_drain_log() returns a JSON array as TEXT —
     // we just grep stdout for `"wal:42:main:`.
+    //
+    // hookprobe declares `spi` + `wal-frames` capabilities
+    // (the latter is the substrate for hookprobe_wal_header /
+    // hookprobe_read_frames; spi backs hookprobe_serialize_main).
+    // Both must appear in --grant or the load fails the
+    // policy.check_manifest pre-flight.
     format!(
-        ".load {}\n\
+        ".load {} --grant=spi,wal-frames\n\
          PRAGMA journal_mode=WAL;\n\
          CREATE TABLE t(x INTEGER);\n\
          INSERT INTO t VALUES (1);\n\
