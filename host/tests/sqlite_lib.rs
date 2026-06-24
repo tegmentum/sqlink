@@ -118,7 +118,7 @@ async fn library_version_and_sqlite_version() {
         eprintln!("skipping: sqlite-lib not built");
         return;
     };
-    let library = lib.sqlink_library();
+    let library = lib.sqlink_wasm_library();
 
     let lib_v = library.call_library_version(&mut store).await.expect("library_version");
     assert!(!lib_v.is_empty(), "library_version returns something");
@@ -133,7 +133,7 @@ async fn library_is_statement_complete() {
         eprintln!("skipping: sqlite-lib not built");
         return;
     };
-    let library = lib.sqlink_library();
+    let library = lib.sqlink_wasm_library();
 
     let complete = library.call_is_statement_complete(&mut store, "SELECT 1;").await.unwrap();
     assert!(complete, "complete statement registers as complete");
@@ -148,7 +148,7 @@ async fn high_level_open_memory_runs_a_query() {
         eprintln!("skipping: sqlite-lib not built");
         return;
     };
-    let high = lib.sqlink_high_level();
+    let high = lib.sqlink_wasm_high_level();
 
     let conn = high
         .call_open_memory(&mut store)
@@ -191,7 +191,7 @@ async fn spi_sees_high_level_writes_through_default_connection() {
         eprintln!("skipping: sqlite-lib not built");
         return;
     };
-    let high = lib.sqlink_high_level();
+    let high = lib.sqlink_wasm_high_level();
     let spi = lib.sqlite_extension_spi();
 
     let conn = high
@@ -236,12 +236,13 @@ async fn library_load_extension_round_trip() {
         eprintln!("skipping: test_extension.wasm not built (sqlink-loader)");
         return;
     };
-    let library = lib.sqlink_library();
+    let library = lib.sqlink_wasm_library();
 
     use exports::sqlink::wasm::library::{Capability, LoadOptions};
     let opts = LoadOptions {
         grant: vec![Capability::Text],
         http_policy: None,
+        dns_policy: None,
         fs_policy: None,
         fuel_per_call: None,
         memory_limit_bytes: None,
