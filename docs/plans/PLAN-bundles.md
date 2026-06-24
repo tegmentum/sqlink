@@ -328,6 +328,29 @@ and the plan's stated APIs didn't match the actual codebase:
   default_external_path`). **Build dir is
   `~/.cache/sqlink/builds/<hash>/`** to match.
 
+- **Gap E (mid-implementation, 2026-06-24): manifest model
+  blocks the Gap C UX.** `policy.check_manifest` enforces
+  *declared ⊆ granted* strictly; bundle-cli must declare
+  `SpawnBuild` to import the `build` interface, but declaring it
+  without the grant fails the load. So Gap C's intent ("default
+  cli loads bundle-cli with Bundles only; `.bundle build` errors
+  helpfully at call time") is unreachable under the current
+  model. **Decision: add `optional-capabilities` to the manifest
+  WIT type.** Small additive change:
+    - Manifest gains `optional-capabilities: list<capability>`
+      alongside the existing `capabilities` (now interpreted as
+      the *required* set).
+    - `check_manifest` enforces `required ⊆ granted` only;
+      optional caps can be declared without being granted.
+    - Bundle-cli declares `Bundles` as required, `SpawnBuild`
+      as optional.
+    - Runtime call to `spi.spawn-build` still fails closed via
+      the existing `spawn_build_granted` flag; bundle-cli
+      translates SQLITE_PERM into the Gap C error message.
+  Existing extensions unchanged (their `capabilities` IS the
+  required set; default `optional-capabilities = []`).
+  Generalizes for any future "may use X if granted" pattern.
+
 - **Gap D (mid-implementation, 2026-06-24): build path needs
   package + features, not a generated crate.** The plan implied
   `.bundle build NAME` would generate a tiny crate that
