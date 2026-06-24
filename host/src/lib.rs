@@ -684,6 +684,15 @@ pub mod loaded_resolving {
 /// `has-commit-hook`. The `hooked` world exports `update-hook` and
 /// `commit-hook` together; we use one bindgen for both since SQLite's
 /// hook API treats them as orthogonal concerns within one db.
+///
+/// Also covers the `wal-aware` world (introduced for #423 wal-archive):
+/// `wal-aware` has the same metadata + scalar-function + update-hook +
+/// commit-hook + wal-hook export set as `hooked` (it differs only in
+/// widening the import surface, which the host satisfies uniformly).
+/// wasmtime instantiation only checks export-shape compatibility, so
+/// the `loaded_hooked::Hooked` bindgen — and the matching `CachedHooked`
+/// store — services wal-aware components too. No separate bindgen /
+/// cache slot is needed in the host.
 pub mod loaded_hooked {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
