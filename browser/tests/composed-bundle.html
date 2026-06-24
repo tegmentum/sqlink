@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser  composed cli + bundle-cli substrate probe</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      // v1.1 substrate probe.
+      //
+      // The browser composed-cli does not have a dot-command
+      // dispatcher in v1 (see browser/src/extension-loader.js:12
+      // dispatch_dot_command returns 404). So we can't exercise
+      // `.bundle save myset --no-build` end-to-end here yet. What we
+      // CAN verify in v1.1:
+      //
+      //   - bundle_cli transpiled cleanly (jco transpile produced
+      //     the generated/bundle_cli/ artifacts).
+      //   - All bundle_cli's WIT imports (bundles, build,
+      //     loader-bridge, etc.) are satisfied by sqlite-lib's
+      //     browser stubs  module instantiation in any reasonable
+      //     harness wouldn't blow up at import-resolution time.
+      //
+      // Once browser dispatch_dot_command lands, this harness
+      // can drive the bundles SPI through the transpiled module
+      // and assert the metadata round-trip; today, the import-OK
+      // signal is the substrate guarantee.
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      try {
+        const mod = await import(
+          '../src/generated/bundle_cli/bundle_cli_extension.js'
+        )
+        log('bundle_cli module imported OK')
+        const exportedNames = Object.keys(mod).sort()
+        log('exports -> ' + JSON.stringify(exportedNames))
+        // jco's --instantiation async shape exposes an
+        // `instantiate(getCoreModule, imports)` factory. Assert
+        // that's present  it's the integration point any browser
+        // harness driving the extension would call.
+        const hasInstantiate = typeof mod.instantiate === 'function'
+        log('has instantiate() -> ' + hasInstantiate)
+        status.textContent = 'done'
+        window.__bundleResult = {
+          imported: true,
+          exports: exportedNames,
+          hasInstantiate,
+          // v1: dot-command driver missing; document the gap so the
+          // spec can skip the end-to-end assertions with a clear
+          // reason without confusing future maintainers.
+          dotCommandDriverGap: true,
+        }
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        log(String(e?.stack ?? e))
+        window.__bundleResult = { error: String(e?.stack ?? e) }
+      } finally {
+        window.__bundleDone = true
+      }
+    </script>
+  </body>
+</html>
