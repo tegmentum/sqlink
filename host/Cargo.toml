@@ -44,6 +44,25 @@ async-trait = "0.1"
 # is OK for v1; future revision uses async reqwest with proper
 # cooperative scheduling.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"] }
+# AWS SigV4 signing for the s3-base::Host dispatcher. Used in
+# concert with reqwest to talk to S3 / MinIO / Cloudflare R2 /
+# any S3-compatible endpoint extensions point at. Substrate for
+# PLAN-wal-archive-extension.md (#440)  the wal-archive
+# extension's primary off-box sink.
+#
+# We use the in-host (aws-sigv4 + reqwest) strategy rather than
+# composing the s3-wasm component into wasmtime because (a) the
+# s3-wasm component imports wasi:http/outgoing-handler which would
+# require wasmtime-wasi-http + an additional aws-sigv4 component
+# instance, and (b) the WIT contract is mirrored exactly so a
+# future iteration can swap implementations without touching the
+# extension-facing surface.
+aws-sigv4 = "1.4"
+# Required by aws-sigv4 to construct the in-host credential
+# identity (access-key + secret + optional session-token).
+aws-credential-types = "1"
+hex = "0.4"
+url = "2"
 # Async DNS resolver used by the host's `dns::resolve` impl for
 # `Capability::Dns`-granted extensions. Same async story as reqwest;
 # the Host trait method is already async, so we just `.await` it.

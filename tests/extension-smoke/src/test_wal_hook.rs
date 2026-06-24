@@ -108,13 +108,14 @@ fn script(component: &Path) -> String {
     // hookprobe_drain_log() returns a JSON array as TEXT —
     // we just grep stdout for `"wal:42:main:`.
     //
-    // hookprobe declares `spi` + `wal-frames` capabilities
-    // (the latter is the substrate for hookprobe_wal_header /
-    // hookprobe_read_frames; spi backs hookprobe_serialize_main).
-    // Both must appear in --grant or the load fails the
+    // hookprobe declares `spi` + `wal-frames` + `s3` capabilities
+    // (wal-frames backs hookprobe_wal_header /
+    // hookprobe_read_frames; spi backs hookprobe_serialize_main;
+    // s3 backs the hookprobe_s3_* probes from #440). All three
+    // must appear in --grant or the load fails the
     // policy.check_manifest pre-flight.
     format!(
-        ".load {} --grant=spi,wal-frames\n\
+        ".load {} --grant=spi,wal-frames,s3\n\
          PRAGMA journal_mode=WAL;\n\
          CREATE TABLE t(x INTEGER);\n\
          INSERT INTO t VALUES (1);\n\

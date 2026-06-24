@@ -61,6 +61,7 @@ mod wasm_export {
     use bindings::sqlite::extension::types::{
         AuthAction, AuthResult, FunctionFlags, SqlValue, UpdateOperation,
     };
+    use bindings::sqlite::extension::s3_base;
     use bindings::sqlite::extension::wal_frames;
 
     // Scalar function ids.
@@ -73,6 +74,18 @@ mod wasm_export {
     const FID_READ_FRAMES: u64 = 5;
     /// hookprobe_serialize_main() -> BLOB
     const FID_SERIALIZE_MAIN: u64 = 6;
+    /// hookprobe_s3_put(endpoint, region, access_key, secret_key,
+    ///                  bucket, key, body) -> INTEGER (200/204 status)
+    const FID_S3_PUT: u64 = 7;
+    /// hookprobe_s3_get(endpoint, region, access_key, secret_key,
+    ///                  bucket, key) -> BLOB
+    const FID_S3_GET: u64 = 8;
+    /// hookprobe_s3_list(endpoint, region, access_key, secret_key,
+    ///                   bucket, prefix) -> TEXT (JSON array of keys)
+    const FID_S3_LIST: u64 = 9;
+    /// hookprobe_s3_delete(endpoint, region, access_key, secret_key,
+    ///                     bucket, key) -> INTEGER (status)
+    const FID_S3_DELETE: u64 = 10;
 
     struct Ext;
 
@@ -183,6 +196,30 @@ mod wasm_export {
                         num_args: 0,
                         func_flags: FunctionFlags::DIRECT_ONLY,
                     },
+                    ScalarFunctionSpec {
+                        id: FID_S3_PUT,
+                        name: "hookprobe_s3_put".to_string(),
+                        num_args: 7,
+                        func_flags: FunctionFlags::DIRECT_ONLY,
+                    },
+                    ScalarFunctionSpec {
+                        id: FID_S3_GET,
+                        name: "hookprobe_s3_get".to_string(),
+                        num_args: 6,
+                        func_flags: FunctionFlags::DIRECT_ONLY,
+                    },
+                    ScalarFunctionSpec {
+                        id: FID_S3_LIST,
+                        name: "hookprobe_s3_list".to_string(),
+                        num_args: 6,
+                        func_flags: FunctionFlags::DIRECT_ONLY,
+                    },
+                    ScalarFunctionSpec {
+                        id: FID_S3_DELETE,
+                        name: "hookprobe_s3_delete".to_string(),
+                        num_args: 6,
+                        func_flags: FunctionFlags::DIRECT_ONLY,
+                    },
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -196,12 +233,15 @@ mod wasm_export {
                 // hookprobe_serialize_main calls spi.serialize-db
                 // (capability::spi), hookprobe_wal_header /
                 // hookprobe_read_frames call wal-frames.*
-                // (capability::wal-frames). The host's policy gate
-                // refuses the load if either is missing from the
-                // operator's --grant list.
+                // (capability::wal-frames), and the four
+                // hookprobe_s3_* probes call s3-base.*
+                // (capability::s3). The host's policy gate refuses
+                // the load if any are missing from the operator's
+                // --grant list.
                 declared_capabilities: alloc::vec![
                     Capability::Spi,
                     Capability::WalFrames,
+                    Capability::S3,
                 ],
             }
         }
@@ -315,8 +355,175 @@ mod wasm_export {
                         )),
                     }
                 }
+                FID_S3_PUT => {
+                    // hookprobe_s3_put(endpoint, region, access_key,
+                    //                  secret_key, bucket, key, body)
+                    // Returns 200 on success.
+                    let mut it = args.into_iter();
+                    let endpoint_url = pop_text(&mut it, "endpoint")?;
+                    let region = pop_text(&mut it, "region")?;
+                    let ak = pop_text(&mut it, "access_key")?;
+                    let sk = pop_text(&mut it, "secret_key")?;
+                    let bucket = pop_text(&mut it, "bucket")?;
+                    let key = pop_text(&mut it, "key")?;
+                    let body = match it.next() {
+                        Some(SqlValue::Blob(b)) => b,
+                        Some(SqlValue::Text(t)) => t.into_bytes(),
+                        _ => return Err("hookprobe_s3_put: body must be BLOB/TEXT".into()),
+                    };
+                    let cfg = s3_base::S3EndpointConfig {
+                        url: endpoint_url,
+                        region,
+                        path_style: true,
+                    };
+                    let creds = s3_base::S3Credentials {
+                        access_key_id: ak,
+                        secret_access_key: sk,
+                        session_token: None,
+                    };
+                    match s3_base::put_object(&cfg, &creds, &bucket, &key, &body, None) {
+                        Ok(_) => Ok(SqlValue::Integer(200)),
+                        Err(e) => Err(format!(
+                            "hookprobe_s3_put: {}",
+                            format_s3_err(&e)
+                        )),
+                    }
+                }
+                FID_S3_GET => {
+                    let mut it = args.into_iter();
+                    let endpoint_url = pop_text(&mut it, "endpoint")?;
+                    let region = pop_text(&mut it, "region")?;
+                    let ak = pop_text(&mut it, "access_key")?;
+                    let sk = pop_text(&mut it, "secret_key")?;
+                    let bucket = pop_text(&mut it, "bucket")?;
+                    let key = pop_text(&mut it, "key")?;
+                    let cfg = s3_base::S3EndpointConfig {
+                        url: endpoint_url,
+                        region,
+                        path_style: true,
+                    };
+                    let creds = s3_base::S3Credentials {
+                        access_key_id: ak,
+                        secret_access_key: sk,
+                        session_token: None,
+                    };
+                    match s3_base::get_object(&cfg, &creds, &bucket, &key, None) {
+                        Ok(out) => Ok(SqlValue::Blob(out.body)),
+                        Err(e) => Err(format!(
+                            "hookprobe_s3_get: {}",
+                            format_s3_err(&e)
+                        )),
+                    }
+                }
+                FID_S3_LIST => {
+                    let mut it = args.into_iter();
+                    let endpoint_url = pop_text(&mut it, "endpoint")?;
+                    let region = pop_text(&mut it, "region")?;
+                    let ak = pop_text(&mut it, "access_key")?;
+                    let sk = pop_text(&mut it, "secret_key")?;
+                    let bucket = pop_text(&mut it, "bucket")?;
+                    let prefix = match it.next() {
+                        Some(SqlValue::Text(s)) => Some(s),
+                        Some(SqlValue::Null) => None,
+                        _ => return Err("hookprobe_s3_list: prefix must be TEXT/NULL".into()),
+                    };
+                    let cfg = s3_base::S3EndpointConfig {
+                        url: endpoint_url,
+                        region,
+                        path_style: true,
+                    };
+                    let creds = s3_base::S3Credentials {
+                        access_key_id: ak,
+                        secret_access_key: sk,
+                        session_token: None,
+                    };
+                    let opts = s3_base::S3ListObjectsOptions {
+                        prefix,
+                        delimiter: None,
+                        max_keys: None,
+                        continuation_token: None,
+                    };
+                    match s3_base::list_objects(&cfg, &creds, &bucket, Some(&opts)) {
+                        Ok(out) => {
+                            let mut s = String::from("[");
+                            for (i, obj) in out.objects.iter().enumerate() {
+                                if i > 0 {
+                                    s.push(',');
+                                }
+                                s.push('"');
+                                // Naive escape: assume keys are safe
+                                // ASCII (the test fixtures use plain
+                                // `foo`-style keys). Anything else
+                                // would need a proper JSON encoder.
+                                s.push_str(&obj.key);
+                                s.push('"');
+                            }
+                            s.push(']');
+                            Ok(SqlValue::Text(s))
+                        }
+                        Err(e) => Err(format!(
+                            "hookprobe_s3_list: {}",
+                            format_s3_err(&e)
+                        )),
+                    }
+                }
+                FID_S3_DELETE => {
+                    let mut it = args.into_iter();
+                    let endpoint_url = pop_text(&mut it, "endpoint")?;
+                    let region = pop_text(&mut it, "region")?;
+                    let ak = pop_text(&mut it, "access_key")?;
+                    let sk = pop_text(&mut it, "secret_key")?;
+                    let bucket = pop_text(&mut it, "bucket")?;
+                    let key = pop_text(&mut it, "key")?;
+                    let cfg = s3_base::S3EndpointConfig {
+                        url: endpoint_url,
+                        region,
+                        path_style: true,
+                    };
+                    let creds = s3_base::S3Credentials {
+                        access_key_id: ak,
+                        secret_access_key: sk,
+                        session_token: None,
+                    };
+                    match s3_base::delete_object(&cfg, &creds, &bucket, &key) {
+                        Ok(()) => Ok(SqlValue::Integer(204)),
+                        Err(e) => Err(format!(
+                            "hookprobe_s3_delete: {}",
+                            format_s3_err(&e)
+                        )),
+                    }
+                }
                 _ => Err(format!("hookprobe: unknown func_id={func_id}")),
             }
+        }
+    }
+
+    /// Pop the next arg as a non-null TEXT value or error out.
+    fn pop_text(
+        it: &mut alloc::vec::IntoIter<SqlValue>,
+        field: &str,
+    ) -> Result<String, String> {
+        match it.next() {
+            Some(SqlValue::Text(s)) => Ok(s),
+            Some(other) => Err(format!(
+                "hookprobe: arg {field} must be TEXT, got {other:?}"
+            )),
+            None => Err(format!("hookprobe: missing arg {field}")),
+        }
+    }
+
+    fn format_s3_err(e: &s3_base::S3Error) -> String {
+        use s3_base::S3Error::*;
+        match e {
+            AccessDenied => "access-denied".to_string(),
+            NoSuchBucket => "no-such-bucket".to_string(),
+            NoSuchKey => "no-such-key".to_string(),
+            InvalidBucketName => "invalid-bucket-name".to_string(),
+            InvalidRequest(s) => format!("invalid-request: {s}"),
+            NetworkError(s) => format!("network-error: {s}"),
+            ParseError(s) => format!("parse-error: {s}"),
+            Internal(s) => format!("internal: {s}"),
+            CapabilityNotGranted => "capability-not-granted".to_string(),
         }
     }
 
