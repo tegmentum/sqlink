@@ -74,6 +74,7 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::wal_hook::Guest as WalHookGuest;
     use bindings::sqlite::extension::policy::Capability;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue, UpdateOperation};
+    use bindings::sqlite::extension::wal_frames;
 
     /// Distinct from hookprobe's WAL_HOOK_ID (42) so a single
     /// connection could in principle host both extensions. The
@@ -419,17 +420,85 @@ mod wasm_export {
     }
 
     impl WalHookGuest for Ext {
-        /// Stage 1: no-op. Stage 2 fills this in to drain frames
-        /// via wal-frames::read-frames + append to the buffer.
+        /// Drain newly-appended WAL frames since the bookmark
+        /// into the in-memory buffer. Stage 3 adds the flush
+        /// trigger that compresses + ships the buffer to S3.
         ///
-        /// Returns SQLITE_OK so the calling SQL statement proceeds.
+        /// Returns SQLITE_OK (0) so the calling SQL statement
+        /// proceeds even if frame capture fails  the design
+        /// favors not blocking writes over guaranteed shipping.
+        /// Failures land in `STATE` so `wal_archive_status` can
+        /// surface them, and the next firing will retry from
+        /// the same bookmark.
+        ///
+        /// IMPORTANT: this runs on the SAME wasmtime Store that
+        /// served the `wal_archive_start` scalar that set up
+        /// `STATE` (#441 cached-store unification). Without that
+        /// fix the thread_local would be wiped between firings
+        /// and the design would not work.
         fn on_wal_hook(
             _hook_id: u64,
-            _db_name: String,
-            _n_frames_in_wal: u32,
+            db_name: String,
+            n_frames_in_wal: u32,
         ) -> i32 {
+            let _ = drain_frames(&db_name, n_frames_in_wal);
             0
         }
+    }
+
+    /// Read frames `[last_uploaded_frame + 1 ..= n_frames_in_wal]`
+    /// and append them to `STATE.buffer`. Caches the WAL header on
+    /// first call. Bumps the bookmark on success. No S3 traffic
+    /// here  Stage 3 wraps this with a flush trigger.
+    fn drain_frames(db_name: &str, n_frames_in_wal: u32) -> Result<(), String> {
+        STATE.with(|s| -> Result<(), String> {
+            let mut guard = s.borrow_mut();
+            let state = match guard.as_mut() {
+                Some(st) if st.started => st,
+                _ => return Ok(()), // not started or stopped — silent no-op
+            };
+            // Lazy header fetch. The WAL header is 32 bytes
+            // starting with the WAL magic (0x377F0682 LE or
+            // 0x377F0683 BE). The page_size is at byte offset 8
+            // as a big-endian u32. We cache the raw 32 bytes
+            // verbatim so the restore path can reconstruct
+            // `<target>-wal` byte-for-byte.
+            if state.wal_header.is_none() {
+                match wal_frames::get_wal_header(&db_name.to_string()) {
+                    Ok(Some(bytes)) if bytes.len() == 32 => {
+                        state.wal_header = Some(bytes);
+                    }
+                    // None: WAL file doesn't exist yet (no WAL
+                    // commits since journal_mode=WAL took effect).
+                    // We'll try again next firing. Same fall-through
+                    // for unexpected sizes  bail without bumping
+                    // the bookmark.
+                    Ok(_) => return Ok(()),
+                    Err(_) => return Ok(()),
+                }
+            }
+            let next_frame = state.last_uploaded_frame.saturating_add(1);
+            if next_frame > n_frames_in_wal as u64 {
+                // No new frames to drain (race or duplicate
+                // firing). Not an error.
+                return Ok(());
+            }
+            let to_read = (n_frames_in_wal as u64 - next_frame + 1) as u32;
+            match wal_frames::read_frames(
+                &db_name.to_string(),
+                next_frame as u32,
+                to_read,
+            ) {
+                Ok(bytes) => {
+                    state.buffer.extend_from_slice(&bytes);
+                    state.last_uploaded_frame = n_frames_in_wal as u64;
+                    Ok(())
+                }
+                // Retain the bookmark on a transient failure so
+                // the next firing tries the same range again.
+                Err(_) => Ok(()),
+            }
+        })
     }
 
     bindings::export!(Ext with_types_in bindings);
