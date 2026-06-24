@@ -380,6 +380,20 @@ first  if anything reads as familiar, that's why.
 and is the most direct way to verify the port behaves like the
 original.
 
+The `wal-archive` extension's design (continuous WAL-frame
+shipping to object storage + periodic base snapshots +
+point-in-time recovery) is heavily inspired by
+**[Litestream](https://litestream.io/)** by
+**[Ben Johnson](https://github.com/benbjohnson)**. The
+WAL-segment shipping cadence, base-snapshot model, and
+restore-from-snapshot-plus-replayed-WAL semantics all come
+from Litestream; sqlink's wal-archive is a separate
+implementation in a different runtime model (in-process inside
+a WASM component rather than a separate Go daemon) but the
+storage layout and recovery story trace directly back to
+Litestream. Where the semantics match the upstream tool's
+docs, the upstream tool got there first.
+
 ## License
 
 SQLite itself is in the public domain. The wrapping code in this
