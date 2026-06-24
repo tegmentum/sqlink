@@ -98,6 +98,7 @@ pub mod loaded_minimal_http {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -122,6 +123,7 @@ pub mod loaded_minimal_dns {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -147,6 +149,7 @@ pub mod loaded_stateful {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -171,6 +174,7 @@ pub mod loaded_dotcmd_aware {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -195,6 +199,7 @@ pub mod loaded_collating {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -219,6 +224,7 @@ pub mod loaded_tabular {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -252,6 +258,7 @@ pub mod loaded_tabular_mutating {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -275,6 +282,7 @@ pub mod loaded_authorizing {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -676,6 +684,7 @@ pub mod loaded_resolving {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -709,6 +718,7 @@ pub mod loaded_hooked {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
         },
     });
 }
@@ -733,6 +743,7 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
         WitCapability::Dns => Capability::Dns,
         WitCapability::WalFrames => Capability::WalFrames,
         WitCapability::S3 => Capability::S3,
+        WitCapability::SpawnBuild => Capability::SpawnBuild,
     }
 }
 
@@ -1156,6 +1167,14 @@ pub struct LoadedState {
     /// chooses what to hit, and the operator's grant is the
     /// allow-the-surface bit.
     s3_granted: bool,
+    /// Whether `Capability::SpawnBuild` was in the policy grant
+    /// list at load time. The build::Host dispatcher fails
+    /// closed (SQLITE_PERM with a "spawn-build capability not
+    /// granted" message) when this is false. No rich policy
+    /// the cargo invocation is described by the extension's
+    /// arguments at call time, and the operator's grant is the
+    /// allow-the-surface bit.
+    spawn_build_granted: bool,
     /// Optional back-reference to the owning Host. Set when the
     /// Store is built for the `dotcmd-aware` world so extensions
     /// reaching the `loader-bridge` import can delegate to the
@@ -3568,6 +3587,172 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
     }
 }
 
+/// `sqlite:extension/build` host dispatcher. Native impl: spawns
+/// `cargo build --release` against the supplied crate-root via
+/// `std::process::Command`. Captures stdout/stderr; on success
+/// resolves the produced binary path under
+/// `target/<triple-or-default>/release/` by looking for the first
+/// regular executable file there.
+///
+/// Capability-gated via `LoadedState::spawn_build_granted`; without
+/// the grant we return `SQLITE_PERM` with a clear "spawn-build
+/// capability not granted" message. Substrate for
+/// PLAN-bundles.md (#445/#446).
+///
+/// The path-validation hook the WIT contract mentions is intentionally
+/// minimal in v1  cargo itself rejects nonexistent crate roots with
+/// a clear error, and the operator's capability grant is the
+/// gating bit. A future iteration may add a workdir grant
+/// (cas-cache prefix only) once the bundle-cli surface lands.
+impl loaded::sqlite::extension::build::Host for LoadedState {
+    async fn spawn_build(
+        &mut self,
+        crate_root: String,
+        target_triple: Option<String>,
+        env: Vec<(String, String)>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::build::BuildOut,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        if !self.spawn_build_granted {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_PERM,
+                extended_code: libsqlite3_sys::SQLITE_PERM,
+                message:
+                    "build.spawn-build: capability not granted at load time \
+                     (add `spawn-build` to the load --grant list)"
+                        .to_string(),
+            });
+        }
+
+        let crate_root_path = std::path::PathBuf::from(&crate_root);
+        if !crate_root_path.exists() {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_CANTOPEN,
+                extended_code: libsqlite3_sys::SQLITE_CANTOPEN,
+                message: format!(
+                    "build.spawn-build: crate-root {crate_root:?} does not exist on host"
+                ),
+            });
+        }
+
+        let triple = target_triple.clone();
+        let env_clone = env.clone();
+        let join: std::result::Result<
+            std::result::Result<
+                loaded::sqlite::extension::build::BuildOut,
+                loaded::sqlite::extension::types::SqliteError,
+            >,
+            tokio::task::JoinError,
+        > = tokio::task::spawn_blocking(move || {
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.arg("build").arg("--release");
+            if let Some(t) = triple.as_deref() {
+                cmd.arg("--target").arg(t);
+            }
+            cmd.current_dir(&crate_root_path);
+            for (k, v) in &env_clone {
+                cmd.env(k, v);
+            }
+            let output = cmd.output().map_err(|e| {
+                loaded::sqlite::extension::types::SqliteError {
+                    code: libsqlite3_sys::SQLITE_ERROR,
+                    extended_code: libsqlite3_sys::SQLITE_ERROR,
+                    message: format!("build.spawn-build: failed to spawn cargo: {e}"),
+                }
+            })?;
+            let stdout =
+                String::from_utf8_lossy(&output.stdout).into_owned();
+            let stderr =
+                String::from_utf8_lossy(&output.stderr).into_owned();
+            if !output.status.success() {
+                return Err(loaded::sqlite::extension::types::SqliteError {
+                    code: libsqlite3_sys::SQLITE_ERROR,
+                    extended_code: libsqlite3_sys::SQLITE_ERROR,
+                    message: format!(
+                        "build.spawn-build: cargo exited {} \nstderr tail:\n{}",
+                        output.status,
+                        tail_lines(&stderr, 40),
+                    ),
+                });
+            }
+            // Resolve binary path. We honor the explicit target if
+            // one was provided; otherwise we look under the default
+            // `target/release/` directory.
+            let release_dir = match triple.as_deref() {
+                Some(t) => crate_root_path.join("target").join(t).join("release"),
+                None => crate_root_path.join("target").join("release"),
+            };
+            let binary_path = find_release_binary(&release_dir).ok_or_else(|| {
+                loaded::sqlite::extension::types::SqliteError {
+                    code: libsqlite3_sys::SQLITE_NOTFOUND,
+                    extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
+                    message: format!(
+                        "build.spawn-build: cargo succeeded but no binary found under {}",
+                        release_dir.display()
+                    ),
+                }
+            })?;
+            Ok(loaded::sqlite::extension::build::BuildOut {
+                binary_path: binary_path.to_string_lossy().into_owned(),
+                stdout,
+                stderr,
+            })
+        })
+        .await;
+        match join {
+            Ok(res) => res,
+            Err(e) => Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_INTERNAL,
+                extended_code: libsqlite3_sys::SQLITE_INTERNAL,
+                message: format!("build.spawn-build: join: {e}"),
+            }),
+        }
+    }
+}
+
+/// Tail of a captured stream  bounded so error messages stay
+/// reasonable.
+fn tail_lines(s: &str, n: usize) -> String {
+    let lines: Vec<&str> = s.lines().collect();
+    let start = lines.len().saturating_sub(n);
+    lines[start..].join("\n")
+}
+
+/// Walk `release_dir` and return the first regular file that has
+/// the executable bit set (on unix) or no `.d` / `.rlib` / `.rmeta`
+/// extension. Cargo emits the main binary at the top level of
+/// `target/<triple>/release/` alongside `.d` / `.rlib` / `.rmeta`
+/// artifacts; we pick the first one that looks executable.
+fn find_release_binary(release_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    let entries = std::fs::read_dir(release_dir).ok()?;
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        // Skip cargo's intermediate artifacts.
+        match path.extension().and_then(|s| s.to_str()) {
+            Some("d") | Some("rlib") | Some("rmeta") | Some("rcgu.o") => continue,
+            _ => {}
+        }
+        // On unix, prefer files with the executable bit set.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if meta.permissions().mode() & 0o111 != 0 {
+                return Some(path);
+            }
+        }
+        candidates.push(path);
+    }
+    // Fallback: first non-intermediate file (covers windows + plain
+    // .wasm artifacts that don't carry the exec bit).
+    candidates.into_iter().next()
+}
+
 fn wal_perm_err(method: &str) -> loaded::sqlite::extension::types::SqliteError {
     loaded::sqlite::extension::types::SqliteError {
         code: libsqlite3_sys::SQLITE_PERM,
@@ -4522,6 +4707,7 @@ fn build_loaded_store(
         dns_policy: ext.policy.dns.clone(),
         wal_frames_granted: ext.policy.is_granted(Capability::WalFrames),
         s3_granted: ext.policy.is_granted(Capability::S3),
+        spawn_build_granted: ext.policy.is_granted(Capability::SpawnBuild),
         host_ref: None,
         cli_state_snapshot: HashMap::new(),
     };
@@ -5842,6 +6028,7 @@ impl Host {
                     L::Dns => "Dns",
                     L::WalFrames => "WalFrames",
                     L::S3 => "S3",
+                    L::SpawnBuild => "SpawnBuild",
                 }
                 .to_string()
             })
@@ -6078,6 +6265,7 @@ impl Host {
                     L::Dns => Capability::Dns,
                     L::WalFrames => Capability::WalFrames,
                     L::S3 => Capability::S3,
+                    L::SpawnBuild => Capability::SpawnBuild,
                 }
             })
             .collect();
