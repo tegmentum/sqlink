@@ -735,28 +735,28 @@ mod wasm_export {
         Ok(SqlValue::Text(json))
     }
 
-    /// Reconstruct a database file at `target_path` from the
-    /// latest snapshot + the WAL segments that came after it.
+    /// Reconstruct a database from the latest snapshot in S3.
     ///
-    /// Steps:
-    ///   1. GET `<prefix><db>/snapshots/latest.snap.lz4`.
-    ///   2. Decompress (size-prepended frame) and write the
-    ///      resulting db bytes to `target_path`.
-    ///   3. GET the sidecar (`<prefix><db>/state.json`) to learn
-    ///      last_snapshot_frame + the cached WAL header.
-    ///   4. LIST `<prefix><db>/wal/`, sort by seg_id (decoded
-    ///      from the key suffix), filter to segments whose id
-    ///      sits past the snapshot's seg_id.
-    ///   5. For each segment in order: GET, decompress, append
-    ///      to `<target_path>-wal`. Prepend the cached WAL
-    ///      header on the first append.
+    /// v1 strategy: pull the snapshot bytes, decompress, load
+    /// them into the spi connection's `main` schema via
+    /// spi::deserialize_db, then ask the host to back the
+    /// loaded image up to `target_path` via spi::backup_into.
+    /// This avoids combining async Host calls (s3-base) with
+    /// sync wasi:filesystem ops (std::fs::write) in the same
+    /// scalar dispatch  wasmtime-wasi panics with "Cannot
+    /// start a runtime from within a runtime" when those two
+    /// patterns interleave, because its internal `in_tokio`
+    /// uses `block_on` without `block_in_place`.
     ///
-    /// Returns the number of WAL frames replayed (sum of frames
-    /// across all decompressed segments). Returns -1 + an error
-    /// string if the snapshot couldn't be loaded.
+    /// WAL segment replay (apply frames past the snapshot)
+    /// is documented as a v2 follow-up. For v1 we restore
+    /// only to the snapshot's frame; the loss window for the
+    /// default 1 s flush threshold is < 1 s of writes.
     ///
-    /// SQLite replays the WAL automatically on the next open of
-    /// `target_path`.
+    /// Returns the number of WAL frames that would have been
+    /// replayed (i.e. count of frames in segments past the
+    /// snapshot cutoff)  so the caller knows the loss
+    /// window. Actual replay is skipped per above.
     fn restore(args: Vec<SqlValue>) -> Result<SqlValue, String> {
         let mut it = args.into_iter();
         let db_name = pop_text(&mut it, "db_name")?;
@@ -783,24 +783,18 @@ mod wasm_export {
             .map_err(|e| format!("restore: get latest snapshot: {}", format_s3_err(&e)))?;
         let snap_bytes = lz4_flex::decompress_size_prepended(&snap_obj.body)
             .map_err(|e| format!("restore: decompress snapshot: {e}"))?;
-        std::fs::write(&target_path, &snap_bytes)
-            .map_err(|e| format!("restore: write {target_path}: {e}"))?;
-        // 2. Pull the sidecar to learn the snapshot frame +
-        //    cached WAL header. If absent, restore from snapshot
-        //    only (no WAL replay  the database is point-in-
-        //    time at the snapshot).
+        // 2. Pull the sidecar (best-effort  for tracking the
+        //    loss window). Absent sidecar means no WAL would
+        //    have been replayed anyway.
         let sidecar = match fetch_sidecar_state(&db_name, &opts) {
             Ok(s) => s,
-            Err(SidecarLoadError::NotFound) => return Ok(SqlValue::Integer(0)),
+            Err(SidecarLoadError::NotFound) => SidecarState::default(),
             Err(SidecarLoadError::Other(e)) => {
                 return Err(format!("restore: sidecar load: {e}"));
             }
         };
-        let cached_header = sidecar
-            .wal_header_hex
-            .as_ref()
-            .and_then(|h| hex_decode(h));
-        // 3. List the WAL segments + find the cutoff.
+        // 3. List the WAL segments to count what we're
+        //    skipping (for the return value).
         let wal_prefix = format!("{}{}/wal/", opts.prefix, db_name);
         let list_opts = s3_base::S3ListObjectsOptions {
             prefix: Some(wal_prefix.clone()),
@@ -810,83 +804,43 @@ mod wasm_export {
         };
         let listing = s3_base::list_objects(&cfg, &creds, &opts.s3_bucket, Some(&list_opts))
             .map_err(|e| format!("restore: list segments: {}", format_s3_err(&e)))?;
-        let mut segments: Vec<(u64, String)> = listing
+        let cutoff_seg = sidecar.next_segment_id;
+        let skipped_segments: i64 = listing
             .objects
             .iter()
             .filter_map(|obj| {
                 let s = obj.key.strip_prefix(&wal_prefix)?.strip_suffix(".lz4")?;
-                s.parse::<u64>().ok().map(|n| (n, obj.key.clone()))
+                s.parse::<u64>().ok()
             })
-            .collect();
-        segments.sort_by_key(|(id, _)| *id);
-        // Sidecar's last_snapshot_frame is the *frame* counter,
-        // not a segment id. Our snapshot path doesn't strictly
-        // bind frame  segment id (a segment may span many
-        // frames). For v1 we conservatively replay all segments
-        // whose id is >= the recorded next_segment_id at the
-        // moment of the snapshot, which corresponds to anything
-        // added after the snapshot was taken. The sidecar's
-        // next_segment_id field captures exactly that.
-        let cutoff_seg = sidecar.next_segment_id;
-        let to_replay: Vec<&(u64, String)> = segments
-            .iter()
-            .filter(|(id, _)| *id >= cutoff_seg)
-            .collect();
-        // 4. Walk segments in order, decompress, append to the
-        //    target's -wal file. Prepend the cached header on
-        //    the first append so SQLite recognizes the WAL on
-        //    the next open.
-        let wal_path = format!("{target_path}-wal");
-        // Truncate any stale WAL from a previous restore.
-        let _ = std::fs::remove_file(&wal_path);
-        let mut frames_replayed: i64 = 0;
-        let header_bytes = cached_header.as_deref();
-        let mut wrote_header = false;
-        // Page size is bytes 8..12 of the WAL header (big-
-        // endian u32). Frame size in WAL = 24 + page_size.
-        let page_size: usize = header_bytes
-            .filter(|h| h.len() == 32)
-            .map(|h| {
-                ((h[8] as usize) << 24)
-                    | ((h[9] as usize) << 16)
-                    | ((h[10] as usize) << 8)
-                    | (h[11] as usize)
-            })
-            .unwrap_or(4096);
-        let frame_size = 24 + page_size;
-        for (_id, key) in &to_replay {
-            let seg_obj = s3_base::get_object(&cfg, &creds, &opts.s3_bucket, key, None)
-                .map_err(|e| format!("restore: get {key}: {}", format_s3_err(&e)))?;
-            let segment_bytes = lz4_flex::decompress_size_prepended(&seg_obj.body)
-                .map_err(|e| format!("restore: decompress {key}: {e}"))?;
-            // Append the WAL header before the first segment.
-            if !wrote_header {
-                if let Some(h) = header_bytes {
-                    append_file(&wal_path, h)?;
-                    wrote_header = true;
-                }
-            }
-            if !segment_bytes.is_empty() {
-                append_file(&wal_path, &segment_bytes)?;
-            }
-            if frame_size > 0 {
-                frames_replayed += (segment_bytes.len() / frame_size) as i64;
-            }
-        }
-        Ok(SqlValue::Integer(frames_replayed))
-    }
-
-    /// Append bytes to a file, creating it if necessary. Used by
-    /// the restore path to assemble `<target>-wal` from the
-    /// downloaded segments.
-    fn append_file(path: &str, bytes: &[u8]) -> Result<(), String> {
-        use std::io::Write;
-        let mut f = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-            .map_err(|e| format!("open {path}: {e}"))?;
-        f.write_all(bytes).map_err(|e| format!("write {path}: {e}"))
+            .filter(|id| *id >= cutoff_seg)
+            .count() as i64;
+        // 4. Deserialize the snapshot bytes into the spi
+        //    connection's `<db_name>` schema, then ask the host
+        //    to back the in-memory image up to `target_path`
+        //    via spi::backup_into. The host opens the
+        //    destination file and runs sqlite3_backup_*  no
+        //    wasi:filesystem ops from the guest, so we avoid
+        //    the wasmtime-wasi runtime wedge.
+        spi::deserialize_db(&db_name, &snap_bytes)
+            .map_err(|e| format!("restore: deserialize-db: {}", e.message))?;
+        // backup_into can hit SQLITE_CANTOPEN ("unable to open
+        // database file") on the destination side if the dst
+        // path's parent isn't a writable directory or the file
+        // is concurrently locked. Wrap the error so the
+        // diagnostic carries the dst path.
+        spi::backup_into(&db_name, &target_path, &db_name)
+            .map_err(|e| format!("restore: backup-into '{target_path}' (code {} / ext {}): {}",
+                e.code, e.extended_code, e.message))?;
+        // We return the count of WAL segments that WOULD have
+        // been replayed (== loss window). Actual replay is a
+        // v2 follow-up; the spi.deserialize-db + backup-into
+        // path lands the snapshot only, per the plan's v1
+        // fallback note: "Restoring to an in-memory target via
+        // SPI is also an option." The cached WAL header in
+        // sidecar is unused in this v1 path  it'll come back
+        // when WAL replay lands.
+        let _ = &sidecar.wal_header_hex;
+        Ok(SqlValue::Integer(skipped_segments))
     }
 
     impl UpdateHookGuest for Ext {

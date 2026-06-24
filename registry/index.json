@@ -1,8 +1,8 @@
 {
   "version": "1.0.0",
-  "updated": "2026-06-24T03:16:57Z",
+  "updated": "2026-06-24T03:40:49Z",
   "registry_url": "https://raw.githubusercontent.com/user/sqlink-extensions/main/registry/index.json",
-  "commit_sha": "6003ec036bff73d1d40ab8294c4fc0c586a89c53",
+  "commit_sha": "0a8cf42ecf8331c6731a6089816313b575ff8400",
   "extensions": [
     {
       "name": "extension-manager",
@@ -9346,8 +9346,8 @@
       "source": "builtin",
       "upstream_url": "",
       "artifact_url": "/asset/wal-archive",
-      "checksum": "sha256:5a55ff5432df09216625bb0b8735e92b4c3dd697078607eca5ade7d27689b8c4",
-      "size_bytes": 170018,
+      "checksum": "sha256:248985e2fe361f134f3e2fde858f49b46fb80f800fde7ed8fdc657dc95a3551b",
+      "size_bytes": 225240,
       "min_sqlite_version": "3.39.0",
       "exports": [
         "wal_archive_restore",
