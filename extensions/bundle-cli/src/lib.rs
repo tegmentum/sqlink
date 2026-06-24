@@ -188,18 +188,27 @@ underlying set-hash row.";
             Some(n) => n,
             None => return err(".bundle save: NAME required (usage: .bundle save NAME [--no-build])".into()),
         };
-        // Filter out bundle-cli itself  it's the tool, not a member.
-        // Including it in every bundle would (a) make the bundle's
-        // set-hash depend on bundle-cli's version (and re-shuffle on
-        // every bundle-cli rebuild), and (b) cause duplicate-load
-        // errors at --bundle-load time since the embedding cli auto-
-        // loads bundle-cli anyway.
+        // Filter out the auto-loaded cli-family extensions  these
+        // are baked into every sqlink-cli build by embed_core_dotcmd
+        // and don't have `embed-*` feature flags in cli/Cargo.toml.
+        // Including them in the bundle would (a) make every bundle's
+        // set-hash depend on the cli build's roster (and re-shuffle
+        // on every cli rebuild), (b) cause duplicate-load errors at
+        // --bundle-load time, and (c) make `.bundle build` fail
+        // with "unknown feature embed-archive-cli" etc. Bundles
+        // are *user-loaded* extensions only.
         let members: Vec<_> = loader_bridge::list_loaded_extensions()
             .into_iter()
-            .filter(|m| m.name != "bundle-cli")
+            .filter(|m| !is_auto_loaded_cli_family(&m.name))
             .collect();
         if members.is_empty() {
-            return err(".bundle save: no extensions loaded (besides bundle-cli itself); nothing to bundle".into());
+            return err(
+                ".bundle save: no user-loaded extensions to bundle. \
+                 Run `.load <path/to/extension.component.wasm>` first \
+                 (the auto-loaded cli-family extensions are excluded \
+                 since they're baked into every sqlink-cli build)."
+                    .into(),
+            );
         }
         // Compute the canonical set-hash: blake3 of "{ext_name}\n{digest}\n"
         // for every member, sorted ascending by extension_name. The host
@@ -494,6 +503,32 @@ underlying set-hash row.";
             ));
         }
         Ok(out.binary_path)
+    }
+
+    /// Mirror of cli/src/lib.rs's embed_core_dotcmd auto-load list.
+    /// These extensions are baked into every sqlink-cli build via
+    /// include_bytes! and don't have `embed-*` feature flags in
+    /// cli/Cargo.toml, so they can't appear in a bundle's
+    /// `--features` list when `.bundle build` invokes cargo. They're
+    /// also already-present in any baked binary, so omitting them
+    /// is semantically correct: a bundle of {uuid, json1} run by
+    /// the cli still has archive-cli, session-cli, etc. available.
+    /// Keep this list in sync with embed_core_dotcmd().
+    fn is_auto_loaded_cli_family(name: &str) -> bool {
+        matches!(
+            name,
+            "bundle-cli"
+                | "core-dotcmd"
+                | "sqlink-meta-cli"
+                | "sha3sum-cli"
+                | "serialize-cli"
+                | "archive-cli"
+                | "session-cli"
+                | "sqlite-utils-schema"
+                | "sqlite-utils-data"
+                | "sqlite-utils-fts"
+                | "sqlite-utils-maint"
+        )
     }
 
     /// Resolve the sqlink workspace root for the cargo invocation.
