@@ -99,6 +99,7 @@ pub mod loaded_minimal_http {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -124,6 +125,7 @@ pub mod loaded_minimal_dns {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -150,6 +152,7 @@ pub mod loaded_stateful {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -175,6 +178,7 @@ pub mod loaded_dotcmd_aware {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -200,6 +204,7 @@ pub mod loaded_collating {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -225,6 +230,7 @@ pub mod loaded_tabular {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -259,6 +265,7 @@ pub mod loaded_tabular_mutating {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -283,6 +290,7 @@ pub mod loaded_authorizing {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -685,6 +693,7 @@ pub mod loaded_resolving {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -719,6 +728,7 @@ pub mod loaded_hooked {
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
             "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -744,6 +754,7 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
         WitCapability::WalFrames => Capability::WalFrames,
         WitCapability::S3 => Capability::S3,
         WitCapability::SpawnBuild => Capability::SpawnBuild,
+        WitCapability::Bundles => Capability::Bundles,
     }
 }
 
@@ -1175,6 +1186,13 @@ pub struct LoadedState {
     /// arguments at call time, and the operator's grant is the
     /// allow-the-surface bit.
     spawn_build_granted: bool,
+    /// Whether `Capability::Bundles` was in the policy grant list
+    /// at load time. The bundles::Host dispatcher fails closed
+    /// (SQLITE_PERM with a "bundles capability not granted"
+    /// message) when this is false. Pairs with `spawn_build_granted`
+    /// for the with-build path; metadata-only `.bundle save
+    /// --no-build` / `.bundle list` / etc. need only this bit.
+    bundles_granted: bool,
     /// Optional back-reference to the owning Host. Set when the
     /// Store is built for the `dotcmd-aware` world so extensions
     /// reaching the `loader-bridge` import can delegate to the
@@ -3711,6 +3729,250 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
     }
 }
 
+/// `sqlite:extension/bundles` host dispatcher. Routes every call to
+/// the cas-cache's `SqliteCasStore::bundle_*` surface via the
+/// host_ref's Cache handle. Capability-gated on
+/// `LoadedState::bundles_granted`; without the grant every method
+/// fails closed with SQLITE_PERM.
+///
+/// The cas-cache db is host-managed (one connection per Cache, behind
+/// a parking_lot::Mutex). The dispatch holds the mutex for the
+/// duration of each call  every method is a single SQLite statement
+/// or a small transaction, so contention with `.cache *` dot commands
+/// or other bundle calls is bounded.
+impl loaded::sqlite::extension::bundles::Host for LoadedState {
+    async fn bundle_save(
+        &mut self,
+        name: Option<String>,
+        set_hash: String,
+        members: Vec<loaded::sqlite::extension::bundles::BundleMember>,
+    ) -> std::result::Result<u64, loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        let members: Vec<sqlite_cas_cache::BundleMember> = members
+            .into_iter()
+            .map(|m| sqlite_cas_cache::BundleMember {
+                extension_name: m.extension_name,
+                content_hash: m.content_hash,
+            })
+            .collect();
+        match guard.bundle_save(name.as_deref(), &set_hash, &members) {
+            Ok(id) => Ok(id),
+            Err(e) => {
+                if let Some(conflict) =
+                    e.downcast_ref::<sqlite_cas_cache::BundleAliasConflict>()
+                {
+                    return Err(loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_CONSTRAINT,
+                        extended_code: libsqlite3_sys::SQLITE_CONSTRAINT,
+                        message: format!("bundles.save: alias conflict: {conflict}"),
+                    });
+                }
+                Err(bundles_err("bundles.save", e))
+            }
+        }
+    }
+
+    async fn bundle_find_by_name(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<
+        Option<loaded::sqlite::extension::bundles::BundleSummary>,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        guard
+            .bundle_find_by_name(&name)
+            .map(|opt| opt.map(bundles_summary_to_wit))
+            .map_err(|e| bundles_err("bundles.find-by-name", e))
+    }
+
+    async fn bundle_find_by_hash_prefix(
+        &mut self,
+        prefix: String,
+    ) -> std::result::Result<
+        Vec<loaded::sqlite::extension::bundles::BundleSummary>,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        guard
+            .bundle_find_by_hash_prefix(&prefix)
+            .map(|v| v.into_iter().map(bundles_summary_to_wit).collect())
+            .map_err(|e| bundles_err("bundles.find-by-hash-prefix", e))
+    }
+
+    async fn bundle_list(
+        &mut self,
+    ) -> std::result::Result<
+        Vec<loaded::sqlite::extension::bundles::BundleSummary>,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        guard
+            .bundle_list()
+            .map(|v| v.into_iter().map(bundles_summary_to_wit).collect())
+            .map_err(|e| bundles_err("bundles.list", e))
+    }
+
+    async fn bundle_show(
+        &mut self,
+        id: u64,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::bundles::BundleDetail,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        match guard.bundle_show(id) {
+            Ok(Some(d)) => Ok(loaded::sqlite::extension::bundles::BundleDetail {
+                summary: bundles_summary_to_wit(d.summary),
+                members: d
+                    .members
+                    .into_iter()
+                    .map(|m| loaded::sqlite::extension::bundles::BundleMember {
+                        extension_name: m.extension_name,
+                        content_hash: m.content_hash,
+                    })
+                    .collect(),
+                binaries: d
+                    .binaries
+                    .into_iter()
+                    .map(|b| loaded::sqlite::extension::bundles::BundleBinary {
+                        target_triple: b.target_triple,
+                        binary_path: b.binary_path,
+                        built_at: b.built_at,
+                    })
+                    .collect(),
+            }),
+            Ok(None) => Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_NOTFOUND,
+                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
+                message: format!("bundles.show: id {id} not found"),
+            }),
+            Err(e) => Err(bundles_err("bundles.show", e)),
+        }
+    }
+
+    async fn bundle_delete(
+        &mut self,
+        id: u64,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        match guard.bundle_delete(id) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_NOTFOUND,
+                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
+                message: format!("bundles.delete: id {id} not found"),
+            }),
+            Err(e) => Err(bundles_err("bundles.delete", e)),
+        }
+    }
+
+    async fn bundle_gc(
+        &mut self,
+        policy: loaded::sqlite::extension::bundles::GcPolicy,
+    ) -> std::result::Result<Vec<u64>, loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        let rust_policy = sqlite_cas_cache::BundleGcPolicy {
+            keep_last: policy.keep_last,
+            older_than_secs: policy.older_than_secs,
+        };
+        guard
+            .bundle_gc(rust_policy)
+            .map_err(|e| bundles_err("bundles.gc", e))
+    }
+
+    async fn bundle_record_binary(
+        &mut self,
+        id: u64,
+        target_triple: String,
+        binary_path: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        guard
+            .bundle_record_binary(id, &target_triple, &binary_path)
+            .map_err(|e| bundles_err("bundles.record-binary", e))
+    }
+
+    async fn bundle_touch(&mut self, id: u64) {
+        if let Ok(store) = bundles_open_store(self) {
+            let guard = store.lock();
+            let _ = guard.bundle_touch(id);
+        }
+    }
+}
+
+/// Resolve the cas-cache `SqliteCasStore` handle from the LoadedState,
+/// applying the bundles capability gate first. Centralized so every
+/// bundle dispatch has the same gate + same error shape.
+fn bundles_open_store(
+    state: &LoadedState,
+) -> std::result::Result<
+    std::sync::Arc<parking_lot::Mutex<sqlite_cas_cache::SqliteCasStore>>,
+    loaded::sqlite::extension::types::SqliteError,
+> {
+    if !state.bundles_granted {
+        return Err(loaded::sqlite::extension::types::SqliteError {
+            code: libsqlite3_sys::SQLITE_PERM,
+            extended_code: libsqlite3_sys::SQLITE_PERM,
+            message: "bundles: capability not granted at load time \
+                      (add `bundles` to the load --grant list)"
+                .into(),
+        });
+    }
+    let host = state.host_ref.as_ref().ok_or_else(|| {
+        loaded::sqlite::extension::types::SqliteError {
+            code: libsqlite3_sys::SQLITE_INTERNAL,
+            extended_code: libsqlite3_sys::SQLITE_INTERNAL,
+            message: "bundles: host_ref not wired (extension must \
+                      run under dotcmd-aware world to access bundles)"
+                .into(),
+        }
+    })?;
+    let cache_guard = host.cache.read();
+    let cache = cache_guard.as_ref().ok_or_else(|| {
+        loaded::sqlite::extension::types::SqliteError {
+            code: libsqlite3_sys::SQLITE_CANTOPEN,
+            extended_code: libsqlite3_sys::SQLITE_CANTOPEN,
+            message: "bundles: cas-cache not initialized on host \
+                      (run a `.cache use-*` first or pass --cache-dir)"
+                .into(),
+        }
+    })?;
+    Ok(cache.store())
+}
+
+/// Wrap an anyhow error into the WIT sqlite-error shape.
+fn bundles_err(method: &str, e: anyhow::Error) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: libsqlite3_sys::SQLITE_ERROR,
+        extended_code: libsqlite3_sys::SQLITE_ERROR,
+        message: format!("{method}: {e}"),
+    }
+}
+
+/// Convert the cas-cache `BundleSummary` into the WIT-side record.
+fn bundles_summary_to_wit(
+    s: sqlite_cas_cache::BundleSummary,
+) -> loaded::sqlite::extension::bundles::BundleSummary {
+    loaded::sqlite::extension::bundles::BundleSummary {
+        id: s.id,
+        name: s.name,
+        set_hash: s.set_hash,
+        created_at: s.created_at,
+        last_used_at: s.last_used_at,
+        member_count: s.member_count,
+        binary_count: s.binary_count,
+    }
+}
+
 /// Tail of a captured stream  bounded so error messages stay
 /// reasonable.
 fn tail_lines(s: &str, n: usize) -> String {
@@ -4306,6 +4568,24 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
         let components = host.components.read();
         components.get(&name).map(|e| e.digest.clone()).unwrap_or_default()
     }
+
+    async fn list_loaded_extensions(
+        &mut self,
+    ) -> Vec<loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension> {
+        let Some(ref host) = self.host_ref else { return Vec::new() };
+        let components = host.components.read();
+        let mut out: Vec<_> = components
+            .values()
+            .map(
+                |e| loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension {
+                    name: e.name.clone(),
+                    digest: e.digest.clone(),
+                },
+            )
+            .collect();
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
+    }
 }
 
 /// HasData tag for the loaded-extension linker setup.
@@ -4708,6 +4988,7 @@ fn build_loaded_store(
         wal_frames_granted: ext.policy.is_granted(Capability::WalFrames),
         s3_granted: ext.policy.is_granted(Capability::S3),
         spawn_build_granted: ext.policy.is_granted(Capability::SpawnBuild),
+        bundles_granted: ext.policy.is_granted(Capability::Bundles),
         host_ref: None,
         cli_state_snapshot: HashMap::new(),
     };
@@ -6029,6 +6310,7 @@ impl Host {
                     L::WalFrames => "WalFrames",
                     L::S3 => "S3",
                     L::SpawnBuild => "SpawnBuild",
+                    L::Bundles => "Bundles",
                 }
                 .to_string()
             })
@@ -6266,6 +6548,7 @@ impl Host {
                     L::WalFrames => Capability::WalFrames,
                     L::S3 => Capability::S3,
                     L::SpawnBuild => Capability::SpawnBuild,
+                    L::Bundles => Capability::Bundles,
                 }
             })
             .collect();
