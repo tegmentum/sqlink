@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>sqlink browser  composed cli + series vtab extension</title>
+  </head>
+  <body>
+    <pre id="status">running...</pre>
+    <pre id="out"></pre>
+    <script type="module">
+      import { openDatabaseComposed } from '../src/sqlink-composed.js'
+
+      const status = document.getElementById('status')
+      const out = document.getElementById('out')
+      const log = (line) => {
+        out.textContent += line + '\n'
+      }
+
+      try {
+        // `series` exports a vtab interface (generate_series TVF) but
+        // no scalars / aggregates / collations  it's the simplest
+        // non-toy consumer of the dispatch-bridge vtab surface.
+        // Eponymous + batched + read-only, so:
+        //
+        //   1. spi-loader.register-vtab fires for `generate_series`.
+        //   2. dispatch-bridge.register-host-vtab installs an
+        //      iVersion-1 eponymous module on sqlite-lib's connection.
+        //   3. `SELECT * FROM generate_series(...)` walks the
+        //      planner -> xBestIndex -> xOpen -> xFilter -> xColumn /
+        //      xRowid / xNext / xEof loop, all routed back to the
+        //      transpiled `series` extension via dispatch.vtab-*.
+        const seriesMod = await import('../src/generated/series/series_extension.js')
+
+        const db = await openDatabaseComposed({
+          embed: [{ name: 'series', module: seriesMod }],
+        })
+        log('opened composed db; series pre-registered')
+
+        // Eponymous TVF form: stop=10, start=1 (default), step=1
+        // (default). Matches SQLite's generate_series test fixtures.
+        const rows = await db.exec('SELECT value FROM generate_series(1, 5);')
+        log('SELECT value FROM generate_series(1, 5) -> ' + JSON.stringify(rows))
+
+        // Larger range to exercise the batched fetch path
+        // (BATCH_SIZE=64 in host_vtabs.rs); 100 rows means at least
+        // two batch refills.
+        const rows100 = await db.exec(
+          'SELECT count(*) AS n FROM generate_series(1, 100);',
+        )
+        log('count(*) FROM generate_series(1, 100) -> ' + JSON.stringify(rows100))
+
+        // execScalar shorthand for a single-value probe.
+        const sum = await db.execScalar(
+          'SELECT sum(value) FROM generate_series(1, 10);',
+        )
+        log('sum(value) FROM generate_series(1, 10) -> ' + sum)
+
+        // Range alias (DuckDB / Snowflake flavour).
+        const rangeRows = await db.exec('SELECT value FROM range(0, 3);')
+        log('SELECT value FROM range(0, 3) -> ' + JSON.stringify(rangeRows))
+
+        db.close()
+        status.textContent = 'done'
+        window.__vtabResult = { rows, rows100, sum, rangeRows }
+      } catch (e) {
+        status.textContent = 'error: ' + (e?.stack ?? String(e))
+        log(String(e?.stack ?? e))
+        window.__vtabResult = { error: String(e?.stack ?? e) }
+      } finally {
+        window.__vtabDone = true
+      }
+    </script>
+  </body>
+</html>

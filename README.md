@@ -147,14 +147,15 @@ host does:
    persist across calls. Build with `cd browser && npm install &&
    npm run transpile && npm test`. **Phase C is fully landed**:
    composed runtime + persistent session + dispatch-bridge wiring
-   for scalar, aggregate, and collation functions; sql.js is gone.
-   The SQL function surface a loaded extension can register is
-   identical to scenarios 1+2 within those three categories
-   (authorizers, update/commit hooks, and vtabs still deferred).
+   for scalars, aggregates, collations, authorizers + update /
+   commit / rollback / wal hooks, AND virtual-table modules;
+   sql.js is gone. Every SPI registration surface a loaded
+   extension can use is wired end-to-end on the composed-browser
+   path  identical to scenarios 1+2 within those categories.
    See `browser/src/sqlink-composed.js`, the cross-spec test set
    (composed / composed-uuid / composed-aggregate / composed-
-   collation / composed-persistent / composed-runtime-ext / demo /
-   embed / smoke), and
+   collation / composed-persistent / composed-runtime-ext /
+   composed-vtab / demo / embed / smoke), and
    [docs/plans/PLAN-browser-runtime.md](docs/plans/PLAN-browser-runtime.md).
 
    Sub-options:

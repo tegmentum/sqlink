@@ -863,6 +863,361 @@ export function buildDispatch(registry) {
     }
   }
 
+  // ────────────── Vtab dispatch ──────────────
+  //
+  // The composed binary's sqlite-lib installs an sqlite3_module
+  // trampoline whose xMethod callbacks re-enter the host via these
+  // dispatch.vtab-* entries. We look up the loaded extension's
+  // `vtab` export by ext-name and forward the call, threading
+  // `(vtab-id, instance-id)` per-instance and `cursor-id` per-cursor
+  // through so the extension can route to the right state.
+  //
+  // State: per-instance + per-cursor metadata is owned by the
+  // *wasm side* (sqlite-lib's host_vtabs.rs); we just pass the ids
+  // through. The transpiled extension manages its own per-cursor
+  // state keyed by cursor-id, as the `series` extension already
+  // does via its CURSORS thread-local.
+  //
+  // Errors: every method that returns result<_, string> uses the
+  // dispatchErr helper to throw a payload-bearing object jco maps
+  // to the err arm. Sqlite-lib's trampoline interprets that as
+  // SQLITE_ERROR.
+
+  function vtabExports(extName) {
+    const entry = registry.get(extName)
+    if (!entry) return null
+    const inst = entry.instance
+    if (!inst) return null
+    return (
+      inst.vtab ??
+      inst['sqlite:extension/vtab'] ??
+      inst['sqlite:extension/vtab@0.1.0'] ??
+      null
+    )
+  }
+
+  function vtabUpdateExports(extName) {
+    const entry = registry.get(extName)
+    if (!entry) return null
+    const inst = entry.instance
+    if (!inst) return null
+    return (
+      inst.vtabUpdate ??
+      inst['sqlite:extension/vtab-update'] ??
+      inst['sqlite:extension/vtab-update@0.1.0'] ??
+      null
+    )
+  }
+
+  /// Common error-propagation wrapper for vtab calls: if the
+  /// extension throws a payload-bearing object, surface its
+  /// message; otherwise, stringify whatever was thrown. jco maps
+  /// the throw onto the result<_, string> err arm.
+  function vtabInvoke(extName, method, fn) {
+    try {
+      return fn()
+    } catch (e) {
+      const msg =
+        e?.payload?.message ??
+        (typeof e?.payload === 'string' ? e.payload : null) ??
+        e?.message ??
+        String(e)
+      dispatchErr(method, `extension '${extName}' threw: ${msg}`)
+    }
+  }
+
+  function vtabCreateImpl(extName, vtabId, instanceId, dbName, tableName, args) {
+    const v = vtabExports(extName)
+    if (!v?.create) {
+      dispatchErr(
+        'vtab-create',
+        `extension '${extName}' has no vtab.create export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-create', () =>
+      v.create(BigInt(vtabId), BigInt(instanceId), dbName, tableName, args),
+    )
+  }
+
+  function vtabConnectImpl(extName, vtabId, instanceId, dbName, tableName, args) {
+    const v = vtabExports(extName)
+    if (!v?.connect) {
+      dispatchErr(
+        'vtab-connect',
+        `extension '${extName}' has no vtab.connect export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-connect', () =>
+      v.connect(BigInt(vtabId), BigInt(instanceId), dbName, tableName, args),
+    )
+  }
+
+  function vtabDestroyImpl(extName, vtabId, instanceId) {
+    const v = vtabExports(extName)
+    if (!v?.destroy) return undefined
+    return vtabInvoke(extName, 'vtab-destroy', () =>
+      v.destroy(BigInt(vtabId), BigInt(instanceId)),
+    )
+  }
+
+  function vtabDisconnectImpl(extName, vtabId, instanceId) {
+    const v = vtabExports(extName)
+    if (!v?.disconnect) return undefined
+    return vtabInvoke(extName, 'vtab-disconnect', () =>
+      v.disconnect(BigInt(vtabId), BigInt(instanceId)),
+    )
+  }
+
+  function vtabBestIndexImpl(extName, vtabId, instanceId, info) {
+    const v = vtabExports(extName)
+    if (!v?.bestIndex) {
+      dispatchErr(
+        'vtab-best-index',
+        `extension '${extName}' has no vtab.best-index export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-best-index', () =>
+      v.bestIndex(BigInt(vtabId), BigInt(instanceId), info),
+    )
+  }
+
+  function vtabOpenImpl(extName, vtabId, instanceId, cursorId) {
+    const v = vtabExports(extName)
+    if (!v?.open) {
+      dispatchErr(
+        'vtab-open',
+        `extension '${extName}' has no vtab.open export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-open', () =>
+      v.open(BigInt(vtabId), BigInt(instanceId), BigInt(cursorId)),
+    )
+  }
+
+  function vtabCloseImpl(extName, vtabId, cursorId) {
+    const v = vtabExports(extName)
+    if (!v?.close) return undefined
+    return vtabInvoke(extName, 'vtab-close', () =>
+      v.close(BigInt(vtabId), BigInt(cursorId)),
+    )
+  }
+
+  function vtabFilterImpl(extName, vtabId, cursorId, idxNum, idxStr, args) {
+    const v = vtabExports(extName)
+    if (!v?.filter) {
+      dispatchErr(
+        'vtab-filter',
+        `extension '${extName}' has no vtab.filter export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-filter', () =>
+      v.filter(
+        BigInt(vtabId),
+        BigInt(cursorId),
+        Number(idxNum) | 0,
+        idxStr,
+        args,
+      ),
+    )
+  }
+
+  function vtabNextImpl(extName, vtabId, cursorId) {
+    const v = vtabExports(extName)
+    if (!v?.next) {
+      dispatchErr(
+        'vtab-next',
+        `extension '${extName}' has no vtab.next export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-next', () =>
+      v.next(BigInt(vtabId), BigInt(cursorId)),
+    )
+  }
+
+  function vtabEofImpl(extName, vtabId, cursorId) {
+    const v = vtabExports(extName)
+    if (typeof v?.eof !== 'function') {
+      // No eof export — treat as exhausted, matching the original
+      // notImplemented stub's behavior (which returned true).
+      return true
+    }
+    try {
+      return !!v.eof(BigInt(vtabId), BigInt(cursorId))
+    } catch (e) {
+      // vtab-eof has no result-shape; we can't surface an error.
+      // Log + treat as exhausted so the scan terminates cleanly.
+      // eslint-disable-next-line no-console
+      console.warn(
+        `dispatch.vtab-eof: extension '${extName}' threw: ${e?.message ?? String(e)}; ` +
+          `treating as EOF`,
+      )
+      return true
+    }
+  }
+
+  function vtabColumnImpl(extName, vtabId, cursorId, col) {
+    const v = vtabExports(extName)
+    if (!v?.column) {
+      dispatchErr(
+        'vtab-column',
+        `extension '${extName}' has no vtab.column export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-column', () =>
+      v.column(BigInt(vtabId), BigInt(cursorId), Number(col) | 0),
+    )
+  }
+
+  function vtabRowidImpl(extName, vtabId, cursorId) {
+    const v = vtabExports(extName)
+    if (!v?.rowid) {
+      dispatchErr(
+        'vtab-rowid',
+        `extension '${extName}' has no vtab.rowid export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-rowid', () =>
+      v.rowid(BigInt(vtabId), BigInt(cursorId)),
+    )
+  }
+
+  function vtabFetchBatchImpl(extName, vtabId, cursorId, maxRows) {
+    const v = vtabExports(extName)
+    // fetch-batch is optional — if the extension lacks it, fall
+    // back to a per-row column/rowid/next/eof loop so a vtab that
+    // declared `batched: true` in its manifest but forgot to export
+    // fetch-batch still works (just slower). dispatch-bridge's
+    // wasm-side trampoline only calls this when batched=true was
+    // set; the host_vtabs.rs path serves xColumn/xRowid/xNext from
+    // its cache populated by this call.
+    if (typeof v?.fetchBatch === 'function') {
+      return vtabInvoke(extName, 'vtab-fetch-batch', () =>
+        v.fetchBatch(BigInt(vtabId), BigInt(cursorId), Number(maxRows) >>> 0),
+      )
+    }
+    // Manual fallback: pull up to maxRows rows via per-row calls.
+    if (!v?.column || !v?.rowid || !v?.next || !v?.eof) {
+      dispatchErr(
+        'vtab-fetch-batch',
+        `extension '${extName}' lacks fetch-batch and one of column/rowid/next/eof`,
+      )
+    }
+    const rows = []
+    const max = Number(maxRows) >>> 0
+    try {
+      while (rows.length < max && !v.eof(BigInt(vtabId), BigInt(cursorId))) {
+        // Pull every column up to a probe ceiling. The wasm-side
+        // trampoline only consumes whatever columns the cached row
+        // actually has; an extension that produces a fixed schema
+        // can mirror schema width exactly. For now, probe 8
+        // columns and stop at the first column that errors.
+        const cols = []
+        for (let i = 0; i < 32; i++) {
+          let cv
+          try {
+            cv = v.column(BigInt(vtabId), BigInt(cursorId), i)
+          } catch {
+            break
+          }
+          cols.push(cv)
+        }
+        const rowid = v.rowid(BigInt(vtabId), BigInt(cursorId))
+        rows.push({ rowid, columns: cols })
+        v.next(BigInt(vtabId), BigInt(cursorId))
+      }
+    } catch (e) {
+      const msg =
+        e?.payload?.message ??
+        (typeof e?.payload === 'string' ? e.payload : null) ??
+        e?.message ??
+        String(e)
+      dispatchErr('vtab-fetch-batch', `extension '${extName}' threw: ${msg}`)
+    }
+    return rows
+  }
+
+  function vtabUpdateImpl(extName, vtabId, instanceId, args) {
+    const vu = vtabUpdateExports(extName)
+    if (!vu?.update) {
+      dispatchErr(
+        'vtab-update',
+        `extension '${extName}' has no vtab-update.update export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-update', () =>
+      vu.update(BigInt(vtabId), BigInt(instanceId), args),
+    )
+  }
+
+  function vtabBeginImpl(extName, vtabId, instanceId) {
+    const vu = vtabUpdateExports(extName)
+    if (!vu?.begin) return undefined
+    return vtabInvoke(extName, 'vtab-begin', () =>
+      vu.begin(BigInt(vtabId), BigInt(instanceId)),
+    )
+  }
+
+  function vtabSyncImpl(extName, vtabId, instanceId) {
+    const vu = vtabUpdateExports(extName)
+    if (!vu?.sync) return undefined
+    return vtabInvoke(extName, 'vtab-sync', () =>
+      vu.sync(BigInt(vtabId), BigInt(instanceId)),
+    )
+  }
+
+  function vtabCommitImpl(extName, vtabId, instanceId) {
+    const vu = vtabUpdateExports(extName)
+    if (!vu?.commit) return undefined
+    return vtabInvoke(extName, 'vtab-commit', () =>
+      vu.commit(BigInt(vtabId), BigInt(instanceId)),
+    )
+  }
+
+  function vtabRollbackImpl(extName, vtabId, instanceId) {
+    const vu = vtabUpdateExports(extName)
+    if (!vu?.rollback) return undefined
+    return vtabInvoke(extName, 'vtab-rollback', () =>
+      vu.rollback(BigInt(vtabId), BigInt(instanceId)),
+    )
+  }
+
+  function vtabRenameImpl(extName, vtabId, instanceId, newName) {
+    const vu = vtabUpdateExports(extName)
+    if (!vu?.rename) {
+      dispatchErr(
+        'vtab-rename',
+        `extension '${extName}' has no vtab-update.rename export`,
+      )
+    }
+    return vtabInvoke(extName, 'vtab-rename', () =>
+      vu.rename(BigInt(vtabId), BigInt(instanceId), newName),
+    )
+  }
+
+  function vtabSavepointImpl(extName, vtabId, instanceId, sp) {
+    const vu = vtabUpdateExports(extName)
+    if (!vu?.savepoint) return undefined
+    return vtabInvoke(extName, 'vtab-savepoint', () =>
+      vu.savepoint(BigInt(vtabId), BigInt(instanceId), Number(sp) | 0),
+    )
+  }
+
+  function vtabReleaseImpl(extName, vtabId, instanceId, sp) {
+    const vu = vtabUpdateExports(extName)
+    if (!vu?.release) return undefined
+    return vtabInvoke(extName, 'vtab-release', () =>
+      vu.release(BigInt(vtabId), BigInt(instanceId), Number(sp) | 0),
+    )
+  }
+
+  function vtabRollbackToImpl(extName, vtabId, instanceId, sp) {
+    const vu = vtabUpdateExports(extName)
+    if (!vu?.rollbackTo) return undefined
+    return vtabInvoke(extName, 'vtab-rollback-to', () =>
+      vu.rollbackTo(BigInt(vtabId), BigInt(instanceId), Number(sp) | 0),
+    )
+  }
+
   return {
     scalarCall: scalarCallImpl,
     aggregateStep: aggregateStepImpl,
@@ -875,34 +1230,40 @@ export function buildDispatch(registry) {
     onCommit: onCommitImpl,
     onRollback: onRollbackImpl,
     walHook: walHookImpl,
-    vtabCreate: notImplemented('vtab-create'),
-    vtabConnect: notImplemented('vtab-connect'),
-    vtabDestroy: notImplemented('vtab-destroy'),
-    vtabDisconnect: notImplemented('vtab-disconnect'),
-    vtabBestIndex: notImplemented('vtab-best-index'),
-    vtabOpen: notImplemented('vtab-open'),
-    vtabClose: notImplemented('vtab-close'),
-    vtabFilter: notImplemented('vtab-filter'),
-    vtabNext: notImplemented('vtab-next'),
-    vtabEof() {
-      return true
-    },
-    vtabColumn: notImplemented('vtab-column'),
-    vtabRowid: notImplemented('vtab-rowid'),
-    vtabFetchBatch: notImplemented('vtab-fetch-batch'),
-    vtabUpdate: notImplemented('vtab-update'),
-    vtabBegin: notImplemented('vtab-begin'),
-    vtabSync: notImplemented('vtab-sync'),
-    vtabCommit: notImplemented('vtab-commit'),
-    vtabRollback: notImplemented('vtab-rollback'),
-    vtabRename: notImplemented('vtab-rename'),
-    vtabSavepoint: notImplemented('vtab-savepoint'),
-    vtabRelease: notImplemented('vtab-release'),
-    vtabRollbackTo: notImplemented('vtab-rollback-to'),
+    vtabCreate: vtabCreateImpl,
+    vtabConnect: vtabConnectImpl,
+    vtabDestroy: vtabDestroyImpl,
+    vtabDisconnect: vtabDisconnectImpl,
+    vtabBestIndex: vtabBestIndexImpl,
+    vtabOpen: vtabOpenImpl,
+    vtabClose: vtabCloseImpl,
+    vtabFilter: vtabFilterImpl,
+    vtabNext: vtabNextImpl,
+    vtabEof: vtabEofImpl,
+    vtabColumn: vtabColumnImpl,
+    vtabRowid: vtabRowidImpl,
+    vtabFetchBatch: vtabFetchBatchImpl,
+    vtabUpdate: vtabUpdateImpl,
+    vtabBegin: vtabBeginImpl,
+    vtabSync: vtabSyncImpl,
+    vtabCommit: vtabCommitImpl,
+    vtabRollback: vtabRollbackImpl,
+    vtabRename: vtabRenameImpl,
+    vtabSavepoint: vtabSavepointImpl,
+    vtabRelease: vtabReleaseImpl,
+    vtabRollbackTo: vtabRollbackToImpl,
     vtabIsShadowName() {
+      // v1: no extension shadow-name support; the sqlite-lib module
+      // template leaves xShadowName=NULL, so this dispatch entry
+      // exists for surface completeness only — it's never invoked
+      // from the wasm side.
       return false
     },
-    vtabIntegrity: notImplemented('vtab-integrity'),
+    vtabIntegrity(_extName, _vtabId, _instanceId, _schema, _table, _flags) {
+      // v1: no extension integrity-check support; sqlite-lib's
+      // module template leaves xIntegrity=NULL.
+      return undefined
+    },
   }
 }
 
@@ -1115,7 +1476,30 @@ export function buildSpiLoader(registry) {
         b.registerHostWalHook(extName, BigInt(hookId))
         return undefined
       },
-      registerVtab(_extName, _name, _vtabId, _eponymous, _mutable, _batched) {
+      // Vtab modules: re-enter dispatch-bridge to install a
+      // sqlite3_module trampoline on sqlite-lib's shared
+      // connection. The wasm-side trampoline's xMethod callbacks
+      // call back out via dispatch.vtab-* (handled in buildDispatch
+      // above). No JS-side recordVtab is needed today — the
+      // wasm-side host_vtabs.rs holds the (ext-name, vtab-id) map
+      // keyed by module name, and JS-side dispatch routes by
+      // ext-name + vtab-id on each xMethod call.
+      registerVtab(extName, name, vtabId, eponymous, mutable, batched) {
+        if (!registry.has(extName)) {
+          structuredErr(
+            `spi-loader.register-vtab: extension '${extName}' not in JS registry. ` +
+              `Pre-register via openDatabase({embed: ...}) or db.loadExtension().`,
+          )
+        }
+        const b = getBridge()
+        b.registerHostVtab(
+          extName,
+          name,
+          BigInt(vtabId),
+          !!eponymous,
+          !!mutable,
+          !!batched,
+        )
         return undefined
       },
     },
@@ -1151,6 +1535,7 @@ export function buildSpiLoader(registry) {
         'registerHostCommitHook',
         'registerHostRollbackHook',
         'registerHostWalHook',
+        'registerHostVtab',
         'unregisterExtension',
       ]) {
         if (typeof dispatchBridge?.[k] !== 'function') missing.push(k)
