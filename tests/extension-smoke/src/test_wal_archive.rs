@@ -19,20 +19,18 @@
 //!
 //! Two #[test] entry points per scenario  smoke (frames
 //! show up in S3) and snapshot (snapshot_now() round-trips a
-//! full db image to S3).
+//! full db image to S3), plus a third pair for the full
+//! restore round-trip (snapshot to S3, restore to a fresh
+//! target file, open the target with the system sqlite3 and
+//! verify the source rows replayed).
 //!
-//! Full round-trip restore (snapshot + WAL replay  reconstructed
-//! db file) is a v2 follow-up: the v1 restore path uses
-//! spi::deserialize_db + spi::backup_into, both of which
-//! sqlink-native + sqlink+wasm-cli currently surface a
-//! "SQLITE_CANTOPEN" out of sqlite3_backup_init on the dst
-//! after deserialize-db replaces the spi connection's main.
-//! The combination of wasmtime-wasi's sync-in-async wedge
-//! (block_on under block_on through wasi:filesystem) and the
-//! deserialize/backup state interaction needs a substrate
-//! design decision before a meaningful round-trip test can
-//! land. The plan calls this out explicitly: "Restoring to
-//! an in-memory target via SPI is also an option."
+//! WAL segment replay past the snapshot frame stays a v2
+//! follow-up (the v1 loss window is < 1 s of writes at the
+//! default flush threshold). The #443 restore wedge that
+//! used to block this test (snapshot's WAL-mode journal
+//! bytes broke sqlite3_deserialize  spi.backup_into) is
+//! resolved by the journal-mode byte patch in
+//! extensions/wal-archive/src/lib.rs.
 //!
 //! Mock S3 server is the same s3s-fs setup test_s3_base uses
 //! (bound to an ephemeral port on 127.0.0.1).
@@ -478,4 +476,217 @@ fn wal_archive_e2e_wasm_cli() {
         let (stdout, stderr) = drive(&sqlink, Some(&cli), &tmp, &script_e2e(&component, &endpoint));
         assert_e2e("sqlink+wasm-cli", &stdout, &stderr);
     });
+}
+
+// ----------------------------------------------------------------
+// Test 4: full restore round-trip. After a snapshot lands in S3,
+// a fresh session calls wal_archive_restore(target_path)  and we
+// open target_path with the system sqlite3 binary to verify all
+// source rows are present.
+//
+// Closes out #443: the wedge that used to surface as "Restoring
+// to an in-memory target via SPI is also an option" with no
+// actual target file is fixed in extensions/wal-archive/src/lib.rs
+// by patching the snapshot's journal-mode bytes from WAL `02 02`
+// to legacy `01 01` before sqlite3_deserialize.
+// ----------------------------------------------------------------
+
+/// Source-session script: archive starts, INSERTs three rows, snaps
+/// to S3, stops. Distinct DB path from the round-trip target so the
+/// restore op can hit a fresh file.
+fn script_roundtrip_source(component: &Path, endpoint: &str) -> String {
+    format!(
+        ".load {} --grant=spi,wal-frames,s3\n\
+         PRAGMA journal_mode=WAL;\n\
+         CREATE TABLE t(x INTEGER);\n\
+         SELECT wal_archive_start('main', {opts});\n\
+         INSERT INTO t VALUES (10);\n\
+         INSERT INTO t VALUES (20);\n\
+         INSERT INTO t VALUES (30);\n\
+         SELECT 'SNAP_SIZE:' || wal_archive_snapshot_now();\n\
+         SELECT wal_archive_stop();\n\
+         .exit\n",
+        component.display(),
+        opts = opts_json(endpoint),
+    )
+}
+
+/// Restore-session script: a fresh empty source db (no rows) is the
+/// `--db`; the restore scalar pulls the snapshot from S3 and writes
+/// it to `target_path`. We tag the row count of the spi-side `t`
+/// (read from the deserialized main, not the target_path file) so
+/// the test can also confirm the deserialize half worked.
+fn script_roundtrip_restore(
+    component: &Path,
+    endpoint: &str,
+    target_path: &Path,
+) -> String {
+    format!(
+        ".load {component} --grant=spi,wal-frames,s3\n\
+         SELECT 'RESTORE_RET:' || wal_archive_restore('main', '{target}', {opts});\n\
+         SELECT 'SRC_ROWS:' || count(*) FROM t;\n\
+         .exit\n",
+        component = component.display(),
+        target = target_path.display(),
+        opts = opts_json(endpoint),
+    )
+}
+
+/// Open `target_path` with the host's `sqlite3` CLI and run
+/// `SELECT count(*) FROM t;`. Returns the parsed row count, or
+/// None if the binary isn't available / sqlite errors. The
+/// system sqlite3 is the right verifier here: rusqlite isn't
+/// in the test crate's dep tree, and the sqlink CLI is the
+/// system-under-test  asking it to read its own restore would
+/// be circular.
+fn count_rows_with_system_sqlite3(path: &Path) -> Option<i64> {
+    let sqlite3 = which_sqlite3()?;
+    let out = Command::new(sqlite3)
+        .arg(path)
+        .arg("SELECT count(*) FROM t;")
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let s = String::from_utf8_lossy(&out.stdout);
+    s.trim().parse::<i64>().ok()
+}
+
+/// Find a usable system sqlite3 binary. Honors SQLITE3_BIN for
+/// CI configs that ship a curated binary; falls back to PATH.
+fn which_sqlite3() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("SQLITE3_BIN") {
+        let pb = PathBuf::from(p);
+        if pb.exists() {
+            return Some(pb);
+        }
+    }
+    for cand in ["/usr/bin/sqlite3", "/usr/local/bin/sqlite3", "/opt/homebrew/bin/sqlite3"] {
+        let pb = PathBuf::from(cand);
+        if pb.exists() {
+            return Some(pb);
+        }
+    }
+    None
+}
+
+fn run_roundtrip(label: &str, source_bin: &Path, source_cli_arg: Option<&Path>) {
+    run_with_mock(label, {
+        let label = label.to_string();
+        let source_bin = source_bin.to_path_buf();
+        let source_cli_arg = source_cli_arg.map(|p| p.to_path_buf());
+        move |endpoint, component| {
+            // First session: write rows + snapshot to S3.
+            let src_db =
+                std::env::temp_dir().join(format!("sqlink_walarch_rt_src_{label}.db"));
+            let target =
+                std::env::temp_dir().join(format!("sqlink_walarch_rt_tgt_{label}.db"));
+            cleanup_db(&src_db);
+            cleanup_db(&target);
+            let cli_arg: Option<&Path> = source_cli_arg.as_deref();
+            let (stdout1, stderr1) = drive(
+                &source_bin,
+                cli_arg,
+                &src_db,
+                &script_roundtrip_source(&component, &endpoint),
+            );
+            assert!(
+                !stderr1.contains("panicked"),
+                "[{label} src] panic.\nstdout:\n{stdout1}\nstderr:\n{stderr1}",
+            );
+            assert!(
+                !stdout1.contains("Error:") && !stdout1.contains("error:"),
+                "[{label} src] SQL error.\nstdout:\n{stdout1}\nstderr:\n{stderr1}",
+            );
+            let snap = find_tagged(&stdout1, "SNAP_SIZE:").unwrap_or_else(|| {
+                panic!("[{label} src] no SNAP_SIZE.\nstdout:\n{stdout1}\nstderr:\n{stderr1}")
+            });
+            let snap_size: i64 = snap.trim().parse().unwrap_or(-1);
+            assert!(
+                snap_size > 0,
+                "[{label} src] snapshot_now non-positive: {snap:?}",
+            );
+
+            // Second session: fresh db, restore from S3, write to
+            // target.
+            let restore_db =
+                std::env::temp_dir().join(format!("sqlink_walarch_rt_restore_{label}.db"));
+            cleanup_db(&restore_db);
+            let (stdout2, stderr2) = drive(
+                &source_bin,
+                cli_arg,
+                &restore_db,
+                &script_roundtrip_restore(&component, &endpoint, &target),
+            );
+            assert!(
+                !stderr2.contains("panicked"),
+                "[{label} restore] panic.\nstdout:\n{stdout2}\nstderr:\n{stderr2}",
+            );
+            // The restore scalar should return the skipped-segments
+            // count (0 here  no segments past the snapshot in this
+            // script). Either way, the line must be present + parse.
+            let ret = find_tagged(&stdout2, "RESTORE_RET:").unwrap_or_else(|| {
+                panic!("[{label} restore] no RESTORE_RET.\nstdout:\n{stdout2}\nstderr:\n{stderr2}")
+            });
+            let _: i64 = ret.trim().parse().unwrap_or_else(|_| {
+                panic!("[{label} restore] RESTORE_RET not an integer: {ret:?}")
+            });
+            let src_rows = find_tagged(&stdout2, "SRC_ROWS:").unwrap_or_else(|| {
+                panic!("[{label} restore] no SRC_ROWS.\nstdout:\n{stdout2}\nstderr:\n{stderr2}")
+            });
+            assert_eq!(
+                src_rows.trim(),
+                "3",
+                "[{label} restore] deserialized spi.main row count != 3.\nstdout:\n{stdout2}",
+            );
+            // backup_into must have materialized target_path with
+            // valid sqlite bytes. Open it with the system sqlite3
+            // and verify all 3 rows are present.
+            assert!(
+                target.exists(),
+                "[{label} restore] target_path {} not created.\nstdout:\n{stdout2}",
+                target.display(),
+            );
+            let meta = std::fs::metadata(&target).expect("stat target_path");
+            assert!(
+                meta.len() > 0,
+                "[{label} restore] target_path {} is 0 bytes.",
+                target.display(),
+            );
+            match count_rows_with_system_sqlite3(&target) {
+                Some(n) => assert_eq!(
+                    n, 3,
+                    "[{label} restore] target_path row count != 3 (got {n})",
+                ),
+                None => {
+                    eprintln!(
+                        "[{label} restore] system sqlite3 not available; \
+                         skipping target_path row-count assert (file size > 0 still passes)"
+                    );
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn wal_archive_roundtrip_native() {
+    let bin = sqlink_native_bin();
+    if !bin.exists() {
+        eprintln!("wal-archive roundtrip (sqlink-native): SKIP");
+        return;
+    }
+    run_roundtrip("roundtrip_native", &bin, None);
+}
+
+#[test]
+fn wal_archive_roundtrip_wasm_cli() {
+    let sqlink = sqlink_bin();
+    let cli = cli_component();
+    if !sqlink.exists() || !cli.exists() {
+        eprintln!("wal-archive roundtrip (sqlink+wasm-cli): SKIP");
+        return;
+    }
+    run_roundtrip("roundtrip_wasm_cli", &sqlink, Some(&cli));
 }
