@@ -73,6 +73,7 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::update_hook::Guest as UpdateHookGuest;
     use bindings::exports::sqlite::extension::wal_hook::Guest as WalHookGuest;
     use bindings::sqlite::extension::policy::Capability;
+    use bindings::sqlite::extension::s3_base;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue, UpdateOperation};
     use bindings::sqlite::extension::wal_frames;
 
@@ -337,6 +338,7 @@ mod wasm_export {
         let db_name = pop_text(&mut it, "db_name")?;
         let opts_json = pop_text(&mut it, "opts_json")?;
         let opts = ArchiveOptions::parse(&opts_json)?;
+        let now_ms = wall_clock_ms();
         STATE.with(|s| {
             *s.borrow_mut() = Some(ArchiveState {
                 started: true,
@@ -347,7 +349,7 @@ mod wasm_export {
                 last_snapshot_frame: 0,
                 wal_header: None,
                 buffer: Vec::new(),
-                last_flush_ts_ms: 0,
+                last_flush_ts_ms: now_ms,
             });
         });
         Ok(SqlValue::Integer(0))
@@ -492,13 +494,89 @@ mod wasm_export {
                 Ok(bytes) => {
                     state.buffer.extend_from_slice(&bytes);
                     state.last_uploaded_frame = n_frames_in_wal as u64;
-                    Ok(())
                 }
                 // Retain the bookmark on a transient failure so
                 // the next firing tries the same range again.
-                Err(_) => Ok(()),
+                Err(_) => return Ok(()),
             }
+            // Stage 3: flush threshold check. We compress + ship
+            // when EITHER the byte threshold or the time threshold
+            // is crossed. The two operate independently  a slow
+            // write trickle triggers on time, a fast burst on
+            // bytes. Both default values come from the design
+            // doc; operators can override via opts.
+            let now_ms = wall_clock_ms();
+            let bytes_threshold = state.opts.flush_bytes_threshold as usize;
+            let time_threshold_ms = state.opts.flush_ms_threshold as u64;
+            let should_flush = state.buffer.len() >= bytes_threshold
+                || now_ms.saturating_sub(state.last_flush_ts_ms)
+                    >= time_threshold_ms;
+            if should_flush && !state.buffer.is_empty() {
+                let _ = flush_buffer(state, now_ms);
+            }
+            Ok(())
         })
+    }
+
+    /// Compress the current buffer with lz4_flex (size-prepended
+    /// frame so the restore path doesn't need a separate length
+    /// table), upload to S3 under `{prefix}{db}/wal/{seg_id:020}
+    /// .lz4`, then clear the buffer + bump the segment counter.
+    /// On any S3 failure the buffer is retained so the next flush
+    /// retries the same payload (idempotent: same seg_id, same
+    /// bytes, S3 just overwrites).
+    fn flush_buffer(state: &mut ArchiveState, now_ms: u64) -> Result<(), String> {
+        let compressed =
+            lz4_flex::compress_prepend_size(&state.buffer);
+        let key = format!(
+            "{}{}/wal/{:020}.lz4",
+            state.opts.prefix, state.db_name, state.next_segment_id
+        );
+        let cfg = s3_base::S3EndpointConfig {
+            url: state.opts.s3_endpoint.clone(),
+            region: state.opts.s3_region.clone(),
+            path_style: state.opts.path_style,
+        };
+        let creds = s3_base::S3Credentials {
+            access_key_id: state.opts.s3_access_key_id.clone(),
+            secret_access_key: state.opts.s3_secret_access_key.clone(),
+            session_token: None,
+        };
+        let bucket = state.opts.s3_bucket.clone();
+        match s3_base::put_object(&cfg, &creds, &bucket, &key, &compressed, None) {
+            Ok(_) => {
+                state.buffer.clear();
+                state.next_segment_id = state.next_segment_id.saturating_add(1);
+                state.last_flush_ts_ms = now_ms;
+                Ok(())
+            }
+            Err(e) => Err(format!("wal_archive flush: {}", format_s3_err(&e))),
+        }
+    }
+
+    fn format_s3_err(e: &s3_base::S3Error) -> String {
+        use s3_base::S3Error::*;
+        match e {
+            AccessDenied => "access-denied".to_string(),
+            NoSuchBucket => "no-such-bucket".to_string(),
+            NoSuchKey => "no-such-key".to_string(),
+            InvalidBucketName => "invalid-bucket-name".to_string(),
+            InvalidRequest(s) => format!("invalid-request: {s}"),
+            NetworkError(s) => format!("network-error: {s}"),
+            ParseError(s) => format!("parse-error: {s}"),
+            Internal(s) => format!("internal: {s}"),
+            CapabilityNotGranted => "capability-not-granted".to_string(),
+        }
+    }
+
+    /// Wall-clock millis since the unix epoch. wasm32-wasip2
+    /// routes std::time::SystemTime through the preview1 adapter
+    /// to the host's wasi:clocks/wall-clock binding.
+    fn wall_clock_ms() -> u64 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0)
     }
 
     bindings::export!(Ext with_types_in bindings);
