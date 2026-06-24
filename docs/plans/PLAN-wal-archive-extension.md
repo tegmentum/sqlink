@@ -1,6 +1,55 @@
 # Plan: `wal-archive` extension  continuous WAL backup for sqlink
 
-## Status (2026-06-23)
+## Status (2026-06-24)
+
+**v1 implementation landed on the `wal-archive-extension` branch.**
+The consumer extension (`extensions/wal-archive/`) ships against
+the four substrate landings (#438 native wal-hook wiring, #439
+wal-frames SPI, #440 s3-base SPI, #441 cached hook+scalar Store
+unification). Native end-to-end tests pass under both deployment
+paths (sqlink-native + sqlink+wasm-cli) via a mock S3 server:
+
+  * `wal_archive_start` parses opts, pulls sidecar state from S3,
+    installs in-Store state.
+  * The wal-hook callback drains frames via wal-frames::read-frames,
+    buffers them, and flushes compressed segments to S3 when the
+    byte/time threshold fires.
+  * `wal_archive_snapshot_now()` serializes the db via
+    spi.serialize-db, compresses, ships to S3, GCs older WAL
+    segments.
+  * `wal_archive_restore()` pulls latest.snap.lz4 + the sidecar,
+    deserializes into the spi connection's main via
+    spi.deserialize-db, and (best-effort) tries
+    spi.backup-into(target_path). WAL replay past the snapshot is
+    deferred to v2 (see below).
+
+**v2 follow-ups** (none of which block v1 shipping):
+
+  1. **WAL replay past the snapshot.** v1 surfaces a count of
+     skipped segments but doesn't actually apply them. Two
+     wedges block it under sqlink-native today: (a)
+     wasmtime-wasi's `in_tokio` does `block_on` without
+     `block_in_place`, so wasi:filesystem ops after async Host
+     calls (s3-base) in the same scalar dispatch panic with
+     "Cannot start a runtime from within a runtime"; (b)
+     `spi::backup_into` after `spi::deserialize-db` currently
+     returns SQLITE_CANTOPEN under sqlink-native + sqlink+wasm-
+     cli  needs investigation. Either route through a different
+     IO bridge OR a `spi::write-file` substrate addition could
+     close this.
+  2. **Timer-driven snapshots.** v1 ships with on-demand
+     `snapshot_now()` only. The opts JSON's
+     `snapshot_interval_seconds` field is parsed + stored for the
+     follow-up.
+  3. **zstd compression option.** v1 ships lz4-only. The opts
+     JSON should grow a `compression` field once a zstd alternative
+     lands.
+  4. **`sqlink --backup` CLI flag** (Stage 7 stretch). v1 requires
+     explicit `.load wal-archive ... + SELECT wal_archive_start(...)`.
+  5. **Browser deployment.** Pending #437 (vfs-tvm WAL support).
+     The extension's `.component.wasm` works fine in the browser
+     today, but `wal-frames::get-wal-header` returns None via the
+     sqlite-lib stub until WAL access exists.
 
 Reframe + rename of `PLAN-browser-litestream.md`. Two changes from
 that earlier doc:
