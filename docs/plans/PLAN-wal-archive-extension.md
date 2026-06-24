@@ -46,10 +46,19 @@ paths (sqlink-native + sqlink+wasm-cli) via a mock S3 server:
      lands.
   4. **`sqlink --backup` CLI flag** (Stage 7 stretch). v1 requires
      explicit `.load wal-archive ... + SELECT wal_archive_start(...)`.
-  5. **Browser deployment.** Pending #437 (vfs-tvm WAL support).
-     The extension's `.component.wasm` works fine in the browser
-     today, but `wal-frames::get-wal-header` returns None via the
-     sqlite-lib stub until WAL access exists.
+  5. **Browser deployment.** #437 (vfs-tvm WAL support) has landed
+     — the composed runtime's in-wasm VFS now honors
+     `PRAGMA journal_mode=WAL` via the iVersion=2 io_methods +
+     xShm* family + per-file lock-level bookkeeping. The remaining
+     blocker is #444 (the s3-base browser polyfill bridge): the
+     wal-archive extension imports `sqlite:extension/s3-base`, and
+     the browser composition currently has that interface
+     undefined, so hookprobe + wal-archive cannot instantiate
+     there yet. `wal-frames::get-wal-header` against the in-wasm
+     VFS still returns None via the sqlite-lib stub — wiring it
+     through the now-WAL-capable VFS is a follow-up. End state:
+     browser deployment unblocked once both #444 lands and the
+     sqlite-lib wal-frames stub gets a real implementation.
 
 Reframe + rename of `PLAN-browser-litestream.md`. Two changes from
 that earlier doc:
@@ -178,10 +187,13 @@ Other landed pieces:
   `Capability::WalFrames` not granted at load time (SQLITE_PERM
   with a "wal-frames capability not granted" message).
 - Browser-side stub in `sqlite-wasm/sqlite-lib`: returns the
-  documented sentinel (None / SQLITE_NOTFOUND) until vfs-tvm
-  grows WAL support (#437). The WIT contract stays honored so a
-  wal-archive-shaped extension can compose with sqlite-lib in the
-  browser today, even though the live data isn't reachable yet.
+  documented sentinel (None / SQLITE_NOTFOUND). #437 (vfs-tvm
+  WAL support) has now landed, so the VFS underneath this stub
+  is WAL-capable; replacing the stub with a real implementation
+  that reads the WAL through the now-functional substrate is a
+  follow-up. The WIT contract stays honored so a wal-archive-
+  shaped extension can compose with sqlite-lib in the browser
+  today, even though the live data isn't reachable yet.
 - New test-bench scalars on hookprobe (`hookprobe_wal_header`,
   `hookprobe_read_frames`, `hookprobe_serialize_main`) and a
   native end-to-end smoke
