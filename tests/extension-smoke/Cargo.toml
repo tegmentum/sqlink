@@ -71,6 +71,19 @@ path = "src/test_wal_frames.rs"
 name = "extension_smoke_s3_base"
 path = "src/test_s3_base.rs"
 
+[[test]]
+# End-to-end consumer of the four substrates above (#438 wal-hook
+# wiring, #439 wal-frames SPI, #440 s3-base SPI, #441 cached
+# Store unification). Loads the wal-archive extension against
+# the same s3s-fs mock S3 server test_s3_base uses, drives
+# wal_archive_start  INSERTs  wal_archive_snapshot_now
+# more INSERTs  wal_archive_stop, then in a fresh process
+# wal_archive_restore to a new path and verifies all rows
+# replayed. Two scenarios (sqlink-native + sqlink+wasm-cli)
+# x three tests (smoke / snapshot / round-trip).
+name = "extension_smoke_wal_archive"
+path = "src/test_wal_archive.rs"
+
 [[bin]]
 name = "extension-smoke-report"
 path = "src/report.rs"
