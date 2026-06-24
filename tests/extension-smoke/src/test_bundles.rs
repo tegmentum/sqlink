@@ -512,6 +512,129 @@ fn bundles_build_honors_sqlink_dev_root_override() {
 }
 
 #[test]
+fn bundles_build_distinct_bundles_dont_collide_on_disk() {
+    // v1.1 fix: each bundle's recorded binary lives at
+    //   ~/.cache/sqlink/builds/<set_hash>/<basename>
+    // (host-side copy in bundle-record-binary), so building two
+    // bundles with DIFFERENT member sets for the same target leaves
+    // both files on disk  no overwrite. Pre-v1.1 both wrote to the
+    // single cargo target path and clobbered each other.
+    //
+    // Also slow: two real cargo builds. SKIPs cleanly if cargo or
+    // wasm-tools is missing.
+    let Some((sqlink, cli, uuid, json1)) = gates() else {
+        eprintln!("bundles distinct-paths smoke: SKIP (no sqlink/cli/uuid/json1)");
+        return;
+    };
+    if !cargo_and_wasm_tools_available() {
+        eprintln!("bundles distinct-paths smoke: SKIP (cargo or wasm-tools missing)");
+        return;
+    }
+    let dir = make_tempdir("distinct_paths");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    // Bundle A = {uuid}.  Bundle B = {uuid, json1}.  Different
+    // member sets  different set_hash  different builds_dir.
+    let script = format!(
+        ".load {}\n\
+         .bundle save bundle_a --no-build\n\
+         .bundle build bundle_a --target wasm32-wasip2\n\
+         .load {}\n\
+         .bundle save bundle_b --no-build\n\
+         .bundle build bundle_b --target wasm32-wasip2\n\
+         .bundle show bundle_a\n\
+         .bundle show bundle_b\n\
+         .exit\n",
+        uuid.display(),
+        json1.display(),
+    );
+    let mut cmd = Command::new(&sqlink);
+    cmd.arg("--db").arg(&db);
+    cmd.arg("--cache-dir").arg(&cache);
+    cmd.arg("--grant").arg("spawn-build");
+    cmd.arg(&cli);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().expect("spawn sqlink");
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(script.as_bytes());
+    }
+    let mut stdout_pipe = child.stdout.take().expect("stdout");
+    let mut stderr_pipe = child.stderr.take().expect("stderr");
+    let stdout_h = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut b);
+        b
+    });
+    let stderr_h = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut b);
+        b
+    });
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if start.elapsed() > std::time::Duration::from_secs(900) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            Err(_) => break,
+        }
+    }
+    let stdout = String::from_utf8_lossy(&stdout_h.join().unwrap_or_default()).into_owned();
+    let stderr = String::from_utf8_lossy(&stderr_h.join().unwrap_or_default()).into_owned();
+    assert!(
+        !stderr.contains("panicked"),
+        "stderr panicked\nstdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    // Pull the recorded binary paths from each `.bundle build`
+    // success line.
+    let build_lines: Vec<&str> = stdout
+        .lines()
+        .filter(|l| l.contains("built for wasm32-wasip2"))
+        .collect();
+    assert_eq!(
+        build_lines.len(),
+        2,
+        "expected two build success lines (bundle_a + bundle_b)\nstdout:\n{stdout}",
+    );
+    let extract_path = |line: &str| -> String {
+        line.split(": ").nth(1).expect("path after ': '").trim().to_string()
+    };
+    let path_a = extract_path(build_lines[0]);
+    let path_b = extract_path(build_lines[1]);
+    assert_ne!(
+        path_a, path_b,
+        "bundle_a and bundle_b should have distinct recorded paths; got {path_a}",
+    );
+    let pa = PathBuf::from(&path_a);
+    let pb = PathBuf::from(&path_b);
+    assert!(pa.exists(), "bundle_a binary {path_a} missing on disk");
+    assert!(pb.exists(), "bundle_b binary {path_b} missing on disk");
+    // The managed dir convention is ~/.cache/sqlink/builds/<set_hash>/.
+    // Both paths should contain `/builds/` and the parent dirs
+    // should differ (different set_hash).
+    assert!(
+        path_a.contains("/builds/"),
+        "bundle_a recorded path should be under ~/.cache/sqlink/builds/ (v1.1 managed dir); got {path_a}",
+    );
+    assert!(
+        path_b.contains("/builds/"),
+        "bundle_b recorded path should be under ~/.cache/sqlink/builds/ (v1.1 managed dir); got {path_b}",
+    );
+    assert_ne!(
+        pa.parent(),
+        pb.parent(),
+        "bundle_a and bundle_b should live in different per-set_hash dirs",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn bundles_build_cache_hit_skips_rebuild() {
     // Second `.bundle build NAME` for the same (bundle, target)
     // should be a cache-hit  bundle-cli reports
