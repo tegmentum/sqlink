@@ -143,17 +143,22 @@ fn bundles_save_list_show_metadata_path() {
         json1.display(),
     );
     let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
+    // Members count varies with the default cli embed list size
+    // (uuid + json1 + every cli-family extension auto-loaded by
+    // the default embed). Assert presence of the loaded
+    // extensions and the structural lines rather than a count.
     assert_ok(
         "save+list+show",
         &stdout,
         &stderr,
         &[
             "bundle 'myset' saved",
-            "members=2",
             "MEMBERS",
             "myset",
             "set_hash:",
-            "members (2):",
+            "members (",
+            "uuid",
+            "json1",
         ],
     );
     let _ = std::fs::remove_dir_all(&dir);
