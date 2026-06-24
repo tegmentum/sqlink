@@ -684,6 +684,15 @@ pub mod loaded_resolving {
 /// `has-commit-hook`. The `hooked` world exports `update-hook` and
 /// `commit-hook` together; we use one bindgen for both since SQLite's
 /// hook API treats them as orthogonal concerns within one db.
+///
+/// Also covers the `wal-aware` world (introduced for #423 wal-archive):
+/// `wal-aware` has the same metadata + scalar-function + update-hook +
+/// commit-hook + wal-hook export set as `hooked` (it differs only in
+/// widening the import surface, which the host satisfies uniformly).
+/// wasmtime instantiation only checks export-shape compatibility, so
+/// the `loaded_hooked::Hooked` bindgen — and the matching `CachedHooked`
+/// store — services wal-aware components too. No separate bindgen /
+/// cache slot is needed in the host.
 pub mod loaded_hooked {
     wasmtime::component::bindgen!({
         path: "../sqlite-loader-wit/wit",
@@ -963,6 +972,22 @@ pub struct LoadedExtension {
     /// shape as `cached_minimal_http`; populated lazily on first
     /// dispatch for extensions declaring `capability::dns`.
     pub cached_minimal_dns: Arc<tokio::sync::Mutex<Option<CachedMinimalDns>>>,
+    /// `hooked` (and `wal-aware` — identical export shape) Store
+    /// cache backing every hook dispatcher (update / commit /
+    /// rollback / wal). Built lazily on the first hook firing or
+    /// (when the extension declares any hook) on the first scalar
+    /// call routed here for cross-world coherence. Mirrors
+    /// `cached_minimal` but holds the wider instance so guest-side
+    /// `thread_local!` / `OnceLock` / `static AtomicU64` state
+    /// survives across hook firings AND scalar calls on the same
+    /// extension — the substrate the wal-archive extension needs.
+    pub cached_hooked: Arc<tokio::sync::Mutex<Option<CachedHooked>>>,
+    /// `authorizing`-world Store cache for the authorize
+    /// dispatcher. Same shape as `cached_hooked`; populated lazily
+    /// on first `dispatch_authorize` for an extension declaring
+    /// `has_authorizer`. The `authorizing` world does not export
+    /// hooks, so this is held separately from `cached_hooked`.
+    pub cached_authorizing: Arc<tokio::sync::Mutex<Option<CachedAuthorizing>>>,
     /// Dot-command specs declared in the manifest. The cli's
     /// repl dispatcher walks this on every `.NAME` parse to
     /// route the call into the extension's `dot-command.invoke`.
@@ -976,15 +1001,23 @@ pub struct LoadedExtension {
 
 /// Which cached Store should handle a scalar call. See
 /// `dispatch_scalar` for the routing rule  the goal is to
-/// keep scalar + vtab (or scalar + aggregate) calls inside
-/// the same wasm Store so they can share thread_local state
-/// (e.g. vec0's NAME_TO_INSTANCE registry).
+/// keep scalar + vtab (or scalar + aggregate, or scalar + hook)
+/// calls inside the same wasm Store so they can share
+/// thread_local state (e.g. vec0's NAME_TO_INSTANCE registry,
+/// or wal-archive's start({opts})  wal-hook ring buffer).
 enum ScalarRoute {
     Minimal,
     Tabular,
     Stateful,
     MinimalHttp,
     MinimalDns,
+    /// Extensions that declare any hook export. Scalars route
+    /// through the same `cached_hooked` Store the hook
+    /// dispatchers use, so guest-side state set by a scalar
+    /// call (e.g. `wal_archive_start({opts})` populating a
+    /// `OnceLock<Mutex<RingBuffer>>`) is visible to the
+    /// subsequent wal-hook firing on the same connection.
+    Hooked,
 }
 
 /// Long-lived `Tabular`-world instance backing a vtab module.
@@ -1039,6 +1072,28 @@ pub struct CachedMinimalHttp {
 pub struct CachedMinimalDns {
     pub store: wasmtime::Store<LoadedState>,
     pub instance: loaded_minimal_dns::MinimalDns,
+}
+
+/// Long-lived `Hooked`-world instance backing hook dispatch
+/// (update / commit / rollback / wal) AND scalar dispatch for
+/// extensions that declare any hook. Caching is a CORRECTNESS
+/// requirement here, not just a perf win: hookprobe's
+/// `thread_local!` LOG and wal-archive's `OnceLock<Mutex<...>>`
+/// ring buffer must survive across firings on the same loaded-
+/// extension lifetime, and state set by a scalar call must be
+/// visible to subsequent hook callbacks.
+pub struct CachedHooked {
+    pub store: wasmtime::Store<LoadedState>,
+    pub instance: loaded_hooked::Hooked,
+}
+
+/// Long-lived `Authorizing`-world instance backing the
+/// authorize dispatcher. Same lifetime contract as
+/// `CachedHooked` — guest-side state across authorize
+/// firings must survive.
+pub struct CachedAuthorizing {
+    pub store: wasmtime::Store<LoadedState>,
+    pub instance: loaded_authorizing::Authorizing,
 }
 
 /// Long-lived `DotcmdAware`-world instance backing dot-command
@@ -5748,6 +5803,8 @@ impl Host {
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_hooked: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
 
             dot_commands: Vec::new(),
             cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),        };
@@ -5983,6 +6040,8 @@ impl Host {
             cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
             cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_hooked: Arc::new(tokio::sync::Mutex::new(None)),
+            cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
 
             dot_commands: Vec::new(),
             cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),        };
@@ -6126,6 +6185,8 @@ impl Host {
                 cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
                 cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
                 cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
+                cached_hooked: Arc::new(tokio::sync::Mutex::new(None)),
+                cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
                 dot_commands,
                 cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),
             }),
@@ -6554,19 +6615,30 @@ impl Host {
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
 
         // Route to the "most capable" cached Store for this
-        // extension. The minimal/tabular/stateful Stores hold
-        // separate wasm instances with separate thread_locals;
-        // if vec0 (tabular) registers its name in the vtab
-        // create path and reads it back from a scalar, the
-        // scalar MUST run in the same Store as the vtab or the
-        // thread_local lookup misses. Picking by manifest:
+        // extension. The minimal/tabular/stateful/hooked Stores
+        // hold separate wasm instances with separate
+        // thread_locals; if vec0 (tabular) registers its name in
+        // the vtab create path and reads it back from a scalar,
+        // the scalar MUST run in the same Store as the vtab or
+        // the thread_local lookup misses. Same constraint applies
+        // to hook-bearing extensions: wal-archive's `start({opts})`
+        // populates a `OnceLock<Mutex<RingBuffer>>` from a scalar
+        // call; the subsequent wal-hook firing has to see it, so
+        // the scalar has to run in the same Store as the hook.
+        // Picking by manifest:
         //
-        //   * vtabs present  use tabular Store (vec0 etc.)
-        //   * aggregates present  use stateful Store
-        //   * otherwise  minimal
+        //   * vtabs present                use tabular Store
+        //   * aggregates present           use stateful Store
+        //   * any hook export              use cached_hooked
+        //   * http capability granted      use minimal-http
+        //   * dns capability granted       use minimal-dns
+        //   * otherwise                    minimal
         //
         // Each world's instance has the scalar-function export,
         // so the call signature is identical across paths.
+        // Worlds are disjoint in practice — a tabular extension
+        // does not export wal-hook, so no manifest reaches the
+        // tabular + hook overlap branch.
         let route = {
             let components = self.components.read();
             let ext = components
@@ -6576,6 +6648,17 @@ impl Host {
                 ScalarRoute::Tabular
             } else if !ext.aggregate_functions.is_empty() {
                 ScalarRoute::Stateful
+            } else if ext.has_update_hook
+                || ext.has_commit_hook
+                || ext.has_wal_hook
+            {
+                // Cross-world coherence: scalars and hook
+                // callbacks share one Store so guest-side
+                // `thread_local!` / `OnceLock` / `static
+                // AtomicU64` state set by a scalar call is
+                // visible to the next hook firing — the
+                // wal-archive substrate invariant.
+                ScalarRoute::Hooked
             } else if ext.policy.is_granted(Capability::Http) {
                 // Scalar extensions that need outbound HTTP load
                 // against the minimal-http world. The host's
@@ -6655,6 +6738,20 @@ impl Host {
             }
             ScalarRoute::MinimalDns => {
                 let mut guard = self.minimal_dns_locked(ext_name).await?;
+                let cached = guard.as_mut().unwrap();
+                cached
+                    .instance
+                    .sqlite_extension_scalar_function()
+                    .call_call(&mut cached.store, func_id, &loaded_args)
+                    .await
+                    .map_err(|e| anyhow!("call_call: {e}"))?
+            }
+            ScalarRoute::Hooked => {
+                // Shared Store with the hook dispatchers — set
+                // up by `hooked_locked`. The `hooked` world also
+                // exports `scalar-function`, so we call the same
+                // export proxy through the wider instance.
+                let mut guard = self.hooked_locked(ext_name).await?;
                 let cached = guard.as_mut().unwrap();
                 cached
                     .instance
@@ -7584,6 +7681,78 @@ impl Host {
         Ok(guard)
     }
 
+    /// `hooked`-world variant of `minimal_locked`. Same
+    /// lazy-instantiate + cache shape; uses the linker that
+    /// wires the update / commit / rollback / wal hook exports.
+    /// The `wal-aware` world has an identical export shape, so
+    /// this single cache covers both. Backs every hook
+    /// dispatcher AND scalar dispatch for extensions that
+    /// declare any hook (so guest-side `thread_local!` set by
+    /// scalar calls is visible to subsequent hook callbacks —
+    /// the wal-archive substrate's invariant).
+    async fn hooked_locked(
+        &self,
+        ext_name: &str,
+    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedHooked>>> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
+        let cached_arc = ext.cached_hooked.clone();
+        let mut guard = cached_arc.lock_owned().await;
+        if guard.is_none() {
+            let linker = make_loaded_hooked_linker(&self.engine)?;
+            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+            let instance = loaded_hooked::Hooked::instantiate_async(
+                &mut store,
+                &ext.component,
+                &linker,
+            )
+            .await
+            .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
+            *guard = Some(CachedHooked { store, instance });
+        }
+        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
+        Ok(guard)
+    }
+
+    /// `authorizing`-world variant of `minimal_locked`. Built
+    /// lazily on first `dispatch_authorize` against extensions
+    /// declaring `has_authorizer`. The `authorizing` world does
+    /// not export hooks, so this is held separately from
+    /// `cached_hooked`.
+    async fn authorizing_locked(
+        &self,
+        ext_name: &str,
+    ) -> Result<tokio::sync::OwnedMutexGuard<Option<CachedAuthorizing>>> {
+        let ext = {
+            let components = self.components.read();
+            components
+                .get(ext_name)
+                .cloned()
+                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
+        };
+        let cached_arc = ext.cached_authorizing.clone();
+        let mut guard = cached_arc.lock_owned().await;
+        if guard.is_none() {
+            let linker = make_loaded_authorizing_linker(&self.engine)?;
+            let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
+            let instance = loaded_authorizing::Authorizing::instantiate_async(
+                &mut store,
+                &ext.component,
+                &linker,
+            )
+            .await
+            .map_err(|e| anyhow!("instantiate {ext_name} as authorizing: {e}"))?;
+            *guard = Some(CachedAuthorizing { store, instance });
+        }
+        refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
+        Ok(guard)
+    }
+
     /// `minimal-dns`-world variant of `minimal_locked`. Same
     /// lazy-instantiate + cache shape; uses the linker that
     /// wires the dns interface.
@@ -7728,26 +7897,14 @@ impl Host {
         database: Option<String>,
         trigger: Option<String>,
     ) -> Result<bindings::sqlite::extension::types::AuthResult> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_authorizing_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_authorizing::Authorizing::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as authorizing: {e}"))?;
-
+        let mut guard = self.authorizing_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
         let action_w = convert_auth_action_to_loaded(action);
-        let result = instance
+        let result = cached
+            .instance
             .sqlite_extension_authorizer()
             .call_authorize(
-                &mut store,
+                &mut cached.store,
                 action_w,
                 arg1.as_deref(),
                 arg2.as_deref(),
@@ -7769,24 +7926,13 @@ impl Host {
         table: &str,
         rowid: i64,
     ) -> Result<()> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
-        instance
+        let mut guard = self.hooked_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        cached
+            .instance
             .sqlite_extension_update_hook()
             .call_on_update(
-                &mut store,
+                &mut cached.store,
                 convert_update_op_to_loaded(operation),
                 database,
                 table,
@@ -7799,46 +7945,24 @@ impl Host {
     /// Route a pre-commit hook. `true` lets the commit proceed; `false`
     /// converts it to a rollback (SQLite's standard semantics).
     pub async fn dispatch_on_commit(&self, ext_name: &str) -> Result<bool> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
-        instance
+        let mut guard = self.hooked_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        cached
+            .instance
             .sqlite_extension_commit_hook()
-            .call_on_commit(&mut store)
+            .call_on_commit(&mut cached.store)
             .await
             .map_err(|e| anyhow!("call_on_commit: {e}"))
     }
 
     /// Route a post-rollback notification.
     pub async fn dispatch_on_rollback(&self, ext_name: &str) -> Result<()> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
-        instance
+        let mut guard = self.hooked_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        cached
+            .instance
             .sqlite_extension_commit_hook()
-            .call_on_rollback(&mut store)
+            .call_on_rollback(&mut cached.store)
             .await
             .map_err(|e| anyhow!("call_on_rollback: {e}"))
     }
@@ -7855,23 +7979,12 @@ impl Host {
         db_name: &str,
         n_frames: u32,
     ) -> Result<i32> {
-        let ext = {
-            let components = self.components.read();
-            components
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
-        };
-        let linker = make_loaded_hooked_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
-        let instance =
-            loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
-        instance
+        let mut guard = self.hooked_locked(ext_name).await?;
+        let cached = guard.as_mut().unwrap();
+        cached
+            .instance
             .sqlite_extension_wal_hook()
-            .call_on_wal_hook(&mut store, hook_id, db_name, n_frames)
+            .call_on_wal_hook(&mut cached.store, hook_id, db_name, n_frames)
             .await
             .map_err(|e| anyhow!("call_on_wal_hook: {e}"))
     }
