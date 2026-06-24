@@ -328,6 +328,25 @@ and the plan's stated APIs didn't match the actual codebase:
   default_external_path`). **Build dir is
   `~/.cache/sqlink/builds/<hash>/`** to match.
 
+- **Gap F (mid-implementation, 2026-06-24): build pipeline is
+  2 stages, spawn-build only does 1.** `.bundle build` for wasm
+  targets needs cargo build  wasm-tools component new (the
+  same flow as `sqlink compose --embed`, host/src/main.rs:139-174).
+  Spawn-build's current contract only runs cargo. **Decision:
+  extend `spawn-build`'s host impl to auto-run wasm-tools
+  component new when target is `wasm32-wasip2`** (and any future
+  wasm component targets). The bundle's `binary-path` return
+  becomes:
+    - For wasm targets: path to the produced `.component.wasm`.
+    - For native targets: path to the raw executable (unchanged).
+  Spawn-build's contract widens from "cargo wrapper" to "produce
+  the buildable artifact for the requested target". Defensible
+  since wasm-tools is part of the canonical wasm-component build
+  flow; no new SPI surface needed.
+
+  Bundle-cli's call shape is unchanged. Spawn-build-probe (the
+  native-target smoke test) is unaffected.
+
 - **Gap E (mid-implementation, 2026-06-24): manifest model
   blocks the Gap C UX.** `policy.check_manifest` enforces
   *declared ⊆ granted* strictly; bundle-cli must declare
