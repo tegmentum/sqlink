@@ -1,0 +1,33 @@
+[package]
+name = "spawn-build-probe-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+Substrate probe for sqlink#445  spi.spawn-build capability.
+
+Exposes a single scalar function:
+
+  spawn_build_probe(crate_root TEXT) -> TEXT
+    Calls build.spawn-build(crate_root, none, []). On success
+    returns the produced binary-path. On failure returns
+    'ERR: <message>'.
+
+Used by tests/extension-smoke/src/test_spawn_build.rs to drive
+an end-to-end .load -> spawn_build_probe -> assertion through
+the native deployment paths (sqlink-native + sqlink+wasm-cli).
+
+The probe declares only Capability::SpawnBuild  the host's
+policy gate refuses the load unless the operator supplies
+--grant=spawn-build.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
