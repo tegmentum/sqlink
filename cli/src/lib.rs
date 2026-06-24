@@ -1023,6 +1023,7 @@ fn parse_grants(s: &str) -> Result<Vec<bindings::sqlite::extension::policy::Capa
             "dns" => Capability::Dns,
             "wal-frames" | "wal_frames" => Capability::WalFrames,
             "s3" => Capability::S3,
+            "spawn-build" | "spawn_build" => Capability::SpawnBuild,
             _ => return Err(format!("unknown capability: {token}")),
         };
         out.push(c);
