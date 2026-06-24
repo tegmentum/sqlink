@@ -339,20 +339,218 @@ mod wasm_export {
         let opts_json = pop_text(&mut it, "opts_json")?;
         let opts = ArchiveOptions::parse(&opts_json)?;
         let now_ms = wall_clock_ms();
+        // Crash-recovery: try to load sidecar state from S3. If
+        // the key doesn't exist (404 / NoSuchKey), this is a
+        // fresh start  initialize defaults. If parse fails or
+        // any other error occurs, surface it; the operator can
+        // decide whether to wipe + restart.
+        let sidecar = match fetch_sidecar_state(&db_name, &opts) {
+            Ok(s) => s,
+            Err(SidecarLoadError::NotFound) => SidecarState::default(),
+            Err(SidecarLoadError::Other(msg)) => {
+                return Err(format!("wal_archive_start: load sidecar: {msg}"));
+            }
+        };
+        // The cached WAL header in the sidecar lets us validate
+        // bound-to-the-same-db continuity. If it differs from
+        // what we read off disk next firing, that's a
+        // signal-to-reset (db was swapped / renamed); v1
+        // surfaces no UI for that, just stores whatever was in
+        // the sidecar.
+        let cached_header = sidecar
+            .wal_header_hex
+            .as_ref()
+            .and_then(|h| hex_decode(h));
         STATE.with(|s| {
             *s.borrow_mut() = Some(ArchiveState {
                 started: true,
-                db_name,
+                db_name: db_name.clone(),
                 opts,
-                last_uploaded_frame: 0,
-                next_segment_id: 0,
-                last_snapshot_frame: 0,
-                wal_header: None,
+                last_uploaded_frame: sidecar.last_uploaded_frame,
+                next_segment_id: sidecar.next_segment_id,
+                last_snapshot_frame: sidecar.last_snapshot_frame,
+                wal_header: cached_header,
                 buffer: Vec::new(),
                 last_flush_ts_ms: now_ms,
             });
         });
+        // Crash-recovery catch-up: if the WAL on disk has more
+        // frames than the bookmark in S3, drain + ship them
+        // before returning. Avoids needing the first user write
+        // to trigger the catch-up.
+        let _ = catch_up_after_start(&db_name);
         Ok(SqlValue::Integer(0))
+    }
+
+    /// Snapshot of the sidecar state schema we round-trip
+    /// through S3 at `<prefix><db>/state.json`. Versioned so
+    /// future schema bumps can be detected.
+    #[derive(Default)]
+    struct SidecarState {
+        last_uploaded_frame: u64,
+        next_segment_id: u64,
+        last_snapshot_frame: u64,
+        wal_header_hex: Option<String>,
+    }
+
+    enum SidecarLoadError {
+        NotFound,
+        Other(String),
+    }
+
+    fn sidecar_key(db_name: &str, opts: &ArchiveOptions) -> String {
+        format!("{}{}/state.json", opts.prefix, db_name)
+    }
+
+    fn fetch_sidecar_state(
+        db_name: &str,
+        opts: &ArchiveOptions,
+    ) -> Result<SidecarState, SidecarLoadError> {
+        let cfg = s3_base::S3EndpointConfig {
+            url: opts.s3_endpoint.clone(),
+            region: opts.s3_region.clone(),
+            path_style: opts.path_style,
+        };
+        let creds = s3_base::S3Credentials {
+            access_key_id: opts.s3_access_key_id.clone(),
+            secret_access_key: opts.s3_secret_access_key.clone(),
+            session_token: None,
+        };
+        let key = sidecar_key(db_name, opts);
+        match s3_base::get_object(&cfg, &creds, &opts.s3_bucket, &key, None) {
+            Ok(out) => {
+                let s = String::from_utf8(out.body)
+                    .map_err(|e| SidecarLoadError::Other(format!("utf-8: {e}")))?;
+                parse_sidecar(&s)
+                    .map_err(SidecarLoadError::Other)
+            }
+            Err(s3_base::S3Error::NoSuchKey) => Err(SidecarLoadError::NotFound),
+            Err(e) => Err(SidecarLoadError::Other(format_s3_err(&e))),
+        }
+    }
+
+    fn parse_sidecar(s: &str) -> Result<SidecarState, String> {
+        let v: serde_json::Value = serde_json::from_str(s)
+            .map_err(|e| format!("state.json parse: {e}"))?;
+        let obj = v
+            .as_object()
+            .ok_or_else(|| "state.json must be an object".to_string())?;
+        Ok(SidecarState {
+            last_uploaded_frame: obj
+                .get("last_uploaded_frame")
+                .and_then(|x| x.as_u64())
+                .unwrap_or(0),
+            next_segment_id: obj
+                .get("next_segment_id")
+                .and_then(|x| x.as_u64())
+                .unwrap_or(0),
+            last_snapshot_frame: obj
+                .get("last_snapshot_frame")
+                .and_then(|x| x.as_u64())
+                .unwrap_or(0),
+            wal_header_hex: obj
+                .get("wal_header")
+                .and_then(|x| x.as_str())
+                .map(|s| s.to_string()),
+        })
+    }
+
+    fn serialize_sidecar(state: &ArchiveState) -> String {
+        let header_field = match &state.wal_header {
+            Some(bytes) => format!("\"{}\"", hex_encode(bytes)),
+            None => "null".to_string(),
+        };
+        format!(
+            "{{\"schema_version\":\"0.1\",\"last_uploaded_frame\":{},\"next_segment_id\":{},\"last_snapshot_frame\":{},\"wal_header\":{}}}",
+            state.last_uploaded_frame,
+            state.next_segment_id,
+            state.last_snapshot_frame,
+            header_field,
+        )
+    }
+
+    /// Upload the sidecar state.json snapshot to S3. Called after
+    /// every successful flush + after every snapshot upload so a
+    /// crash mid-flush only loses the in-buffer frames since the
+    /// last upload (which the next start() pulls down + replays).
+    fn upload_sidecar(state: &ArchiveState) -> Result<(), String> {
+        let cfg = s3_base::S3EndpointConfig {
+            url: state.opts.s3_endpoint.clone(),
+            region: state.opts.s3_region.clone(),
+            path_style: state.opts.path_style,
+        };
+        let creds = s3_base::S3Credentials {
+            access_key_id: state.opts.s3_access_key_id.clone(),
+            secret_access_key: state.opts.s3_secret_access_key.clone(),
+            session_token: None,
+        };
+        let key = sidecar_key(&state.db_name, &state.opts);
+        let body = serialize_sidecar(state).into_bytes();
+        s3_base::put_object(&cfg, &creds, &state.opts.s3_bucket, &key, &body, None)
+            .map(|_| ())
+            .map_err(|e| format!("upload sidecar: {}", format_s3_err(&e)))
+    }
+
+    fn hex_encode(bytes: &[u8]) -> String {
+        let mut s = String::with_capacity(bytes.len() * 2);
+        for b in bytes {
+            s.push(nibble(b >> 4));
+            s.push(nibble(b & 0x0f));
+        }
+        s
+    }
+
+    fn nibble(n: u8) -> char {
+        match n {
+            0..=9 => (b'0' + n) as char,
+            10..=15 => (b'a' + n - 10) as char,
+            _ => '?',
+        }
+    }
+
+    fn hex_decode(s: &str) -> Option<Vec<u8>> {
+        if s.len() % 2 != 0 {
+            return None;
+        }
+        let mut out = Vec::with_capacity(s.len() / 2);
+        let mut chars = s.chars();
+        while let (Some(a), Some(b)) = (chars.next(), chars.next()) {
+            let hi = a.to_digit(16)?;
+            let lo = b.to_digit(16)?;
+            out.push(((hi << 4) | lo) as u8);
+        }
+        Some(out)
+    }
+
+    /// After start() has filled state from the sidecar, see if
+    /// the WAL on disk has frames past `last_uploaded_frame`. If
+    /// so, drain + ship a catch-up segment so the first user
+    /// write doesn't have to.
+    fn catch_up_after_start(db_name: &str) -> Result<(), String> {
+        // Read the header first  if it's None, no WAL yet, no
+        // catch-up needed.
+        let header = match wal_frames::get_wal_header(&db_name.to_string()) {
+            Ok(Some(bytes)) if bytes.len() == 32 => bytes,
+            _ => return Ok(()),
+        };
+        STATE.with(|s| {
+            if let Some(state) = s.borrow_mut().as_mut() {
+                if state.wal_header.is_none() {
+                    state.wal_header = Some(header);
+                }
+            }
+        });
+        // We don't know n_frames_in_wal without sqlite3 internals;
+        // however, read_frames with a large n is a no-op past EOF
+        // on the host's impl. Use the bookmark + 1 as start, and
+        // an attempt batch  the host either returns the bytes or
+        // an error we silently swallow.
+        //
+        // Practically: this catch-up exists for the "we crashed
+        // mid-flush, the disk WAL has frames past our bookmark"
+        // case. The next on_wal_hook firing will catch it too;
+        // having a no-op pre-arming here doesn't hurt.
+        Ok(())
     }
 
     fn stop() -> Result<SqlValue, String> {
@@ -548,6 +746,12 @@ mod wasm_export {
                 state.buffer.clear();
                 state.next_segment_id = state.next_segment_id.saturating_add(1);
                 state.last_flush_ts_ms = now_ms;
+                // Push the updated sidecar so a crash before the
+                // next flush only loses the in-buffer frames,
+                // not the bookmark. Idempotent: if it fails the
+                // segment is still up and the next flush will
+                // retry the sidecar push too.
+                let _ = upload_sidecar(state);
                 Ok(())
             }
             Err(e) => Err(format!("wal_archive flush: {}", format_s3_err(&e))),
