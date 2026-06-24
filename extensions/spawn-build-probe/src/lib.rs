@@ -70,6 +70,7 @@ mod wasm_export {
                 // fails the load if the operator's --grant list
                 // is missing it.
                 declared_capabilities: alloc::vec![Capability::SpawnBuild],
+                optional_capabilities: alloc::vec![],
             }
         }
     }

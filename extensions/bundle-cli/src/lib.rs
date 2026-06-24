@@ -84,6 +84,7 @@ mod wasm_export {
                 // the v1 manifest because declaring them with no
                 // grant from the operator would fail the load.
                 declared_capabilities: alloc::vec![Capability::Bundles],
+                optional_capabilities: alloc::vec![],
             }
         }
     }

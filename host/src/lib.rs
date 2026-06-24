@@ -884,6 +884,7 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
         has_wal_hook: ext.has_wal_hook,
         wal_hook_id: ext.wal_hook_id,
         declared_capabilities: vec![],
+        optional_capabilities: vec![],
     }
 }
 

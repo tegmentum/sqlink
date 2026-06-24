@@ -301,6 +301,7 @@ mod wasm_export {
                     Capability::WalFrames,
                     Capability::S3,
                 ],
+                optional_capabilities: alloc::vec![],
             }
         }
     }
