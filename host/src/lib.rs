@@ -93,8 +93,9 @@ pub mod loaded_minimal_http {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -115,8 +116,9 @@ pub mod loaded_minimal_dns {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -138,8 +140,9 @@ pub mod loaded_stateful {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -160,8 +163,9 @@ pub mod loaded_dotcmd_aware {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -182,8 +186,9 @@ pub mod loaded_collating {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -204,8 +209,9 @@ pub mod loaded_tabular {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -235,8 +241,9 @@ pub mod loaded_tabular_mutating {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -256,8 +263,9 @@ pub mod loaded_authorizing {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -655,8 +663,9 @@ pub mod loaded_resolving {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -677,8 +686,9 @@ pub mod loaded_hooked {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
