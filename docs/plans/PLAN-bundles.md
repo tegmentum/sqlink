@@ -290,23 +290,32 @@ Resolution order for `--bundle NAME`:
 3. Wire `--bundle` flag in sqlink-host.
 4. Native integration tests + browser smoke + docs.
 
-## Open questions before starting
+## Resolved design decisions
 
-1. **Tempdir / build dir location**: does `spi.spawn-build` accept
-   an arbitrary path, or always materialize inside cas-cache
-   (e.g. `~/.cache/xtran/builds/<hash>/`)? Latter is cleaner for
-   gc + isolation; former gives users control. Recommend: cas-cache
-   path by default, optional override via env var.
-2. **Generated-crate dep resolution**: how does the generated crate
-   find sqlink-host's source? `SQLINK_DEV_ROOT` env var pointing
-   at the workspace? Hardcoded compile-time path? Recommend: env
-   var with fallback to compile-time path; fail clearly if neither
-   resolves.
-3. **Behaviour on extension cas-cache miss during auto-load**: if
-   `sqlink --bundle myset` falls back to dynamic-load and a member
-   isn't in cas-cache (e.g., the cache was pruned), should it
-   error or attempt to fetch from a registry? Recommend: error
-   for v1; fetch-from-registry is a v2 concern.
+1. **Build dir location**: **cas-cache-managed.** Always materialize
+   the generated crate under `~/.cache/xtran/builds/<bundle-hash>/`.
+   Tied to the cas-cache gc lifecycle. Re-uses the same dir on
+   subsequent builds of the same bundle so incremental cargo cache
+   works for free. No env-var override in v1; users who need
+   explicit control will hit the question later.
+2. **Generated-crate dep resolution**: **`SQLINK_DEV_ROOT` env var
+   with compile-time fallback.** The bundle-cli extension's
+   generated `Cargo.toml` resolves `sqlink-host` / `sqlink-loader-wit`
+   via `$SQLINK_DEV_ROOT` if set; otherwise it uses the workspace
+   path baked at bundle-cli build time. Works out-of-box in dev
+   (sqlink built in workspace  compile-time path is valid).
+   Installed binaries on a clean machine fail with a clear "set
+   SQLINK_DEV_ROOT to your sqlink source checkout" error. The
+   "ship sqlink-host as an rlib" production-install path stays
+   in v2.
+3. **Auto-load behavior on cache miss**: **error with helpful
+   message.** When `sqlink --bundle myset` falls back to auto-load
+   and a member's content-hash isn't in cas-cache, exit non-zero
+   with: "bundle myset references extension <name> (sha=<hash>)
+   which isn't in cas-cache. Run .load /path/to/<name>.component.wasm
+   to refill, or rebuild the baked binary with .bundle build myset."
+   No auto-magic. v2 registry-fetch slots in cleanly later (would
+   become a fallback before the error).
 
 ## References
 
