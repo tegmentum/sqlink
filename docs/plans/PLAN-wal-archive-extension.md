@@ -207,6 +207,62 @@ their own credentials.
 
 Already done. Browser-side only; #438 completes the native side.
 
+### Substrate 5 (#441): cached hook + scalar dispatch  **LANDED 2026-06-23**
+
+Native-only correctness fix. Pre-#441 the host re-instantiated the
+loaded extension on every hook firing (one fresh wasmtime Store
+per call), so guest-side `thread_local!` / `OnceLock` / `static
+AtomicU64` state was wiped between callbacks. The browser side
+shares one instance per page and was unaffected.
+
+Wal-archive's design requires:
+
+  * a `OnceLock<Mutex<RingBuffer>>` populated by
+    `wal_archive_start({opts})` (a scalar call) and READ by every
+    subsequent `on_wal_hook` firing,
+  * a `static AtomicU64` segment-id counter incremented per
+    wal-hook firing and observed across them,
+  * a cached WAL header derived once and reused.
+
+None of those can survive across firings unless the wasm Store
+they live in is reused.
+
+What landed:
+
+- `CachedHooked` (per-extension `Arc<TokioMutex<Option<(Store,
+  Hooked)>>>`) mirroring the existing `CachedMinimal` /
+  `CachedTabular` / `CachedStateful` slots on `LoadedExtension`.
+  Built lazily on the first hook firing or the first scalar call
+  routed here, dropped when the extension is unloaded.
+- `CachedAuthorizing` slot for symmetry (authorize callbacks now
+  also share state across firings within the authorize world).
+- `hooked_locked` / `authorizing_locked` helpers mirroring
+  `minimal_locked` (lazy first instantiate, owned mutex guard,
+  per-call budget refresh).
+- `dispatch_on_update`, `dispatch_on_commit`,
+  `dispatch_on_rollback`, `dispatch_on_wal_hook`,
+  `dispatch_authorize` rewired to use the cached stores.
+- `ScalarRoute::Hooked` route in `dispatch_scalar`: when the
+  extension declares any hook (`has_update_hook ||
+  has_commit_hook || has_wal_hook`), scalar dispatch routes
+  through the SAME `cached_hooked` Store the hook dispatchers
+  use. Cross-world coherence  the `wal_archive_start` scalar
+  and the next `on_wal_hook` firing share one instance.
+- `tests/extension-smoke/src/test_wal_hook.rs` tightened to
+  assert `wal:42:main:<n>` events in `hookprobe_drain_log()`
+  output, mirroring `composed-wal-hook.spec.js` in browser.
+
+The `wal-aware` world has an identical export shape to `hooked`
+(metadata + scalar-function + update-hook + commit-hook +
+wal-hook); the host's `loaded_hooked::Hooked` bindgen and the
+single `cached_hooked` slot service both worlds.
+
+With this, the wal-archive substrate consumer work can proceed:
+the extension can author against `wal-aware`, set state from
+`wal_archive_start({opts})` scalar, and observe / mutate it
+from the per-WAL-commit `on_wal_hook` callbacks  the native
+side now matches the browser semantics.
+
 ### `dispatch-bridge` core methods (already done in #429/#432/#433/#436)
 
 ```wit
