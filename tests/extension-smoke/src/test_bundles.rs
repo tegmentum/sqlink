@@ -1,12 +1,13 @@
 //! bundle-cli (PLAN-bundles.md #446) end-to-end smoke. Covers the
-//! v1 metadata-only path:
+//! v1 metadata + build paths:
 //!
 //!   .bundle save NAME --no-build      record live-loaded set
 //!   .bundle list                       enumerate
 //!   .bundle show NAME                  member detail + LRU touch
 //!   .bundle delete NAME                drop row + cascade
 //!   .bundle gc --keep N                LRU prune
-//!   .bundle build NAME                 v1.1 deferred  errors helpfully
+//!   .bundle build NAME                 Gap C perm error w/o --grant;
+//!                                      Gap D+F build path w/ grant.
 //!
 //! Plus the launch-flag path:
 //!
@@ -234,12 +235,18 @@ fn bundles_delete_then_missing() {
 }
 
 #[test]
-fn bundles_build_v11_deferred_error() {
+fn bundles_build_perm_error_without_grant() {
+    // Default cli grants Bundles only  bundle-cli declares
+    // SpawnBuild as optional (Gap E), so bundle-cli loads but
+    // `.bundle build` host-side returns SQLITE_PERM. Bundle-cli
+    // translates that into the Gap C error message that names
+    // both `--grant spawn-build` and `--no-build` as the
+    // remediation paths.
     let Some((sqlink, cli, uuid, _json1)) = gates() else {
-        eprintln!("bundles build-deferred smoke: SKIP");
+        eprintln!("bundles build-perm smoke: SKIP");
         return;
     };
-    let dir = make_tempdir("build_v11");
+    let dir = make_tempdir("build_perm");
     let db = dir.join("probe.db");
     let cache = dir.join("cas");
     let script = format!(
@@ -250,13 +257,239 @@ fn bundles_build_v11_deferred_error() {
         uuid.display(),
     );
     let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
-    // .bundle build is the v1.1-deferred surface; bundle-cli returns
-    // a clear "build orchestration not yet wired in v1" message.
-    assert_ok(
-        "build-deferred",
-        &stdout,
-        &stderr,
-        &["build orchestration not yet wired in v1"],
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        combined.contains("spawn-build capability not granted"),
+        "expected Gap C perm error to mention 'spawn-build capability not granted'\n\
+         stdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    assert!(
+        combined.contains("--grant spawn-build"),
+        "Gap C error should name the --grant remediation\n\
+         stdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    assert!(
+        combined.contains("--no-build"),
+        "Gap C error should name the --no-build alternative\n\
+         stdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Locate cargo + wasm-tools in PATH; return None if either is
+/// missing so the build-path test SKIPs cleanly on a minimal CI
+/// runner.
+fn cargo_and_wasm_tools_available() -> bool {
+    let cargo_ok = Command::new("cargo")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    let wt_ok = Command::new("wasm-tools")
+        .arg("--version")
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    cargo_ok && wt_ok
+}
+
+#[test]
+fn bundles_build_with_grant_produces_component() {
+    // Build-path round-trip exercising Gap D (spawn-build accepts
+    // package + features) + Gap F (host auto-runs wasm-tools
+    // component new for wasm targets).
+    //
+    // Slow: invokes a real `cargo build --target wasm32-wasip2
+    // --release -p sqlite-cli --features embed-uuid` from
+    // inside the wasm extension. SKIPs if cargo/wasm-tools
+    // missing from PATH.
+    let Some((sqlink, cli, uuid, _json1)) = gates() else {
+        eprintln!("bundles build-with-grant smoke: SKIP (no sqlink/cli/uuid)");
+        return;
+    };
+    if !cargo_and_wasm_tools_available() {
+        eprintln!("bundles build-with-grant smoke: SKIP (cargo or wasm-tools missing)");
+        return;
+    }
+    let dir = make_tempdir("build_grant");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    // .bundle save --no-build  no build.
+    // .bundle build --target wasm32-wasip2  exercises Gap F.
+    let script = format!(
+        ".load {}\n\
+         .bundle save myset --no-build\n\
+         .bundle build myset --target wasm32-wasip2\n\
+         .bundle show myset\n\
+         .exit\n",
+        uuid.display(),
+    );
+    // 600s deadline since cargo + wasm-tools is slow under CI.
+    let mut cmd = Command::new(&sqlink);
+    cmd.arg("--db").arg(&db);
+    cmd.arg("--cache-dir").arg(&cache);
+    cmd.arg("--grant").arg("spawn-build");
+    cmd.arg(&cli);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().expect("spawn sqlink");
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(script.as_bytes());
+    }
+    let mut stdout_pipe = child.stdout.take().expect("stdout");
+    let mut stderr_pipe = child.stderr.take().expect("stderr");
+    let stdout_h = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut b);
+        b
+    });
+    let stderr_h = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut b);
+        b
+    });
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if start.elapsed() > std::time::Duration::from_secs(600) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            Err(_) => break,
+        }
+    }
+    let stdout = String::from_utf8_lossy(&stdout_h.join().unwrap_or_default()).into_owned();
+    let stderr = String::from_utf8_lossy(&stderr_h.join().unwrap_or_default()).into_owned();
+    assert!(
+        !stderr.contains("panicked"),
+        "stderr panicked\nstdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    assert!(
+        stdout.contains("bundle 'myset' built for wasm32-wasip2"),
+        "expected build success line\nstdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    // Pull the binary-path out of the build output line. Format:
+    //   bundle 'myset' built for wasm32-wasip2: /abs/path/to/file.component.wasm
+    let build_line = stdout
+        .lines()
+        .find(|l| l.contains("built for wasm32-wasip2"))
+        .expect("build success line");
+    let path = build_line
+        .split(": ")
+        .nth(1)
+        .expect("path after ': '")
+        .trim();
+    let pbuf = PathBuf::from(path);
+    assert!(
+        pbuf.exists(),
+        "build success line names {path:?} but the file isn't there",
+    );
+    assert!(
+        path.ends_with(".component.wasm"),
+        "expected a .component.wasm for wasm32-wasip2 target (Gap F should have run wasm-tools); got {path:?}",
+    );
+    // Magic-bytes check: wasm components start with \0asm.
+    let bytes = std::fs::read(&pbuf).expect("read produced binary");
+    assert!(bytes.len() > 0, "produced .component.wasm is empty");
+    assert_eq!(
+        &bytes[..4],
+        b"\0asm",
+        "produced file isn't a wasm module (first 4 bytes = {:?})",
+        &bytes[..4],
+    );
+    // bundle_binaries row should have been recorded; .bundle show
+    // surfaces it.
+    assert!(
+        stdout.contains("wasm32-wasip2 ->"),
+        ".bundle show should report the recorded binary\nstdout:\n{stdout}",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn bundles_build_cache_hit_skips_rebuild() {
+    // Second `.bundle build NAME` for the same (bundle, target)
+    // should be a cache-hit  bundle-cli reports
+    //   "bundle 'myset' already built for <target>: <path>"
+    // rather than re-invoking cargo. Same gating as the build
+    // test above.
+    let Some((sqlink, cli, uuid, _json1)) = gates() else {
+        eprintln!("bundles cache-hit smoke: SKIP");
+        return;
+    };
+    if !cargo_and_wasm_tools_available() {
+        eprintln!("bundles cache-hit smoke: SKIP (cargo or wasm-tools missing)");
+        return;
+    }
+    let dir = make_tempdir("build_cache");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    let script = format!(
+        ".load {}\n\
+         .bundle save myset --no-build\n\
+         .bundle build myset --target wasm32-wasip2\n\
+         .bundle build myset --target wasm32-wasip2\n\
+         .exit\n",
+        uuid.display(),
+    );
+    let mut cmd = Command::new(&sqlink);
+    cmd.arg("--db").arg(&db);
+    cmd.arg("--cache-dir").arg(&cache);
+    cmd.arg("--grant").arg("spawn-build");
+    cmd.arg(&cli);
+    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    let mut child = cmd.spawn().expect("spawn sqlink");
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(script.as_bytes());
+    }
+    let mut stdout_pipe = child.stdout.take().expect("stdout");
+    let mut stderr_pipe = child.stderr.take().expect("stderr");
+    let stdout_h = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut b);
+        b
+    });
+    let stderr_h = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut b);
+        b
+    });
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if start.elapsed() > std::time::Duration::from_secs(600) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+            }
+            Err(_) => break,
+        }
+    }
+    let stdout = String::from_utf8_lossy(&stdout_h.join().unwrap_or_default()).into_owned();
+    let stderr = String::from_utf8_lossy(&stderr_h.join().unwrap_or_default()).into_owned();
+    assert!(
+        !stderr.contains("panicked"),
+        "stderr panicked\nstdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    assert!(
+        stdout.contains("bundle 'myset' built for wasm32-wasip2"),
+        "first build should produce a binary\nstdout:\n{stdout}",
+    );
+    assert!(
+        stdout.contains("bundle 'myset' already built for wasm32-wasip2"),
+        "second build should be a cache-hit\nstdout:\n{stdout}\nstderr:\n{stderr}",
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
