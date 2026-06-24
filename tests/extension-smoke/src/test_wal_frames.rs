@@ -4,7 +4,7 @@
 //!
 //! What this validates:
 //!
-//!   .load hookprobe --grant=spi,wal-frames
+//!   .load hookprobe --grant=spi,wal-frames,s3
 //!     → describe() declares Capability::WalFrames + Capability::Spi
 //!     → host policy.check_manifest passes (both granted)
 //!     → host LoadedState records `wal_frames_granted = true`
@@ -109,7 +109,7 @@ fn drive(bin: &Path, extra_arg: Option<&Path>, db: &Path, script: &str) -> (Stri
 /// raw bytes (the latter chokes the line-based stdout parser).
 fn script(component: &Path) -> String {
     format!(
-        ".load {} --grant=spi,wal-frames\n\
+        ".load {} --grant=spi,wal-frames,s3\n\
          PRAGMA journal_mode=WAL;\n\
          CREATE TABLE t(x INTEGER);\n\
          INSERT INTO t VALUES (1);\n\

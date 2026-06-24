@@ -60,6 +60,17 @@ path = "src/test_wal_hook.rs"
 name = "extension_smoke_wal_frames"
 path = "src/test_wal_frames.rs"
 
+[[test]]
+# Substrate-companion to test_wal_frames (#439). Spins up a
+# local mock S3 server (s3s-fs, filesystem-backed) on an
+# ephemeral port, then drives the hookprobe extension's s3-base
+# probes (s3_put / s3_get / s3_list / s3_delete) end-to-end to
+# verify the host's s3-base SPI bridge round-trips through the
+# capability-gated grant. Substrate for PLAN-wal-archive-
+# extension.md (#440).
+name = "extension_smoke_s3_base"
+path = "src/test_s3_base.rs"
+
 [[bin]]
 name = "extension-smoke-report"
 path = "src/report.rs"
@@ -72,3 +83,14 @@ regex = "1"
 once_cell = "1"
 
 [dev-dependencies]
+# Mock S3 server for the s3-base substrate test (#440). s3s +
+# s3s-fs spin up a file-system-backed S3-compatible HTTP server
+# that accepts SigV4-signed requests on an ephemeral port, so the
+# test can exercise the host's reqwest+aws-sigv4 bridge without
+# touching a real AWS account.
+s3s = "0.14"
+s3s-fs = "0.14"
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["server-auto", "tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net"] }
+tempfile = "3"
