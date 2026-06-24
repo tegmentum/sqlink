@@ -26,8 +26,23 @@ last-write-wins on re-registration from a different ext-name (SQLite
 permits exactly one of each per connection; multi-extension fan-out
 is a future enhancement).
 
-vtabs remain the only outstanding spi-loader surface  tracked
-separately.
+vtabs landed (this branch). dispatch-bridge gained
+`register-host-vtab(ext-name, name, vtab-id, eponymous, mutable,
+batched)`; sqlite-lib installs an `sqlite3_module` trampoline on
+the shared connection via `sqlite3_create_module_v2` (three module
+templates: read-only, eponymous, mutable) whose xMethod callbacks
+re-enter the host via the `dispatch.vtab-*` imports already in
+place. The JS side in `buildSpiLoader::registerVtab` forwards to
+the bridge; `buildDispatch` routes the 19 vtab-* import entries to
+the loaded extension's `vtab` (and, when mutable, `vtab-update`)
+exports; `composed-vtab.spec.js` exercises the path end-to-end via
+the `series` extension (eponymous + batched). Batched fetch-batch
+fast path mirrors the native side (BATCH_SIZE=64); xShadowName +
+xIntegrity left NULL for v1 (clean follow-ups if a real consumer
+needs them).
+
+Every spi-loader surface is now wired end-to-end on the composed
+browser path.
 
 The sketch below is preserved for historical context.
 
@@ -94,7 +109,7 @@ From `sqlite-loader-wit/wit/host-spi.wit` (interface `spi-loader`):
 | `register-update-hook` | `(ext) -> result<_, err>` | **LANDED** (this branch) |
 | `register-commit-hook` | `(ext) -> result<_, err>` | **LANDED** (this branch)  also installs rollback-hook |
 | `register-wal-hook` | `(ext, hook-id) -> result<_, err>` | **LANDED** (wal-hook-bridge)  substrate for wal-archive |
-| `register-vtab` | `(ext, name, vtab-id, eponymous, mutable, batched) -> result<_, err>` | Defer |
+| `register-vtab` | `(ext, name, vtab-id, eponymous, mutable, batched) -> result<_, err>` | **LANDED** (this branch)  read-only + eponymous + mutable templates; batched fetch path mirrored from host/src/vtab.rs |
 
 For smoke-spec coverage, only `register-scalar` and
 `unregister-extension` matter at v1. The other `register-*` calls
