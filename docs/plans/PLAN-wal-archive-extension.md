@@ -46,19 +46,21 @@ paths (sqlink-native + sqlink+wasm-cli) via a mock S3 server:
      lands.
   4. **`sqlink --backup` CLI flag** (Stage 7 stretch). v1 requires
      explicit `.load wal-archive ... + SELECT wal_archive_start(...)`.
-  5. **Browser deployment.** #437 (vfs-tvm WAL support) has landed
-     — the composed runtime's in-wasm VFS now honors
-     `PRAGMA journal_mode=WAL` via the iVersion=2 io_methods +
-     xShm* family + per-file lock-level bookkeeping. The remaining
-     blocker is #444 (the s3-base browser polyfill bridge): the
-     wal-archive extension imports `sqlite:extension/s3-base`, and
-     the browser composition currently has that interface
-     undefined, so hookprobe + wal-archive cannot instantiate
-     there yet. `wal-frames::get-wal-header` against the in-wasm
-     VFS still returns None via the sqlite-lib stub — wiring it
-     through the now-WAL-capable VFS is a follow-up. End state:
-     browser deployment unblocked once both #444 lands and the
-     sqlite-lib wal-frames stub gets a real implementation.
+  5. **Browser deployment.** #437 (vfs-tvm WAL support) and #444
+     (browser-side s3-base / wal-frames / wal-hook / metadata /
+     spi-loader stubs) have both landed. The composed runtime's
+     in-wasm VFS now honors `PRAGMA journal_mode=WAL` via the
+     iVersion=2 io_methods + xShm* family + per-file lock-level
+     bookkeeping, and the browser extension-imports layer stubs
+     out the newer `sqlite:extension/*` interfaces so hookprobe
+     and wal-archive can instantiate (full browser playwright
+     suite is now 12/12). What's left for a real browser
+     deployment of wal-archive: the s3-base stubs return
+     `SQLITE_ERROR` when called, so the wal-archive S3 backend
+     needs a fetch+SigV4 browser polyfill before it can actually
+     ship frames. And the sqlite-lib wal-frames stub still
+     returns None — wiring it through the now-WAL-capable VFS
+     is a follow-up too.
 
 Reframe + rename of `PLAN-browser-litestream.md`. Two changes from
 that earlier doc:
