@@ -53,6 +53,18 @@ const PICK = [
   'decimal',
   // 'define' — needs SPI (spi::execute_batch at startup); not
   //            in-scope for browser scenario 3 today. See host/SPI.md.
+  // bundle_cli — dot-command extension for named extension sets.
+  //              Needs SPI + Bundles + (optional) SpawnBuild + loader-
+  //              bridge; the sqlite-lib bundles SPI stub from
+  //              feat/bundles-v1 satisfies the imports. End-to-end
+  //              `.bundle save` round-trip in the browser is
+  //              gated on extension-loader.js gaining a
+  //              dispatch_dot_command driver (currently returns 404
+  //              in v1; see browser/src/extension-loader.js). Until
+  //              then we transpile bundle_cli so it's importable
+  //              from a future browser harness; composed-bundle.spec.js
+  //              documents the gap.
+  'bundle_cli',
   'detect',
   'ean',
   // hookprobe — test-bench extension exercising the dispatch-bridge
@@ -119,32 +131,35 @@ function resolveTargetDir() {
 const FALLBACK_EXTENSIONS_ROOT = '/Users/zacharywhitley/git/sqlink/extensions'
 
 function resolveWasmFor(name, workspaceTargetDir) {
-  const perExtPath = resolve(
-    ROOT,
-    'extensions',
-    name,
-    'target',
-    'wasm32-wasip2',
-    'release',
-    `${name}_extension.component.wasm`,
-  )
-  const perExtFallback = resolve(
-    FALLBACK_EXTENSIONS_ROOT,
-    name,
-    'target',
-    'wasm32-wasip2',
-    'release',
-    `${name}_extension.component.wasm`,
-  )
+  // Some extension dirs use hyphens while their cargo artifact names
+  // use underscores (e.g. `extensions/bundle-cli` produces
+  // `bundle_cli_extension.component.wasm`). Try the literal dir
+  // name first, then the hyphenated form, then the workspace target.
+  const dirCandidates = [name]
+  if (name.includes('_')) dirCandidates.push(name.replace(/_/g, '-'))
+  const perExtCandidates = dirCandidates.flatMap((dir) => [
+    resolve(ROOT, 'extensions', dir, 'target', 'wasm32-wasip2', 'release',
+      `${name}_extension.component.wasm`),
+    resolve(FALLBACK_EXTENSIONS_ROOT, dir, 'target', 'wasm32-wasip2', 'release',
+      `${name}_extension.component.wasm`),
+  ])
   const workspacePath = join(workspaceTargetDir, `${name}_extension.component.wasm`)
-  if (existsSync(perExtPath)) {
-    if (!existsSync(workspacePath) || statSync(perExtPath).mtimeMs >= statSync(workspacePath).mtimeMs) {
-      return perExtPath
+  // Prefer the freshest per-ext build, falling back to the workspace
+  // target, then any per-ext fallback path.
+  let bestPerExt = null
+  for (const p of perExtCandidates) {
+    if (!existsSync(p)) continue
+    if (!bestPerExt || statSync(p).mtimeMs > statSync(bestPerExt).mtimeMs) {
+      bestPerExt = p
+    }
+  }
+  if (bestPerExt) {
+    if (!existsSync(workspacePath) || statSync(bestPerExt).mtimeMs >= statSync(workspacePath).mtimeMs) {
+      return bestPerExt
     }
   }
   if (existsSync(workspacePath)) return workspacePath
-  if (existsSync(perExtPath)) return perExtPath
-  if (existsSync(perExtFallback)) return perExtFallback
+  if (bestPerExt) return bestPerExt
   return null
 }
 
