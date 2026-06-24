@@ -4711,6 +4711,10 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
             other => format!("{arch}-unknown-{other}-{family}"),
         }
     }
+
+    async fn env_var(&mut self, name: String) -> Option<String> {
+        std::env::var(&name).ok().filter(|v| !v.is_empty())
+    }
 }
 
 /// HasData tag for the loaded-extension linker setup.
