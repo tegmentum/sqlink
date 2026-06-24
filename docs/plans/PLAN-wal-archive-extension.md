@@ -144,36 +144,64 @@ The `backup` interface and `backup-aware` world that briefly
 appeared in `sqlite-loader-wit` f66bdca were reverted in 522645e
 once the design call landed.
 
-### Substrate 3 (#440): host-resident `s3-base` SPI bridge
+### Substrate 3 (#440): host-resident `s3-base` SPI bridge  **LANDED**
 
-Define `sqlite:extension/s3-base@0.1.0` in `sqlite-loader-wit`,
+Defines `sqlite:extension/s3-base@0.1.0` in `sqlite-loader-wit`,
 mirroring `~/git/s3-wasm`'s `s3-base` interface (get/put/delete/
-head/list/copy-object). Extensions import this interface like
-they import spi/types/policy. The host provides the impl:
+head/list/copy-object) record-for-record. Extensions import this
+interface like they import spi/types/policy.
 
-- **Native (scenarios 1+2 + sqlink-loader.so)**: bridges to
-  `~/git/s3-wasm` via wasmtime (host instantiates s3-wasm once
-  and routes extension calls to it).
-- **Browser** (when #437 vfs-tvm WAL lands): bridges to
-  `fetch` + a SigV4 JS impl via the polyfill. Cheaper than
-  running s3-wasm in JS-land.
+What landed:
 
-Three reasons this beats build-time `wac plug` baking or runtime
-composition:
+- WIT contract (`sqlite-loader-wit/wit/host-spi.wit`): the
+  `s3-base` interface plus the six S3 method signatures + the
+  record types (s3-endpoint-config, s3-credentials, options,
+  outputs) and the s3-error variant (including the extra
+  `capability-not-granted` variant for the grant gate).
+- `Capability::S3` in `sqlite-loader-wit/wit/policy.wit` + the
+  Rust `Capability::S3` variant. Operator picks it via
+  `--grant=s3` on `.load`.
+- World widening: every world that hosts an extension (minimal,
+  minimal-http, minimal-dns, stateful, lifecycle-aware,
+  resolving, collating, authorizing, hooked, wal-aware,
+  hookprobe, tabular, tabular-mutating, dotcmd-aware, full)
+  imports `s3-base` so the per-shape host bindgens all install
+  the same `s3_base::Host` impl via `with:` clauses.
+- Native host bridge (`host/src/lib.rs` + `host/src/s3.rs`):
+  **in-host** strategy. Each WIT method is dispatched via
+  `tokio::spawn_blocking` to a synchronous routine that signs
+  the request with the `aws-sigv4` Rust crate and sends it
+  through `reqwest::blocking`. Fail-closed on
+  `Capability::S3` not granted at load time (returns
+  `S3Error::CapabilityNotGranted`).
 
-1. **Security model**: extensions don't bring their own
-   credentials. The host injects credentials via the bridge.
-   AWS keys / R2 tokens live with the host, not in extension
-   code. Same shape as policy/grants for capability-restricted
-   operations.
-2. **Pattern reuse**: mirrors the dispatch-bridge work from
-   #429/#432/#433/#436  one more flavor of "host-resident
-   capability surface."
-3. **Per-platform flexibility**: native can use the heavyweight
-   s3-wasm component directly; browser can route to fetch
-   (smaller, native to the platform).
+  Implementation strategy decision: in-host beats composing the
+  s3-wasm component into wasmtime because s3-wasm imports
+  `wasi:http/outgoing-handler` + `aws:sigv4/{types,signer}`;
+  satisfying those would require `wasmtime-wasi-http` + an
+  additional aws-sigv4 component instance per loaded-extension
+  Store, and the bookkeeping cost dwarfs the payoff for a
+  sink-style SPI. The WIT contract is mirrored 1:1 so a future
+  iteration can swap implementations without touching extension
+  code.
+- Browser-side stub in `sqlite-wasm/sqlite-lib`: each method
+  returns `S3Error::Internal("not implemented; pending fetch+
+  SigV4 polyfill bridge follow-up to #437")`. The wal-archive
+  extension can't even start in the browser without WAL access
+  (#437), so the browser-polyfill bridge is a follow-up rather
+  than v1 scope.
+- New test-bench scalars on hookprobe (`hookprobe_s3_put`,
+  `hookprobe_s3_get`, `hookprobe_s3_list`, `hookprobe_s3_delete`)
+  and a native end-to-end smoke (`tests/extension-smoke/src/
+  test_s3_base.rs`, scenarios 1+2) that spins up a local mock
+  S3 server (s3s + s3s-fs, filesystem-backed) on an ephemeral
+  port and asserts a full PUT/GET/LIST/DELETE round-trip with
+  byte equality.
 
-~2-3 days (including the per-platform impl).
+Pattern reuses the dispatch-bridge work from #429/#432/#433/#436
+and the wal-frames substrate from #439  one more flavor of
+"host-resident capability surface" where extensions don't bring
+their own credentials.
 
 ### Substrate 4 (#436): dispatch-bridge WAL hook
 
