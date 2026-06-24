@@ -74,6 +74,10 @@ const PICK = [
   'numfmt',
   'postcode',
   'regexp',
+  // series — eponymous vtab (generate_series TVF). First non-toy
+  //          vtab consumer over the dispatch-bridge surface; loaded
+  //          by composed-vtab.spec.js.
+  'series',
   'sha3',
   'shathree',
   'ssn',
