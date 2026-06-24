@@ -1001,15 +1001,23 @@ pub struct LoadedExtension {
 
 /// Which cached Store should handle a scalar call. See
 /// `dispatch_scalar` for the routing rule  the goal is to
-/// keep scalar + vtab (or scalar + aggregate) calls inside
-/// the same wasm Store so they can share thread_local state
-/// (e.g. vec0's NAME_TO_INSTANCE registry).
+/// keep scalar + vtab (or scalar + aggregate, or scalar + hook)
+/// calls inside the same wasm Store so they can share
+/// thread_local state (e.g. vec0's NAME_TO_INSTANCE registry,
+/// or wal-archive's start({opts})  wal-hook ring buffer).
 enum ScalarRoute {
     Minimal,
     Tabular,
     Stateful,
     MinimalHttp,
     MinimalDns,
+    /// Extensions that declare any hook export. Scalars route
+    /// through the same `cached_hooked` Store the hook
+    /// dispatchers use, so guest-side state set by a scalar
+    /// call (e.g. `wal_archive_start({opts})` populating a
+    /// `OnceLock<Mutex<RingBuffer>>`) is visible to the
+    /// subsequent wal-hook firing on the same connection.
+    Hooked,
 }
 
 /// Long-lived `Tabular`-world instance backing a vtab module.
@@ -6607,19 +6615,30 @@ impl Host {
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
 
         // Route to the "most capable" cached Store for this
-        // extension. The minimal/tabular/stateful Stores hold
-        // separate wasm instances with separate thread_locals;
-        // if vec0 (tabular) registers its name in the vtab
-        // create path and reads it back from a scalar, the
-        // scalar MUST run in the same Store as the vtab or the
-        // thread_local lookup misses. Picking by manifest:
+        // extension. The minimal/tabular/stateful/hooked Stores
+        // hold separate wasm instances with separate
+        // thread_locals; if vec0 (tabular) registers its name in
+        // the vtab create path and reads it back from a scalar,
+        // the scalar MUST run in the same Store as the vtab or
+        // the thread_local lookup misses. Same constraint applies
+        // to hook-bearing extensions: wal-archive's `start({opts})`
+        // populates a `OnceLock<Mutex<RingBuffer>>` from a scalar
+        // call; the subsequent wal-hook firing has to see it, so
+        // the scalar has to run in the same Store as the hook.
+        // Picking by manifest:
         //
-        //   * vtabs present  use tabular Store (vec0 etc.)
-        //   * aggregates present  use stateful Store
-        //   * otherwise  minimal
+        //   * vtabs present                use tabular Store
+        //   * aggregates present           use stateful Store
+        //   * any hook export              use cached_hooked
+        //   * http capability granted      use minimal-http
+        //   * dns capability granted       use minimal-dns
+        //   * otherwise                    minimal
         //
         // Each world's instance has the scalar-function export,
         // so the call signature is identical across paths.
+        // Worlds are disjoint in practice — a tabular extension
+        // does not export wal-hook, so no manifest reaches the
+        // tabular + hook overlap branch.
         let route = {
             let components = self.components.read();
             let ext = components
@@ -6629,6 +6648,17 @@ impl Host {
                 ScalarRoute::Tabular
             } else if !ext.aggregate_functions.is_empty() {
                 ScalarRoute::Stateful
+            } else if ext.has_update_hook
+                || ext.has_commit_hook
+                || ext.has_wal_hook
+            {
+                // Cross-world coherence: scalars and hook
+                // callbacks share one Store so guest-side
+                // `thread_local!` / `OnceLock` / `static
+                // AtomicU64` state set by a scalar call is
+                // visible to the next hook firing — the
+                // wal-archive substrate invariant.
+                ScalarRoute::Hooked
             } else if ext.policy.is_granted(Capability::Http) {
                 // Scalar extensions that need outbound HTTP load
                 // against the minimal-http world. The host's
@@ -6708,6 +6738,20 @@ impl Host {
             }
             ScalarRoute::MinimalDns => {
                 let mut guard = self.minimal_dns_locked(ext_name).await?;
+                let cached = guard.as_mut().unwrap();
+                cached
+                    .instance
+                    .sqlite_extension_scalar_function()
+                    .call_call(&mut cached.store, func_id, &loaded_args)
+                    .await
+                    .map_err(|e| anyhow!("call_call: {e}"))?
+            }
+            ScalarRoute::Hooked => {
+                // Shared Store with the hook dispatchers — set
+                // up by `hooked_locked`. The `hooked` world also
+                // exports `scalar-function`, so we call the same
+                // export proxy through the wider instance.
+                let mut guard = self.hooked_locked(ext_name).await?;
                 let cached = guard.as_mut().unwrap();
                 cached
                     .instance
