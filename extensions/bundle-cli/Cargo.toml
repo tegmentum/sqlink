@@ -1,0 +1,42 @@
+[package]
+name = "bundle-cli-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+`.bundle` dot-command extension. Manages named extension
+sets and per-target baked binaries on the host's cas-cache.
+
+Subcommands:
+  .bundle save NAME [--no-build]   snapshot live connection's
+                                   loaded extensions as bundle NAME
+  .bundle list                     show all bundles
+  .bundle show NAME|HASH           full bundle detail
+  .bundle delete NAME              drop a bundle
+  .bundle gc [--keep N | --older-than DURATION]
+                                   prune via LRU or age policy
+
+Build-path commands (`.bundle save NAME` without --no-build, and
+`.bundle build NAME [--target X]`) error in v1 with a clear
+"v1.1: build orchestration deferred" message. The substrate
+(spi.spawn-build + Capability::SpawnBuild from #445) is wired,
+but the generated-crate template + cargo-orchestration path is
+held back until the design call on how to drive `sqlink compose`
+from inside a wasm extension lands. v1 still ships value: the
+"snapshot + reproducible reload" workflow works end-to-end via
+the dynamic-load path (`sqlink --bundle NAME db.sqlite`).
+
+PLAN-bundles.md #446.
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+blake3 = { version = "1", default-features = false }
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
