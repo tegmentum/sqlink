@@ -502,7 +502,22 @@ underlying set-hash row.";
                 out.binary_path, e.message
             ));
         }
-        Ok(out.binary_path)
+        // v1.1: the host copies the cargo target output into a
+        // per-bundle managed dir (~/.cache/sqlink/builds/<set_hash>/)
+        // before recording, so the actually-stored path differs from
+        // out.binary_path. Surface the recorded path to the user so
+        // `.bundle build` output matches what `.bundle show` will
+        // report and what the launch-flag exec resolves to.
+        let recorded_path = match bundles::bundle_show(bundle_id) {
+            Ok(detail) => detail
+                .binaries
+                .into_iter()
+                .find(|b| b.target_triple == target)
+                .map(|b| b.binary_path)
+                .unwrap_or_else(|| out.binary_path.clone()),
+            Err(_) => out.binary_path.clone(),
+        };
+        Ok(recorded_path)
     }
 
     /// Mirror of cli/src/lib.rs's embed_core_dotcmd auto-load list.

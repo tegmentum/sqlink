@@ -3975,10 +3975,59 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         target_triple: String,
         binary_path: String,
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        // v1.1: copy the cargo target output into a per-bundle
+        // managed dir (`~/.cache/sqlink/builds/<set_hash>/<basename>`)
+        // before recording so different bundles for the same target
+        // don't trample each other (cargo writes every wasm32-wasip2
+        // build to the same target/<triple>/release/<bin> path).
         let store = bundles_open_store(self)?;
         let mut guard = store.lock();
+        let detail = guard
+            .bundle_show(id)
+            .map_err(|e| bundles_err("bundles.record-binary (lookup set_hash)", e))?
+            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_NOTFOUND,
+                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
+                message: format!("bundles.record-binary: bundle {id} not found"),
+            })?;
+        let src = std::path::PathBuf::from(&binary_path);
+        let basename = src.file_name().ok_or_else(|| {
+            loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_ERROR,
+                extended_code: libsqlite3_sys::SQLITE_ERROR,
+                message: format!(
+                    "bundles.record-binary: src path {binary_path:?} has no filename"
+                ),
+            }
+        })?;
+        let dest_dir = sqlite_cas_cache::SqliteCasStore::default_builds_dir(
+            &detail.summary.set_hash,
+        );
+        let dest = dest_dir.join(basename);
+        std::fs::create_dir_all(&dest_dir).map_err(|e| {
+            loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_IOERR,
+                extended_code: libsqlite3_sys::SQLITE_IOERR,
+                message: format!(
+                    "bundles.record-binary: mkdir -p {}: {e}",
+                    dest_dir.display()
+                ),
+            }
+        })?;
+        std::fs::copy(&src, &dest).map_err(|e| {
+            loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_IOERR,
+                extended_code: libsqlite3_sys::SQLITE_IOERR,
+                message: format!(
+                    "bundles.record-binary: copy {} -> {}: {e}",
+                    src.display(),
+                    dest.display()
+                ),
+            }
+        })?;
+        let dest_str = dest.to_string_lossy().into_owned();
         guard
-            .bundle_record_binary(id, &target_triple, &binary_path)
+            .bundle_record_binary(id, &target_triple, &dest_str)
             .map_err(|e| bundles_err("bundles.record-binary", e))
     }
 

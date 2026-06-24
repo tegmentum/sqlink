@@ -127,6 +127,20 @@ impl SqliteCasStore {
             .join("cas.sqlite")
     }
 
+    /// Default per-bundle build dir: `~/.cache/sqlink/builds/<set_hash>/`.
+    /// `.bundle build` copies the cargo target output here so each
+    /// bundle gets a stable, collision-free path independent of
+    /// cargo's single-target-dir convention. Caller is expected to
+    /// `create_dir_all` before writing.
+    pub fn default_builds_dir(set_hash: &str) -> PathBuf {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        Path::new(&home)
+            .join(".cache")
+            .join("sqlink")
+            .join("builds")
+            .join(set_hash)
+    }
+
     /// Convenience: open external mode at the default path.
     pub fn open_default_external() -> Result<Self> {
         Self::open_external(Self::default_external_path())
