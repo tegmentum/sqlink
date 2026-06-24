@@ -74,6 +74,7 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::wal_hook::Guest as WalHookGuest;
     use bindings::sqlite::extension::policy::Capability;
     use bindings::sqlite::extension::s3_base;
+    use bindings::sqlite::extension::spi;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue, UpdateOperation};
     use bindings::sqlite::extension::wal_frames;
 
@@ -562,9 +563,156 @@ mod wasm_export {
         Ok(SqlValue::Integer(0))
     }
 
-    /// Stage 1 stub. Real impl lands in Stage 5.
+    /// Take an on-demand snapshot of the database via
+    /// spi.serialize-db, compress with lz4_flex, upload to S3
+    /// under `<prefix><db>/snapshots/<ts>.snap.lz4`, also update
+    /// a `latest.snap.lz4` copy for easy restore, push the new
+    /// sidecar, and GC older WAL segments that the snapshot
+    /// supersedes.
+    ///
+    /// Returns the size in bytes of the snapshot payload (raw
+    /// serialized db, not the compressed size). Errors during
+    /// the S3 puts come back as String error.
+    ///
+    /// Timer-driven snapshots are a v2 follow-up; v1 ships with
+    /// on-demand only. Operators wire this into cron / their
+    /// app's idle path.
     fn snapshot_now() -> Result<SqlValue, String> {
-        Ok(SqlValue::Integer(0))
+        // Snapshot reads STATE briefly to grab the opts +
+        // db_name, then unlocks before doing I/O so the wal-hook
+        // can keep draining. After the upload it relocks to bump
+        // last_snapshot_frame.
+        let (opts, db_name, last_uploaded_frame) =
+            STATE.with(|s| -> Result<_, String> {
+                let guard = s.borrow();
+                let st = guard.as_ref().ok_or_else(|| {
+                    "wal_archive_snapshot_now: not started".to_string()
+                })?;
+                if !st.started {
+                    return Err(
+                        "wal_archive_snapshot_now: stopped".to_string()
+                    );
+                }
+                Ok((clone_opts(&st.opts), st.db_name.clone(), st.last_uploaded_frame))
+            })?;
+        // serialize-db produces a self-contained byte-image of
+        // the database (sqlite3_serialize) suitable to round-trip
+        // through sqlite3_deserialize. Hot path here is just
+        // memcpy + the wal-frames re-checkpoint inside the host.
+        let serialized = spi::serialize_db(&db_name)
+            .map_err(|e| format!("wal_archive_snapshot_now: serialize-db: {}", e.message))?;
+        let raw_size = serialized.len() as i64;
+        let compressed = lz4_flex::compress_prepend_size(&serialized);
+        // Snapshot key uses wall-clock seconds for human-
+        // browsability. The `latest.snap.lz4` overwrite keeps
+        // a fixed pointer the restore path can hit without a
+        // list.
+        let ts = wall_clock_ms() / 1000;
+        let ts_key = format!(
+            "{}{}/snapshots/{:020}.snap.lz4",
+            opts.prefix, db_name, ts
+        );
+        let latest_key = format!("{}{}/snapshots/latest.snap.lz4", opts.prefix, db_name);
+        let cfg = s3_base::S3EndpointConfig {
+            url: opts.s3_endpoint.clone(),
+            region: opts.s3_region.clone(),
+            path_style: opts.path_style,
+        };
+        let creds = s3_base::S3Credentials {
+            access_key_id: opts.s3_access_key_id.clone(),
+            secret_access_key: opts.s3_secret_access_key.clone(),
+            session_token: None,
+        };
+        s3_base::put_object(&cfg, &creds, &opts.s3_bucket, &ts_key, &compressed, None)
+            .map_err(|e| format!("snapshot put ts: {}", format_s3_err(&e)))?;
+        s3_base::put_object(
+            &cfg,
+            &creds,
+            &opts.s3_bucket,
+            &latest_key,
+            &compressed,
+            None,
+        )
+        .map_err(|e| format!("snapshot put latest: {}", format_s3_err(&e)))?;
+        // Bump last_snapshot_frame + push sidecar.
+        STATE.with(|s| {
+            if let Some(state) = s.borrow_mut().as_mut() {
+                state.last_snapshot_frame = last_uploaded_frame;
+                let _ = upload_sidecar(state);
+            }
+        });
+        // GC: older WAL segments are superseded by the snapshot.
+        // We keep a small grace window of `GC_GRACE_SEGMENTS`
+        // segments before the snapshot's segment so an in-flight
+        // restore picking a fractionally older base snapshot can
+        // still replay the WAL that bridges to it.
+        let gc_grace_segments: u64 = 4;
+        let next_segment_id = STATE.with(|s| {
+            s.borrow().as_ref().map(|st| st.next_segment_id).unwrap_or(0)
+        });
+        let gc_cutoff = next_segment_id.saturating_sub(gc_grace_segments);
+        let _ = gc_segments_before(&cfg, &creds, &opts, &db_name, gc_cutoff);
+        Ok(SqlValue::Integer(raw_size))
+    }
+
+    fn clone_opts(opts: &ArchiveOptions) -> ArchiveOptions {
+        ArchiveOptions {
+            s3_endpoint: opts.s3_endpoint.clone(),
+            s3_bucket: opts.s3_bucket.clone(),
+            s3_region: opts.s3_region.clone(),
+            s3_access_key_id: opts.s3_access_key_id.clone(),
+            s3_secret_access_key: opts.s3_secret_access_key.clone(),
+            prefix: opts.prefix.clone(),
+            flush_bytes_threshold: opts.flush_bytes_threshold,
+            flush_ms_threshold: opts.flush_ms_threshold,
+            snapshot_interval_seconds: opts.snapshot_interval_seconds,
+            path_style: opts.path_style,
+        }
+    }
+
+    /// List the WAL segments under `<prefix><db>/wal/` and
+    /// delete any whose seg_id encoded in the key is < cutoff.
+    /// Best-effort  on list / delete failure we drop the
+    /// segment-id from consideration but don't error out the
+    /// snapshot. Garbage that survives can be cleaned up by a
+    /// later snapshot.
+    fn gc_segments_before(
+        cfg: &s3_base::S3EndpointConfig,
+        creds: &s3_base::S3Credentials,
+        opts: &ArchiveOptions,
+        db_name: &str,
+        cutoff_id: u64,
+    ) -> Result<(), String> {
+        let wal_prefix = format!("{}{}/wal/", opts.prefix, db_name);
+        let list_opts = s3_base::S3ListObjectsOptions {
+            prefix: Some(wal_prefix.clone()),
+            delimiter: None,
+            max_keys: None,
+            continuation_token: None,
+        };
+        let listing =
+            s3_base::list_objects(cfg, creds, &opts.s3_bucket, Some(&list_opts))
+                .map_err(|e| format!("gc list: {}", format_s3_err(&e)))?;
+        for obj in listing.objects.iter() {
+            // Key shape: `<prefix><db>/wal/<seg:020>.lz4`. Strip
+            // the prefix and the `.lz4` suffix, parse the seg id.
+            let after_prefix = match obj.key.strip_prefix(&wal_prefix) {
+                Some(s) => s,
+                None => continue,
+            };
+            let seg_part = match after_prefix.strip_suffix(".lz4") {
+                Some(s) => s,
+                None => continue,
+            };
+            let seg_id: u64 = match seg_part.parse() {
+                Ok(n) => n,
+                Err(_) => continue,
+            };
+            if seg_id < cutoff_id {
+                let _ = s3_base::delete_object(cfg, creds, &opts.s3_bucket, &obj.key);
+            }
+        }
+        Ok(())
     }
 
     /// Diagnostic JSON status. Tests assert on individual fields.
