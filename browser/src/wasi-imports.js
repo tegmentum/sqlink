@@ -38,6 +38,50 @@ let cachedPolyfill = null
 let cachedImports = null
 
 /**
+ * Canonical list of `sqlite:extension/*` interfaces we stub for the
+ * browser scenario. These are interfaces extensions IMPORT that are
+ * either host-provided in native deployments (and we don't bother to
+ * polyfill in the browser yet) or are pure SPI sinks the extension
+ * doesn't actually call on the browser code path.
+ *
+ * `sqlite:extension/types` and `sqlite:extension/policy` are stubbed
+ * only by the runtime-bindgen path (`buildExtensionAdditionalImports`)
+ * — the `buildExtensionImports` path lets jco's own bindgen stub them
+ * if the component declares them.
+ *
+ * Newer entries (s3-base, wal-frames, metadata, wal-hook, spi-loader)
+ * resolve #444: the original list pre-dated those interfaces and
+ * extensions like hookprobe that import them failed instantiation with
+ * a TypeError on the missing import key. Stubbing them returns a
+ * structured `SQLITE_ERROR` to any code path that actually calls a
+ * stubbed function — the assertion being that pure-compute hookprobe
+ * surfaces (scalar drain-log, wal-hook, update/commit/authorizer)
+ * don't reach the stubbed call sites in the browser-test workload.
+ */
+const EXTENSION_IMPORT_STUB_NAMES = [
+  'sqlite:extension/spi',
+  'sqlite:extension/spi-loader',
+  'sqlite:extension/session',
+  'sqlite:extension/logging',
+  'sqlite:extension/config',
+  'sqlite:extension/http',
+  'sqlite:extension/dns',
+  'sqlite:extension/cache',
+  'sqlite:extension/state',
+  'sqlite:extension/random',
+  'sqlite:extension/text',
+  'sqlite:extension/hashing',
+  'sqlite:extension/encoding',
+  'sqlite:extension/prepared',
+  'sqlite:extension/transaction',
+  'sqlite:extension/schema',
+  'sqlite:extension/metadata',
+  'sqlite:extension/s3-base',
+  'sqlite:extension/wal-frames',
+  'sqlite:extension/wal-hook',
+]
+
+/**
  * Build the imports map jco's async-mode transpile expects.
  *
  * Cached across all extensions: every extension imports the same
@@ -142,23 +186,11 @@ export async function buildExtensionImports() {
   // Stub the sqlink-shaped imports that show up in extensions that
   // declare extra capabilities — they're not used by the pure-compute
   // surface but bindgen emits them.
-  for (const k of [
-    'sqlite:extension/spi',
-    'sqlite:extension/session',
-    'sqlite:extension/logging',
-    'sqlite:extension/config',
-    'sqlite:extension/http',
-    'sqlite:extension/dns',
-    'sqlite:extension/cache',
-    'sqlite:extension/state',
-    'sqlite:extension/random',
-    'sqlite:extension/text',
-    'sqlite:extension/hashing',
-    'sqlite:extension/encoding',
-    'sqlite:extension/prepared',
-    'sqlite:extension/transaction',
-    'sqlite:extension/schema',
-  ]) {
+  //
+  // Keep this list in sync with `EXTENSION_IMPORT_STUB_NAMES` (the
+  // shared canonical set) — the runtime-bindgen path in
+  // `buildExtensionAdditionalImports` consumes the same list.
+  for (const k of EXTENSION_IMPORT_STUB_NAMES) {
     if (!imports[k]) imports[k] = noop(k)
   }
 
@@ -213,8 +245,9 @@ export function buildExtensionAdditionalImports() {
       },
     )
   }
-  // Keep this set in sync with the stub list in `buildExtensionImports`
-  // above. Versioned key shape (sqlite:extension/foo@0.1.0) matches
+  // Same canonical list `buildExtensionImports` uses, plus the few
+  // host-shaped names (types, policy) the runtime-bindgen path also
+  // exposes. Versioned key shape (sqlite:extension/foo@0.1.0) matches
   // what jco's runtime transpile emits when the component declares
   // versioned imports — different from the unversioned shape the
   // build-time --instantiation async path uses. We register BOTH so
@@ -222,21 +255,7 @@ export function buildExtensionAdditionalImports() {
   const stubNames = [
     'sqlite:extension/types',
     'sqlite:extension/policy',
-    'sqlite:extension/spi',
-    'sqlite:extension/session',
-    'sqlite:extension/logging',
-    'sqlite:extension/config',
-    'sqlite:extension/http',
-    'sqlite:extension/dns',
-    'sqlite:extension/cache',
-    'sqlite:extension/state',
-    'sqlite:extension/random',
-    'sqlite:extension/text',
-    'sqlite:extension/hashing',
-    'sqlite:extension/encoding',
-    'sqlite:extension/prepared',
-    'sqlite:extension/transaction',
-    'sqlite:extension/schema',
+    ...EXTENSION_IMPORT_STUB_NAMES,
   ]
   const out = {}
   for (const k of stubNames) {
