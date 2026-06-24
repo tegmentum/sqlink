@@ -15,7 +15,7 @@
 //!       "main", n) → hookprobe's on_wal_hook returns SQLITE_OK
 //!       → the statement proceeds normally.
 //!
-//! Two assertions:
+//! Three assertions:
 //!
 //!   1. The cli's `.load` echo reports `4 hook` registered (one
 //!      per manifest flag: authorizer + update + commit + wal).
@@ -27,15 +27,17 @@
 //!      mode is actually engaged; the wal-hook trampoline gets
 //!      called for every subsequent commit.
 //!
-//! Why not assert events via hookprobe_drain_log: the native host
-//! re-instantiates the loaded extension on every hook dispatch
-//! (one fresh wasmtime Store per call), so hookprobe's
-//! thread_local LOG is wiped between the wal-hook firing and
-//! drain_log being read. That's a known native-side dispatch
-//! limitation orthogonal to #438; the browser side ships one
-//! instance per page and is unaffected. With cached-instance
-//! dispatch (TBD), the drain-log assertion in the browser spec
-//! ports directly here.
+//!   3. `SELECT hookprobe_drain_log();` returns the events the
+//!      wal-hook firings pushed onto hookprobe's thread_local
+//!      LOG. Each event has the shape `wal:<hook-id>:<db>:<n>`
+//!      where hook-id is 42 (hookprobe's manifest pick), db is
+//!      "main", and n is the per-commit frame count. This
+//!      assertion mirrors composed-wal-hook.spec.js in browser
+//!      and is enabled by the #441 cached-store unification:
+//!      scalar dispatch (drain_log) and wal-hook dispatch now
+//!      share one CachedHooked Store per extension, so the
+//!      thread_local LOG written by the hook is visible to the
+//!      scalar read.
 //!
 //! Why a file-backed db (not :memory:): WAL mode is only
 //! available on file-backed SQLite databases. `PRAGMA
@@ -168,6 +170,28 @@ fn assert_wal_substrate(label: &str, stdout: &str, stderr: &str) {
     assert!(
         !stdout.contains("Error:") && !stderr.contains("panicked"),
         "[{label}] cli reported an error during WAL inserts.\nstdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    // Did the wal-hook firings push events onto hookprobe's
+    // thread_local LOG, and are those events visible to the
+    // SELECT hookprobe_drain_log() call that ran AFTER the
+    // commits? Pre-#441, no — every dispatch built a fresh Store
+    // so the LOG was wiped between the wal-hook firing and the
+    // drain. Post-#441, scalar + hook dispatch share the same
+    // CachedHooked store so the LOG persists.
+    //
+    // Each wal-hook event has the shape `wal:<hook-id>:<db>:<n>`
+    // where hook-id is 42 (hookprobe's manifest pick), db is
+    // "main", and n is the per-commit frame count. We just check
+    // for the prefix `wal:42:main:` — exact frame counts depend
+    // on page sizes and aren't worth nailing down.
+    let saw_wal_event = stdout.contains("wal:42:main:");
+    assert!(
+        saw_wal_event,
+        "[{label}] hookprobe_drain_log() did not return any \
+         `wal:42:main:<n>` events — the wal-hook either never \
+         fired or the scalar drain ran against a different \
+         Store than the hook firings (cached-store unification \
+         #441 regression).\nstdout:\n{stdout}\nstderr:\n{stderr}",
     );
 }
 
