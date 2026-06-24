@@ -737,20 +737,27 @@ mod wasm_export {
 
     /// Reconstruct a database from the latest snapshot in S3.
     ///
-    /// v1 strategy: pull the snapshot bytes, decompress, load
-    /// them into the spi connection's `main` schema via
-    /// spi::deserialize_db, then ask the host to back the
-    /// loaded image up to `target_path` via spi::backup_into.
-    /// This avoids combining async Host calls (s3-base) with
-    /// sync wasi:filesystem ops (std::fs::write) in the same
-    /// scalar dispatch  wasmtime-wasi panics with "Cannot
-    /// start a runtime from within a runtime" when those two
-    /// patterns interleave, because its internal `in_tokio`
-    /// uses `block_on` without `block_in_place`.
+    /// v1 strategy: pull the snapshot bytes, decompress, patch
+    /// the journal-mode header bytes from WAL (`02 02`) to
+    /// legacy (`01 01`) so the in-memory image we hand to
+    /// sqlite3_deserialize doesn't try to open a non-existent
+    /// WAL sidecar, then load them into the spi connection's
+    /// `<db_name>` schema via spi::deserialize_db, then ask
+    /// the host to back the loaded image up to `target_path`
+    /// via spi::backup_into.
     ///
-    /// WAL segment replay (apply frames past the snapshot)
-    /// is documented as a v2 follow-up. For v1 we restore
-    /// only to the snapshot's frame; the loss window for the
+    /// All I/O after the s3-base download stays inside the
+    /// host (spi::*)  no wasi:filesystem ops from the guest,
+    /// so we sidestep the wasmtime-wasi `in_tokio` wedge
+    /// (Cannot start a runtime from within a runtime)
+    /// that fires when wasi:filesystem ops follow awaited
+    /// host calls in the same scalar dispatch under wasmtime-
+    /// wasi 45.0.1 (it calls `Handle::current().block_on(f)`
+    /// without `block_in_place`).
+    ///
+    /// WAL segment replay (apply frames past the snapshot) is
+    /// documented as a v2 follow-up. For v1 we restore only
+    /// to the snapshot's frame; the loss window for the
     /// default 1 s flush threshold is < 1 s of writes.
     ///
     /// Returns the number of WAL frames that would have been
@@ -814,20 +821,55 @@ mod wasm_export {
             })
             .filter(|id| *id >= cutoff_seg)
             .count() as i64;
-        // 4. Deserialize the snapshot bytes into the spi
-        //    connection's `<db_name>` schema, then ask the host
-        //    to back the in-memory image up to `target_path`
-        //    via spi::backup_into. The host opens the
-        //    destination file and runs sqlite3_backup_*  no
-        //    wasi:filesystem ops from the guest, so we avoid
-        //    the wasmtime-wasi runtime wedge.
-        spi::deserialize_db(&db_name, &snap_bytes)
+        // 4. Patch the snapshot's journal-mode bytes if they
+        //    encode WAL (`02 02` at offsets 18/19 of the
+        //    SQLite file-format header). The snapshot was
+        //    taken while journal_mode=WAL on the source db
+        //    (the wal-archive design REQUIRES WAL on the
+        //    source for the wal-hook firings), so the
+        //    serialize-db bytes carry those mode bits.
+        //
+        //    sqlite3_deserialize installs those bytes verbatim
+        //    as the connection's `<db_name>` schema. Any
+        //    subsequent read on a WAL-mode in-memory db tries
+        //    to open the (non-existent) WAL sidecar and fails
+        //    with SQLITE_CANTOPEN  taking down the next
+        //    SELECT and the spi::backup_into below.
+        //
+        //    The fix is byte-level: flip offsets 18/19 to
+        //    `01 01` (legacy/rollback journal mode) before
+        //    handing the bytes to deserialize-db. The pages
+        //    themselves are journal-mode-agnostic; backup_into
+        //    then reads from main and writes target_path with
+        //    the same legacy mode (the operator can flip the
+        //    target back to WAL afterwards if they want).
+        //
+        //    This is sound because:
+        //      - sqlite3_serialize/deserialize round-trip the
+        //        full byte image  the mode bytes are just two
+        //        bytes in the standard SQLite file header.
+        //      - The deserialized image is in-memory only;
+        //        legacy-mode in-memory dbs don't need any
+        //        on-disk journal artifact.
+        //      - backup_into copies pages, not the journal,
+        //        and the destination file is freshly opened in
+        //        DEFAULT (RW|CREATE) flags  no WAL sidecar
+        //        attempted there either.
+        let mut snap_for_deserialize = snap_bytes;
+        if snap_for_deserialize.len() >= 20
+            && snap_for_deserialize[18] == 2
+            && snap_for_deserialize[19] == 2
+        {
+            snap_for_deserialize[18] = 1;
+            snap_for_deserialize[19] = 1;
+        }
+        spi::deserialize_db(&db_name, &snap_for_deserialize)
             .map_err(|e| format!("restore: deserialize-db: {}", e.message))?;
-        // backup_into can hit SQLITE_CANTOPEN ("unable to open
-        // database file") on the destination side if the dst
-        // path's parent isn't a writable directory or the file
-        // is concurrently locked. Wrap the error so the
-        // diagnostic carries the dst path.
+        // Now ask the host to back the in-memory image up to
+        // `target_path` via spi::backup_into. The host opens
+        // the destination file and runs sqlite3_backup_*  no
+        // wasi:filesystem ops from the guest, so we avoid the
+        // wasmtime-wasi runtime wedge described above.
         spi::backup_into(&db_name, &target_path, &db_name)
             .map_err(|e| format!("restore: backup-into '{target_path}' (code {} / ext {}): {}",
                 e.code, e.extended_code, e.message))?;
