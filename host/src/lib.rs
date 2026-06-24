@@ -29,6 +29,7 @@ pub mod cache;
 pub mod component_blob_cache;
 pub mod compose_provider;
 pub mod policy;
+pub mod s3;
 pub mod session_ffi;
 pub mod vtab;
 
@@ -96,6 +97,7 @@ pub mod loaded_minimal_http {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -119,6 +121,7 @@ pub mod loaded_minimal_dns {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -143,6 +146,7 @@ pub mod loaded_stateful {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -166,6 +170,7 @@ pub mod loaded_dotcmd_aware {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -189,6 +194,7 @@ pub mod loaded_collating {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -212,6 +218,7 @@ pub mod loaded_tabular {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -244,6 +251,7 @@ pub mod loaded_tabular_mutating {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -266,6 +274,7 @@ pub mod loaded_authorizing {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -666,6 +675,7 @@ pub mod loaded_resolving {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -689,6 +699,7 @@ pub mod loaded_hooked {
             "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
+            "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
         },
     });
 }
@@ -712,6 +723,7 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
         WitCapability::Http => Capability::Http,
         WitCapability::Dns => Capability::Dns,
         WitCapability::WalFrames => Capability::WalFrames,
+        WitCapability::S3 => Capability::S3,
     }
 }
 
@@ -1080,6 +1092,15 @@ pub struct LoadedState {
     /// already-attached database, so once the bit is set the
     /// extension can read every WAL the spi_conn knows about.
     wal_frames_granted: bool,
+    /// Whether `Capability::S3` was in the policy grant list at
+    /// load time. The s3-base::Host dispatcher fails closed
+    /// (S3Error::CapabilityNotGranted) when this is false. Same
+    /// pattern as wal_frames_granted  there is no rich policy
+    /// (no per-bucket allowlist in v1); the endpoint URL +
+    /// credentials are arguments to each call so the extension
+    /// chooses what to hit, and the operator's grant is the
+    /// allow-the-surface bit.
+    s3_granted: bool,
     /// Optional back-reference to the owning Host. Set when the
     /// Store is built for the `dotcmd-aware` world so extensions
     /// reaching the `loader-bridge` import can delegate to the
@@ -3336,6 +3357,162 @@ impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
     }
 }
 
+/// `sqlite:extension/s3-base` host dispatcher. Bridges every WIT
+/// method into the in-host `crate::s3::*` helpers (aws-sigv4 +
+/// reqwest). Each call is capability-gated via
+/// `LoadedState::s3_granted`; without the grant we return
+/// `S3Error::CapabilityNotGranted`. Substrate for PLAN-wal-
+/// archive-extension.md (#440).
+///
+/// The reqwest blocking client is spun up per call rather than
+/// cached because (a) we're inside an async trait method and the
+/// pool-keepalive semantics under tokio + a per-Store
+/// re-instantiation get fiddly, and (b) wal-archive's cadence is
+/// coarse (seconds-to-minutes) so a TCP setup cost per call is
+/// negligible. Future iteration may cache the client on Host.
+impl loaded::sqlite::extension::s3_base::Host for LoadedState {
+    async fn get_object(
+        &mut self,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        key: String,
+        options: Option<loaded::sqlite::extension::s3_base::S3GetObjectOptions>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3GetObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        if !self.s3_granted {
+            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
+        }
+        tokio::task::spawn_blocking(move || {
+            crate::s3::op_get_object(endpoint, credentials, bucket, key, options)
+        })
+        .await
+        .map_err(|e| {
+            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
+        })?
+    }
+
+    async fn put_object(
+        &mut self,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        key: String,
+        body: Vec<u8>,
+        options: Option<loaded::sqlite::extension::s3_base::S3PutObjectOptions>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3PutObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        if !self.s3_granted {
+            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
+        }
+        tokio::task::spawn_blocking(move || {
+            crate::s3::op_put_object(endpoint, credentials, bucket, key, body, options)
+        })
+        .await
+        .map_err(|e| {
+            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
+        })?
+    }
+
+    async fn delete_object(
+        &mut self,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        key: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::s3_base::S3Error> {
+        if !self.s3_granted {
+            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
+        }
+        tokio::task::spawn_blocking(move || {
+            crate::s3::op_delete_object(endpoint, credentials, bucket, key)
+        })
+        .await
+        .map_err(|e| {
+            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
+        })?
+    }
+
+    async fn head_object(
+        &mut self,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        key: String,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3HeadObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        if !self.s3_granted {
+            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
+        }
+        tokio::task::spawn_blocking(move || {
+            crate::s3::op_head_object(endpoint, credentials, bucket, key)
+        })
+        .await
+        .map_err(|e| {
+            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
+        })?
+    }
+
+    async fn list_objects(
+        &mut self,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        bucket: String,
+        options: Option<loaded::sqlite::extension::s3_base::S3ListObjectsOptions>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3ListObjectsOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        if !self.s3_granted {
+            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
+        }
+        tokio::task::spawn_blocking(move || {
+            crate::s3::op_list_objects(endpoint, credentials, bucket, options)
+        })
+        .await
+        .map_err(|e| {
+            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
+        })?
+    }
+
+    async fn copy_object(
+        &mut self,
+        endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        source_bucket: String,
+        source_key: String,
+        dest_bucket: String,
+        dest_key: String,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3PutObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        if !self.s3_granted {
+            return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
+        }
+        tokio::task::spawn_blocking(move || {
+            crate::s3::op_copy_object(
+                endpoint,
+                credentials,
+                source_bucket,
+                source_key,
+                dest_bucket,
+                dest_key,
+            )
+        })
+        .await
+        .map_err(|e| {
+            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
+        })?
+    }
+}
+
 fn wal_perm_err(method: &str) -> loaded::sqlite::extension::types::SqliteError {
     loaded::sqlite::extension::types::SqliteError {
         code: libsqlite3_sys::SQLITE_PERM,
@@ -4289,6 +4466,7 @@ fn build_loaded_store(
         http_policy: ext.policy.http.clone(),
         dns_policy: ext.policy.dns.clone(),
         wal_frames_granted: ext.policy.is_granted(Capability::WalFrames),
+        s3_granted: ext.policy.is_granted(Capability::S3),
         host_ref: None,
         cli_state_snapshot: HashMap::new(),
     };
@@ -5606,6 +5784,7 @@ impl Host {
                     L::Http => "Http",
                     L::Dns => "Dns",
                     L::WalFrames => "WalFrames",
+                    L::S3 => "S3",
                 }
                 .to_string()
             })
@@ -5839,6 +6018,7 @@ impl Host {
                     L::Http => Capability::Http,
                     L::Dns => Capability::Dns,
                     L::WalFrames => Capability::WalFrames,
+                    L::S3 => Capability::S3,
                 }
             })
             .collect();
