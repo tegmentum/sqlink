@@ -420,6 +420,98 @@ fn bundles_build_with_grant_produces_component() {
 }
 
 #[test]
+fn bundles_build_honors_sqlink_dev_root_override() {
+    // v1.1 substrate: bundle-cli's resolve_crate_root() consults
+    // loader-bridge.env-var("SQLINK_DEV_ROOT") before falling back
+    // to its compile-time CARGO_MANIFEST_DIR-derived path. This
+    // test sets the env var to a tempdir, runs `.bundle build`
+    // (which will fail because the tempdir has no Cargo.toml),
+    // and asserts the failure stderr names the env-var path
+    // proving the override fired before the compile-time fallback.
+    //
+    // No real cargo build happens (cargo fails fast on the missing
+    // Cargo.toml), so this test runs in single-digit seconds even
+    // on slow CI. SKIPs cleanly if sqlink/cli/uuid components
+    // aren't available.
+    let Some((sqlink, cli, uuid, _json1)) = gates() else {
+        eprintln!("bundles SQLINK_DEV_ROOT override smoke: SKIP");
+        return;
+    };
+    let dir = make_tempdir("dev_root_override");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    let dev_root = dir.join("fake_workspace");
+    std::fs::create_dir_all(&dev_root).expect("create fake workspace");
+    // Intentionally NO Cargo.toml  cargo will fail and we'll see
+    // the path in stderr.
+    let script = format!(
+        ".load {}\n\
+         .bundle save myset --no-build\n\
+         .bundle build myset --target wasm32-wasip2\n\
+         .exit\n",
+        uuid.display(),
+    );
+    let mut cmd = Command::new(&sqlink);
+    cmd.arg("--db").arg(&db);
+    cmd.arg("--cache-dir").arg(&cache);
+    cmd.arg("--grant").arg("spawn-build");
+    cmd.arg(&cli);
+    cmd.env("SQLINK_DEV_ROOT", &dev_root);
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn().expect("spawn sqlink");
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(script.as_bytes());
+    }
+    let mut stdout_pipe = child.stdout.take().expect("stdout");
+    let mut stderr_pipe = child.stderr.take().expect("stderr");
+    let stdout_h = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = stdout_pipe.read_to_end(&mut b);
+        b
+    });
+    let stderr_h = std::thread::spawn(move || {
+        let mut b = Vec::new();
+        let _ = stderr_pipe.read_to_end(&mut b);
+        b
+    });
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) => {
+                if start.elapsed() > std::time::Duration::from_secs(60) {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(_) => break,
+        }
+    }
+    let stdout = String::from_utf8_lossy(&stdout_h.join().unwrap_or_default()).into_owned();
+    let stderr = String::from_utf8_lossy(&stderr_h.join().unwrap_or_default()).into_owned();
+    let combined = format!("{stdout}{stderr}");
+    assert!(
+        !stderr.contains("panicked"),
+        "stderr panicked\nstdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    // Cargo's "could not find Cargo.toml" / similar should mention
+    // our fake workspace path; either way the override path must
+    // appear somewhere in the output.
+    let dev_root_str = dev_root.display().to_string();
+    assert!(
+        combined.contains(&dev_root_str),
+        "expected build output to reference SQLINK_DEV_ROOT override path {dev_root_str:?}\n\
+         (compile-time fallback would have used the sqlink workspace path).\n\
+         stdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
 fn bundles_build_cache_hit_skips_rebuild() {
     // Second `.bundle build NAME` for the same (bundle, target)
     // should be a cache-hit  bundle-cli reports
