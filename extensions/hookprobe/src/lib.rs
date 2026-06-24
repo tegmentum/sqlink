@@ -56,14 +56,23 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::update_hook::Guest as UpdateHookGuest;
     use bindings::exports::sqlite::extension::wal_hook::Guest as WalHookGuest;
+    use bindings::sqlite::extension::policy::Capability;
+    use bindings::sqlite::extension::spi;
     use bindings::sqlite::extension::types::{
         AuthAction, AuthResult, FunctionFlags, SqlValue, UpdateOperation,
     };
+    use bindings::sqlite::extension::wal_frames;
 
     // Scalar function ids.
     const FID_DRAIN: u64 = 1;
     const FID_DENY: u64 = 2;
     const FID_VETO: u64 = 3;
+    /// hookprobe_wal_header() -> BLOB or NULL
+    const FID_WAL_HEADER: u64 = 4;
+    /// hookprobe_read_frames(start, n) -> BLOB
+    const FID_READ_FRAMES: u64 = 5;
+    /// hookprobe_serialize_main() -> BLOB
+    const FID_SERIALIZE_MAIN: u64 = 6;
 
     struct Ext;
 
@@ -156,6 +165,24 @@ mod wasm_export {
                         num_args: 1,
                         func_flags: FunctionFlags::DIRECT_ONLY,
                     },
+                    ScalarFunctionSpec {
+                        id: FID_WAL_HEADER,
+                        name: "hookprobe_wal_header".to_string(),
+                        num_args: 0,
+                        func_flags: FunctionFlags::DIRECT_ONLY,
+                    },
+                    ScalarFunctionSpec {
+                        id: FID_READ_FRAMES,
+                        name: "hookprobe_read_frames".to_string(),
+                        num_args: 2,
+                        func_flags: FunctionFlags::DIRECT_ONLY,
+                    },
+                    ScalarFunctionSpec {
+                        id: FID_SERIALIZE_MAIN,
+                        name: "hookprobe_serialize_main".to_string(),
+                        num_args: 0,
+                        func_flags: FunctionFlags::DIRECT_ONLY,
+                    },
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -166,7 +193,16 @@ mod wasm_export {
                 has_wal_hook: true,
                 wal_hook_id: WAL_HOOK_ID,
                 dot_commands: alloc::vec![],
-                declared_capabilities: alloc::vec![],
+                // hookprobe_serialize_main calls spi.serialize-db
+                // (capability::spi), hookprobe_wal_header /
+                // hookprobe_read_frames call wal-frames.*
+                // (capability::wal-frames). The host's policy gate
+                // refuses the load if either is missing from the
+                // operator's --grant list.
+                declared_capabilities: alloc::vec![
+                    Capability::Spi,
+                    Capability::WalFrames,
+                ],
             }
         }
     }
@@ -219,6 +255,65 @@ mod wasm_export {
                     let on = matches!(arg, SqlValue::Integer(n) if n != 0);
                     VETO_NEXT_COMMIT.with(|v| *v.borrow_mut() = on);
                     Ok(SqlValue::Null)
+                }
+                FID_WAL_HEADER => {
+                    // wal-frames.get-wal-header("main"). The native
+                    // host opens <db_path>-wal and returns the first
+                    // 32 bytes; the composed-runtime host (sqlite-lib)
+                    // returns None until vfs-tvm #437 lands.
+                    match wal_frames::get_wal_header(&"main".to_string()) {
+                        Ok(Some(bytes)) => Ok(SqlValue::Blob(bytes)),
+                        Ok(None) => Ok(SqlValue::Null),
+                        Err(e) => Err(format!(
+                            "hookprobe_wal_header: get-wal-header: {}",
+                            e.message
+                        )),
+                    }
+                }
+                FID_READ_FRAMES => {
+                    let mut it = args.into_iter();
+                    let start = match it.next() {
+                        Some(SqlValue::Integer(n)) if n >= 1 => n as u32,
+                        Some(SqlValue::Integer(n)) => {
+                            return Err(format!(
+                                "hookprobe_read_frames: start must be >= 1, got {n}"
+                            ))
+                        }
+                        _ => return Err(
+                            "hookprobe_read_frames: start arg must be INTEGER".into(),
+                        ),
+                    };
+                    let n_frames = match it.next() {
+                        Some(SqlValue::Integer(n)) if n >= 0 => n as u32,
+                        Some(SqlValue::Integer(n)) => {
+                            return Err(format!(
+                                "hookprobe_read_frames: n must be >= 0, got {n}"
+                            ))
+                        }
+                        _ => return Err(
+                            "hookprobe_read_frames: n arg must be INTEGER".into(),
+                        ),
+                    };
+                    match wal_frames::read_frames(&"main".to_string(), start, n_frames) {
+                        Ok(bytes) => Ok(SqlValue::Blob(bytes)),
+                        Err(e) => Err(format!(
+                            "hookprobe_read_frames: read-frames: {}",
+                            e.message
+                        )),
+                    }
+                }
+                FID_SERIALIZE_MAIN => {
+                    // spi.serialize-db("main")  the existing one-shot
+                    // serialize path the wal-archive snapshot cadence
+                    // uses (no separate `backup` interface  see #439
+                    // design call).
+                    match spi::serialize_db(&"main".to_string()) {
+                        Ok(bytes) => Ok(SqlValue::Blob(bytes)),
+                        Err(e) => Err(format!(
+                            "hookprobe_serialize_main: serialize-db: {}",
+                            e.message
+                        )),
+                    }
                 }
                 _ => Err(format!("hookprobe: unknown func_id={func_id}")),
             }

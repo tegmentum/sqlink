@@ -93,8 +93,9 @@ pub mod loaded_minimal_http {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -115,8 +116,9 @@ pub mod loaded_minimal_dns {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -138,8 +140,9 @@ pub mod loaded_stateful {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -160,8 +163,9 @@ pub mod loaded_dotcmd_aware {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -182,8 +186,9 @@ pub mod loaded_collating {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -204,8 +209,9 @@ pub mod loaded_tabular {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -235,8 +241,9 @@ pub mod loaded_tabular_mutating {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -256,8 +263,9 @@ pub mod loaded_authorizing {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -655,8 +663,9 @@ pub mod loaded_resolving {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -677,8 +686,9 @@ pub mod loaded_hooked {
             "sqlite:extension/session": super::loaded::sqlite::extension::session,
             "sqlite:extension/logging": super::loaded::sqlite::extension::logging,
             "sqlite:extension/config":  super::loaded::sqlite::extension::config,
-            "sqlite:extension/policy":  super::loaded::sqlite::extension::policy,
-            "sqlite:extension/http":    super::loaded::sqlite::extension::http,
+            "sqlite:extension/policy":     super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":       super::loaded::sqlite::extension::http,
+            "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
         },
     });
 }
@@ -701,6 +711,7 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
         WitCapability::Encoding => Capability::Encoding,
         WitCapability::Http => Capability::Http,
         WitCapability::Dns => Capability::Dns,
+        WitCapability::WalFrames => Capability::WalFrames,
     }
 }
 
@@ -1062,6 +1073,13 @@ pub struct LoadedState {
     /// but for dns::resolve. None means the extension wasn't granted
     /// `Capability::Dns`; the resolver denies every query.
     dns_policy: Option<DnsPolicy>,
+    /// Whether `Capability::WalFrames` was in the policy grant list
+    /// at load time. The wal-frames::Host dispatcher fails closed
+    /// (capability-not-granted) when this is false. There is no
+    /// rich policy here  the WAL file path is derived from the
+    /// already-attached database, so once the bit is set the
+    /// extension can read every WAL the spi_conn knows about.
+    wal_frames_granted: bool,
     /// Optional back-reference to the owning Host. Set when the
     /// Store is built for the `dotcmd-aware` world so extensions
     /// reaching the `loader-bridge` import can delegate to the
@@ -3195,6 +3213,184 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
 
 }
 
+/// `sqlite:extension/wal-frames` host dispatcher. Both methods
+/// look up the on-disk filename of the named database via
+/// `sqlite3_db_filename` on the extension's spi connection, then
+/// read the `<db_path>-wal` sidecar with a synchronous `std::fs`
+/// open. The wal file is opened on every call (no fd cache)
+/// the wal-archive cadence is coarse (seconds-to-hours) so the
+/// open syscall cost is negligible.
+///
+/// Both methods fail closed: when the extension was loaded
+/// without `Capability::WalFrames` in the grant set, every call
+/// returns `SQLITE_PERM` with a "wal-frames capability not
+/// granted" message. The bit is captured in
+/// `LoadedState::wal_frames_granted` at Store-build time so the
+/// check is one bool compare per call.
+///
+/// Substrate for PLAN-wal-archive-extension.md (#439).
+impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
+    async fn get_wal_header(
+        &mut self,
+        db_name: String,
+    ) -> std::result::Result<
+        Option<Vec<u8>>,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        if !self.wal_frames_granted {
+            return Err(wal_perm_err("get-wal-header"));
+        }
+        let Some(wal_path) = wal_sidecar_path(self, &db_name)? else {
+            return Ok(None);
+        };
+        match std::fs::metadata(&wal_path) {
+            Ok(m) if m.len() < 32 => return Ok(None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) => return Err(wal_io_err("stat wal", &wal_path, &e)),
+            _ => {}
+        }
+        let bytes = std::fs::read(&wal_path)
+            .map_err(|e| wal_io_err("read wal", &wal_path, &e))?;
+        if bytes.len() < 32 { return Ok(None); }
+        Ok(Some(bytes[..32].to_vec()))
+    }
+
+    async fn read_frames(
+        &mut self,
+        db_name: String,
+        start_frame: u32,
+        n_frames: u32,
+    ) -> std::result::Result<
+        Vec<u8>,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        if !self.wal_frames_granted {
+            return Err(wal_perm_err("read-frames"));
+        }
+        if start_frame == 0 {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_RANGE,
+                extended_code: libsqlite3_sys::SQLITE_RANGE,
+                message: "wal-frames.read-frames: start-frame is 1-based; 0 is invalid"
+                    .to_string(),
+            });
+        }
+        let wal_path = wal_sidecar_path(self, &db_name)?.ok_or_else(|| {
+            loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_NOTFOUND,
+                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
+                message: format!(
+                    "wal-frames.read-frames: no WAL file for db {db_name:?}"
+                ),
+            }
+        })?;
+        let bytes = std::fs::read(&wal_path)
+            .map_err(|e| wal_io_err("read wal", &wal_path, &e))?;
+        if bytes.len() < 32 {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_CORRUPT,
+                extended_code: libsqlite3_sys::SQLITE_CORRUPT,
+                message: format!(
+                    "wal-frames.read-frames: WAL at {wal_path:?} truncated ({} bytes)",
+                    bytes.len()
+                ),
+            });
+        }
+        // WAL header layout (https://www.sqlite.org/walformat.html):
+        // 0..4   magic 0x377F0682 or 0x377F0683
+        // 4..8   format version (3007000)
+        // 8..12  page_size (big-endian u32)
+        // 12..16 checkpoint sequence
+        // 16..32 salts + checksum
+        let page_size = u32::from_be_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
+        if page_size == 0 || page_size > 1 << 16 {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_CORRUPT,
+                extended_code: libsqlite3_sys::SQLITE_CORRUPT,
+                message: format!(
+                    "wal-frames.read-frames: invalid page_size {page_size} in WAL header"
+                ),
+            });
+        }
+        let frame_size = 24u64 + page_size as u64;
+        let start_off = 32u64 + (start_frame as u64 - 1) * frame_size;
+        let length = n_frames as u64 * frame_size;
+        let end_off = start_off
+            .checked_add(length)
+            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_RANGE,
+                extended_code: libsqlite3_sys::SQLITE_RANGE,
+                message: "wal-frames.read-frames: range overflow".to_string(),
+            })?;
+        if end_off > bytes.len() as u64 {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_RANGE,
+                extended_code: libsqlite3_sys::SQLITE_RANGE,
+                message: format!(
+                    "wal-frames.read-frames: range {start_off}..{end_off} exceeds WAL size {}",
+                    bytes.len()
+                ),
+            });
+        }
+        Ok(bytes[start_off as usize..end_off as usize].to_vec())
+    }
+}
+
+fn wal_perm_err(method: &str) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: libsqlite3_sys::SQLITE_PERM,
+        extended_code: libsqlite3_sys::SQLITE_PERM,
+        message: format!(
+            "wal-frames.{method}: capability not granted at load time \
+             (add `wal-frames` to the load --grant list)"
+        ),
+    }
+}
+
+fn wal_io_err(
+    op: &str,
+    path: &std::path::Path,
+    e: &std::io::Error,
+) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: libsqlite3_sys::SQLITE_IOERR,
+        extended_code: libsqlite3_sys::SQLITE_IOERR,
+        message: format!("wal-frames {op} {}: {e}", path.display()),
+    }
+}
+
+/// Look up `<db_name>`'s on-disk filename via the spi connection
+/// and return the WAL sidecar path (`<db_path>-wal`). Returns
+/// `Ok(None)` if the database is in-memory or temp (empty
+/// filename string from `sqlite3_db_filename`).
+fn wal_sidecar_path(
+    state: &LoadedState,
+    db_name: &str,
+) -> std::result::Result<
+    Option<std::path::PathBuf>,
+    loaded::sqlite::extension::types::SqliteError,
+> {
+    spi_ensure_open(state)?;
+    let g = state.spi_conn.lock();
+    let r = g.borrow();
+    let conn = r.as_ref().expect("ensured open");
+    let db_path = match conn.db_filename(db_name).map_err(db_err_to_spi)? {
+        Some(p) if !p.is_empty() => p,
+        _ => return Ok(None),
+    };
+    let mut wal = std::path::PathBuf::from(&db_path);
+    let file_name = wal
+        .file_name()
+        .map(|s| s.to_os_string())
+        .unwrap_or_default();
+    let mut file_name = file_name.into_string().unwrap_or_else(|os| {
+        os.to_string_lossy().into_owned()
+    });
+    file_name.push_str("-wal");
+    wal.set_file_name(file_name);
+    Ok(Some(wal))
+}
+
 /// Stage 6: LoadedState (extension callers) delegates to the
 /// host's session_handles map when `host_ref` is wired (dotcmd-aware
 /// Stores get one). The cli's session-cli extension is the primary
@@ -4092,6 +4288,7 @@ fn build_loaded_store(
         spi_conn: ext.spi_conn.clone(),
         http_policy: ext.policy.http.clone(),
         dns_policy: ext.policy.dns.clone(),
+        wal_frames_granted: ext.policy.is_granted(Capability::WalFrames),
         host_ref: None,
         cli_state_snapshot: HashMap::new(),
     };
@@ -5408,6 +5605,7 @@ impl Host {
                     L::Encoding => "Encoding",
                     L::Http => "Http",
                     L::Dns => "Dns",
+                    L::WalFrames => "WalFrames",
                 }
                 .to_string()
             })
@@ -5640,6 +5838,7 @@ impl Host {
                     L::Encoding => Capability::Encoding,
                     L::Http => Capability::Http,
                     L::Dns => Capability::Dns,
+                    L::WalFrames => Capability::WalFrames,
                 }
             })
             .collect();

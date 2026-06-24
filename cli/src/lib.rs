@@ -1021,6 +1021,7 @@ fn parse_grants(s: &str) -> Result<Vec<bindings::sqlite::extension::policy::Capa
             "encoding" => Capability::Encoding,
             "http" => Capability::Http,
             "dns" => Capability::Dns,
+            "wal-frames" | "wal_frames" => Capability::WalFrames,
             _ => return Err(format!("unknown capability: {token}")),
         };
         out.push(c);
