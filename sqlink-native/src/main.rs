@@ -169,6 +169,7 @@ fn parse_load_args(input: &str) -> Result<(String, Policy)> {
                         "http" => Capability::Http,
                         "dns" => Capability::Dns,
                         "wal-frames" | "wal_frames" => Capability::WalFrames,
+                        "s3" => Capability::S3,
                         other => return Err(anyhow!(".load: unknown grant {other:?}")),
                     };
                     grants.push(c);
