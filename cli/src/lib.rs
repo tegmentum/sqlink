@@ -2689,8 +2689,23 @@ fn embed_core_dotcmd() {
     const SQLITE_UTILS_MAINT_BYTES: &[u8] = include_bytes!(
         "../../extensions/sqlite-utils-maint/target/wasm32-wasip2/release/sqlite_utils_maint_extension.component.wasm"
     );
+    /// PLAN-bundles.md #446: `.bundle` dot-cmd backed by the bundles
+    /// SPI. Auto-loaded in every cli session with a Bundles-only
+    /// grant (no SpawnBuild  the build path is held back for v1.1).
+    const BUNDLE_CLI_BYTES: &[u8] = include_bytes!(
+        "../../extensions/bundle-cli/target/wasm32-wasip2/release/bundle_cli_extension.component.wasm"
+    );
     let options = LoadOptions {
         grant: Vec::new(),
+        http_policy: None,
+        dns_policy: None,
+        fs_policy: None,
+        fuel_per_call: None,
+        memory_limit_bytes: None,
+        epoch_deadline_ms: None,
+    };
+    let bundle_options = LoadOptions {
+        grant: vec![bindings::sqlite::extension::policy::Capability::Bundles],
         http_policy: None,
         dns_policy: None,
         fs_policy: None,
@@ -2836,6 +2851,19 @@ fn embed_core_dotcmd() {
                  sqlite-utils data commands (.rows, .analyze_tables, .insert, \
                  .upsert, .bulk, .insert_files, .convert, .memory) will read \
                  \"Unknown command\".",
+                e.message, e.code
+            );
+        }
+    }
+    match extension_loader::load_extension_from_bytes(
+        "bundle-cli",
+        BUNDLE_CLI_BYTES,
+        &bundle_options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load bundle-cli failed: {} ({}). `.bundle` will read \"Unknown command\".",
                 e.message, e.code
             );
         }

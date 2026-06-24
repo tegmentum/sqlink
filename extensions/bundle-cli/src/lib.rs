@@ -77,15 +77,13 @@ mod wasm_export {
                 has_commit_hook: false,
                 has_wal_hook: false,
                 wal_hook_id: 0,
-                // Bundles  every CRUD call. SpawnBuild  upper
-                // bound for the build path (grant gated separately
-                // at load time). Spi reserved for future SQL
-                // projections off bundle metadata.
-                declared_capabilities: alloc::vec![
-                    Capability::Spi,
-                    Capability::Bundles,
-                    Capability::SpawnBuild,
-                ],
+                // v1: only Bundles  every CRUD call routes through
+                // the bundles SPI dispatcher. v1.1 will also declare
+                // Spi (for SQL projections off bundle metadata) and
+                // SpawnBuild (for the build path); both stay out of
+                // the v1 manifest because declaring them with no
+                // grant from the operator would fail the load.
+                declared_capabilities: alloc::vec![Capability::Bundles],
             }
         }
     }
