@@ -173,9 +173,18 @@ underlying set-hash row.";
             Some(n) => n,
             None => return err(".bundle save: NAME required (usage: .bundle save NAME [--no-build])".into()),
         };
-        let members = loader_bridge::list_loaded_extensions();
+        // Filter out bundle-cli itself  it's the tool, not a member.
+        // Including it in every bundle would (a) make the bundle's
+        // set-hash depend on bundle-cli's version (and re-shuffle on
+        // every bundle-cli rebuild), and (b) cause duplicate-load
+        // errors at --bundle-load time since the embedding cli auto-
+        // loads bundle-cli anyway.
+        let members: Vec<_> = loader_bridge::list_loaded_extensions()
+            .into_iter()
+            .filter(|m| m.name != "bundle-cli")
+            .collect();
         if members.is_empty() {
-            return err(".bundle save: no extensions loaded; nothing to bundle".into());
+            return err(".bundle save: no extensions loaded (besides bundle-cli itself); nothing to bundle".into());
         }
         // Compute the canonical set-hash: blake3 of "{ext_name}\n{digest}\n"
         // for every member, sorted ascending by extension_name. The host

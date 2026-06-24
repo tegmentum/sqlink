@@ -96,6 +96,16 @@ path = "src/test_wal_archive.rs"
 name = "extension_smoke_spawn_build"
 path = "src/test_spawn_build.rs"
 
+[[test]]
+# Substrate for sqlink#446 (PLAN-bundles.md). Loads bundle-cli
+# via sqlink+wasm-cli, dynamic-loads two stock extensions (uuid +
+# json1), then exercises `.bundle save / list / show / delete /
+# gc / build` and the `--bundle-load NAME` launch flag. Each test
+# uses its own --cache-dir so the bundle registry is hermetic;
+# SKIPs cleanly if sqlink/cli/extension components aren't built.
+name = "extension_smoke_bundles"
+path = "src/test_bundles.rs"
+
 [[bin]]
 name = "extension-smoke-report"
 path = "src/report.rs"
