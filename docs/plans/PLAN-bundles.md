@@ -328,6 +328,23 @@ and the plan's stated APIs didn't match the actual codebase:
   default_external_path`). **Build dir is
   `~/.cache/sqlink/builds/<hash>/`** to match.
 
+- **Gap D (mid-implementation, 2026-06-24): build path needs
+  package + features, not a generated crate.** The plan implied
+  `.bundle build NAME` would generate a tiny crate that
+  `include_bytes!()`s each extension and depends on sqlink-host
+  as a library. `spawn-build`'s current 1-stage `cargo build
+  --release <crate-root>` contract can't drive `sqlink compose
+  --embed X,Y,Z` (cargo + wasm-tools, 2 stages). **Decision:
+  extend `spi.spawn-build` WIT signature** with
+  `package: option<string>` + `features: list<string>` so
+  bundle-cli calls `cargo build -p sqlite-cli
+  --features embed-uuid,embed-json1,...` directly against the
+  workspace. Additive WIT change; per-world re-widening; host
+  impl gains feature-flag passthrough. Bundle-cli's `.bundle
+  build` drops the v1.1-deferred stub and wires the new params.
+  Removes the need for the generated-crate template entirely
+  (sqlink-host as rlib still v2 production-install concern).
+
 ## Resolved design decisions (open-question pass)
 
 1. **Build dir location**: **cas-cache-managed.** Always materialize
