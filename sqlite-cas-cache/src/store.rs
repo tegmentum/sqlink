@@ -17,7 +17,8 @@ use sqlite_component_core::db::{Connection, OpenFlags, Statement, StepResult, Va
 
 use crate::resolver::{ArtifactRef, ResolverRegistry, Source};
 use crate::schema::{
-    INSTALL_SCHEMA, MIGRATE_V1_TO_V2, MIGRATE_V2_TO_V3, MIGRATE_V3_TO_V4, SCHEMA_VERSION,
+    BOOTSTRAP_SCHEMA, INSTALL_SCHEMA, MIGRATE_V1_TO_V2, MIGRATE_V2_TO_V3, MIGRATE_V3_TO_V4,
+    SCHEMA_VERSION,
 };
 
 /// Blake3 hash, 32 bytes. Wrapped so callers can pass it around
@@ -259,41 +260,56 @@ impl SqliteCasStore {
                  PRAGMA foreign_keys = ON;",
             )
             .map_err(|e| anyhow!("enable foreign_keys: {}", e.message))?;
+        // Order matters: migrations BEFORE INSTALL_SCHEMA.
+        //
+        // INSTALL_SCHEMA's `CREATE UNIQUE INDEX ... ON
+        // __cas_artifact(sha256)` cannot run against a v1 db (no
+        // sha256 column yet). Bootstrap `__cas_meta`, read the
+        // version, apply migrations to bring the db up to current
+        // shape, THEN run INSTALL_SCHEMA. INSTALL_SCHEMA's
+        // CREATE-IF-NOT-EXISTS statements are idempotent so a
+        // fully-migrated db treats it as a no-op while a fresh db
+        // (empty __cas_meta, no schema_version row) skips
+        // migrations and lets INSTALL_SCHEMA seed everything.
+        self.conn
+            .execute_batch(BOOTSTRAP_SCHEMA)
+            .map_err(|e| anyhow!("bootstrap schema: {}", e.message))?;
+        if let Some(initial) = try_read_schema_version(&self.conn)? {
+            // Existing db (pre-vN). Walk the migration ladder.
+            let mut observed = initial;
+            while observed != SCHEMA_VERSION {
+                match observed.as_str() {
+                    "1" => {
+                        self.conn
+                            .execute_batch(MIGRATE_V1_TO_V2)
+                            .map_err(|e| anyhow!("migrate v1 -> v2: {}", e.message))?;
+                    }
+                    "2" => {
+                        self.conn
+                            .execute_batch(MIGRATE_V2_TO_V3)
+                            .map_err(|e| anyhow!("migrate v2 -> v3: {}", e.message))?;
+                    }
+                    "3" => {
+                        self.conn
+                            .execute_batch(MIGRATE_V3_TO_V4)
+                            .map_err(|e| anyhow!("migrate v3 -> v4: {}", e.message))?;
+                    }
+                    _ => {
+                        return Err(anyhow!(
+                            "incompatible cas schema version: code expects {SCHEMA_VERSION}, db has {observed} (no upgrade path)"
+                        ));
+                    }
+                }
+                observed = read_schema_version(&self.conn)?;
+            }
+        }
+        // Fresh db OR migrated db at current SCHEMA_VERSION. Either
+        // way, INSTALL_SCHEMA is safe: CREATE IF NOT EXISTS for every
+        // table/index plus an `INSERT OR REPLACE` seeding the
+        // schema_version row.
         self.conn
             .execute_batch(INSTALL_SCHEMA)
             .map_err(|e| anyhow!("install schema: {}", e.message))?;
-        // Read the version. A v1 db has the v1 schema (no
-        // sha256 column); the INSTALL_SCHEMA above is a no-op
-        // because the tables already exist with CREATE IF NOT
-        // EXISTS. Run the v1->v2 ALTER to bring it up to date.
-        loop {
-            let observed = read_schema_version(&self.conn)?;
-            if observed == SCHEMA_VERSION {
-                break;
-            }
-            match observed.as_str() {
-                "1" => {
-                    self.conn
-                        .execute_batch(MIGRATE_V1_TO_V2)
-                        .map_err(|e| anyhow!("migrate v1 -> v2: {}", e.message))?;
-                }
-                "2" => {
-                    self.conn
-                        .execute_batch(MIGRATE_V2_TO_V3)
-                        .map_err(|e| anyhow!("migrate v2 -> v3: {}", e.message))?;
-                }
-                "3" => {
-                    self.conn
-                        .execute_batch(MIGRATE_V3_TO_V4)
-                        .map_err(|e| anyhow!("migrate v3 -> v4: {}", e.message))?;
-                }
-                _ => {
-                    return Err(anyhow!(
-                        "incompatible cas schema version: code expects {SCHEMA_VERSION}, db has {observed} (no upgrade path)"
-                    ));
-                }
-            }
-        }
         Ok(())
     }
 
@@ -929,9 +945,21 @@ fn unix_now() -> i64 {
         .unwrap_or(0)
 }
 
-/// Read the `schema_version` meta-row. Pulled out so both initial
-/// install + migration loop can reuse it.
+/// Read the `schema_version` meta-row. Pulled out so the
+/// migration loop can re-read after each step. Errors if the row
+/// is absent  callers that need to handle the "fresh db, no
+/// version yet" case should use [`try_read_schema_version`].
 fn read_schema_version(conn: &Connection) -> Result<String> {
+    try_read_schema_version(conn)?.ok_or_else(|| anyhow!("schema_version missing after install"))
+}
+
+/// Like [`read_schema_version`] but returns `Ok(None)` when the
+/// row is absent (fresh db: `__cas_meta` exists but no
+/// `schema_version` entry has been seeded yet). Used by
+/// `install_schema` to distinguish "this db needs migrating from
+/// some pre-current vN" from "this is a brand-new db, skip to
+/// INSTALL_SCHEMA".
+fn try_read_schema_version(conn: &Connection) -> Result<Option<String>> {
     let mut stmt = conn
         .prepare("SELECT value FROM __cas_meta WHERE key = 'schema_version'")
         .map_err(|e| anyhow!("prepare schema_version: {}", e.message))?;
@@ -940,10 +968,10 @@ fn read_schema_version(conn: &Connection) -> Result<String> {
         .map_err(|e| anyhow!("step schema_version: {}", e.message))?
     {
         StepResult::Row => match stmt.column_value(0) {
-            Value::Text(s) => Ok(s),
+            Value::Text(s) => Ok(Some(s)),
             other => Err(anyhow!("schema_version not text: {other:?}")),
         },
-        StepResult::Done => Err(anyhow!("schema_version missing after install")),
+        StepResult::Done => Ok(None),
     }
 }
 
