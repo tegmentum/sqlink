@@ -29,6 +29,7 @@ pub mod cache;
 pub mod component_blob_cache;
 pub mod compose_provider;
 pub mod policy;
+pub mod prefix_registry;
 pub mod s3;
 pub mod session_ffi;
 pub mod vtab;

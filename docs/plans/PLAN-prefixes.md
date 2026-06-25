@@ -105,21 +105,25 @@ attached to). Per-db storage is the right choice because:
 - Different databases can have different prefix mappings without
   cross-talk.
 
-The tables use the `sqlite_*` reserved-name convention so they
-don't appear in casual `.tables` output:
+The tables use the `__sqlink_*` double-underscore prefix
+convention (matching the cas-cache's `__cas_*` tables). SQLite
+itself reserves names starting with `sqlite_` for internal use
+and rejects user-CREATE of such tables; the `__` prefix is the
+project's analog for hiding internal bookkeeping from casual
+`.tables` output:
 
 ```sql
-CREATE TABLE sqlite_sqlink_prefix (
+CREATE TABLE __sqlink_prefix (
     name        TEXT PRIMARY KEY,    -- short prefix: 'foaf', 'tegmentum'
     expansion   TEXT NOT NULL,       -- opaque expanded form
     description TEXT,                -- optional human label
     created_at  INTEGER NOT NULL,
     last_used_at INTEGER             -- updated on function dispatch + .prefix touch
 );
-CREATE INDEX sqlite_sqlink_prefix_expansion
-    ON sqlite_sqlink_prefix(expansion);
+CREATE INDEX __sqlink_prefix_expansion
+    ON __sqlink_prefix(expansion);
 
-CREATE TABLE sqlite_sqlink_prefix_function (
+CREATE TABLE __sqlink_prefix_function (
     expansion      TEXT NOT NULL,    -- joins on expansion, NOT short name
     function_name  TEXT NOT NULL,    -- the bare name, e.g. 'name'
     extension_name TEXT,             -- which extension registered it (audit)
@@ -132,7 +136,7 @@ CREATE TABLE sqlite_sqlink_prefix_function (
 -- same bare name + arity, this row says which one wins the bare
 -- name dispatch. NULL pin means "follow SQLite default" (last-
 -- registered wins).
-CREATE TABLE sqlite_sqlink_prefix_pin (
+CREATE TABLE __sqlink_prefix_pin (
     function_name TEXT NOT NULL,
     n_args        INTEGER NOT NULL,
     expansion     TEXT NOT NULL,     -- which expansion's impl wins bare-name
@@ -181,7 +185,7 @@ other extension has that name at the same arity:
    `extb__concat` are available for explicit dispatch."
 4. Operator can `.prefix prefer concat exta` to pin the bare name
    to a specific extension. This writes a row to
-   `sqlite_sqlink_prefix_pin` and re-registers the bare name
+   `__sqlink_prefix_pin` and re-registers the bare name
    against the pinned extension's implementation.
 
 **Case 3 — extension unloaded.** Extension B unloads (releasing its
@@ -221,13 +225,13 @@ through `spi-loader.register-*`, the host's loader-bridge wrapper:
    If absent, falls back to the deprecation-window synthetic
    expansion `sqlink-internal://<crate-name>` + warns. After
    v1.1 this becomes a hard error.
-2. Looks up the prefix in `sqlite_sqlink_prefix`:
+2. Looks up the prefix in `__sqlink_prefix`:
    - If exists with matching expansion → use it.
    - If exists with different expansion → fall back to numbered
      alternative (`foaf2`, `foaf3`, ...) per Q1 resolution + warn.
      Operator can `.prefix rename` after.
    - If absent → insert it.
-3. Inserts the function into `sqlite_sqlink_prefix_function` keyed
+3. Inserts the function into `__sqlink_prefix_function` keyed
    by `(expansion, function_name, n_args)`.
 4. **Always** registers the function with SQLite under
    `prefix__function_name` (the qualified form). This is unconditional;
@@ -236,7 +240,7 @@ through `spi-loader.register-*`, the host's loader-bridge wrapper:
    under `function_name` too. This may shadow an earlier registration
    (per SQLite's last-wins semantics) — that's intentional, it
    preserves current behavior.
-6. **Pin override**: if `sqlite_sqlink_prefix_pin` has a row for
+6. **Pin override**: if `__sqlink_prefix_pin` has a row for
    `(function_name, n_args)` pinning a different expansion, after
    the registration the wrapper re-registers the bare name pointing
    at the PINNED expansion's implementation (so the pin survives
@@ -397,8 +401,8 @@ No new substrate / capability variants required.
 
 ## Sequencing
 
-1. Land **schema + migration** (`sqlite_sqlink_prefix` +
-   `sqlite_sqlink_prefix_function`). Small standalone commit.
+1. Land **schema + migration** (`__sqlink_prefix` +
+   `__sqlink_prefix_function`). Small standalone commit.
 2. Land **manifest parsing** for `preferred-prefix` +
    `prefix-expansion`. Touches loader's manifest types.
 3. Land **registration wrapper** in the loader-bridge that
@@ -462,7 +466,7 @@ No new substrate / capability variants required.
      (qualified dispatch, visibility into collisions, operator
      pin).
 
-   New `sqlite_sqlink_prefix_pin` table introduced to back the
+   New `__sqlink_prefix_pin` table introduced to back the
    operator-pin functionality.
 
 4. **Function-shape coverage (Q4).** All four shapes — scalar,
