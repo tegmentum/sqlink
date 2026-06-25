@@ -209,3 +209,113 @@ fn fetch_artifact_binds_uri_on_success() {
     assert_eq!(resolved_hash, hash);
     assert_eq!(resolved_bytes, payload);
 }
+
+// ---------------------------------------------------------------------------
+// HTTPS resolver fixtures via mockito (closes mutants 179 + 187).
+//
+// The HttpsResolver in src/resolver.rs:179 is unit-tested only against
+// happy-path local mocks; the real 200/404/500/invalid-url branches
+// were uncovered before this batch. Mockito spawns a localhost HTTP
+// server per test, the resolver's `client.get(url)` hits it, and each
+// branch lights up.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "https")]
+mod https_mock {
+    use sqlite_cas_cache::{ArtifactResolver, Source};
+
+    fn https_resolver() -> sqlite_cas_cache::HttpsResolver {
+        sqlite_cas_cache::HttpsResolver::default()
+    }
+
+    #[test]
+    fn https_resolves_200_returns_body() {
+        let mut server = mockito::Server::new();
+        let payload = b"hello-from-mock";
+        let m = server
+            .mock("GET", "/artifact.wasm")
+            .with_status(200)
+            .with_body(payload)
+            .create();
+        let url = format!("{}/artifact.wasm", server.url());
+        let r = https_resolver();
+        let bytes = r
+            .resolve(&Source::Https { url })
+            .expect("200 should resolve to body");
+        assert_eq!(bytes, payload);
+        m.assert();
+    }
+
+    #[test]
+    fn https_404_returns_error() {
+        let mut server = mockito::Server::new();
+        let m = server.mock("GET", "/missing").with_status(404).create();
+        let url = format!("{}/missing", server.url());
+        let r = https_resolver();
+        let err = r
+            .resolve(&Source::Https { url })
+            .expect_err("404 should propagate as error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("404"),
+            "404 error message should reference the status, got: {msg}"
+        );
+        m.assert();
+    }
+
+    #[test]
+    fn https_500_returns_error() {
+        let mut server = mockito::Server::new();
+        let m = server
+            .mock("GET", "/server-err")
+            .with_status(500)
+            .with_body("oops")
+            .create();
+        let url = format!("{}/server-err", server.url());
+        let r = https_resolver();
+        let err = r
+            .resolve(&Source::Https { url })
+            .expect_err("500 should propagate as error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("500"),
+            "500 error message should reference the status, got: {msg}"
+        );
+        m.assert();
+    }
+
+    #[test]
+    fn https_wrong_source_kind_returns_error() {
+        let r = https_resolver();
+        let err = r
+            .resolve(&Source::LocalFile { path: "/tmp/x".into() })
+            .expect_err("LocalFile source on HTTPS resolver should error");
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("wrong source kind"),
+            "wrong-kind path didn't match expected message, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn https_invalid_url_returns_error() {
+        // Malformed URL ("not-a-url") -> reqwest::Client::get refuses to send.
+        // We don't need mockito here; reqwest's URL parser rejects the request
+        // before it leaves the client. The error path is the same one mutants
+        // 179/187 ask about: an Err propagates out of `resolve`, not a panic.
+        let r = https_resolver();
+        let err = r
+            .resolve(&Source::Https {
+                url: "not-a-url".to_string(),
+            })
+            .expect_err("malformed URL should error");
+        let _msg = format!("{err:#}");
+    }
+
+    // Note on timeout coverage: HttpsResolver currently uses a default
+    // reqwest::blocking::Client with no per-call timeout configured. A
+    // timeout test would either (a) sleep > the platform's default
+    // connect timeout (flaky in CI) or (b) require a resolver-side
+    // timeout knob that doesn't exist yet. Deferred + tracked under
+    // PLAN-followups.md.
+}

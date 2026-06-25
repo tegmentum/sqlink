@@ -52,3 +52,8 @@ anyhow = "1.0"
 # match the sync trait shape; future async variants can layer
 # on top.
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking"], optional = true }
+
+[dev-dependencies]
+# Mock HTTP server for HttpsResolver tests. Spawns a per-test
+# blocking server, configurable per-route status + body.
+mockito = "1"
