@@ -24,6 +24,18 @@
 //!     -o target/runnable_sqlite_demo.composed.wasm
 //! ```
 
+// Wasm-only: exports the `sqlink:wasm/run` component-model
+// interface via wit-bindgen. On native targets the post-return
+// trampolines bindgen emits resolve to undefined symbols when the
+// cdylib is linked, so the body is gated. `cargo build --workspace`
+// from the root (default-members=host) doesn't touch this crate;
+// `cargo build --workspace --release` (which opts in to all
+// members) used to fail here, now produces an empty cdylib.
+#[cfg(not(target_arch = "wasm32"))]
+#[allow(dead_code)]
+fn _wasm_only_stub() {}
+
+#[cfg(target_arch = "wasm32")]
 mod bindings {
     wit_bindgen::generate!({
         path: "wit",
@@ -32,12 +44,17 @@ mod bindings {
     });
 }
 
+#[cfg(target_arch = "wasm32")]
 use bindings::exports::sqlink::wasm::run::Guest;
+#[cfg(target_arch = "wasm32")]
 use bindings::sqlite::extension::spi;
+#[cfg(target_arch = "wasm32")]
 use bindings::sqlite::extension::types::SqlValue;
 
+#[cfg(target_arch = "wasm32")]
 struct Demo;
 
+#[cfg(target_arch = "wasm32")]
 impl Guest for Demo {
     fn run() -> Result<String, String> {
         // Schema setup. execute_batch runs multiple statements
@@ -84,4 +101,5 @@ impl Guest for Demo {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
 bindings::export!(Demo with_types_in bindings);
