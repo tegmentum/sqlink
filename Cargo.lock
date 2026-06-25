@@ -5215,6 +5215,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqlink-cli-argv"
+version = "0.1.0"
+
+[[package]]
 name = "sqlink-host"
 version = "0.1.0"
 dependencies = [
@@ -5367,6 +5371,7 @@ dependencies = [
  "once_cell",
  "sqlink-host",
  "sqlite-extension-policy",
+ "tempfile",
  "tokio",
  "tracing",
 ]

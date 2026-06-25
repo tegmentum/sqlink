@@ -15,6 +15,7 @@ resolver = "2"
 members = [
     "cli",
     "host",
+    "sqlink-cli-argv",
     "sqlink-loader",
     "sqlink-native",
     "sqlite-cas-cache",
