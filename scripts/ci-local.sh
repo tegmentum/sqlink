@@ -62,6 +62,19 @@ if ! docker info >/dev/null 2>&1; then
     exit 4
 fi
 
+# act doesn't read `docker context`  it goes straight at
+# /var/run/docker.sock. Colima + OrbStack + Docker Desktop all
+# put the socket somewhere else. Read the host the current docker
+# context points at and export it as DOCKER_HOST so act follows.
+if [[ -z "${DOCKER_HOST:-}" ]]; then
+    ctx_host="$(docker context inspect "$(docker context show)" \
+                --format '{{.Endpoints.docker.Host}}' 2>/dev/null || true)"
+    if [[ -n "$ctx_host" ]] && [[ "$ctx_host" != "unix:///var/run/docker.sock" ]]; then
+        echo "==> exporting DOCKER_HOST=$ctx_host (from docker context)"
+        export DOCKER_HOST="$ctx_host"
+    fi
+fi
+
 # Pick the event act should simulate based on the workflow's `on:` clause.
 # Schedule-driven workflows need an explicit `schedule` event payload;
 # `act schedule` synthesizes a minimal one. Push/PR workflows just need
