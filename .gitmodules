@@ -7,3 +7,6 @@
 [submodule "compression-multiplexer"]
 	path = compression-multiplexer
 	url = https://github.com/tegmentum/compression-multiplexer.git
+[submodule "tvm-wasm"]
+	path = tvm-wasm
+	url = https://github.com/tegmentum/tvm-wasm.git

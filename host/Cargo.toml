@@ -103,8 +103,10 @@ ciborium = "0.2"
 # small components that exercise the tvm:memory contract directly.
 # The host's make_run_linker + the main.rs cli runner both wire
 # tvm_wasmtime::add_to_linker so those imports resolve. Path dep
-# against the sibling tvm-wasm checkout.
-tvm-wasmtime = { path = "../../tvm-wasm/crates/tvm-wasmtime" }
+# against the tvm-wasm submodule (sqlink/tvm-wasm/), formerly the
+# sibling checkout at <sqlink-parent>/tvm-wasm/ which didn't
+# resolve on CI runners.
+tvm-wasmtime = { path = "../tvm-wasm/crates/tvm-wasmtime" }
 
 # PLAN-cli-stages-5-6.md Stage 5c: embedded SQL function extensions
 # moved from cli/Cargo.toml. Each is an optional dep + a feature
