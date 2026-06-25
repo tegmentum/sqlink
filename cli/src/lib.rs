@@ -90,9 +90,18 @@ impl RunGuest for CliCommand {
         // first-open time. sqlite-pcache-tvm / sqlite-mem-tvm /
         // sqlite-vfs-tvm / install_log_callback / init_wasivfs /
         // init_memvfs are all dropped along with libsqlite3-sys.
+        // Phase 1.5 argv entry point. Argv shape:
+        //   sqlite_cli.component.wasm <db_path>
+        //       [--load FILE.wasm]* [--keep-open]
+        //       [--bundle-grant-spawn-build]
+        //       [.NAME args...]
+        //
+        // The parsing logic lives in `sqlink-cli-argv` (pure-fn
+        // over `&[String]`) so it's unit-testable on native
+        // despite this crate being wasm-gated.
         let argv: Vec<String> = std::env::args().collect();
-        let db_path = if argv.len() > 1 { argv[1].clone() } else { String::new() };
-        DB_PATH.with(|p| *p.borrow_mut() = db_path);
+        let parsed = sqlink_cli_argv::parse_argv(&argv);
+        DB_PATH.with(|p| *p.borrow_mut() = parsed.db_path);
         // Stage 5f: the cli no longer maintains its own libsqlite3-sys
         // connection. Every embedded-extension / pragma / dot_command
         // SQL-fn registration that ensure_cli_conn() used to do
@@ -116,51 +125,12 @@ impl RunGuest for CliCommand {
         // SpawnBuild capability so `.bundle build` can drive
         // cargo via spi.spawn-build. Sourced from sqlink-level
         // `sqlink --grant spawn-build` (host translates).
-        let bundle_grant_spawn_build = argv
-            .iter()
-            .any(|a| a == "--bundle-grant-spawn-build");
-        embed_core_dotcmd(bundle_grant_spawn_build);
+        embed_core_dotcmd(parsed.bundle_grant_spawn_build);
 
-        // Phase 1.5 argv entry point. Argv shape:
-        //   sqlite_cli.component.wasm <db_path>
-        //       [--load FILE.wasm]* [--keep-open]
-        //       [.NAME args...]
-        //
-        // The `--load` flag pre-loads zero or more wasm extension
-        // components (each gets turned into a synthesized
-        // `.load FILE` line). The single `.NAME` that follows
-        // (terminated by EOL) is the dispatch target. With
-        // `--keep-open` the cli drops into its repl after the
-        // command completes; without it the process exits.
-        let mut keep_open = false;
-        let mut preload: Vec<String> = Vec::new();
-        let mut dot_args: Vec<&str> = Vec::new();
-        let mut dot_seen = false;
-        let mut i = 2;
-        while i < argv.len() {
-            let a = &argv[i];
-            if !dot_seen {
-                if a == "--keep-open" {
-                    keep_open = true;
-                    i += 1; continue;
-                }
-                if a == "--load" {
-                    i += 1;
-                    if i < argv.len() {
-                        preload.push(argv[i].clone());
-                    }
-                    i += 1; continue;
-                }
-                if a.starts_with('.') {
-                    dot_seen = true;
-                    dot_args.push(a.as_str());
-                    i += 1; continue;
-                }
-            } else {
-                dot_args.push(a.as_str());
-            }
-            i += 1;
-        }
+        let keep_open = parsed.keep_open;
+        let preload = parsed.preload;
+        let dot_args = parsed.dot_args;
+        let dot_seen = parsed.dot_seen;
         for path in &preload {
             let line = format!(".load {}", path);
             let out = eval_input(&line);

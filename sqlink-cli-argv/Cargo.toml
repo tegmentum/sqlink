@@ -1,0 +1,7 @@
+[package]
+name = "sqlink-cli-argv"
+version = "0.1.0"
+edition = "2021"
+description = "Pure-function argv parser for the sqlink cli component. Extracted so the wasm-gated cli's parsing logic is unit-testable on native."
+license = "MIT OR Apache-2.0"
+publish = false
