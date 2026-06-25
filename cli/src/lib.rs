@@ -798,7 +798,6 @@ fn eval_sql(sql: &str) -> String {
 /// `eval_sql`. Drains any trace lines captured during execution.
 fn eval_sql_inner(sql: &str) -> String {
     use bindings::sqlite::extension::spi;
-    use bindings::sqlite::extension::types::SqlValue;
     let mut out = String::new();
     // PLAN-cli-shared-conn.md Stage 3c: route every cli SQL exec
     // through spi.execute_multi. The host walks the statement

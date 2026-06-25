@@ -421,7 +421,7 @@ fn run_changeset_apply(args: &[String]) -> Result<()> {
 /// Matches what `.sqlite3 sessionApply ... --replace` does.
 extern "C" fn replace_on_conflict(
     _ctx: *mut std::os::raw::c_void,
-    _eConflict: std::os::raw::c_int,
+    _e_conflict: std::os::raw::c_int,
     _p: *mut session_ffi::sqlite3_changeset_iter,
 ) -> std::os::raw::c_int {
     session_ffi::SQLITE_CHANGESET_REPLACE
