@@ -3663,6 +3663,26 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                 ),
             });
         }
+        if let Err(why) = validate_spawn_build_crate_root(&crate_root_path) {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_PERM,
+                extended_code: libsqlite3_sys::SQLITE_PERM,
+                message: format!(
+                    "build.spawn-build: crate-root {crate_root:?} not under an \
+                     allowed prefix ({why})"
+                ),
+            });
+        }
+        if let Err(why) = validate_spawn_build_target_triple(target_triple.as_deref()) {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_PERM,
+                extended_code: libsqlite3_sys::SQLITE_PERM,
+                message: format!(
+                    "build.spawn-build: target_triple {:?} {why}",
+                    target_triple
+                ),
+            });
+        }
 
         let triple = target_triple.clone();
         let env_clone = env.clone();
@@ -4109,6 +4129,105 @@ fn tail_lines(s: &str, n: usize) -> String {
     let lines: Vec<&str> = s.lines().collect();
     let start = lines.len().saturating_sub(n);
     lines[start..].join("\n")
+}
+
+/// Build the allowlist of crate-root prefixes spawn-build may build
+/// against. Each entry is a canonicalized absolute path; a candidate
+/// crate_root is accepted iff (after canonicalization) it equals an
+/// entry OR is a descendant of one.
+///
+/// Sources, in order of precedence (each may be absent):
+///   * `~/.cache/sqlink/builds/` — the cas-cache-managed bundle build
+///     dir (Gap-pass decision #1 in PLAN-bundles.md).
+///   * `$SQLINK_DEV_ROOT` if set in the host's environment — the
+///     operator-supplied dev workspace (Gap-pass decision #2).
+///   * The compile-time workspace root baked into the host crate
+///     (`env!("CARGO_MANIFEST_DIR")`'s parent) — covers the default
+///     dev-install case where the operator built sqlink in-tree.
+fn allowed_crate_root_prefixes() -> Vec<std::path::PathBuf> {
+    let mut prefixes = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        let mut p = std::path::PathBuf::from(home);
+        p.push(".cache");
+        p.push("sqlink");
+        p.push("builds");
+        if let Ok(canon) = p.canonicalize() {
+            prefixes.push(canon);
+        } else {
+            prefixes.push(p);
+        }
+    }
+    if let Ok(dev_root) = std::env::var("SQLINK_DEV_ROOT") {
+        if !dev_root.is_empty() {
+            let p = std::path::PathBuf::from(dev_root);
+            if let Ok(canon) = p.canonicalize() {
+                prefixes.push(canon);
+            } else {
+                prefixes.push(p);
+            }
+        }
+    }
+    let host_manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    if let Some(workspace_root) = host_manifest.parent() {
+        if let Ok(canon) = workspace_root.canonicalize() {
+            prefixes.push(canon);
+        } else {
+            prefixes.push(workspace_root.to_path_buf());
+        }
+    }
+    prefixes
+}
+
+/// HIGH-severity defensive fix: validate that `crate_root` resolves
+/// under one of the prefixes returned by `allowed_crate_root_prefixes`.
+/// Without this check a granted-spawn-build extension could ask the
+/// host to `cargo build` against any user-readable directory.
+///
+/// Canonicalizes both sides (resolves symlinks + `..` segments) before
+/// comparison, defeating the `~/.cache/sqlink/builds/../etc` escape.
+fn validate_spawn_build_crate_root(
+    crate_root: &std::path::Path,
+) -> std::result::Result<(), String> {
+    let canon = crate_root
+        .canonicalize()
+        .map_err(|e| format!("canonicalize failed: {e}"))?;
+    let prefixes = allowed_crate_root_prefixes();
+    for pref in &prefixes {
+        if canon == *pref || canon.starts_with(pref) {
+            return Ok(());
+        }
+    }
+    Err(format!(
+        "must canonicalize under one of: {}",
+        prefixes
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
+}
+
+/// HIGH-severity defensive fix: reject target_triple values containing
+/// path-traversal or shell-unsafe characters. The triple flows into
+/// both `cargo --target T` AND a `crate_root/target/<T>/release` path
+/// join; a value like `../../foo` could escape the target dir.
+///
+/// Allowed chars: ASCII lowercase letters, digits, `_`, `-`. Empty
+/// triple (None) is fine; that path uses the default release dir.
+fn validate_spawn_build_target_triple(
+    triple: Option<&str>,
+) -> std::result::Result<(), &'static str> {
+    let Some(t) = triple else { return Ok(()) };
+    if t.is_empty() {
+        return Err("must be non-empty when specified");
+    }
+    if !t
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+    {
+        return Err("contains disallowed characters (only [a-z0-9_-] allowed)");
+    }
+    Ok(())
 }
 
 /// Walk `release_dir` and return the first regular file that has
@@ -11732,5 +11851,90 @@ mod http_policy_tests {
             ..Default::default()
         };
         check_http_policy(Some(&policy), "api.example.com:8443", "GET").unwrap();
+    }
+}
+
+#[cfg(test)]
+mod spawn_build_validation_tests {
+    //! Tests for the spawn-build defensive validators. The host-side
+    //! HIGH-severity findings from the bundles-era defensive audit:
+    //! crate_root path-escape, target_triple shell-injection.
+
+    use super::*;
+
+    #[test]
+    fn target_triple_allowed() {
+        validate_spawn_build_target_triple(Some("wasm32-wasip2")).unwrap();
+        validate_spawn_build_target_triple(Some("aarch64-apple-darwin")).unwrap();
+        validate_spawn_build_target_triple(Some("x86_64-unknown-linux-gnu")).unwrap();
+        validate_spawn_build_target_triple(None).unwrap();
+    }
+
+    #[test]
+    fn target_triple_rejects_path_traversal() {
+        let err = validate_spawn_build_target_triple(Some(
+            "x86_64-unknown-linux-gnu/../../etc",
+        ))
+        .unwrap_err();
+        assert!(err.contains("disallowed characters"));
+    }
+
+    #[test]
+    fn target_triple_rejects_uppercase() {
+        let err = validate_spawn_build_target_triple(Some("WASM32-wasip2")).unwrap_err();
+        assert!(err.contains("disallowed characters"));
+    }
+
+    #[test]
+    fn target_triple_rejects_empty_string() {
+        let err = validate_spawn_build_target_triple(Some("")).unwrap_err();
+        assert!(err.contains("non-empty"));
+    }
+
+    #[test]
+    fn target_triple_rejects_shell_metas() {
+        for bad in ["wasm32-wasip2;rm", "x86;cat", "a b", "x86_64$VAR"] {
+            assert!(
+                validate_spawn_build_target_triple(Some(bad)).is_err(),
+                "expected reject for {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn crate_root_rejects_outside_allowed_prefixes() {
+        // /tmp is outside any allowed prefix unless SQLINK_DEV_ROOT
+        // happens to be set to /tmp in the test env. Sanity-check by
+        // using a known-unrelated absolute path: the system root, or
+        // create a fresh tempdir and assert rejection.
+        let tmp = std::env::temp_dir().join(format!(
+            "sqlink-spawnbuild-rejection-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        // Make sure the tempdir is NOT under any default allowed
+        // prefix.
+        let canon = tmp.canonicalize().unwrap();
+        let allowed = allowed_crate_root_prefixes();
+        let under_allowed = allowed
+            .iter()
+            .any(|p| canon == *p || canon.starts_with(p));
+        if !under_allowed {
+            let err = validate_spawn_build_crate_root(&tmp).unwrap_err();
+            assert!(
+                err.contains("must canonicalize under one of"),
+                "got: {err}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn crate_root_accepts_compile_time_workspace() {
+        // The host's own CARGO_MANIFEST_DIR parent IS one of the
+        // allowed prefixes; the host crate itself must therefore
+        // pass validation.
+        let host_manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        validate_spawn_build_crate_root(&host_manifest).unwrap();
     }
 }
