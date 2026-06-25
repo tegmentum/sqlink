@@ -45,7 +45,7 @@ impl wasmtime_wasi::WasiView for State {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: sqlink [--db PATH] [--cache-dir DIR] [--no-component-cache] <component.wasm|.cwasm> [-- guest-args...]");
+    eprintln!("usage: sqlink [--db PATH] [--cache-dir DIR] [--no-component-cache] [--grant CAP[,CAP...]] <component.wasm|.cwasm> [-- guest-args...]");
     eprintln!("       sqlink changeset {{invert|concat}} <in1> [in2] <out>");
     eprintln!("       sqlink changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
     eprintln!("       sqlink changeset apply --db PATH --input FILE");
@@ -539,6 +539,139 @@ fn changeset_concat(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 
+/// PLAN-bundles.md #446 launch-flag mode.
+#[derive(Debug, Clone, Copy)]
+enum BundleMode {
+    /// `--bundle NAME`: exec baked binary for current target if
+    /// present; otherwise fall back to dynamic-load.
+    Auto,
+    /// `--bundle-baked NAME`: exec the baked binary; error if none.
+    Baked,
+    /// `--bundle-load NAME`: skip any baked binary; dynamic-load
+    /// every member from cas-cache.
+    Load,
+}
+
+/// Resolve a bundle launch request against the cas-cache. For dynamic-
+/// load (Auto-fallback or Load): pre-loads each member's bytes into
+/// the host before the cli component instantiates. For baked: looks
+/// up the per-target binary path and substitutes it as `component_path`.
+///
+/// Cache-miss-during-auto-load (a member's content-hash isn't in cas-
+/// cache): exits non-zero with the exact message specified in
+/// PLAN-bundles.md "Resolved design decisions (open-question pass)" #3.
+async fn resolve_bundle_launch(
+    cache: &sqlink_host::cache::Cache,
+    host: &sqlink_host::Host,
+    key: &str,
+    mode: BundleMode,
+    component_path: &mut PathBuf,
+) -> Result<()> {
+    use sqlite_extension_policy::{Capability, Policy};
+
+    let store = cache.store();
+    let (summary, members, binaries) = {
+        let guard = store.lock();
+        let summary = match guard.bundle_find_by_name(key) {
+            Ok(Some(s)) => s,
+            Ok(None) => {
+                let candidates = guard
+                    .bundle_find_by_hash_prefix(key)
+                    .map_err(|e| anyhow!("bundle lookup: {e}"))?;
+                match candidates.len() {
+                    0 => return Err(anyhow!("bundle '{key}' not found in cas-cache")),
+                    1 => candidates.into_iter().next().unwrap(),
+                    n => return Err(anyhow!(
+                        "bundle '{key}' is an ambiguous hash prefix matching {n} bundles; use more chars"
+                    )),
+                }
+            }
+            Err(e) => return Err(anyhow!("bundle lookup: {e}")),
+        };
+        let detail = guard
+            .bundle_show(summary.id)
+            .map_err(|e| anyhow!("bundle show: {e}"))?
+            .ok_or_else(|| anyhow!("bundle '{key}': vanished mid-resolve"))?;
+        let _ = guard.bundle_touch(summary.id);
+        (detail.summary, detail.members, detail.binaries)
+    };
+
+    let resolved_name = summary.name.clone().unwrap_or_else(|| key.to_string());
+    let triple = current_target_triple();
+
+    // Look for a baked binary matching the current target.
+    let baked = binaries.iter().find(|b| b.target_triple == triple);
+    match (mode, baked) {
+        (BundleMode::Baked, None) => {
+            return Err(anyhow!(
+                "bundle '{resolved_name}': --bundle-baked but no baked binary for current target ({triple}). \
+                 Run `.bundle build {resolved_name}` from inside a cli session first \
+                 (note: build path is deferred to v1.1; use `--bundle-load {resolved_name}` for now)."
+            ));
+        }
+        (BundleMode::Auto, Some(b)) | (BundleMode::Baked, Some(b)) => {
+            let p = PathBuf::from(&b.binary_path);
+            if !p.exists() {
+                return Err(anyhow!(
+                    "bundle '{resolved_name}': baked binary path {} not on disk; \
+                     `.bundle build {resolved_name}` would refresh it",
+                    p.display()
+                ));
+            }
+            eprintln!("[bundle] '{resolved_name}': exec baked binary {}", p.display());
+            *component_path = p;
+            return Ok(());
+        }
+        // Auto with no baked  fall through to dynamic-load.
+        // Load  always dynamic.
+        _ => {}
+    }
+
+    // Dynamic-load path. For each member, hit cas-cache by content-
+    // hash; load_extension_from_bytes against the host with a default
+    // Policy (matches the embed_core_dotcmd convention).
+    let policy = Policy::deny_all().with_grants([Capability::Spi]);
+    for m in &members {
+        let bytes = cache.lookup_by_hash(&m.content_hash).ok_or_else(|| {
+            anyhow!(
+                "bundle '{resolved_name}' references extension {} (sha={}) \
+                 which isn't in cas-cache. Run `.load /path/to/{}.component.wasm` \
+                 to refill, or rebuild the baked binary with `.bundle build {resolved_name}` \
+                 (note: build path is deferred to v1.1).",
+                m.extension_name,
+                &m.content_hash[..16.min(m.content_hash.len())],
+                m.extension_name,
+            )
+        })?;
+        host.load_extension_from_bytes(bytes, &m.extension_name, policy.clone())
+            .await
+            .map_err(|e| anyhow!("bundle '{resolved_name}': load {}: {e}", m.extension_name))?;
+        eprintln!(
+            "[bundle] '{resolved_name}': dynamic-loaded {} ({}…)",
+            m.extension_name,
+            &m.content_hash[..12.min(m.content_hash.len())]
+        );
+    }
+    Ok(())
+}
+
+/// Best-effort current target triple. Used to key per-target baked
+/// binaries in `bundle_binaries`. Built from the standard
+/// `std::env::consts` constants  arch + os + (libc / abi if known).
+fn current_target_triple() -> String {
+    // Common shapes: aarch64-apple-darwin, x86_64-unknown-linux-gnu,
+    // x86_64-pc-windows-msvc, wasm32-unknown-unknown.
+    let arch = std::env::consts::ARCH;
+    let os = std::env::consts::OS;
+    let family = std::env::consts::FAMILY;
+    match os {
+        "macos" => format!("{arch}-apple-darwin"),
+        "linux" => format!("{arch}-unknown-linux-gnu"),
+        "windows" => format!("{arch}-pc-windows-msvc"),
+        other => format!("{arch}-unknown-{other}-{family}"),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -564,6 +697,13 @@ async fn main() -> Result<()> {
     let mut cache_dir: Option<String> = None;
     let mut positional: Vec<String> = Vec::new();
     let mut after_dashes = false;
+    // PLAN-bundles.md #446: launch a bundle. `--bundle NAME` is the
+    // auto path (exec baked binary if present for current target,
+    // else dynamic-load from cas-cache). `--bundle-baked` forces
+    // the baked path (errors if no binary). `--bundle-load` forces
+    // dynamic-load (skips any baked binary).
+    let mut bundle_request: Option<(String, BundleMode)> = None;
+    let mut extra_guest_grants: Vec<String> = Vec::new();
     let mut i = 1;
     while i < args.len() {
         let a = &args[i];
@@ -587,6 +727,42 @@ async fn main() -> Result<()> {
                 eprintln!("--cache-dir expects a path");
                 usage();
             }
+        } else if a == "--bundle" || a == "--bundle-baked" || a == "--bundle-load" {
+            let mode = match a.as_str() {
+                "--bundle" => BundleMode::Auto,
+                "--bundle-baked" => BundleMode::Baked,
+                "--bundle-load" => BundleMode::Load,
+                _ => unreachable!(),
+            };
+            i += 1;
+            if i < args.len() {
+                bundle_request = Some((args[i].clone(), mode));
+            } else {
+                eprintln!("{a} expects a NAME or HASH-PREFIX");
+                usage();
+            }
+        } else if a == "--grant" {
+            // PLAN-bundles.md Gap C: `sqlink --grant CAP[,CAP...]`
+            // augments the grant set the cli applies to its auto-
+            // loaded embedded extensions. For v1 the only grant
+            // the cli's auto-load consults is `spawn-build` (which
+            // unlocks bundle-cli's `.bundle build` path). We
+            // translate that into the guest-side `--bundle-grant-
+            // spawn-build` flag that cli/src/lib.rs's
+            // embed_core_dotcmd reads. The flag is appended to
+            // guest_args after positional resolution below.
+            i += 1;
+            if i < args.len() {
+                for cap in args[i].split(',') {
+                    let cap = cap.trim().to_ascii_lowercase();
+                    if cap == "spawn-build" || cap == "spawn_build" {
+                        extra_guest_grants.push("--bundle-grant-spawn-build".to_string());
+                    }
+                }
+            } else {
+                eprintln!("--grant expects CAP[,CAP...]");
+                usage();
+            }
         } else if a == "--no-component-cache" {
             // PLAN-component-cache.md C3: cli flag plumbing.
             // Set the env var the host's component_cache_disabled()
@@ -600,8 +776,15 @@ async fn main() -> Result<()> {
     if positional.is_empty() {
         usage();
     }
-    let component_path = PathBuf::from(&positional[0]);
-    let guest_args: Vec<String> = positional.iter().skip(1).cloned().collect();
+    let mut component_path = PathBuf::from(&positional[0]);
+    let mut guest_args: Vec<String> = positional.iter().skip(1).cloned().collect();
+    // Prepend host-level grant flags so the cli sees them before
+    // its embed_core_dotcmd runs (Gap C plumbing  the cli reads
+    // `--bundle-grant-spawn-build` and lifts it into bundle-cli's
+    // auto-load grant list).
+    for g in extra_guest_grants.into_iter().rev() {
+        guest_args.insert(0, g);
+    }
 
     let host = Host::new()?;
     host.set_db_path(&db_path);
@@ -610,7 +793,26 @@ async fn main() -> Result<()> {
     // SQLITE_WASM_CACHE_DIR, XDG_CACHE_HOME, then ~/.cache.
     let cache_root = sqlink_host::cache::Cache::default_root(cache_dir.as_deref())?;
     let cache = sqlink_host::cache::Cache::open(cache_root)?;
-    host.set_cache(cache);
+    host.set_cache(cache.clone());
+
+    // PLAN-bundles.md #446 launch flag. Resolve --bundle / --bundle-baked
+    // / --bundle-load AFTER the cas-cache is attached  the resolution
+    // queries the bundle registry there.
+    if let Some((bundle_key, mode)) = bundle_request.as_ref() {
+        match resolve_bundle_launch(
+            &cache,
+            &host,
+            bundle_key,
+            *mode,
+            &mut component_path,
+        ).await {
+            Ok(()) => {}
+            Err(e) => {
+                eprintln!("{e}");
+                std::process::exit(2);
+            }
+        }
+    }
 
     // Register the sqlite-runtime compose provider so runnable components
     // (compose-shaped wasm components) can `linker.resolve_by_id("sqlite-runtime")`.

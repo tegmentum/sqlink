@@ -478,6 +478,7 @@ mod wasm_export {
                 wal_hook_id: 0,
                 dot_commands: alloc::vec![],
                 declared_capabilities: vec![],
+                optional_capabilities: vec![],
             }
         }
     }

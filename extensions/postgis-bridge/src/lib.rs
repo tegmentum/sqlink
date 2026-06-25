@@ -1205,6 +1205,7 @@ impl MetadataGuest for PostgisBridge {
             wal_hook_id: 0,
             dot_commands: alloc::vec![],
             declared_capabilities: alloc::vec![],
+            optional_capabilities: alloc::vec![],
         }
     }
 }

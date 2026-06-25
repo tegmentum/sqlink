@@ -290,7 +290,104 @@ Resolution order for `--bundle NAME`:
 3. Wire `--bundle` flag in sqlink-host.
 4. Native integration tests + browser smoke + docs.
 
-## Resolved design decisions
+## Resolved design decisions (gap pass, 2026-06-24)
+
+Three substrate gaps surfaced when #446 started scope investigation
+and the plan's stated APIs didn't match the actual codebase:
+
+- **Gap A: enumerating loaded extensions.** The plan referenced
+  `spi-loader.list-extensions` from #427/#433. That doesn't exist;
+  `list-extensions` lives in the CLI-facing `sqlite:wasm/extension-
+  loader` world which extensions can't import. **Decision: add
+  `list-loaded-extensions` to `loader-bridge.wit`**, mirroring how
+  `extension-digest` already works. Smallest WIT delta; reuses the
+  bridge capability bundle-cli already needs.
+
+- **Gap B: cas-cache reachability for bundle metadata.** The plan
+  said bundle-cli reads/writes the cas-cache via `spi.execute`.
+  `spi.execute` runs against the user's main connection, not the
+  host-managed cas-cache. **Decision: add a new `bundles` SPI
+  interface to `host-spi.wit`** with ~6-8 methods (`save`, `list`,
+  `show`, `delete`, `gc`, `find`, `record-binary`) and gate it
+  with new `Capability::Bundles`. Host serves CRUD against the
+  cas-cache; bundle-cli does UX + planning. Mirrors the dispatch-
+  bridge pattern from #429/#432/#433/#436/#439/#440.
+
+- **Gap C: spawn-build capability for default cli's bundle-cli
+  load.** Since bundle-cli ships in the default cli embed list,
+  every cli session loads it. **Decision: default cli grants
+  Spi + Bundles + (read-only) filesystem only.** `.bundle save NAME`
+  without `--no-build` errors helpfully: `"spawn-build capability
+  not granted. Re-run with sqlink --grant spawn-build, or use
+  .bundle save NAME --no-build to record metadata only."` Security-
+  by-default; the error message names the fix.
+
+- **Path-prefix correction**: the plan said
+  `~/.cache/xtran/builds/<hash>/`. The actual cas-cache is at
+  `~/.cache/sqlink/cas.sqlite` (per `SqliteCasStore::
+  default_external_path`). **Build dir is
+  `~/.cache/sqlink/builds/<hash>/`** to match.
+
+- **Gap F (mid-implementation, 2026-06-24): build pipeline is
+  2 stages, spawn-build only does 1.** `.bundle build` for wasm
+  targets needs cargo build  wasm-tools component new (the
+  same flow as `sqlink compose --embed`, host/src/main.rs:139-174).
+  Spawn-build's current contract only runs cargo. **Decision:
+  extend `spawn-build`'s host impl to auto-run wasm-tools
+  component new when target is `wasm32-wasip2`** (and any future
+  wasm component targets). The bundle's `binary-path` return
+  becomes:
+    - For wasm targets: path to the produced `.component.wasm`.
+    - For native targets: path to the raw executable (unchanged).
+  Spawn-build's contract widens from "cargo wrapper" to "produce
+  the buildable artifact for the requested target". Defensible
+  since wasm-tools is part of the canonical wasm-component build
+  flow; no new SPI surface needed.
+
+  Bundle-cli's call shape is unchanged. Spawn-build-probe (the
+  native-target smoke test) is unaffected.
+
+- **Gap E (mid-implementation, 2026-06-24): manifest model
+  blocks the Gap C UX.** `policy.check_manifest` enforces
+  *declared ⊆ granted* strictly; bundle-cli must declare
+  `SpawnBuild` to import the `build` interface, but declaring it
+  without the grant fails the load. So Gap C's intent ("default
+  cli loads bundle-cli with Bundles only; `.bundle build` errors
+  helpfully at call time") is unreachable under the current
+  model. **Decision: add `optional-capabilities` to the manifest
+  WIT type.** Small additive change:
+    - Manifest gains `optional-capabilities: list<capability>`
+      alongside the existing `capabilities` (now interpreted as
+      the *required* set).
+    - `check_manifest` enforces `required ⊆ granted` only;
+      optional caps can be declared without being granted.
+    - Bundle-cli declares `Bundles` as required, `SpawnBuild`
+      as optional.
+    - Runtime call to `spi.spawn-build` still fails closed via
+      the existing `spawn_build_granted` flag; bundle-cli
+      translates SQLITE_PERM into the Gap C error message.
+  Existing extensions unchanged (their `capabilities` IS the
+  required set; default `optional-capabilities = []`).
+  Generalizes for any future "may use X if granted" pattern.
+
+- **Gap D (mid-implementation, 2026-06-24): build path needs
+  package + features, not a generated crate.** The plan implied
+  `.bundle build NAME` would generate a tiny crate that
+  `include_bytes!()`s each extension and depends on sqlink-host
+  as a library. `spawn-build`'s current 1-stage `cargo build
+  --release <crate-root>` contract can't drive `sqlink compose
+  --embed X,Y,Z` (cargo + wasm-tools, 2 stages). **Decision:
+  extend `spi.spawn-build` WIT signature** with
+  `package: option<string>` + `features: list<string>` so
+  bundle-cli calls `cargo build -p sqlite-cli
+  --features embed-uuid,embed-json1,...` directly against the
+  workspace. Additive WIT change; per-world re-widening; host
+  impl gains feature-flag passthrough. Bundle-cli's `.bundle
+  build` drops the v1.1-deferred stub and wires the new params.
+  Removes the need for the generated-crate template entirely
+  (sqlink-host as rlib still v2 production-install concern).
+
+## Resolved design decisions (open-question pass)
 
 1. **Build dir location**: **cas-cache-managed.** Always materialize
    the generated crate under `~/.cache/xtran/builds/<bundle-hash>/`.

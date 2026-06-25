@@ -98,6 +98,8 @@ pub mod loaded_minimal_http {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -122,6 +124,8 @@ pub mod loaded_minimal_dns {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -147,6 +151,8 @@ pub mod loaded_stateful {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -171,6 +177,8 @@ pub mod loaded_dotcmd_aware {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -195,6 +203,8 @@ pub mod loaded_collating {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -219,6 +229,8 @@ pub mod loaded_tabular {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -252,6 +264,8 @@ pub mod loaded_tabular_mutating {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -275,6 +289,8 @@ pub mod loaded_authorizing {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -676,6 +692,8 @@ pub mod loaded_resolving {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -709,6 +727,8 @@ pub mod loaded_hooked {
             "sqlite:extension/http":       super::loaded::sqlite::extension::http,
             "sqlite:extension/wal-frames": super::loaded::sqlite::extension::wal_frames,
             "sqlite:extension/s3-base":    super::loaded::sqlite::extension::s3_base,
+            "sqlite:extension/build":      super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":    super::loaded::sqlite::extension::bundles,
         },
     });
 }
@@ -733,6 +753,8 @@ fn from_wit_cap(c: &WitCapability) -> Capability {
         WitCapability::Dns => Capability::Dns,
         WitCapability::WalFrames => Capability::WalFrames,
         WitCapability::S3 => Capability::S3,
+        WitCapability::SpawnBuild => Capability::SpawnBuild,
+        WitCapability::Bundles => Capability::Bundles,
     }
 }
 
@@ -862,6 +884,7 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
         has_wal_hook: ext.has_wal_hook,
         wal_hook_id: ext.wal_hook_id,
         declared_capabilities: vec![],
+        optional_capabilities: vec![],
     }
 }
 
@@ -1156,6 +1179,21 @@ pub struct LoadedState {
     /// chooses what to hit, and the operator's grant is the
     /// allow-the-surface bit.
     s3_granted: bool,
+    /// Whether `Capability::SpawnBuild` was in the policy grant
+    /// list at load time. The build::Host dispatcher fails
+    /// closed (SQLITE_PERM with a "spawn-build capability not
+    /// granted" message) when this is false. No rich policy
+    /// the cargo invocation is described by the extension's
+    /// arguments at call time, and the operator's grant is the
+    /// allow-the-surface bit.
+    spawn_build_granted: bool,
+    /// Whether `Capability::Bundles` was in the policy grant list
+    /// at load time. The bundles::Host dispatcher fails closed
+    /// (SQLITE_PERM with a "bundles capability not granted"
+    /// message) when this is false. Pairs with `spawn_build_granted`
+    /// for the with-build path; metadata-only `.bundle save
+    /// --no-build` / `.bundle list` / etc. need only this bit.
+    bundles_granted: bool,
     /// Optional back-reference to the owning Host. Set when the
     /// Store is built for the `dotcmd-aware` world so extensions
     /// reaching the `loader-bridge` import can delegate to the
@@ -3568,6 +3606,577 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
     }
 }
 
+/// `sqlite:extension/build` host dispatcher. Native impl: spawns
+/// `cargo build --release` against the supplied crate-root via
+/// `std::process::Command`. Captures stdout/stderr; on success
+/// resolves the produced binary path under
+/// `target/<triple-or-default>/release/` by looking for the first
+/// regular executable file there.
+///
+/// For wasm-component targets (target triple contains
+/// `wasm32-wasi`) the cargo step produces a core wasm module; we
+/// then run `wasm-tools component new` to wrap it as a wasi-
+/// preview2 component and return that path instead. spawn-build's
+/// contract is "produce the buildable artifact for the requested
+/// target" (Gap F resolution in PLAN-bundles.md).
+///
+/// Capability-gated via `LoadedState::spawn_build_granted`; without
+/// the grant we return `SQLITE_PERM` with a clear "spawn-build
+/// capability not granted" message. Substrate for
+/// PLAN-bundles.md (#445/#446).
+///
+/// The path-validation hook the WIT contract mentions is intentionally
+/// minimal in v1  cargo itself rejects nonexistent crate roots with
+/// a clear error, and the operator's capability grant is the
+/// gating bit. A future iteration may add a workdir grant
+/// (cas-cache prefix only) once the bundle-cli surface lands.
+impl loaded::sqlite::extension::build::Host for LoadedState {
+    async fn spawn_build(
+        &mut self,
+        crate_root: String,
+        target_triple: Option<String>,
+        env: Vec<(String, String)>,
+        cargo_package: Option<String>,
+        features: Vec<String>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::build::BuildOut,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        if !self.spawn_build_granted {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_PERM,
+                extended_code: libsqlite3_sys::SQLITE_PERM,
+                message:
+                    "build.spawn-build: capability not granted at load time \
+                     (add `spawn-build` to the load --grant list)"
+                        .to_string(),
+            });
+        }
+
+        let crate_root_path = std::path::PathBuf::from(&crate_root);
+        if !crate_root_path.exists() {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_CANTOPEN,
+                extended_code: libsqlite3_sys::SQLITE_CANTOPEN,
+                message: format!(
+                    "build.spawn-build: crate-root {crate_root:?} does not exist on host"
+                ),
+            });
+        }
+
+        let triple = target_triple.clone();
+        let env_clone = env.clone();
+        let package_clone = cargo_package.clone();
+        let features_clone = features.clone();
+        let join: std::result::Result<
+            std::result::Result<
+                loaded::sqlite::extension::build::BuildOut,
+                loaded::sqlite::extension::types::SqliteError,
+            >,
+            tokio::task::JoinError,
+        > = tokio::task::spawn_blocking(move || {
+            let mut cmd = std::process::Command::new("cargo");
+            cmd.arg("build").arg("--release");
+            if let Some(p) = package_clone.as_deref() {
+                cmd.arg("-p").arg(p);
+            }
+            if !features_clone.is_empty() {
+                cmd.arg("--features").arg(features_clone.join(","));
+            }
+            if let Some(t) = triple.as_deref() {
+                cmd.arg("--target").arg(t);
+            }
+            cmd.current_dir(&crate_root_path);
+            for (k, v) in &env_clone {
+                cmd.env(k, v);
+            }
+            let output = cmd.output().map_err(|e| {
+                loaded::sqlite::extension::types::SqliteError {
+                    code: libsqlite3_sys::SQLITE_ERROR,
+                    extended_code: libsqlite3_sys::SQLITE_ERROR,
+                    message: format!("build.spawn-build: failed to spawn cargo: {e}"),
+                }
+            })?;
+            let stdout =
+                String::from_utf8_lossy(&output.stdout).into_owned();
+            let stderr =
+                String::from_utf8_lossy(&output.stderr).into_owned();
+            if !output.status.success() {
+                return Err(loaded::sqlite::extension::types::SqliteError {
+                    code: libsqlite3_sys::SQLITE_ERROR,
+                    extended_code: libsqlite3_sys::SQLITE_ERROR,
+                    message: format!(
+                        "build.spawn-build: cargo exited {} \nstderr tail:\n{}",
+                        output.status,
+                        tail_lines(&stderr, 40),
+                    ),
+                });
+            }
+            // Resolve binary path. We honor the explicit target if
+            // one was provided; otherwise we look under the default
+            // `target/release/` directory. When `package` was set,
+            // prefer the binary whose stem matches the package name
+            // (cargo uses underscores in the artifact name when the
+            // package has a hyphen, so try both).
+            let release_dir = match triple.as_deref() {
+                Some(t) => crate_root_path.join("target").join(t).join("release"),
+                None => crate_root_path.join("target").join("release"),
+            };
+            let binary_path = find_release_binary(
+                &release_dir,
+                package_clone.as_deref(),
+            ).ok_or_else(|| {
+                loaded::sqlite::extension::types::SqliteError {
+                    code: libsqlite3_sys::SQLITE_NOTFOUND,
+                    extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
+                    message: format!(
+                        "build.spawn-build: cargo succeeded but no binary found under {}",
+                        release_dir.display()
+                    ),
+                }
+            })?;
+            // Gap F: for wasm-component targets, cargo produces a
+            // core wasm module; the canonical embed/load pipeline
+            // expects a wasi-preview2 component. Run `wasm-tools
+            // component new` here so spawn-build's contract is
+            // "produce the buildable artifact for the requested
+            // target" rather than "wrap cargo verbatim".
+            let is_wasm_component_target = triple
+                .as_deref()
+                .map(|t| t.contains("wasm32-wasi"))
+                .unwrap_or(false);
+            let (final_path, mut combined_stdout, mut combined_stderr) =
+                (binary_path, stdout, stderr);
+            if is_wasm_component_target {
+                let component_path = final_path.with_extension("component.wasm");
+                let mut wt = std::process::Command::new("wasm-tools");
+                wt.arg("component")
+                    .arg("new")
+                    .arg(&final_path)
+                    .arg("-o")
+                    .arg(&component_path);
+                let wt_out = wt.output().map_err(|e| {
+                    loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_ERROR,
+                        extended_code: libsqlite3_sys::SQLITE_ERROR,
+                        message: format!(
+                            "build.spawn-build: wasm-tools not found in PATH; \
+                             required to component-encode wasm target output: {e}"
+                        ),
+                    }
+                })?;
+                combined_stdout.push_str("\n--- wasm-tools stdout ---\n");
+                combined_stdout
+                    .push_str(&String::from_utf8_lossy(&wt_out.stdout));
+                combined_stderr.push_str("\n--- wasm-tools stderr ---\n");
+                combined_stderr
+                    .push_str(&String::from_utf8_lossy(&wt_out.stderr));
+                if !wt_out.status.success() {
+                    return Err(loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_ERROR,
+                        extended_code: libsqlite3_sys::SQLITE_ERROR,
+                        message: format!(
+                            "build.spawn-build: wasm-tools component new exited {}\n\
+                             stderr tail:\n{}",
+                            wt_out.status,
+                            tail_lines(
+                                &String::from_utf8_lossy(&wt_out.stderr),
+                                40
+                            ),
+                        ),
+                    });
+                }
+                return Ok(loaded::sqlite::extension::build::BuildOut {
+                    binary_path: component_path.to_string_lossy().into_owned(),
+                    stdout: combined_stdout,
+                    stderr: combined_stderr,
+                });
+            }
+            Ok(loaded::sqlite::extension::build::BuildOut {
+                binary_path: final_path.to_string_lossy().into_owned(),
+                stdout: combined_stdout,
+                stderr: combined_stderr,
+            })
+        })
+        .await;
+        match join {
+            Ok(res) => res,
+            Err(e) => Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_INTERNAL,
+                extended_code: libsqlite3_sys::SQLITE_INTERNAL,
+                message: format!("build.spawn-build: join: {e}"),
+            }),
+        }
+    }
+}
+
+/// `sqlite:extension/bundles` host dispatcher. Routes every call to
+/// the cas-cache's `SqliteCasStore::bundle_*` surface via the
+/// host_ref's Cache handle. Capability-gated on
+/// `LoadedState::bundles_granted`; without the grant every method
+/// fails closed with SQLITE_PERM.
+///
+/// The cas-cache db is host-managed (one connection per Cache, behind
+/// a parking_lot::Mutex). The dispatch holds the mutex for the
+/// duration of each call  every method is a single SQLite statement
+/// or a small transaction, so contention with `.cache *` dot commands
+/// or other bundle calls is bounded.
+impl loaded::sqlite::extension::bundles::Host for LoadedState {
+    async fn bundle_save(
+        &mut self,
+        name: Option<String>,
+        set_hash: String,
+        members: Vec<loaded::sqlite::extension::bundles::BundleMember>,
+    ) -> std::result::Result<u64, loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        let members: Vec<sqlite_cas_cache::BundleMember> = members
+            .into_iter()
+            .map(|m| sqlite_cas_cache::BundleMember {
+                extension_name: m.extension_name,
+                content_hash: m.content_hash,
+            })
+            .collect();
+        match guard.bundle_save(name.as_deref(), &set_hash, &members) {
+            Ok(id) => Ok(id),
+            Err(e) => {
+                if let Some(conflict) =
+                    e.downcast_ref::<sqlite_cas_cache::BundleAliasConflict>()
+                {
+                    return Err(loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_CONSTRAINT,
+                        extended_code: libsqlite3_sys::SQLITE_CONSTRAINT,
+                        message: format!("bundles.save: alias conflict: {conflict}"),
+                    });
+                }
+                Err(bundles_err("bundles.save", e))
+            }
+        }
+    }
+
+    async fn bundle_find_by_name(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<
+        Option<loaded::sqlite::extension::bundles::BundleSummary>,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        guard
+            .bundle_find_by_name(&name)
+            .map(|opt| opt.map(bundles_summary_to_wit))
+            .map_err(|e| bundles_err("bundles.find-by-name", e))
+    }
+
+    async fn bundle_find_by_hash_prefix(
+        &mut self,
+        prefix: String,
+    ) -> std::result::Result<
+        Vec<loaded::sqlite::extension::bundles::BundleSummary>,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        guard
+            .bundle_find_by_hash_prefix(&prefix)
+            .map(|v| v.into_iter().map(bundles_summary_to_wit).collect())
+            .map_err(|e| bundles_err("bundles.find-by-hash-prefix", e))
+    }
+
+    async fn bundle_list(
+        &mut self,
+    ) -> std::result::Result<
+        Vec<loaded::sqlite::extension::bundles::BundleSummary>,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        guard
+            .bundle_list()
+            .map(|v| v.into_iter().map(bundles_summary_to_wit).collect())
+            .map_err(|e| bundles_err("bundles.list", e))
+    }
+
+    async fn bundle_show(
+        &mut self,
+        id: u64,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::bundles::BundleDetail,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        match guard.bundle_show(id) {
+            Ok(Some(d)) => Ok(loaded::sqlite::extension::bundles::BundleDetail {
+                summary: bundles_summary_to_wit(d.summary),
+                members: d
+                    .members
+                    .into_iter()
+                    .map(|m| loaded::sqlite::extension::bundles::BundleMember {
+                        extension_name: m.extension_name,
+                        content_hash: m.content_hash,
+                    })
+                    .collect(),
+                binaries: d
+                    .binaries
+                    .into_iter()
+                    .map(|b| loaded::sqlite::extension::bundles::BundleBinary {
+                        target_triple: b.target_triple,
+                        binary_path: b.binary_path,
+                        built_at: b.built_at,
+                    })
+                    .collect(),
+            }),
+            Ok(None) => Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_NOTFOUND,
+                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
+                message: format!("bundles.show: id {id} not found"),
+            }),
+            Err(e) => Err(bundles_err("bundles.show", e)),
+        }
+    }
+
+    async fn bundle_delete(
+        &mut self,
+        id: u64,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        match guard.bundle_delete(id) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_NOTFOUND,
+                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
+                message: format!("bundles.delete: id {id} not found"),
+            }),
+            Err(e) => Err(bundles_err("bundles.delete", e)),
+        }
+    }
+
+    async fn bundle_gc(
+        &mut self,
+        policy: loaded::sqlite::extension::bundles::GcPolicy,
+    ) -> std::result::Result<Vec<u64>, loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        let rust_policy = sqlite_cas_cache::BundleGcPolicy {
+            keep_last: policy.keep_last,
+            older_than_secs: policy.older_than_secs,
+        };
+        guard
+            .bundle_gc(rust_policy)
+            .map_err(|e| bundles_err("bundles.gc", e))
+    }
+
+    async fn bundle_record_binary(
+        &mut self,
+        id: u64,
+        target_triple: String,
+        binary_path: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        // v1.1: copy the cargo target output into a per-bundle
+        // managed dir (`~/.cache/sqlink/builds/<set_hash>/<basename>`)
+        // before recording so different bundles for the same target
+        // don't trample each other (cargo writes every wasm32-wasip2
+        // build to the same target/<triple>/release/<bin> path).
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        let detail = guard
+            .bundle_show(id)
+            .map_err(|e| bundles_err("bundles.record-binary (lookup set_hash)", e))?
+            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_NOTFOUND,
+                extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
+                message: format!("bundles.record-binary: bundle {id} not found"),
+            })?;
+        let src = std::path::PathBuf::from(&binary_path);
+        let basename = src.file_name().ok_or_else(|| {
+            loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_ERROR,
+                extended_code: libsqlite3_sys::SQLITE_ERROR,
+                message: format!(
+                    "bundles.record-binary: src path {binary_path:?} has no filename"
+                ),
+            }
+        })?;
+        let dest_dir = sqlite_cas_cache::SqliteCasStore::default_builds_dir(
+            &detail.summary.set_hash,
+        );
+        let dest = dest_dir.join(basename);
+        std::fs::create_dir_all(&dest_dir).map_err(|e| {
+            loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_IOERR,
+                extended_code: libsqlite3_sys::SQLITE_IOERR,
+                message: format!(
+                    "bundles.record-binary: mkdir -p {}: {e}",
+                    dest_dir.display()
+                ),
+            }
+        })?;
+        std::fs::copy(&src, &dest).map_err(|e| {
+            loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_IOERR,
+                extended_code: libsqlite3_sys::SQLITE_IOERR,
+                message: format!(
+                    "bundles.record-binary: copy {} -> {}: {e}",
+                    src.display(),
+                    dest.display()
+                ),
+            }
+        })?;
+        let dest_str = dest.to_string_lossy().into_owned();
+        guard
+            .bundle_record_binary(id, &target_triple, &dest_str)
+            .map_err(|e| bundles_err("bundles.record-binary", e))
+    }
+
+    async fn bundle_touch(&mut self, id: u64) {
+        if let Ok(store) = bundles_open_store(self) {
+            let guard = store.lock();
+            let _ = guard.bundle_touch(id);
+        }
+    }
+}
+
+/// Resolve the cas-cache `SqliteCasStore` handle from the LoadedState,
+/// applying the bundles capability gate first. Centralized so every
+/// bundle dispatch has the same gate + same error shape.
+fn bundles_open_store(
+    state: &LoadedState,
+) -> std::result::Result<
+    std::sync::Arc<parking_lot::Mutex<sqlite_cas_cache::SqliteCasStore>>,
+    loaded::sqlite::extension::types::SqliteError,
+> {
+    if !state.bundles_granted {
+        return Err(loaded::sqlite::extension::types::SqliteError {
+            code: libsqlite3_sys::SQLITE_PERM,
+            extended_code: libsqlite3_sys::SQLITE_PERM,
+            message: "bundles: capability not granted at load time \
+                      (add `bundles` to the load --grant list)"
+                .into(),
+        });
+    }
+    let host = state.host_ref.as_ref().ok_or_else(|| {
+        loaded::sqlite::extension::types::SqliteError {
+            code: libsqlite3_sys::SQLITE_INTERNAL,
+            extended_code: libsqlite3_sys::SQLITE_INTERNAL,
+            message: "bundles: host_ref not wired (extension must \
+                      run under dotcmd-aware world to access bundles)"
+                .into(),
+        }
+    })?;
+    let cache_guard = host.cache.read();
+    let cache = cache_guard.as_ref().ok_or_else(|| {
+        loaded::sqlite::extension::types::SqliteError {
+            code: libsqlite3_sys::SQLITE_CANTOPEN,
+            extended_code: libsqlite3_sys::SQLITE_CANTOPEN,
+            message: "bundles: cas-cache not initialized on host \
+                      (run a `.cache use-*` first or pass --cache-dir)"
+                .into(),
+        }
+    })?;
+    Ok(cache.store())
+}
+
+/// Wrap an anyhow error into the WIT sqlite-error shape.
+fn bundles_err(method: &str, e: anyhow::Error) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: libsqlite3_sys::SQLITE_ERROR,
+        extended_code: libsqlite3_sys::SQLITE_ERROR,
+        message: format!("{method}: {e}"),
+    }
+}
+
+/// Convert the cas-cache `BundleSummary` into the WIT-side record.
+fn bundles_summary_to_wit(
+    s: sqlite_cas_cache::BundleSummary,
+) -> loaded::sqlite::extension::bundles::BundleSummary {
+    loaded::sqlite::extension::bundles::BundleSummary {
+        id: s.id,
+        name: s.name,
+        set_hash: s.set_hash,
+        created_at: s.created_at,
+        last_used_at: s.last_used_at,
+        member_count: s.member_count,
+        binary_count: s.binary_count,
+    }
+}
+
+/// Tail of a captured stream  bounded so error messages stay
+/// reasonable.
+fn tail_lines(s: &str, n: usize) -> String {
+    let lines: Vec<&str> = s.lines().collect();
+    let start = lines.len().saturating_sub(n);
+    lines[start..].join("\n")
+}
+
+/// Walk `release_dir` and return the first regular file that has
+/// the executable bit set (on unix) or no `.d` / `.rlib` / `.rmeta`
+/// extension. Cargo emits the main binary at the top level of
+/// `target/<triple>/release/` alongside `.d` / `.rlib` / `.rmeta`
+/// artifacts; we pick the first one that looks executable.
+fn find_release_binary(
+    release_dir: &std::path::Path,
+    package_hint: Option<&str>,
+) -> Option<std::path::PathBuf> {
+    let entries = std::fs::read_dir(release_dir).ok()?;
+    // Cargo replaces hyphens with underscores in binary stems, so the
+    // hint and its underscored sibling are both valid matches.
+    let hint_norm = package_hint.map(|p| p.replace('-', "_"));
+    let mut hint_match: Option<std::path::PathBuf> = None;
+    let mut exec_candidates: Vec<std::path::PathBuf> = Vec::new();
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let Ok(meta) = entry.metadata() else { continue };
+        if !meta.is_file() {
+            continue;
+        }
+        // Skip cargo's intermediate artifacts.
+        match path.extension().and_then(|s| s.to_str()) {
+            Some("d") | Some("rlib") | Some("rmeta") | Some("rcgu.o") => continue,
+            _ => {}
+        }
+        let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
+        let stem_matches_hint = match (&hint_norm, package_hint) {
+            (Some(n), Some(h)) => stem == n || stem == h,
+            _ => false,
+        };
+        // On unix, prefer files with the executable bit set.
+        #[cfg(unix)]
+        let is_exec = {
+            use std::os::unix::fs::PermissionsExt;
+            meta.permissions().mode() & 0o111 != 0
+        };
+        #[cfg(not(unix))]
+        let is_exec = false;
+
+        if stem_matches_hint && is_exec {
+            return Some(path);
+        }
+        if stem_matches_hint {
+            hint_match = Some(path.clone());
+        }
+        if is_exec {
+            exec_candidates.push(path);
+            continue;
+        }
+        candidates.push(path);
+    }
+    // Hint match (even without exec bit, e.g. plain .wasm) wins next.
+    if let Some(p) = hint_match {
+        return Some(p);
+    }
+    // Then any executable.
+    if let Some(p) = exec_candidates.into_iter().next() {
+        return Some(p);
+    }
+    // Fallback: first non-intermediate file (covers windows + plain
+    // .wasm artifacts that don't carry the exec bit).
+    candidates.into_iter().next()
+}
+
 fn wal_perm_err(method: &str) -> loaded::sqlite::extension::types::SqliteError {
     loaded::sqlite::extension::types::SqliteError {
         code: libsqlite3_sys::SQLITE_PERM,
@@ -4121,6 +4730,40 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
         let components = host.components.read();
         components.get(&name).map(|e| e.digest.clone()).unwrap_or_default()
     }
+
+    async fn list_loaded_extensions(
+        &mut self,
+    ) -> Vec<loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension> {
+        let Some(ref host) = self.host_ref else { return Vec::new() };
+        let components = host.components.read();
+        let mut out: Vec<_> = components
+            .values()
+            .map(
+                |e| loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension {
+                    name: e.name.clone(),
+                    digest: e.digest.clone(),
+                },
+            )
+            .collect();
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
+    }
+
+    async fn host_target_triple(&mut self) -> String {
+        let arch = std::env::consts::ARCH;
+        let os = std::env::consts::OS;
+        let family = std::env::consts::FAMILY;
+        match os {
+            "macos" => format!("{arch}-apple-darwin"),
+            "linux" => format!("{arch}-unknown-linux-gnu"),
+            "windows" => format!("{arch}-pc-windows-msvc"),
+            other => format!("{arch}-unknown-{other}-{family}"),
+        }
+    }
+
+    async fn env_var(&mut self, name: String) -> Option<String> {
+        std::env::var(&name).ok().filter(|v| !v.is_empty())
+    }
 }
 
 /// HasData tag for the loaded-extension linker setup.
@@ -4522,6 +5165,8 @@ fn build_loaded_store(
         dns_policy: ext.policy.dns.clone(),
         wal_frames_granted: ext.policy.is_granted(Capability::WalFrames),
         s3_granted: ext.policy.is_granted(Capability::S3),
+        spawn_build_granted: ext.policy.is_granted(Capability::SpawnBuild),
+        bundles_granted: ext.policy.is_granted(Capability::Bundles),
         host_ref: None,
         cli_state_snapshot: HashMap::new(),
     };
@@ -5842,6 +6487,8 @@ impl Host {
                     L::Dns => "Dns",
                     L::WalFrames => "WalFrames",
                     L::S3 => "S3",
+                    L::SpawnBuild => "SpawnBuild",
+                    L::Bundles => "Bundles",
                 }
                 .to_string()
             })
@@ -6078,6 +6725,8 @@ impl Host {
                     L::Dns => Capability::Dns,
                     L::WalFrames => Capability::WalFrames,
                     L::S3 => Capability::S3,
+                    L::SpawnBuild => Capability::SpawnBuild,
+                    L::Bundles => Capability::Bundles,
                 }
             })
             .collect();

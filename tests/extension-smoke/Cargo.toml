@@ -84,6 +84,28 @@ path = "src/test_s3_base.rs"
 name = "extension_smoke_wal_archive"
 path = "src/test_wal_archive.rs"
 
+[[test]]
+# Substrate for sqlink#445 (PLAN-bundles.md). Loads the
+# spawn-build-probe extension, drives spawn_build_probe()
+# against a per-test trivial hello-world crate generated in a
+# tempdir, and asserts (a) the returned binary-path is under
+# the expected target/release/ prefix and (b) the file
+# actually exists on disk. Two scenarios (sqlink-native +
+# sqlink+wasm-cli). Each test SKIPs if the probe component or
+# the relevant sqlink binary isn't built.
+name = "extension_smoke_spawn_build"
+path = "src/test_spawn_build.rs"
+
+[[test]]
+# Substrate for sqlink#446 (PLAN-bundles.md). Loads bundle-cli
+# via sqlink+wasm-cli, dynamic-loads two stock extensions (uuid +
+# json1), then exercises `.bundle save / list / show / delete /
+# gc / build` and the `--bundle-load NAME` launch flag. Each test
+# uses its own --cache-dir so the bundle registry is hermetic;
+# SKIPs cleanly if sqlink/cli/extension components aren't built.
+name = "extension_smoke_bundles"
+path = "src/test_bundles.rs"
+
 [[bin]]
 name = "extension-smoke-report"
 path = "src/report.rs"

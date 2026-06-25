@@ -14,7 +14,7 @@ use anyhow::{anyhow, Context, Result};
 use sqlite_component_core::db::{Connection, OpenFlags, StepResult, Value};
 
 use crate::resolver::{ArtifactRef, ResolverRegistry, Source};
-use crate::schema::{INSTALL_SCHEMA, MIGRATE_V1_TO_V2, SCHEMA_VERSION};
+use crate::schema::{INSTALL_SCHEMA, MIGRATE_V1_TO_V2, MIGRATE_V2_TO_V3, SCHEMA_VERSION};
 
 /// Blake3 hash, 32 bytes. Wrapped so callers can pass it around
 /// without reaching for the `blake3` crate directly.
@@ -127,6 +127,20 @@ impl SqliteCasStore {
             .join("cas.sqlite")
     }
 
+    /// Default per-bundle build dir: `~/.cache/sqlink/builds/<set_hash>/`.
+    /// `.bundle build` copies the cargo target output here so each
+    /// bundle gets a stable, collision-free path independent of
+    /// cargo's single-target-dir convention. Caller is expected to
+    /// `create_dir_all` before writing.
+    pub fn default_builds_dir(set_hash: &str) -> PathBuf {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        Path::new(&home)
+            .join(".cache")
+            .join("sqlink")
+            .join("builds")
+            .join(set_hash)
+    }
+
     /// Convenience: open external mode at the default path.
     pub fn open_default_external() -> Result<Self> {
         Self::open_external(Self::default_external_path())
@@ -134,6 +148,13 @@ impl SqliteCasStore {
 
     pub fn mode(&self) -> &StoreMode {
         &self.mode
+    }
+
+    /// Direct access to the underlying connection. Used by sibling
+    /// modules (bundles) that need to issue their own prepared
+    /// statements without going through put/get/etc.
+    pub fn conn(&self) -> &Connection {
+        &self.conn
     }
 
     pub fn config(&self) -> &StoreConfig {
@@ -180,6 +201,11 @@ impl SqliteCasStore {
                     self.conn
                         .execute_batch(MIGRATE_V1_TO_V2)
                         .map_err(|e| anyhow!("migrate v1 -> v2: {}", e.message))?;
+                }
+                "2" => {
+                    self.conn
+                        .execute_batch(MIGRATE_V2_TO_V3)
+                        .map_err(|e| anyhow!("migrate v2 -> v3: {}", e.message))?;
                 }
                 _ => {
                     return Err(anyhow!(

@@ -143,6 +143,7 @@ mod wasm_export {
                 // Pure JSON over serde_json — no host capabilities needed.
                 dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
+                optional_capabilities: alloc::vec![],
             }
         }
     }
