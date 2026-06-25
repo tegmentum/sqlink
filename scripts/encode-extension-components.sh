@@ -144,7 +144,7 @@ rebuild_pkg() {
     esac
 }
 
-ok=0; failed=0
+skip=0; rebuild=0; encode=0; failed=0
 for wasm in $(find target/wasm32-wasip2/release extensions/*/target/wasm32-wasip2/release -maxdepth 1 -name "*.wasm" -not -name "*.component.wasm" 2>/dev/null); do
     out="${wasm%.wasm}.component.wasm"
     sidecar="$out.wit-hash"
@@ -155,7 +155,8 @@ for wasm in $(find target/wasm32-wasip2/release extensions/*/target/wasm32-wasip
     # AND no WIT file is newer than the component, the artifact
     # is up to date — skip everything.
     if [ -f "$sidecar" ] && [ -f "$out" ] && ! wit_newer_than "$out" "$pkg"; then
-        ok=$((ok + 1))
+        echo "[skip]    $pkg (up-to-date)"
+        skip=$((skip + 1))
         continue
     fi
 
@@ -168,30 +169,38 @@ for wasm in $(find target/wasm32-wasip2/release extensions/*/target/wasm32-wasip
         # Sidecar missing or mismatched -> WIT closure changed
         # (or unknown). Rebuild before re-encoding so the next
         # `component new` reads bindgen output from the current WIT.
+        if [ -z "$sidecar_hash" ]; then
+            echo "[rebuild] $pkg (no sidecar  unknown provenance)"
+        else
+            echo "[rebuild] $pkg (WIT skew)"
+        fi
         if ! rebuild_pkg "$pkg" "$wasm"; then
             failed=$((failed + 1))
-            echo "FAILED rebuild: $pkg"
+            echo "[fail]    $pkg (cargo build failed)"
             continue
         fi
+        rebuild=$((rebuild + 1))
         # The rebuild may have produced a new .wasm at the same
         # path; loop expression already captured the path, fall
         # through to encode.
+    else
+        echo "[encode]  $pkg (sidecar match  re-encode only)"
+        encode=$((encode + 1))
     fi
 
     # Try plain encode first
     if wasm-tools component new "$wasm" -o "$out" 2>/dev/null; then
         printf '%s' "$wit_hash" > "$sidecar"
-        ok=$((ok + 1))
         continue
     fi
     # Fallback: try with the WASI-p1 adapter (for reactor-shape artifacts)
     if wasm-tools component new "$wasm" --adapt "wasi_snapshot_preview1=$ADAPTER" -o "$out" 2>/dev/null; then
         printf '%s' "$wit_hash" > "$sidecar"
-        ok=$((ok + 1))
     else
         failed=$((failed + 1))
-        echo "FAILED: $(basename $wasm)"
+        echo "[fail]    $pkg (wasm-tools component new failed)"
     fi
 done
 
-echo "encoded: $ok / failed: $failed"
+echo
+echo "summary: skip=$skip rebuild=$rebuild encode=$encode failed=$failed"
