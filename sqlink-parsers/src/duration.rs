@@ -1,23 +1,17 @@
 //! `.bundle gc --older-than` duration value parser.
 //!
 //! Canonical source for both `bundle-cli` (wasm extension) and the
-//! `parse_duration` fuzz target. Behaviour preserved verbatim from
-//! the historical inline implementation at
-//! `extensions/bundle-cli/src/lib.rs` so the fuzz harness keeps
-//! detecting the documented `n * mul` overflow.
+//! `parse_duration` fuzz target.
 
 use alloc::format;
 use alloc::string::String;
 
 /// Parse a duration of the form `<integer><unit>` where unit is one
 /// of `s` (seconds), `m` (minutes), `h` (hours), or `d` (days).
-/// Returns the duration as a count of seconds.
-///
-/// Note: the unchecked `n * mul` at the end can panic on overflow
-/// for very large inputs. This matches the historical behaviour and
-/// is the bug the `parse_duration` fuzz target hunts. Switching to
-/// `checked_mul` is a behaviour change that should ride a separate
-/// commit if/when intended.
+/// Returns the duration as a count of seconds. Overflow on the
+/// `n * mul` step returns Err rather than panicking; the previous
+/// unchecked `n * mul` was a known crash surface flagged by the
+/// `parse_duration` fuzz target.
 pub fn parse_duration(s: &str) -> Result<u64, String> {
     let (num, mul): (&str, u64) = if let Some(n) = s.strip_suffix('s') {
         (n, 1)
@@ -33,7 +27,8 @@ pub fn parse_duration(s: &str) -> Result<u64, String> {
     let n: u64 = num
         .parse()
         .map_err(|_| format!("not an integer: {num:?}"))?;
-    Ok(n * mul)
+    n.checked_mul(mul)
+        .ok_or_else(|| format!("duration overflow: {n} * {mul} exceeds u64::MAX"))
 }
 
 #[cfg(test)]
@@ -82,12 +77,20 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "std")]
-    fn overflow_panics() {
-        // Documents the known bug: u64::MAX * 86400 overflows.
-        // Captured via catch_unwind so the suite still passes.
-        // Skipped under no_std (catch_unwind needs std).
-        let r = std::panic::catch_unwind(|| parse_duration("18446744073709551615d"));
-        assert!(r.is_err(), "expected overflow panic on huge day count");
+    fn overflow_returns_err() {
+        // u64::MAX * 86400 overflows; checked_mul returns Err
+        // instead of panicking. Regression guard against
+        // re-introducing the unchecked multiplication that the
+        // parse_duration fuzz target previously caught.
+        let e = parse_duration("18446744073709551615d").unwrap_err();
+        assert!(e.contains("overflow"), "expected overflow err, got {e}");
+    }
+
+    #[test]
+    fn overflow_with_minute_suffix() {
+        // u64::MAX m would also overflow; covers a different
+        // suffix than the day-based regression.
+        let e = parse_duration("307445734561825862m").unwrap_err();
+        assert!(e.contains("overflow"), "expected overflow err, got {e}");
     }
 }
