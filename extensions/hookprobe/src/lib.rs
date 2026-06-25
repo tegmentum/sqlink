@@ -244,6 +244,8 @@ mod wasm_export {
                     Capability::S3,
                 ],
                 optional_capabilities: alloc::vec![],
+                preferred_prefix: None,
+                prefix_expansion: None,
             }
         }
     }

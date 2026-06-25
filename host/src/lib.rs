@@ -883,6 +883,8 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
         wal_hook_id: ext.wal_hook_id,
         declared_capabilities: vec![],
         optional_capabilities: vec![],
+        preferred_prefix: ext.preferred_prefix.clone(),
+        prefix_expansion: ext.prefix_expansion.clone(),
     }
 }
 
@@ -1018,6 +1020,17 @@ pub struct LoadedExtension {
     /// extension; persists for the cli session.
     pub cached_dotcmd_aware:
         Arc<tokio::sync::Mutex<Option<CachedDotcmdAware>>>,
+    /// Extension's declared short prefix (PLAN-prefixes.md). Set
+    /// from manifest.preferred-prefix at load time. None means the
+    /// manifest didn't declare one; the loader synthesizes a
+    /// fallback at registration time.
+    pub preferred_prefix: Option<String>,
+    /// Extension's declared expansion (PLAN-prefixes.md). Set from
+    /// manifest.prefix-expansion at load time. None means the
+    /// manifest didn't declare one; the loader synthesizes a
+    /// `sqlink-internal://<crate-name>` fallback at registration
+    /// time.
+    pub prefix_expansion: Option<String>,
 }
 
 /// Which cached Store should handle a scalar call. See
@@ -6744,7 +6757,10 @@ impl Host {
             cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
 
             dot_commands: Vec::new(),
-            cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),        };
+            cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),
+            preferred_prefix: None,
+            prefix_expansion: None,
+        };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
             .await
@@ -6983,7 +6999,10 @@ impl Host {
             cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
 
             dot_commands: Vec::new(),
-            cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),        };
+            cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),
+            preferred_prefix: None,
+            prefix_expansion: None,
+        };
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
             .await
@@ -7130,6 +7149,8 @@ impl Host {
                 cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
                 dot_commands,
                 cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),
+                preferred_prefix: manifest.preferred_prefix.clone(),
+                prefix_expansion: manifest.prefix_expansion.clone(),
             }),
         );
 

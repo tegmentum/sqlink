@@ -118,6 +118,8 @@ mod wasm_export {
                 dot_commands: alloc::vec![],
                 declared_capabilities: vec![],
                 optional_capabilities: vec![],
+                preferred_prefix: None,
+                prefix_expansion: None,
             }
         }
     }
