@@ -5673,6 +5673,13 @@ pub struct Host {
     /// down. Names are sqlite3 function names (the one the
     /// SQL caller types), not WIT entry names.
     ext_scalar_registrations: Arc<Mutex<HashMap<String, Vec<(String, i32)>>>>,
+    /// PLAN-followups.md P1 live-prefer: (ext_name, function_name, n_args)
+    ///  func_id so `loader-bridge.apply-prefix-pin` can re-register
+    /// the bare-name SQLite trampoline against the pinned extension's
+    /// implementation in the current session, without waiting for a
+    /// restart. Populated by `register_scalar` alongside
+    /// `ext_scalar_registrations`.
+    ext_scalar_func_ids: Arc<Mutex<HashMap<(String, String, i32), u64>>>,
     /// PLAN-prefixes.md hot-path cache: ext_name -> (prefix, expansion)
     /// after one-time resolution + __sqlink_prefix recording. The
     /// bindings-world register-* impls (cli auto-load path) consult
@@ -6118,6 +6125,7 @@ impl Host {
             user_conn: Arc::new(Mutex::new(None)),
             trace_buf: Arc::new(Mutex::new(Vec::new())),
             ext_scalar_registrations: Arc::new(Mutex::new(HashMap::new())),
+            ext_scalar_func_ids: Arc::new(Mutex::new(HashMap::new())),
             prefix_cache: Arc::new(Mutex::new(HashMap::new())),
             ext_collation_registrations: Arc::new(Mutex::new(HashMap::new())),
             ext_aggregate_registrations: Arc::new(Mutex::new(HashMap::new())),
@@ -10524,6 +10532,15 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             .entry(ext_name.clone())
             .or_default()
             .push((name.clone(), num_args));
+        // PLAN-followups.md P1 live-prefer cache: needed by
+        // loader-bridge.apply-prefix-pin to re-register the bare-name
+        // SQLite trampoline against the pinned extension's impl in the
+        // current session. Last registration wins on duplicate
+        // (ext_name, name, num_args)  same shape as SQLite.
+        self.host
+            .ext_scalar_func_ids
+            .lock()
+            .insert((ext_name.clone(), name.clone(), num_args), func_id);
         // PLAN-prefixes.md hot-path: record (expansion, name, n_args)
         // in __sqlink_prefix_function and register the always-available
         // `prefix__name` qualified form alongside the bare name. Best-
@@ -10954,6 +10971,15 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
 
     async fn unregister_extension(&mut self, ext_name: String) {
         let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
+        // PLAN-followups.md P1 live-prefer cache  drop every
+        // (ext_name, *, *) entry alongside the scalar registrations.
+        // Pin re-registrations targeting this extension stop working
+        // immediately; a follow-up call to apply-prefix-pin will see
+        // the miss and surface a clean error.
+        {
+            let mut g = self.host.ext_scalar_func_ids.lock();
+            g.retain(|(en, _, _), _| en != &ext_name);
+        }
         let colls = self
             .host
             .ext_collation_registrations
