@@ -351,12 +351,7 @@ async fn sqlite_runtime_invoke(
             let conn = g.as_ref().ok_or_else(|| err("no db open"))?;
             let mut stmt = conn.prepare(&sql).map_err(|e| e.message)?;
             stmt.bind_all(&params).map_err(|e| e.message)?;
-            loop {
-                match stmt.step().map_err(|e| e.message)? {
-                    db::StepResult::Row => continue,
-                    db::StepResult::Done => break,
-                }
-            }
+            while let db::StepResult::Row = stmt.step().map_err(|e| e.message)? {}
             drop(stmt);
             let resp = CborValue::Map(vec![
                 (

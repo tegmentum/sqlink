@@ -84,8 +84,8 @@ pub fn install_schema(conn: &Connection) -> Result<()> {
 ///   - If both `preferred_prefix` and `prefix_expansion` are
 ///     present in the manifest, use them directly.
 ///   - Otherwise, emit a tracing warning and synthesize:
-///       prefix    = sanitize(crate_name)
-///       expansion = "sqlink-internal://" + crate_name
+///     - prefix    = sanitize(crate_name)
+///     - expansion = "sqlink-internal://" + crate_name
 ///   - The `is_synthetic` flag tells callers whether the
 ///     extension is running on the deprecation-window fallback
 ///     (so the cli can surface a roll-up warning at the end of
@@ -262,17 +262,12 @@ pub fn record_function(
             Value::Text(expansion.to_string()),
         ])
         .map_err(|e| anyhow!("bind collision-scan: {}", e.message))?;
-        loop {
-            match stmt
-                .step()
-                .map_err(|e| anyhow!("step collision-scan: {}", e.message))?
-            {
-                StepResult::Row => {
-                    if let Value::Text(s) = stmt.column_value(0) {
-                        other_expansions.push(s);
-                    }
-                }
-                StepResult::Done => break,
+        while let StepResult::Row = stmt
+            .step()
+            .map_err(|e| anyhow!("step collision-scan: {}", e.message))?
+        {
+            if let Value::Text(s) = stmt.column_value(0) {
+                other_expansions.push(s);
             }
         }
     }
