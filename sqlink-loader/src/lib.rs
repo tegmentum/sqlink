@@ -299,3 +299,122 @@ unsafe fn register_sqlink_load_ext(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    //! lib.rs is mostly the C entry point + an internal `set_err`
+    //! helper that writes the init error message via pApi malloc.
+    //! Tests focus on `set_err`'s null guards + happy-path
+    //! round-trip. The init function itself can only be tested
+    //! with a live sqlite3 instance + a wasm extension on disk;
+    //! that's covered by the host-crate integration smoke.
+    use super::*;
+    use crate::api::sqlite3_api_routines;
+    use std::ffi::CStr;
+    use std::sync::Mutex;
+
+    /// Captured malloc state. Pointer stored as `usize` so the
+    /// Mutex's Sync bound is satisfied  raw pointers aren't Send,
+    /// but the pointer value as an integer is.
+    static MALLOC_LOG: Mutex<Vec<(c_int, usize)>> = Mutex::new(Vec::new());
+
+    unsafe extern "C" fn capturing_malloc(n: c_int) -> *mut c_void {
+        // Use libc-style malloc via std::alloc. Layout requires
+        // align>0 and size>0; we get both from sqlite3's contract.
+        let layout = std::alloc::Layout::from_size_align(n as usize, 1).unwrap();
+        let p = std::alloc::alloc(layout) as *mut c_void;
+        MALLOC_LOG.lock().unwrap().push((n, p as usize));
+        p
+    }
+
+    /// A pApi table that only populates `malloc`  every other
+    /// field stays None.
+    fn fake_api_with_malloc() -> sqlite3_api_routines {
+        let mut t: sqlite3_api_routines = unsafe { std::mem::zeroed() };
+        t.malloc = Some(capturing_malloc);
+        t
+    }
+
+    /// Free a buffer captured-malloc returned. Tests must free
+    /// what they allocate; raw alloc/dealloc requires matching
+    /// layouts.
+    unsafe fn free_captured(p: *mut c_void, n: c_int) {
+        let layout = std::alloc::Layout::from_size_align(n as usize, 1).unwrap();
+        std::alloc::dealloc(p as *mut u8, layout);
+    }
+
+    #[test]
+    fn set_err_handles_null_pz_err_msg_without_panic() {
+        let table = fake_api_with_malloc();
+        let api: *const sqlite3_api_routines = &table;
+        // Should silently return; no panic, no malloc call.
+        MALLOC_LOG.lock().unwrap().clear();
+        unsafe {
+            set_err(api, std::ptr::null_mut(), "anything");
+        }
+        assert!(
+            MALLOC_LOG.lock().unwrap().is_empty(),
+            "null pz_err_msg must short-circuit before malloc"
+        );
+    }
+
+    #[test]
+    fn set_err_handles_null_p_api_without_panic() {
+        let mut msg_ptr: *mut c_char = std::ptr::null_mut();
+        // No pApi  no malloc to call  must short-circuit.
+        unsafe {
+            set_err(std::ptr::null(), &mut msg_ptr, "anything");
+        }
+        assert!(msg_ptr.is_null(), "no malloc called  pz_err_msg unchanged");
+    }
+
+    #[test]
+    fn set_err_handles_pap_i_without_malloc_function() {
+        // Zero-init pApi  malloc is None  short-circuit before
+        // deref. Important: an older sqlite3 that doesn't expose
+        // malloc must not crash us.
+        let table: sqlite3_api_routines = unsafe { std::mem::zeroed() };
+        let api: *const sqlite3_api_routines = &table;
+        let mut msg_ptr: *mut c_char = std::ptr::null_mut();
+        unsafe { set_err(api, &mut msg_ptr, "hello") };
+        assert!(msg_ptr.is_null(), "missing malloc  short-circuit, no write");
+    }
+
+    #[test]
+    fn set_err_writes_message_plus_nul_terminator() {
+        MALLOC_LOG.lock().unwrap().clear();
+        let table = fake_api_with_malloc();
+        let api: *const sqlite3_api_routines = &table;
+        let mut msg_ptr: *mut c_char = std::ptr::null_mut();
+        let msg = "sqlink-loader init: oops";
+        unsafe { set_err(api, &mut msg_ptr, msg) };
+
+        assert!(!msg_ptr.is_null(), "malloc was called  msg_ptr populated");
+        unsafe {
+            let cstr = CStr::from_ptr(msg_ptr);
+            assert_eq!(cstr.to_bytes(), msg.as_bytes());
+        }
+
+        // Free the buffer with the same layout as the capturing
+        // malloc used.
+        let log = MALLOC_LOG.lock().unwrap();
+        let (n, p_addr) = log.last().copied().expect("malloc was logged");
+        assert_eq!(n as usize, msg.len() + 1, "size must include trailing NUL");
+        assert_eq!(p_addr, msg_ptr as usize);
+        drop(log);
+        unsafe { free_captured(msg_ptr as *mut c_void, n) };
+    }
+
+    /// Module-export smoke: confirm the submodules are visible to
+    /// the rest of the crate (regression guard for accidental
+    /// privatisation during refactor).
+    #[test]
+    fn submodules_are_accessible() {
+        // Pure compile-time checks  if any of these types stop
+        // resolving, the test won't build.
+        let _: fn() -> sqlink_host::Policy = crate::load::default_policy;
+        let _: fn() -> Option<crate::api::ApiRoutines> = crate::state::api_routines;
+        let _: unsafe fn(*const sqlite3_api_routines) -> Option<crate::api::ApiRoutines> =
+            crate::api::ApiRoutines::from_raw;
+    }
+}

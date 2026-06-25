@@ -208,3 +208,230 @@ pub unsafe fn load_and_install(
 
     Ok(counts)
 }
+
+#[cfg(test)]
+mod tests {
+    //! load.rs covers the path-resolution helper, the default
+    //! policy builder, and the InstallCounts shape. The full
+    //! `load_and_install` path is exercised by the host crate's
+    //! smoke tests (it requires a live wasmtime engine + a real
+    //! `.component.wasm`); we cover the pure-logic surface here.
+    //!
+    //! Env-var tests use `--test-threads=1` (process-global env)
+    //! and clean up via a small RAII guard so test order doesn't
+    //! matter.
+    use super::*;
+    use sqlink_host::Capability;
+    use std::fs;
+
+    /// Save env-var state at construction; restore on drop. Cargo
+    /// tests share one process; without restore, leaked env-var
+    /// state contaminates sibling tests.
+    struct EnvGuard {
+        keys: Vec<(&'static str, Option<std::ffi::OsString>)>,
+    }
+    impl EnvGuard {
+        fn capture(keys: &[&'static str]) -> Self {
+            let mut saved = Vec::with_capacity(keys.len());
+            for k in keys {
+                saved.push((*k, std::env::var_os(k)));
+                std::env::remove_var(k);
+            }
+            Self { keys: saved }
+        }
+    }
+    impl Drop for EnvGuard {
+        fn drop(&mut self) {
+            for (k, v) in self.keys.drain(..) {
+                match v {
+                    Some(val) => std::env::set_var(k, val),
+                    None => std::env::remove_var(k),
+                }
+            }
+        }
+    }
+
+    // ─── default_policy() ─────────────────────────────────────────
+
+    #[test]
+    fn default_policy_grants_expected_capabilities() {
+        let p = default_policy();
+        for cap in [
+            Capability::Random,
+            Capability::Hashing,
+            Capability::Encoding,
+            Capability::Text,
+            Capability::Cache,
+            Capability::State,
+            Capability::Spi,
+            Capability::Prepared,
+            Capability::Schema,
+            Capability::Transaction,
+        ] {
+            assert!(p.is_granted(cap), "default_policy missing {cap:?}");
+        }
+    }
+
+    #[test]
+    fn default_policy_denies_dangerous_capabilities() {
+        let p = default_policy();
+        for cap in [
+            Capability::Http,
+            Capability::Dns,
+            Capability::WalFrames,
+            Capability::S3,
+            Capability::SpawnBuild,
+            Capability::Bundles,
+        ] {
+            assert!(
+                !p.is_granted(cap),
+                "default_policy should not grant {cap:?}  it's reserved for explicit opt-in"
+            );
+        }
+    }
+
+    #[test]
+    fn default_policy_validates_clean() {
+        // No Http/Dns granted  no missing HttpPolicy / DnsPolicy
+        // sub-policies expected.
+        default_policy()
+            .validate()
+            .expect("default policy must be internally consistent");
+    }
+
+    #[test]
+    fn default_policy_check_manifest_accepts_subset() {
+        let p = default_policy();
+        let declared = vec![
+            Capability::Random,
+            Capability::Hashing,
+            Capability::Spi,
+        ];
+        assert!(p.check_manifest(&declared).is_ok());
+    }
+
+    #[test]
+    fn default_policy_check_manifest_rejects_ungranted() {
+        let p = default_policy();
+        let declared = vec![Capability::Http];
+        let r = p.check_manifest(&declared);
+        assert!(r.is_err(), "Http isn't granted; expected rejection");
+    }
+
+    // ─── InstallCounts ────────────────────────────────────────────
+
+    #[test]
+    fn install_counts_default_is_zero() {
+        let c = InstallCounts::default();
+        assert_eq!(c.scalar, 0);
+        assert_eq!(c.aggregate, 0);
+        assert_eq!(c.skipped, 0);
+    }
+
+    #[test]
+    fn install_counts_is_copy_clone_debug() {
+        let a = InstallCounts { scalar: 3, aggregate: 1, skipped: 2 };
+        let b = a;          // Copy
+        let c = a.clone();  // Clone
+        assert_eq!(a.scalar, b.scalar);
+        assert_eq!(a.scalar, c.scalar);
+        // Debug is required by the warn! call site.
+        let _ = format!("{a:?}");
+    }
+
+    // ─── resolve_extension_path ───────────────────────────────────
+
+    #[test]
+    fn resolve_returns_existing_absolute_path_verbatim() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let tmp = tempfile::tempdir().unwrap();
+        let f = tmp.path().join("any-name.bin");
+        fs::write(&f, b"x").unwrap();
+        let r = resolve_extension_path(f.to_str().unwrap()).expect("absolute existing path");
+        assert_eq!(r, f);
+    }
+
+    #[test]
+    fn resolve_finds_in_ext_dir_with_extension_suffix() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("uuid_extension.component.wasm");
+        fs::write(&target, b"\0asm").unwrap();
+        std::env::set_var("SQLINK_LOADER_EXT_DIR", tmp.path());
+        let r = resolve_extension_path("uuid").expect("ext-dir hit");
+        assert_eq!(r, target);
+    }
+
+    #[test]
+    fn resolve_replaces_hyphens_with_underscores_for_filename() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let tmp = tempfile::tempdir().unwrap();
+        // Hyphenated hint should also match the underscore-rewritten
+        // filename variant.
+        let target = tmp.path().join("bundle_cli_extension.component.wasm");
+        fs::write(&target, b"\0asm").unwrap();
+        std::env::set_var("SQLINK_LOADER_EXT_DIR", tmp.path());
+        let r = resolve_extension_path("bundle-cli").expect("hyphen->underscore variant");
+        assert_eq!(r, target);
+    }
+
+    #[test]
+    fn resolve_finds_via_short_component_wasm_filename() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let tmp = tempfile::tempdir().unwrap();
+        // The 4-variant rotation includes `<name>.component.wasm`
+        // (no `_extension` suffix); make sure that arm is honored.
+        let target = tmp.path().join("myset.component.wasm");
+        fs::write(&target, b"\0asm").unwrap();
+        std::env::set_var("SQLINK_LOADER_EXT_DIR", tmp.path());
+        let r = resolve_extension_path("myset").expect("short variant");
+        assert_eq!(r, target);
+    }
+
+    #[test]
+    fn resolve_finds_via_repo_root_target_layout() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("target/wasm32-wasip2/release");
+        fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("json1_extension.component.wasm");
+        fs::write(&target, b"\0asm").unwrap();
+        std::env::set_var("SQLINK_LOADER_REPO_ROOT", tmp.path());
+        let r = resolve_extension_path("json1").expect("repo-root hit");
+        assert_eq!(r, target);
+    }
+
+    #[test]
+    fn resolve_finds_via_per_extension_workspace_layout() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("extensions/csv/target/wasm32-wasip2/release");
+        fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("csv_extension.component.wasm");
+        fs::write(&target, b"\0asm").unwrap();
+        std::env::set_var("SQLINK_LOADER_REPO_ROOT", tmp.path());
+        let r = resolve_extension_path("csv").expect("per-ext layout hit");
+        assert_eq!(r, target);
+    }
+
+    #[test]
+    fn resolve_missing_returns_err_with_hint_in_message() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
+        // Point both env vars at empty tempdirs so the lookup hits
+        // nothing and falls through to the error.
+        let tmp = tempfile::tempdir().unwrap();
+        std::env::set_var("SQLINK_LOADER_EXT_DIR", tmp.path());
+        std::env::set_var("SQLINK_LOADER_REPO_ROOT", tmp.path());
+        let r = resolve_extension_path("does-not-exist-xyz");
+        let err = r.expect_err("missing extension must error");
+        let s = format!("{err}");
+        assert!(
+            s.contains("does-not-exist-xyz"),
+            "error message should name the hint, got {s:?}"
+        );
+        assert!(
+            s.contains("SQLINK_LOADER_EXT_DIR") || s.contains("absolute path"),
+            "error message should hint at the env-var fix, got {s:?}"
+        );
+    }
+}

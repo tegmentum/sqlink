@@ -66,3 +66,62 @@ pub unsafe fn set_api_routines(ptr: *const sqlite3_api_routines) -> Result<()> {
 pub fn api_routines() -> Option<ApiRoutines> {
     API.get().copied()
 }
+
+#[cfg(test)]
+mod tests {
+    //! State tests exercise the per-process statics. Cargo runs
+    //! tests in one process and OnceLock survives across them, so
+    //! these tests are deliberately order-agnostic: each one
+    //! asserts behaviour that holds regardless of prior `set_*`
+    //! calls. We skip `host()` (would spin up a full wasmtime
+    //! engine, slow + leaks resources for the process) and
+    //! `runtime()` (would block on a multi-thread builder).
+    //! Substantive runtime/host wiring is covered by the host
+    //! crate's integration tests.
+    use super::*;
+
+    /// `set_api_routines(null)` rejects without populating the
+    /// global stash. Safe to call regardless of prior state  the
+    /// null guard fires before OnceLock::set.
+    #[test]
+    fn set_api_routines_rejects_null() {
+        unsafe {
+            let r = set_api_routines(std::ptr::null());
+            assert!(r.is_err());
+            let msg = format!("{}", r.unwrap_err());
+            assert!(msg.contains("null"), "expected null mention, got {msg:?}");
+        }
+    }
+
+    /// First valid call populates; subsequent `api_routines()`
+    /// returns `Some`. Either this test set it or an earlier test
+    /// in the same process did  either way, after a successful
+    /// set we expect `Some`.
+    #[test]
+    fn set_api_routines_accepts_non_null_and_api_routines_returns_some() {
+        let table: sqlite3_api_routines = unsafe { std::mem::zeroed() };
+        let ptr: *const sqlite3_api_routines = &table;
+        unsafe {
+            // OnceLock semantics: first set wins. We only care that
+            // SOME pApi is recorded after this call (could be this
+            // pointer or one a sibling test set first).
+            let _ = set_api_routines(ptr);
+            assert!(api_routines().is_some());
+        }
+    }
+
+    /// `set_api_routines` is idempotent: calling twice with the
+    /// same non-null pointer is OK. (OnceLock's set silently
+    /// returns Err on the second call; the wrapper discards that
+    /// and returns Ok.)
+    #[test]
+    fn set_api_routines_is_idempotent_on_double_set() {
+        let table: sqlite3_api_routines = unsafe { std::mem::zeroed() };
+        let ptr: *const sqlite3_api_routines = &table;
+        unsafe {
+            // Both calls succeed from the caller's POV.
+            assert!(set_api_routines(ptr).is_ok());
+            assert!(set_api_routines(ptr).is_ok());
+        }
+    }
+}
