@@ -121,6 +121,7 @@ jobs:
             --exclude sqlite-cas-cache \
             --exclude sqlink-native \
             --exclude sqlink-httpd \
+            --exclude sqlink-loader \
             --exclude postgis-bridge-extension \
             --exclude extension-smoke \
             --exclude extension-proptest \
