@@ -1460,6 +1460,19 @@ const MODULE_MUTABLE: ffi::sqlite3_module = ffi::sqlite3_module {
 /// CREATE VIRTUAL TABLE. `host` is captured into the OnceLock
 /// the trampolines fetch; passing different `host` instances on
 /// successive calls is a programmer error (only the first sticks).
+///
+/// # Safety
+///
+/// `db` must be a valid, open `sqlite3*` for the lifetime of the
+/// registered module; deregistering before close requires
+/// `unregister_vtab_module`. The vtab module callbacks dereference
+/// `ext_name`/`vtab_id` via the host's loaded-extension table;
+/// callers must keep the matching extension loaded until the module
+/// is unregistered.
+#[allow(clippy::too_many_arguments)] // CLIPPY: SQLite vtab modules
+// are configured by their full feature set (eponymous / mutable /
+// batched) at registration time; packing these into a config struct
+// would just move the cardinality without trimming it.
 pub unsafe fn register_vtab_module(
     db: *mut ffi::sqlite3,
     host: Host,
@@ -1505,6 +1518,11 @@ pub unsafe fn register_vtab_module(
 /// has no first-class "remove module" call — registering a
 /// fresh null module under the same name overrides the
 /// previous registration. Called by `unregister-extension`.
+///
+/// # Safety
+///
+/// `db` must be a valid, open `sqlite3*`. Calling this against a
+/// closed or never-registered handle is undefined behavior.
 pub unsafe fn unregister_vtab_module(db: *mut ffi::sqlite3, name: &str) -> c_int {
     let name_c = match CString::new(name) {
         Ok(c) => c,

@@ -1772,7 +1772,7 @@ unsafe fn register_host_dot_command_function(db: *mut libsqlite3_sys::sqlite3, h
     ) {
         if argc < 1 {
             unsafe {
-                let msg = b"dot_command: needs at least 1 arg (name)\0".as_ptr() as *const c_char;
+                let msg = c"dot_command: needs at least 1 arg (name)".as_ptr();
                 libsqlite3_sys::sqlite3_result_error(ctx, msg, -1);
             }
             return;
@@ -1822,7 +1822,7 @@ unsafe fn register_host_dot_command_function(db: *mut libsqlite3_sys::sqlite3, h
         }
     }
 
-    let name_c = b"dot_command\0".as_ptr() as *const c_char;
+    let name_c = c"dot_command".as_ptr();
     let rc = libsqlite3_sys::sqlite3_create_function_v2(
         db,
         name_c,
@@ -1958,8 +1958,7 @@ unsafe fn register_host_loaded_scalar(
         let scalar_ctx = unsafe { libsqlite3_sys::sqlite3_user_data(ctx) as *const ScalarCtx };
         if scalar_ctx.is_null() {
             unsafe {
-                let msg =
-                    b"scalar trampoline: null context\0".as_ptr() as *const std::os::raw::c_char;
+                let msg = c"scalar trampoline: null context".as_ptr();
                 libsqlite3_sys::sqlite3_result_error(ctx, msg, -1);
             }
             return;
@@ -5852,6 +5851,20 @@ pub struct VtabEntry {
     pub batched: bool,
 }
 
+/// Per-extension function registrations keyed by ext_name: list of
+/// `(function_name, num_args)` tuples for SQL functions the host
+/// registered on shared_spi_conn on the extension's behalf.
+type ExtNameAritiesMap = Arc<Mutex<HashMap<String, Vec<(String, i32)>>>>;
+
+/// `(ext_name, function_name, n_args)` -> func_id lookup used by
+/// `apply-prefix-pin` to find the right trampoline implementation
+/// when re-registering a bare-name SQLite function in-session.
+type ExtScalarFuncIds = Arc<Mutex<HashMap<(String, String, i32), u64>>>;
+
+/// `(file_extension, flavor)` -> registered language-runtime plugin.
+/// Empty-flavor entry is the default for that file extension.
+type LanguageRuntimes = Arc<RwLock<HashMap<(String, String), Arc<LanguageRuntime>>>>;
+
 /// The wasmtime engines + the registry of loaded extensions.
 ///
 /// Two engines, two trust tiers:
@@ -5908,14 +5921,14 @@ pub struct Host {
     /// Used by spi.unregister-extension to know what to tear
     /// down. Names are sqlite3 function names (the one the
     /// SQL caller types), not WIT entry names.
-    ext_scalar_registrations: Arc<Mutex<HashMap<String, Vec<(String, i32)>>>>,
+    ext_scalar_registrations: ExtNameAritiesMap,
     /// PLAN-followups.md P1 live-prefer: (ext_name, function_name, n_args)
     ///  func_id so `loader-bridge.apply-prefix-pin` can re-register
     /// the bare-name SQLite trampoline against the pinned extension's
     /// implementation in the current session, without waiting for a
     /// restart. Populated by `register_scalar` alongside
     /// `ext_scalar_registrations`.
-    ext_scalar_func_ids: Arc<Mutex<HashMap<(String, String, i32), u64>>>,
+    ext_scalar_func_ids: ExtScalarFuncIds,
     /// PLAN-prefixes.md hot-path cache: ext_name -> (prefix, expansion)
     /// after one-time resolution + __sqlink_prefix recording. The
     /// bindings-world register-* impls (cli auto-load path) consult
@@ -5930,7 +5943,7 @@ pub struct Host {
     /// PLAN-cli-stages-5-6.md Stage 5e.10: per-extension list of
     /// (name, num_args) tuples for aggregate functions the host
     /// registered. Same lifecycle as the scalar/collation maps.
-    ext_aggregate_registrations: Arc<Mutex<HashMap<String, Vec<(String, i32)>>>>,
+    ext_aggregate_registrations: ExtNameAritiesMap,
     /// PLAN-cli-stages-5-6.md Stage 5e.10: monotonically-increasing
     /// counter used to allocate aggregate context_ids on the host
     /// side. Mirrors AGG_CTX_COUNTER on the cli's old path.
@@ -5990,7 +6003,7 @@ pub struct Host {
     /// `.run foo.<ext>` looks up (ext, "") for the default flavor;
     /// `.run foo.<ext> flavor` picks a specific one. Empty-flavor
     /// entry is the default for that extension.
-    runtimes: Arc<RwLock<HashMap<(String, String), Arc<LanguageRuntime>>>>,
+    runtimes: LanguageRuntimes,
     /// PLAN-component-cache.md C1: parsed-Component LRU keyed
     /// by blake3(bytes). Saves the ~100-500ms Component::from_binary
     /// cost on a re-load of the same wasm within the host's
@@ -6459,7 +6472,7 @@ impl Host {
     /// E1: drop every `_component_cache` row from the user db.
     /// Returns bytes freed. Used by `.cache gc components`.
     pub fn component_cache_purge(&self) -> Result<u64> {
-        match self.with_user_conn(|conn| component_blob_cache::purge_all(conn)) {
+        match self.with_user_conn(component_blob_cache::purge_all) {
             Some(r) => r,
             None => Ok(0),
         }
@@ -8095,10 +8108,7 @@ impl Host {
             unsafe { clear_default_wal_autocheckpoint(conn.raw_handle()) };
             conn.wal_hook(Some(move |db_name: &str, n_frames: i32| {
                 let n = if n_frames < 0 { 0u32 } else { n_frames as u32 };
-                match sync_dispatch_on_wal_hook(&host_c, &ext_n, hook_id, db_name, n) {
-                    Ok(rc) => rc,
-                    Err(_) => 0,
-                }
+                sync_dispatch_on_wal_hook(&host_c, &ext_n, hook_id, db_name, n).unwrap_or_default()
             }));
             *self.ext_wal_hook_owner.lock() = Some((ext_name.to_string(), hook_id));
             hooks += 1;
@@ -11103,10 +11113,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         // tunnel hiccups, which is worse than a missed event.
         conn.wal_hook(Some(move |db_name: &str, n_frames: i32| {
             let n = if n_frames < 0 { 0u32 } else { n_frames as u32 };
-            match sync_dispatch_on_wal_hook(&host_c, &ext_c, hook_id, db_name, n) {
-                Ok(rc) => rc,
-                Err(_) => 0,
-            }
+            sync_dispatch_on_wal_hook(&host_c, &ext_c, hook_id, db_name, n).unwrap_or_default()
         }));
         *self.host.ext_wal_hook_owner.lock() = Some((ext_name, hook_id));
         Ok(())

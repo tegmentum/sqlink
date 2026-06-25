@@ -62,14 +62,15 @@ jobs:
 
       - name: cargo clippy
         working-directory: host
-        # --no-deps: don't lint submodule path-deps (sqlite-embed,
-        # sqlite-component-core in sqlite-wasm submodule; their lint
-        # state isn't sqlink's to enforce). All-features: covers the
-        # auth/SPI/compose paths. Warnings reported but NOT failing
-        # the build  there's a clippy-cleanup backlog tracked in
-        # PLAN-followups.md P1 that needs landing before we can
-        # bring back -D warnings.
-        run: cargo clippy --all-targets --all-features --no-deps
+        # -p sqlink-host scopes the lint to host's own crate, so
+        # path-dep extension crates don't surface their lints here
+        # (each extension has its own CI). --no-deps belt-and-braces
+        # excludes submodule path-deps (sqlite-embed,
+        # sqlite-component-core in sqlite-wasm). --all-features
+        # covers the auth/SPI/compose paths. -D warnings turns lint
+        # warnings into failures (backlog closed by fix/clippy-
+        # backlog-cleanup; PLAN-followups.md P1).
+        run: cargo clippy -p sqlink-host --all-targets --all-features --no-deps -- -D warnings
 
       - name: cargo test (host crate)
         working-directory: host
