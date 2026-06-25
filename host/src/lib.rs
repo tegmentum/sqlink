@@ -563,10 +563,7 @@ impl<'a> compose::compose::dynlink::linker::Host for HostWrap<'a> {
         // sha256 mirror column makes the lookup symmetric). Cache
         // hit → compile bytes through the TrustPolicy → instantiate
         // a dynlink-provider component → hand out the Resource.
-        let hex = digest
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect::<String>();
+        let hex = hex::encode(digest);
         let cached_bytes = {
             let g = self.host.cache.read();
             g.as_ref().and_then(|c| c.lookup_by_hash(&hex))
