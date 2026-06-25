@@ -1,0 +1,155 @@
+name: Wasm smoke
+
+# Builds the wasm side (cli + sqlink-loader + workspace + standalone
+# extensions), encodes the produced .wasm artifacts to component
+# blobs, and runs the extension-smoke native test driver against
+# the freshly-encoded components.
+#
+# Catches the "WIT skew" failure mode: a PR widens host-spi.wit (or
+# loader-bridge.wit, or a policy variant) without rebuilding the
+# extension components. The native host then expects an import set
+# the stale component doesn't provide; extension-smoke panics with
+# "failed to convert function to given type" / "no such function".
+# That used to be a "you'll discover this when you run tests
+# locally" problem. This job catches it at PR time.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  # Each push to a PR cancels the prior in-flight build. Wasm-side
+  # CI is heavy (wasi-sdk download, cargo install wasm-tools, full
+  # release-mode workspace build); piling builds up on a noisy PR
+  # branch wastes runner minutes.
+  group: wasm-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Same overrides the host jobs in ci.yml set. The repo's
+  # .cargo/config.toml.template pins build.target = wasm32-wasip2
+  # for the per-crate configs; this job explicitly targets wasm
+  # via --target on every cargo invocation, but we still want
+  # native compilation of build.rs / proc-macros to use the runner
+  # triple. Empty CARGO_BUILD_TARGET = "let cargo pick".
+  CARGO_BUILD_TARGET: ""
+  CARGO_PROFILE_DEV_DEBUG: "0"
+  CARGO_PROFILE_TEST_DEBUG: "0"
+  # The vendored excel extension needs nightly features via stable
+  # bootstrap (per the extensions/excel/.cargo/config.toml.template
+  # comment + recent ef6fe7a workaround).
+  RUSTC_BOOTSTRAP: "1"
+
+jobs:
+  wasm-smoke:
+    name: Build wasm side + extension-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install pinned Rust toolchain + wasm32-wasip2
+        run: |
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --default-toolchain none --profile minimal
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup show
+          rustup target add wasm32-wasip2
+
+      - name: Cache cargo registry + target dir
+        # Distinct shared-key from any future native-side job so we
+        # don't poison either cache with the other's artifacts.
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: wasm-smoke-v1
+          # Cache the workspace target/ + standalone-extension target/s.
+          # rust-cache only caches workspace target/ by default; the
+          # standalone-extension trees rebuild fresh each run, which
+          # is acceptable (small handful of crates each).
+          cache-targets: true
+
+      - name: Install wasi-sdk (clang + sysroot for libsqlite3-sys)
+        # Pinned to v33 by scripts/download-wasi-sdk.sh. Installs to
+        # deps/wasi-sdk/. Provides the C toolchain that
+        # libsqlite3-sys's bundled compile needs to produce wasm.
+        run: bash scripts/download-wasi-sdk.sh
+
+      - name: Generate per-crate .cargo/config.toml from .template
+        # Substitutes __WASI_SDK_PATH__ in every .cargo/config.toml.template
+        # under the workspace. The generated configs are gitignored;
+        # this script runs once per CI invocation.
+        env:
+          WASI_SDK_PATH: ${{ github.workspace }}/deps/wasi-sdk
+        run: bash scripts/setup-cargo-config.sh
+
+      - name: Install wasm-tools
+        # Used by scripts/encode-extension-components.sh and the
+        # extension-smoke loader path. --locked keeps the version
+        # deterministic across runs (and benefits from the cargo
+        # cache key above).
+        run: cargo install --locked wasm-tools
+
+      - name: Fetch wasi-preview1 reactor adapter
+        # scripts/encode-extension-components.sh expects this file
+        # for reactor-shape artifacts. The wasmtime project ships
+        # the canonical adapter alongside its releases.
+        run: |
+          mkdir -p "$HOME/.cache/xtran"
+          curl -fsSL \
+            "https://github.com/bytecodealliance/wasmtime/releases/download/v25.0.0/wasi_snapshot_preview1.reactor.wasm" \
+            -o "$HOME/.cache/xtran/wasi_snapshot_preview1.reactor.wasm"
+
+      - name: Build wasm-side workspace members
+        # Workspace contains both native crates (host, sqlite-cas-cache,
+        # sqlink-native, sqlink-httpd, the test drivers) and wasm crates
+        # (cli, sqlink-loader, the in-workspace extension crates).
+        # --target wasm32-wasip2 with --exclude on every native crate
+        # builds only the wasm side. postgis-bridge is excluded from
+        # the workspace-level build because its postgis-wasm import
+        # path needs a separate compose step.
+        run: |
+          cargo build --workspace --target wasm32-wasip2 --release \
+            --exclude host \
+            --exclude sqlite-cas-cache \
+            --exclude sqlink-native \
+            --exclude sqlink-httpd \
+            --exclude postgis-bridge-extension \
+            --exclude extension-smoke \
+            --exclude extension-proptest \
+            --exclude runnable-sqlite-demo
+
+      - name: Build standalone-workspace extensions
+        # extensions/color, formats, iban, sys-compat, list, excel are
+        # NOT workspace members (each has its own [workspace] root).
+        # The encode script picks up .wasm under their own target/ dirs.
+        # Build them explicitly so the encode step has something to
+        # encode.
+        run: |
+          for d in extensions/color extensions/formats extensions/iban \
+                   extensions/sys-compat extensions/list extensions/excel; do
+            if [ -f "$d/Cargo.toml" ]; then
+              echo "::group::build $d"
+              (cd "$d" && cargo build --target wasm32-wasip2 --release)
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Encode .wasm -> .component.wasm
+        # Idempotent. Walks target/wasm32-wasip2/release and the
+        # per-extension target/ dirs the prior step produced;
+        # wraps each .wasm via wasm-tools component new (with the
+        # wasi-p1 adapter fallback for reactor-shape artifacts).
+        run: bash scripts/encode-extension-components.sh
+
+      - name: Run extension-smoke (native driver)
+        # --test-threads=1 because of a pre-existing SIGSEGV at default
+        # parallelism with some fixtures sharing global SQLite state.
+        # Documented in fix/preexisting-breakage; safe to drop once the
+        # underlying isolation lands.
+        run: cargo test -p extension-smoke --test extension_smoke_native -- --test-threads=1

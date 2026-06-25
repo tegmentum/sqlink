@@ -56,8 +56,8 @@ jobs:
         working-directory: host
         # All tests run on the native target. The fiji_function smoke
         # test gracefully skips when the fiji_hello.wasm artifact is
-        # absent (CI doesn't build the wasm side yet — see "Future"
-        # below).
+        # absent — this job is native-only by design; wasm-side build
+        # + extension-smoke are in .github/workflows/wasm-smoke.yml.
         run: cargo test --all-features
 
   cache-tests:
@@ -105,18 +105,7 @@ jobs:
         working-directory: host
         run: cargo test --lib compose_provider --all-features
 
-# Future jobs (held until the wasm-side build is moved into CI):
-#
-#   wasm-builds:
-#     Build cli-rust, fiji-hello, sqlink-loader extensions.
-#     Needs wasi-sdk in the container (~150 MB download) and
-#     cargo-component (cargo install). The wasi-sdk + rusqlite-bundled
-#     combination is the load-bearing thing — proves the C-toolchain
-#     env vars (CC_wasm32_wasip1 / AR_wasm32_wasip1 /
-#     CFLAGS_wasm32_wasip1) are right.
-#
-#     Until that lands, host smoke tests skip the fiji path when
-#     fiji_hello.wasm isn't present (test does the existence check
-#     up front and prints a "skipping" line). Develop with
-#     `cargo component build --release` locally; CI verifies the
-#     native side stays healthy.
+# Wasm-side build + extension-smoke live in a separate workflow:
+# .github/workflows/wasm-smoke.yml. It downloads wasi-sdk, installs
+# wasm-tools, builds every extension component, and runs the smoke
+# matrix. Catches WIT-skew regressions at PR time.
