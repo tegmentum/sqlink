@@ -5997,6 +5997,23 @@ fn build_compile_cache() -> Result<Cache> {
     Cache::new(cfg).map_err(|e| anyhow!("init wasmtime cache at {}: {e}", dir.display()))
 }
 
+/// Return value from [`Host::record_function_for_extension`]. Bundles
+/// the per-function context that loader-bridge dispatch sites need:
+/// the qualified SQL identifier to register, the prefix + expansion
+/// for collision diagnostics, the other expansions currently sharing
+/// `(name, n_args)`, and whether the bare name should be installed
+/// (false when a `__sqlink_prefix_pin` row redirects bare-dispatch
+/// to a different expansion). Callers that don't need the extra
+/// diagnostic fields can just read `.qualified`; install_loaded_extension
+/// consumes the whole struct.
+pub struct RecordedFunction {
+    pub qualified: String,
+    pub prefix: String,
+    pub expansion: String,
+    pub other_expansions: Vec<String>,
+    pub want_bare: bool,
+}
+
 impl Host {
     /// Build a Host with sensible default Engine config (fuel, epoch,
     /// component-model, pooling). Spawns the epoch-bumper thread.
@@ -6703,44 +6720,67 @@ impl Host {
     }
 
     /// PLAN-prefixes.md hot-path helper. Records a function in
-    /// `__sqlink_prefix_function` keyed by (expansion, name, n_args).
-    /// Called by the bindings-world register-* impls AFTER the bare
-    /// name has been registered with SQLite. Returns the qualified
-    /// form (`prefix__name`) for the caller to also register, or
-    /// `None` if the prefix lookup failed (caller should skip the
-    /// qualified-form registration in that case).
+    /// `__sqlink_prefix_function` keyed by (expansion, name, n_args)
+    /// and returns the full registration context needed by the
+    /// caller:
+    ///   * `qualified`: `prefix__name`  always register this form.
+    ///   * `expansion`: the canonical expansion of this extension's
+    ///     prefix; used by collision diagnostics + pin lookups.
+    ///   * `other_expansions`: other expansions that have already
+    ///     registered `(name, n_args)`. Non-empty means a load-time
+    ///     collision is in effect.
+    ///   * `want_bare`: whether the bare `name` should be registered
+    ///     with SQLite. False iff a `__sqlink_prefix_pin` row pins
+    ///     bare-name dispatch at this `(name, n_args)` to a
+    ///     DIFFERENT expansion.
+    ///
+    /// Returns `None` when `ensure_prefix_for_extension` fails (no
+    /// prefix could be resolved); the caller should skip both the
+    /// qualified-form registration and the collision diagnostics
+    /// in that case.
     pub fn record_function_for_extension(
         &self,
         ext_name: &str,
         name: &str,
         n_args: i32,
-    ) -> Option<String> {
+    ) -> Option<RecordedFunction> {
         let (prefix, expansion) = self.ensure_prefix_for_extension(ext_name)?;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
-        let _ = {
+        let (other_expansions, want_bare) = {
             let g = self.shared_spi_conn.lock();
             let r = g.borrow();
             if let Some(conn) = r.as_ref() {
-                prefix_registry::record_function(conn, &expansion, name, n_args, ext_name, now)
-                    .map_err(|e| {
-                        tracing::warn!(
-                            extension = ext_name,
-                            func = name,
-                            arity = n_args,
-                            err = %e,
-                            "record_function_for_extension: record_function failed"
-                        );
-                        e
-                    })
-                    .ok()
+                let others = prefix_registry::record_function(
+                    conn, &expansion, name, n_args, ext_name, now,
+                )
+                .map_err(|e| {
+                    tracing::warn!(
+                        extension = ext_name,
+                        func = name,
+                        arity = n_args,
+                        err = %e,
+                        "record_function_for_extension: record_function failed"
+                    );
+                    e
+                })
+                .unwrap_or_default();
+                let bare = prefix_registry::should_register_bare(conn, name, n_args, &expansion)
+                    .unwrap_or(true);
+                (others, bare)
             } else {
-                None
+                (Vec::new(), true)
             }
         };
-        Some(prefix_registry::qualify(&prefix, name))
+        Some(RecordedFunction {
+            qualified: prefix_registry::qualify(&prefix, name),
+            prefix,
+            expansion,
+            other_expansions,
+            want_bare,
+        })
     }
 
     /// Set the database path the cli is using. Called by sqlink
@@ -10528,10 +10568,11 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         // in __sqlink_prefix_function and register the always-available
         // `prefix__name` qualified form alongside the bare name. Best-
         // effort  failures are logged but don't fail the registration.
-        if let Some(qualified) = self
+        if let Some(rec) = self
             .host
             .record_function_for_extension(&ext_name, &name, num_args)
         {
+            let qualified = rec.qualified;
             let rc_q = {
                 let g = self.host.shared_spi_conn.lock();
                 let r = g.borrow();
@@ -10603,7 +10644,8 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         // PLAN-prefixes.md hot-path: collations don't have arity in
         // the scalar/aggregate sense  use 0 as the sentinel
         // (matches install_loaded_extension's convention).
-        if let Some(qualified) = self.host.record_function_for_extension(&ext_name, &name, 0) {
+        if let Some(rec) = self.host.record_function_for_extension(&ext_name, &name, 0) {
+            let qualified = rec.qualified;
             let rc_q = {
                 let g = self.host.shared_spi_conn.lock();
                 let r = g.borrow();
@@ -10686,10 +10728,11 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             .or_default()
             .push((name.clone(), num_args));
         // PLAN-prefixes.md hot-path: record + register the qualified form.
-        if let Some(qualified) = self
+        if let Some(rec) = self
             .host
             .record_function_for_extension(&ext_name, &name, num_args)
         {
+            let qualified = rec.qualified;
             let res_q = {
                 let g = self.host.shared_spi_conn.lock();
                 let r = g.borrow();
@@ -10913,7 +10956,8 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         // PLAN-prefixes.md hot-path: record + register the qualified
         // USING module name. Vtabs have no arity in the scalar sense
         //  use 0 (matches install_loaded_extension's convention).
-        if let Some(qualified) = self.host.record_function_for_extension(&ext_name, &name, 0) {
+        if let Some(rec) = self.host.record_function_for_extension(&ext_name, &name, 0) {
+            let qualified = rec.qualified;
             let res_q = {
                 let g = self.host.shared_spi_conn.lock();
                 let r = g.borrow();
