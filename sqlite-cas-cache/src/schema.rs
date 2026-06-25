@@ -32,6 +32,36 @@ pub const SCHEMA_VERSION: &str = "4";
 /// rows into __cas_bundle_alias.
 ///
 /// `INSTALL_MIGRATIONS` handles in-place upgrades from v1 / v2 / v3.
+///
+/// Order-of-operations note: `install_schema` runs
+/// [`BOOTSTRAP_SCHEMA`] first to materialize `__cas_meta`, then
+/// runs the migration loop to bring an existing pre-vN db up to
+/// the current `SCHEMA_VERSION`, then runs `INSTALL_SCHEMA` to
+/// finish creating any tables/indexes the migrations didn't touch
+/// (and as a no-op for a fully-up-to-date db). Running
+/// `INSTALL_SCHEMA` BEFORE migrations is incorrect: a v1 db has
+/// no `sha256` column, so the `CREATE UNIQUE INDEX ... ON
+/// __cas_artifact(sha256)` errors out before the v1->v2 ALTER
+/// gets a chance to add the column. Always migrate first.
+/// Minimal bootstrap DDL: just the `__cas_meta` key/value table.
+/// Run this BEFORE the migration loop so `read_schema_version`
+/// can safely query the meta-row on first install (where the table
+/// doesn't exist yet) without erroring out. The migration loop
+/// then sees either:
+///   * an empty `__cas_meta`  fresh db, skip migrations, proceed
+///     straight to `INSTALL_SCHEMA` which seeds the version row;
+///   * an existing `schema_version` row at vN  apply
+///     MIGRATE_V{N}_TO_V{N+1} steps until vN == `SCHEMA_VERSION`,
+///     then run `INSTALL_SCHEMA` as a CREATE-IF-NOT-EXISTS no-op
+///     that doubles as a safety-net for any post-migration
+///     idempotent index additions.
+pub const BOOTSTRAP_SCHEMA: &str = "\
+CREATE TABLE IF NOT EXISTS __cas_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+";
+
 pub const INSTALL_SCHEMA: &str = "\
 BEGIN;
 CREATE TABLE IF NOT EXISTS __cas_artifact (
