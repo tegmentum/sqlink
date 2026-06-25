@@ -172,6 +172,29 @@ fn custom_resolver_dispatches_by_kind() {
     assert_eq!(h, blake3::hash(&payload));
 }
 
+// Mutant guard: fetch_artifact's match `Some(expected) if expected != h`
+// (store.rs:588) must NOT return the URI-bound artifact when its hash
+// differs from the caller's expected_hash. Replacing `!=` with `==` (or
+// the guard with `true`/`false`) lets the bound-URI bytes pass through
+// even when they're the wrong artifact.
+#[test]
+fn fetch_artifact_rejects_uri_when_hash_mismatch() {
+    let (_d, mut store) = fresh_store();
+    // Pre-bind URI "u" to artifact A. Then ask for B via the same URI
+    // with expected_hash=B. The bound A must not be returned.
+    let hash_a = store.put(b"artifact-aaaa").unwrap();
+    store.set_uri("u", &hash_a).unwrap();
+    let hash_b = blake3::hash(b"artifact-bbbb");
+    assert_ne!(hash_a, hash_b);
+    // No source registered; fetch must fail rather than return A.
+    let aref = ArtifactRef::from_source(Source::Blake3 { hash: hash_b })
+        .with_uri("u")
+        .with_expected_hash(hash_b);
+    let registry = ResolverRegistry::new();
+    let res = store.fetch_artifact(&aref, &registry);
+    assert!(res.is_err(), "fetch_artifact returned URI-bound A despite expecting B");
+}
+
 #[test]
 fn fetch_artifact_binds_uri_on_success() {
     let (dir, mut store) = fresh_store();
