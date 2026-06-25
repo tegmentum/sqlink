@@ -563,3 +563,83 @@ impl ApiRoutines {
 // Suppress unused warning on c_uint  it's re-exported for the lib
 // module if it ever needs it.
 const _: c_uint = 0;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A null pApi pointer is the only error case for `from_raw`;
+    /// caller asserts non-null = valid via the loadable-extension
+    /// contract.
+    #[test]
+    fn from_raw_null_returns_none() {
+        unsafe {
+            assert!(ApiRoutines::from_raw(std::ptr::null()).is_none());
+        }
+    }
+
+    /// A non-null pApi pointer wraps successfully. We use a zeroed
+    /// table here  every field is None or null, which is correct
+    /// for an `Option<unsafe extern "C" fn ...>` (null-pointer
+    /// optimised) or a `*const c_void`. The wrapper is just a
+    /// pointer hold; it doesn't touch contents on construction.
+    #[test]
+    fn from_raw_non_null_returns_some() {
+        let table: sqlite3_api_routines = unsafe { std::mem::zeroed() };
+        let ptr: *const sqlite3_api_routines = &table;
+        unsafe {
+            let wrapped = ApiRoutines::from_raw(ptr).expect("non-null wraps");
+            assert_eq!(wrapped.as_ptr(), ptr);
+        }
+    }
+
+    /// `as_ref` lets callers reach the table's function pointers;
+    /// since we constructed with `zeroed`, every fn-ptr Option is
+    /// None. Just check one to confirm the deref works.
+    #[test]
+    fn as_ref_returns_zeroed_table_with_none_fn_ptrs() {
+        let table: sqlite3_api_routines = unsafe { std::mem::zeroed() };
+        let ptr: *const sqlite3_api_routines = &table;
+        unsafe {
+            let wrapped = ApiRoutines::from_raw(ptr).unwrap();
+            assert!(wrapped.as_ref().create_function_v2.is_none());
+            assert!(wrapped.as_ref().result_null.is_none());
+            assert!(wrapped.as_ref().value_type.is_none());
+        }
+    }
+
+    /// `ApiRoutines` is Copy so trampolines can stash it cheaply.
+    #[test]
+    fn api_routines_is_copy() {
+        fn assert_copy<T: Copy>() {}
+        assert_copy::<ApiRoutines>();
+    }
+
+    /// The Send/Sync impls are unsafe and reasoned about in source;
+    /// this just makes sure they survive future refactors.
+    #[test]
+    fn api_routines_is_send_sync() {
+        fn assert_send_sync<T: Send + Sync>() {}
+        assert_send_sync::<ApiRoutines>();
+        assert_send_sync::<sqlite3_api_routines>();
+    }
+
+    /// Common SQLite result-code constants used by the loader's
+    /// public surface have their documented values.
+    #[test]
+    fn sqlite_constants_match_canonical_values() {
+        assert_eq!(SQLITE_OK, 0);
+        assert_eq!(SQLITE_ERROR, 1);
+        assert_eq!(SQLITE_NOMEM, 7);
+        assert_eq!(SQLITE_MISUSE, 21);
+        assert_eq!(SQLITE_UTF8, 1);
+        assert_eq!(SQLITE_INTEGER, 1);
+        assert_eq!(SQLITE_FLOAT, 2);
+        assert_eq!(SQLITE_TEXT, 3);
+        assert_eq!(SQLITE_BLOB, 4);
+        assert_eq!(SQLITE_NULL, 5);
+        assert_eq!(SQLITE_TRANSIENT, -1);
+        assert_eq!(SQLITE_STATIC, 0);
+        assert_eq!(SQLITE_DETERMINISTIC, 0x800);
+    }
+}
