@@ -1,0 +1,44 @@
+[package]
+name = "prefix-cli-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+`.prefix` dot-command extension. Manages SQL-function prefix
+namespacing (PLAN-prefixes.md). All paths read/write the host's
+__sqlink_prefix* tables via spi.execute  the loader-bridge
+substrate already installs the schema and wraps registration,
+this extension is the operator-facing surface.
+
+Subcommands:
+  .prefix add NAME EXPANSION [DESCRIPTION]
+                                  Register a new prefix.
+  .prefix list                    All prefixes, last-used desc.
+  .prefix functions NAME          List functions under prefix's expansion.
+  .prefix expansion NAME          Print expansion string only.
+  .prefix rename OLD NEW          Change short alias; function
+                                  identity (keyed by expansion)
+                                  preserved.
+  .prefix modify NAME DESCRIPTION
+                                  Update human description.
+  .prefix delete NAME             Remove short alias (function
+                                  identity rows persist).
+  .prefix prefer NAME EXTENSION   Pin bare-name dispatch to a
+                                  specific extension on next session.
+  .prefix unprefer NAME           Remove a pin.
+  .prefix conflicts               Bare-name ambiguities in effect.
+  .prefix verify                  Stale-entry diagnostic.
+
+Capability: Spi (no new capability per the plan  the __sqlink_*
+tables live in the user db and read/write goes through spi.execute).
+"""
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
