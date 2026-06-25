@@ -239,16 +239,12 @@ impl SqliteCasStore {
                     use_count    = use_count + 1",
             )
             .map_err(|e| anyhow!("prepare put: {}", e.message))?;
-        insert
-            .bind_all(&[
-                Value::Blob(hash.as_bytes().to_vec()),
-                Value::Blob(sha.to_vec()),
-                Value::Blob(bytes.to_vec()),
-                Value::Integer(bytes.len() as i64),
-                Value::Integer(now),
-                Value::Integer(now),
-            ])
-            .map_err(|e| anyhow!("bind put: {}", e.message))?;
+        insert.bind_blob_ref(1, hash.as_bytes()).map_err(|e| anyhow!("bind put hash: {}", e.message))?;
+        insert.bind_blob_ref(2, &sha).map_err(|e| anyhow!("bind put sha: {}", e.message))?;
+        insert.bind_blob_ref(3, bytes).map_err(|e| anyhow!("bind put bytes: {}", e.message))?;
+        insert.bind(4, &Value::Integer(bytes.len() as i64)).map_err(|e| anyhow!("bind put len: {}", e.message))?;
+        insert.bind(5, &Value::Integer(now)).map_err(|e| anyhow!("bind put created: {}", e.message))?;
+        insert.bind(6, &Value::Integer(now)).map_err(|e| anyhow!("bind put used: {}", e.message))?;
         match insert.step().map_err(|e| anyhow!("step put: {}", e.message))? {
             StepResult::Done => Ok(hash),
             StepResult::Row => Err(anyhow!("insert returned row")),
@@ -267,7 +263,7 @@ impl SqliteCasStore {
                 "SELECT bytes, hash FROM __cas_artifact WHERE sha256 = ?1",
             )
             .map_err(|e| anyhow!("prepare get_by_sha256: {}", e.message))?;
-        sel.bind_all(&[Value::Blob(sha256.to_vec())])
+        sel.bind_blob_ref(1, sha256)
             .map_err(|e| anyhow!("bind get_by_sha256: {}", e.message))?;
         let (bytes, blake_hash) = match sel
             .step()
@@ -314,7 +310,7 @@ impl SqliteCasStore {
             .conn
             .prepare("SELECT bytes FROM __cas_artifact WHERE hash = ?1")
             .map_err(|e| anyhow!("prepare get: {}", e.message))?;
-        sel.bind_all(&[Value::Blob(hash.as_bytes().to_vec())])
+        sel.bind_blob_ref(1, hash.as_bytes())
             .map_err(|e| anyhow!("bind get: {}", e.message))?;
         let bytes = match sel.step().map_err(|e| anyhow!("step get: {}", e.message))? {
             StepResult::Row => match sel.column_value(0) {
@@ -332,11 +328,8 @@ impl SqliteCasStore {
                      WHERE hash = ?1",
                 )
                 .map_err(|e| anyhow!("prepare get-update: {}", e.message))?;
-            upd.bind_all(&[
-                Value::Blob(hash.as_bytes().to_vec()),
-                Value::Integer(now),
-            ])
-            .map_err(|e| anyhow!("bind get-update: {}", e.message))?;
+            upd.bind_blob_ref(1, hash.as_bytes()).map_err(|e| anyhow!("bind get-update hash: {}", e.message))?;
+            upd.bind(2, &Value::Integer(now)).map_err(|e| anyhow!("bind get-update now: {}", e.message))?;
             upd.step()
                 .map_err(|e| anyhow!("step get-update: {}", e.message))?;
         }
@@ -359,12 +352,9 @@ impl SqliteCasStore {
                     last_used_at = excluded.last_used_at",
             )
             .map_err(|e| anyhow!("prepare set_uri: {}", e.message))?;
-        stmt.bind_all(&[
-            Value::Text(uri.to_string()),
-            Value::Blob(hash.as_bytes().to_vec()),
-            Value::Integer(now),
-        ])
-        .map_err(|e| anyhow!("bind set_uri: {}", e.message))?;
+        stmt.bind_text_ref(1, uri).map_err(|e| anyhow!("bind set_uri uri: {}", e.message))?;
+        stmt.bind_blob_ref(2, hash.as_bytes()).map_err(|e| anyhow!("bind set_uri hash: {}", e.message))?;
+        stmt.bind(3, &Value::Integer(now)).map_err(|e| anyhow!("bind set_uri now: {}", e.message))?;
         stmt.step()
             .map_err(|e| anyhow!("step set_uri: {}", e.message))?;
         Ok(())
@@ -378,7 +368,7 @@ impl SqliteCasStore {
             .conn
             .prepare("SELECT hash FROM __cas_uri WHERE uri = ?1")
             .map_err(|e| anyhow!("prepare resolve_uri: {}", e.message))?;
-        sel.bind_all(&[Value::Text(uri.to_string())])
+        sel.bind_text_ref(1, uri)
             .map_err(|e| anyhow!("bind resolve_uri: {}", e.message))?;
         let hash_blob = match sel
             .step()

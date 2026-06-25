@@ -152,15 +152,13 @@ impl SqliteCasStore {
                      VALUES (?1, ?2, ?3, ?3)",
                 )
                 .map_err(|e| anyhow!("prepare bundle-insert: {}", e.message))?;
-            ins.bind_all(&[
-                match name {
-                    Some(n) => Value::Text(n.to_string()),
-                    None => Value::Null,
-                },
-                Value::Text(set_hash.to_string()),
-                Value::Integer(now),
-            ])
-            .map_err(|e| anyhow!("bind bundle-insert: {}", e.message))?;
+            match name {
+                Some(n) => ins.bind_text_ref(1, n),
+                None => ins.bind(1, &Value::Null),
+            }
+            .map_err(|e| anyhow!("bind bundle-insert name: {}", e.message))?;
+            ins.bind_text_ref(2, set_hash).map_err(|e| anyhow!("bind bundle-insert hash: {}", e.message))?;
+            ins.bind(3, &Value::Integer(now)).map_err(|e| anyhow!("bind bundle-insert now: {}", e.message))?;
             ins.step()
                 .map_err(|e| anyhow!("step bundle-insert: {}", e.message))?;
             drop(ins);
@@ -174,12 +172,9 @@ impl SqliteCasStore {
                      VALUES (?1, ?2, ?3)",
                 )
                 .map_err(|e| anyhow!("prepare member-insert: {}", e.message))?;
-            ins.bind_all(&[
-                Value::Integer(id as i64),
-                Value::Text(m.extension_name.clone()),
-                Value::Text(m.content_hash.clone()),
-            ])
-            .map_err(|e| anyhow!("bind member-insert: {}", e.message))?;
+            ins.bind(1, &Value::Integer(id as i64)).map_err(|e| anyhow!("bind member-insert id: {}", e.message))?;
+            ins.bind_text_ref(2, &m.extension_name).map_err(|e| anyhow!("bind member-insert ext: {}", e.message))?;
+            ins.bind_text_ref(3, &m.content_hash).map_err(|e| anyhow!("bind member-insert hash: {}", e.message))?;
             ins.step()
                 .map_err(|e| anyhow!("step member-insert: {}", e.message))?;
         }
@@ -195,7 +190,7 @@ impl SqliteCasStore {
                  FROM __cas_bundle WHERE name = ?1",
             )
             .map_err(|e| anyhow!("prepare find-by-name: {}", e.message))?;
-        sel.bind_all(&[Value::Text(name.to_string())])
+        sel.bind_text_ref(1, name)
             .map_err(|e| anyhow!("bind find-by-name: {}", e.message))?;
         let row = match sel
             .step()
@@ -225,7 +220,7 @@ impl SqliteCasStore {
                  ORDER BY id LIMIT 1",
             )
             .map_err(|e| anyhow!("prepare find-first-by-hash: {}", e.message))?;
-        sel.bind_all(&[Value::Text(set_hash.to_string())])
+        sel.bind_text_ref(1, set_hash)
             .map_err(|e| anyhow!("bind find-first-by-hash: {}", e.message))?;
         let row = match sel
             .step()
