@@ -2683,6 +2683,12 @@ fn embed_core_dotcmd(grant_spawn_build: bool) {
     const BUNDLE_CLI_BYTES: &[u8] = include_bytes!(
         "../../extensions/bundle-cli/target/wasm32-wasip2/release/bundle_cli_extension.component.wasm"
     );
+    /// PLAN-prefixes.md: `.prefix` dot-cmd over the __sqlink_prefix*
+    /// registry. Auto-loaded with Spi only  reads + writes the
+    /// registry tables via spi.execute against the user db.
+    const PREFIX_CLI_BYTES: &[u8] = include_bytes!(
+        "../../extensions/prefix-cli/target/wasm32-wasip2/release/prefix_cli_extension.component.wasm"
+    );
     let options = LoadOptions {
         grant: Vec::new(),
         http_policy: None,
@@ -2856,6 +2862,31 @@ fn embed_core_dotcmd(grant_spawn_build: bool) {
         Err(e) => {
             eprintln!(
                 "auto-load bundle-cli failed: {} ({}). `.bundle` will read \"Unknown command\".",
+                e.message, e.code
+            );
+        }
+    }
+    // PLAN-prefixes.md: prefix-cli takes only Spi (reads/writes the
+    // user db's __sqlink_prefix* tables via spi.execute). No new
+    // capability; the registry lives in the user db.
+    let prefix_options = LoadOptions {
+        grant: vec![Capability::Spi],
+        http_policy: None,
+        dns_policy: None,
+        fs_policy: None,
+        fuel_per_call: None,
+        memory_limit_bytes: None,
+        epoch_deadline_ms: None,
+    };
+    match extension_loader::load_extension_from_bytes(
+        "prefix-cli",
+        PREFIX_CLI_BYTES,
+        &prefix_options,
+    ) {
+        Ok(_manifest) => {}
+        Err(e) => {
+            eprintln!(
+                "auto-load prefix-cli failed: {} ({}). `.prefix` will read \"Unknown command\".",
                 e.message, e.code
             );
         }

@@ -188,6 +188,17 @@ for wasm in $(find target/wasm32-wasip2/release extensions/*/target/wasm32-wasip
         encode=$((encode + 1))
     fi
 
+    # Some rust + cargo combinations (notably newer toolchains with
+    # cargo-component-style auto-detect on wasm32-wasip2) produce a
+    # `.wasm` that is ALREADY a component (binary version 0x1000d).
+    # `wasm-tools component new` rejects those with "decoding a
+    # component is not supported". In that case the source IS the
+    # component; copy in place.
+    if wasm-tools print "$wasm" 2>/dev/null | head -1 | grep -q "^(component"; then
+        cp "$wasm" "$out"
+        printf '%s' "$wit_hash" > "$sidecar"
+        continue
+    fi
     # Try plain encode first
     if wasm-tools component new "$wasm" -o "$out" 2>/dev/null; then
         printf '%s' "$wit_hash" > "$sidecar"

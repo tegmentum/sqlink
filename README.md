@@ -368,6 +368,56 @@ renders usage, prose help, and worked examples drawn from the
 extension's own manifest. Authoring guide:
 [AUTHORING-DOTCMD-COMPONENTS.md](AUTHORING-DOTCMD-COMPONENTS.md).
 
+### Function prefixes — SPARQL-style namespacing
+
+As sqlink ranges across hundreds of extensions, naming collisions
+between SQL functions become inevitable. The `.prefix` dot-cmd
+manages an additive prefix-namespace registry: every function gets
+a qualified `prefix__name(...)` form alongside the bare `name(...)`,
+so callers can explicitly target a specific implementation when two
+extensions collide on the bare name.
+
+**Strictly additive — existing SQL is never broken.** Bare-name
+calls (`SELECT uuid_v4()`) keep working exactly as they do today,
+even when a second extension registers the same name. On collision,
+SQLite's last-registered-wins default still picks the bare-name
+implementation; operators can override via `.prefix prefer`.
+
+```
+.prefix add foaf http://xmlns.com/foaf/0.1/ "FOAF ontology"
+.prefix list                       # all prefixes, last-used desc
+.prefix functions foaf             # functions under foaf's expansion
+.prefix expansion foaf             # print expansion string only
+.prefix rename foaf bar            # change alias; identity preserved
+.prefix modify foaf "Updated desc"
+.prefix delete foaf                # remove alias (warns on orphan)
+.prefix prefer concat my-ext       # pin bare-name dispatch (next session)
+.prefix unprefer concat
+.prefix conflicts                  # bare-name ambiguities diagnostic
+.prefix verify                     # registry summary + orphan check
+```
+
+Each prefix has a required **expansion** — an opaque string that
+gives the prefix its global identity. URLs are common (matches
+SPARQL convention) but any opaque token works: `com.tegmentum.foaf`,
+`urn:uuid:...`, etc. The expansion is what makes a function
+globally portable: two databases can disagree on what `foaf`
+short-name resolves to, but `http://xmlns.com/foaf/0.1/name` is the
+same function everywhere.
+
+**Extension manifest declaration** (v1.1 hard requirement):
+```toml
+[package.metadata.extension]
+preferred-prefix = "foaf"
+prefix-expansion = "http://xmlns.com/foaf/0.1/"
+```
+
+v1 provides a deprecation-window fallback: extensions missing both
+fields get a synthetic `(crate-name, sqlink-internal://crate-name)`
+pair + a load-time warning. v1.1 makes the manifest fields a hard
+requirement — extensions without them fail to load. Design + the
+full architectural rationale: [PLAN-prefixes.md](docs/plans/PLAN-prefixes.md).
+
 ## Extension catalog highlights
 
 | Category | Examples |

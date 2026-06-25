@@ -623,6 +623,7 @@ underlying set-hash row.";
         matches!(
             name,
             "bundle-cli"
+                | "prefix-cli"
                 | "core-dotcmd"
                 | "sqlink-meta-cli"
                 | "sha3sum-cli"
