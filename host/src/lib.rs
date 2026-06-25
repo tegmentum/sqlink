@@ -3663,6 +3663,26 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                 ),
             });
         }
+        if let Err(why) = validate_spawn_build_crate_root(&crate_root_path) {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_PERM,
+                extended_code: libsqlite3_sys::SQLITE_PERM,
+                message: format!(
+                    "build.spawn-build: crate-root {crate_root:?} not under an \
+                     allowed prefix ({why})"
+                ),
+            });
+        }
+        if let Err(why) = validate_spawn_build_target_triple(target_triple.as_deref()) {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_PERM,
+                extended_code: libsqlite3_sys::SQLITE_PERM,
+                message: format!(
+                    "build.spawn-build: target_triple {:?} {why}",
+                    target_triple
+                ),
+            });
+        }
 
         let triple = target_triple.clone();
         let env_clone = env.clone();
@@ -3687,16 +3707,8 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                 cmd.arg("--target").arg(t);
             }
             cmd.current_dir(&crate_root_path);
-            for (k, v) in &env_clone {
-                cmd.env(k, v);
-            }
-            let output = cmd.output().map_err(|e| {
-                loaded::sqlite::extension::types::SqliteError {
-                    code: libsqlite3_sys::SQLITE_ERROR,
-                    extended_code: libsqlite3_sys::SQLITE_ERROR,
-                    message: format!("build.spawn-build: failed to spawn cargo: {e}"),
-                }
-            })?;
+            apply_spawn_build_env(&mut cmd, &env_clone);
+            let output = run_with_timeout(&mut cmd, SPAWN_BUILD_TIMEOUT, "cargo")?;
             let stdout =
                 String::from_utf8_lossy(&output.stdout).into_owned();
             let stderr =
@@ -3755,16 +3767,8 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                     .arg(&final_path)
                     .arg("-o")
                     .arg(&component_path);
-                let wt_out = wt.output().map_err(|e| {
-                    loaded::sqlite::extension::types::SqliteError {
-                        code: libsqlite3_sys::SQLITE_ERROR,
-                        extended_code: libsqlite3_sys::SQLITE_ERROR,
-                        message: format!(
-                            "build.spawn-build: wasm-tools not found in PATH; \
-                             required to component-encode wasm target output: {e}"
-                        ),
-                    }
-                })?;
+                apply_spawn_build_env(&mut wt, &env_clone);
+                let wt_out = run_with_timeout(&mut wt, SPAWN_BUILD_TIMEOUT, "wasm-tools")?;
                 combined_stdout.push_str("\n--- wasm-tools stdout ---\n");
                 combined_stdout
                     .push_str(&String::from_utf8_lossy(&wt_out.stdout));
@@ -3828,6 +3832,23 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         set_hash: String,
         members: Vec<loaded::sqlite::extension::bundles::BundleMember>,
     ) -> std::result::Result<u64, loaded::sqlite::extension::types::SqliteError> {
+        // MEDIUM-severity defensive fix: cap + sanitize all
+        // extension-supplied string args before they reach the
+        // cas-cache. Untrusted bytes-in: a 100MB name would alloc;
+        // embedded NUL or control chars confuse sqlite bind_text
+        // and downstream display.
+        if let Some(n) = name.as_deref() {
+            validate_bundle_str(n, "name", BUNDLE_NAME_MAX)
+                .map_err(bundle_arg_err)?;
+        }
+        validate_bundle_str(&set_hash, "set_hash", BUNDLE_SET_HASH_MAX)
+            .map_err(bundle_arg_err)?;
+        for m in &members {
+            validate_bundle_str(&m.extension_name, "extension_name", BUNDLE_NAME_MAX)
+                .map_err(bundle_arg_err)?;
+            validate_bundle_str(&m.content_hash, "content_hash", BUNDLE_SET_HASH_MAX)
+                .map_err(bundle_arg_err)?;
+        }
         let store = bundles_open_store(self)?;
         let mut guard = store.lock();
         let members: Vec<sqlite_cas_cache::BundleMember> = members
@@ -4109,6 +4130,257 @@ fn tail_lines(s: &str, n: usize) -> String {
     let lines: Vec<&str> = s.lines().collect();
     let start = lines.len().saturating_sub(n);
     lines[start..].join("\n")
+}
+
+/// Build the allowlist of crate-root prefixes spawn-build may build
+/// against. Each entry is a canonicalized absolute path; a candidate
+/// crate_root is accepted iff (after canonicalization) it equals an
+/// entry OR is a descendant of one.
+///
+/// Sources, in order of precedence (each may be absent):
+///   * `~/.cache/sqlink/builds/` — the cas-cache-managed bundle build
+///     dir (Gap-pass decision #1 in PLAN-bundles.md).
+///   * `$SQLINK_DEV_ROOT` if set in the host's environment — the
+///     operator-supplied dev workspace (Gap-pass decision #2).
+///   * The compile-time workspace root baked into the host crate
+///     (`env!("CARGO_MANIFEST_DIR")`'s parent) — covers the default
+///     dev-install case where the operator built sqlink in-tree.
+fn allowed_crate_root_prefixes() -> Vec<std::path::PathBuf> {
+    let mut prefixes = Vec::new();
+    if let Some(home) = std::env::var_os("HOME") {
+        let mut p = std::path::PathBuf::from(home);
+        p.push(".cache");
+        p.push("sqlink");
+        p.push("builds");
+        if let Ok(canon) = p.canonicalize() {
+            prefixes.push(canon);
+        } else {
+            prefixes.push(p);
+        }
+    }
+    if let Ok(dev_root) = std::env::var("SQLINK_DEV_ROOT") {
+        if !dev_root.is_empty() {
+            let p = std::path::PathBuf::from(dev_root);
+            if let Ok(canon) = p.canonicalize() {
+                prefixes.push(canon);
+            } else {
+                prefixes.push(p);
+            }
+        }
+    }
+    let host_manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    if let Some(workspace_root) = host_manifest.parent() {
+        if let Ok(canon) = workspace_root.canonicalize() {
+            prefixes.push(canon);
+        } else {
+            prefixes.push(workspace_root.to_path_buf());
+        }
+    }
+    prefixes
+}
+
+/// HIGH-severity defensive fix: validate that `crate_root` resolves
+/// under one of the prefixes returned by `allowed_crate_root_prefixes`.
+/// Without this check a granted-spawn-build extension could ask the
+/// host to `cargo build` against any user-readable directory.
+///
+/// Canonicalizes both sides (resolves symlinks + `..` segments) before
+/// comparison, defeating the `~/.cache/sqlink/builds/../etc` escape.
+fn validate_spawn_build_crate_root(
+    crate_root: &std::path::Path,
+) -> std::result::Result<(), String> {
+    let canon = crate_root
+        .canonicalize()
+        .map_err(|e| format!("canonicalize failed: {e}"))?;
+    let prefixes = allowed_crate_root_prefixes();
+    for pref in &prefixes {
+        if canon == *pref || canon.starts_with(pref) {
+            return Ok(());
+        }
+    }
+    Err(format!(
+        "must canonicalize under one of: {}",
+        prefixes
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    ))
+}
+
+/// Caps for extension-supplied bundle string args. names and
+/// extension-names are operator-facing handles; 256 bytes is more
+/// than enough. set/content hashes are hex SHA-256/blake3 strings;
+/// 128 chars covers SHA-512 hex with headroom.
+const BUNDLE_NAME_MAX: usize = 256;
+const BUNDLE_SET_HASH_MAX: usize = 128;
+
+/// MEDIUM-severity defensive fix: cap + sanitize string args coming
+/// from extensions through `bundle_save`. Rejects oversize values
+/// (would alloc unboundedly downstream), control chars (corrupt
+/// terminal output), and NUL bytes (truncate sqlite bind_text).
+fn validate_bundle_str(
+    s: &str,
+    field: &'static str,
+    max_len: usize,
+) -> std::result::Result<(), String> {
+    if s.len() > max_len {
+        return Err(format!(
+            "bundles.save: {field} exceeds {max_len}-byte cap (got {})",
+            s.len()
+        ));
+    }
+    if let Some((i, c)) = s.char_indices().find(|(_, c)| c.is_control() || *c == '\0') {
+        return Err(format!(
+            "bundles.save: {field} contains control char {:?} at byte {i}",
+            c
+        ));
+    }
+    Ok(())
+}
+
+fn bundle_arg_err(msg: String) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: libsqlite3_sys::SQLITE_RANGE,
+        extended_code: libsqlite3_sys::SQLITE_RANGE,
+        message: msg,
+    }
+}
+
+/// Maximum wall-clock time a single spawn-build subprocess invocation
+/// (cargo OR wasm-tools) may take. Hardcoded for v1; making this
+/// per-call configurable would let extensions request arbitrarily
+/// long jobs.
+const SPAWN_BUILD_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(600);
+
+/// HIGH-severity defensive fix: clear the subprocess's environment
+/// before adding our own curated minimum. The prior implementation
+/// inherited the host's full env, exposing secrets like
+/// AWS_SECRET_ACCESS_KEY / GITHUB_TOKEN / etc. to any build-script
+/// in the dep tree.
+///
+/// The curated minimum is what cargo and wasm-tools actually need
+/// to function:
+///   * PATH      cargo invokes rustc, linker, build scripts
+///   * HOME      where cargo's config lives by default
+///   * USER      some tooling looks at this; harmless
+///   * CARGO_HOME, RUSTUP_HOME  cargo + toolchain mgmt
+///   * RUSTC_BOOTSTRAP  ONLY preserved if already set; required for
+///     the typed-path / excel extension build path (see #444 lesson).
+///
+/// Then any `(k, v)` pairs the extension supplied via the SPI `env`
+/// argument are appended on top. The extension can override the
+/// curated minimum but cannot READ the host's other env values.
+fn apply_spawn_build_env(
+    cmd: &mut std::process::Command,
+    extra: &[(String, String)],
+) {
+    cmd.env_clear();
+    for k in &["PATH", "HOME", "USER", "CARGO_HOME", "RUSTUP_HOME"] {
+        if let Some(v) = std::env::var_os(k) {
+            cmd.env(k, v);
+        }
+    }
+    if let Some(v) = std::env::var_os("RUSTC_BOOTSTRAP") {
+        cmd.env("RUSTC_BOOTSTRAP", v);
+    }
+    for (k, v) in extra {
+        cmd.env(k, v);
+    }
+}
+
+/// MEDIUM-severity defensive fix: cap subprocess runtime. Without
+/// this a malicious or wedged extension could pin a tokio worker
+/// indefinitely via spawn-build (cargo's `--release` is normally
+/// minutes; an infinite-loop `build.rs` is unbounded).
+///
+/// Polls the child up to `timeout`; on expiry SIGKILLs and returns
+/// a clear SQLITE_ERROR. Runs synchronously inside `spawn_blocking`
+/// so std `Child::wait_timeout` semantics are correct.
+fn run_with_timeout(
+    cmd: &mut std::process::Command,
+    timeout: std::time::Duration,
+    label: &str,
+) -> std::result::Result<
+    std::process::Output,
+    loaded::sqlite::extension::types::SqliteError,
+> {
+    use std::io::Read;
+    let mut child = cmd
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| loaded::sqlite::extension::types::SqliteError {
+            code: libsqlite3_sys::SQLITE_ERROR,
+            extended_code: libsqlite3_sys::SQLITE_ERROR,
+            message: format!("build.spawn-build: failed to spawn {label}: {e}"),
+        })?;
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut stdout = Vec::new();
+                if let Some(mut s) = child.stdout.take() {
+                    let _ = s.read_to_end(&mut stdout);
+                }
+                let mut stderr = Vec::new();
+                if let Some(mut s) = child.stderr.take() {
+                    let _ = s.read_to_end(&mut stderr);
+                }
+                return Ok(std::process::Output {
+                    status,
+                    stdout,
+                    stderr,
+                });
+            }
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_ERROR,
+                        extended_code: libsqlite3_sys::SQLITE_ERROR,
+                        message: format!(
+                            "build.spawn-build: {label} exceeded {} second timeout",
+                            timeout.as_secs()
+                        ),
+                    });
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(e) => {
+                return Err(loaded::sqlite::extension::types::SqliteError {
+                    code: libsqlite3_sys::SQLITE_ERROR,
+                    extended_code: libsqlite3_sys::SQLITE_ERROR,
+                    message: format!("build.spawn-build: {label} wait: {e}"),
+                });
+            }
+        }
+    }
+}
+
+/// HIGH-severity defensive fix: reject target_triple values containing
+/// path-traversal or shell-unsafe characters. The triple flows into
+/// both `cargo --target T` AND a `crate_root/target/<T>/release` path
+/// join; a value like `../../foo` could escape the target dir.
+///
+/// Allowed chars: ASCII lowercase letters, digits, `_`, `-`. Empty
+/// triple (None) is fine; that path uses the default release dir.
+fn validate_spawn_build_target_triple(
+    triple: Option<&str>,
+) -> std::result::Result<(), &'static str> {
+    let Some(t) = triple else { return Ok(()) };
+    if t.is_empty() {
+        return Err("must be non-empty when specified");
+    }
+    if !t
+        .chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
+    {
+        return Err("contains disallowed characters (only [a-z0-9_-] allowed)");
+    }
+    Ok(())
 }
 
 /// Walk `release_dir` and return the first regular file that has
@@ -4762,9 +5034,31 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
     }
 
     async fn env_var(&mut self, name: String) -> Option<String> {
+        // HIGH-severity defensive fix: the prior implementation
+        // returned ANY host env var to the extension, letting any
+        // Spi-granted extension exfiltrate secrets like
+        // AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN, etc. The Gap-pass
+        // resolution in PLAN-bundles.md intended only the narrow
+        // SQLINK_DEV_ROOT override; this allowlist enforces that.
+        //
+        // Any future env-var added to ENV_VAR_ALLOWLIST should be
+        // reviewed for sensitivity  these are extension-readable.
+        if !ENV_VAR_ALLOWLIST.contains(&name.as_str()) {
+            tracing::warn!(
+                requested = %name,
+                allowed = ?ENV_VAR_ALLOWLIST,
+                "loader-bridge.env-var: extension requested a non-allowlisted host env var; returning None"
+            );
+            return None;
+        }
         std::env::var(&name).ok().filter(|v| !v.is_empty())
     }
 }
+
+/// Allowlist of host env vars an Spi-granted extension may read via
+/// `loader-bridge.env-var`. Adding here is a policy change  any new
+/// entry is readable by every extension with Spi.
+const ENV_VAR_ALLOWLIST: &[&str] = &["SQLINK_DEV_ROOT"];
 
 /// HasData tag for the loaded-extension linker setup.
 pub struct LoadedHostData;
@@ -11732,5 +12026,195 @@ mod http_policy_tests {
             ..Default::default()
         };
         check_http_policy(Some(&policy), "api.example.com:8443", "GET").unwrap();
+    }
+}
+
+#[cfg(test)]
+mod spawn_build_validation_tests {
+    //! Tests for the spawn-build defensive validators. The host-side
+    //! HIGH-severity findings from the bundles-era defensive audit:
+    //! crate_root path-escape, target_triple shell-injection.
+
+    use super::*;
+
+    #[test]
+    fn target_triple_allowed() {
+        validate_spawn_build_target_triple(Some("wasm32-wasip2")).unwrap();
+        validate_spawn_build_target_triple(Some("aarch64-apple-darwin")).unwrap();
+        validate_spawn_build_target_triple(Some("x86_64-unknown-linux-gnu")).unwrap();
+        validate_spawn_build_target_triple(None).unwrap();
+    }
+
+    #[test]
+    fn target_triple_rejects_path_traversal() {
+        let err = validate_spawn_build_target_triple(Some(
+            "x86_64-unknown-linux-gnu/../../etc",
+        ))
+        .unwrap_err();
+        assert!(err.contains("disallowed characters"));
+    }
+
+    #[test]
+    fn target_triple_rejects_uppercase() {
+        let err = validate_spawn_build_target_triple(Some("WASM32-wasip2")).unwrap_err();
+        assert!(err.contains("disallowed characters"));
+    }
+
+    #[test]
+    fn target_triple_rejects_empty_string() {
+        let err = validate_spawn_build_target_triple(Some("")).unwrap_err();
+        assert!(err.contains("non-empty"));
+    }
+
+    #[test]
+    fn target_triple_rejects_shell_metas() {
+        for bad in ["wasm32-wasip2;rm", "x86;cat", "a b", "x86_64$VAR"] {
+            assert!(
+                validate_spawn_build_target_triple(Some(bad)).is_err(),
+                "expected reject for {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn crate_root_rejects_outside_allowed_prefixes() {
+        // /tmp is outside any allowed prefix unless SQLINK_DEV_ROOT
+        // happens to be set to /tmp in the test env. Sanity-check by
+        // using a known-unrelated absolute path: the system root, or
+        // create a fresh tempdir and assert rejection.
+        let tmp = std::env::temp_dir().join(format!(
+            "sqlink-spawnbuild-rejection-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&tmp).unwrap();
+        // Make sure the tempdir is NOT under any default allowed
+        // prefix.
+        let canon = tmp.canonicalize().unwrap();
+        let allowed = allowed_crate_root_prefixes();
+        let under_allowed = allowed
+            .iter()
+            .any(|p| canon == *p || canon.starts_with(p));
+        if !under_allowed {
+            let err = validate_spawn_build_crate_root(&tmp).unwrap_err();
+            assert!(
+                err.contains("must canonicalize under one of"),
+                "got: {err}"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+
+    #[test]
+    fn crate_root_accepts_compile_time_workspace() {
+        // The host's own CARGO_MANIFEST_DIR parent IS one of the
+        // allowed prefixes; the host crate itself must therefore
+        // pass validation.
+        let host_manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        validate_spawn_build_crate_root(&host_manifest).unwrap();
+    }
+
+    #[test]
+    fn env_var_allowlist_is_narrow() {
+        // Guard against accidental widening. Any change to this
+        // assertion should be paired with a security review of what
+        // a granted-Spi extension would gain access to.
+        assert_eq!(ENV_VAR_ALLOWLIST, &["SQLINK_DEV_ROOT"]);
+    }
+
+    #[test]
+    fn apply_env_clears_then_curates() {
+        // We can't directly inspect a Command's env after env_clear
+        // without running it, but we can run a trivial child (`/usr/bin/env`
+        // on unix, otherwise skip) and look at its stdout.
+        #[cfg(unix)]
+        {
+            // Pollute the host env with a sentinel that MUST NOT
+            // leak into the child.
+            // SAFETY: this test is single-threaded by virtue of
+            // running with --test-threads=1 (workspace convention);
+            // mutating process env elsewhere would race.
+            unsafe {
+                std::env::set_var("SQLINK_TEST_SECRET", "MUST_NOT_LEAK");
+            }
+            let mut cmd = std::process::Command::new("/usr/bin/env");
+            apply_spawn_build_env(&mut cmd, &[]);
+            let out = cmd.output().expect("env exec");
+            let s = String::from_utf8_lossy(&out.stdout);
+            assert!(
+                !s.contains("SQLINK_TEST_SECRET=MUST_NOT_LEAK"),
+                "child inherited unauthorized env: {s}"
+            );
+            // PATH should be present (curated minimum).
+            assert!(s.contains("PATH="), "PATH missing from curated env: {s}");
+            unsafe {
+                std::env::remove_var("SQLINK_TEST_SECRET");
+            }
+        }
+    }
+
+    #[test]
+    fn apply_env_passes_extra_through() {
+        #[cfg(unix)]
+        {
+            let mut cmd = std::process::Command::new("/usr/bin/env");
+            apply_spawn_build_env(
+                &mut cmd,
+                &[("MY_BUILD_FLAG".to_string(), "ON".to_string())],
+            );
+            let out = cmd.output().expect("env exec");
+            let s = String::from_utf8_lossy(&out.stdout);
+            assert!(
+                s.contains("MY_BUILD_FLAG=ON"),
+                "extension-supplied env not passed: {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn bundle_str_caps_length() {
+        let too_long = "a".repeat(BUNDLE_NAME_MAX + 1);
+        let err = validate_bundle_str(&too_long, "name", BUNDLE_NAME_MAX).unwrap_err();
+        assert!(err.contains("exceeds"));
+    }
+
+    #[test]
+    fn bundle_str_rejects_nul_and_control() {
+        for bad in ["name\0nul", "name\x01ctrl", "tab\there"] {
+            assert!(
+                validate_bundle_str(bad, "name", BUNDLE_NAME_MAX).is_err(),
+                "expected reject for {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bundle_str_accepts_normal_names() {
+        validate_bundle_str("my-bundle_v1", "name", BUNDLE_NAME_MAX).unwrap();
+        validate_bundle_str(
+            "4c8e1aabcd123456789abcdef0123456",
+            "set_hash",
+            BUNDLE_SET_HASH_MAX,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_with_timeout_kills_runaway() {
+        #[cfg(unix)]
+        {
+            let mut cmd = std::process::Command::new("/bin/sh");
+            cmd.arg("-c").arg("sleep 60");
+            let r = run_with_timeout(
+                &mut cmd,
+                std::time::Duration::from_millis(200),
+                "sleeper",
+            );
+            let err = r.unwrap_err();
+            assert!(
+                err.message.contains("exceeded"),
+                "expected timeout error, got: {}",
+                err.message
+            );
+        }
     }
 }

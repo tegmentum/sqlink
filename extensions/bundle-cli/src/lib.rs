@@ -22,6 +22,74 @@
 
 extern crate alloc;
 
+use alloc::format;
+use alloc::string::String;
+
+/// LOW-severity defensive fix: bundle names + hash strings flow from
+/// operator-supplied dot-cmd argv straight into stdout via
+/// `cli_stdout::write(format!("...{name}..."))`. Without sanitization
+/// a name containing ANSI escape codes (`\x1b[31m`, `\x1b]0;...`)
+/// could repaint the cli session, hide subsequent command output, or
+/// smuggle terminal-control characters into scrollback. Strip ASCII
+/// control chars (< 0x20 + 0x7f) and replace them with their `\xNN`
+/// hex escape for visibility.
+///
+/// Lives at the crate root (not in `wasm_export`) so native tests
+/// can exercise it; the wasm export pulls it in via `super::`.
+pub fn sanitize_for_terminal(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        if (c as u32) < 0x20 || c == '\x7f' {
+            out.push_str(&format!("\\x{:02x}", c as u32));
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod sanitize_tests {
+    use super::sanitize_for_terminal;
+
+    #[test]
+    fn escapes_ansi_csi() {
+        // ESC [ 31 m sequence  ANSI red color.
+        assert_eq!(
+            sanitize_for_terminal("danger\x1b[31m bad"),
+            "danger\\x1b[31m bad"
+        );
+    }
+
+    #[test]
+    fn escapes_osc_title_set() {
+        // ESC ] 0 ; ... BEL sequence  set window title.
+        assert_eq!(
+            sanitize_for_terminal("name\x1b]0;hacked\x07"),
+            "name\\x1b]0;hacked\\x07"
+        );
+    }
+
+    #[test]
+    fn escapes_bare_nul_and_del() {
+        assert_eq!(sanitize_for_terminal("a\0b\x7fc"), "a\\x00b\\x7fc");
+    }
+
+    #[test]
+    fn passes_normal_chars_through() {
+        assert_eq!(
+            sanitize_for_terminal("my-bundle_v1.2"),
+            "my-bundle_v1.2"
+        );
+    }
+
+    #[test]
+    fn passes_unicode_through() {
+        // Non-control codepoints (>= 0x20) are untouched.
+        assert_eq!(sanitize_for_terminal("café  "), "café  ");
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 mod wasm_export {
     use alloc::format;
@@ -326,11 +394,15 @@ underlying set-hash row.";
             Ok(None) => match bundles::bundle_find_by_hash_prefix(key) {
                 Ok(v) if v.len() == 1 => v.into_iter().next().unwrap(),
                 Ok(v) if v.is_empty() => {
-                    return err(format!(".bundle show: no bundle matches {key:?}"));
+                    return err(format!(
+                        ".bundle show: no bundle matches {:?}",
+                        sanitize_for_terminal(key)
+                    ));
                 }
                 Ok(_) => {
                     return err(format!(
-                        ".bundle show: {key:?} is an ambiguous hash prefix; use more chars"
+                        ".bundle show: {:?} is an ambiguous hash prefix; use more chars",
+                        sanitize_for_terminal(key)
                     ));
                 }
                 Err(e) => return err(format!(".bundle show: {}", e.message)),
@@ -373,12 +445,21 @@ underlying set-hash row.";
         };
         let summary = match bundles::bundle_find_by_name(name) {
             Ok(Some(s)) => s,
-            Ok(None) => return err(format!(".bundle delete: bundle {name:?} not found")),
+            Ok(None) => {
+                return err(format!(
+                    ".bundle delete: bundle {:?} not found",
+                    sanitize_for_terminal(name)
+                ))
+            }
             Err(e) => return err(format!(".bundle delete: {}", e.message)),
         };
         match bundles::bundle_delete(summary.id) {
             Ok(()) => {
-                cli_stdout::write(&format!("bundle '{name}' deleted (id={})\n", summary.id));
+                cli_stdout::write(&format!(
+                    "bundle '{}' deleted (id={})\n",
+                    sanitize_for_terminal(name),
+                    summary.id
+                ));
                 ok()
             }
             Err(e) => err(format!(".bundle delete: {}", e.message)),
@@ -416,7 +497,12 @@ underlying set-hash row.";
         };
         let summary = match bundles::bundle_find_by_name(&name) {
             Ok(Some(s)) => s,
-            Ok(None) => return err(format!(".bundle build: bundle {name:?} not found")),
+            Ok(None) => {
+                return err(format!(
+                    ".bundle build: bundle {:?} not found",
+                    sanitize_for_terminal(&name)
+                ))
+            }
             Err(e) => return err(format!(".bundle build: {}", e.message)),
         };
         let detail = match bundles::bundle_show(summary.id) {
@@ -436,7 +522,8 @@ underlying set-hash row.";
         {
             bundles::bundle_touch(summary.id);
             cli_stdout::write(&format!(
-                "bundle '{name}' already built for {target}: {}\n",
+                "bundle '{}' already built for {target}: {}\n",
+                sanitize_for_terminal(&name),
                 existing.binary_path
             ));
             return ok();
@@ -444,7 +531,8 @@ underlying set-hash row.";
         match do_build(&name, summary.id, &detail.members, &target) {
             Ok(path) => {
                 cli_stdout::write(&format!(
-                    "bundle '{name}' built for {target}: {path}\n"
+                    "bundle '{}' built for {target}: {path}\n",
+                    sanitize_for_terminal(&name)
                 ));
                 ok()
             }
@@ -652,6 +740,8 @@ underlying set-hash row.";
             out
         }
     }
+
+    use super::sanitize_for_terminal;
 
     fn err(msg: String) -> InvokeResult {
         InvokeResult {

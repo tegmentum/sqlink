@@ -249,6 +249,24 @@ impl SqliteCasStore {
         &self,
         prefix: &str,
     ) -> Result<Vec<BundleSummary>> {
+        // LOW-severity defensive fix: reject LIKE wildcards in the
+        // user-supplied prefix. Without this `bundle_find_by_hash_prefix("%a%")`
+        // would match any set_hash containing 'a' rather than the
+        // expected "starts with %a%" semantic. Not exploitable
+        // (read-only query) but confusing  and validating up front
+        // is easier than escaping. Hash prefixes are hex only, so
+        // we also reject anything outside [0-9a-f].
+        if prefix.is_empty() {
+            return Err(anyhow!(
+                "find-by-hash-prefix: empty prefix (use bundle_list for all)"
+            ));
+        }
+        if let Some(bad) = prefix.chars().find(|c| !c.is_ascii_hexdigit()) {
+            return Err(anyhow!(
+                "find-by-hash-prefix: prefix contains non-hex char {:?} (LIKE wildcards and other metacharacters are not allowed)",
+                bad
+            ));
+        }
         let mut sel = self
             .conn()
             .prepare(
@@ -588,4 +606,48 @@ fn unix_now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs() as i64)
         .unwrap_or(0)
+}
+
+#[cfg(test)]
+mod hash_prefix_validation_tests {
+    use crate::SqliteCasStore;
+    use sqlite_component_core::db::{Connection, OpenFlags};
+    use tempfile::TempDir;
+
+    fn fresh_store() -> (TempDir, SqliteCasStore) {
+        let dir = TempDir::new().unwrap();
+        let path = dir.path().join("cas.sqlite");
+        let conn = Connection::open(path.to_str().unwrap(), OpenFlags::DEFAULT).unwrap();
+        let store = SqliteCasStore::open_internal(conn).unwrap();
+        (dir, store)
+    }
+
+    #[test]
+    fn rejects_like_wildcards() {
+        let (_dir, store) = fresh_store();
+        for bad in ["%abc", "ab%cd", "_abc", "abc_", "abc\\d"] {
+            let err = store
+                .bundle_find_by_hash_prefix(bad)
+                .expect_err(&format!("expected reject for {bad:?}"));
+            let msg = err.to_string();
+            assert!(
+                msg.contains("LIKE wildcards") || msg.contains("non-hex"),
+                "wrong error for {bad:?}: {msg}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_empty_prefix() {
+        let (_dir, store) = fresh_store();
+        let err = store.bundle_find_by_hash_prefix("").unwrap_err();
+        assert!(err.to_string().contains("empty prefix"));
+    }
+
+    #[test]
+    fn accepts_hex_prefix() {
+        let (_dir, store) = fresh_store();
+        let rows = store.bundle_find_by_hash_prefix("4c8e1a").unwrap();
+        assert!(rows.is_empty());
+    }
 }
