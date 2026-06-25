@@ -1,0 +1,38 @@
+# cargo-mutants workspace config.
+#
+# Run baseline: `cargo mutants -p <crate> --list` (shows the mutants
+# without running tests, fast scan).
+#
+# Run real mutations: `cargo mutants -p <crate>` (slow — every
+# mutant runs the full test suite for that crate).
+#
+# CI runs this nightly per .github/workflows/mutants-nightly.yml.
+
+# Skip code that mutation testing has no business touching.
+exclude_globs = [
+    "tests/**",
+    "**/tests/**",
+    "examples/**",
+    "**/examples/**",
+    "**/target/**",
+    "fuzz/**",
+    # Wasm extensions (most of `extensions/*`) can't run native
+    # tests, so mutating them and trying to run `cargo test` is
+    # nonsense — cargo-mutants would time out or skip-mark every
+    # mutant. The non-wasm host crates (host, sqlink-loader,
+    # sqlite-cas-cache, sqlite-loader-wit) are where mutation
+    # testing has signal.
+    "extensions/**",
+    "**/build.rs",
+]
+
+# Some tests run slower than the per-mutant default budget. Bump
+# the timeout multiplier so we don't false-positive a "killed" on
+# tests that legitimately take longer than the baseline.
+timeout_multiplier = 3.0
+
+# The pre-existing SIGSEGV under default `cargo test` parallelism
+# (cas-cache regression caught during #448) means we run mutation
+# tests serialized. This argument flows into every cargo-mutants
+# baseline + mutant test invocation.
+additional_cargo_test_args = ["--", "--test-threads=1"]
