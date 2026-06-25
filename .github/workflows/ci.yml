@@ -45,10 +45,12 @@ jobs:
 
       - name: cargo fmt --check
         working-directory: host
-        # `cargo fmt --all -- --check` passes --check via the legacy
-        # rustfmt-arg form. Modern cargo fmt rejects this; --check is
-        # a cargo-fmt flag now, no `--` separator needed.
-        run: cargo fmt --all --check
+        # Lint only host's own code; --all would walk path-deps
+        # into submodules (sqlite-loader-wit, sqlite-wasm/core)
+        # whose fmt is enforced by their own CI. Drift across
+        # submodule rustfmt versions is real and shouldn't gate
+        # sqlink CI.
+        run: cargo fmt --check
 
       - name: cargo clippy
         working-directory: host
