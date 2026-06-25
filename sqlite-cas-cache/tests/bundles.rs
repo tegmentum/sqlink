@@ -108,8 +108,8 @@ fn anonymous_bundle_save_and_lookup() {
 fn find_by_hash_prefix_full_hash_matches_one() {
     let (_d, mut s) = fresh();
     let m = vec![member("uuid", "h_uuid")];
-    let id = s.bundle_save(Some("myset"), "set_hash_aaaa", &m).unwrap();
-    let hits = s.bundle_find_by_hash_prefix("set_hash_aaaa").unwrap();
+    let id = s.bundle_save(Some("myset"), "deadbeefaaaa", &m).unwrap();
+    let hits = s.bundle_find_by_hash_prefix("deadbeefaaaa").unwrap();
     assert_eq!(hits.len(), 1);
     assert_eq!(hits[0].id, id);
 }
@@ -132,7 +132,7 @@ fn find_by_hash_prefix_ambiguous_returns_all() {
 #[test]
 fn find_by_hash_prefix_no_match_returns_empty() {
     let (_d, _s) = fresh();
-    let hits = _s.bundle_find_by_hash_prefix("nothing_matches").unwrap();
+    let hits = _s.bundle_find_by_hash_prefix("cafebabedead").unwrap();
     assert!(hits.is_empty());
 }
 
