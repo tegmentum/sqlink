@@ -22,6 +22,15 @@
 //!   -o target/wasm32-wasip2/release/sqlite_cli.component.wasm
 //! ```
 
+// This crate is wasm32-wasip2-only: it exports `wasi:cli/run` via
+// wit-bindgen, whose component-model trampolines resolve to
+// undefined symbols when the cdylib is linked natively. The
+// workspace's `default-members = ["host"]` already keeps `cargo
+// build --release` from touching this crate, but `cargo build
+// --workspace --release` explicitly opts in to it and hit the
+// link error. Gating the entire module at the crate level makes
+// the native build produce an empty cdylib that links cleanly.
+#![cfg(target_arch = "wasm32")]
 #![allow(clippy::needless_lifetimes)]
 
 mod bindings {
