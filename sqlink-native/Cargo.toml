@@ -24,4 +24,5 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 sqlink-host = { path = "../host" }
 sqlite-component-core = { path = "../sqlite-wasm/core" }
 sqlite-extension-policy = { path = "../sqlite-loader-wit" }
+sqlink-parsers = { path = "../sqlink-parsers" }
 libsqlite3-sys = { version = "0.38", default-features = false }

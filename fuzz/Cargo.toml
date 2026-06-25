@@ -4,6 +4,10 @@ version = "0.0.0"
 publish = false
 edition = "2021"
 
+# Stand-alone workspace root so cargo-fuzz doesn't drag the
+# parent sqlink workspace into its nightly + sanitizer build.
+[workspace]
+
 # Top-level fuzz crate, intentionally OUTSIDE the workspace
 # `members` list (root Cargo.toml). cargo-fuzz needs nightly
 # for `-Z sanitizer=fuzzer`, and pinning the workspace to
@@ -27,6 +31,7 @@ tempfile = "3"
 
 sqlite-extension-policy = { path = "../sqlite-loader-wit" }
 sqlite-cas-cache = { path = "../sqlite-cas-cache" }
+sqlink-parsers = { path = "../sqlink-parsers" }
 
 [[bin]]
 name = "policy_check_manifest"

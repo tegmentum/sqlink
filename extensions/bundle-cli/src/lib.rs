@@ -713,23 +713,7 @@ underlying set-hash row.";
         ok()
     }
 
-    fn parse_duration(s: &str) -> Result<u64, String> {
-        let (num, mul): (&str, u64) = if let Some(n) = s.strip_suffix('s') {
-            (n, 1)
-        } else if let Some(n) = s.strip_suffix('m') {
-            (n, 60)
-        } else if let Some(n) = s.strip_suffix('h') {
-            (n, 3600)
-        } else if let Some(n) = s.strip_suffix('d') {
-            (n, 86400)
-        } else {
-            return Err(format!("expected a number with suffix s|m|h|d (got {s:?})"));
-        };
-        let n: u64 = num
-            .parse()
-            .map_err(|_| format!("not an integer: {num:?}"))?;
-        Ok(n * mul)
-    }
+    use sqlink_parsers::duration::parse_duration;
 
     fn truncate(s: &str, n: usize) -> String {
         if s.len() <= n {

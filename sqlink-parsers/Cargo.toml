@@ -1,0 +1,30 @@
+[package]
+name = "sqlink-parsers"
+version = "0.1.0"
+edition = "2021"
+description = """
+Shared, dependency-light parsers used by sqlink crates and their
+fuzz harnesses. Lives outside any single wasm/native consumer so
+fuzz targets can import the canonical source instead of copying
+it with a sync-comment.
+
+Modules:
+  * `duration`  `.bundle gc --older-than` value parser (no_std,
+    alloc only). Consumed by `bundle-cli` (wasm32-wasip2) and the
+    `parse_duration` fuzz target.
+  * `load_args`  `.load PATH [--grant=...] [--allowed-hosts=...]
+    [--allowed-domains=...]` parser. Builds a `Policy` from
+    sqlite-extension-policy. std + anyhow + Policy types; gated
+    behind the default `std` feature so the wasm side of the crate
+    stays no_std.
+"""
+license = "MIT"
+publish = false
+
+[features]
+default = ["std"]
+std = ["dep:anyhow", "dep:sqlite-extension-policy"]
+
+[dependencies]
+anyhow = { version = "1.0", optional = true }
+sqlite-extension-policy = { path = "../sqlite-loader-wit", optional = true }

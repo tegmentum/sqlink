@@ -27,7 +27,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 
 use anyhow::{anyhow, Result};
-use sqlink_host::{Capability, DnsPolicy, Host, HttpPolicy, Policy};
+use sqlink_host::Host;
 use sqlite_component_core::db;
 
 fn usage() -> ! {
@@ -152,102 +152,7 @@ fn exec_sql_on(conn: &db::Connection, sql: &str) -> Result<()> {
     Ok(())
 }
 
-/// Parse `PATH [--grant=cap[,cap...]] [--allowed-hosts=...]
-/// [--allowed-domains=...]`. Returns (path, Policy).
-fn parse_load_args(input: &str) -> Result<(String, Policy)> {
-    let mut parts = input.split_whitespace();
-    let path = parts
-        .next()
-        .ok_or_else(|| anyhow!(".load: missing path"))?
-        .to_string();
-
-    let mut grants: Vec<Capability> = Vec::new();
-    let mut allowed_hosts: Vec<String> = Vec::new();
-    let mut allowed_domains: Vec<String> = Vec::new();
-
-    for arg in parts {
-        let Some((k, v)) = arg.split_once('=') else {
-            return Err(anyhow!(".load: expected --key=value, got {arg:?}"));
-        };
-        match k {
-            "--grant" => {
-                for cap in v.split(',') {
-                    let cap = cap.trim();
-                    if cap.is_empty() {
-                        continue;
-                    }
-                    let c = match cap.to_ascii_lowercase().as_str() {
-                        "spi" => Capability::Spi,
-                        "prepared" => Capability::Prepared,
-                        "transaction" => Capability::Transaction,
-                        "schema" => Capability::Schema,
-                        "state" => Capability::State,
-                        "cache" => Capability::Cache,
-                        "random" => Capability::Random,
-                        "text" => Capability::Text,
-                        "hashing" => Capability::Hashing,
-                        "encoding" => Capability::Encoding,
-                        "http" => Capability::Http,
-                        "dns" => Capability::Dns,
-                        "wal-frames" | "wal_frames" => Capability::WalFrames,
-                        "s3" => Capability::S3,
-                        "spawn-build" | "spawn_build" => Capability::SpawnBuild,
-                        other => return Err(anyhow!(".load: unknown grant {other:?}")),
-                    };
-                    grants.push(c);
-                }
-            }
-            "--allowed-hosts" => {
-                for h in v.split(',') {
-                    let h = h.trim();
-                    if !h.is_empty() {
-                        allowed_hosts.push(h.to_string());
-                    }
-                }
-            }
-            "--allowed-domains" => {
-                for d in v.split(',') {
-                    let d = d.trim();
-                    if !d.is_empty() {
-                        allowed_domains.push(d.to_string());
-                    }
-                }
-            }
-            _ => {
-                // Unknown flags non-fatal — wasm cli accepts
-                // --fuel/--epoch/--mem/--trust that we ignore.
-            }
-        }
-    }
-
-    let http = if grants.iter().any(|c| *c == Capability::Http) {
-        Some(HttpPolicy {
-            allowed_hosts,
-            allowed_methods: None,
-            max_body_bytes: None,
-            timeout_ms: None,
-        })
-    } else {
-        None
-    };
-    let dns = if grants.iter().any(|c| *c == Capability::Dns) {
-        Some(DnsPolicy {
-            allowed_domains,
-            timeout_ms: None,
-        })
-    } else {
-        None
-    };
-
-    let mut policy = Policy::deny_all().with_grants(grants);
-    if let Some(h) = http {
-        policy = policy.with_http(h);
-    }
-    if let Some(d) = dns {
-        policy = policy.with_dns(d);
-    }
-    Ok((path, policy))
-}
+use sqlink_parsers::load_args::parse_load_args;
 
 async fn do_load(host: &Host, input: &str) -> String {
     let (path, policy) = match parse_load_args(input) {

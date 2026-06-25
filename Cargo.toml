@@ -18,6 +18,7 @@ members = [
     "sqlink-cli-argv",
     "sqlink-loader",
     "sqlink-native",
+    "sqlink-parsers",
     "sqlite-cas-cache",
     "sqlink-httpd",
     "extensions/json1",
