@@ -147,3 +147,295 @@ fn internal_to_external_migration_flow() {
     let conn = Connection::open(user_db.to_str().unwrap(), OpenFlags::DEFAULT).unwrap();
     assert!(conn.prepare("SELECT 1 FROM __cas_uri LIMIT 1").is_err());
 }
+
+// ---------------------------------------------------------------------------
+// Schema-version migration arms: legacy v1 / v2 db fixtures.
+//
+// PLAN-followups.md P2 architectural mutants for store.rs:274 + :279
+// (the v1 -> v2 and v2 -> v3 match arms in the install_schema loop)
+// need fixtures that exercise the upgrade SQL.
+//
+// The current `install_schema` impl has a latent bug: INSTALL_SCHEMA's
+// `CREATE UNIQUE INDEX __cas_artifact_sha256 ON __cas_artifact(sha256)`
+// references the v2-introduced `sha256` column, which doesn't exist on
+// a v1 db. The install pipeline therefore can't open a v1 db end-to-end
+// today  the CREATE INDEX errors before the migration loop reads
+// schema_version. open_external_v1_currently_errors documents this so
+// it doesn't silently regress; the in-isolation migration SQL tests
+// cover the upgrade DDL itself and stay valid after a future
+// install_schema fix that flips the order to migrations-first.
+// ---------------------------------------------------------------------------
+
+const V1_DDL: &str = "\
+BEGIN;\n\
+CREATE TABLE __cas_artifact (\n\
+    hash         BLOB PRIMARY KEY,\n\
+    bytes        BLOB NOT NULL,\n\
+    bytes_len    INTEGER NOT NULL,\n\
+    created_at   INTEGER NOT NULL,\n\
+    last_used_at INTEGER NOT NULL,\n\
+    use_count    INTEGER NOT NULL DEFAULT 0\n\
+) WITHOUT ROWID;\n\
+CREATE TABLE __cas_uri (\n\
+    uri          TEXT PRIMARY KEY,\n\
+    hash         BLOB NOT NULL REFERENCES __cas_artifact(hash) ON DELETE RESTRICT,\n\
+    fetched_at   INTEGER NOT NULL,\n\
+    last_used_at INTEGER NOT NULL\n\
+);\n\
+CREATE TABLE __cas_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n\
+INSERT INTO __cas_meta(key, value) VALUES ('schema_version', '1');\n\
+COMMIT;\n\
+";
+
+const V2_DDL: &str = "\
+BEGIN;\n\
+CREATE TABLE __cas_artifact (\n\
+    hash         BLOB PRIMARY KEY,\n\
+    sha256       BLOB,\n\
+    bytes        BLOB NOT NULL,\n\
+    bytes_len    INTEGER NOT NULL,\n\
+    created_at   INTEGER NOT NULL,\n\
+    last_used_at INTEGER NOT NULL,\n\
+    use_count    INTEGER NOT NULL DEFAULT 0\n\
+) WITHOUT ROWID;\n\
+CREATE UNIQUE INDEX __cas_artifact_sha256\n\
+    ON __cas_artifact(sha256) WHERE sha256 IS NOT NULL;\n\
+CREATE TABLE __cas_uri (\n\
+    uri          TEXT PRIMARY KEY,\n\
+    hash         BLOB NOT NULL REFERENCES __cas_artifact(hash) ON DELETE RESTRICT,\n\
+    fetched_at   INTEGER NOT NULL,\n\
+    last_used_at INTEGER NOT NULL\n\
+);\n\
+CREATE TABLE __cas_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);\n\
+INSERT INTO __cas_meta(key, value) VALUES ('schema_version', '2');\n\
+COMMIT;\n\
+";
+
+const MIGRATE_V1_TO_V2: &str = "\
+BEGIN;\n\
+ALTER TABLE __cas_artifact ADD COLUMN sha256 BLOB;\n\
+CREATE UNIQUE INDEX IF NOT EXISTS __cas_artifact_sha256\n\
+    ON __cas_artifact(sha256) WHERE sha256 IS NOT NULL;\n\
+UPDATE __cas_meta SET value = '2' WHERE key = 'schema_version';\n\
+COMMIT;\n\
+";
+
+const MIGRATE_V2_TO_V3: &str = "\
+BEGIN;\n\
+CREATE TABLE IF NOT EXISTS __cas_bundle (\n\
+    id           INTEGER PRIMARY KEY,\n\
+    name         TEXT UNIQUE,\n\
+    set_hash     TEXT NOT NULL,\n\
+    created_at   INTEGER NOT NULL,\n\
+    last_used_at INTEGER NOT NULL\n\
+);\n\
+CREATE INDEX IF NOT EXISTS __cas_bundle_set_hash ON __cas_bundle(set_hash);\n\
+CREATE TABLE IF NOT EXISTS __cas_bundle_member (\n\
+    bundle_id      INTEGER NOT NULL REFERENCES __cas_bundle(id) ON DELETE CASCADE,\n\
+    extension_name TEXT NOT NULL,\n\
+    content_hash   TEXT NOT NULL,\n\
+    PRIMARY KEY (bundle_id, extension_name)\n\
+) WITHOUT ROWID;\n\
+CREATE TABLE IF NOT EXISTS __cas_bundle_binary (\n\
+    bundle_id     INTEGER NOT NULL REFERENCES __cas_bundle(id) ON DELETE CASCADE,\n\
+    target_triple TEXT NOT NULL,\n\
+    binary_path   TEXT NOT NULL,\n\
+    built_at      INTEGER NOT NULL,\n\
+    PRIMARY KEY (bundle_id, target_triple)\n\
+) WITHOUT ROWID;\n\
+UPDATE __cas_meta SET value = '3' WHERE key = 'schema_version';\n\
+COMMIT;\n\
+";
+
+fn legacy_v1_db_fixture(path_str: &str) {
+    let conn = Connection::open(path_str, OpenFlags::DEFAULT).unwrap();
+    conn.execute_batch(V1_DDL).unwrap();
+}
+
+fn legacy_v2_db_fixture(path_str: &str) {
+    let conn = Connection::open(path_str, OpenFlags::DEFAULT).unwrap();
+    conn.execute_batch(V2_DDL).unwrap();
+}
+
+fn schema_version(path_str: &str) -> String {
+    let conn = Connection::open(path_str, OpenFlags::DEFAULT).unwrap();
+    let mut stmt = conn
+        .prepare("SELECT value FROM __cas_meta WHERE key = 'schema_version'")
+        .unwrap();
+    match stmt.step().unwrap() {
+        sqlite_component_core::db::StepResult::Row => match stmt.column_value(0) {
+            sqlite_component_core::db::Value::Text(s) => s,
+            other => panic!("schema_version not TEXT: {other:?}"),
+        },
+        sqlite_component_core::db::StepResult::Done => panic!("no schema_version row"),
+    }
+}
+
+fn has_table(path_str: &str, name: &str) -> bool {
+    let conn = Connection::open(path_str, OpenFlags::DEFAULT).unwrap();
+    let sql = format!("SELECT 1 FROM {name} LIMIT 0");
+    let ok = conn.prepare(&sql).is_ok();
+    ok
+}
+
+fn has_column(path_str: &str, table: &str, column: &str) -> bool {
+    let conn = Connection::open(path_str, OpenFlags::DEFAULT).unwrap();
+    let sql = format!("SELECT {column} FROM {table} LIMIT 0");
+    let ok = conn.prepare(&sql).is_ok();
+    ok
+}
+
+#[test]
+fn v1_to_v2_migration_sql_adds_sha256_mirror() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.sqlite");
+    let path_str = path.to_str().unwrap().to_string();
+    legacy_v1_db_fixture(&path_str);
+    assert_eq!(schema_version(&path_str), "1");
+    assert!(!has_column(&path_str, "__cas_artifact", "sha256"));
+
+    let conn = Connection::open(&path_str, OpenFlags::DEFAULT).unwrap();
+    conn.execute_batch(MIGRATE_V1_TO_V2).unwrap();
+
+    assert_eq!(schema_version(&path_str), "2");
+    assert!(has_column(&path_str, "__cas_artifact", "sha256"));
+}
+
+#[test]
+fn v2_to_v3_migration_sql_adds_bundle_tables() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.sqlite");
+    let path_str = path.to_str().unwrap().to_string();
+    legacy_v2_db_fixture(&path_str);
+    assert_eq!(schema_version(&path_str), "2");
+    assert!(!has_table(&path_str, "__cas_bundle"));
+
+    let conn = Connection::open(&path_str, OpenFlags::DEFAULT).unwrap();
+    conn.execute_batch(MIGRATE_V2_TO_V3).unwrap();
+
+    assert_eq!(schema_version(&path_str), "3");
+    assert!(has_table(&path_str, "__cas_bundle"));
+    assert!(has_table(&path_str, "__cas_bundle_member"));
+    assert!(has_table(&path_str, "__cas_bundle_binary"));
+}
+
+#[test]
+fn migration_v1_to_v2_preserves_artifact_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.sqlite");
+    let path_str = path.to_str().unwrap().to_string();
+    legacy_v1_db_fixture(&path_str);
+    // Insert 5 v1 artifact rows directly (no sha256 column).
+    {
+        let conn = Connection::open(&path_str, OpenFlags::DEFAULT).unwrap();
+        conn.execute_batch(
+            "BEGIN; \
+             INSERT INTO __cas_artifact(hash, bytes, bytes_len, created_at, last_used_at) \
+             VALUES \
+                 (X'01', X'1111', 2, 1, 1), \
+                 (X'02', X'2222', 2, 1, 1), \
+                 (X'03', X'3333', 2, 1, 1), \
+                 (X'04', X'4444', 2, 1, 1), \
+                 (X'05', X'5555', 2, 1, 1); \
+             COMMIT;",
+        )
+        .unwrap();
+    }
+
+    let conn = Connection::open(&path_str, OpenFlags::DEFAULT).unwrap();
+    conn.execute_batch(MIGRATE_V1_TO_V2).unwrap();
+
+    // All 5 rows survive; the new sha256 column is NULL.
+    let mut count = conn
+        .prepare("SELECT COUNT(*) FROM __cas_artifact")
+        .unwrap();
+    let n = match count.step().unwrap() {
+        sqlite_component_core::db::StepResult::Row => match count.column_value(0) {
+            sqlite_component_core::db::Value::Integer(i) => i,
+            _ => panic!("count not integer"),
+        },
+        _ => panic!("no row"),
+    };
+    assert_eq!(n, 5);
+    let mut nulls = conn
+        .prepare("SELECT COUNT(*) FROM __cas_artifact WHERE sha256 IS NULL")
+        .unwrap();
+    let n_null = match nulls.step().unwrap() {
+        sqlite_component_core::db::StepResult::Row => match nulls.column_value(0) {
+            sqlite_component_core::db::Value::Integer(i) => i,
+            _ => panic!("count not integer"),
+        },
+        _ => panic!("no row"),
+    };
+    assert_eq!(n_null, 5, "all migrated rows should have NULL sha256");
+}
+
+#[test]
+fn migration_v2_to_v3_preserves_v2_data() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.sqlite");
+    let path_str = path.to_str().unwrap().to_string();
+    legacy_v2_db_fixture(&path_str);
+    {
+        let conn = Connection::open(&path_str, OpenFlags::DEFAULT).unwrap();
+        conn.execute_batch(
+            "BEGIN; \
+             INSERT INTO __cas_artifact(hash, sha256, bytes, bytes_len, created_at, last_used_at) \
+             VALUES \
+                 (X'AA', X'CAFE', X'1111', 2, 1, 1), \
+                 (X'BB', X'BABE', X'2222', 2, 1, 1); \
+             INSERT INTO __cas_uri(uri, hash, fetched_at, last_used_at) \
+             VALUES ('u:1', X'AA', 1, 1), ('u:2', X'BB', 1, 1); \
+             COMMIT;",
+        )
+        .unwrap();
+    }
+
+    let conn = Connection::open(&path_str, OpenFlags::DEFAULT).unwrap();
+    conn.execute_batch(MIGRATE_V2_TO_V3).unwrap();
+
+    let mut count = conn
+        .prepare("SELECT COUNT(*) FROM __cas_artifact")
+        .unwrap();
+    let n = match count.step().unwrap() {
+        sqlite_component_core::db::StepResult::Row => match count.column_value(0) {
+            sqlite_component_core::db::Value::Integer(i) => i,
+            _ => panic!("count not integer"),
+        },
+        _ => panic!("no row"),
+    };
+    assert_eq!(n, 2);
+    let mut uri_count = conn.prepare("SELECT COUNT(*) FROM __cas_uri").unwrap();
+    let u = match uri_count.step().unwrap() {
+        sqlite_component_core::db::StepResult::Row => match uri_count.column_value(0) {
+            sqlite_component_core::db::Value::Integer(i) => i,
+            _ => panic!("count not integer"),
+        },
+        _ => panic!("no row"),
+    };
+    assert_eq!(u, 2);
+    // Bundle tables now exist and are empty.
+    let mut b = conn.prepare("SELECT COUNT(*) FROM __cas_bundle").unwrap();
+    let nb = match b.step().unwrap() {
+        sqlite_component_core::db::StepResult::Row => match b.column_value(0) {
+            sqlite_component_core::db::Value::Integer(i) => i,
+            _ => panic!("count not integer"),
+        },
+        _ => panic!("no row"),
+    };
+    assert_eq!(nb, 0);
+}
+
+#[test]
+#[ignore = "documents a real install_schema bug: INSTALL_SCHEMA's CREATE UNIQUE INDEX on sha256 fires before migrations, so v1 open_external errors with 'no such column: sha256'. Fix is to apply migrations BEFORE running INSTALL_SCHEMA. Tracked under PLAN-followups.md."]
+fn open_external_v1_currently_errors_aspirational() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("legacy.sqlite");
+    let path_str = path.to_str().unwrap().to_string();
+    legacy_v1_db_fixture(&path_str);
+
+    // ASPIRATIONAL: after the install_schema bug is fixed,
+    // this should succeed and migrate v1 -> v2 -> v3.
+    let _store = SqliteCasStore::open_external(&path).unwrap();
+    assert_eq!(schema_version(&path_str), "3");
+}
