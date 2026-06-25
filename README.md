@@ -4,6 +4,9 @@
 
 # SQLink
 
+**Documentation**: <https://tegmentum.github.io/sqlink/> — built with
+Docusaurus from `docs/plans/` + `website/docs/`.
+
 SQLite + a portable extension ecosystem, distributed as
 [WebAssembly Components](https://component-model.bytecodealliance.org/).
 The full SQLite C library compiles to WASI Preview 2 alongside a
