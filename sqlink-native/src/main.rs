@@ -37,19 +37,32 @@ fn usage() -> ! {
     std::process::exit(2);
 }
 
-#[derive(Default)]
-struct Args {
-    db_path: String,
-    inline_sql: Option<String>,
+#[derive(Default, Debug, PartialEq, Eq)]
+pub(crate) struct Args {
+    pub(crate) db_path: String,
+    pub(crate) inline_sql: Option<String>,
 }
 
-fn parse_args() -> Result<Args> {
+/// Outcome of pure argv parsing. `Help` lets the caller decide
+/// whether to print usage and exit (production) or assert on the
+/// variant (tests). All error paths return `Err`; `usage()` is
+/// only called from `parse_args()`.
+#[derive(Debug)]
+pub(crate) enum ParseOutcome {
+    Args(Args),
+    Help,
+}
+
+/// Pure-function argv parser. Takes the full argv slice (element
+/// 0 is the program name). No side effects, no process::exit.
+/// Tests call this directly; `parse_args` is the env::args()
+/// wrapper that handles `Help` and unwraps errors via `usage()`.
+pub(crate) fn parse_argv(argv: &[String]) -> Result<ParseOutcome> {
     let mut a = Args::default();
-    let argv: Vec<String> = env::args().collect();
     let mut i = 1;
     while i < argv.len() {
         match argv[i].as_str() {
-            "-h" | "--help" => usage(),
+            "-h" | "--help" => return Ok(ParseOutcome::Help),
             "--db" => {
                 i += 1;
                 if i >= argv.len() {
@@ -68,7 +81,15 @@ fn parse_args() -> Result<Args> {
         }
         i += 1;
     }
-    Ok(a)
+    Ok(ParseOutcome::Args(a))
+}
+
+fn parse_args() -> Result<Args> {
+    let argv: Vec<String> = env::args().collect();
+    match parse_argv(&argv)? {
+        ParseOutcome::Args(a) => Ok(a),
+        ParseOutcome::Help => usage(),
+    }
 }
 
 /// Render a SQL value matching the cli's `format::render` defaults:
