@@ -32,6 +32,7 @@ tempfile = "3"
 sqlite-extension-policy = { path = "../sqlite-loader-wit" }
 sqlite-cas-cache = { path = "../sqlite-cas-cache" }
 sqlink-parsers = { path = "../sqlink-parsers" }
+sqlink-cli-argv = { path = "../sqlink-cli-argv" }
 
 [[bin]]
 name = "policy_check_manifest"
@@ -72,5 +73,11 @@ doc = false
 [[bin]]
 name = "bundle_cli_argv"
 path = "fuzz_targets/bundle_cli_argv.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "sqlink_cli_argv"
+path = "fuzz_targets/sqlink_cli_argv.rs"
 test = false
 doc = false
