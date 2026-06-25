@@ -18,6 +18,11 @@ crate-type = ["cdylib"]
 # build).
 
 [dependencies]
+# Pure-fn argv parser. Native-buildable so the parsing logic is
+# unit-testable outside the wasm cfg-gate. cli's RunGuest::run
+# calls sqlink_cli_argv::parse_argv to split argv before the
+# wasm-coupled side effects begin.
+sqlink-cli-argv = { path = "../sqlink-cli-argv" }
 # wit-bindgen-rt provides the runtime support functions the
 # generate! macro emits calls to. Sync bindings — no `async`
 # feature needed now that the live-SPI bridge is gone.

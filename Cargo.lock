@@ -5487,6 +5487,7 @@ dependencies = [
  "sha3",
  "sha3-extension",
  "sketches-extension",
+ "sqlink-cli-argv",
  "sqlparse-extension",
  "ssn-extension",
  "stats-extension",
