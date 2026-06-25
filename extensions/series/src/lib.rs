@@ -35,8 +35,8 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::sqlite::extension::types::SqlValue;
 
     const VTAB_ID_SERIES: u64 = 1;
@@ -201,11 +201,7 @@ mod wasm_export {
             })
         }
 
-        fn open(
-            _vtab_id: u64,
-            _instance_id: u64,
-            cursor_id: u64,
-        ) -> Result<(), String> {
+        fn open(_vtab_id: u64, _instance_id: u64, cursor_id: u64) -> Result<(), String> {
             CURSORS.with(|m| {
                 m.borrow_mut().insert(
                     cursor_id,
@@ -299,16 +295,10 @@ mod wasm_export {
         }
 
         fn eof(_vtab_id: u64, cursor_id: u64) -> bool {
-            CURSORS.with(|m| {
-                m.borrow().get(&cursor_id).map(|c| c.done).unwrap_or(true)
-            })
+            CURSORS.with(|m| m.borrow().get(&cursor_id).map(|c| c.done).unwrap_or(true))
         }
 
-        fn column(
-            _vtab_id: u64,
-            cursor_id: u64,
-            col: i32,
-        ) -> Result<SqlValue, String> {
+        fn column(_vtab_id: u64, cursor_id: u64, col: i32) -> Result<SqlValue, String> {
             CURSORS.with(|m| {
                 let cursors = m.borrow();
                 let c = cursors
@@ -333,7 +323,7 @@ mod wasm_export {
                     .ok_or_else(|| "generate_series: cursor not open".to_string())
             })
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             cursor_id: u64,
@@ -366,9 +356,7 @@ mod wasm_export {
                     let (next, overflow) = c.current.overflowing_add(c.step);
                     if overflow {
                         c.done = true;
-                    } else if (c.step > 0 && next > c.stop)
-                        || (c.step < 0 && next < c.stop)
-                    {
+                    } else if (c.step > 0 && next > c.stop) || (c.step < 0 && next < c.stop) {
                         c.done = true;
                     } else {
                         c.current = next;
@@ -378,7 +366,7 @@ mod wasm_export {
                 Ok(out)
             })
         }
-}
+    }
 
     bindings::export!(Series with_types_in bindings);
 }

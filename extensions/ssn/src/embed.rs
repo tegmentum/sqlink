@@ -84,10 +84,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "ssn")?;
     let d = digits_only(&raw);
 
@@ -117,12 +114,42 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,  name: b"ssn_validate\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_AREA,      name: b"ssn_area\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_GROUP,     name: b"ssn_group\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SERIAL,    name: b"ssn_serial\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MASK,      name: b"ssn_mask\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NORMALIZE, name: b"ssn_normalize\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"ssn_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_AREA,
+        name: b"ssn_area\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_GROUP,
+        name: b"ssn_group\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SERIAL,
+        name: b"ssn_serial\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MASK,
+        name: b"ssn_mask\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NORMALIZE,
+        name: b"ssn_normalize\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

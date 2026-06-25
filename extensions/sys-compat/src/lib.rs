@@ -30,7 +30,11 @@ mod algo {
     pub const SCHEMA: &str = "main";
 
     pub fn version_string() -> String {
-        format!("SQLink/{} (SQLite {})", env!("CARGO_PKG_VERSION"), bundled_sqlite_version())
+        format!(
+            "SQLink/{} (SQLite {})",
+            env!("CARGO_PKG_VERSION"),
+            bundled_sqlite_version()
+        )
     }
 
     /// Baked-in bundled SQLite version. The cli's libsqlite3-sys
@@ -42,7 +46,11 @@ mod algo {
     }
 
     pub fn current_schemas(include_temp: bool) -> String {
-        if include_temp { "main,temp".to_string() } else { SCHEMA.to_string() }
+        if include_temp {
+            "main,temp".to_string()
+        } else {
+            SCHEMA.to_string()
+        }
     }
 
     pub fn collation_of(_text: &str) -> &'static str {
@@ -59,12 +67,19 @@ mod algo {
         const GIB: f64 = MIB * 1024.0;
         const TIB: f64 = GIB * 1024.0;
         const PIB: f64 = TIB * 1024.0;
-        if abs < KIB        { format!("{}{} bytes", neg, abs as i64) }
-        else if abs < MIB   { format!("{}{:.2} KiB", neg, abs / KIB) }
-        else if abs < GIB   { format!("{}{:.2} MiB", neg, abs / MIB) }
-        else if abs < TIB   { format!("{}{:.2} GiB", neg, abs / GIB) }
-        else if abs < PIB   { format!("{}{:.2} TiB", neg, abs / TIB) }
-        else                { format!("{}{:.2} PiB", neg, abs / PIB) }
+        if abs < KIB {
+            format!("{}{} bytes", neg, abs as i64)
+        } else if abs < MIB {
+            format!("{}{:.2} KiB", neg, abs / KIB)
+        } else if abs < GIB {
+            format!("{}{:.2} MiB", neg, abs / MIB)
+        } else if abs < TIB {
+            format!("{}{:.2} GiB", neg, abs / GIB)
+        } else if abs < PIB {
+            format!("{}{:.2} TiB", neg, abs / TIB)
+        } else {
+            format!("{}{:.2} PiB", neg, abs / PIB)
+        }
     }
 }
 
@@ -89,19 +104,19 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
-    pub const FID_USER:             u64 = 1;
-    pub const FID_CURRENT_USER:     u64 = 2;
-    pub const FID_SESSION_USER:     u64 = 3;
-    pub const FID_SYSTEM_USER:      u64 = 4;
-    pub const FID_CURRENT_ROLE:     u64 = 5;
-    pub const FID_DATABASE:         u64 = 6;
+    pub const FID_USER: u64 = 1;
+    pub const FID_CURRENT_USER: u64 = 2;
+    pub const FID_SESSION_USER: u64 = 3;
+    pub const FID_SYSTEM_USER: u64 = 4;
+    pub const FID_CURRENT_ROLE: u64 = 5;
+    pub const FID_DATABASE: u64 = 6;
     pub const FID_CURRENT_DATABASE: u64 = 7;
-    pub const FID_SCHEMA:           u64 = 8;
-    pub const FID_CURRENT_SCHEMA:   u64 = 9;
-    pub const FID_CURRENT_SCHEMAS:  u64 = 10;
-    pub const FID_VERSION:          u64 = 11;
-    pub const FID_COLLATION:        u64 = 12;
-    pub const FID_FORMAT_BYTES:     u64 = 13;
+    pub const FID_SCHEMA: u64 = 8;
+    pub const FID_CURRENT_SCHEMA: u64 = 9;
+    pub const FID_CURRENT_SCHEMAS: u64 = 10;
+    pub const FID_VERSION: u64 = 11;
+    pub const FID_COLLATION: u64 = 12;
+    pub const FID_FORMAT_BYTES: u64 = 13;
 
     struct Ext;
 
@@ -118,19 +133,19 @@ mod wasm_export {
                 name: "sys-compat".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
-                    s(FID_USER,             "user",             0),
-                    s(FID_CURRENT_USER,     "current_user",     0),
-                    s(FID_SESSION_USER,     "session_user",     0),
-                    s(FID_SYSTEM_USER,      "system_user",      0),
-                    s(FID_CURRENT_ROLE,     "current_role",     0),
-                    s(FID_DATABASE,         "database",         0),
+                    s(FID_USER, "user", 0),
+                    s(FID_CURRENT_USER, "current_user", 0),
+                    s(FID_SESSION_USER, "session_user", 0),
+                    s(FID_SYSTEM_USER, "system_user", 0),
+                    s(FID_CURRENT_ROLE, "current_role", 0),
+                    s(FID_DATABASE, "database", 0),
                     s(FID_CURRENT_DATABASE, "current_database", 0),
-                    s(FID_SCHEMA,           "schema",           0),
-                    s(FID_CURRENT_SCHEMA,   "current_schema",   0),
-                    s(FID_CURRENT_SCHEMAS,  "current_schemas",  1),
-                    s(FID_VERSION,          "version",          0),
-                    s(FID_COLLATION,        "collation",        1),
-                    s(FID_FORMAT_BYTES,     "format_bytes",     1),
+                    s(FID_SCHEMA, "schema", 0),
+                    s(FID_CURRENT_SCHEMA, "current_schema", 0),
+                    s(FID_CURRENT_SCHEMAS, "current_schemas", 1),
+                    s(FID_VERSION, "version", 0),
+                    s(FID_COLLATION, "collation", 1),
+                    s(FID_FORMAT_BYTES, "format_bytes", 1),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -162,7 +177,9 @@ mod wasm_export {
                 FID_CURRENT_SCHEMAS => {
                     let include_temp = match args.first() {
                         Some(SqlValue::Integer(n)) => *n != 0,
-                        Some(SqlValue::Text(s)) => matches!(s.to_lowercase().as_str(), "true" | "1" | "yes"),
+                        Some(SqlValue::Text(s)) => {
+                            matches!(s.to_lowercase().as_str(), "true" | "1" | "yes")
+                        }
                         _ => false,
                     };
                     Ok(SqlValue::Text(algo::current_schemas(include_temp)))
@@ -180,7 +197,9 @@ mod wasm_export {
                     let n = match args.first() {
                         Some(SqlValue::Integer(n)) => *n,
                         Some(SqlValue::Real(r)) => *r as i64,
-                        Some(SqlValue::Text(s)) => s.parse::<i64>().map_err(|_| "format_bytes: not integer".to_string())?,
+                        Some(SqlValue::Text(s)) => s
+                            .parse::<i64>()
+                            .map_err(|_| "format_bytes: not integer".to_string())?,
                         _ => return Err("format_bytes: INTEGER arg".to_string()),
                     };
                     Ok(SqlValue::Text(algo::format_bytes(n)))

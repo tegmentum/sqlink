@@ -14,8 +14,7 @@ fn wrapper_invocation_shapes() {
         .expect("host has a parent dir")
         .to_path_buf();
     let script = repo_root.join("tests/cli/sqlink-wrapper.sh");
-    let component = repo_root
-        .join("target/wasm32-wasip2/release/sqlite_cli.component.wasm");
+    let component = repo_root.join("target/wasm32-wasip2/release/sqlite_cli.component.wasm");
     if !script.exists() {
         eprintln!("skipping: {} missing", script.display());
         return;

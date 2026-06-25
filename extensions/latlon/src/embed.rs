@@ -7,9 +7,9 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_TO_DMS:        u64 = 1;
-const FID_TO_DDM:        u64 = 2;
-const FID_FROM_DMS:      u64 = 3;
+const FID_TO_DMS: u64 = 1;
+const FID_TO_DDM: u64 = 2;
+const FID_FROM_DMS: u64 = 3;
 const FID_NORMALIZE_LON: u64 = 4;
 const FID_NORMALIZE_LAT: u64 = 5;
 
@@ -50,7 +50,9 @@ fn from_dms(s: &str) -> Option<f64> {
             current.push(c);
         } else {
             if !current.is_empty() {
-                if let Ok(n) = current.parse::<f64>() { nums.push(n); }
+                if let Ok(n) = current.parse::<f64>() {
+                    nums.push(n);
+                }
                 current.clear();
             }
             if c.is_ascii_alphabetic() {
@@ -62,14 +64,20 @@ fn from_dms(s: &str) -> Option<f64> {
         }
     }
     if !current.is_empty() {
-        if let Ok(n) = current.parse::<f64>() { nums.push(n); }
+        if let Ok(n) = current.parse::<f64>() {
+            nums.push(n);
+        }
     }
     if nums.is_empty() || nums.len() > 3 {
         return None;
     }
     let mut dd = nums[0];
-    if nums.len() > 1 { dd += nums[1] / 60.0; }
-    if nums.len() > 2 { dd += nums[2] / 3600.0; }
+    if nums.len() > 1 {
+        dd += nums[1] / 60.0;
+    }
+    if nums.len() > 2 {
+        dd += nums[2] / 3600.0;
+    }
     match hemi {
         Some('S') | Some('W') => Some(-dd.abs()),
         Some('N') | Some('E') => Some(dd.abs()),
@@ -79,7 +87,11 @@ fn from_dms(s: &str) -> Option<f64> {
 
 fn normalize_lon(x: f64) -> f64 {
     let r = ((x + 180.0) % 360.0 + 360.0) % 360.0 - 180.0;
-    if r == 180.0 { -180.0 } else { r }
+    if r == 180.0 {
+        -180.0
+    } else {
+        r
+    }
 }
 
 fn normalize_lat(x: f64) -> f64 {
@@ -101,24 +113,27 @@ fn arg_real(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<f64, String
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_TO_DMS => {
             let v = arg_real(&args, 0, "latlon_to_dms")?;
             let a = arg_text(&args, 1, "latlon_to_dms")?;
-            Ok(to_dms(v, &a).map(SqlValueOwned::Text).unwrap_or(SqlValueOwned::Null))
+            Ok(to_dms(v, &a)
+                .map(SqlValueOwned::Text)
+                .unwrap_or(SqlValueOwned::Null))
         }
         FID_TO_DDM => {
             let v = arg_real(&args, 0, "latlon_to_ddm")?;
             let a = arg_text(&args, 1, "latlon_to_ddm")?;
-            Ok(to_ddm(v, &a).map(SqlValueOwned::Text).unwrap_or(SqlValueOwned::Null))
+            Ok(to_ddm(v, &a)
+                .map(SqlValueOwned::Text)
+                .unwrap_or(SqlValueOwned::Null))
         }
         FID_FROM_DMS => {
             let s = arg_text(&args, 0, "latlon_from_dms")?;
-            Ok(from_dms(&s).map(SqlValueOwned::Real).unwrap_or(SqlValueOwned::Null))
+            Ok(from_dms(&s)
+                .map(SqlValueOwned::Real)
+                .unwrap_or(SqlValueOwned::Null))
         }
         FID_NORMALIZE_LON => {
             let v = arg_real(&args, 0, "latlon_normalize_lon")?;
@@ -133,11 +148,36 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_TO_DMS,        name: b"latlon_to_dms\0",        num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_TO_DDM,        name: b"latlon_to_ddm\0",        num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_FROM_DMS,      name: b"latlon_from_dms\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NORMALIZE_LON, name: b"latlon_normalize_lon\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NORMALIZE_LAT, name: b"latlon_normalize_lat\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_TO_DMS,
+        name: b"latlon_to_dms\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TO_DDM,
+        name: b"latlon_to_ddm\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FROM_DMS,
+        name: b"latlon_from_dms\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NORMALIZE_LON,
+        name: b"latlon_normalize_lon\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NORMALIZE_LAT,
+        name: b"latlon_normalize_lat\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

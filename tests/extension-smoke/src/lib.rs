@@ -32,7 +32,9 @@ struct SubprocessLimiter {
 
 impl SubprocessLimiter {
     const fn new() -> Self {
-        Self { state: OnceLock::new() }
+        Self {
+            state: OnceLock::new(),
+        }
     }
     fn cell(&self) -> &(Mutex<usize>, Condvar) {
         self.state.get_or_init(|| (Mutex::new(0), Condvar::new()))
@@ -63,9 +65,13 @@ impl Drop for SubprocessPermit<'_> {
 
 pub fn repo_root() -> PathBuf {
     // tests/extension-smoke/ → ../..
-    let manifest = std::env::var_os("CARGO_MANIFEST_DIR")
-        .expect("CARGO_MANIFEST_DIR set by cargo");
-    PathBuf::from(manifest).parent().unwrap().parent().unwrap().to_path_buf()
+    let manifest = std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR set by cargo");
+    PathBuf::from(manifest)
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf()
 }
 
 pub fn sqlink_bin() -> PathBuf {
@@ -83,8 +89,7 @@ pub fn cli_component() -> PathBuf {
         return PathBuf::from(p);
     }
     if let Some(root) = std::env::var_os("EXTENSION_SMOKE_REPO_ROOT") {
-        return PathBuf::from(root)
-            .join("target/wasm32-wasip2/release/sqlite_cli.component.wasm");
+        return PathBuf::from(root).join("target/wasm32-wasip2/release/sqlite_cli.component.wasm");
     }
     repo_root().join("target/wasm32-wasip2/release/sqlite_cli.component.wasm")
 }
@@ -428,9 +433,7 @@ pub fn run_probe(
     if stdout.contains("Error loading") || stderr.contains("Error loading") {
         return ProbeReport {
             kind,
-            outcome: ProbeOutcome::LoadFailed(format!(
-                "stdout: {stdout}\nstderr: {stderr}"
-            )),
+            outcome: ProbeOutcome::LoadFailed(format!("stdout: {stdout}\nstderr: {stderr}")),
         };
     }
     // Strip cli prompts + .load echo; find the first non-empty
@@ -441,10 +444,13 @@ pub fn run_probe(
         (None, Some(rx)) => regex::Regex::new(rx)
             .map(|r| r.is_match(&line))
             .unwrap_or(false),
-        (None, None) => !line.is_empty(),  // any non-empty output passes
+        (None, None) => !line.is_empty(), // any non-empty output passes
     };
     if matched {
-        ProbeReport { kind, outcome: ProbeOutcome::Pass }
+        ProbeReport {
+            kind,
+            outcome: ProbeOutcome::Pass,
+        }
     } else {
         let want = probe
             .expects
@@ -590,9 +596,7 @@ pub fn run_probe_native(
     if stdout.contains("Error loading") || stderr.contains("Error loading") {
         return ProbeReport {
             kind,
-            outcome: ProbeOutcome::LoadFailed(format!(
-                "stdout: {stdout}\nstderr: {stderr}"
-            )),
+            outcome: ProbeOutcome::LoadFailed(format!("stdout: {stdout}\nstderr: {stderr}")),
         };
     }
     let line = extract_probe_output(&stdout);
@@ -604,7 +608,10 @@ pub fn run_probe_native(
         (None, None) => !line.is_empty(),
     };
     if matched {
-        ProbeReport { kind, outcome: ProbeOutcome::Pass }
+        ProbeReport {
+            kind,
+            outcome: ProbeOutcome::Pass,
+        }
     } else {
         let want = probe
             .expects
@@ -652,10 +659,7 @@ pub fn run_probe_loader(
 
     let mut sql = String::new();
     // load the .so first.
-    sql.push_str(&format!(
-        "SELECT load_extension('{}');\n",
-        so.display()
-    ));
+    sql.push_str(&format!("SELECT load_extension('{}');\n", so.display()));
     // load the wasm extension via our sqlink_load_ext() registered
     // SQL function. Both args literal-quoted; component paths from
     // the workspace don't have single-quotes.
@@ -695,10 +699,7 @@ pub fn run_probe_loader(
         Err(e) => {
             return Some(ProbeReport {
                 kind,
-                outcome: ProbeOutcome::SubprocessError(format!(
-                    "spawn {}: {e}",
-                    shell.display()
-                )),
+                outcome: ProbeOutcome::SubprocessError(format!("spawn {}: {e}", shell.display())),
             })
         }
     };
@@ -769,9 +770,7 @@ pub fn run_probe_loader(
         {
             return Some(ProbeReport {
                 kind,
-                outcome: ProbeOutcome::LoadFailed(format!(
-                    "stdout: {stdout}\nstderr: {stderr}"
-                )),
+                outcome: ProbeOutcome::LoadFailed(format!("stdout: {stdout}\nstderr: {stderr}")),
             });
         }
     }
@@ -784,7 +783,10 @@ pub fn run_probe_loader(
         (None, None) => !line.is_empty(),
     };
     Some(if matched {
-        ProbeReport { kind, outcome: ProbeOutcome::Pass }
+        ProbeReport {
+            kind,
+            outcome: ProbeOutcome::Pass,
+        }
     } else {
         let want = probe
             .expects
@@ -834,7 +836,9 @@ fn extract_probe_output(stdout: &str) -> String {
     for raw in stdout.lines() {
         // Some lines start with `sqlite> ` followed by the
         // result. Treat the trailing payload as the candidate.
-        let line = raw.trim_start_matches("sqlite> ").trim_start_matches("sqlite>");
+        let line = raw
+            .trim_start_matches("sqlite> ")
+            .trim_start_matches("sqlite>");
         let line = line.trim();
         if line.is_empty() {
             continue;
@@ -873,7 +877,9 @@ pub fn load_inventory() -> Vec<InventoryRow> {
 pub fn inventory_index() -> BTreeMap<(String, String), Vec<InventoryRow>> {
     let mut out: BTreeMap<(String, String), Vec<InventoryRow>> = BTreeMap::new();
     for row in load_inventory() {
-        out.entry((row.plugin.clone(), row.kind.clone())).or_default().push(row);
+        out.entry((row.plugin.clone(), row.kind.clone()))
+            .or_default()
+            .push(row);
     }
     out
 }

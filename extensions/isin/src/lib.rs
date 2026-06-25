@@ -61,7 +61,11 @@ mod wasm_export {
             let d = c.to_digit(10)?;
             let v = if alt {
                 let x = d * 2;
-                if x > 9 { x - 9 } else { x }
+                if x > 9 {
+                    x - 9
+                } else {
+                    x
+                }
             } else {
                 d
             };

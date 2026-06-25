@@ -116,7 +116,9 @@ mod wasm_export {
         }
         let pad = (length as usize) - len;
         let mut out = String::with_capacity(s.len() + pad);
-        for _ in 0..pad { out.push(' '); }
+        for _ in 0..pad {
+            out.push(' ');
+        }
         out.push_str(s);
         out
     }
@@ -129,7 +131,9 @@ mod wasm_export {
         let pad = (length as usize) - len;
         let mut out = String::with_capacity(s.len() + pad);
         out.push_str(s);
-        for _ in 0..pad { out.push(' '); }
+        for _ in 0..pad {
+            out.push(' ');
+        }
         out
     }
 
@@ -142,16 +146,23 @@ mod wasm_export {
         let left = total_pad / 2;
         let right = total_pad - left;
         let mut out = String::with_capacity(s.len() + total_pad);
-        for _ in 0..left { out.push(' '); }
+        for _ in 0..left {
+            out.push(' ');
+        }
         out.push_str(s);
-        for _ in 0..right { out.push(' '); }
+        for _ in 0..right {
+            out.push(' ');
+        }
         out
     }
 
     /// Keep only chars from `haystack` that appear in `allowed`.
     fn strfilter(haystack: &str, allowed: &str) -> String {
         let allowed_set: alloc::collections::BTreeSet<char> = allowed.chars().collect();
-        haystack.chars().filter(|c| allowed_set.contains(c)).collect()
+        haystack
+            .chars()
+            .filter(|c| allowed_set.contains(c))
+            .collect()
     }
 
     // ---- Arg helpers ----

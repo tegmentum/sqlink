@@ -8,12 +8,9 @@ mod schema;
 pub mod store;
 
 pub use bundles::{
-    BundleAliasConflict, BundleBinary, BundleDetail, BundleGcPolicy, BundleMember,
-    BundleSummary,
-};
-pub use resolver::{
-    ArtifactRef, ArtifactResolver, LocalFileResolver, ResolverRegistry, Source,
+    BundleAliasConflict, BundleBinary, BundleDetail, BundleGcPolicy, BundleMember, BundleSummary,
 };
 #[cfg(feature = "https")]
 pub use resolver::HttpsResolver;
+pub use resolver::{ArtifactRef, ArtifactResolver, LocalFileResolver, ResolverRegistry, Source};
 pub use store::{Hash, MergeStats, SqliteCasStore, StoreConfig, StoreMode, UriEntry};

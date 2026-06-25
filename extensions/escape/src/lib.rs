@@ -90,20 +90,45 @@ mod wasm_export {
         let mut i = 0;
         while i < bytes.len() {
             if bytes[i] == b'&' {
-                if s[i..].starts_with("&amp;") { out.push('&'); i += 5; continue; }
-                if s[i..].starts_with("&lt;") { out.push('<'); i += 4; continue; }
-                if s[i..].starts_with("&gt;") { out.push('>'); i += 4; continue; }
-                if s[i..].starts_with("&quot;") { out.push('"'); i += 6; continue; }
-                if s[i..].starts_with("&apos;") { out.push('\''); i += 6; continue; }
-                if s[i..].starts_with("&#39;") { out.push('\''); i += 5; continue; }
+                if s[i..].starts_with("&amp;") {
+                    out.push('&');
+                    i += 5;
+                    continue;
+                }
+                if s[i..].starts_with("&lt;") {
+                    out.push('<');
+                    i += 4;
+                    continue;
+                }
+                if s[i..].starts_with("&gt;") {
+                    out.push('>');
+                    i += 4;
+                    continue;
+                }
+                if s[i..].starts_with("&quot;") {
+                    out.push('"');
+                    i += 6;
+                    continue;
+                }
+                if s[i..].starts_with("&apos;") {
+                    out.push('\'');
+                    i += 6;
+                    continue;
+                }
+                if s[i..].starts_with("&#39;") {
+                    out.push('\'');
+                    i += 5;
+                    continue;
+                }
                 if let Some(semi) = s[i..].find(';') {
                     let inner = &s[i + 1..i + semi];
                     if let Some(rest) = inner.strip_prefix('#') {
-                        let code: Option<u32> = if let Some(hex) = rest.strip_prefix('x').or(rest.strip_prefix('X')) {
-                            u32::from_str_radix(hex, 16).ok()
-                        } else {
-                            rest.parse().ok()
-                        };
+                        let code: Option<u32> =
+                            if let Some(hex) = rest.strip_prefix('x').or(rest.strip_prefix('X')) {
+                                u32::from_str_radix(hex, 16).ok()
+                            } else {
+                                rest.parse().ok()
+                            };
                         if let Some(c) = code.and_then(char::from_u32) {
                             out.push(c);
                             i += semi + 1;

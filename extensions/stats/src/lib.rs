@@ -36,7 +36,9 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
-    use crate::aggs::{AnyValue, ArrayAgg, BitOp, BitReduce, ModeTracker, Samples, StringAgg, ValueKind, Welford};
+    use crate::aggs::{
+        AnyValue, ArrayAgg, BitOp, BitReduce, ModeTracker, Samples, StringAgg, ValueKind, Welford,
+    };
 
     const FID_STDDEV_POP: u64 = 1;
     const FID_STDDEV_SAMP: u64 = 2;
@@ -54,8 +56,8 @@ mod wasm_export {
     const FID_REGR_INTERCEPT: u64 = 13;
     const FID_REGR_R2: u64 = 14;
     // Gap-analysis additions (cross-DB portability):
-    const FID_STDDEV: u64 = 15;         // alias: stddev = stddev_samp
-    const FID_VARIANCE: u64 = 16;       // alias: variance = var_samp
+    const FID_STDDEV: u64 = 15; // alias: stddev = stddev_samp
+    const FID_VARIANCE: u64 = 16; // alias: variance = var_samp
     const FID_CORR: u64 = 17;
     const FID_COVAR_POP: u64 = 18;
     const FID_COVAR_SAMP: u64 = 19;
@@ -67,11 +69,11 @@ mod wasm_export {
     const FID_STRING_AGG: u64 = 25;
     // PostgreSQL regr_* component accumulators:
     const FID_REGR_COUNT: u64 = 26;
-    const FID_REGR_AVGX:  u64 = 27;
-    const FID_REGR_AVGY:  u64 = 28;
-    const FID_REGR_SXX:   u64 = 29;
-    const FID_REGR_SYY:   u64 = 30;
-    const FID_REGR_SXY:   u64 = 31;
+    const FID_REGR_AVGX: u64 = 27;
+    const FID_REGR_AVGY: u64 = 28;
+    const FID_REGR_SXX: u64 = 29;
+    const FID_REGR_SYY: u64 = 30;
+    const FID_REGR_SXY: u64 = 31;
 
     /// All running state for one in-flight aggregation. The host
     /// passes us the same `context_id` for every step/value/
@@ -81,12 +83,21 @@ mod wasm_export {
         Stddev(Welford),
         Var(Welford),
         Median(Samples),
-        Percentile { p: Option<f64>, samples: Samples },
+        Percentile {
+            p: Option<f64>,
+            samples: Samples,
+        },
         Mode(ModeTracker),
         // Continuous + discrete percentile share the same state
         // shape  the difference is the finalize() path.
-        PercentileCont { p: Option<f64>, samples: super::aggs::Samples },
-        PercentileDisc { p: Option<f64>, samples: super::aggs::Samples },
+        PercentileCont {
+            p: Option<f64>,
+            samples: super::aggs::Samples,
+        },
+        PercentileDisc {
+            p: Option<f64>,
+            samples: super::aggs::Samples,
+        },
         Moments(super::aggs::Moments),
         Regression(super::aggs::Regression),
         BitReduce(BitReduce),
@@ -134,9 +145,9 @@ mod wasm_export {
                     a(FID_REGR_INTERCEPT, "regr_intercept", 2),
                     a(FID_REGR_R2, "regr_r2", 2),
                     // Gap-analysis additions:
-                    a(FID_STDDEV, "stddev", 1),       // alias for stddev_samp
-                    a(FID_VARIANCE, "variance", 1),   // alias for var_samp
-                    a(FID_CORR, "corr", 2),           // (y, x)  Pearson r
+                    a(FID_STDDEV, "stddev", 1), // alias for stddev_samp
+                    a(FID_VARIANCE, "variance", 1), // alias for var_samp
+                    a(FID_CORR, "corr", 2),     // (y, x)  Pearson r
                     a(FID_COVAR_POP, "covar_pop", 2),
                     a(FID_COVAR_SAMP, "covar_samp", 2),
                     a(FID_ANY_VALUE, "any_value", 1),
@@ -146,11 +157,11 @@ mod wasm_export {
                     a(FID_ARRAY_AGG, "array_agg", 1),
                     a(FID_STRING_AGG, "string_agg", 2), // (expr, sep)
                     a(FID_REGR_COUNT, "regr_count", 2),
-                    a(FID_REGR_AVGX,  "regr_avgx",  2),
-                    a(FID_REGR_AVGY,  "regr_avgy",  2),
-                    a(FID_REGR_SXX,   "regr_sxx",   2),
-                    a(FID_REGR_SYY,   "regr_syy",   2),
-                    a(FID_REGR_SXY,   "regr_sxy",   2),
+                    a(FID_REGR_AVGX, "regr_avgx", 2),
+                    a(FID_REGR_AVGY, "regr_avgy", 2),
+                    a(FID_REGR_SXX, "regr_sxx", 2),
+                    a(FID_REGR_SYY, "regr_syy", 2),
+                    a(FID_REGR_SXY, "regr_sxy", 2),
                 ],
                 collations: alloc::vec![],
                 vtabs: alloc::vec![],
@@ -194,11 +205,7 @@ mod wasm_export {
     }
 
     impl AggregateGuest for StatsExtension {
-        fn step(
-            func_id: u64,
-            context_id: u64,
-            args: Vec<SqlValue>,
-        ) -> Result<(), String> {
+        fn step(func_id: u64, context_id: u64, args: Vec<SqlValue>) -> Result<(), String> {
             // NULL  no-op (SQL aggregate convention).
             if matches!(args.first(), Some(SqlValue::Null) | None) {
                 return Ok(());
@@ -206,7 +213,9 @@ mod wasm_export {
             CTX.with(|m| -> Result<(), String> {
                 let mut tbl = m.borrow_mut();
                 let entry = tbl.entry(context_id).or_insert_with(|| match func_id {
-                    FID_STDDEV_POP | FID_STDDEV_SAMP | FID_STDDEV => AggState::Stddev(Welford::default()),
+                    FID_STDDEV_POP | FID_STDDEV_SAMP | FID_STDDEV => {
+                        AggState::Stddev(Welford::default())
+                    }
                     FID_VAR_POP | FID_VAR_SAMP | FID_VARIANCE => AggState::Var(Welford::default()),
                     FID_MEDIAN => AggState::Median(Samples::default()),
                     FID_PERCENTILE => AggState::Percentile {
@@ -225,10 +234,9 @@ mod wasm_export {
                     FID_SKEWNESS | FID_KURTOSIS => {
                         AggState::Moments(super::aggs::Moments::default())
                     }
-                    FID_REGR_SLOPE | FID_REGR_INTERCEPT | FID_REGR_R2
-                    | FID_CORR | FID_COVAR_POP | FID_COVAR_SAMP
-                    | FID_REGR_COUNT | FID_REGR_AVGX | FID_REGR_AVGY
-                    | FID_REGR_SXX | FID_REGR_SYY | FID_REGR_SXY => {
+                    FID_REGR_SLOPE | FID_REGR_INTERCEPT | FID_REGR_R2 | FID_CORR
+                    | FID_COVAR_POP | FID_COVAR_SAMP | FID_REGR_COUNT | FID_REGR_AVGX
+                    | FID_REGR_AVGY | FID_REGR_SXX | FID_REGR_SYY | FID_REGR_SXY => {
                         AggState::Regression(super::aggs::Regression::default())
                     }
                     FID_BIT_AND => AggState::BitReduce(BitReduce::new(BitOp::And)),
@@ -242,18 +250,16 @@ mod wasm_export {
                 match (func_id, entry) {
                     (FID_STDDEV_POP | FID_STDDEV_SAMP | FID_STDDEV, AggState::Stddev(w))
                     | (FID_VAR_POP | FID_VAR_SAMP | FID_VARIANCE, AggState::Var(w)) => {
-                        let x = to_f64(&args[0])
-                            .ok_or_else(|| "non-numeric arg".to_string())?;
+                        let x = to_f64(&args[0]).ok_or_else(|| "non-numeric arg".to_string())?;
                         w.add(x);
                     }
                     (FID_MEDIAN, AggState::Median(s)) => {
-                        let x = to_f64(&args[0])
-                            .ok_or_else(|| "non-numeric arg".to_string())?;
+                        let x = to_f64(&args[0]).ok_or_else(|| "non-numeric arg".to_string())?;
                         s.add(x);
                     }
                     (FID_PERCENTILE, AggState::Percentile { p, samples }) => {
-                        let x = to_f64(&args[0])
-                            .ok_or_else(|| "non-numeric value arg".to_string())?;
+                        let x =
+                            to_f64(&args[0]).ok_or_else(|| "non-numeric value arg".to_string())?;
                         let p_arg = args
                             .get(1)
                             .and_then(to_f64)
@@ -274,8 +280,8 @@ mod wasm_export {
                     }
                     (FID_PERCENTILE_CONT, AggState::PercentileCont { p, samples })
                     | (FID_PERCENTILE_DISC, AggState::PercentileDisc { p, samples }) => {
-                        let x = to_f64(&args[0])
-                            .ok_or_else(|| "non-numeric value arg".to_string())?;
+                        let x =
+                            to_f64(&args[0]).ok_or_else(|| "non-numeric value arg".to_string())?;
                         let p_arg = args
                             .get(1)
                             .and_then(to_f64)
@@ -286,21 +292,18 @@ mod wasm_export {
                         samples.add(x);
                     }
                     (FID_SKEWNESS | FID_KURTOSIS, AggState::Moments(m)) => {
-                        let x = to_f64(&args[0])
-                            .ok_or_else(|| "non-numeric arg".to_string())?;
+                        let x = to_f64(&args[0]).ok_or_else(|| "non-numeric arg".to_string())?;
                         m.add(x);
                     }
                     (
-                        FID_REGR_SLOPE | FID_REGR_INTERCEPT | FID_REGR_R2
-                        | FID_CORR | FID_COVAR_POP | FID_COVAR_SAMP
-                        | FID_REGR_COUNT | FID_REGR_AVGX | FID_REGR_AVGY
-                        | FID_REGR_SXX | FID_REGR_SYY | FID_REGR_SXY,
+                        FID_REGR_SLOPE | FID_REGR_INTERCEPT | FID_REGR_R2 | FID_CORR
+                        | FID_COVAR_POP | FID_COVAR_SAMP | FID_REGR_COUNT | FID_REGR_AVGX
+                        | FID_REGR_AVGY | FID_REGR_SXX | FID_REGR_SYY | FID_REGR_SXY,
                         AggState::Regression(r),
                     ) => {
                         // SQL order is `regr_slope(y, x)`  matches
                         // PostgreSQL's signature. add(y, x).
-                        let y = to_f64(&args[0])
-                            .ok_or_else(|| "non-numeric y arg".to_string())?;
+                        let y = to_f64(&args[0]).ok_or_else(|| "non-numeric y arg".to_string())?;
                         let x = args
                             .get(1)
                             .and_then(to_f64)
@@ -311,7 +314,9 @@ mod wasm_export {
                         let x = match &args[0] {
                             SqlValue::Integer(n) => *n,
                             SqlValue::Real(r) => *r as i64,
-                            SqlValue::Text(s) => s.parse::<i64>().map_err(|_| "non-integer arg".to_string())?,
+                            SqlValue::Text(s) => s
+                                .parse::<i64>()
+                                .map_err(|_| "non-integer arg".to_string())?,
                             _ => return Err("bit_*: INTEGER arg expected".to_string()),
                         };
                         br.add(x);
@@ -321,22 +326,32 @@ mod wasm_export {
                             av.seen = true;
                             match &args[0] {
                                 SqlValue::Null => av.kind = ValueKind::Null,
-                                SqlValue::Integer(n) => { av.kind = ValueKind::Integer; av.i = *n; }
-                                SqlValue::Real(r) => { av.kind = ValueKind::Real; av.r = *r; }
-                                SqlValue::Text(s) => { av.kind = ValueKind::Text; av.s = s.clone(); }
-                                SqlValue::Blob(b) => { av.kind = ValueKind::Blob; av.b = b.clone(); }
+                                SqlValue::Integer(n) => {
+                                    av.kind = ValueKind::Integer;
+                                    av.i = *n;
+                                }
+                                SqlValue::Real(r) => {
+                                    av.kind = ValueKind::Real;
+                                    av.r = *r;
+                                }
+                                SqlValue::Text(s) => {
+                                    av.kind = ValueKind::Text;
+                                    av.s = s.clone();
+                                }
+                                SqlValue::Blob(b) => {
+                                    av.kind = ValueKind::Blob;
+                                    av.b = b.clone();
+                                }
                             }
                         }
                     }
-                    (FID_ARRAY_AGG, AggState::ArrayAgg(aa)) => {
-                        match &args[0] {
-                            SqlValue::Null => aa.add_null(),
-                            SqlValue::Integer(n) => aa.add_int(*n),
-                            SqlValue::Real(r) => aa.add_real(*r),
-                            SqlValue::Text(s) => aa.add_text(s),
-                            SqlValue::Blob(b) => aa.add_text(&String::from_utf8_lossy(b)),
-                        }
-                    }
+                    (FID_ARRAY_AGG, AggState::ArrayAgg(aa)) => match &args[0] {
+                        SqlValue::Null => aa.add_null(),
+                        SqlValue::Integer(n) => aa.add_int(*n),
+                        SqlValue::Real(r) => aa.add_real(*r),
+                        SqlValue::Text(s) => aa.add_text(s),
+                        SqlValue::Blob(b) => aa.add_text(&String::from_utf8_lossy(b)),
+                    },
                     (FID_STRING_AGG, AggState::StringAgg(sa)) => {
                         let s = match &args[0] {
                             SqlValue::Text(t) => t.clone(),
@@ -357,10 +372,7 @@ mod wasm_export {
             })
         }
 
-        fn finalize(
-            func_id: u64,
-            context_id: u64,
-        ) -> Result<SqlValue, String> {
+        fn finalize(func_id: u64, context_id: u64) -> Result<SqlValue, String> {
             CTX.with(|m| -> Result<SqlValue, String> {
                 let mut tbl = m.borrow_mut();
                 let state = match tbl.remove(&context_id) {
@@ -371,9 +383,10 @@ mod wasm_export {
                     (FID_STDDEV_POP, AggState::Stddev(w)) => {
                         w.stddev_pop().map(SqlValue::Real).unwrap_or(SqlValue::Null)
                     }
-                    (FID_STDDEV_SAMP, AggState::Stddev(w)) => {
-                        w.stddev_samp().map(SqlValue::Real).unwrap_or(SqlValue::Null)
-                    }
+                    (FID_STDDEV_SAMP, AggState::Stddev(w)) => w
+                        .stddev_samp()
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null),
                     (FID_VAR_POP, AggState::Var(w)) => {
                         w.var_pop().map(SqlValue::Real).unwrap_or(SqlValue::Null)
                     }
@@ -385,11 +398,15 @@ mod wasm_export {
                     }
                     (FID_PERCENTILE, AggState::Percentile { p, samples }) => {
                         let p = p.unwrap_or(50.0);
-                        samples.percentile(p).map(SqlValue::Real).unwrap_or(SqlValue::Null)
+                        samples
+                            .percentile(p)
+                            .map(SqlValue::Real)
+                            .unwrap_or(SqlValue::Null)
                     }
-                    (FID_MODE, AggState::Mode(m)) => {
-                        m.mode().map(|(k, _)| SqlValue::Text(k)).unwrap_or(SqlValue::Null)
-                    }
+                    (FID_MODE, AggState::Mode(m)) => m
+                        .mode()
+                        .map(|(k, _)| SqlValue::Text(k))
+                        .unwrap_or(SqlValue::Null),
                     (FID_PERCENTILE_CONT, AggState::PercentileCont { p, samples }) => {
                         let p = p.unwrap_or(50.0);
                         samples
@@ -404,14 +421,12 @@ mod wasm_export {
                             .map(SqlValue::Real)
                             .unwrap_or(SqlValue::Null)
                     }
-                    (FID_SKEWNESS, AggState::Moments(m)) => m
-                        .skewness()
-                        .map(SqlValue::Real)
-                        .unwrap_or(SqlValue::Null),
-                    (FID_KURTOSIS, AggState::Moments(m)) => m
-                        .kurtosis()
-                        .map(SqlValue::Real)
-                        .unwrap_or(SqlValue::Null),
+                    (FID_SKEWNESS, AggState::Moments(m)) => {
+                        m.skewness().map(SqlValue::Real).unwrap_or(SqlValue::Null)
+                    }
+                    (FID_KURTOSIS, AggState::Moments(m)) => {
+                        m.kurtosis().map(SqlValue::Real).unwrap_or(SqlValue::Null)
+                    }
                     (FID_REGR_SLOPE, AggState::Regression(r)) => {
                         r.slope().map(SqlValue::Real).unwrap_or(SqlValue::Null)
                     }
@@ -422,24 +437,26 @@ mod wasm_export {
                         r.r2().map(SqlValue::Real).unwrap_or(SqlValue::Null)
                     }
                     // Aliases  same Welford state, sample variant.
-                    (FID_STDDEV, AggState::Stddev(w)) => {
-                        w.stddev_samp().map(SqlValue::Real).unwrap_or(SqlValue::Null)
-                    }
+                    (FID_STDDEV, AggState::Stddev(w)) => w
+                        .stddev_samp()
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null),
                     (FID_VARIANCE, AggState::Var(w)) => {
                         w.var_samp().map(SqlValue::Real).unwrap_or(SqlValue::Null)
                     }
-                    (FID_CORR, AggState::Regression(r)) => {
-                        r.correlation().map(SqlValue::Real).unwrap_or(SqlValue::Null)
-                    }
-                    (FID_COVAR_POP, AggState::Regression(r)) => {
-                        r.covariance_pop().map(SqlValue::Real).unwrap_or(SqlValue::Null)
-                    }
-                    (FID_COVAR_SAMP, AggState::Regression(r)) => {
-                        r.covariance_samp().map(SqlValue::Real).unwrap_or(SqlValue::Null)
-                    }
-                    (FID_REGR_COUNT, AggState::Regression(r)) => {
-                        SqlValue::Integer(r.regr_count())
-                    }
+                    (FID_CORR, AggState::Regression(r)) => r
+                        .correlation()
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null),
+                    (FID_COVAR_POP, AggState::Regression(r)) => r
+                        .covariance_pop()
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null),
+                    (FID_COVAR_SAMP, AggState::Regression(r)) => r
+                        .covariance_samp()
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null),
+                    (FID_REGR_COUNT, AggState::Regression(r)) => SqlValue::Integer(r.regr_count()),
                     (FID_REGR_AVGX, AggState::Regression(r)) => {
                         r.regr_avgx().map(SqlValue::Real).unwrap_or(SqlValue::Null)
                     }
@@ -459,41 +476,36 @@ mod wasm_export {
                         br.value().map(SqlValue::Integer).unwrap_or(SqlValue::Null)
                     }
                     (FID_ANY_VALUE, AggState::AnyValue(av)) => {
-                        if !av.seen { SqlValue::Null }
-                        else { match av.kind {
-                            ValueKind::Null => SqlValue::Null,
-                            ValueKind::Integer => SqlValue::Integer(av.i),
-                            ValueKind::Real => SqlValue::Real(av.r),
-                            ValueKind::Text => SqlValue::Text(av.s),
-                            ValueKind::Blob => SqlValue::Blob(av.b),
-                        }}
+                        if !av.seen {
+                            SqlValue::Null
+                        } else {
+                            match av.kind {
+                                ValueKind::Null => SqlValue::Null,
+                                ValueKind::Integer => SqlValue::Integer(av.i),
+                                ValueKind::Real => SqlValue::Real(av.r),
+                                ValueKind::Text => SqlValue::Text(av.s),
+                                ValueKind::Blob => SqlValue::Blob(av.b),
+                            }
+                        }
                     }
-                    (FID_ARRAY_AGG, AggState::ArrayAgg(aa)) => {
-                        SqlValue::Text(aa.into_json())
-                    }
-                    (FID_STRING_AGG, AggState::StringAgg(sa)) => {
-                        sa.into_string().map(SqlValue::Text).unwrap_or(SqlValue::Null)
-                    }
+                    (FID_ARRAY_AGG, AggState::ArrayAgg(aa)) => SqlValue::Text(aa.into_json()),
+                    (FID_STRING_AGG, AggState::StringAgg(sa)) => sa
+                        .into_string()
+                        .map(SqlValue::Text)
+                        .unwrap_or(SqlValue::Null),
                     _ => return Err(format!("stats: bad func_id {func_id} in finalize")),
                 };
                 Ok(r)
             })
         }
 
-        fn value(
-            _func_id: u64,
-            _context_id: u64,
-        ) -> Result<SqlValue, String> {
+        fn value(_func_id: u64, _context_id: u64) -> Result<SqlValue, String> {
             // Window mode not advertised in the manifest; SQLite
             // wouldn't call this. Defensive default.
             Err("stats: window mode not supported".to_string())
         }
 
-        fn inverse(
-            _func_id: u64,
-            _context_id: u64,
-            _args: Vec<SqlValue>,
-        ) -> Result<(), String> {
+        fn inverse(_func_id: u64, _context_id: u64, _args: Vec<SqlValue>) -> Result<(), String> {
             Err("stats: window mode not supported".to_string())
         }
     }

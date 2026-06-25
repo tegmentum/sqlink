@@ -84,8 +84,7 @@ impl Moments {
         let delta_n2 = delta_n * delta_n;
         let term1 = delta * delta_n * n1;
         self.mean += delta_n;
-        self.m4 += term1 * delta_n2 * (n * n - 3.0 * n + 3.0)
-            + 6.0 * delta_n2 * self.m2
+        self.m4 += term1 * delta_n2 * (n * n - 3.0 * n + 3.0) + 6.0 * delta_n2 * self.m2
             - 4.0 * delta_n * self.m3;
         self.m3 += term1 * delta_n * (n - 2.0) - 3.0 * delta_n * self.m2;
         self.m2 += term1;
@@ -171,7 +170,9 @@ impl Regression {
     /// Population covariance: `sum((x  )(y  )) / n`. None if
     /// n < 1.
     pub fn covariance_pop(&self) -> Option<f64> {
-        if self.n < 1 { return None; }
+        if self.n < 1 {
+            return None;
+        }
         let n = self.n as f64;
         Some((self.sum_xy - self.sum_x * self.sum_y / n) / n)
     }
@@ -179,7 +180,9 @@ impl Regression {
     /// Sample covariance: divide by `n - 1` instead of `n`. None
     /// if n < 2.
     pub fn covariance_samp(&self) -> Option<f64> {
-        if self.n < 2 { return None; }
+        if self.n < 2 {
+            return None;
+        }
         let n = self.n as f64;
         Some((self.sum_xy - self.sum_x * self.sum_y / n) / (n - 1.0))
     }
@@ -187,11 +190,15 @@ impl Regression {
     /// Pearson correlation coefficient r. None if n < 2 or
     /// either variable has zero variance.
     pub fn correlation(&self) -> Option<f64> {
-        if self.n < 2 { return None; }
+        if self.n < 2 {
+            return None;
+        }
         let n = self.n as f64;
         let dx = n * self.sum_x2 - self.sum_x * self.sum_x;
         let dy = n * self.sum_y2 - self.sum_y * self.sum_y;
-        if dx <= 0.0 || dy <= 0.0 { return None; }
+        if dx <= 0.0 || dy <= 0.0 {
+            return None;
+        }
         let num = n * self.sum_xy - self.sum_x * self.sum_y;
         Some(num / (dx * dy).sqrt())
     }
@@ -199,26 +206,42 @@ impl Regression {
     // PostgreSQL regr_* family  surface the accumulator
     // components directly so callers can reproduce regression
     // diagnostics without recomputing.
-    pub fn regr_count(&self) -> i64 { self.n as i64 }
+    pub fn regr_count(&self) -> i64 {
+        self.n as i64
+    }
     pub fn regr_avgx(&self) -> Option<f64> {
-        if self.n == 0 { None } else { Some(self.sum_x / self.n as f64) }
+        if self.n == 0 {
+            None
+        } else {
+            Some(self.sum_x / self.n as f64)
+        }
     }
     pub fn regr_avgy(&self) -> Option<f64> {
-        if self.n == 0 { None } else { Some(self.sum_y / self.n as f64) }
+        if self.n == 0 {
+            None
+        } else {
+            Some(self.sum_y / self.n as f64)
+        }
     }
     /// Sxx = (x  )²  =  sum_x2  (sum_x)² / n.
     pub fn regr_sxx(&self) -> Option<f64> {
-        if self.n == 0 { None } else {
+        if self.n == 0 {
+            None
+        } else {
             Some(self.sum_x2 - self.sum_x * self.sum_x / self.n as f64)
         }
     }
     pub fn regr_syy(&self) -> Option<f64> {
-        if self.n == 0 { None } else {
+        if self.n == 0 {
+            None
+        } else {
             Some(self.sum_y2 - self.sum_y * self.sum_y / self.n as f64)
         }
     }
     pub fn regr_sxy(&self) -> Option<f64> {
-        if self.n == 0 { None } else {
+        if self.n == 0 {
+            None
+        } else {
             Some(self.sum_xy - self.sum_x * self.sum_y / self.n as f64)
         }
     }
@@ -245,7 +268,7 @@ impl BitReduce {
         Self {
             n: 0,
             acc: match op {
-                BitOp::And => !0,   // identity for AND is all-ones
+                BitOp::And => !0, // identity for AND is all-ones
                 BitOp::Or | BitOp::Xor => 0,
             },
             op,
@@ -260,7 +283,11 @@ impl BitReduce {
         };
     }
     pub fn value(&self) -> Option<i64> {
-        if self.n == 0 { None } else { Some(self.acc) }
+        if self.n == 0 {
+            None
+        } else {
+            Some(self.acc)
+        }
     }
 }
 
@@ -295,7 +322,9 @@ pub struct ArrayAgg {
 }
 
 impl ArrayAgg {
-    pub fn add_int(&mut self, x: i64) { self.items.push(serde_json::Value::from(x)); }
+    pub fn add_int(&mut self, x: i64) {
+        self.items.push(serde_json::Value::from(x));
+    }
     pub fn add_real(&mut self, x: f64) {
         match serde_json::Number::from_f64(x) {
             Some(n) => self.items.push(serde_json::Value::Number(n)),
@@ -306,11 +335,13 @@ impl ArrayAgg {
         // If the string parses as JSON, store it as that JSON
         // value (so callers can array_agg a JSON column without
         // double-encoding). Otherwise treat as TEXT.
-        let v: serde_json::Value = serde_json::from_str(s)
-            .unwrap_or_else(|_| serde_json::Value::String(s.to_string()));
+        let v: serde_json::Value =
+            serde_json::from_str(s).unwrap_or_else(|_| serde_json::Value::String(s.to_string()));
         self.items.push(v);
     }
-    pub fn add_null(&mut self) { self.items.push(serde_json::Value::Null); }
+    pub fn add_null(&mut self) {
+        self.items.push(serde_json::Value::Null);
+    }
     pub fn into_json(self) -> String {
         serde_json::to_string(&self.items).unwrap_or_else(|_| "[]".to_string())
     }
@@ -329,16 +360,22 @@ pub struct StringAgg {
 
 impl StringAgg {
     pub fn add(&mut self, s: String, sep: &str) {
-        if self.sep.is_none() { self.sep = Some(sep.to_string()); }
+        if self.sep.is_none() {
+            self.sep = Some(sep.to_string());
+        }
         self.parts.push(s);
     }
     pub fn into_string(self) -> Option<String> {
-        if self.parts.is_empty() { return None; }
+        if self.parts.is_empty() {
+            return None;
+        }
         let sep = self.sep.unwrap_or_default();
         Some(self.parts.join(&sep))
     }
     pub fn to_owned_string(&self) -> Option<String> {
-        if self.parts.is_empty() { return None; }
+        if self.parts.is_empty() {
+            return None;
+        }
         let sep = self.sep.clone().unwrap_or_default();
         Some(self.parts.join(&sep))
     }
@@ -371,8 +408,7 @@ impl Samples {
         sorted.sort_by(|a, b| a.partial_cmp(b).unwrap_or(core::cmp::Ordering::Equal));
         let n = sorted.len();
         // ceil(p * n / 100) - 1 (0-indexed), clamped.
-        let idx = ((p / 100.0 * n as f64).ceil() as isize - 1).clamp(0, n as isize - 1)
-            as usize;
+        let idx = ((p / 100.0 * n as f64).ceil() as isize - 1).clamp(0, n as isize - 1) as usize;
         Some(sorted[idx])
     }
 

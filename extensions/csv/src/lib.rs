@@ -39,8 +39,8 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::sqlite::extension::types::SqlValue;
 
     use crate::parser;
@@ -160,11 +160,7 @@ mod wasm_export {
             })
         }
 
-        fn open(
-            _vtab_id: u64,
-            instance_id: u64,
-            cursor_id: u64,
-        ) -> Result<(), String> {
+        fn open(_vtab_id: u64, instance_id: u64, cursor_id: u64) -> Result<(), String> {
             CURSORS.with(|m| {
                 m.borrow_mut().insert(
                     cursor_id,
@@ -223,11 +219,7 @@ mod wasm_export {
             })
         }
 
-        fn column(
-            _vtab_id: u64,
-            cursor_id: u64,
-            col: i32,
-        ) -> Result<SqlValue, String> {
+        fn column(_vtab_id: u64, cursor_id: u64, col: i32) -> Result<SqlValue, String> {
             CURSORS.with(|m| {
                 let cursors = m.borrow();
                 let cursor = cursors
@@ -261,7 +253,7 @@ mod wasm_export {
                 Ok((cursor.row_idx + 1) as i64)
             })
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             _cursor_id: u64,
@@ -269,7 +261,7 @@ mod wasm_export {
         ) -> Result<Vec<VtabRow>, String> {
             Err("fetch_batch: not implemented; host falls back to per-row".to_string())
         }
-}
+    }
 
     fn connect_impl(instance_id: u64, args: &[String]) -> Result<String, String> {
         let parsed = parse_args(args)?;
@@ -290,9 +282,7 @@ mod wasm_export {
                         .map(|h| format!("\"{}\" TEXT", h.replace('"', "\"\"")))
                         .collect()
                 } else {
-                    (0..column_count)
-                        .map(|i| format!("c{i} TEXT"))
-                        .collect()
+                    (0..column_count).map(|i| format!("c{i} TEXT")).collect()
                 };
                 format!("CREATE TABLE x({})", cols.join(", "))
             }
@@ -327,7 +317,9 @@ mod wasm_export {
             let v = strip_quotes(v.trim());
             match k.trim() {
                 "filename" => filename = Some(v.to_string()),
-                "header" => header = matches!(v.to_ascii_lowercase().as_str(), "true" | "1" | "yes"),
+                "header" => {
+                    header = matches!(v.to_ascii_lowercase().as_str(), "true" | "1" | "yes")
+                }
                 "schema" => schema = Some(v.to_string()),
                 other => return Err(format!("csv: unknown arg {other:?}")),
             }
@@ -340,8 +332,13 @@ mod wasm_export {
     }
 
     fn strip_quotes(s: &str) -> &str {
-        let s = s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')).unwrap_or(s);
-        s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s)
+        let s = s
+            .strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .unwrap_or(s);
+        s.strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(s)
     }
 
     bindings::export!(CsvVtab with_types_in bindings);

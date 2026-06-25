@@ -67,7 +67,11 @@ mod wasm_export {
             out.push(' ');
             out.push('|');
             for &b in chunk {
-                out.push(if (0x20..0x7f).contains(&b) { b as char } else { '.' });
+                out.push(if (0x20..0x7f).contains(&b) {
+                    b as char
+                } else {
+                    '.'
+                });
             }
             for _ in chunk.len()..width {
                 out.push(' ');

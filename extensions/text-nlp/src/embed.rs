@@ -93,19 +93,84 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_DIFF,         name: b"text_diff\0",               num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_MD,           name: b"markdown_to_html\0",        num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_STEM,         name: b"stem_porter\0",             num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SOUNDEX,      name: b"soundex\0",                 num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_METAPHONE,    name: b"metaphone\0",               num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DIFF_ADDED,   name: b"text_diff_added\0",         num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_DIFF_REMOVED, name: b"text_diff_removed\0",       num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_DIFF_SUMMARY, name: b"text_diff_summary\0",       num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_SIMILARITY,   name: b"text_similarity\0",         num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_MD_TEXT,      name: b"markdown_to_text\0",        num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MD_LINKS,     name: b"markdown_extract_links\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MD_HEADINGS,  name: b"markdown_extract_headings\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_HTML_TO_MD,   name: b"html_to_markdown\0",        num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_DIFF,
+        name: b"text_diff\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MD,
+        name: b"markdown_to_html\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_STEM,
+        name: b"stem_porter\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SOUNDEX,
+        name: b"soundex\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_METAPHONE,
+        name: b"metaphone\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DIFF_ADDED,
+        name: b"text_diff_added\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DIFF_REMOVED,
+        name: b"text_diff_removed\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DIFF_SUMMARY,
+        name: b"text_diff_summary\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SIMILARITY,
+        name: b"text_similarity\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MD_TEXT,
+        name: b"markdown_to_text\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MD_LINKS,
+        name: b"markdown_extract_links\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MD_HEADINGS,
+        name: b"markdown_extract_headings\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_HTML_TO_MD,
+        name: b"html_to_markdown\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

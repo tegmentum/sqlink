@@ -70,16 +70,16 @@ mod wasm_export {
     // Gap-analysis additions (cross-DB portability):
     const FID_COT: u64 = 71;
     const FID_FACTORIAL: u64 = 72;
-    const FID_RAND: u64 = 73;        // [0, 1) float
-    const FID_DIV: u64 = 74;         // integer division
+    const FID_RAND: u64 = 73; // [0, 1) float
+    const FID_DIV: u64 = 74; // integer division
     const FID_GCD: u64 = 75;
     const FID_LCM: u64 = 76;
-    const FID_TRUNCATE_1: u64 = 77;  // alias of trunc
-    const FID_TRUNCATE_2: u64 = 78;  // trunc to N decimal places
+    const FID_TRUNCATE_1: u64 = 77; // alias of trunc
+    const FID_TRUNCATE_2: u64 = 78; // trunc to N decimal places
     const FID_BIT_COUNT: u64 = 79;
     const FID_ISFINITE: u64 = 80;
     const FID_WIDTH_BUCKET: u64 = 81;
-    const FID_BIN: u64 = 82;         // binary repr
+    const FID_BIN: u64 = 82; // binary repr
 
     struct MathExtension;
 
@@ -184,16 +184,17 @@ mod wasm_export {
                 let x = a
                     .first()
                     .ok_or_else(|| alloc::format!("{name}: missing arg"))?;
-                funcs::to_f64(x)
-                    .map_err(|e| alloc::format!("{name}: {e}"))
+                funcs::to_f64(x).map_err(|e| alloc::format!("{name}: {e}"))
             };
             let get2 = |name: &str| -> Result<(f64, f64), alloc::string::String> {
                 let x = funcs::to_f64(
-                    a.first().ok_or_else(|| alloc::format!("{name}: missing arg 0"))?,
+                    a.first()
+                        .ok_or_else(|| alloc::format!("{name}: missing arg 0"))?,
                 )
                 .map_err(|e| alloc::format!("{name}: {e}"))?;
                 let y = funcs::to_f64(
-                    a.get(1).ok_or_else(|| alloc::format!("{name}: missing arg 1"))?,
+                    a.get(1)
+                        .ok_or_else(|| alloc::format!("{name}: missing arg 1"))?,
                 )
                 .map_err(|e| alloc::format!("{name}: {e}"))?;
                 Ok((x, y))
@@ -294,7 +295,9 @@ mod wasm_export {
                 FID_COT => {
                     let x = get1("cot")?;
                     let t = libm::tan(x);
-                    if t == 0.0 { return Err("cot: undefined at multiples of pi".to_string()); }
+                    if t == 0.0 {
+                        return Err("cot: undefined at multiples of pi".to_string());
+                    }
                     SqlValue::Real(1.0 / t)
                 }
                 FID_FACTORIAL => {
@@ -303,10 +306,16 @@ mod wasm_export {
                         Some(Arg::Real(r)) if r.fract() == 0.0 => *r as i64,
                         _ => return Err("factorial: INTEGER arg".to_string()),
                     };
-                    if n < 0 { return Err("factorial: negative arg".to_string()); }
-                    if n > 20 { return Err("factorial: overflows i64 for n > 20".to_string()); }
+                    if n < 0 {
+                        return Err("factorial: negative arg".to_string());
+                    }
+                    if n > 20 {
+                        return Err("factorial: overflows i64 for n > 20".to_string());
+                    }
                     let mut acc: i64 = 1;
-                    for i in 2..=n { acc *= i; }
+                    for i in 2..=n {
+                        acc *= i;
+                    }
                     SqlValue::Integer(acc)
                 }
                 FID_RAND => {
@@ -321,7 +330,9 @@ mod wasm_export {
                     }
                     let s = STATE.with(|c| {
                         let mut v = c.get();
-                        v ^= v << 13; v ^= v >> 7; v ^= v << 17;
+                        v ^= v << 13;
+                        v ^= v >> 7;
+                        v ^= v << 17;
                         c.set(v);
                         v
                     });
@@ -330,21 +341,36 @@ mod wasm_export {
                 FID_DIV => {
                     let x = funcs::to_f64(a.first().ok_or("div: missing arg 0")?)? as i64;
                     let y = funcs::to_f64(a.get(1).ok_or("div: missing arg 1")?)? as i64;
-                    if y == 0 { return Err("div: division by zero".to_string()); }
+                    if y == 0 {
+                        return Err("div: division by zero".to_string());
+                    }
                     SqlValue::Integer(x / y)
                 }
                 FID_GCD => {
                     let x = funcs::to_f64(a.first().ok_or("gcd: missing arg 0")?)? as i64;
                     let y = funcs::to_f64(a.get(1).ok_or("gcd: missing arg 1")?)? as i64;
-                    fn g(a: i64, b: i64) -> i64 { if b == 0 { a.abs() } else { g(b, a % b) } }
+                    fn g(a: i64, b: i64) -> i64 {
+                        if b == 0 {
+                            a.abs()
+                        } else {
+                            g(b, a % b)
+                        }
+                    }
                     SqlValue::Integer(g(x, y))
                 }
                 FID_LCM => {
                     let x = funcs::to_f64(a.first().ok_or("lcm: missing arg 0")?)? as i64;
                     let y = funcs::to_f64(a.get(1).ok_or("lcm: missing arg 1")?)? as i64;
-                    if x == 0 || y == 0 { SqlValue::Integer(0) }
-                    else {
-                        fn g(a: i64, b: i64) -> i64 { if b == 0 { a.abs() } else { g(b, a % b) } }
+                    if x == 0 || y == 0 {
+                        SqlValue::Integer(0)
+                    } else {
+                        fn g(a: i64, b: i64) -> i64 {
+                            if b == 0 {
+                                a.abs()
+                            } else {
+                                g(b, a % b)
+                            }
+                        }
                         SqlValue::Integer((x / g(x, y) * y).abs())
                     }
                 }
@@ -367,11 +393,17 @@ mod wasm_export {
                     let lo = funcs::to_f64(a.get(1).ok_or("width_bucket: missing arg 1")?)?;
                     let hi = funcs::to_f64(a.get(2).ok_or("width_bucket: missing arg 2")?)?;
                     let n = funcs::to_f64(a.get(3).ok_or("width_bucket: missing arg 3")?)? as i64;
-                    if n <= 0 { return Err("width_bucket: nbuckets must be > 0".to_string()); }
-                    if lo == hi { return Err("width_bucket: lo == hi".to_string()); }
-                    if x < lo { SqlValue::Integer(0) }
-                    else if x >= hi { SqlValue::Integer(n + 1) }
-                    else {
+                    if n <= 0 {
+                        return Err("width_bucket: nbuckets must be > 0".to_string());
+                    }
+                    if lo == hi {
+                        return Err("width_bucket: lo == hi".to_string());
+                    }
+                    if x < lo {
+                        SqlValue::Integer(0)
+                    } else if x >= hi {
+                        SqlValue::Integer(n + 1)
+                    } else {
                         let span = hi - lo;
                         SqlValue::Integer(((x - lo) * (n as f64) / span).floor() as i64 + 1)
                     }

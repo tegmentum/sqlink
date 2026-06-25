@@ -26,9 +26,9 @@ use std::sync::{Mutex, OnceLock};
 
 use libsqlite3_sys as ffi;
 
-use crate::Host;
 use crate::bindings::sqlite::extension::types::SqlValue as WitSqlValue;
 use crate::bindings::sqlite::extension::vtab as wv;
+use crate::Host;
 
 // ─────────── Host handle ───────────
 //
@@ -137,21 +137,17 @@ fn drop_batch_cache(cursor_id: u64) {
 /// Try to pull a fresh batch into the cache. Returns true if a
 /// non-empty batch landed; false if EOF / error.
 fn refill_batch(meta: &CursorMeta, cursor_id: u64) -> bool {
-    let rows = match sync_dispatch_vtab_fetch_batch(
-        &meta.ext_name,
-        meta.vtab_id,
-        cursor_id,
-        BATCH_SIZE,
-    ) {
-        Ok(r) => r,
-        Err(_) => {
-            // Treat error as EOF. The host already logged it.
-            let mut cache = batch_cache().lock().unwrap();
-            let entry = cache.entry(cursor_id).or_default();
-            entry.eof_seen = true;
-            return false;
-        }
-    };
+    let rows =
+        match sync_dispatch_vtab_fetch_batch(&meta.ext_name, meta.vtab_id, cursor_id, BATCH_SIZE) {
+            Ok(r) => r,
+            Err(_) => {
+                // Treat error as EOF. The host already logged it.
+                let mut cache = batch_cache().lock().unwrap();
+                let entry = cache.entry(cursor_id).or_default();
+                entry.eof_seen = true;
+                return false;
+            }
+        };
     let mut cache = batch_cache().lock().unwrap();
     let entry = cache.entry(cursor_id).or_default();
     entry.idx = 0;
@@ -332,11 +328,7 @@ fn sync_dispatch_vtab_open(
     }
 }
 
-fn sync_dispatch_vtab_close(
-    ext_name: &str,
-    vtab_id: u64,
-    cursor_id: u64,
-) -> Result<(), String> {
+fn sync_dispatch_vtab_close(ext_name: &str, vtab_id: u64, cursor_id: u64) -> Result<(), String> {
     match block_on(host().dispatch_vtab_close(ext_name, vtab_id, cursor_id)) {
         Ok(Ok(())) => Ok(()),
         Ok(Err(e)) => Err(e),
@@ -366,11 +358,7 @@ fn sync_dispatch_vtab_filter(
     }
 }
 
-fn sync_dispatch_vtab_next(
-    ext_name: &str,
-    vtab_id: u64,
-    cursor_id: u64,
-) -> Result<(), String> {
+fn sync_dispatch_vtab_next(ext_name: &str, vtab_id: u64, cursor_id: u64) -> Result<(), String> {
     match block_on(host().dispatch_vtab_next(ext_name, vtab_id, cursor_id)) {
         Ok(Ok(())) => Ok(()),
         Ok(Err(e)) => Err(e),
@@ -399,11 +387,7 @@ fn sync_dispatch_vtab_column(
     }
 }
 
-fn sync_dispatch_vtab_rowid(
-    ext_name: &str,
-    vtab_id: u64,
-    cursor_id: u64,
-) -> Result<i64, String> {
+fn sync_dispatch_vtab_rowid(ext_name: &str, vtab_id: u64, cursor_id: u64) -> Result<i64, String> {
     match block_on(host().dispatch_vtab_rowid(ext_name, vtab_id, cursor_id)) {
         Ok(Ok(r)) => Ok(r),
         Ok(Err(e)) => Err(e),
@@ -423,7 +407,11 @@ fn sync_dispatch_vtab_fetch_batch(
             .into_iter()
             .map(|r| BatchRow {
                 rowid: r.rowid,
-                columns: r.columns.into_iter().map(convert_sql_value_from_loaded).collect(),
+                columns: r
+                    .columns
+                    .into_iter()
+                    .map(convert_sql_value_from_loaded)
+                    .collect(),
             })
             .collect()),
         Ok(Err(e)) => Err(e),
@@ -823,21 +811,23 @@ unsafe extern "C" fn x_best_index(
         col_used: info.colUsed,
     };
 
-    let plan = match sync_dispatch_vtab_best_index(&meta.ext_name, meta.vtab_id, wv.instance_id, wit_info) {
-        Ok(p) => p,
-        Err(e) => {
-            // Best-effort error surfacing: SQLite expects an error
-            // string written into zErrMsg on the vtab struct.
-            let msg = CString::new(e).unwrap_or_else(|_| CString::new("best_index").unwrap());
-            let bytes = msg.as_bytes_with_nul();
-            let buf = ffi::sqlite3_malloc(bytes.len() as c_int) as *mut c_char;
-            if !buf.is_null() {
-                ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, buf, bytes.len());
-                (*p_vtab).zErrMsg = buf;
+    let plan =
+        match sync_dispatch_vtab_best_index(&meta.ext_name, meta.vtab_id, wv.instance_id, wit_info)
+        {
+            Ok(p) => p,
+            Err(e) => {
+                // Best-effort error surfacing: SQLite expects an error
+                // string written into zErrMsg on the vtab struct.
+                let msg = CString::new(e).unwrap_or_else(|_| CString::new("best_index").unwrap());
+                let bytes = msg.as_bytes_with_nul();
+                let buf = ffi::sqlite3_malloc(bytes.len() as c_int) as *mut c_char;
+                if !buf.is_null() {
+                    ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, buf, bytes.len());
+                    (*p_vtab).zErrMsg = buf;
+                }
+                return ffi::SQLITE_ERROR;
             }
-            return ffi::SQLITE_ERROR;
-        }
-    };
+        };
 
     // Write plan back into the index_info struct.
     for (i, usage) in plan.constraint_usage.iter().enumerate() {
@@ -880,7 +870,8 @@ unsafe extern "C" fn x_open(
         vtab_id: meta.vtab_id,
         batched: meta.batched,
     });
-    if let Err(e) = sync_dispatch_vtab_open(&meta.ext_name, meta.vtab_id, wv.instance_id, cursor_id) {
+    if let Err(e) = sync_dispatch_vtab_open(&meta.ext_name, meta.vtab_id, wv.instance_id, cursor_id)
+    {
         drop_cursor(cursor_id);
         let _ = e;
         return ffi::SQLITE_ERROR;
@@ -1161,10 +1152,7 @@ unsafe extern "C" fn x_find_function(
 /// (only meaningful for INSERT/UPDATE); the rest are column values
 /// in declared-schema order. We send all of them through to the
 /// extension so it can do the same case-split.
-unsafe fn argv_to_wit_values(
-    argc: c_int,
-    argv: *mut *mut ffi::sqlite3_value,
-) -> Vec<WitSqlValue> {
+unsafe fn argv_to_wit_values(argc: c_int, argv: *mut *mut ffi::sqlite3_value) -> Vec<WitSqlValue> {
     if argc <= 0 || argv.is_null() {
         return Vec::new();
     }
@@ -1238,10 +1226,7 @@ unsafe extern "C" fn x_rollback(p_vtab: *mut ffi::sqlite3_vtab) -> c_int {
     }
 }
 
-unsafe extern "C" fn x_rename(
-    p_vtab: *mut ffi::sqlite3_vtab,
-    z_new: *const c_char,
-) -> c_int {
+unsafe extern "C" fn x_rename(p_vtab: *mut ffi::sqlite3_vtab, z_new: *const c_char) -> c_int {
     let wv = &*(p_vtab as *const WasmVtab);
     let Some(meta) = instance_meta(wv.instance_id) else {
         return ffi::SQLITE_ERROR;
@@ -1362,11 +1347,7 @@ unsafe extern "C" fn x_integrity(
                     // sqlite frees this with sqlite3_free
                     let buf = ffi::sqlite3_malloc((c.as_bytes().len() + 1) as c_int) as *mut c_char;
                     if !buf.is_null() {
-                        std::ptr::copy_nonoverlapping(
-                            c.as_ptr(),
-                            buf,
-                            c.as_bytes().len() + 1,
-                        );
+                        std::ptr::copy_nonoverlapping(c.as_ptr(), buf, c.as_bytes().len() + 1);
                         *pz_err = buf;
                     }
                 }
@@ -1511,13 +1492,8 @@ pub unsafe fn register_vtab_module(
     } else {
         &MODULE
     };
-    let rc = ffi::sqlite3_create_module_v2(
-        db,
-        name_c.as_ptr(),
-        module_ptr,
-        aux,
-        Some(x_destroy_aux),
-    );
+    let rc =
+        ffi::sqlite3_create_module_v2(db, name_c.as_ptr(), module_ptr, aux, Some(x_destroy_aux));
     if rc != ffi::SQLITE_OK {
         drop(Box::from_raw(aux as *mut ModuleAux));
         return Err(format!("sqlite3_create_module_v2: rc={rc}"));

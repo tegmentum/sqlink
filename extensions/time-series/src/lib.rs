@@ -141,7 +141,9 @@ pub fn gap_fill_buckets(
             let mut mo = s.month();
             let mut steps = 0i64;
             while steps < 10_000_000 {
-                if let Some(d) = NaiveDate::from_ymd_opt(yr, mo, 1).and_then(|d| d.and_hms_opt(0, 0, 0)) {
+                if let Some(d) =
+                    NaiveDate::from_ymd_opt(yr, mo, 1).and_then(|d| d.and_hms_opt(0, 0, 0))
+                {
                     if d >= e {
                         break;
                     }
@@ -158,7 +160,9 @@ pub fn gap_fill_buckets(
             let mut yr = s.year();
             let mut steps = 0i64;
             while steps < 1_000_000 {
-                if let Some(d) = NaiveDate::from_ymd_opt(yr, 1, 1).and_then(|d| d.and_hms_opt(0, 0, 0)) {
+                if let Some(d) =
+                    NaiveDate::from_ymd_opt(yr, 1, 1).and_then(|d| d.and_hms_opt(0, 0, 0))
+                {
                     if d >= e {
                         break;
                     }
@@ -202,12 +206,8 @@ mod tests {
 
     #[test]
     fn gap_fill_hourly() {
-        let buckets = gap_fill_buckets(
-            "2024-01-01 00:00:00",
-            "2024-01-01 03:00:00",
-            "1 hour",
-        )
-        .unwrap();
+        let buckets =
+            gap_fill_buckets("2024-01-01 00:00:00", "2024-01-01 03:00:00", "1 hour").unwrap();
         assert_eq!(buckets.len(), 3);
         assert_eq!(buckets[0], "2024-01-01 00:00:00");
         assert_eq!(buckets[2], "2024-01-01 02:00:00");
@@ -238,8 +238,8 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
     const FID_TIME_BUCKET: u64 = 1;
@@ -325,22 +325,10 @@ mod wasm_export {
     }
 
     impl VtabGuest for Ext {
-        fn create(
-            _: u64,
-            _: u64,
-            _: String,
-            _: String,
-            _: Vec<String>,
-        ) -> Result<String, String> {
+        fn create(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {
             Ok(schema())
         }
-        fn connect(
-            _: u64,
-            _: u64,
-            _: String,
-            _: String,
-            _: Vec<String>,
-        ) -> Result<String, String> {
+        fn connect(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {
             Ok(schema())
         }
         fn destroy(_: u64, _: u64) -> Result<(), String> {
@@ -350,11 +338,7 @@ mod wasm_export {
             Ok(())
         }
 
-        fn best_index(
-            _: u64,
-            _: u64,
-            info: IndexInfo,
-        ) -> Result<IndexPlan, String> {
+        fn best_index(_: u64, _: u64, info: IndexInfo) -> Result<IndexPlan, String> {
             let mut argv_idx: i32 = 0;
             let mut start_slot: i32 = 0;
             let mut end_slot: i32 = 0;
@@ -362,7 +346,10 @@ mod wasm_export {
             let mut usage: Vec<ConstraintUsage> = info
                 .constraints
                 .iter()
-                .map(|_| ConstraintUsage { argv_index: 0, omit: false })
+                .map(|_| ConstraintUsage {
+                    argv_index: 0,
+                    omit: false,
+                })
                 .collect();
             for (i, c) in info.constraints.iter().enumerate() {
                 if !c.usable || c.op != ConstraintOp::Eq {
@@ -380,7 +367,10 @@ mod wasm_export {
                 }
                 argv_idx += 1;
                 *sr = argv_idx;
-                usage[i] = ConstraintUsage { argv_index: argv_idx, omit: true };
+                usage[i] = ConstraintUsage {
+                    argv_index: argv_idx,
+                    omit: true,
+                };
             }
             // Pack the three argv slots into idx_num
             // (start, end, interval): 4 bits each.
@@ -397,7 +387,13 @@ mod wasm_export {
 
         fn open(_: u64, _: u64, cursor_id: u64) -> Result<(), String> {
             CURSORS.with(|m| {
-                m.borrow_mut().insert(cursor_id, Cursor { rows: Vec::new(), idx: 0 })
+                m.borrow_mut().insert(
+                    cursor_id,
+                    Cursor {
+                        rows: Vec::new(),
+                        idx: 0,
+                    },
+                )
             });
             Ok(())
         }
@@ -493,7 +489,7 @@ mod wasm_export {
                     .ok_or_else(|| "gap_fill_series: cursor not open".to_string())
             })
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             cursor_id: u64,
@@ -510,10 +506,10 @@ mod wasm_export {
                     out.push(VtabRow {
                         rowid: (c.idx + 1) as i64,
                         columns: alloc::vec![
-                            SqlValue::Text(bucket),         // COL_BUCKET
-                            SqlValue::Null,                 // COL_START (HIDDEN)
-                            SqlValue::Null,                 // COL_END (HIDDEN)
-                            SqlValue::Null,                 // COL_INTERVAL (HIDDEN)
+                            SqlValue::Text(bucket), // COL_BUCKET
+                            SqlValue::Null,         // COL_START (HIDDEN)
+                            SqlValue::Null,         // COL_END (HIDDEN)
+                            SqlValue::Null,         // COL_INTERVAL (HIDDEN)
                         ],
                     });
                     c.idx += 1;
@@ -521,7 +517,7 @@ mod wasm_export {
                 Ok(out)
             })
         }
-}
+    }
 
     bindings::export!(Ext with_types_in bindings);
 }

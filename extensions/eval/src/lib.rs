@@ -66,8 +66,7 @@ mod wasm_export {
     ///   eval(X)     run X, concat all cell values with no separator
     ///   eval(X, Y)  run X, concat all cell values separated by Y
     fn eval_impl(sql: &str, sep: &str) -> Result<String, String> {
-        let result = spi::execute(sql, &[])
-            .map_err(|e| format!("eval: {e:?}"))?;
+        let result = spi::execute(sql, &[]).map_err(|e| format!("eval: {e:?}"))?;
         let mut out = String::new();
         let mut first = true;
         for row in &result.rows {

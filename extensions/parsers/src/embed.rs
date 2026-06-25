@@ -48,9 +48,24 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_RGB_HEX, name: b"rgb_to_hex\0", num_args: 3, deterministic: true },
-    ScalarSpec { func_id: FID_RGB_HSL, name: b"rgb_to_hsl\0", num_args: 3, deterministic: true },
-    ScalarSpec { func_id: FID_LUHN,    name: b"luhn_check\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_RGB_HEX,
+        name: b"rgb_to_hex\0",
+        num_args: 3,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_RGB_HSL,
+        name: b"rgb_to_hsl\0",
+        num_args: 3,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LUHN,
+        name: b"luhn_check\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

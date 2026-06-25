@@ -22,15 +22,13 @@
 
 use std::time::SystemTime;
 
-use aws_sigv4::http_request::{
-    sign, SignableBody, SignableRequest, SigningSettings,
-};
+use aws_sigv4::http_request::{sign, SignableBody, SignableRequest, SigningSettings};
 use aws_sigv4::sign::v4::SigningParams as V4SigningParams;
 
 use crate::loaded::sqlite::extension::s3_base::{
     S3Credentials, S3EndpointConfig, S3Error, S3GetObjectOptions, S3GetObjectOutput,
-    S3HeadObjectOutput, S3ListObjectsOptions, S3ListObjectsOutput, S3ObjectInfo,
-    S3ObjectMetadata, S3PutObjectOptions, S3PutObjectOutput,
+    S3HeadObjectOutput, S3ListObjectsOptions, S3ListObjectsOutput, S3ObjectInfo, S3ObjectMetadata,
+    S3PutObjectOptions, S3PutObjectOutput,
 };
 
 /// HTTP verbs we support against S3.
@@ -179,7 +177,8 @@ fn send_signed(
         .map_err(|e| S3Error::Internal(format!("sigv4 params: {e}")))?;
 
     // Build the headers list for signing.
-    let mut headers_for_signing: Vec<(String, String)> = Vec::with_capacity(extra_headers.len() + 1);
+    let mut headers_for_signing: Vec<(String, String)> =
+        Vec::with_capacity(extra_headers.len() + 1);
     headers_for_signing.push(("host".to_string(), host_header.to_string()));
     for (k, v) in extra_headers {
         headers_for_signing.push((k.clone(), v.clone()));
@@ -250,14 +249,10 @@ fn check_status(status: u16, body_preview: &str) -> Result<(), S3Error> {
             if body_preview.contains("InvalidBucketName") {
                 Err(S3Error::InvalidBucketName)
             } else {
-                Err(S3Error::InvalidRequest(format!(
-                    "HTTP 400: {body_preview}"
-                )))
+                Err(S3Error::InvalidRequest(format!("HTTP 400: {body_preview}")))
             }
         }
-        _ => Err(S3Error::Internal(format!(
-            "HTTP {status}: {body_preview}"
-        ))),
+        _ => Err(S3Error::Internal(format!("HTTP {status}: {body_preview}"))),
     }
 }
 
@@ -284,7 +279,9 @@ fn extract_metadata(headers: &reqwest::header::HeaderMap) -> S3ObjectMetadata {
         .filter_map(|(k, v)| {
             let key = k.as_str();
             key.strip_prefix("x-amz-meta-").and_then(|name| {
-                v.to_str().ok().map(|val| (name.to_string(), val.to_string()))
+                v.to_str()
+                    .ok()
+                    .map(|val| (name.to_string(), val.to_string()))
             })
         })
         .collect();
@@ -318,9 +315,18 @@ fn httpdate_parse(s: &str) -> Option<u64> {
     }
     let day: u32 = parts[1].parse().ok()?;
     let month = match parts[2] {
-        "Jan" => 1, "Feb" => 2, "Mar" => 3, "Apr" => 4,
-        "May" => 5, "Jun" => 6, "Jul" => 7, "Aug" => 8,
-        "Sep" => 9, "Oct" => 10, "Nov" => 11, "Dec" => 12,
+        "Jan" => 1,
+        "Feb" => 2,
+        "Mar" => 3,
+        "Apr" => 4,
+        "May" => 5,
+        "Jun" => 6,
+        "Jul" => 7,
+        "Aug" => 8,
+        "Sep" => 9,
+        "Oct" => 10,
+        "Nov" => 11,
+        "Dec" => 12,
         _ => return None,
     };
     let year: i32 = parts[3].parse().ok()?;
@@ -340,10 +346,8 @@ fn httpdate_parse(s: &str) -> Option<u64> {
     let doy = (153 * month_i as u32 + 2) / 5 + day - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days_since_epoch = (era * 146097 + doe as i32) - 719468;
-    let secs = days_since_epoch as i64 * 86400
-        + hour as i64 * 3600
-        + minute as i64 * 60
-        + second as i64;
+    let secs =
+        days_since_epoch as i64 * 86400 + hour as i64 * 3600 + minute as i64 * 60 + second as i64;
     if secs < 0 {
         None
     } else {
@@ -453,10 +457,8 @@ fn iso8601_to_epoch(s: &str) -> Option<u64> {
     let doy = (153 * month_i as u32 + 2) / 5 + day - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days_since_epoch = (era * 146097 + doe as i32) - 719468;
-    let secs = days_since_epoch as i64 * 86400
-        + hour as i64 * 3600
-        + minute as i64 * 60
-        + second as i64;
+    let secs =
+        days_since_epoch as i64 * 86400 + hour as i64 * 3600 + minute as i64 * 60 + second as i64;
     if secs < 0 {
         None
     } else {
@@ -504,7 +506,10 @@ pub(crate) fn op_get_object(
         .map_err(|e| S3Error::NetworkError(format!("read body: {e}")))?
         .to_vec();
     if !(200..300).contains(&status) {
-        let preview = String::from_utf8_lossy(&body).chars().take(512).collect::<String>();
+        let preview = String::from_utf8_lossy(&body)
+            .chars()
+            .take(512)
+            .collect::<String>();
         check_status(status, &preview)?;
     }
     let metadata = extract_metadata(&headers);
@@ -548,7 +553,10 @@ pub(crate) fn op_put_object(
         .map_err(|e| S3Error::NetworkError(format!("read body: {e}")))?
         .to_vec();
     if !(200..300).contains(&status) {
-        let preview = String::from_utf8_lossy(&body_bytes).chars().take(512).collect::<String>();
+        let preview = String::from_utf8_lossy(&body_bytes)
+            .chars()
+            .take(512)
+            .collect::<String>();
         check_status(status, &preview)?;
     }
     let etag = headers
@@ -581,7 +589,10 @@ pub(crate) fn op_delete_object(
         .map_err(|e| S3Error::NetworkError(format!("read body: {e}")))?
         .to_vec();
     if !(200..300).contains(&status) {
-        let preview = String::from_utf8_lossy(&body).chars().take(512).collect::<String>();
+        let preview = String::from_utf8_lossy(&body)
+            .chars()
+            .take(512)
+            .collect::<String>();
         check_status(status, &preview)?;
     }
     Ok(())
@@ -684,7 +695,10 @@ pub(crate) fn op_copy_object(
         .map_err(|e| S3Error::NetworkError(format!("read body: {e}")))?
         .to_vec();
     if !(200..300).contains(&status) {
-        let preview = String::from_utf8_lossy(&body_bytes).chars().take(512).collect::<String>();
+        let preview = String::from_utf8_lossy(&body_bytes)
+            .chars()
+            .take(512)
+            .collect::<String>();
         check_status(status, &preview)?;
     }
     // The CopyObject response carries a <CopyObjectResult><ETag>...

@@ -33,10 +33,7 @@ fn clamp_count(n: i64) -> usize {
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_WORDS => {
             let n = clamp_count(arg_int(&args, 0, "lorem_words")?);
@@ -69,11 +66,36 @@ pub fn call_scalar(
 // extension non-det at the SQL layer to avoid SQLite caching
 // surprises across rows), we keep deterministic=false here too.
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_WORDS,            name: b"lorem_words\0",            num_args: 1, deterministic: false },
-    ScalarSpec { func_id: FID_SENTENCES,        name: b"lorem_sentences\0",        num_args: 1, deterministic: false },
-    ScalarSpec { func_id: FID_TITLE,            name: b"lorem_title\0",            num_args: 0, deterministic: false },
-    ScalarSpec { func_id: FID_WORDS_SEEDED,     name: b"lorem_words_seeded\0",     num_args: 2, deterministic: true  },
-    ScalarSpec { func_id: FID_SENTENCES_SEEDED, name: b"lorem_sentences_seeded\0", num_args: 2, deterministic: true  },
+    ScalarSpec {
+        func_id: FID_WORDS,
+        name: b"lorem_words\0",
+        num_args: 1,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_SENTENCES,
+        name: b"lorem_sentences\0",
+        num_args: 1,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_TITLE,
+        name: b"lorem_title\0",
+        num_args: 0,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_WORDS_SEEDED,
+        name: b"lorem_words_seeded\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SENTENCES_SEEDED,
+        name: b"lorem_sentences_seeded\0",
+        num_args: 2,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

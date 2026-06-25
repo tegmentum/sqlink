@@ -32,10 +32,7 @@ fn blob_arg<'a>(args: &'a [SqlValueOwned], fname: &str) -> Result<&'a [u8], Stri
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_CBOR_ENC => {
             let s = text_arg(&args, "cbor_encode")?;
@@ -66,12 +63,42 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_CBOR_ENC, name: b"cbor_encode\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CBOR_DEC, name: b"cbor_decode\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MP_ENC,   name: b"msgpack_encode\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MP_DEC,   name: b"msgpack_decode\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_Y2J,      name: b"yaml_to_json\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_J2Y,      name: b"json_to_yaml\0",   num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_CBOR_ENC,
+        name: b"cbor_encode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CBOR_DEC,
+        name: b"cbor_decode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MP_ENC,
+        name: b"msgpack_encode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MP_DEC,
+        name: b"msgpack_decode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_Y2J,
+        name: b"yaml_to_json\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_J2Y,
+        name: b"json_to_yaml\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

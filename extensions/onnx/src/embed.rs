@@ -29,11 +29,36 @@ pub fn call_scalar(_func_id: u64, _args: Vec<SqlValueOwned>) -> Result<SqlValueO
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_LOAD,         name: b"onnx_load\0",         num_args: 1, deterministic: false },
-    ScalarSpec { func_id: FID_INPUT_NAMES,  name: b"onnx_input_names\0",  num_args: 1, deterministic: false },
-    ScalarSpec { func_id: FID_OUTPUT_NAMES, name: b"onnx_output_names\0", num_args: 1, deterministic: false },
-    ScalarSpec { func_id: FID_RUN,          name: b"onnx_run\0",          num_args: 2, deterministic: false },
-    ScalarSpec { func_id: FID_UNLOAD,       name: b"onnx_unload\0",       num_args: 1, deterministic: false },
+    ScalarSpec {
+        func_id: FID_LOAD,
+        name: b"onnx_load\0",
+        num_args: 1,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_INPUT_NAMES,
+        name: b"onnx_input_names\0",
+        num_args: 1,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_OUTPUT_NAMES,
+        name: b"onnx_output_names\0",
+        num_args: 1,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_RUN,
+        name: b"onnx_run\0",
+        num_args: 2,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_UNLOAD,
+        name: b"onnx_unload\0",
+        num_args: 1,
+        deterministic: false,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

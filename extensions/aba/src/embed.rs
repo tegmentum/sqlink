@@ -14,10 +14,7 @@ const FID_FED_REGION: u64 = 3;
 /// ABA RTN check: sum(weight * digit) mod 10 == 0 with weights
 /// 3,7,1,3,7,1,3,7,1 from left to right.
 fn validate(routing: &str) -> bool {
-    let d: Vec<u32> = routing
-        .chars()
-        .filter_map(|c| c.to_digit(10))
-        .collect();
+    let d: Vec<u32> = routing.chars().filter_map(|c| c.to_digit(10)).collect();
     if d.len() != 9 {
         return false;
     }
@@ -70,10 +67,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "aba")?;
     match func_id {
         FID_VALIDATE => Ok(SqlValueOwned::Integer(validate(&raw) as i64)),
@@ -88,9 +82,24 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,   name: b"aba_validate\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_FRB,        name: b"aba_frb_district\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_FED_REGION, name: b"aba_fed_region\0",   num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"aba_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FRB,
+        name: b"aba_frb_district\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FED_REGION,
+        name: b"aba_fed_region\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

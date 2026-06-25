@@ -12,9 +12,9 @@ use sqlite_embed::{
 
 const FID_TIME_BUCKET: u64 = 1;
 
-const COL_BUCKET:   i32 = 0;
-const COL_START:    i32 = 1;
-const COL_END:      i32 = 2;
+const COL_BUCKET: i32 = 0;
+const COL_START: i32 = 1;
+const COL_END: i32 = 2;
 const COL_INTERVAL: i32 = 3;
 
 const SQLITE_INDEX_CONSTRAINT_EQ: u8 = 2;
@@ -94,10 +94,7 @@ unsafe fn gf_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result<(),
     Ok(())
 }
 
-unsafe fn gf_make_cursor(
-    _vtab_state: *mut (),
-    _db: *mut libsqlite3_sys::sqlite3,
-) -> *mut () {
+unsafe fn gf_make_cursor(_vtab_state: *mut (), _db: *mut libsqlite3_sys::sqlite3) -> *mut () {
     alloc::boxed::Box::into_raw(alloc::boxed::Box::new(GapFillCursor {
         rows: Vec::new(),
         idx: 0,
@@ -130,7 +127,9 @@ unsafe fn gf_filter(
             _ => None,
         }
     };
-    let Some(start) = val(s_slot) else { return Ok(()); };
+    let Some(start) = val(s_slot) else {
+        return Ok(());
+    };
     let Some(end) = val(e_slot) else {
         return Err("gap_fill_series: end= required".to_string());
     };
@@ -171,7 +170,8 @@ unsafe fn gf_rowid(state: *mut ()) -> Result<i64, String> {
 
 const VTABS: &[VtabSpec] = &[VtabSpec {
     name: b"gap_fill_series\0",
-    schema: b"CREATE TABLE x(bucket TEXT, start TEXT HIDDEN, end TEXT HIDDEN, interval TEXT HIDDEN)\0",
+    schema:
+        b"CREATE TABLE x(bucket TEXT, start TEXT HIDDEN, end TEXT HIDDEN, interval TEXT HIDDEN)\0",
     eponymous: true,
     make_vtab: gf_make_vtab,
     destroy_vtab: gf_destroy_vtab,

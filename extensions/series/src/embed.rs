@@ -5,14 +5,12 @@
 use alloc::format;
 use alloc::string::{String, ToString};
 use core::ffi::c_int;
-use sqlite_embed::{
-    register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec,
-};
+use sqlite_embed::{register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec};
 
 const COL_VALUE: i32 = 0;
 const COL_START: i32 = 1;
-const COL_STOP:  i32 = 2;
-const COL_STEP:  i32 = 3;
+const COL_STOP: i32 = 2;
+const COL_STEP: i32 = 3;
 
 // SQLite constraint operator codes
 const SQLITE_INDEX_CONSTRAINT_EQ: u8 = 2;
@@ -53,8 +51,8 @@ unsafe fn series_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result
         }
         let bit = match c.column {
             COL_START => 1,
-            COL_STOP  => 2,
-            COL_STEP  => 4,
+            COL_STOP => 2,
+            COL_STEP => 4,
             _ => continue,
         };
         if idx_num & bit != 0 {
@@ -113,9 +111,18 @@ unsafe fn series_filter(
     let mut stop: i64 = 0xffffffff;
     let mut step: i64 = 1;
     let mut argi = 0usize;
-    if idx_num & 1 != 0 { start = take_int(args, argi)?; argi += 1; }
-    if idx_num & 2 != 0 { stop  = take_int(args, argi)?; argi += 1; }
-    if idx_num & 4 != 0 { step  = take_int(args, argi)?; let _ = argi; }
+    if idx_num & 1 != 0 {
+        start = take_int(args, argi)?;
+        argi += 1;
+    }
+    if idx_num & 2 != 0 {
+        stop = take_int(args, argi)?;
+        argi += 1;
+    }
+    if idx_num & 4 != 0 {
+        step = take_int(args, argi)?;
+        let _ = argi;
+    }
     if step == 0 {
         return Err("generate_series: step must not be zero".to_string());
     }
@@ -152,8 +159,8 @@ unsafe fn series_column(state: *mut (), col: i32) -> Result<SqlValueOwned, Strin
     let v = match col {
         COL_VALUE => c.current,
         COL_START => c.current,
-        COL_STOP  => c.stop,
-        COL_STEP  => c.step,
+        COL_STOP => c.stop,
+        COL_STEP => c.step,
         other => return Err(format!("generate_series: bad column {other}")),
     };
     Ok(SqlValueOwned::Integer(v))

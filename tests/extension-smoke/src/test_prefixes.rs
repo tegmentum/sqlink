@@ -236,7 +236,10 @@ fn prefix_modify_updates_description() {
         "modify",
         &stdout,
         &stderr,
-        &["prefix \"p1\" description updated", "updated description text"],
+        &[
+            "prefix \"p1\" description updated",
+            "updated description text",
+        ],
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -264,12 +267,7 @@ fn prefix_conflicts_clean_on_fresh_cli() {
     // overlap)  both are valid outcomes. Just assert the command
     // returned a sensible report (no panic; mentions FUNCTION or
     // "no bare-name").
-    assert_contains(
-        "conflicts/verify",
-        &stdout,
-        &stderr,
-        &["registry summary"],
-    );
+    assert_contains("conflicts/verify", &stdout, &stderr, &["registry summary"]);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -317,12 +315,7 @@ fn prefix_add_rejects_duplicate_name() {
 .exit
 ";
     let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], script);
-    assert_contains(
-        "dup-name",
-        &stdout,
-        &stderr,
-        &["already exists"],
-    );
+    assert_contains("dup-name", &stdout, &stderr, &["already exists"]);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -343,10 +336,7 @@ fn prefix_prefer_writes_pin_row() {
     // as a target. We don't need a collision  the pin row should
     // be writeable for any registered function. The function-
     // name lookup goes via __sqlink_prefix_function.
-    let script = format!(
-        ".load {}\n.prefix functions uuid\n.exit\n",
-        uuid.display(),
-    );
+    let script = format!(".load {}\n.prefix functions uuid\n.exit\n", uuid.display(),);
     let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
     // Just confirm functions list is non-empty (the substrate is
     // populating the table during uuid load). True pin-effect

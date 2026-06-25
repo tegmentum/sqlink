@@ -17,19 +17,20 @@ use sqlite_embed::{
 
 use crate::parse;
 
-const FID_DECIMAL_ADD:  u64 = 1;
-const FID_DECIMAL_SUB:  u64 = 2;
-const FID_DECIMAL_MUL:  u64 = 3;
-const FID_DECIMAL_CMP:  u64 = 4;
+const FID_DECIMAL_ADD: u64 = 1;
+const FID_DECIMAL_SUB: u64 = 2;
+const FID_DECIMAL_MUL: u64 = 3;
+const FID_DECIMAL_CMP: u64 = 4;
 const FID_DECIMAL_POW2: u64 = 5;
-const FID_DECIMAL_SUM:  u64 = 100;
+const FID_DECIMAL_SUM: u64 = 100;
 
 fn to_decimal(v: &SqlValueOwned, fname: &str) -> Result<BigDecimal, String> {
     match v {
         SqlValueOwned::Text(s) => parse(s),
         SqlValueOwned::Integer(i) => Ok(BigDecimal::from(*i)),
-        SqlValueOwned::Real(r) => BigDecimal::from_f64(*r)
-            .ok_or_else(|| format!("{fname}: non-finite float arg")),
+        SqlValueOwned::Real(r) => {
+            BigDecimal::from_f64(*r).ok_or_else(|| format!("{fname}: non-finite float arg"))
+        }
         SqlValueOwned::Null => Err(format!("{fname}: null arg")),
         SqlValueOwned::Blob(_) => Err(format!("{fname}: blob arg")),
     }
@@ -151,25 +152,48 @@ unsafe fn decimal_sum_destroy(state: *mut ()) {
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_DECIMAL_ADD,  name: b"decimal_add\0",  num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_DECIMAL_SUB,  name: b"decimal_sub\0",  num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_DECIMAL_MUL,  name: b"decimal_mul\0",  num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_DECIMAL_CMP,  name: b"decimal_cmp\0",  num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_DECIMAL_POW2, name: b"decimal_pow2\0", num_args: 1, deterministic: true },
-];
-
-const AGGREGATES: &[AggregateSpec] = &[
-    AggregateSpec {
-        func_id: FID_DECIMAL_SUM,
-        name: b"decimal_sum\0",
+    ScalarSpec {
+        func_id: FID_DECIMAL_ADD,
+        name: b"decimal_add\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECIMAL_SUB,
+        name: b"decimal_sub\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECIMAL_MUL,
+        name: b"decimal_mul\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECIMAL_CMP,
+        name: b"decimal_cmp\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECIMAL_POW2,
+        name: b"decimal_pow2\0",
         num_args: 1,
         deterministic: true,
-        make_state: decimal_sum_make,
-        step_state: decimal_sum_step,
-        final_state: decimal_sum_final,
-        destroy_state: decimal_sum_destroy,
     },
 ];
+
+const AGGREGATES: &[AggregateSpec] = &[AggregateSpec {
+    func_id: FID_DECIMAL_SUM,
+    name: b"decimal_sum\0",
+    num_args: 1,
+    deterministic: true,
+    make_state: decimal_sum_make,
+    step_state: decimal_sum_step,
+    final_state: decimal_sum_final,
+    destroy_state: decimal_sum_destroy,
+}];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {
     let rc = register_scalars(db, SCALARS, call_scalar);

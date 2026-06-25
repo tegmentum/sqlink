@@ -69,25 +69,29 @@ pub fn get(name: &str) -> Result<Option<OrchestrationDef>, SqliteError> {
          FROM _compose_plans WHERE name = ?1",
         &[SqlValue::Text(name.into())],
     )?;
-    let Some(row) = result.rows.into_iter().next() else { return Ok(None) };
+    let Some(row) = result.rows.into_iter().next() else {
+        return Ok(None);
+    };
     let mut it = row.into_iter();
     Ok(Some(OrchestrationDef {
-        name:       it.next().map(text).unwrap_or_default(),
-        version:    it.next().map(text).unwrap_or_default(),
-        root:       it.next().map(text).unwrap_or_default(),
+        name: it.next().map(text).unwrap_or_default(),
+        version: it.next().map(text).unwrap_or_default(),
+        root: it.next().map(text).unwrap_or_default(),
         digest_hex: it.next().map(text).unwrap_or_default(),
-        format:     it.next().map(text).unwrap_or_default(),
-        body:       it.next().map(blob).unwrap_or_default(),
-        saved_at:   it.next().map(int).unwrap_or_default(),
+        format: it.next().map(text).unwrap_or_default(),
+        body: it.next().map(blob).unwrap_or_default(),
+        saved_at: it.next().map(int).unwrap_or_default(),
     }))
 }
 
 pub fn list() -> Result<Vec<String>, SqliteError> {
     ensure_schema()?;
     let result = spi::execute("SELECT name FROM _compose_plans ORDER BY name", &[])?;
-    Ok(result.rows.into_iter().filter_map(|row| {
-        row.into_iter().next().map(text)
-    }).collect())
+    Ok(result
+        .rows
+        .into_iter()
+        .filter_map(|row| row.into_iter().next().map(text))
+        .collect())
 }
 
 pub fn delete(name: &str) -> Result<bool, SqliteError> {
@@ -106,8 +110,8 @@ pub fn body_signature(bytes: &[u8]) -> String {
 fn text(v: SqlValue) -> String {
     match v {
         SqlValue::Text(s) => s,
-        SqlValue::Null    => String::new(),
-        other             => format!("{other:?}"),
+        SqlValue::Null => String::new(),
+        other => format!("{other:?}"),
     }
 }
 

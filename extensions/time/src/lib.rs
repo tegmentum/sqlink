@@ -31,10 +31,10 @@ fn fmt(dt: NaiveDateTime) -> String {
 pub fn date_trunc(unit: &str, ts: &str) -> Result<String, String> {
     let dt = parse(ts)?;
     let truncated = match unit.to_ascii_lowercase().as_str() {
-        "year" => NaiveDate::from_ymd_opt(dt.year(), 1, 1)
-            .and_then(|d| d.and_hms_opt(0, 0, 0)),
-        "month" => NaiveDate::from_ymd_opt(dt.year(), dt.month(), 1)
-            .and_then(|d| d.and_hms_opt(0, 0, 0)),
+        "year" => NaiveDate::from_ymd_opt(dt.year(), 1, 1).and_then(|d| d.and_hms_opt(0, 0, 0)),
+        "month" => {
+            NaiveDate::from_ymd_opt(dt.year(), dt.month(), 1).and_then(|d| d.and_hms_opt(0, 0, 0))
+        }
         "day" => dt.date().and_hms_opt(0, 0, 0),
         "hour" => dt.date().and_hms_opt(dt.hour(), 0, 0),
         "minute" => dt.date().and_hms_opt(dt.hour(), dt.minute(), 0),

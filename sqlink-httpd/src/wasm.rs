@@ -38,8 +38,8 @@
 //! magic. The simplest path is also the most debuggable.
 
 use anyhow::{anyhow, Result};
-use sqlite_extension_policy::Policy;
 use sqlink_host::Host;
+use sqlite_extension_policy::Policy;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::runtime::Handle;
@@ -94,8 +94,7 @@ impl HostDispatcher {
 
 impl WasmDispatcher for HostDispatcher {
     fn dispatch(&self, name: &str, request_data: &[u8]) -> Result<WasmResponse> {
-        let source =
-            std::str::from_utf8(request_data).map_err(|e| anyhow!("request json: {e}"))?;
+        let source = std::str::from_utf8(request_data).map_err(|e| anyhow!("request json: {e}"))?;
         // The runtime's execute() is async (component-model-async
         // path on wasmtime). The router calls dispatch() from
         // inside hyper's async request handler  calling
@@ -115,7 +114,8 @@ impl WasmDispatcher for HostDispatcher {
         let env = self.env.clone();
         let result = tokio::task::block_in_place(move || {
             rt.block_on(async move {
-                host.invoke_runtime("http", &name, &source_name, &source, &env).await
+                host.invoke_runtime("http", &name, &source_name, &source, &env)
+                    .await
             })
         })?;
 
@@ -138,7 +138,11 @@ impl WasmDispatcher for HostDispatcher {
                     Some(other) => other.to_string().into_bytes(),
                     None => Vec::new(),
                 };
-                WasmResponse { status, body, ctype }
+                WasmResponse {
+                    status,
+                    body,
+                    ctype,
+                }
             }
             _ => WasmResponse {
                 status: 200,

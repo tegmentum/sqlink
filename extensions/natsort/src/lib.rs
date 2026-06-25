@@ -38,7 +38,7 @@ mod wasm_export {
     /// pad info but compared numerically) or a text segment compared
     /// case-insensitively.
     enum Tok {
-        Num(u64, usize),  // (value, original digit count for tie-break)
+        Num(u64, usize), // (value, original digit count for tie-break)
         Text(String),
     }
 
@@ -81,12 +81,10 @@ mod wasm_export {
         let tb = tokenize(b);
         for (xa, xb) in ta.iter().zip(tb.iter()) {
             let c = match (xa, xb) {
-                (Tok::Num(va, la), Tok::Num(vb, lb)) => {
-                    match va.cmp(vb) {
-                        core::cmp::Ordering::Equal => la.cmp(lb),
-                        o => o,
-                    }
-                }
+                (Tok::Num(va, la), Tok::Num(vb, lb)) => match va.cmp(vb) {
+                    core::cmp::Ordering::Equal => la.cmp(lb),
+                    o => o,
+                },
                 (Tok::Text(sa), Tok::Text(sb)) => sa.cmp(sb),
                 // Mixed tokens at the same position: numbers sort
                 // before text. ("file10" before "filea"
@@ -128,7 +126,7 @@ mod wasm_export {
                 Tok::Text(s) => {
                     out.push('T');
                     out.push_str(s);
-                    out.push('\0');  // terminator so "ab"+next != "abc"
+                    out.push('\0'); // terminator so "ab"+next != "abc"
                 }
             }
         }

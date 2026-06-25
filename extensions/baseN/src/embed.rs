@@ -27,10 +27,7 @@ fn arg_blob(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<Vec<u8>, St
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_B32_ENC => {
             let b = arg_blob(&args, 0, "base32_encode")?;
@@ -62,10 +59,30 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_B32_ENC, name: b"base32_encode\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_B32_DEC, name: b"base32_decode\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_B58_ENC, name: b"base58_encode\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_B58_DEC, name: b"base58_decode\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_B32_ENC,
+        name: b"base32_encode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_B32_DEC,
+        name: b"base32_decode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_B58_ENC,
+        name: b"base58_encode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_B58_DEC,
+        name: b"base58_decode\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

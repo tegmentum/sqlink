@@ -190,9 +190,7 @@ async fn do_load(host: &Host, input: &str) -> String {
     } else {
         bits.join(", ")
     };
-    format!(
-        "Loaded extension: {name} from {path} ({total} registered: {detail})\n"
-    )
+    format!("Loaded extension: {name} from {path} ({total} registered: {detail})\n")
 }
 
 /// Statement-complete heuristic matching the wasm cli's behavior

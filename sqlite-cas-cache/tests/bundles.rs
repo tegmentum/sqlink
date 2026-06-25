@@ -7,15 +7,13 @@
 //! These tests hit the storage API directly so a regression in
 //! e.g. the alias path doesn't require building the wasm cli to surface.
 
-use sqlite_cas_cache::{
-    BundleAliasConflict, BundleGcPolicy, BundleMember, SqliteCasStore,
-};
+use sqlite_cas_cache::{BundleAliasConflict, BundleGcPolicy, BundleMember, SqliteCasStore};
 use sqlite_component_core::db::{StepResult, Value};
 
 fn fresh() -> (tempfile::TempDir, SqliteCasStore) {
     let dir = tempfile::tempdir().unwrap();
-    let store = SqliteCasStore::open_external(dir.path().join("cas.sqlite"))
-        .expect("open external");
+    let store =
+        SqliteCasStore::open_external(dir.path().join("cas.sqlite")).expect("open external");
     (dir, store)
 }
 
@@ -50,7 +48,9 @@ fn now_secs() -> i64 {
 fn save_then_find_then_show_roundtrips() {
     let (_d, mut s) = fresh();
     let members = vec![member("uuid", "h_uuid"), member("json1", "h_json1")];
-    let id = s.bundle_save(Some("myset"), "set_hash_aaaa", &members).unwrap();
+    let id = s
+        .bundle_save(Some("myset"), "set_hash_aaaa", &members)
+        .unwrap();
     let summary = s.bundle_find_by_name("myset").unwrap().expect("found");
     assert_eq!(summary.id, id);
     assert_eq!(summary.name.as_deref(), Some("myset"));
@@ -80,7 +80,9 @@ fn save_errors_on_name_reuse_with_different_hash() {
     let m1 = vec![member("uuid", "h_uuid")];
     let m2 = vec![member("json1", "h_json1")];
     let _id1 = s.bundle_save(Some("myset"), "set_hash_aaaa", &m1).unwrap();
-    let err = s.bundle_save(Some("myset"), "set_hash_bbbb", &m2).unwrap_err();
+    let err = s
+        .bundle_save(Some("myset"), "set_hash_bbbb", &m2)
+        .unwrap_err();
     let conflict = err
         .downcast_ref::<BundleAliasConflict>()
         .expect("BundleAliasConflict");
@@ -142,7 +144,8 @@ fn delete_cascades_members_and_binaries() {
     let (_d, mut s) = fresh();
     let m = vec![member("uuid", "h_uuid"), member("json1", "h_json1")];
     let id = s.bundle_save(Some("myset"), "set_hash_aaaa", &m).unwrap();
-    s.bundle_record_binary(id, "aarch64-apple-darwin", "/p/bin").unwrap();
+    s.bundle_record_binary(id, "aarch64-apple-darwin", "/p/bin")
+        .unwrap();
     assert_eq!(s.bundle_members(id).unwrap().len(), 2);
     assert_eq!(s.bundle_binaries(id).unwrap().len(), 1);
     assert!(s.bundle_delete(id).unwrap());
@@ -176,7 +179,10 @@ fn gc_keep_last_n_drops_older() {
     set_last_used(&s, id_new2, 500);
 
     let dropped = s
-        .bundle_gc(BundleGcPolicy { keep_last: Some(2), older_than_secs: None })
+        .bundle_gc(BundleGcPolicy {
+            keep_last: Some(2),
+            older_than_secs: None,
+        })
         .unwrap();
     let dropped_set: std::collections::HashSet<u64> = dropped.iter().copied().collect();
     assert_eq!(dropped_set.len(), 3);
@@ -202,7 +208,10 @@ fn gc_older_than_drops_stale_only() {
     set_last_used(&s, id_stale, now - 600);
 
     let dropped = s
-        .bundle_gc(BundleGcPolicy { keep_last: None, older_than_secs: Some(120) })
+        .bundle_gc(BundleGcPolicy {
+            keep_last: None,
+            older_than_secs: Some(120),
+        })
         .unwrap();
     assert_eq!(dropped, vec![id_stale]);
     let remaining: std::collections::HashSet<u64> =
@@ -219,7 +228,10 @@ fn gc_keep_last_zero_drops_all() {
     s.bundle_save(Some("b"), "h_b", &m).unwrap();
     s.bundle_save(Some("c"), "h_c", &m).unwrap();
     let dropped = s
-        .bundle_gc(BundleGcPolicy { keep_last: Some(0), older_than_secs: None })
+        .bundle_gc(BundleGcPolicy {
+            keep_last: Some(0),
+            older_than_secs: None,
+        })
         .unwrap();
     assert_eq!(dropped.len(), 3);
     assert!(s.bundle_list().unwrap().is_empty());
@@ -234,7 +246,10 @@ fn gc_older_than_zero_drops_nothing_with_now_stamps() {
     let now = now_secs();
     set_last_used(&s, id, now);
     let dropped = s
-        .bundle_gc(BundleGcPolicy { keep_last: None, older_than_secs: Some(0) })
+        .bundle_gc(BundleGcPolicy {
+            keep_last: None,
+            older_than_secs: Some(0),
+        })
         .unwrap();
     assert!(dropped.is_empty());
     assert_eq!(s.bundle_list().unwrap().len(), 1);
@@ -261,7 +276,8 @@ fn record_binary_then_binaries_lists_it() {
     let (_d, mut s) = fresh();
     let m = vec![member("u", "h")];
     let id = s.bundle_save(Some("a"), "h_a", &m).unwrap();
-    s.bundle_record_binary(id, "aarch64-apple-darwin", "/p/bin").unwrap();
+    s.bundle_record_binary(id, "aarch64-apple-darwin", "/p/bin")
+        .unwrap();
     let bins = s.bundle_binaries(id).unwrap();
     assert_eq!(bins.len(), 1);
     assert_eq!(bins[0].target_triple, "aarch64-apple-darwin");
@@ -278,8 +294,10 @@ fn record_binary_upserts_on_same_target() {
     let (_d, mut s) = fresh();
     let m = vec![member("u", "h")];
     let id = s.bundle_save(Some("a"), "h_a", &m).unwrap();
-    s.bundle_record_binary(id, "wasm32-wasip2", "/p/v1").unwrap();
-    s.bundle_record_binary(id, "wasm32-wasip2", "/p/v2").unwrap();
+    s.bundle_record_binary(id, "wasm32-wasip2", "/p/v1")
+        .unwrap();
+    s.bundle_record_binary(id, "wasm32-wasip2", "/p/v2")
+        .unwrap();
     let bins = s.bundle_binaries(id).unwrap();
     assert_eq!(bins.len(), 1);
     assert_eq!(bins[0].binary_path, "/p/v2");

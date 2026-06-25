@@ -21,8 +21,8 @@ use sqlink_host::Host;
 use tokio::runtime::Runtime;
 
 use crate::api::{
-    sqlite3, sqlite3_context, sqlite3_value, ApiRoutines, SQLITE_DETERMINISTIC,
-    SQLITE_OK, SQLITE_UTF8,
+    sqlite3, sqlite3_context, sqlite3_value, ApiRoutines, SQLITE_DETERMINISTIC, SQLITE_OK,
+    SQLITE_UTF8,
 };
 use crate::value::{read_value, write_error, write_result};
 
@@ -48,7 +48,11 @@ unsafe extern "C" fn scalar_xfunc(
     let user_data_fn = api_routines.as_ref().user_data.expect("user_data");
     let raw = user_data_fn(ctx) as *const ScalarCtx;
     if raw.is_null() {
-        write_error(&api_routines, ctx, "sqlink-loader scalar: null trampoline ctx");
+        write_error(
+            &api_routines,
+            ctx,
+            "sqlink-loader scalar: null trampoline ctx",
+        );
         return;
     }
     let scalar_ctx: &ScalarCtx = &*raw;
@@ -63,13 +67,11 @@ unsafe extern "C" fn scalar_xfunc(
     // block_in_place + Handle::current because we're called from a
     // thread sqlite3 owns (no surrounding tokio task). The
     // Runtime::block_on path is the canonical way to bridge.
-    let dispatch = scalar_ctx
-        .rt
-        .block_on(scalar_ctx.host.dispatch_scalar(
-            &scalar_ctx.ext_name,
-            scalar_ctx.func_id,
-            args,
-        ));
+    let dispatch = scalar_ctx.rt.block_on(scalar_ctx.host.dispatch_scalar(
+        &scalar_ctx.ext_name,
+        scalar_ctx.func_id,
+        args,
+    ));
     match dispatch {
         Ok(Ok(v)) => write_result(&scalar_ctx.api, ctx, v),
         Ok(Err(extension_err)) => {
@@ -178,7 +180,11 @@ unsafe fn agg_state(
         // Fresh row group. Allocate a new context-id, starting from
         // 1 so 0 stays reserved for the uninit sentinel.
         let id = agg.next_id.fetch_add(1, Ordering::Relaxed);
-        let id = if id == 0 { agg.next_id.fetch_add(1, Ordering::Relaxed) } else { id };
+        let id = if id == 0 {
+            agg.next_id.fetch_add(1, Ordering::Relaxed)
+        } else {
+            id
+        };
         *slot = id;
         Some((id, true))
     } else {
@@ -198,7 +204,11 @@ unsafe extern "C" fn agg_xstep(
     let user_data_fn = api_routines.as_ref().user_data.expect("user_data");
     let raw = user_data_fn(ctx) as *const AggCtx;
     if raw.is_null() {
-        write_error(&api_routines, ctx, "sqlink-loader aggregate: null trampoline ctx");
+        write_error(
+            &api_routines,
+            ctx,
+            "sqlink-loader aggregate: null trampoline ctx",
+        );
         return;
     }
     let agg: &AggCtx = &*raw;
@@ -241,14 +251,22 @@ unsafe extern "C" fn agg_xfinal(ctx: *mut sqlite3_context) {
     let user_data_fn = api_routines.as_ref().user_data.expect("user_data");
     let raw = user_data_fn(ctx) as *const AggCtx;
     if raw.is_null() {
-        write_error(&api_routines, ctx, "sqlink-loader aggregate: null trampoline ctx");
+        write_error(
+            &api_routines,
+            ctx,
+            "sqlink-loader aggregate: null trampoline ctx",
+        );
         return;
     }
     let agg: &AggCtx = &*raw;
     // aggregate_context with size 0 returns the existing buffer or
     // NULL if xStep was never called on this row group. If NULL,
     // emit NULL result (matches sqlite3's behavior for empty agg).
-    let aggctx_fn = agg.api.as_ref().aggregate_context.expect("aggregate_context");
+    let aggctx_fn = agg
+        .api
+        .as_ref()
+        .aggregate_context
+        .expect("aggregate_context");
     let buf = aggctx_fn(ctx, 0);
     let context_id = if buf.is_null() {
         0
@@ -282,11 +300,19 @@ unsafe extern "C" fn agg_xvalue(ctx: *mut sqlite3_context) {
     let user_data_fn = api_routines.as_ref().user_data.expect("user_data");
     let raw = user_data_fn(ctx) as *const AggCtx;
     if raw.is_null() {
-        write_error(&api_routines, ctx, "sqlink-loader aggregate: null trampoline ctx");
+        write_error(
+            &api_routines,
+            ctx,
+            "sqlink-loader aggregate: null trampoline ctx",
+        );
         return;
     }
     let agg: &AggCtx = &*raw;
-    let aggctx_fn = agg.api.as_ref().aggregate_context.expect("aggregate_context");
+    let aggctx_fn = agg
+        .api
+        .as_ref()
+        .aggregate_context
+        .expect("aggregate_context");
     let buf = aggctx_fn(ctx, 0);
     let context_id = if buf.is_null() {
         0
@@ -321,11 +347,19 @@ unsafe extern "C" fn agg_xinverse(
     let user_data_fn = api_routines.as_ref().user_data.expect("user_data");
     let raw = user_data_fn(ctx) as *const AggCtx;
     if raw.is_null() {
-        write_error(&api_routines, ctx, "sqlink-loader aggregate: null trampoline ctx");
+        write_error(
+            &api_routines,
+            ctx,
+            "sqlink-loader aggregate: null trampoline ctx",
+        );
         return;
     }
     let agg: &AggCtx = &*raw;
-    let aggctx_fn = agg.api.as_ref().aggregate_context.expect("aggregate_context");
+    let aggctx_fn = agg
+        .api
+        .as_ref()
+        .aggregate_context
+        .expect("aggregate_context");
     let buf = aggctx_fn(ctx, 0);
     let context_id = if buf.is_null() {
         0

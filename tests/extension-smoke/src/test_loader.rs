@@ -61,9 +61,7 @@ fn run_kind_loader(plugin: &str, kind: &'static str, probe: Option<&Probe>) {
     let component: PathBuf = match component_path(plugin) {
         Some(p) => p,
         None => {
-            eprintln!(
-                "loader smoke {plugin}/{kind}: SKIP (no .component.wasm built)"
-            );
+            eprintln!("loader smoke {plugin}/{kind}: SKIP (no .component.wasm built)");
             return;
         }
     };
@@ -84,20 +82,22 @@ fn run_kind_loader(plugin: &str, kind: &'static str, probe: Option<&Probe>) {
         ProbeOutcome::Pass => {
             eprintln!("loader smoke {plugin}/{kind}: PASS");
         }
-        ProbeOutcome::OutputMismatch { got, want, stderr, stdout } => {
+        ProbeOutcome::OutputMismatch {
+            got,
+            want,
+            stderr,
+            stdout,
+        } => {
             // The loader's `sqlink_load_ext` diagnostic line tells
             // us whether the extension actually registered any
             // sqlite functions. Vtab-only / hook-only extensions
             // skip everything in v1; rather than fail the probe,
             // treat that as SKIP.
-            let registered_anything = stdout
-                .lines()
-                .any(|l| {
-                    let l = l.trim();
-                    l.starts_with("loaded ")
-                        && (l.contains("scalar")
-                            && !l.contains("0 scalar, 0 aggregate"))
-                });
+            let registered_anything = stdout.lines().any(|l| {
+                let l = l.trim();
+                l.starts_with("loaded ")
+                    && (l.contains("scalar") && !l.contains("0 scalar, 0 aggregate"))
+            });
             if !registered_anything {
                 eprintln!(
                     "loader smoke {plugin}/{kind}: SKIP (extension registers no scalars/aggregates in loader v1)"

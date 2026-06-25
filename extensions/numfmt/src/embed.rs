@@ -117,10 +117,7 @@ fn arg_real(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<f64, String
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_COMMAS => {
             let n = arg_real(&args, 0, "numfmt_commas")?;
@@ -163,13 +160,48 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_COMMAS,     name: b"numfmt_commas\0",     num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_FIXED,      name: b"numfmt_fixed\0",      num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_ORDINAL,    name: b"numfmt_ordinal\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SCIENTIFIC, name: b"numfmt_scientific\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_PERCENT,    name: b"numfmt_percent\0",    num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_PAD,        name: b"numfmt_pad_left\0",   num_args: 3, deterministic: true },
-    ScalarSpec { func_id: FID_GROUP,      name: b"numfmt_group\0",      num_args: 2, deterministic: true },
+    ScalarSpec {
+        func_id: FID_COMMAS,
+        name: b"numfmt_commas\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FIXED,
+        name: b"numfmt_fixed\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ORDINAL,
+        name: b"numfmt_ordinal\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SCIENTIFIC,
+        name: b"numfmt_scientific\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PERCENT,
+        name: b"numfmt_percent\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PAD,
+        name: b"numfmt_pad_left\0",
+        num_args: 3,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_GROUP,
+        name: b"numfmt_group\0",
+        num_args: 2,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

@@ -137,10 +137,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let t = arg_text(&args, 0, "morse")?;
     match func_id {
         FID_ENCODE => Ok(SqlValueOwned::Text(encode(&t))),
@@ -150,8 +147,18 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_ENCODE, name: b"morse_encode\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DECODE, name: b"morse_decode\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_ENCODE,
+        name: b"morse_encode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECODE,
+        name: b"morse_decode\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

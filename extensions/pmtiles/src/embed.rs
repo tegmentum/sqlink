@@ -25,8 +25,8 @@ fn call(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String>
     match func_id {
         FID_METADATA => {
             let path = arg_text(&args, 0, "pmtiles_metadata")?;
-            let bytes = std::fs::read(&path)
-                .map_err(|e| format!("pmtiles_metadata: open {path}: {e}"))?;
+            let bytes =
+                std::fs::read(&path).map_err(|e| format!("pmtiles_metadata: open {path}: {e}"))?;
             let reader = PmTilesReader::from_bytes(bytes)
                 .map_err(|e| format!("pmtiles_metadata: parse: {e}"))?;
             let meta = reader
@@ -65,7 +65,9 @@ fn strip_quotes(s: &str) -> &str {
         .strip_prefix('\'')
         .and_then(|s| s.strip_suffix('\''))
         .unwrap_or(s);
-    s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s)
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(s)
 }
 
 fn parse_path(args: &[&str]) -> Result<String, String> {
@@ -93,10 +95,8 @@ unsafe fn pm_make_vtab(
     // Validate by parsing the header. Cheap (header is the first
     // 127 bytes); catches a typo in the CREATE VIRTUAL TABLE arg
     // before any query runs.
-    let bytes = std::fs::read(&path)
-        .map_err(|e| format!("pmtiles: open {path}: {e}"))?;
-    let _ = PmTilesReader::from_bytes(bytes)
-        .map_err(|e| format!("pmtiles: parse header: {e}"))?;
+    let bytes = std::fs::read(&path).map_err(|e| format!("pmtiles: open {path}: {e}"))?;
+    let _ = PmTilesReader::from_bytes(bytes).map_err(|e| format!("pmtiles: parse header: {e}"))?;
     Ok(Box::into_raw(Box::new(PmtilesVtab { path })) as *mut ())
 }
 
@@ -111,10 +111,7 @@ unsafe fn pm_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result<(),
     Ok(())
 }
 
-unsafe fn pm_make_cursor(
-    vtab_state: *mut (),
-    _db: *mut libsqlite3_sys::sqlite3,
-) -> *mut () {
+unsafe fn pm_make_cursor(vtab_state: *mut (), _db: *mut libsqlite3_sys::sqlite3) -> *mut () {
     let v = &*(vtab_state as *const PmtilesVtab);
     Box::into_raw(Box::new(PmtilesCursor {
         path: v.path.clone(),
@@ -131,8 +128,8 @@ unsafe fn pm_destroy_cursor(state: *mut ()) {
 
 fn load(path: &str) -> Result<(Vec<TileInfo>, Vec<u8>, u64), String> {
     let bytes = std::fs::read(path).map_err(|e| format!("pmtiles: open {path}: {e}"))?;
-    let reader = PmTilesReader::from_bytes(bytes)
-        .map_err(|e| format!("pmtiles: parse header: {e}"))?;
+    let reader =
+        PmTilesReader::from_bytes(bytes).map_err(|e| format!("pmtiles: parse header: {e}"))?;
     let tile_data_offset = reader.header.tile_data_offset;
     let tiles = reader
         .enumerate_tiles()

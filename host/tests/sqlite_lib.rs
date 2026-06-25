@@ -31,7 +31,10 @@ struct State {
 
 impl wasmtime_wasi::WasiView for State {
     fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
-        wasmtime_wasi::WasiCtxView { ctx: &mut self.wasi, table: &mut self.resources }
+        wasmtime_wasi::WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.resources,
+        }
     }
 }
 
@@ -72,7 +75,9 @@ fn canonical_ext_path() -> Option<PathBuf> {
 }
 
 async fn instantiate() -> Result<Option<(Store<State>, SqliteLibrary)>> {
-    let Some(path) = sqlite_lib_path() else { return Ok(None); };
+    let Some(path) = sqlite_lib_path() else {
+        return Ok(None);
+    };
     let mut config = Config::new();
     config.wasm_component_model(true);
     // Path 3: sqlite-lib.component.wasm is now a multi-memory
@@ -120,11 +125,20 @@ async fn library_version_and_sqlite_version() {
     };
     let library = lib.sqlink_wasm_library();
 
-    let lib_v = library.call_library_version(&mut store).await.expect("library_version");
+    let lib_v = library
+        .call_library_version(&mut store)
+        .await
+        .expect("library_version");
     assert!(!lib_v.is_empty(), "library_version returns something");
 
-    let sql_v = library.call_sqlite_version(&mut store).await.expect("sqlite_version");
-    assert!(sql_v.starts_with("3."), "sqlite_version begins with 3., got {sql_v:?}");
+    let sql_v = library
+        .call_sqlite_version(&mut store)
+        .await
+        .expect("sqlite_version");
+    assert!(
+        sql_v.starts_with("3."),
+        "sqlite_version begins with 3., got {sql_v:?}"
+    );
 }
 
 #[tokio::test]
@@ -135,10 +149,16 @@ async fn library_is_statement_complete() {
     };
     let library = lib.sqlink_wasm_library();
 
-    let complete = library.call_is_statement_complete(&mut store, "SELECT 1;").await.unwrap();
+    let complete = library
+        .call_is_statement_complete(&mut store, "SELECT 1;")
+        .await
+        .unwrap();
     assert!(complete, "complete statement registers as complete");
 
-    let incomplete = library.call_is_statement_complete(&mut store, "SELECT").await.unwrap();
+    let incomplete = library
+        .call_is_statement_complete(&mut store, "SELECT")
+        .await
+        .unwrap();
     assert!(!incomplete, "incomplete statement registers as incomplete");
 }
 
@@ -256,11 +276,17 @@ async fn library_load_extension_round_trip() {
         .expect("load_extension");
 
     assert!(!manifest.name.is_empty(), "manifest carries a name");
-    assert!(!manifest.scalar_functions.is_empty(), "manifest declares scalars");
+    assert!(
+        !manifest.scalar_functions.is_empty(),
+        "manifest declares scalars"
+    );
 
     let unload = library
         .call_unload_extension(&mut store, &manifest.name)
         .await
         .expect("trap");
-    assert!(unload.is_ok(), "unload of just-loaded extension succeeds, got {unload:?}");
+    assert!(
+        unload.is_ok(),
+        "unload of just-loaded extension succeeds, got {unload:?}"
+    );
 }

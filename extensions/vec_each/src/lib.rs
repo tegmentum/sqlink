@@ -31,8 +31,8 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::sqlite::extension::types::SqlValue;
 
     const VTAB_ID_VEC_EACH: u64 = 1;
@@ -107,22 +107,10 @@ mod wasm_export {
     }
 
     impl VtabGuest for VecEach {
-        fn create(
-            _: u64,
-            _: u64,
-            _: String,
-            _: String,
-            _: Vec<String>,
-        ) -> Result<String, String> {
+        fn create(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {
             Ok(schema_str())
         }
-        fn connect(
-            _: u64,
-            _: u64,
-            _: String,
-            _: String,
-            _: Vec<String>,
-        ) -> Result<String, String> {
+        fn connect(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {
             Ok(schema_str())
         }
         fn destroy(_: u64, _: u64) -> Result<(), String> {
@@ -273,7 +261,7 @@ mod wasm_export {
                     .ok_or_else(|| "vec_each: cursor not open".to_string())
             })
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             cursor_id: u64,
@@ -291,8 +279,8 @@ mod wasm_export {
                         rowid: (c.idx + 1) as i64,
                         columns: alloc::vec![
                             SqlValue::Integer(c.idx as i64), // COL_IDX
-                            SqlValue::Real(v as f64),         // COL_VALUE
-                            SqlValue::Null,                   // COL_VECTOR (HIDDEN)
+                            SqlValue::Real(v as f64),        // COL_VALUE
+                            SqlValue::Null,                  // COL_VECTOR (HIDDEN)
                         ],
                     });
                     c.idx += 1;
@@ -300,7 +288,7 @@ mod wasm_export {
                 Ok(out)
             })
         }
-}
+    }
 
     bindings::export!(VecEach with_types_in bindings);
 }

@@ -16,10 +16,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_RENDER => {
             let tmpl = arg_text(&args, 0, "template_render")?;
@@ -36,9 +33,12 @@ pub fn call_scalar(
     }
 }
 
-const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_RENDER, name: b"template_render\0", num_args: 2, deterministic: true },
-];
+const SCALARS: &[ScalarSpec] = &[ScalarSpec {
+    func_id: FID_RENDER,
+    name: b"template_render\0",
+    num_args: 2,
+    deterministic: true,
+}];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {
     register_scalars(db, SCALARS, call_scalar)

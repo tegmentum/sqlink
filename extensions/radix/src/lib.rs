@@ -33,7 +33,7 @@ mod wasm_export {
     const FID_CHANGE: u64 = 3;
     const FID_DIGITS: u64 = 4;
     const FID_BITS: u64 = 5;
-    const FID_CONV: u64 = 6;  // MySQL alias of radix_change
+    const FID_CONV: u64 = 6; // MySQL alias of radix_change
 
     struct Ext;
 
@@ -57,7 +57,7 @@ mod wasm_export {
         } else {
             n as u64
         };
-        let _ = &mut n;  // explicit drop of `n`  abs is the source now
+        let _ = &mut n; // explicit drop of `n`  abs is the source now
         let mut buf = String::with_capacity(64);
         while abs > 0 {
             let d = (abs % base as u64) as usize;
@@ -184,9 +184,7 @@ mod wasm_export {
                 FID_TO => {
                     let n = arg_int(&args, 0, "radix_to")?;
                     let b = arg_int(&args, 1, "radix_to")? as u32;
-                    Ok(to_base(n, b)
-                        .map(SqlValue::Text)
-                        .unwrap_or(SqlValue::Null))
+                    Ok(to_base(n, b).map(SqlValue::Text).unwrap_or(SqlValue::Null))
                 }
                 FID_FROM => {
                     let s = arg_text(&args, 0, "radix_from")?;

@@ -7,13 +7,13 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_VALIDATE:    u64 = 1;
+const FID_VALIDATE: u64 = 1;
 const FID_CHECK_DIGIT: u64 = 2;
-const FID_WMI:         u64 = 3;
-const FID_VDS:         u64 = 4;
-const FID_VIS:         u64 = 5;
-const FID_MODEL_YEAR:  u64 = 6;
-const FID_REGION:      u64 = 7;
+const FID_WMI: u64 = 3;
+const FID_VDS: u64 = 4;
+const FID_VIS: u64 = 5;
+const FID_MODEL_YEAR: u64 = 6;
+const FID_REGION: u64 = 7;
 
 fn char_value(c: char) -> Option<u32> {
     if c.is_ascii_digit() {
@@ -44,7 +44,11 @@ fn check_digit(vin: &str) -> Option<char> {
         sum += char_value(c)? * WEIGHTS[i];
     }
     let r = sum % 11;
-    Some(if r == 10 { 'X' } else { char::from_digit(r, 10).unwrap() })
+    Some(if r == 10 {
+        'X'
+    } else {
+        char::from_digit(r, 10).unwrap()
+    })
 }
 
 fn normalize(s: &str) -> String {
@@ -92,10 +96,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "vin")?;
     let v = normalize(&raw);
 
@@ -120,14 +121,17 @@ pub fn call_scalar(
             SqlValueOwned::Null
         }),
         FID_MODEL_YEAR => Ok(if v.len() == 17 {
-            v.chars().nth(9)
+            v.chars()
+                .nth(9)
                 .and_then(model_year_code)
                 .map(SqlValueOwned::Integer)
                 .unwrap_or(SqlValueOwned::Null)
         } else {
             SqlValueOwned::Null
         }),
-        FID_REGION => Ok(v.chars().next()
+        FID_REGION => Ok(v
+            .chars()
+            .next()
             .map(|c| SqlValueOwned::Text(region(c).to_string()))
             .unwrap_or(SqlValueOwned::Null)),
         other => Err(format!("vin: unknown func id {other}")),
@@ -135,13 +139,48 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,    name: b"vin_validate\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CHECK_DIGIT, name: b"vin_check_digit\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_WMI,         name: b"vin_wmi\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VDS,         name: b"vin_vds\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VIS,         name: b"vin_vis\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MODEL_YEAR,  name: b"vin_model_year\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_REGION,      name: b"vin_region\0",      num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"vin_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CHECK_DIGIT,
+        name: b"vin_check_digit\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_WMI,
+        name: b"vin_wmi\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VDS,
+        name: b"vin_vds\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VIS,
+        name: b"vin_vis\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MODEL_YEAR,
+        name: b"vin_model_year\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_REGION,
+        name: b"vin_region\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

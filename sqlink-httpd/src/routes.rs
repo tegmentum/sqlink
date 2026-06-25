@@ -55,10 +55,7 @@ pub async fn handle(
     //    it. v1: built-ins win. Sysadmins keep their /sql endpoint.
     let builtin = matches!(
         (method.as_str(), path.as_str()),
-        ("GET", "/health")
-        | ("GET", "/sql")
-        | ("POST", "/sql")
-        | ("GET", "/tables")
+        ("GET", "/health") | ("GET", "/sql") | ("POST", "/sql") | ("GET", "/tables")
     ) || path.starts_with("/schema/");
 
     if !builtin {
@@ -142,7 +139,10 @@ pub async fn handle(
 
     match result {
         Ok(r) => Ok(r),
-        Err(e) => Ok(err_response(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string())),
+        Err(e) => Ok(err_response(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            &e.to_string(),
+        )),
     }
 }
 
@@ -169,7 +169,11 @@ fn run_sql(conn: &SharedConn, sql: &str) -> anyhow::Result<Resp> {
     match guard.query(sql) {
         Ok((cols, rows)) => {
             let rowcount = rows.len();
-            let payload = SqlResult { columns: cols, rows, rowcount };
+            let payload = SqlResult {
+                columns: cols,
+                rows,
+                rowcount,
+            };
             Ok(json_response(StatusCode::OK, &payload))
         }
         Err(e) => {
@@ -177,7 +181,10 @@ fn run_sql(conn: &SharedConn, sql: &str) -> anyhow::Result<Resp> {
             // semantically rejected by sqlite (syntax error, table
             // missing, constraint violation, etc.). Reserve 500 for
             // actual server-side failures.
-            Ok(err_response(StatusCode::UNPROCESSABLE_ENTITY, &e.to_string()))
+            Ok(err_response(
+                StatusCode::UNPROCESSABLE_ENTITY,
+                &e.to_string(),
+            ))
         }
     }
 }

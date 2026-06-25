@@ -92,7 +92,10 @@ pub fn inet6_ntoa(b: &[u8]) -> Result<String, String> {
             octets.copy_from_slice(b);
             Ok(core::net::Ipv6Addr::from(octets).to_string())
         }
-        _ => Err(alloc::format!("inet6_ntoa: BLOB must be 4 or 16 bytes, got {}", b.len())),
+        _ => Err(alloc::format!(
+            "inet6_ntoa: BLOB must be 4 or 16 bytes, got {}",
+            b.len()
+        )),
     }
 }
 
@@ -155,17 +158,17 @@ mod wasm_export {
     const FID_PREFIX_LEN: u64 = 6;
     const FID_CONTAINS: u64 = 7;
     // Cross-DB (MySQL-style) text↔binary converters.
-    const FID_INET_ATON:  u64 = 8;
-    const FID_INET_NTOA:  u64 = 9;
+    const FID_INET_ATON: u64 = 8;
+    const FID_INET_NTOA: u64 = 9;
     const FID_INET6_ATON: u64 = 10;
     const FID_INET6_NTOA: u64 = 11;
     // MySQL / MariaDB / BigQuery checks:
-    const FID_IS_IPV4:         u64 = 12;
-    const FID_IS_IPV6:         u64 = 13;
-    const FID_IS_IPV4_COMPAT:  u64 = 14;
-    const FID_IS_IPV4_MAPPED:  u64 = 15;
+    const FID_IS_IPV4: u64 = 12;
+    const FID_IS_IPV6: u64 = 13;
+    const FID_IS_IPV4_COMPAT: u64 = 14;
+    const FID_IS_IPV4_MAPPED: u64 = 15;
     const FID_INET_SAME_FAMILY: u64 = 16;
-    const FID_INET_MERGE:      u64 = 17;
+    const FID_INET_MERGE: u64 = 17;
 
     struct Ext;
 
@@ -189,8 +192,8 @@ mod wasm_export {
                     s(FID_BROADCAST, "ip_broadcast", 1),
                     s(FID_PREFIX_LEN, "ip_prefix_len", 1),
                     s(FID_CONTAINS, "ip_contains", 2),
-                    s(FID_INET_ATON,  "inet_aton",  1),
-                    s(FID_INET_NTOA,  "inet_ntoa",  1),
+                    s(FID_INET_ATON, "inet_aton", 1),
+                    s(FID_INET_NTOA, "inet_ntoa", 1),
                     s(FID_INET6_ATON, "inet6_aton", 1),
                     s(FID_INET6_NTOA, "inet6_ntoa", 1),
                     s(FID_IS_IPV4, "is_ipv4", 1),
@@ -228,34 +231,31 @@ mod wasm_export {
         fn call(func_id: u64, args: Vec<SqlValue>) -> Result<SqlValue, String> {
             match func_id {
                 FID_FAMILY => {
-                    super::family(&arg_text(&args, 0, "ip_family")?)
-                        .map(SqlValue::Integer)
+                    super::family(&arg_text(&args, 0, "ip_family")?).map(SqlValue::Integer)
                 }
                 FID_IN_CIDR => super::in_cidr(
                     &arg_text(&args, 0, "ip_in_cidr")?,
                     &arg_text(&args, 1, "ip_in_cidr")?,
                 )
                 .map(|b| SqlValue::Integer(b as i64)),
-                FID_HOST => {
-                    super::host(&arg_text(&args, 0, "ip_host")?).map(SqlValue::Text)
-                }
+                FID_HOST => super::host(&arg_text(&args, 0, "ip_host")?).map(SqlValue::Text),
                 FID_NETWORK => {
                     super::network(&arg_text(&args, 0, "ip_network")?).map(SqlValue::Text)
                 }
-                FID_BROADCAST => super::broadcast(&arg_text(&args, 0, "ip_broadcast")?)
-                    .map(SqlValue::Text),
+                FID_BROADCAST => {
+                    super::broadcast(&arg_text(&args, 0, "ip_broadcast")?).map(SqlValue::Text)
+                }
                 FID_PREFIX_LEN => {
-                    super::prefix_len(&arg_text(&args, 0, "ip_prefix_len")?)
-                        .map(SqlValue::Integer)
+                    super::prefix_len(&arg_text(&args, 0, "ip_prefix_len")?).map(SqlValue::Integer)
                 }
                 FID_CONTAINS => super::contains(
                     &arg_text(&args, 0, "ip_contains")?,
                     &arg_text(&args, 1, "ip_contains")?,
                 )
                 .map(|b| SqlValue::Integer(b as i64)),
-                FID_INET_ATON => super::inet_aton(
-                    &arg_text(&args, 0, "inet_aton")?
-                ).map(SqlValue::Integer),
+                FID_INET_ATON => {
+                    super::inet_aton(&arg_text(&args, 0, "inet_aton")?).map(SqlValue::Integer)
+                }
                 FID_INET_NTOA => {
                     let n = match args.first() {
                         Some(SqlValue::Integer(n)) => *n,
@@ -264,9 +264,9 @@ mod wasm_export {
                     };
                     super::inet_ntoa(n).map(SqlValue::Text)
                 }
-                FID_INET6_ATON => super::inet6_aton(
-                    &arg_text(&args, 0, "inet6_aton")?
-                ).map(SqlValue::Blob),
+                FID_INET6_ATON => {
+                    super::inet6_aton(&arg_text(&args, 0, "inet6_aton")?).map(SqlValue::Blob)
+                }
                 FID_INET6_NTOA => {
                     let bytes = match args.first() {
                         Some(SqlValue::Blob(b)) => b.clone(),
@@ -277,31 +277,44 @@ mod wasm_export {
                 }
                 FID_IS_IPV4 => {
                     let s = arg_text(&args, 0, "is_ipv4")?;
-                    Ok(SqlValue::Integer(matches!(s.parse::<core::net::IpAddr>(), Ok(core::net::IpAddr::V4(_))) as i64))
+                    Ok(SqlValue::Integer(matches!(
+                        s.parse::<core::net::IpAddr>(),
+                        Ok(core::net::IpAddr::V4(_))
+                    ) as i64))
                 }
                 FID_IS_IPV6 => {
                     let s = arg_text(&args, 0, "is_ipv6")?;
-                    Ok(SqlValue::Integer(matches!(s.parse::<core::net::IpAddr>(), Ok(core::net::IpAddr::V6(_))) as i64))
+                    Ok(SqlValue::Integer(matches!(
+                        s.parse::<core::net::IpAddr>(),
+                        Ok(core::net::IpAddr::V6(_))
+                    ) as i64))
                 }
                 FID_IS_IPV4_COMPAT => {
                     let s = arg_text(&args, 0, "is_ipv4_compat")?;
                     let r = if let Ok(core::net::IpAddr::V6(v6)) = s.parse::<core::net::IpAddr>() {
                         let segs = v6.segments();
                         segs[..6].iter().all(|&x| x == 0) && (segs[6] != 0 || segs[7] != 0)
-                    } else { false };
+                    } else {
+                        false
+                    };
                     Ok(SqlValue::Integer(r as i64))
                 }
                 FID_IS_IPV4_MAPPED => {
                     let s = arg_text(&args, 0, "is_ipv4_mapped")?;
                     let r = if let Ok(core::net::IpAddr::V6(v6)) = s.parse::<core::net::IpAddr>() {
                         v6.to_ipv4_mapped().is_some()
-                    } else { false };
+                    } else {
+                        false
+                    };
                     Ok(SqlValue::Integer(r as i64))
                 }
                 FID_INET_SAME_FAMILY => {
                     let a = arg_text(&args, 0, "inet_same_family")?;
                     let b = arg_text(&args, 1, "inet_same_family")?;
-                    let r = match (a.parse::<core::net::IpAddr>(), b.parse::<core::net::IpAddr>()) {
+                    let r = match (
+                        a.parse::<core::net::IpAddr>(),
+                        b.parse::<core::net::IpAddr>(),
+                    ) {
                         (Ok(core::net::IpAddr::V4(_)), Ok(core::net::IpAddr::V4(_))) => true,
                         (Ok(core::net::IpAddr::V6(_)), Ok(core::net::IpAddr::V6(_))) => true,
                         _ => false,
@@ -313,9 +326,11 @@ mod wasm_export {
                     // both. Compute by finding the common CIDR prefix.
                     let a = arg_text(&args, 0, "inet_merge")?;
                     let b = arg_text(&args, 1, "inet_merge")?;
-                    let na = a.parse::<ipnet::IpNet>()
+                    let na = a
+                        .parse::<ipnet::IpNet>()
                         .map_err(|e| format!("inet_merge: a: {e}"))?;
-                    let nb = b.parse::<ipnet::IpNet>()
+                    let nb = b
+                        .parse::<ipnet::IpNet>()
                         .map_err(|e| format!("inet_merge: b: {e}"))?;
                     let max = na.prefix_len().min(nb.prefix_len());
                     let mut prefix = max;
@@ -323,7 +338,9 @@ mod wasm_export {
                         let ta = ipnet::IpNet::new(na.addr(), prefix).ok();
                         let tb = ipnet::IpNet::new(nb.addr(), prefix).ok();
                         if let (Some(ta), Some(tb)) = (ta, tb) {
-                            if ta.network() == tb.network() { break; }
+                            if ta.network() == tb.network() {
+                                break;
+                            }
                         }
                         prefix -= 1;
                     }

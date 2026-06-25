@@ -34,7 +34,8 @@ fn country_re(cc: &str) -> Option<&'static Regex> {
             Regex::new(r"^(GIR 0AA|[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2})$").unwrap()
         })),
         "CA" => Some(CA.get_or_init(|| {
-            Regex::new(r"^[A-CEGHJ-NPRSTVXY][0-9][A-CEGHJ-NPRSTV-Z] ?[0-9][A-CEGHJ-NPRSTV-Z][0-9]$").unwrap()
+            Regex::new(r"^[A-CEGHJ-NPRSTVXY][0-9][A-CEGHJ-NPRSTV-Z] ?[0-9][A-CEGHJ-NPRSTV-Z][0-9]$")
+                .unwrap()
         })),
         "DE" => Some(DE.get_or_init(|| Regex::new(r"^[0-9]{5}$").unwrap())),
         "FR" => Some(FR.get_or_init(|| Regex::new(r"^[0-9]{5}$").unwrap())),
@@ -65,9 +66,7 @@ fn validate(code: &str) -> bool {
 fn validate_country(code: &str, cc: &str) -> bool {
     let n = normalize(code);
     let cc_n = cc.to_ascii_uppercase();
-    country_re(&cc_n)
-        .map(|re| re.is_match(&n))
-        .unwrap_or(false)
+    country_re(&cc_n).map(|re| re.is_match(&n)).unwrap_or(false)
 }
 
 fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, String> {
@@ -77,10 +76,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "postcode")?;
     match func_id {
         FID_VALIDATE => Ok(SqlValueOwned::Integer(validate(&raw) as i64)),
@@ -97,10 +93,30 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,         name: b"postcode_validate\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DETECT_COUNTRY,   name: b"postcode_detect_country\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VALIDATE_COUNTRY, name: b"postcode_validate_country\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_NORMALIZE,        name: b"postcode_normalize\0",        num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"postcode_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DETECT_COUNTRY,
+        name: b"postcode_detect_country\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VALIDATE_COUNTRY,
+        name: b"postcode_validate_country\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NORMALIZE,
+        name: b"postcode_normalize\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

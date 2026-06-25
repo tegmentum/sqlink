@@ -7,13 +7,13 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_VALIDATE:   u64 = 1;
-const FID_BANK:       u64 = 2;
-const FID_COUNTRY:    u64 = 3;
-const FID_LOCATION:   u64 = 4;
-const FID_BRANCH:     u64 = 5;
+const FID_VALIDATE: u64 = 1;
+const FID_BANK: u64 = 2;
+const FID_COUNTRY: u64 = 3;
+const FID_LOCATION: u64 = 4;
+const FID_BRANCH: u64 = 5;
 const FID_IS_PRIMARY: u64 = 6;
-const FID_IS_TEST:    u64 = 7;
+const FID_IS_TEST: u64 = 7;
 
 fn normalize(raw: &str) -> String {
     raw.chars()
@@ -56,10 +56,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "bic")?;
     let b = normalize(&raw);
     let valid = validate(&raw);
@@ -108,13 +105,48 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,   name: b"bic_validate\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_BANK,       name: b"bic_bank\0",       num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_COUNTRY,    name: b"bic_country\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_LOCATION,   name: b"bic_location\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_BRANCH,     name: b"bic_branch\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_IS_PRIMARY, name: b"bic_is_primary\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_IS_TEST,    name: b"bic_is_test\0",    num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"bic_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BANK,
+        name: b"bic_bank\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_COUNTRY,
+        name: b"bic_country\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LOCATION,
+        name: b"bic_location\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BRANCH,
+        name: b"bic_branch\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_IS_PRIMARY,
+        name: b"bic_is_primary\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_IS_TEST,
+        name: b"bic_is_test\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

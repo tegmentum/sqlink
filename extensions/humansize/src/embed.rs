@@ -6,10 +6,10 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_BYTES:          u64 = 1;
-const FID_IBYTES:         u64 = 2;
-const FID_PARSE_BYTES:    u64 = 3;
-const FID_DURATION:       u64 = 4;
+const FID_BYTES: u64 = 1;
+const FID_IBYTES: u64 = 2;
+const FID_PARSE_BYTES: u64 = 3;
+const FID_DURATION: u64 = 4;
 const FID_PARSE_DURATION: u64 = 5;
 
 fn format_bytes(n: f64, binary: bool) -> String {
@@ -38,8 +38,12 @@ fn byte_unit_factor(u: &str) -> Option<f64> {
     let n = u.to_ascii_lowercase();
     Some(match n.as_str() {
         "b" | "byte" | "bytes" => 1.0,
-        "kb" => 1e3, "mb" => 1e6, "gb" => 1e9,
-        "tb" => 1e12, "pb" => 1e15, "eb" => 1e18,
+        "kb" => 1e3,
+        "mb" => 1e6,
+        "gb" => 1e9,
+        "tb" => 1e12,
+        "pb" => 1e15,
+        "eb" => 1e18,
         "kib" | "k" => 1024.0,
         "mib" | "m" => 1024.0 * 1024.0,
         "gib" | "g" => 1024.0 * 1024.0 * 1024.0,
@@ -73,17 +77,27 @@ fn format_duration(secs: i64) -> String {
     let m = (s % 3600) / 60;
     let sec = s % 60;
     let mut parts: Vec<String> = alloc::vec![];
-    if d > 0 { parts.push(format!("{d}d")); }
-    if h > 0 { parts.push(format!("{h}h")); }
-    if m > 0 { parts.push(format!("{m}m")); }
-    if sec > 0 && d == 0 { parts.push(format!("{sec}s")); }
+    if d > 0 {
+        parts.push(format!("{d}d"));
+    }
+    if h > 0 {
+        parts.push(format!("{h}h"));
+    }
+    if m > 0 {
+        parts.push(format!("{m}m"));
+    }
+    if sec > 0 && d == 0 {
+        parts.push(format!("{sec}s"));
+    }
     parts.truncate(2);
     format!("{sign}{}", parts.join(" "))
 }
 
 fn parse_duration(s: &str) -> Option<i64> {
     let t = s.trim();
-    if t.is_empty() { return None; }
+    if t.is_empty() {
+        return None;
+    }
     let mut total: f64 = 0.0;
     let mut current = String::new();
     let mut any = false;
@@ -91,11 +105,17 @@ fn parse_duration(s: &str) -> Option<i64> {
         if c.is_ascii_digit() || c == '.' || c == '-' {
             current.push(c);
         } else if c.is_ascii_alphabetic() {
-            if current.is_empty() { return None; }
+            if current.is_empty() {
+                return None;
+            }
             let value: f64 = current.parse().ok()?;
             let mult = match c.to_ascii_lowercase() {
-                's' => 1.0, 'm' => 60.0, 'h' => 3600.0,
-                'd' => 86400.0, 'w' => 604800.0, 'y' => 31557600.0,
+                's' => 1.0,
+                'm' => 60.0,
+                'h' => 3600.0,
+                'd' => 86400.0,
+                'w' => 604800.0,
+                'y' => 31557600.0,
                 _ => return None,
             };
             total += value * mult;
@@ -105,8 +125,12 @@ fn parse_duration(s: &str) -> Option<i64> {
             return None;
         }
     }
-    if !current.is_empty() { return None; }
-    if !any { return None; }
+    if !current.is_empty() {
+        return None;
+    }
+    if !any {
+        return None;
+    }
     Some(total as i64)
 }
 
@@ -156,11 +180,36 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_BYTES,          name: b"humansize_bytes\0",          num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_IBYTES,         name: b"humansize_ibytes\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_PARSE_BYTES,    name: b"humansize_parse_bytes\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DURATION,       name: b"humansize_duration\0",       num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_PARSE_DURATION, name: b"humansize_parse_duration\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_BYTES,
+        name: b"humansize_bytes\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_IBYTES,
+        name: b"humansize_ibytes\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PARSE_BYTES,
+        name: b"humansize_parse_bytes\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DURATION,
+        name: b"humansize_duration\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PARSE_DURATION,
+        name: b"humansize_parse_duration\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

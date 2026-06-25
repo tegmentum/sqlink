@@ -6,9 +6,7 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::ffi::c_int;
-use sqlite_embed::{
-    exec_batch, exec_query, register_scalars_with_db, ScalarSpec, SqlValueOwned,
-};
+use sqlite_embed::{exec_batch, exec_query, register_scalars_with_db, ScalarSpec, SqlValueOwned};
 
 const FID_DEFINE: u64 = 1;
 const FID_DEFINE_CALL: u64 = 2;
@@ -153,10 +151,30 @@ fn call(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_DEFINE,      name: b"define\0",      num_args: 2, deterministic: false },
-    ScalarSpec { func_id: FID_DEFINE_CALL, name: b"define_call\0", num_args: 2, deterministic: false },
-    ScalarSpec { func_id: FID_DEFINE_DROP, name: b"define_drop\0", num_args: 1, deterministic: false },
-    ScalarSpec { func_id: FID_DEFINE_LIST, name: b"define_list\0", num_args: 0, deterministic: false },
+    ScalarSpec {
+        func_id: FID_DEFINE,
+        name: b"define\0",
+        num_args: 2,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_DEFINE_CALL,
+        name: b"define_call\0",
+        num_args: 2,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_DEFINE_DROP,
+        name: b"define_drop\0",
+        num_args: 1,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_DEFINE_LIST,
+        name: b"define_list\0",
+        num_args: 0,
+        deterministic: false,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

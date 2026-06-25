@@ -162,7 +162,11 @@ pub fn lookup(
     let Some(row) = rows.into_iter().next() else {
         return Ok(None);
     };
-    let handler = row.get(0).and_then(|v| v.as_str()).unwrap_or_default().to_string();
+    let handler = row
+        .get(0)
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
     let status = row.get(1).and_then(|v| v.as_i64()).unwrap_or(200);
     let ctype = row.get(2).and_then(|v| v.as_str()).map(|s| s.to_string());
     let kind = row
@@ -173,7 +177,12 @@ pub fn lookup(
     if handler.is_empty() {
         return Ok(None);
     }
-    Ok(Some(RouteMatch { kind, handler, status, ctype }))
+    Ok(Some(RouteMatch {
+        kind,
+        handler,
+        status,
+        ctype,
+    }))
 }
 
 fn is_safe_ident(s: &str) -> bool {
@@ -221,12 +230,11 @@ fn execute_blob(
         ("path", Value::String(path.to_string())),
         (
             "query",
-            query.map(|s| Value::String(s.to_string())).unwrap_or(Value::Null),
+            query
+                .map(|s| Value::String(s.to_string()))
+                .unwrap_or(Value::Null),
         ),
-        (
-            "body",
-            body_text.map(Value::String).unwrap_or(Value::Null),
-        ),
+        ("body", body_text.map(Value::String).unwrap_or(Value::Null)),
         ("remote", Value::String(peer.to_string())),
     ];
     let guard = match conn.lock() {
@@ -252,8 +260,7 @@ fn execute_blob(
             );
         }
     };
-    let status =
-        StatusCode::from_u16(matched.status as u16).unwrap_or(StatusCode::OK);
+    let status = StatusCode::from_u16(matched.status as u16).unwrap_or(StatusCode::OK);
     let ctype = matched
         .ctype
         .as_deref()
@@ -285,9 +292,11 @@ pub struct WasmResponse {
 }
 
 fn execute_static(matched: &RouteMatch) -> Response<Full<Bytes>> {
-    let status =
-        StatusCode::from_u16(matched.status as u16).unwrap_or(StatusCode::OK);
-    let ctype = matched.ctype.as_deref().unwrap_or("text/plain; charset=utf-8");
+    let status = StatusCode::from_u16(matched.status as u16).unwrap_or(StatusCode::OK);
+    let ctype = matched
+        .ctype
+        .as_deref()
+        .unwrap_or("text/plain; charset=utf-8");
     Response::builder()
         .status(status)
         .header(CONTENT_TYPE, ctype)
@@ -340,8 +349,7 @@ fn execute_wasm(
     let payload = req.to_string().into_bytes();
     match dispatcher.dispatch(&matched.handler, &payload) {
         Ok(resp) => {
-            let status =
-                StatusCode::from_u16(resp.status).unwrap_or(StatusCode::OK);
+            let status = StatusCode::from_u16(resp.status).unwrap_or(StatusCode::OK);
             let ctype = resp
                 .ctype
                 .or(matched.ctype.clone())
@@ -385,12 +393,11 @@ fn execute_sql(
         ("path", Value::String(path.to_string())),
         (
             "query",
-            query.map(|s| Value::String(s.to_string())).unwrap_or(Value::Null),
+            query
+                .map(|s| Value::String(s.to_string()))
+                .unwrap_or(Value::Null),
         ),
-        (
-            "body",
-            body_text.map(Value::String).unwrap_or(Value::Null),
-        ),
+        ("body", body_text.map(Value::String).unwrap_or(Value::Null)),
         ("remote", Value::String(peer.to_string())),
     ];
     let guard = match conn.lock() {
@@ -417,8 +424,7 @@ fn build_response(
     cols: Vec<String>,
     rows: Vec<Vec<Value>>,
 ) -> Response<Full<Bytes>> {
-    let default_status =
-        StatusCode::from_u16(matched.status as u16).unwrap_or(StatusCode::OK);
+    let default_status = StatusCode::from_u16(matched.status as u16).unwrap_or(StatusCode::OK);
     let default_ctype = matched.ctype.clone();
 
     if rows.is_empty() {
@@ -458,10 +464,7 @@ fn build_response(
             };
             return Response::builder()
                 .status(status)
-                .header(
-                    CONTENT_TYPE,
-                    ctype.as_deref().unwrap_or("application/json"),
-                )
+                .header(CONTENT_TYPE, ctype.as_deref().unwrap_or("application/json"))
                 .header("access-control-allow-origin", "*")
                 .body(Full::new(body_bytes))
                 .unwrap_or_else(|_| text(StatusCode::INTERNAL_SERVER_ERROR, "build resp"));
@@ -515,11 +518,7 @@ fn text(status: StatusCode, body: &str) -> Response<Full<Bytes>> {
         .unwrap()
 }
 
-fn json(
-    status: StatusCode,
-    payload: &Value,
-    ctype: Option<&str>,
-) -> Response<Full<Bytes>> {
+fn json(status: StatusCode, payload: &Value, ctype: Option<&str>) -> Response<Full<Bytes>> {
     let bytes = serde_json::to_vec(payload).unwrap_or_else(|_| b"null".to_vec());
     Response::builder()
         .status(status)

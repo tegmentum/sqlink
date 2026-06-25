@@ -14,8 +14,7 @@ use bigdecimal::BigDecimal;
 use core::str::FromStr;
 
 pub fn parse(s: &str) -> Result<BigDecimal, String> {
-    BigDecimal::from_str(s.trim())
-        .map_err(|e| format!("decimal: parse '{s}': {e}"))
+    BigDecimal::from_str(s.trim()).map_err(|e| format!("decimal: parse '{s}': {e}"))
 }
 
 #[cfg(feature = "embed")]
@@ -106,8 +105,9 @@ mod wasm_export {
         match v {
             SqlValue::Text(s) => super::parse(s),
             SqlValue::Integer(i) => Ok(BigDecimal::from(*i)),
-            SqlValue::Real(r) => BigDecimal::from_f64(*r)
-                .ok_or_else(|| format!("{fname}: non-finite float arg")),
+            SqlValue::Real(r) => {
+                BigDecimal::from_f64(*r).ok_or_else(|| format!("{fname}: non-finite float arg"))
+            }
             SqlValue::Null => Err(format!("{fname}: null arg")),
             SqlValue::Blob(_) => Err(format!("{fname}: blob arg")),
         }
@@ -204,11 +204,7 @@ mod wasm_export {
     }
 
     impl AggregateGuest for Ext {
-        fn step(
-            func_id: u64,
-            context_id: u64,
-            args: Vec<SqlValue>,
-        ) -> Result<(), String> {
+        fn step(func_id: u64, context_id: u64, args: Vec<SqlValue>) -> Result<(), String> {
             // NULL  no-op (SQL aggregate convention).
             if matches!(args.first(), Some(SqlValue::Null) | None) {
                 return Ok(());
@@ -225,10 +221,7 @@ mod wasm_export {
             Ok(())
         }
 
-        fn finalize(
-            func_id: u64,
-            context_id: u64,
-        ) -> Result<SqlValue, String> {
+        fn finalize(func_id: u64, context_id: u64) -> Result<SqlValue, String> {
             if func_id != FID_DECIMAL_SUM {
                 return Err(format!("decimal: bad agg func id {func_id}"));
             }
@@ -245,11 +238,7 @@ mod wasm_export {
             Err("decimal_sum: window mode not supported".to_string())
         }
 
-        fn inverse(
-            _func_id: u64,
-            _context_id: u64,
-            _args: Vec<SqlValue>,
-        ) -> Result<(), String> {
+        fn inverse(_func_id: u64, _context_id: u64, _args: Vec<SqlValue>) -> Result<(), String> {
             Err("decimal_sum: window mode not supported".to_string())
         }
     }

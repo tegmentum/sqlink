@@ -302,11 +302,7 @@ mod tests {
     #[test]
     fn default_policy_check_manifest_accepts_subset() {
         let p = default_policy();
-        let declared = vec![
-            Capability::Random,
-            Capability::Hashing,
-            Capability::Spi,
-        ];
+        let declared = vec![Capability::Random, Capability::Hashing, Capability::Spi];
         assert!(p.check_manifest(&declared).is_ok());
     }
 
@@ -330,9 +326,13 @@ mod tests {
 
     #[test]
     fn install_counts_is_copy_clone_debug() {
-        let a = InstallCounts { scalar: 3, aggregate: 1, skipped: 2 };
-        let b = a;          // Copy
-        let c = a.clone();  // Clone
+        let a = InstallCounts {
+            scalar: 3,
+            aggregate: 1,
+            skipped: 2,
+        };
+        let b = a; // Copy
+        let c = a.clone(); // Clone
         assert_eq!(a.scalar, b.scalar);
         assert_eq!(a.scalar, c.scalar);
         // Debug is required by the warn! call site.
@@ -405,7 +405,9 @@ mod tests {
     fn resolve_finds_via_per_extension_workspace_layout() {
         let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);
         let tmp = tempfile::tempdir().unwrap();
-        let dir = tmp.path().join("extensions/csv/target/wasm32-wasip2/release");
+        let dir = tmp
+            .path()
+            .join("extensions/csv/target/wasm32-wasip2/release");
         fs::create_dir_all(&dir).unwrap();
         let target = dir.join("csv_extension.component.wasm");
         fs::write(&target, b"\0asm").unwrap();

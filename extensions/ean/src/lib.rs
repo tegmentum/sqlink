@@ -34,10 +34,7 @@ mod wasm_export {
 
     // --- snippet: tooling/snippets/luhn.rs (weighted_mod10) ---
     fn weighted_mod10(digits: &str, weights: &[u32]) -> Option<bool> {
-        let d: alloc::vec::Vec<u32> = digits
-            .chars()
-            .filter_map(|c| c.to_digit(10))
-            .collect();
+        let d: alloc::vec::Vec<u32> = digits.chars().filter_map(|c| c.to_digit(10)).collect();
         if d.len() != weights.len() {
             return None;
         }
@@ -53,20 +50,15 @@ mod wasm_export {
     fn validate(raw: &str) -> bool {
         let d = digits_only(raw);
         match d.len() {
-            13 => weighted_mod10(&d, &[1u32, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1])
-                .unwrap_or(false),
-            12 => weighted_mod10(&d, &[3u32, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1])
-                .unwrap_or(false),
+            13 => weighted_mod10(&d, &[1u32, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1]).unwrap_or(false),
+            12 => weighted_mod10(&d, &[3u32, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1]).unwrap_or(false),
             8 => weighted_mod10(&d, &[3u32, 1, 3, 1, 3, 1, 3, 1]).unwrap_or(false),
             _ => false,
         }
     }
 
     fn ean13_check_digit(body12: &str) -> Option<u32> {
-        let d: alloc::vec::Vec<u32> = body12
-            .chars()
-            .filter_map(|c| c.to_digit(10))
-            .collect();
+        let d: alloc::vec::Vec<u32> = body12.chars().filter_map(|c| c.to_digit(10)).collect();
         if d.len() != 12 {
             return None;
         }

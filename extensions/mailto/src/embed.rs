@@ -36,10 +36,7 @@ fn primary_recipient(url: &Url) -> String {
     url.path().to_string()
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "mailto")?;
     let parsed = Url::parse(&raw).ok().filter(|u| u.scheme() == "mailto");
 
@@ -88,8 +85,7 @@ pub fn call_scalar(
                     }
                 }
                 SqlValueOwned::Text(
-                    serde_json::to_string(&all)
-                        .unwrap_or_else(|_| "[]".to_string()),
+                    serde_json::to_string(&all).unwrap_or_else(|_| "[]".to_string()),
                 )
             })
             .unwrap_or(SqlValueOwned::Null)),
@@ -98,13 +94,48 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,   name: b"mailto_validate\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TO,         name: b"mailto_to\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SUBJECT,    name: b"mailto_subject\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_BODY,       name: b"mailto_body\0",       num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CC,         name: b"mailto_cc\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_BCC,        name: b"mailto_bcc\0",        num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_RECIPIENTS, name: b"mailto_recipients\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"mailto_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TO,
+        name: b"mailto_to\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SUBJECT,
+        name: b"mailto_subject\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BODY,
+        name: b"mailto_body\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CC,
+        name: b"mailto_cc\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BCC,
+        name: b"mailto_bcc\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_RECIPIENTS,
+        name: b"mailto_recipients\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

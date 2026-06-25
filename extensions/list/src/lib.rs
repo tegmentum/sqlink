@@ -73,7 +73,10 @@ mod algo {
     }
 
     pub fn position(arr: &[Value], needle: &Value) -> i64 {
-        arr.iter().position(|x| x == needle).map(|i| (i + 1) as i64).unwrap_or(0)
+        arr.iter()
+            .position(|x| x == needle)
+            .map(|i| (i + 1) as i64)
+            .unwrap_or(0)
     }
 
     pub fn remove(arr: Vec<Value>, needle: &Value) -> Vec<Value> {
@@ -96,13 +99,21 @@ mod algo {
     /// Mirrors DuckDB `list_slice`.
     pub fn slice(arr: &[Value], lo: i64, hi: i64) -> Vec<Value> {
         let n = arr.len() as i64;
-        if n == 0 { return Vec::new(); }
+        if n == 0 {
+            return Vec::new();
+        }
         let resolve = |i: i64| -> i64 {
-            if i < 0 { n + i + 1 } else { i }
+            if i < 0 {
+                n + i + 1
+            } else {
+                i
+            }
         };
         let lo = resolve(lo).clamp(1, n);
         let hi = resolve(hi).clamp(1, n);
-        if lo > hi { return Vec::new(); }
+        if lo > hi {
+            return Vec::new();
+        }
         let start = (lo - 1) as usize;
         let end = hi as usize;
         arr[start..end].to_vec()
@@ -116,7 +127,9 @@ mod algo {
     pub fn distinct(arr: Vec<Value>) -> Vec<Value> {
         let mut seen: Vec<Value> = Vec::with_capacity(arr.len());
         for v in arr {
-            if !seen.iter().any(|x| x == &v) { seen.push(v); }
+            if !seen.iter().any(|x| x == &v) {
+                seen.push(v);
+            }
         }
         seen
     }
@@ -153,12 +166,18 @@ mod algo {
 
     pub fn list_min(arr: &[Value]) -> Option<f64> {
         arr.iter().filter_map(to_num).fold(None, |a, x| {
-            Some(match a { Some(v) => v.min(x), None => x })
+            Some(match a {
+                Some(v) => v.min(x),
+                None => x,
+            })
         })
     }
     pub fn list_max(arr: &[Value]) -> Option<f64> {
         arr.iter().filter_map(to_num).fold(None, |a, x| {
-            Some(match a { Some(v) => v.max(x), None => x })
+            Some(match a {
+                Some(v) => v.max(x),
+                None => x,
+            })
         })
     }
     pub fn list_sum(arr: &[Value]) -> f64 {
@@ -168,9 +187,17 @@ mod algo {
         arr.iter().filter_map(to_num).fold(1.0, |a, x| a * x)
     }
     pub fn list_avg(arr: &[Value]) -> Option<f64> {
-        let mut n = 0usize; let mut s = 0.0;
-        for x in arr.iter().filter_map(to_num) { n += 1; s += x; }
-        if n == 0 { None } else { Some(s / n as f64) }
+        let mut n = 0usize;
+        let mut s = 0.0;
+        for x in arr.iter().filter_map(to_num) {
+            n += 1;
+            s += x;
+        }
+        if n == 0 {
+            None
+        } else {
+            Some(s / n as f64)
+        }
     }
     /// Count non-null elements (DuckDB semantics).
     pub fn list_count(arr: &[Value]) -> i64 {
@@ -189,8 +216,11 @@ mod algo {
                 Value::Object(_) => 5,
             }
         }
-        let ra = rank(a); let rb = rank(b);
-        if ra != rb { return ra.cmp(&rb); }
+        let ra = rank(a);
+        let rb = rank(b);
+        if ra != rb {
+            return ra.cmp(&rb);
+        }
         match (a, b) {
             (Value::Bool(x), Value::Bool(y)) => x.cmp(y),
             (Value::Number(x), Value::Number(y)) => {
@@ -225,37 +255,37 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
-    pub const FID_APPEND:    u64 = 1;
-    pub const FID_PREPEND:   u64 = 2;
-    pub const FID_CAT:       u64 = 3;
-    pub const FID_CONCAT:    u64 = 4;
-    pub const FID_LENGTH:    u64 = 5;
-    pub const FID_POSITION:  u64 = 6;
-    pub const FID_REMOVE:    u64 = 7;
+    pub const FID_APPEND: u64 = 1;
+    pub const FID_PREPEND: u64 = 2;
+    pub const FID_CAT: u64 = 3;
+    pub const FID_CONCAT: u64 = 4;
+    pub const FID_LENGTH: u64 = 5;
+    pub const FID_POSITION: u64 = 6;
+    pub const FID_REMOVE: u64 = 7;
     pub const FID_TO_STRING: u64 = 8;
-    pub const FID_SLICE:     u64 = 9;
-    pub const FID_SORT:      u64 = 10;
-    pub const FID_DISTINCT:  u64 = 11;
-    pub const FID_CONTAINS:  u64 = 12;
-    pub const FID_REVERSE:   u64 = 13;
-    pub const FID_FLATTEN:   u64 = 14;
+    pub const FID_SLICE: u64 = 9;
+    pub const FID_SORT: u64 = 10;
+    pub const FID_DISTINCT: u64 = 11;
+    pub const FID_CONTAINS: u64 = 12;
+    pub const FID_REVERSE: u64 = 13;
+    pub const FID_FLATTEN: u64 = 14;
     // Scalar reductions over a JSON array  scalar (not SQL agg)
     // because the entire list is one TEXT value, not a column.
-    pub const FID_MIN:       u64 = 15;
-    pub const FID_MAX:       u64 = 16;
-    pub const FID_SUM:       u64 = 17;
-    pub const FID_PRODUCT:   u64 = 18;
-    pub const FID_AVG:       u64 = 19;
-    pub const FID_COUNT:     u64 = 20;
+    pub const FID_MIN: u64 = 15;
+    pub const FID_MAX: u64 = 16;
+    pub const FID_SUM: u64 = 17;
+    pub const FID_PRODUCT: u64 = 18;
+    pub const FID_AVG: u64 = 19;
+    pub const FID_COUNT: u64 = 20;
     // PG / Snowflake / BigQuery extras:
-    pub const FID_DIMS:      u64 = 21;
-    pub const FID_LOWER:     u64 = 22;  // array_lower
-    pub const FID_UPPER:     u64 = 23;  // array_upper (= length for 1-D)
-    pub const FID_NDIMS:     u64 = 24;
-    pub const FID_POSITIONS: u64 = 25;  // all matches as JSON array
-    pub const FID_REPLACE:   u64 = 26;
-    pub const FID_TO_JSON:   u64 = 27;
-    pub const FID_OVERLAPS:  u64 = 28;
+    pub const FID_DIMS: u64 = 21;
+    pub const FID_LOWER: u64 = 22; // array_lower
+    pub const FID_UPPER: u64 = 23; // array_upper (= length for 1-D)
+    pub const FID_NDIMS: u64 = 24;
+    pub const FID_POSITIONS: u64 = 25; // all matches as JSON array
+    pub const FID_REPLACE: u64 = 26;
+    pub const FID_TO_JSON: u64 = 27;
+    pub const FID_OVERLAPS: u64 = 28;
     pub const FID_INTERSECT: u64 = 29;
 
     struct Ext;
@@ -274,7 +304,9 @@ mod wasm_export {
         match v {
             SqlValue::Integer(n) => Ok(*n),
             SqlValue::Real(r) => Ok(*r as i64),
-            SqlValue::Text(s) => s.parse::<i64>().map_err(|_| format!("{fname}: arg {i} not integer")),
+            SqlValue::Text(s) => s
+                .parse::<i64>()
+                .map_err(|_| format!("{fname}: arg {i} not integer")),
             _ => Err(format!("{fname}: INTEGER arg at {i}")),
         }
     }
@@ -305,64 +337,64 @@ mod wasm_export {
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
                     // PostgreSQL flavour
-                    s(FID_APPEND,    "array_append",    2),
-                    s(FID_PREPEND,   "array_prepend",   2),
-                    s(FID_CAT,       "array_cat",       2),
-                    s(FID_CONCAT,    "array_concat",    2),
-                    s(FID_LENGTH,    "array_length",    1),
-                    s(FID_POSITION,  "array_position",  2),
-                    s(FID_REMOVE,    "array_remove",    2),
+                    s(FID_APPEND, "array_append", 2),
+                    s(FID_PREPEND, "array_prepend", 2),
+                    s(FID_CAT, "array_cat", 2),
+                    s(FID_CONCAT, "array_concat", 2),
+                    s(FID_LENGTH, "array_length", 1),
+                    s(FID_POSITION, "array_position", 2),
+                    s(FID_REMOVE, "array_remove", 2),
                     s(FID_TO_STRING, "array_to_string", 2),
-                    s(FID_SLICE,     "array_slice",     3),
-                    s(FID_SORT,      "array_sort",      1),
-                    s(FID_DISTINCT,  "array_distinct",  1),
-                    s(FID_CONTAINS,  "array_contains",  2),
-                    s(FID_REVERSE,   "array_reverse",   1),
-                    s(FID_FLATTEN,   "flatten",         1),
+                    s(FID_SLICE, "array_slice", 3),
+                    s(FID_SORT, "array_sort", 1),
+                    s(FID_DISTINCT, "array_distinct", 1),
+                    s(FID_CONTAINS, "array_contains", 2),
+                    s(FID_REVERSE, "array_reverse", 1),
+                    s(FID_FLATTEN, "flatten", 1),
                     // DuckDB flavour  same FIDs, different names. Adding
                     // these doubles the addressable surface for portable
                     // DuckDB queries without any new dispatch code.
-                    s(FID_APPEND,    "list_append",     2),
-                    s(FID_PREPEND,   "list_prepend",    2),
-                    s(FID_CAT,       "list_cat",        2),
-                    s(FID_CONCAT,    "list_concat",     2),
-                    s(FID_LENGTH,    "list_length",     1),
-                    s(FID_LENGTH,    "len",             1),
-                    s(FID_POSITION,  "list_position",   2),
-                    s(FID_POSITION,  "list_indexof",    2),
+                    s(FID_APPEND, "list_append", 2),
+                    s(FID_PREPEND, "list_prepend", 2),
+                    s(FID_CAT, "list_cat", 2),
+                    s(FID_CONCAT, "list_concat", 2),
+                    s(FID_LENGTH, "list_length", 1),
+                    s(FID_LENGTH, "len", 1),
+                    s(FID_POSITION, "list_position", 2),
+                    s(FID_POSITION, "list_indexof", 2),
                     s(FID_TO_STRING, "list_string_agg", 2),
-                    s(FID_TO_STRING, "list_aggr",       2),
-                    s(FID_SLICE,     "list_slice",      3),
-                    s(FID_SORT,      "list_sort",       1),
-                    s(FID_DISTINCT,  "list_distinct",   1),
-                    s(FID_DISTINCT,  "list_unique",     1),
-                    s(FID_CONTAINS,  "list_contains",   2),
-                    s(FID_CONTAINS,  "list_has",        2),
-                    s(FID_REVERSE,   "list_reverse",    1),
+                    s(FID_TO_STRING, "list_aggr", 2),
+                    s(FID_SLICE, "list_slice", 3),
+                    s(FID_SORT, "list_sort", 1),
+                    s(FID_DISTINCT, "list_distinct", 1),
+                    s(FID_DISTINCT, "list_unique", 1),
+                    s(FID_CONTAINS, "list_contains", 2),
+                    s(FID_CONTAINS, "list_has", 2),
+                    s(FID_REVERSE, "list_reverse", 1),
                     // Reductions (both array_ and list_ flavours).
-                    s(FID_MIN,       "array_min",       1),
-                    s(FID_MAX,       "array_max",       1),
-                    s(FID_SUM,       "array_sum",       1),
-                    s(FID_PRODUCT,   "array_product",   1),
-                    s(FID_AVG,       "array_avg",       1),
-                    s(FID_COUNT,     "array_count",     1),
-                    s(FID_MIN,       "list_min",        1),
-                    s(FID_MAX,       "list_max",        1),
-                    s(FID_SUM,       "list_sum",        1),
-                    s(FID_PRODUCT,   "list_product",    1),
-                    s(FID_AVG,       "list_avg",        1),
-                    s(FID_COUNT,     "list_count",      1),
+                    s(FID_MIN, "array_min", 1),
+                    s(FID_MAX, "array_max", 1),
+                    s(FID_SUM, "array_sum", 1),
+                    s(FID_PRODUCT, "array_product", 1),
+                    s(FID_AVG, "array_avg", 1),
+                    s(FID_COUNT, "array_count", 1),
+                    s(FID_MIN, "list_min", 1),
+                    s(FID_MAX, "list_max", 1),
+                    s(FID_SUM, "list_sum", 1),
+                    s(FID_PRODUCT, "list_product", 1),
+                    s(FID_AVG, "list_avg", 1),
+                    s(FID_COUNT, "list_count", 1),
                     // PG / Snowflake / BigQuery extras (1-D arrays):
-                    s(FID_DIMS,      "array_dims",      1),
-                    s(FID_LOWER,     "array_lower",     1),
-                    s(FID_UPPER,     "array_upper",     1),
-                    s(FID_NDIMS,     "array_ndims",     1),
+                    s(FID_DIMS, "array_dims", 1),
+                    s(FID_LOWER, "array_lower", 1),
+                    s(FID_UPPER, "array_upper", 1),
+                    s(FID_NDIMS, "array_ndims", 1),
                     s(FID_POSITIONS, "array_positions", 2),
-                    s(FID_REPLACE,   "array_replace",   3),
-                    s(FID_TO_JSON,   "array_to_json",   1),
-                    s(FID_OVERLAPS,  "arrays_overlap",  2),
+                    s(FID_REPLACE, "array_replace", 3),
+                    s(FID_TO_JSON, "array_to_json", 1),
+                    s(FID_OVERLAPS, "arrays_overlap", 2),
                     s(FID_INTERSECT, "array_intersect", 2),
-                    s(FID_INTERSECT, "list_intersect",  2),
+                    s(FID_INTERSECT, "list_intersect", 2),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -407,7 +439,11 @@ mod wasm_export {
                     let arr = algo::parse_array(&as_text(&args[0], "array_position", 0)?)?;
                     let v = as_json_value(&args[1]);
                     let pos = algo::position(&arr, &v);
-                    Ok(if pos == 0 { SqlValue::Null } else { SqlValue::Integer(pos) })
+                    Ok(if pos == 0 {
+                        SqlValue::Null
+                    } else {
+                        SqlValue::Integer(pos)
+                    })
                 }
                 FID_REMOVE => {
                     let arr = algo::parse_array(&as_text(&args[0], "array_remove", 0)?)?;
@@ -448,11 +484,15 @@ mod wasm_export {
                 }
                 FID_MIN => {
                     let arr = algo::parse_array(&as_text(&args[0], "list_min", 0)?)?;
-                    Ok(algo::list_min(&arr).map(SqlValue::Real).unwrap_or(SqlValue::Null))
+                    Ok(algo::list_min(&arr)
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null))
                 }
                 FID_MAX => {
                     let arr = algo::parse_array(&as_text(&args[0], "list_max", 0)?)?;
-                    Ok(algo::list_max(&arr).map(SqlValue::Real).unwrap_or(SqlValue::Null))
+                    Ok(algo::list_max(&arr)
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null))
                 }
                 FID_SUM => {
                     let arr = algo::parse_array(&as_text(&args[0], "list_sum", 0)?)?;
@@ -464,7 +504,9 @@ mod wasm_export {
                 }
                 FID_AVG => {
                     let arr = algo::parse_array(&as_text(&args[0], "list_avg", 0)?)?;
-                    Ok(algo::list_avg(&arr).map(SqlValue::Real).unwrap_or(SqlValue::Null))
+                    Ok(algo::list_avg(&arr)
+                        .map(SqlValue::Real)
+                        .unwrap_or(SqlValue::Null))
                 }
                 FID_COUNT => {
                     let arr = algo::parse_array(&as_text(&args[0], "list_count", 0)?)?;
@@ -472,35 +514,54 @@ mod wasm_export {
                 }
                 FID_DIMS => {
                     let arr = algo::parse_array(&as_text(&args[0], "array_dims", 0)?)?;
-                    if arr.is_empty() { return Ok(SqlValue::Null); }
+                    if arr.is_empty() {
+                        return Ok(SqlValue::Null);
+                    }
                     Ok(SqlValue::Text(format!("[1:{}]", arr.len())))
                 }
                 FID_LOWER => {
                     let arr = algo::parse_array(&as_text(&args[0], "array_lower", 0)?)?;
-                    Ok(if arr.is_empty() { SqlValue::Null } else { SqlValue::Integer(1) })
+                    Ok(if arr.is_empty() {
+                        SqlValue::Null
+                    } else {
+                        SqlValue::Integer(1)
+                    })
                 }
                 FID_UPPER => {
                     let arr = algo::parse_array(&as_text(&args[0], "array_upper", 0)?)?;
-                    Ok(if arr.is_empty() { SqlValue::Null } else { SqlValue::Integer(arr.len() as i64) })
+                    Ok(if arr.is_empty() {
+                        SqlValue::Null
+                    } else {
+                        SqlValue::Integer(arr.len() as i64)
+                    })
                 }
                 FID_NDIMS => {
                     let arr = algo::parse_array(&as_text(&args[0], "array_ndims", 0)?)?;
-                    Ok(if arr.is_empty() { SqlValue::Null } else { SqlValue::Integer(1) })
+                    Ok(if arr.is_empty() {
+                        SqlValue::Null
+                    } else {
+                        SqlValue::Integer(1)
+                    })
                 }
                 FID_POSITIONS => {
                     let arr = algo::parse_array(&as_text(&args[0], "array_positions", 0)?)?;
                     let v = as_json_value(&args[1]);
-                    let hits: Vec<serde_json::Value> = arr.iter().enumerate()
+                    let hits: Vec<serde_json::Value> = arr
+                        .iter()
+                        .enumerate()
                         .filter(|(_, x)| **x == v)
                         .map(|(i, _)| serde_json::Value::from((i + 1) as i64))
                         .collect();
-                    Ok(SqlValue::Text(serde_json::to_string(&hits).unwrap_or_default()))
+                    Ok(SqlValue::Text(
+                        serde_json::to_string(&hits).unwrap_or_default(),
+                    ))
                 }
                 FID_REPLACE => {
                     let arr = algo::parse_array(&as_text(&args[0], "array_replace", 0)?)?;
                     let from = as_json_value(&args[1]);
                     let to = as_json_value(&args[2]);
-                    let out: Vec<serde_json::Value> = arr.into_iter()
+                    let out: Vec<serde_json::Value> = arr
+                        .into_iter()
                         .map(|v| if v == from { to.clone() } else { v })
                         .collect();
                     Ok(SqlValue::Text(algo::to_json(&out)))
@@ -521,9 +582,8 @@ mod wasm_export {
                 FID_INTERSECT => {
                     let a = algo::parse_array(&as_text(&args[0], "array_intersect", 0)?)?;
                     let b = algo::parse_array(&as_text(&args[1], "array_intersect", 1)?)?;
-                    let inter: Vec<serde_json::Value> = a.into_iter()
-                        .filter(|x| b.iter().any(|y| x == y))
-                        .collect();
+                    let inter: Vec<serde_json::Value> =
+                        a.into_iter().filter(|x| b.iter().any(|y| x == y)).collect();
                     Ok(SqlValue::Text(algo::to_json(&inter)))
                 }
                 other => Err(format!("list: unknown func id {other}")),

@@ -39,10 +39,10 @@ mod wasm_export {
     const FID_REGEXP_INSTR: u64 = 5;
     const FID_REGEXP_COUNT: u64 = 6;
     const FID_REGEXP_CONTAINS: u64 = 7;
-    const FID_REGEXP_EXTRACT:  u64 = 8;
+    const FID_REGEXP_EXTRACT: u64 = 8;
     const FID_REGEXP_EXTRACT_ALL: u64 = 9;
-    const FID_REGEXP_MATCH:    u64 = 10;
-    const FID_REGEXP_MATCHES:  u64 = 11;
+    const FID_REGEXP_MATCH: u64 = 10;
+    const FID_REGEXP_MATCHES: u64 = 11;
     const FID_REGEXP_SPLIT_TO_ARRAY: u64 = 12;
 
     struct RegexpExtension;
@@ -118,7 +118,10 @@ mod wasm_export {
                     let (pattern, text) = if func_id == FID_REGEXP {
                         (text_arg(&args, 0, "regexp")?, text_arg(&args, 1, "regexp")?)
                     } else {
-                        (text_arg(&args, 1, "regexp_like")?, text_arg(&args, 0, "regexp_like")?)
+                        (
+                            text_arg(&args, 1, "regexp_like")?,
+                            text_arg(&args, 0, "regexp_like")?,
+                        )
                     };
                     let re = Regex::new(pattern)
                         .map_err(|e| alloc::format!("regexp: bad pattern: {e}"))?;
@@ -140,7 +143,9 @@ mod wasm_export {
                     let replacement = text_arg(&args, 2, "regexp_replace")?;
                     let re = Regex::new(pattern)
                         .map_err(|e| alloc::format!("regexp_replace: bad pattern: {e}"))?;
-                    Ok(SqlValue::Text(re.replace_all(text, replacement).into_owned()))
+                    Ok(SqlValue::Text(
+                        re.replace_all(text, replacement).into_owned(),
+                    ))
                 }
                 FID_REGEXP_INSTR => {
                     let text = text_arg(&args, 0, "regexp_instr")?;
@@ -199,7 +204,9 @@ mod wasm_export {
                     }
                     let mut json = String::from("[");
                     for (i, s) in items.iter().enumerate() {
-                        if i > 0 { json.push(','); }
+                        if i > 0 {
+                            json.push(',');
+                        }
                         let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
                         json.push('"');
                         json.push_str(&escaped);
@@ -216,7 +223,9 @@ mod wasm_export {
                     let parts: Vec<&str> = re.split(text).collect();
                     let mut json = String::from("[");
                     for (i, s) in parts.iter().enumerate() {
-                        if i > 0 { json.push(','); }
+                        if i > 0 {
+                            json.push(',');
+                        }
                         let escaped = s.replace('\\', "\\\\").replace('"', "\\\"");
                         json.push('"');
                         json.push_str(&escaped);

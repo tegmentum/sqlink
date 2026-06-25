@@ -100,14 +100,7 @@ async fn dispatches_authorize_through_loaded_extension() {
     );
 
     let select_result = host
-        .dispatch_authorize(
-            &name,
-            AuthAction::Select,
-            None,
-            None,
-            None,
-            None,
-        )
+        .dispatch_authorize(&name, AuthAction::Select, None, None, None, None)
         .await
         .expect("dispatch Select");
     assert!(

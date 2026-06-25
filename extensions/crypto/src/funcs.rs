@@ -125,6 +125,9 @@ mod tests {
 
     #[test]
     fn unhex_tolerates_whitespace() {
-        assert_eq!(hex_decode("  deadbeef\n").unwrap(), vec![0xde, 0xad, 0xbe, 0xef]);
+        assert_eq!(
+            hex_decode("  deadbeef\n").unwrap(),
+            vec![0xde, 0xad, 0xbe, 0xef]
+        );
     }
 }

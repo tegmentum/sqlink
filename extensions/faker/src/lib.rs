@@ -25,12 +25,12 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
-    use fake::Fake;
     use fake::faker::address::en::{CityName, CountryName, StreetName, ZipCode};
     use fake::faker::company::en::CompanyName;
     use fake::faker::internet::en::{FreeEmail, IPv4, Password, SafeEmail, Username};
     use fake::faker::name::en::{FirstName, LastName, Name};
     use fake::faker::phone_number::en::PhoneNumber;
+    use fake::Fake;
 
     const FID_NAME: u64 = 1;
     const FID_FIRST_NAME: u64 = 2;

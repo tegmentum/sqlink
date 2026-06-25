@@ -149,7 +149,11 @@ pub fn sub(a: &[f32], b: &[f32]) -> Result<Vec<f32>, VecError> {
 
 /// L2-normalize. Zero vectors stay zero (no NaN explosion).
 pub fn normalize(v: &[f32]) -> Vec<f32> {
-    let n: f64 = v.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt();
+    let n: f64 = v
+        .iter()
+        .map(|x| (*x as f64) * (*x as f64))
+        .sum::<f64>()
+        .sqrt();
     if n == 0.0 {
         return v.to_vec();
     }
@@ -239,7 +243,11 @@ mod tests {
         let a = alloc::vec![1.0f32, 2.0, 3.0];
         let b = alloc::vec![4.0f32, 6.0, 8.0];
         assert!(approx(l1(&a, &b).unwrap(), 3.0 + 4.0 + 5.0, 1e-6));
-        assert!(approx(l2(&a, &b).unwrap(), (9.0f64 + 16.0 + 25.0).sqrt(), 1e-6));
+        assert!(approx(
+            l2(&a, &b).unwrap(),
+            (9.0f64 + 16.0 + 25.0).sqrt(),
+            1e-6
+        ));
     }
 
     #[test]
@@ -269,7 +277,11 @@ mod tests {
     fn normalize_then_l2_is_one() {
         let v = alloc::vec![3.0f32, 4.0];
         let n = normalize(&v);
-        let norm: f64 = n.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt();
+        let norm: f64 = n
+            .iter()
+            .map(|x| (*x as f64) * (*x as f64))
+            .sum::<f64>()
+            .sqrt();
         assert!(approx(norm, 1.0, 1e-6));
     }
 
@@ -283,7 +295,9 @@ mod tests {
 
     #[test]
     fn quantize_binary_packs_sign() {
-        let v: Vec<f32> = (0..8).map(|i| if i % 2 == 0 { 1.0 } else { -1.0 }).collect();
+        let v: Vec<f32> = (0..8)
+            .map(|i| if i % 2 == 0 { 1.0 } else { -1.0 })
+            .collect();
         // 1 0 1 0 1 0 1 0  0b10101010 = 0xAA
         assert_eq!(quantize_binary(&v), alloc::vec![0xAAu8]);
     }

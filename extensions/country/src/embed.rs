@@ -6,30 +6,30 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_NAME:    u64 = 1;
-const FID_ALPHA2:  u64 = 2;
-const FID_ALPHA3:  u64 = 3;
+const FID_NAME: u64 = 1;
+const FID_ALPHA2: u64 = 2;
+const FID_ALPHA3: u64 = 3;
 const FID_NUMERIC: u64 = 4;
-const FID_REGION:  u64 = 5;
+const FID_REGION: u64 = 5;
 
 type Entry = (&'static str, &'static str, u16, &'static str, &'static str);
 
 const TABLE: &[Entry] = &[
     ("AE", "ARE", 784, "United Arab Emirates", "Asia"),
-    ("AF", "AFG", 4,   "Afghanistan", "Asia"),
-    ("AL", "ALB",  8,  "Albania", "Europe"),
-    ("AM", "ARM", 51,  "Armenia", "Asia"),
-    ("AR", "ARG", 32,  "Argentina", "Americas"),
-    ("AT", "AUT", 40,  "Austria", "Europe"),
-    ("AU", "AUS", 36,  "Australia", "Oceania"),
-    ("AZ", "AZE", 31,  "Azerbaijan", "Asia"),
-    ("BA", "BIH", 70,  "Bosnia and Herzegovina", "Europe"),
-    ("BD", "BGD", 50,  "Bangladesh", "Asia"),
-    ("BE", "BEL", 56,  "Belgium", "Europe"),
+    ("AF", "AFG", 4, "Afghanistan", "Asia"),
+    ("AL", "ALB", 8, "Albania", "Europe"),
+    ("AM", "ARM", 51, "Armenia", "Asia"),
+    ("AR", "ARG", 32, "Argentina", "Americas"),
+    ("AT", "AUT", 40, "Austria", "Europe"),
+    ("AU", "AUS", 36, "Australia", "Oceania"),
+    ("AZ", "AZE", 31, "Azerbaijan", "Asia"),
+    ("BA", "BIH", 70, "Bosnia and Herzegovina", "Europe"),
+    ("BD", "BGD", 50, "Bangladesh", "Asia"),
+    ("BE", "BEL", 56, "Belgium", "Europe"),
     ("BG", "BGR", 100, "Bulgaria", "Europe"),
-    ("BH", "BHR", 48,  "Bahrain", "Asia"),
-    ("BO", "BOL", 68,  "Bolivia", "Americas"),
-    ("BR", "BRA", 76,  "Brazil", "Americas"),
+    ("BH", "BHR", 48, "Bahrain", "Asia"),
+    ("BO", "BOL", 68, "Bolivia", "Americas"),
+    ("BR", "BRA", 76, "Brazil", "Americas"),
     ("BY", "BLR", 112, "Belarus", "Europe"),
     ("CA", "CAN", 124, "Canada", "Americas"),
     ("CH", "CHE", 756, "Switzerland", "Europe"),
@@ -124,11 +124,15 @@ const TABLE: &[Entry] = &[
 
 fn lookup(raw: &str) -> Option<&'static Entry> {
     let s = raw.trim();
-    if s.is_empty() { return None; }
+    if s.is_empty() {
+        return None;
+    }
     if let Ok(n) = s.parse::<u16>() {
         return TABLE.iter().find(|e| e.2 == n);
     }
-    if !s.chars().all(|c| c.is_ascii_alphabetic()) { return None; }
+    if !s.chars().all(|c| c.is_ascii_alphabetic()) {
+        return None;
+    }
     let upper: String = s.chars().map(|c| c.to_ascii_uppercase()).collect();
     match upper.len() {
         2 => TABLE.iter().find(|e| e.0 == upper),
@@ -148,21 +152,56 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
     let raw = arg_text(&args, 0, "country")?;
     let entry = lookup(&raw);
     Ok(match func_id {
-        FID_NAME => entry.map(|e| SqlValueOwned::Text(e.3.to_string())).unwrap_or(SqlValueOwned::Null),
-        FID_ALPHA2 => entry.map(|e| SqlValueOwned::Text(e.0.to_string())).unwrap_or(SqlValueOwned::Null),
-        FID_ALPHA3 => entry.map(|e| SqlValueOwned::Text(e.1.to_string())).unwrap_or(SqlValueOwned::Null),
-        FID_NUMERIC => entry.map(|e| SqlValueOwned::Integer(e.2 as i64)).unwrap_or(SqlValueOwned::Null),
-        FID_REGION => entry.map(|e| SqlValueOwned::Text(e.4.to_string())).unwrap_or(SqlValueOwned::Null),
+        FID_NAME => entry
+            .map(|e| SqlValueOwned::Text(e.3.to_string()))
+            .unwrap_or(SqlValueOwned::Null),
+        FID_ALPHA2 => entry
+            .map(|e| SqlValueOwned::Text(e.0.to_string()))
+            .unwrap_or(SqlValueOwned::Null),
+        FID_ALPHA3 => entry
+            .map(|e| SqlValueOwned::Text(e.1.to_string()))
+            .unwrap_or(SqlValueOwned::Null),
+        FID_NUMERIC => entry
+            .map(|e| SqlValueOwned::Integer(e.2 as i64))
+            .unwrap_or(SqlValueOwned::Null),
+        FID_REGION => entry
+            .map(|e| SqlValueOwned::Text(e.4.to_string()))
+            .unwrap_or(SqlValueOwned::Null),
         other => return Err(format!("country: unknown func id {other}")),
     })
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_NAME,    name: b"country_name\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ALPHA2,  name: b"country_alpha2\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ALPHA3,  name: b"country_alpha3\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NUMERIC, name: b"country_numeric\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_REGION,  name: b"country_region\0",  num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_NAME,
+        name: b"country_name\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ALPHA2,
+        name: b"country_alpha2\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ALPHA3,
+        name: b"country_alpha3\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NUMERIC,
+        name: b"country_numeric\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_REGION,
+        name: b"country_region\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

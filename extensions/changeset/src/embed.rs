@@ -161,10 +161,7 @@ unsafe fn op_name(op: c_int) -> &'static str {
 
 /// Run a closure for every record in the changeset; finalize the
 /// iterator at the end. Returns Err with sqlite rc on parse fail.
-unsafe fn for_each_record<F>(
-    bytes: &[u8],
-    mut f: F,
-) -> Result<(), String>
+unsafe fn for_each_record<F>(bytes: &[u8], mut f: F) -> Result<(), String>
 where
     F: FnMut(*mut sqlite3_changeset_iter, &str, i32, c_int, c_int) -> Result<(), String>,
 {
@@ -364,11 +361,36 @@ fn call(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String>
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_INVERT, name: b"changeset_invert\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CONCAT, name: b"changeset_concat\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_COUNT,  name: b"changeset_count\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TABLES, name: b"changeset_tables\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DECODE, name: b"changeset_decode\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_INVERT,
+        name: b"changeset_invert\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CONCAT,
+        name: b"changeset_concat\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_COUNT,
+        name: b"changeset_count\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TABLES,
+        name: b"changeset_tables\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECODE,
+        name: b"changeset_decode\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

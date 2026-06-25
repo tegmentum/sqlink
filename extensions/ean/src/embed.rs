@@ -28,10 +28,8 @@ fn weighted_mod10(digits: &str, weights: &[u32]) -> Option<bool> {
 fn validate(raw: &str) -> bool {
     let d = digits_only(raw);
     match d.len() {
-        13 => weighted_mod10(&d, &[1u32, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1])
-            .unwrap_or(false),
-        12 => weighted_mod10(&d, &[3u32, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1])
-            .unwrap_or(false),
+        13 => weighted_mod10(&d, &[1u32, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1]).unwrap_or(false),
+        12 => weighted_mod10(&d, &[3u32, 1, 3, 1, 3, 1, 3, 1, 3, 1, 3, 1]).unwrap_or(false),
         8 => weighted_mod10(&d, &[3u32, 1, 3, 1, 3, 1, 3, 1]).unwrap_or(false),
         _ => false,
     }
@@ -73,10 +71,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "ean")?;
 
     match func_id {
@@ -95,10 +90,30 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,     name: b"ean_validate\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CHECK_DIGIT,  name: b"ean_check_digit\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_GS1_PREFIX,   name: b"ean_gs1_prefix\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_UPCA_TO_EAN13,name: b"upca_to_ean13\0",   num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"ean_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CHECK_DIGIT,
+        name: b"ean_check_digit\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_GS1_PREFIX,
+        name: b"ean_gs1_prefix\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_UPCA_TO_EAN13,
+        name: b"upca_to_ean13\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

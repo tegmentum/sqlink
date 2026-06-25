@@ -84,16 +84,66 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_DATE_TRUNC,        name: b"date_trunc\0",            num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_ISO_YEAR,          name: b"iso_year\0",              num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ISO_WEEK,          name: b"iso_week\0",              num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ISO_WEEKDAY,       name: b"iso_weekday\0",           num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_FISCAL_YEAR,       name: b"fiscal_year\0",           num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_FISCAL_QUARTER,    name: b"fiscal_quarter\0",        num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_BUSINESS_DAYS,     name: b"business_days_between\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_WEEKDAY_NAME,      name: b"weekday_name\0",          num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DURATION_HUMANIZE, name: b"duration_humanize\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TIME_HUMANIZE,     name: b"time_humanize\0",         num_args: 2, deterministic: true },
+    ScalarSpec {
+        func_id: FID_DATE_TRUNC,
+        name: b"date_trunc\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ISO_YEAR,
+        name: b"iso_year\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ISO_WEEK,
+        name: b"iso_week\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ISO_WEEKDAY,
+        name: b"iso_weekday\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FISCAL_YEAR,
+        name: b"fiscal_year\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FISCAL_QUARTER,
+        name: b"fiscal_quarter\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BUSINESS_DAYS,
+        name: b"business_days_between\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_WEEKDAY_NAME,
+        name: b"weekday_name\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DURATION_HUMANIZE,
+        name: b"duration_humanize\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TIME_HUMANIZE,
+        name: b"time_humanize\0",
+        num_args: 2,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

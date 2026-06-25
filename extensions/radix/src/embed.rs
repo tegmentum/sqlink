@@ -7,11 +7,11 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_TO:     u64 = 1;
-const FID_FROM:   u64 = 2;
+const FID_TO: u64 = 1;
+const FID_FROM: u64 = 2;
 const FID_CHANGE: u64 = 3;
 const FID_DIGITS: u64 = 4;
-const FID_BITS:   u64 = 5;
+const FID_BITS: u64 = 5;
 
 /// Digit alphabet for bases up to 36. Uppercase output; lowercase
 /// accepted on input for symmetry with Rust's parsing convention.
@@ -94,10 +94,7 @@ fn arg_int(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<i64, String>
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_TO => {
             let n = arg_int(&args, 0, "radix_to")?;
@@ -138,11 +135,36 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_TO,     name: b"radix_to\0",     num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_FROM,   name: b"radix_from\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_CHANGE, name: b"radix_change\0", num_args: 3, deterministic: true },
-    ScalarSpec { func_id: FID_DIGITS, name: b"radix_digits\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_BITS,   name: b"radix_bits\0",   num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_TO,
+        name: b"radix_to\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FROM,
+        name: b"radix_from\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CHANGE,
+        name: b"radix_change\0",
+        num_args: 3,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DIGITS,
+        name: b"radix_digits\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BITS,
+        name: b"radix_bits\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

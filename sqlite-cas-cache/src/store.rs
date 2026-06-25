@@ -115,9 +115,8 @@ impl SqliteCasStore {
         let path = path.into();
         if let Some(parent) = path.parent() {
             if !parent.as_os_str().is_empty() {
-                std::fs::create_dir_all(parent).with_context(|| {
-                    format!("create parent dir for {}", path.display())
-                })?;
+                std::fs::create_dir_all(parent)
+                    .with_context(|| format!("create parent dir for {}", path.display()))?;
             }
         }
         let path_str = path
@@ -321,7 +320,10 @@ impl SqliteCasStore {
                 .map_err(|e| anyhow!("bind put created: {}", e.message))?;
             stmt.bind(6, &Value::Integer(now))
                 .map_err(|e| anyhow!("bind put used: {}", e.message))?;
-            match stmt.step().map_err(|e| anyhow!("step put: {}", e.message))? {
+            match stmt
+                .step()
+                .map_err(|e| anyhow!("step put: {}", e.message))?
+            {
                 StepResult::Done => Ok(()),
                 StepResult::Row => Err(anyhow!("insert returned row")),
             }
@@ -335,7 +337,8 @@ impl SqliteCasStore {
     /// when found, like `get`.
     pub fn get_by_sha256(&mut self, sha256: &[u8; 32]) -> Result<Option<Vec<u8>>> {
         const SEL_SQL: &str = "SELECT bytes, hash FROM __cas_artifact WHERE sha256 = ?1";
-        const UPD_SQL: &str = "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
+        const UPD_SQL: &str =
+            "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
              WHERE hash = ?1";
         let now = unix_now();
         let (bytes, blake_hash) = self.with_stmt(SEL_SQL, |stmt| {
@@ -375,7 +378,8 @@ impl SqliteCasStore {
     /// `last_used_at` + bumps `use_count`.
     pub fn get(&mut self, hash: &Hash) -> Result<Option<Vec<u8>>> {
         const SEL_SQL: &str = "SELECT bytes FROM __cas_artifact WHERE hash = ?1";
-        const UPD_SQL: &str = "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
+        const UPD_SQL: &str =
+            "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
              WHERE hash = ?1";
         let now = unix_now();
         // Read + update in two statements; sqlite doesn't have
@@ -384,7 +388,10 @@ impl SqliteCasStore {
         let bytes = self.with_stmt(SEL_SQL, |stmt| {
             stmt.bind_blob_ref(1, hash.as_bytes())
                 .map_err(|e| anyhow!("bind get: {}", e.message))?;
-            match stmt.step().map_err(|e| anyhow!("step get: {}", e.message))? {
+            match stmt
+                .step()
+                .map_err(|e| anyhow!("step get: {}", e.message))?
+            {
                 StepResult::Row => match stmt.column_value(0) {
                     Value::Blob(b) => Ok(Some(b)),
                     other => Err(anyhow!("bytes column not blob: {other:?}")),
@@ -484,7 +491,10 @@ impl SqliteCasStore {
             )
             .map_err(|e| anyhow!("prepare list: {}", e.message))?;
         let mut out = Vec::new();
-        while let StepResult::Row = stmt.step().map_err(|e| anyhow!("step list: {}", e.message))? {
+        while let StepResult::Row = stmt
+            .step()
+            .map_err(|e| anyhow!("step list: {}", e.message))?
+        {
             let uri = match stmt.column_value(0) {
                 Value::Text(t) => t,
                 other => return Err(anyhow!("uri not text: {other:?}")),
@@ -678,9 +688,9 @@ impl SqliteCasStore {
         }
         // Seed the target with the schema.
         let _ = SqliteCasStore::open_external(target.to_path_buf())?;
-        let target_str = target.to_str().ok_or_else(|| {
-            anyhow!("non-UTF8 target path: {}", target.display())
-        })?;
+        let target_str = target
+            .to_str()
+            .ok_or_else(|| anyhow!("non-UTF8 target path: {}", target.display()))?;
         let escaped = target_str.replace('\'', "''");
         // INSERT OR IGNORE on artifacts: any rows present in
         // both stores (which can't happen for a fresh target)
@@ -706,9 +716,9 @@ impl SqliteCasStore {
     /// Returns counts of net additions.
     pub fn merge_from(&mut self, source_path: impl AsRef<Path>) -> Result<MergeStats> {
         let source = source_path.as_ref();
-        let source_str = source.to_str().ok_or_else(|| {
-            anyhow!("non-UTF8 source path: {}", source.display())
-        })?;
+        let source_str = source
+            .to_str()
+            .ok_or_else(|| anyhow!("non-UTF8 source path: {}", source.display()))?;
         let escaped = source_str.replace('\'', "''");
         self.conn
             .execute_batch(&format!("ATTACH DATABASE '{escaped}' AS src;"))
@@ -717,9 +727,7 @@ impl SqliteCasStore {
         let validate = (|| -> Result<()> {
             let mut stmt = self
                 .conn
-                .prepare(
-                    "SELECT value FROM src.__cas_meta WHERE key = 'schema_version'",
-                )
+                .prepare("SELECT value FROM src.__cas_meta WHERE key = 'schema_version'")
                 .map_err(|e| anyhow!("prepare src version: {}", e.message))?;
             let observed = match stmt
                 .step()
@@ -729,9 +737,7 @@ impl SqliteCasStore {
                     Value::Text(s) => s,
                     other => return Err(anyhow!("src version not text: {other:?}")),
                 },
-                StepResult::Done => {
-                    return Err(anyhow!("src has no schema_version"))
-                }
+                StepResult::Done => return Err(anyhow!("src has no schema_version")),
             };
             if observed != SCHEMA_VERSION {
                 return Err(anyhow!(
@@ -903,9 +909,7 @@ impl SqliteCasStore {
     /// Delete everything. `.cache purge`.
     pub fn purge(&mut self) -> Result<()> {
         self.conn
-            .execute_batch(
-                "BEGIN; DELETE FROM __cas_uri; DELETE FROM __cas_artifact; COMMIT;",
-            )
+            .execute_batch("BEGIN; DELETE FROM __cas_uri; DELETE FROM __cas_artifact; COMMIT;")
             .map_err(|e| anyhow!("purge: {}", e.message))?;
         Ok(())
     }

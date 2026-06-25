@@ -34,8 +34,7 @@ pub enum Out {
 /// form. Errors if `text` is not valid JSON.
 pub fn json(args: &[Arg]) -> Result<Out, String> {
     let s = expect_text(args, 0, "json")?;
-    let v: Value =
-        serde_json::from_str(s).map_err(|e| format!("malformed JSON: {e}"))?;
+    let v: Value = serde_json::from_str(s).map_err(|e| format!("malformed JSON: {e}"))?;
     Ok(Out::Text(v.to_string()))
 }
 
@@ -44,13 +43,11 @@ pub fn json(args: &[Arg]) -> Result<Out, String> {
 pub fn json_valid(args: &[Arg]) -> Result<Out, String> {
     match args.first() {
         Some(Arg::Null) | None => Ok(Out::Null),
-        Some(Arg::Text(s)) => Ok(Out::Integer(
-            if serde_json::from_str::<Value>(s).is_ok() {
-                1
-            } else {
-                0
-            },
-        )),
+        Some(Arg::Text(s)) => Ok(Out::Integer(if serde_json::from_str::<Value>(s).is_ok() {
+            1
+        } else {
+            0
+        })),
         Some(other) => {
             // Non-text args are not JSON; SQLite returns 0 here.
             let _ = other;
@@ -64,8 +61,8 @@ pub fn json_valid(args: &[Arg]) -> Result<Out, String> {
 /// `object`. NULL when path misses.
 pub fn json_type(args: &[Arg]) -> Result<Out, String> {
     let json_text = expect_text(args, 0, "json_type")?;
-    let root: Value = serde_json::from_str(json_text)
-        .map_err(|e| format!("json_type: malformed JSON: {e}"))?;
+    let root: Value =
+        serde_json::from_str(json_text).map_err(|e| format!("json_type: malformed JSON: {e}"))?;
     let target = match args.get(1) {
         Some(Arg::Text(p)) => {
             let segs = path::parse(p).map_err(|e| format!("json_type path: {e}"))?;
@@ -130,11 +127,7 @@ pub fn json_extract(args: &[Arg]) -> Result<Out, String> {
     for i in 1..args.len() {
         let p = expect_text(args, i, "json_extract")?;
         let segs = path::parse(p).map_err(|e| format!("json_extract: {e}"))?;
-        out.push(
-            path::resolve(&root, &segs)
-                .cloned()
-                .unwrap_or(Value::Null),
-        );
+        out.push(path::resolve(&root, &segs).cloned().unwrap_or(Value::Null));
     }
     Ok(Out::Text(Value::Array(out).to_string()))
 }
@@ -174,8 +167,7 @@ pub fn json_array_length(args: &[Arg]) -> Result<Out, String> {
         .map_err(|e| format!("json_array_length: malformed JSON: {e}"))?;
     let target = match args.get(1) {
         Some(Arg::Text(p)) => {
-            let segs = path::parse(p)
-                .map_err(|e| format!("json_array_length path: {e}"))?;
+            let segs = path::parse(p).map_err(|e| format!("json_array_length path: {e}"))?;
             match path::resolve(&root, &segs) {
                 Some(v) => v.clone(),
                 None => return Ok(Out::Null),
@@ -195,10 +187,10 @@ pub fn json_array_length(args: &[Arg]) -> Result<Out, String> {
 pub fn json_patch(args: &[Arg]) -> Result<Out, String> {
     let target_text = expect_text(args, 0, "json_patch")?;
     let patch_text = expect_text(args, 1, "json_patch")?;
-    let mut target: Value = serde_json::from_str(target_text)
-        .map_err(|e| format!("json_patch: bad target: {e}"))?;
-    let patch: Value = serde_json::from_str(patch_text)
-        .map_err(|e| format!("json_patch: bad patch: {e}"))?;
+    let mut target: Value =
+        serde_json::from_str(target_text).map_err(|e| format!("json_patch: bad target: {e}"))?;
+    let patch: Value =
+        serde_json::from_str(patch_text).map_err(|e| format!("json_patch: bad patch: {e}"))?;
     apply_merge_patch(&mut target, &patch);
     Ok(Out::Text(target.to_string()))
 }
@@ -206,8 +198,8 @@ pub fn json_patch(args: &[Arg]) -> Result<Out, String> {
 /// `json_remove(json, path[, path...])`  silently drops each path.
 pub fn json_remove(args: &[Arg]) -> Result<Out, String> {
     let json_text = expect_text(args, 0, "json_remove")?;
-    let mut root: Value = serde_json::from_str(json_text)
-        .map_err(|e| format!("json_remove: malformed JSON: {e}"))?;
+    let mut root: Value =
+        serde_json::from_str(json_text).map_err(|e| format!("json_remove: malformed JSON: {e}"))?;
     for i in 1..args.len() {
         let p = expect_text(args, i, "json_remove")?;
         let segs = path::parse(p).map_err(|e| format!("json_remove: {e}"))?;
@@ -246,8 +238,7 @@ pub fn json_array_append(args: &[Arg]) -> Result<Out, String> {
     let mut i = 1;
     while i < args.len() {
         let p = expect_text(args, i, "json_array_append")?;
-        let segs = path::parse(p)
-            .map_err(|e| format!("json_array_append: bad path: {e}"))?;
+        let segs = path::parse(p).map_err(|e| format!("json_array_append: bad path: {e}"))?;
         let value = arg_to_value(&args[i + 1]);
         let node = path::resolve_mut(&mut root, &segs)
             .ok_or_else(|| format!("json_array_append: path {p} not found"))?;
@@ -276,8 +267,7 @@ pub fn json_array_insert(args: &[Arg]) -> Result<Out, String> {
     let mut i = 1;
     while i < args.len() {
         let p = expect_text(args, i, "json_array_insert")?;
-        let segs = path::parse(p)
-            .map_err(|e| format!("json_array_insert: bad path: {e}"))?;
+        let segs = path::parse(p).map_err(|e| format!("json_array_insert: bad path: {e}"))?;
         if segs.is_empty() {
             return Err("json_array_insert: path must end at an array index".to_string());
         }
@@ -293,7 +283,9 @@ pub fn json_array_insert(args: &[Arg]) -> Result<Out, String> {
             let pos = (idx.max(0) as usize).min(arr.len());
             arr.insert(pos, value);
         } else {
-            return Err(format!("json_array_insert: path {p} parent is not an array"));
+            return Err(format!(
+                "json_array_insert: path {p} parent is not an array"
+            ));
         }
         i += 2;
     }
@@ -303,13 +295,14 @@ pub fn json_array_insert(args: &[Arg]) -> Result<Out, String> {
 /// SQL/JSON `json_value(json, path)`  return the SCALAR value at
 /// `path`, or NULL if path missing / target is an array/object.
 pub fn json_value(args: &[Arg]) -> Result<Out, String> {
-    if args.len() < 2 { return Err("json_value: needs json + path".to_string()); }
+    if args.len() < 2 {
+        return Err("json_value: needs json + path".to_string());
+    }
     let json_text = expect_text(args, 0, "json_value")?;
     let p = expect_text(args, 1, "json_value")?;
-    let root: Value = serde_json::from_str(json_text)
-        .map_err(|e| format!("json_value: malformed JSON: {e}"))?;
-    let segs = path::parse(p)
-        .map_err(|e| format!("json_value: bad path: {e}"))?;
+    let root: Value =
+        serde_json::from_str(json_text).map_err(|e| format!("json_value: malformed JSON: {e}"))?;
+    let segs = path::parse(p).map_err(|e| format!("json_value: bad path: {e}"))?;
     let Some(v) = path::resolve(&root, &segs) else {
         return Ok(Out::Null);
     };
@@ -317,9 +310,13 @@ pub fn json_value(args: &[Arg]) -> Result<Out, String> {
         Value::Null => Out::Null,
         Value::Bool(b) => Out::Integer(if *b { 1 } else { 0 }),
         Value::Number(n) => {
-            if let Some(i) = n.as_i64() { Out::Integer(i) }
-            else if let Some(f) = n.as_f64() { Out::Real(f) }
-            else { Out::Null }
+            if let Some(i) = n.as_i64() {
+                Out::Integer(i)
+            } else if let Some(f) = n.as_f64() {
+                Out::Real(f)
+            } else {
+                Out::Null
+            }
         }
         Value::String(s) => Out::Text(s.clone()),
         // Array/object aren't scalars  json_value returns NULL.
@@ -331,13 +328,14 @@ pub fn json_value(args: &[Arg]) -> Result<Out, String> {
 /// value at `path` as a JSON-encoded string. NULL if path missing
 /// or target is a scalar.
 pub fn json_query(args: &[Arg]) -> Result<Out, String> {
-    if args.len() < 2 { return Err("json_query: needs json + path".to_string()); }
+    if args.len() < 2 {
+        return Err("json_query: needs json + path".to_string());
+    }
     let json_text = expect_text(args, 0, "json_query")?;
     let p = expect_text(args, 1, "json_query")?;
-    let root: Value = serde_json::from_str(json_text)
-        .map_err(|e| format!("json_query: malformed JSON: {e}"))?;
-    let segs = path::parse(p)
-        .map_err(|e| format!("json_query: bad path: {e}"))?;
+    let root: Value =
+        serde_json::from_str(json_text).map_err(|e| format!("json_query: malformed JSON: {e}"))?;
+    let segs = path::parse(p).map_err(|e| format!("json_query: bad path: {e}"))?;
     let Some(v) = path::resolve(&root, &segs) else {
         return Ok(Out::Null);
     };
@@ -351,14 +349,19 @@ pub fn json_query(args: &[Arg]) -> Result<Out, String> {
 /// SQL/JSON `json_exists(json, path)`  1 if path resolves to any
 /// value (including null), 0 otherwise.
 pub fn json_exists(args: &[Arg]) -> Result<Out, String> {
-    if args.len() < 2 { return Err("json_exists: needs json + path".to_string()); }
+    if args.len() < 2 {
+        return Err("json_exists: needs json + path".to_string());
+    }
     let json_text = expect_text(args, 0, "json_exists")?;
     let p = expect_text(args, 1, "json_exists")?;
-    let root: Value = serde_json::from_str(json_text)
-        .map_err(|e| format!("json_exists: malformed JSON: {e}"))?;
-    let segs = path::parse(p)
-        .map_err(|e| format!("json_exists: bad path: {e}"))?;
-    Ok(Out::Integer(if path::resolve(&root, &segs).is_some() { 1 } else { 0 }))
+    let root: Value =
+        serde_json::from_str(json_text).map_err(|e| format!("json_exists: malformed JSON: {e}"))?;
+    let segs = path::parse(p).map_err(|e| format!("json_exists: bad path: {e}"))?;
+    Ok(Out::Integer(if path::resolve(&root, &segs).is_some() {
+        1
+    } else {
+        0
+    }))
 }
 
 /// `json_keys(json[, path])`  array of keys at the object found
@@ -368,12 +371,11 @@ pub fn json_keys(args: &[Arg]) -> Result<Out, String> {
         return Err("json_keys: needs JSON arg".to_string());
     }
     let json_text = expect_text(args, 0, "json_keys")?;
-    let root: Value = serde_json::from_str(json_text)
-        .map_err(|e| format!("json_keys: malformed JSON: {e}"))?;
+    let root: Value =
+        serde_json::from_str(json_text).map_err(|e| format!("json_keys: malformed JSON: {e}"))?;
     let target = if args.len() > 1 {
         let p = expect_text(args, 1, "json_keys")?;
-        let segs = path::parse(p)
-            .map_err(|e| format!("json_keys: bad path: {e}"))?;
+        let segs = path::parse(p).map_err(|e| format!("json_keys: bad path: {e}"))?;
         match path::resolve(&root, &segs) {
             Some(v) => v.clone(),
             None => return Ok(Out::Null),
@@ -383,9 +385,8 @@ pub fn json_keys(args: &[Arg]) -> Result<Out, String> {
     };
     match target {
         Value::Object(map) => {
-            let keys: alloc::vec::Vec<Value> = map.keys()
-                .map(|k| Value::String(k.clone()))
-                .collect();
+            let keys: alloc::vec::Vec<Value> =
+                map.keys().map(|k| Value::String(k.clone())).collect();
             Ok(Out::Text(Value::Array(keys).to_string()))
         }
         _ => Ok(Out::Null),
@@ -402,13 +403,12 @@ fn apply_path_value_pairs(
         return Err(format!("{name}: arg count must be json + (path, value)*"));
     }
     let json_text = expect_text(args, 0, name)?;
-    let mut root: Value = serde_json::from_str(json_text)
-        .map_err(|e| format!("{name}: malformed JSON: {e}"))?;
+    let mut root: Value =
+        serde_json::from_str(json_text).map_err(|e| format!("{name}: malformed JSON: {e}"))?;
     let mut i = 1;
     while i < args.len() {
         let p = expect_text(args, i, name)?;
-        let segs =
-            path::parse(p).map_err(|e| format!("{name}: bad path: {e}"))?;
+        let segs = path::parse(p).map_err(|e| format!("{name}: bad path: {e}"))?;
         let value = arg_to_value(&args[i + 1]);
         path::set(&mut root, &segs, value, if_present_only, if_missing_only)
             .map_err(|e| format!("{name}: {e}"))?;
@@ -478,9 +478,7 @@ fn value_to_out(v: Option<&Value>) -> Out {
             }
         }
         Some(Value::String(s)) => Out::Text(s.clone()),
-        Some(other @ (Value::Array(_) | Value::Object(_))) => {
-            Out::Text(other.to_string())
-        }
+        Some(other @ (Value::Array(_) | Value::Object(_))) => Out::Text(other.to_string()),
     }
 }
 
@@ -576,9 +574,7 @@ mod tests {
 
     #[test]
     fn json_object_builds() {
-        match json_object(&[text("a"), Arg::Integer(1), text("b"), text("two")])
-            .unwrap()
-        {
+        match json_object(&[text("a"), Arg::Integer(1), text("b"), text("two")]).unwrap() {
             Out::Text(s) => assert_eq!(s, "{\"a\":1,\"b\":\"two\"}"),
             _ => panic!(),
         }
@@ -631,8 +627,14 @@ mod tests {
     #[test]
     fn json_set_overwrites_and_creates() {
         let j = text("{\"a\":1}");
-        match json_set(&[j, text("$.a"), Arg::Integer(2), text("$.b.c"), Arg::Integer(3)])
-            .unwrap()
+        match json_set(&[
+            j,
+            text("$.a"),
+            Arg::Integer(2),
+            text("$.b.c"),
+            Arg::Integer(3),
+        ])
+        .unwrap()
         {
             Out::Text(s) => {
                 let v: Value = serde_json::from_str(&s).unwrap();

@@ -169,8 +169,7 @@ mod wasm_export {
                         Ok(mut stmts) => {
                             let names = collect_tables(&mut stmts);
                             Ok(SqlValue::Text(
-                                serde_json::to_string(&names)
-                                    .unwrap_or_else(|_| "[]".to_string()),
+                                serde_json::to_string(&names).unwrap_or_else(|_| "[]".to_string()),
                             ))
                         }
                         Err(_) => Ok(SqlValue::Null),
@@ -180,9 +179,7 @@ mod wasm_export {
                     let t = arg_text(&args, 0, "sql_is_readonly")?;
                     match parse(&t) {
                         Ok(stmts) if !stmts.is_empty() => {
-                            Ok(SqlValue::Integer(
-                                stmts.iter().all(is_readonly) as i64,
-                            ))
+                            Ok(SqlValue::Integer(stmts.iter().all(is_readonly) as i64))
                         }
                         _ => Ok(SqlValue::Null),
                     }

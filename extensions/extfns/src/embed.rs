@@ -92,7 +92,9 @@ fn padl(s: &str, length: i64) -> String {
     }
     let pad = (length as usize) - len;
     let mut out = String::with_capacity(s.len() + pad);
-    for _ in 0..pad { out.push(' '); }
+    for _ in 0..pad {
+        out.push(' ');
+    }
     out.push_str(s);
     out
 }
@@ -105,7 +107,9 @@ fn padr(s: &str, length: i64) -> String {
     let pad = (length as usize) - len;
     let mut out = String::with_capacity(s.len() + pad);
     out.push_str(s);
-    for _ in 0..pad { out.push(' '); }
+    for _ in 0..pad {
+        out.push(' ');
+    }
     out
 }
 
@@ -118,15 +122,22 @@ fn padc(s: &str, length: i64) -> String {
     let left = total_pad / 2;
     let right = total_pad - left;
     let mut out = String::with_capacity(s.len() + total_pad);
-    for _ in 0..left { out.push(' '); }
+    for _ in 0..left {
+        out.push(' ');
+    }
     out.push_str(s);
-    for _ in 0..right { out.push(' '); }
+    for _ in 0..right {
+        out.push(' ');
+    }
     out
 }
 
 fn strfilter(haystack: &str, allowed: &str) -> String {
     let allowed_set: alloc::collections::BTreeSet<char> = allowed.chars().collect();
-    haystack.chars().filter(|c| allowed_set.contains(c)).collect()
+    haystack
+        .chars()
+        .filter(|c| allowed_set.contains(c))
+        .collect()
 }
 
 fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, String> {
@@ -204,17 +215,72 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_CHARINDEX_2, name: b"charindex\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_CHARINDEX_3, name: b"charindex\0", num_args: 3, deterministic: true },
-    ScalarSpec { func_id: FID_LEFTSTR,     name: b"leftstr\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_RIGHTSTR,    name: b"rightstr\0",  num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_REVERSE,     name: b"reverse\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_REPLICATE,   name: b"replicate\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_PROPER,      name: b"proper\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_PADL,        name: b"padl\0",      num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_PADR,        name: b"padr\0",      num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_PADC,        name: b"padc\0",      num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_STRFILTER,   name: b"strfilter\0", num_args: 2, deterministic: true },
+    ScalarSpec {
+        func_id: FID_CHARINDEX_2,
+        name: b"charindex\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CHARINDEX_3,
+        name: b"charindex\0",
+        num_args: 3,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LEFTSTR,
+        name: b"leftstr\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_RIGHTSTR,
+        name: b"rightstr\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_REVERSE,
+        name: b"reverse\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_REPLICATE,
+        name: b"replicate\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PROPER,
+        name: b"proper\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PADL,
+        name: b"padl\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PADR,
+        name: b"padr\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PADC,
+        name: b"padc\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_STRFILTER,
+        name: b"strfilter\0",
+        num_args: 2,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

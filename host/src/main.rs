@@ -78,7 +78,11 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
                 if i >= args.len() {
                     return Err(anyhow!("--embed expects a comma-separated list"));
                 }
-                embed = args[i].split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                embed = args[i]
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
             }
             "--output" => {
                 i += 1;
@@ -119,7 +123,11 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
     if !missing.is_empty() {
         return Err(anyhow!(
             "compose: not embeddable: {}\n  Embeddable here: {}",
-            missing.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
+            missing
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
             embeddable.join(", "),
         ));
     }
@@ -138,8 +146,14 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
 
     let status = std::process::Command::new("cargo")
         .args([
-            "build", "--release", "-p", "sqlite-cli", "--target", "wasm32-wasip2",
-            "--features", &features,
+            "build",
+            "--release",
+            "-p",
+            "sqlite-cli",
+            "--target",
+            "wasm32-wasip2",
+            "--features",
+            &features,
         ])
         .current_dir(&repo_root)
         .status()
@@ -148,13 +162,10 @@ fn run_compose_subcommand(args: &[String]) -> Result<()> {
         return Err(anyhow!("cargo build failed"));
     }
 
-    let core_wasm = repo_root
-        .join("target/wasm32-wasip2/release/sqlite_cli.wasm");
-    let component_out = output
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            repo_root.join("target/wasm32-wasip2/release/sqlite_cli_embedded.component.wasm")
-        });
+    let core_wasm = repo_root.join("target/wasm32-wasip2/release/sqlite_cli.wasm");
+    let component_out = output.map(PathBuf::from).unwrap_or_else(|| {
+        repo_root.join("target/wasm32-wasip2/release/sqlite_cli_embedded.component.wasm")
+    });
 
     if let Some(parent) = component_out.parent() {
         std::fs::create_dir_all(parent).ok();
@@ -207,7 +218,9 @@ fn discover_embeddable_extensions(repo_root: &std::path::Path) -> Result<Vec<Str
         ));
     }
     let mut out: Vec<String> = Vec::new();
-    for entry in std::fs::read_dir(&ext_root).map_err(|e| anyhow!("read {}: {e}", ext_root.display()))? {
+    for entry in
+        std::fs::read_dir(&ext_root).map_err(|e| anyhow!("read {}: {e}", ext_root.display()))?
+    {
         let entry = entry.map_err(|e| anyhow!("entry: {e}"))?;
         if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
             continue;
@@ -245,8 +258,7 @@ fn run_precompile_subcommand(args: &[String]) -> Result<()> {
     }
     let in_path = std::path::Path::new(&args[0]);
     let out_path = std::path::Path::new(&args[1]);
-    let bytes = std::fs::read(in_path)
-        .map_err(|e| anyhow!("read {}: {e}", in_path.display()))?;
+    let bytes = std::fs::read(in_path).map_err(|e| anyhow!("read {}: {e}", in_path.display()))?;
     // Precompile against engine_run (fuel disabled). That's the
     // engine run_wasm uses to load the cli .cwasm; precompiling
     // against the extension engine would produce a blob the loader
@@ -277,7 +289,9 @@ fn run_changeset_subcommand(args: &[String]) -> Result<()> {
     if args.len() < 2 {
         eprintln!("usage: sqlink changeset invert <input.cs> <output.cs>");
         eprintln!("       sqlink changeset concat <a.cs> <b.cs> <output.cs>");
-        eprintln!("       sqlink changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
+        eprintln!(
+            "       sqlink changeset capture --db PATH --sql FILE --output FILE [--table NAME]"
+        );
         eprintln!("       sqlink changeset apply --db PATH --input FILE");
         std::process::exit(2);
     }
@@ -290,7 +304,11 @@ fn run_changeset_subcommand(args: &[String]) -> Result<()> {
             let input = std::fs::read(&args[1])?;
             let output = changeset_invert(&input)?;
             std::fs::write(&args[2], &output)?;
-            eprintln!("changeset invert: {} bytes  {} bytes", input.len(), output.len());
+            eprintln!(
+                "changeset invert: {} bytes  {} bytes",
+                input.len(),
+                output.len()
+            );
             Ok(())
         }
         "concat" => {
@@ -301,12 +319,19 @@ fn run_changeset_subcommand(args: &[String]) -> Result<()> {
             let b = std::fs::read(&args[2])?;
             let output = changeset_concat(&a, &b)?;
             std::fs::write(&args[3], &output)?;
-            eprintln!("changeset concat: {} + {}  {} bytes", a.len(), b.len(), output.len());
+            eprintln!(
+                "changeset concat: {} + {}  {} bytes",
+                a.len(),
+                b.len(),
+                output.len()
+            );
             Ok(())
         }
         "capture" => run_changeset_capture(&args[1..]),
         "apply" => run_changeset_apply(&args[1..]),
-        other => anyhow::bail!("changeset: unknown op {other:?} (expected invert|concat|capture|apply)"),
+        other => {
+            anyhow::bail!("changeset: unknown op {other:?} (expected invert|concat|capture|apply)")
+        }
     }
 }
 
@@ -343,9 +368,15 @@ fn parse_flags(args: &[String]) -> (std::collections::HashMap<String, String>, V
 /// restricts to a single table.
 fn run_changeset_capture(args: &[String]) -> Result<()> {
     let (flags, _) = parse_flags(args);
-    let db_path = flags.get("db").ok_or_else(|| anyhow!("capture: --db PATH required"))?;
-    let sql_path = flags.get("sql").ok_or_else(|| anyhow!("capture: --sql FILE required"))?;
-    let out_path = flags.get("output").ok_or_else(|| anyhow!("capture: --output FILE required"))?;
+    let db_path = flags
+        .get("db")
+        .ok_or_else(|| anyhow!("capture: --db PATH required"))?;
+    let sql_path = flags
+        .get("sql")
+        .ok_or_else(|| anyhow!("capture: --sql FILE required"))?;
+    let out_path = flags
+        .get("output")
+        .ok_or_else(|| anyhow!("capture: --output FILE required"))?;
     let table = flags.get("table");
 
     use sqlite_component_core::db;
@@ -356,7 +387,10 @@ fn run_changeset_capture(args: &[String]) -> Result<()> {
     let sql = std::fs::read_to_string(sql_path)?;
     let bytes = changeset_capture(raw_db, &sql, table.map(|s| s.as_str()))?;
     std::fs::write(out_path, &bytes)?;
-    eprintln!("changeset capture: {} bytes written to {out_path}", bytes.len());
+    eprintln!(
+        "changeset capture: {} bytes written to {out_path}",
+        bytes.len()
+    );
     Ok(())
 }
 
@@ -366,8 +400,12 @@ fn run_changeset_capture(args: &[String]) -> Result<()> {
 /// REPLACE (matches the documented SQLITE_CHANGESET_REPLACE behavior).
 fn run_changeset_apply(args: &[String]) -> Result<()> {
     let (flags, _) = parse_flags(args);
-    let db_path = flags.get("db").ok_or_else(|| anyhow!("apply: --db PATH required"))?;
-    let in_path = flags.get("input").ok_or_else(|| anyhow!("apply: --input FILE required"))?;
+    let db_path = flags
+        .get("db")
+        .ok_or_else(|| anyhow!("apply: --db PATH required"))?;
+    let in_path = flags
+        .get("input")
+        .ok_or_else(|| anyhow!("apply: --input FILE required"))?;
 
     use sqlite_component_core::db;
     let conn = db::Connection::open(db_path, db::OpenFlags::DEFAULT)
@@ -428,15 +466,15 @@ fn changeset_capture(
     // the session captures.
     let sql_c = CString::new(sql)?;
     let mut errmsg: *mut std::os::raw::c_char = ptr::null_mut();
-    let rc = unsafe {
-        sqlite3_exec(db, sql_c.as_ptr(), None, ptr::null_mut(), &mut errmsg)
-    };
+    let rc = unsafe { sqlite3_exec(db, sql_c.as_ptr(), None, ptr::null_mut(), &mut errmsg) };
     if rc != SQLITE_OK {
         let msg = unsafe {
             if errmsg.is_null() {
                 "(no message)".to_string()
             } else {
-                let s = std::ffi::CStr::from_ptr(errmsg).to_string_lossy().into_owned();
+                let s = std::ffi::CStr::from_ptr(errmsg)
+                    .to_string_lossy()
+                    .into_owned();
                 sqlite3_free(errmsg as *mut _);
                 s
             }
@@ -471,7 +509,7 @@ fn changeset_apply(db: *mut libsqlite3_sys::sqlite3, blob: &[u8]) -> Result<()> 
             db,
             blob.len() as std::os::raw::c_int,
             blob.as_ptr() as *mut std::os::raw::c_void,
-            None,  // xFilter (None = include all tables)
+            None, // xFilter (None = include all tables)
             Some(replace_on_conflict),
             std::ptr::null_mut(),
         )
@@ -698,7 +736,10 @@ async fn resolve_bundle_launch(
                     p.display()
                 ));
             }
-            eprintln!("[bundle] '{resolved_name}': exec baked binary {}", p.display());
+            eprintln!(
+                "[bundle] '{resolved_name}': exec baked binary {}",
+                p.display()
+            );
             *component_path = p;
             return Ok(());
         }
@@ -815,13 +856,7 @@ async fn main() -> Result<()> {
     // / --bundle-load AFTER the cas-cache is attached  the resolution
     // queries the bundle registry there.
     if let Some((bundle_key, mode)) = bundle_request.as_ref() {
-        match resolve_bundle_launch(
-            &cache,
-            &host,
-            bundle_key,
-            *mode,
-            &mut component_path,
-        ).await {
+        match resolve_bundle_launch(&cache, &host, bundle_key, *mode, &mut component_path).await {
             Ok(()) => {}
             Err(e) => {
                 eprintln!("{e}");
@@ -859,11 +894,7 @@ async fn main() -> Result<()> {
     // it via Component::deserialize_file skips parse+validate+compile.
     // unsafe is the API contract  caller asserts the file is a
     // trusted artifact from this exact wasmtime + host CPU.
-    let component = if component_path
-        .extension()
-        .and_then(|s| s.to_str())
-        == Some("cwasm")
-    {
+    let component = if component_path.extension().and_then(|s| s.to_str()) == Some("cwasm") {
         unsafe { Component::deserialize_file(&engine, &component_path) }
             .map_err(|e| anyhow!("deserialize precompiled: {e}"))?
     } else {
@@ -926,8 +957,7 @@ async fn main() -> Result<()> {
     // composed `cli + sqlite-lib` runnable does. sqlite-pcache-tvm
     // and sqlite-vfs-tvm use wit-bindgen-backed cold tiers on
     // wasm32 unconditionally.
-    tvm_wasmtime::add_to_linker(&mut linker)
-        .map_err(|e| anyhow!("wire tvm:memory: {e}"))?;
+    tvm_wasmtime::add_to_linker(&mut linker).map_err(|e| anyhow!("wire tvm:memory: {e}"))?;
 
     let mut wasi_builder = WasiCtxBuilder::new();
     wasi_builder.inherit_stdio();
@@ -982,11 +1012,10 @@ async fn main() -> Result<()> {
     // would error.
     store.set_epoch_deadline(1_000_000_000_000);
 
-    let command = wasmtime_wasi::p2::bindings::Command::instantiate_async(
-        &mut store, &component, &linker,
-    )
-    .await
-    .map_err(|e| anyhow!("instantiate: {e}"))?;
+    let command =
+        wasmtime_wasi::p2::bindings::Command::instantiate_async(&mut store, &component, &linker)
+            .await
+            .map_err(|e| anyhow!("instantiate: {e}"))?;
 
     let result = command
         .wasi_cli_run()
@@ -1089,8 +1118,7 @@ mod main_argparse_tests {
 
     #[test]
     fn multiple_bundle_flags_last_wins() {
-        let p = parse_main_args(&argv(&["--bundle", "first", "--bundle-load", "second"]))
-            .unwrap();
+        let p = parse_main_args(&argv(&["--bundle", "first", "--bundle-load", "second"])).unwrap();
         assert_eq!(p.bundle_request, Some(("second".into(), BundleMode::Load)));
     }
 
@@ -1159,10 +1187,7 @@ mod main_argparse_tests {
 
     #[test]
     fn double_dash_starts_positional_collection() {
-        let p = parse_main_args(&argv(&[
-            "--db", "/tmp/x.db", "--", "--bundle", "myset",
-        ]))
-        .unwrap();
+        let p = parse_main_args(&argv(&["--db", "/tmp/x.db", "--", "--bundle", "myset"])).unwrap();
         assert_eq!(p.db_path, "/tmp/x.db");
         // After `--`, the --bundle flag is treated as positional,
         // not a bundle request.

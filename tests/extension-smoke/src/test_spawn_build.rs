@@ -164,9 +164,7 @@ fn assert_spawn_build(
         "[{label}] cli stderr reports a panic.\nstdout:\n{stdout}\nstderr:\n{stderr}",
     );
     let raw = find_tagged(stdout, "BIN:").unwrap_or_else(|| {
-        panic!(
-            "[{label}] no BIN: line in stdout.\nstdout:\n{stdout}\nstderr:\n{stderr}",
-        )
+        panic!("[{label}] no BIN: line in stdout.\nstdout:\n{stdout}\nstderr:\n{stderr}",)
     });
     let bin_path = raw.trim();
     if bin_path.starts_with("ERR:") {
@@ -265,7 +263,18 @@ fn spawn_build_scenario_2_wasm_cli() {
     let crate_root = make_tempdir("wasm");
     let crate_name = write_hello_crate(&crate_root).expect("write hello crate");
     let tmp_db = crate_root.join("probe.db");
-    let (stdout, stderr) = drive(&sqlink, Some(&cli), &tmp_db, &script(&component, &crate_root));
-    assert_spawn_build("sqlink+wasm-cli", &stdout, &stderr, &crate_root, &crate_name);
+    let (stdout, stderr) = drive(
+        &sqlink,
+        Some(&cli),
+        &tmp_db,
+        &script(&component, &crate_root),
+    );
+    assert_spawn_build(
+        "sqlink+wasm-cli",
+        &stdout,
+        &stderr,
+        &crate_root,
+        &crate_name,
+    );
     let _ = std::fs::remove_dir_all(&crate_root);
 }

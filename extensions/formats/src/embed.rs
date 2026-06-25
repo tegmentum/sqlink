@@ -26,15 +26,17 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
             0,
             "ini_to_json",
         )?))),
-        FID_JSON_TO_INI => crate::json_to_ini(&arg_text(&args, 0, "json_to_ini")?)
-            .map(SqlValueOwned::Text),
+        FID_JSON_TO_INI => {
+            crate::json_to_ini(&arg_text(&args, 0, "json_to_ini")?).map(SqlValueOwned::Text)
+        }
         FID_XML_EXTRACT => crate::xml_extract(
             &arg_text(&args, 0, "xml_extract")?,
             &arg_text(&args, 1, "xml_extract")?,
         )
         .map(SqlValueOwned::Text),
-        FID_XML_TO_JSON => crate::xml_to_json(&arg_text(&args, 0, "xml_to_json")?)
-            .map(SqlValueOwned::Text),
+        FID_XML_TO_JSON => {
+            crate::xml_to_json(&arg_text(&args, 0, "xml_to_json")?).map(SqlValueOwned::Text)
+        }
         FID_XML_ATTR => crate::xml_attr(
             &arg_text(&args, 0, "xml_attr")?,
             &arg_text(&args, 1, "xml_attr")?,
@@ -46,11 +48,36 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_INI_TO_JSON,  name: b"ini_to_json\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_TO_INI,  name: b"json_to_ini\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_XML_EXTRACT,  name: b"xml_extract\0",  num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_XML_TO_JSON,  name: b"xml_to_json\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_XML_ATTR,     name: b"xml_attr\0",     num_args: 3, deterministic: true },
+    ScalarSpec {
+        func_id: FID_INI_TO_JSON,
+        name: b"ini_to_json\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_TO_INI,
+        name: b"json_to_ini\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_XML_EXTRACT,
+        name: b"xml_extract\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_XML_TO_JSON,
+        name: b"xml_to_json\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_XML_ATTR,
+        name: b"xml_attr\0",
+        num_args: 3,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

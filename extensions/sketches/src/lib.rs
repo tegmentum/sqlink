@@ -172,7 +172,11 @@ pub fn td_deserialize(blob: &[u8]) -> Result<TDigest, String> {
     let n_cent = u32::from_le_bytes(blob[36..40].try_into().unwrap()) as usize;
     let expected = 40 + n_cent * 16;
     if blob.len() != expected {
-        return Err(alloc::format!("t_digest: blob len {} != expected {}", blob.len(), expected));
+        return Err(alloc::format!(
+            "t_digest: blob len {} != expected {}",
+            blob.len(),
+            expected
+        ));
     }
     let mut centroids = Vec::with_capacity(n_cent);
     let mut off = 40;
@@ -203,13 +207,16 @@ pub struct MinHash {
 
 impl MinHash {
     pub fn new(k: usize) -> Self {
-        Self { mins: alloc::vec![u64::MAX; k.max(8)] }
+        Self {
+            mins: alloc::vec![u64::MAX; k.max(8)],
+        }
     }
 
     pub fn add(&mut self, value: &[u8]) {
         use core::hash::Hasher;
         for (i, m) in self.mins.iter_mut().enumerate() {
-            let mut h = twox_hash::XxHash64::with_seed(0x9E3779B97F4A7C15u64.wrapping_mul(i as u64 + 1));
+            let mut h =
+                twox_hash::XxHash64::with_seed(0x9E3779B97F4A7C15u64.wrapping_mul(i as u64 + 1));
             h.write(value);
             let v = h.finish();
             if v < *m {
@@ -253,7 +260,12 @@ pub fn mh_jaccard(a: &[u8], b: &[u8]) -> Result<f64, String> {
     if a.mins.len() != b.mins.len() {
         return Err("minhash_jaccard: signature lengths differ".into());
     }
-    let matches = a.mins.iter().zip(b.mins.iter()).filter(|(x, y)| x == y).count();
+    let matches = a
+        .mins
+        .iter()
+        .zip(b.mins.iter())
+        .filter(|(x, y)| x == y)
+        .count();
     Ok(matches as f64 / a.mins.len() as f64)
 }
 
@@ -353,7 +365,7 @@ mod wasm_export {
     const FID_VERSION: u64 = 4;
     const FID_TD_AGG: u64 = 100;
     const FID_MH_AGG: u64 = 101;
-    const FID_TOP_K_AGG: u64 = 102;  // approx_top_k via Misra-Gries
+    const FID_TOP_K_AGG: u64 = 102; // approx_top_k via Misra-Gries
 
     /// Misra-Gries summary  fixed-K counters that survive
     /// arbitrary stream length using O(K) memory. Items are
@@ -365,9 +377,17 @@ mod wasm_export {
     }
 
     impl MisraGries {
-        pub fn new(k: usize) -> Self { Self { k: k.max(1), counters: alloc::collections::BTreeMap::new() } }
+        pub fn new(k: usize) -> Self {
+            Self {
+                k: k.max(1),
+                counters: alloc::collections::BTreeMap::new(),
+            }
+        }
         pub fn add(&mut self, key: String) {
-            if let Some(c) = self.counters.get_mut(&key) { *c += 1; return; }
+            if let Some(c) = self.counters.get_mut(&key) {
+                *c += 1;
+                return;
+            }
             if self.counters.len() < self.k {
                 self.counters.insert(key, 1);
                 return;
@@ -376,13 +396,17 @@ mod wasm_export {
             let mut drops = alloc::vec::Vec::new();
             for (k, c) in self.counters.iter_mut() {
                 *c -= 1;
-                if *c <= 0 { drops.push(k.clone()); }
+                if *c <= 0 {
+                    drops.push(k.clone());
+                }
             }
-            for k in drops { self.counters.remove(&k); }
+            for k in drops {
+                self.counters.remove(&k);
+            }
         }
         pub fn top(&self) -> alloc::vec::Vec<(String, i64)> {
-            let mut v: alloc::vec::Vec<(String, i64)> = self.counters.iter()
-                .map(|(k, c)| (k.clone(), *c)).collect();
+            let mut v: alloc::vec::Vec<(String, i64)> =
+                self.counters.iter().map(|(k, c)| (k.clone(), *c)).collect();
             v.sort_by(|a, b| b.1.cmp(&a.1));
             v
         }
@@ -513,13 +537,16 @@ mod wasm_export {
                 let mut tbl = m.borrow_mut();
                 let entry = tbl.entry(context_id).or_insert_with(|| match func_id {
                     FID_TD_AGG => AggState::TDigest(super::TDigest::new(100.0)),
-                    FID_TOP_K_AGG => AggState::TopK { k: None, mg: MisraGries::new(64) },
+                    FID_TOP_K_AGG => AggState::TopK {
+                        k: None,
+                        mg: MisraGries::new(64),
+                    },
                     _ => AggState::MinHash(super::MinHash::new(super::MH_DEFAULT_K)),
                 });
                 match (func_id, entry) {
                     (FID_TD_AGG, AggState::TDigest(td)) => {
-                        let x = val_f64(&args[0])
-                            .ok_or_else(|| "t_digest: numeric arg".to_string())?;
+                        let x =
+                            val_f64(&args[0]).ok_or_else(|| "t_digest: numeric arg".to_string())?;
                         td.add(x);
                     }
                     (FID_MH_AGG, AggState::MinHash(mh)) => {
@@ -532,7 +559,8 @@ mod wasm_export {
                         // so a runaway value can't OOM the worker.
                         if k.is_none() {
                             let kk = val_f64(args.get(1).unwrap_or(&SqlValue::Null))
-                                .ok_or_else(|| "approx_top_k: numeric k".to_string())? as usize;
+                                .ok_or_else(|| "approx_top_k: numeric k".to_string())?
+                                as usize;
                             let kk = kk.clamp(1, 1024);
                             *k = Some(kk);
                             // Replace the default 64-counter MG with
@@ -577,8 +605,9 @@ mod wasm_export {
                             .take(take)
                             .map(|(v, c)| serde_json::json!({"value": v, "approx_count": c}))
                             .collect();
-                        SqlValue::Text(serde_json::to_string(&arr)
-                            .unwrap_or_else(|_| "[]".to_string()))
+                        SqlValue::Text(
+                            serde_json::to_string(&arr).unwrap_or_else(|_| "[]".to_string()),
+                        )
                     }
                     _ => SqlValue::Null,
                 })

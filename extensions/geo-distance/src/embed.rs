@@ -8,9 +8,9 @@ use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
 const FID_HAVERSINE: u64 = 1;
-const FID_BEARING:   u64 = 2;
-const FID_WITHIN:    u64 = 3;
-const FID_MIDPOINT:  u64 = 4;
+const FID_BEARING: u64 = 2;
+const FID_WITHIN: u64 = 3;
+const FID_MIDPOINT: u64 = 4;
 
 /// Earth's mean radius in meters (WGS84-ish).
 const EARTH_RADIUS_M: f64 = 6_371_008.8;
@@ -32,8 +32,7 @@ fn haversine(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> f64 {
     let phi2 = lat2 * to_rad;
     let dphi = (lat2 - lat1) * to_rad;
     let dlam = (lon2 - lon1) * to_rad;
-    let a = (dphi / 2.0).sin().powi(2)
-        + phi1.cos() * phi2.cos() * (dlam / 2.0).sin().powi(2);
+    let a = (dphi / 2.0).sin().powi(2) + phi1.cos() * phi2.cos() * (dlam / 2.0).sin().powi(2);
     let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
     EARTH_RADIUS_M * c
 }
@@ -62,17 +61,12 @@ fn midpoint(lat1: f64, lon1: f64, lat2: f64, lon2: f64) -> (f64, f64) {
     let dlam = (lon2 - lon1) * to_rad;
     let bx = phi2.cos() * dlam.cos();
     let by = phi2.cos() * dlam.sin();
-    let phi_m = (phi1.sin() + phi2.sin()).atan2(
-        ((phi1.cos() + bx).powi(2) + by.powi(2)).sqrt(),
-    );
+    let phi_m = (phi1.sin() + phi2.sin()).atan2(((phi1.cos() + bx).powi(2) + by.powi(2)).sqrt());
     let lam_m = lam1 + by.atan2(phi1.cos() + bx);
     (phi_m * to_deg, lam_m * to_deg)
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let lat1 = arg_real(&args, 0, "geo_distance")?;
     let lon1 = arg_real(&args, 1, "geo_distance")?;
     let lat2 = arg_real(&args, 2, "geo_distance")?;
@@ -95,10 +89,30 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_HAVERSINE, name: b"haversine\0",     num_args: 4, deterministic: true },
-    ScalarSpec { func_id: FID_BEARING,   name: b"bearing\0",       num_args: 4, deterministic: true },
-    ScalarSpec { func_id: FID_WITHIN,    name: b"within_radius\0", num_args: 5, deterministic: true },
-    ScalarSpec { func_id: FID_MIDPOINT,  name: b"geo_midpoint\0",  num_args: 4, deterministic: true },
+    ScalarSpec {
+        func_id: FID_HAVERSINE,
+        name: b"haversine\0",
+        num_args: 4,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BEARING,
+        name: b"bearing\0",
+        num_args: 4,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_WITHIN,
+        name: b"within_radius\0",
+        num_args: 5,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MIDPOINT,
+        name: b"geo_midpoint\0",
+        num_args: 4,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

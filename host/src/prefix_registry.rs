@@ -305,11 +305,7 @@ pub fn record_function(
 /// Look up a pin for `(function_name, n_args)`. Returns the pinned
 /// expansion if a row exists, else None. Pins are operator-set via
 /// `.prefix prefer` (v1.1 surface).
-pub fn lookup_pin(
-    conn: &Connection,
-    function_name: &str,
-    n_args: i32,
-) -> Result<Option<String>> {
+pub fn lookup_pin(conn: &Connection, function_name: &str, n_args: i32) -> Result<Option<String>> {
     let mut stmt = conn
         .prepare(
             "SELECT expansion FROM __sqlink_prefix_pin \
@@ -430,11 +426,7 @@ mod tests {
 
     #[test]
     fn resolve_uses_manifest_when_both_present() {
-        let (p, e, s) = resolve_prefix_expansion(
-            "uuid",
-            Some("uuid"),
-            Some("urn:uuid"),
-        );
+        let (p, e, s) = resolve_prefix_expansion("uuid", Some("uuid"), Some("urn:uuid"));
         assert_eq!(p, "uuid");
         assert_eq!(e, "urn:uuid");
         assert!(!s);

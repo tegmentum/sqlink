@@ -7,8 +7,8 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_ENCODE:   u64 = 1;
-const FID_DECODE:   u64 = 2;
+const FID_ENCODE: u64 = 1;
+const FID_DECODE: u64 = 2;
 const FID_VALIDATE: u64 = 3;
 
 const PAIRS: &[(i64, &str)] = &[
@@ -96,18 +96,19 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_ENCODE => {
             let n = arg_int(&args, 0, "roman_encode")?;
-            Ok(encode(n).map(SqlValueOwned::Text).unwrap_or(SqlValueOwned::Null))
+            Ok(encode(n)
+                .map(SqlValueOwned::Text)
+                .unwrap_or(SqlValueOwned::Null))
         }
         FID_DECODE => {
             let t = arg_text(&args, 0, "roman_decode")?;
-            Ok(decode(&t).map(SqlValueOwned::Integer).unwrap_or(SqlValueOwned::Null))
+            Ok(decode(&t)
+                .map(SqlValueOwned::Integer)
+                .unwrap_or(SqlValueOwned::Null))
         }
         FID_VALIDATE => {
             let t = arg_text(&args, 0, "roman_validate")?;
@@ -118,9 +119,24 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_ENCODE,   name: b"roman_encode\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DECODE,   name: b"roman_decode\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VALIDATE, name: b"roman_validate\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_ENCODE,
+        name: b"roman_encode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECODE,
+        name: b"roman_decode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"roman_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

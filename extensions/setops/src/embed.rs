@@ -119,16 +119,15 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
                 Some(a) => a,
                 None => return Ok(SqlValueOwned::Null),
             };
-            let needle: Value = serde_json::from_str(&needle_s)
-                .unwrap_or(Value::String(needle_s.clone()));
+            let needle: Value =
+                serde_json::from_str(&needle_s).unwrap_or(Value::String(needle_s.clone()));
             Ok(SqlValueOwned::Integer(contains(&arr, &needle) as i64))
         }
         FID_SUBSET => {
             let a = arg_text(&args, 0, "set_subset")?;
             let b = arg_text(&args, 1, "set_subset")?;
             match (parse(&a), parse(&b)) {
-                (Some(a), Some(b)) =>
-                    Ok(SqlValueOwned::Integer(is_subset(&a, &b) as i64)),
+                (Some(a), Some(b)) => Ok(SqlValueOwned::Integer(is_subset(&a, &b) as i64)),
                 _ => Ok(SqlValueOwned::Null),
             }
         }
@@ -136,16 +135,21 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
             let a = arg_text(&args, 0, "set_disjoint")?;
             let b = arg_text(&args, 1, "set_disjoint")?;
             match (parse(&a), parse(&b)) {
-                (Some(a), Some(b)) =>
-                    Ok(SqlValueOwned::Integer(is_disjoint(&a, &b) as i64)),
+                (Some(a), Some(b)) => Ok(SqlValueOwned::Integer(is_disjoint(&a, &b) as i64)),
                 _ => Ok(SqlValueOwned::Null),
             }
         }
         _ => {
             let a = arg_text(&args, 0, "setops")?;
             let b = arg_text(&args, 1, "setops")?;
-            let av = match parse(&a) { Some(v) => v, None => return Ok(SqlValueOwned::Null) };
-            let bv = match parse(&b) { Some(v) => v, None => return Ok(SqlValueOwned::Null) };
+            let av = match parse(&a) {
+                Some(v) => v,
+                None => return Ok(SqlValueOwned::Null),
+            };
+            let bv = match parse(&b) {
+                Some(v) => v,
+                None => return Ok(SqlValueOwned::Null),
+            };
             let result = match func_id {
                 FID_UNION => union(av, bv),
                 FID_INTERSECTION => intersection(av, bv),
@@ -159,14 +163,54 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_UNION,          name: b"set_union\0",          num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_INTERSECTION,   name: b"set_intersection\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_DIFFERENCE,     name: b"set_difference\0",     num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_UNIQUE,         name: b"set_unique\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CONTAINS,       name: b"set_contains\0",       num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_SUBSET,         name: b"set_subset\0",         num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_DISJOINT,       name: b"set_disjoint\0",       num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_SYM_DIFFERENCE, name: b"set_sym_difference\0", num_args: 2, deterministic: true },
+    ScalarSpec {
+        func_id: FID_UNION,
+        name: b"set_union\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_INTERSECTION,
+        name: b"set_intersection\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DIFFERENCE,
+        name: b"set_difference\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_UNIQUE,
+        name: b"set_unique\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CONTAINS,
+        name: b"set_contains\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SUBSET,
+        name: b"set_subset\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DISJOINT,
+        name: b"set_disjoint\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SYM_DIFFERENCE,
+        name: b"set_sym_difference\0",
+        num_args: 2,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

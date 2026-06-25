@@ -83,8 +83,11 @@ fn brand(num: &str) -> Option<&'static str> {
     }
     // Maestro: 50, 56-69 (minus other brand prefixes), 12-19 digits
     if matches!(d.len(), 12..=19) {
-        if d.starts_with("50") || d.starts_with("56") || d.starts_with("57") ||
-           d.starts_with("58") || d.starts_with("67")
+        if d.starts_with("50")
+            || d.starts_with("56")
+            || d.starts_with("57")
+            || d.starts_with("58")
+            || d.starts_with("67")
         {
             return Some("maestro");
         }
@@ -106,7 +109,11 @@ fn luhn(digits: &str) -> bool {
         };
         let v = if alt {
             let x = d * 2;
-            if x > 9 { x - 9 } else { x }
+            if x > 9 {
+                x - 9
+            } else {
+                x
+            }
         } else {
             d
         };
@@ -137,10 +144,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "cc")?;
     let d = digits_only(&raw);
 
@@ -176,12 +180,42 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_TYPE,      name: b"cc_type\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VALIDATE,  name: b"cc_validate\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MASK,      name: b"cc_mask\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_LAST4,     name: b"cc_last4\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_BIN,       name: b"cc_bin\0",       num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NORMALIZE, name: b"cc_normalize\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_TYPE,
+        name: b"cc_type\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"cc_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MASK,
+        name: b"cc_mask\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LAST4,
+        name: b"cc_last4\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BIN,
+        name: b"cc_bin\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NORMALIZE,
+        name: b"cc_normalize\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

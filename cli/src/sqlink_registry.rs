@@ -97,7 +97,10 @@ pub fn lookup(name: &str) -> Option<ResolvedRow> {
         SqlValue::Text(s) => s,
         _ => return None,
     };
-    Some(ResolvedRow { name, artifact_digest: digest })
+    Some(ResolvedRow {
+        name,
+        artifact_digest: digest,
+    })
 }
 
 pub fn fetch_artifact(digest: &str) -> Option<Vec<u8>> {
@@ -117,14 +120,29 @@ pub fn resolver_list() -> Vec<ResolverRow> {
     let Ok(result) = spi::execute(
         "SELECT priority, kind, uri FROM sqlink_cas_resolver ORDER BY priority",
         &[],
-    ) else { return Vec::new() };
+    ) else {
+        return Vec::new();
+    };
     let mut out = Vec::new();
     for row in result.rows {
         let mut it = row.into_iter();
-        let priority = match it.next() { Some(SqlValue::Integer(i)) => i, _ => 0 };
-        let kind = match it.next() { Some(SqlValue::Text(t)) => t, _ => String::new() };
-        let uri = match it.next() { Some(SqlValue::Text(t)) => t, _ => String::new() };
-        out.push(ResolverRow { priority, kind, uri });
+        let priority = match it.next() {
+            Some(SqlValue::Integer(i)) => i,
+            _ => 0,
+        };
+        let kind = match it.next() {
+            Some(SqlValue::Text(t)) => t,
+            _ => String::new(),
+        };
+        let uri = match it.next() {
+            Some(SqlValue::Text(t)) => t,
+            _ => String::new(),
+        };
+        out.push(ResolverRow {
+            priority,
+            kind,
+            uri,
+        });
     }
     out
 }

@@ -112,7 +112,9 @@ mod wasm_export {
         }
         let pad_n = w - s.chars().count();
         let mut out = String::with_capacity(s.len() + pad_n);
-        for _ in 0..pad_n { out.push(fillc); }
+        for _ in 0..pad_n {
+            out.push(fillc);
+        }
         out.push_str(s);
         out
     }

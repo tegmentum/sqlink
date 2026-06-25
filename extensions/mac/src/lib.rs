@@ -47,10 +47,7 @@ mod wasm_export {
     ///   bare hex         AABBCC112233
     /// Case-insensitive. Returns None on any other shape.
     fn parse_mac(s: &str) -> Option<[u8; 6]> {
-        let hex: String = s
-            .chars()
-            .filter(|c| c.is_ascii_hexdigit())
-            .collect();
+        let hex: String = s.chars().filter(|c| c.is_ascii_hexdigit()).collect();
         if hex.len() != 12 {
             return None;
         }
@@ -109,9 +106,7 @@ mod wasm_export {
 
             match func_id {
                 FID_NIC => Ok(parsed
-                    .map(|b| SqlValue::Text(alloc::format!(
-                        "{:02X}{:02X}{:02X}", b[3], b[4], b[5]
-                    )))
+                    .map(|b| SqlValue::Text(alloc::format!("{:02X}{:02X}{:02X}", b[3], b[4], b[5])))
                     .unwrap_or(SqlValue::Null)),
                 FID_IS_MULTICAST => Ok(parsed
                     .map(|b| SqlValue::Integer((b[0] & 0x01) as i64))

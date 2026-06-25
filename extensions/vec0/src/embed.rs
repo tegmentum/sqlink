@@ -18,8 +18,8 @@ use core::ffi::c_int;
 use std::collections::HashMap;
 
 use sqlite_embed::{
-    exec_batch, exec_query, register_scalars_with_db, register_vtabs, BestIndexInfo,
-    CallFnWithDb, ScalarSpec, SqlValueOwned, VtabSpec,
+    exec_batch, exec_query, register_scalars_with_db, register_vtabs, BestIndexInfo, CallFnWithDb,
+    ScalarSpec, SqlValueOwned, VtabSpec,
 };
 
 use crate::kernels;
@@ -131,7 +131,9 @@ fn strip_quotes(s: &str) -> &str {
         .strip_prefix('\'')
         .and_then(|s| s.strip_suffix('\''))
         .unwrap_or(s);
-    s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s)
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(s)
 }
 
 fn parse_args(table_name: &str, args: &[&str]) -> Result<Instance, String> {
@@ -159,29 +161,19 @@ fn parse_args(table_name: &str, args: &[&str]) -> Result<Instance, String> {
             "metric" => metric = Metric::parse(v)?,
             "index" => index = v.to_ascii_lowercase(),
             "n_partitions" => {
-                n_partitions = Some(
-                    v.parse()
-                        .map_err(|e| format!("vec0: n_partitions: {e}"))?,
-                )
+                n_partitions = Some(v.parse().map_err(|e| format!("vec0: n_partitions: {e}"))?)
             }
-            "n_probes" => {
-                n_probes =
-                    Some(v.parse().map_err(|e| format!("vec0: n_probes: {e}"))?)
-            }
-            "max_iter" => {
-                max_iter = v.parse().map_err(|e| format!("vec0: max_iter: {e}"))?
-            }
+            "n_probes" => n_probes = Some(v.parse().map_err(|e| format!("vec0: n_probes: {e}"))?),
+            "max_iter" => max_iter = v.parse().map_err(|e| format!("vec0: max_iter: {e}"))?,
             "m" => m = v.parse().map_err(|e| format!("vec0: m: {e}"))?,
             "ef_construction" => {
-                ef_construction =
-                    v.parse().map_err(|e| format!("vec0: ef_construction: {e}"))?
+                ef_construction = v
+                    .parse()
+                    .map_err(|e| format!("vec0: ef_construction: {e}"))?
             }
-            "ef_search" => {
-                ef_search = v.parse().map_err(|e| format!("vec0: ef_search: {e}"))?
-            }
+            "ef_search" => ef_search = v.parse().map_err(|e| format!("vec0: ef_search: {e}"))?,
             "d_signature" => {
-                d_signature =
-                    v.parse().map_err(|e| format!("vec0: d_signature: {e}"))?
+                d_signature = v.parse().map_err(|e| format!("vec0: d_signature: {e}"))?
             }
             other => return Err(format!("vec0: unknown arg {other:?}")),
         }
@@ -321,8 +313,7 @@ unsafe fn source_fingerprint(
         rid = inst.rowid_column,
         src = inst.source,
     );
-    let rows = exec_query(db, &sql, &[])
-        .map_err(|e| format!("vec0: fingerprint: {e}"))?;
+    let rows = exec_query(db, &sql, &[]).map_err(|e| format!("vec0: fingerprint: {e}"))?;
     let Some(row) = rows.first() else {
         return Ok((0, 0));
     };
@@ -337,10 +328,7 @@ unsafe fn source_fingerprint(
     Ok((count, max))
 }
 
-unsafe fn drop_persisted(
-    db: *mut libsqlite3_sys::sqlite3,
-    table_name: &str,
-) -> Result<(), String> {
+unsafe fn drop_persisted(db: *mut libsqlite3_sys::sqlite3, table_name: &str) -> Result<(), String> {
     ensure_shadow_schema(db)?;
     exec_query(
         db,
@@ -370,12 +358,15 @@ unsafe fn scan_vectors(
         emb = inst.embedding_column,
         src = inst.source,
     );
-    let rows = exec_query(db, &sql, &[])
-        .map_err(|e| format!("vec0: scan source: {e}"))?;
+    let rows = exec_query(db, &sql, &[]).map_err(|e| format!("vec0: scan source: {e}"))?;
     let mut out: Vec<(i64, Vec<f32>)> = Vec::with_capacity(rows.len());
     for row in &rows {
-        let Some(SqlValueOwned::Integer(rid)) = row.first() else { continue };
-        let Some(SqlValueOwned::Blob(emb)) = row.get(1) else { continue };
+        let Some(SqlValueOwned::Integer(rid)) = row.first() else {
+            continue;
+        };
+        let Some(SqlValueOwned::Blob(emb)) = row.get(1) else {
+            continue;
+        };
         if let Ok(v) = kernels::from_blob(emb) {
             out.push((*rid, v));
         }
@@ -394,7 +385,10 @@ unsafe fn brute_force_topk(
     for (rid, v) in &vectors {
         if let Some(d) = inst.metric.distance(query, v) {
             if !d.is_nan() {
-                scored.push(ScoredRow { rowid: *rid, distance: d });
+                scored.push(ScoredRow {
+                    rowid: *rid,
+                    distance: d,
+                });
             }
         }
     }
@@ -417,13 +411,12 @@ where
         rid = inst.rowid_column,
         src = inst.source,
     );
-    let probe = exec_query(db, &probe_sql, &[])
-        .map_err(|e| format!("vec0: poll source: {e}"))?;
-    let Some(row) = probe.first() else { return Ok(()); };
+    let probe = exec_query(db, &probe_sql, &[]).map_err(|e| format!("vec0: poll source: {e}"))?;
+    let Some(row) = probe.first() else {
+        return Ok(());
+    };
     let (cur_count, cur_max) = match (row.first(), row.get(1)) {
-        (Some(SqlValueOwned::Integer(c)), Some(SqlValueOwned::Integer(m))) => {
-            (*c as usize, *m)
-        }
+        (Some(SqlValueOwned::Integer(c)), Some(SqlValueOwned::Integer(m))) => (*c as usize, *m),
         _ => return Ok(()),
     };
     if cur_count == last_count && cur_max == last_max {
@@ -438,8 +431,12 @@ where
     let new_rows = exec_query(db, &fetch_sql, &[SqlValueOwned::Integer(last_max)])
         .map_err(|e| format!("vec0: fetch new rows: {e}"))?;
     for row in &new_rows {
-        let Some(SqlValueOwned::Integer(rid)) = row.first() else { continue };
-        let Some(SqlValueOwned::Blob(emb)) = row.get(1) else { continue };
+        let Some(SqlValueOwned::Integer(rid)) = row.first() else {
+            continue;
+        };
+        let Some(SqlValueOwned::Blob(emb)) = row.get(1) else {
+            continue;
+        };
         if let Ok(v) = kernels::from_blob(emb) {
             absorb(*rid, v);
         }
@@ -447,21 +444,20 @@ where
     Ok(())
 }
 
-unsafe fn ivf_topk(
-    vtab: &Vec0Vtab,
-    query: &[f32],
-    k: usize,
-) -> Result<Vec<ScoredRow>, String> {
-    let Backend::Ivf { n_partitions, n_probes, max_iter } = vtab.inst.backend else {
+unsafe fn ivf_topk(vtab: &Vec0Vtab, query: &[f32], k: usize) -> Result<Vec<ScoredRow>, String> {
+    let Backend::Ivf {
+        n_partitions,
+        n_probes,
+        max_iter,
+    } = vtab.inst.backend
+    else {
         return Err("vec0: ivf_topk called on non-IVF backend".to_string());
     };
     let db = vtab.db;
     let inst = &vtab.inst;
     if vtab.ivf_cache.borrow().is_none() {
         let (cur_count, cur_max) = source_fingerprint(db, inst)?;
-        if let Some(blob) =
-            load_persisted(db, &inst.table_name, "ivf", cur_count, cur_max)?
-        {
+        if let Some(blob) = load_persisted(db, &inst.table_name, "ivf", cur_count, cur_max)? {
             if let Ok(idx) = postcard::from_bytes::<crate::ivf::Index>(&blob) {
                 *vtab.ivf_cache.borrow_mut() = Some(idx);
             }
@@ -521,7 +517,10 @@ unsafe fn ivf_topk(
             }
             if let Some(d) = inst.metric.distance(query, v) {
                 if !d.is_nan() {
-                    scored.push(ScoredRow { rowid: *rid, distance: d });
+                    scored.push(ScoredRow {
+                        rowid: *rid,
+                        distance: d,
+                    });
                 }
             }
         }
@@ -530,21 +529,20 @@ unsafe fn ivf_topk(
     Ok(scored)
 }
 
-unsafe fn hnsw_topk(
-    vtab: &Vec0Vtab,
-    query: &[f32],
-    k: usize,
-) -> Result<Vec<ScoredRow>, String> {
-    let Backend::Hnsw { m, ef_construction, ef_search } = vtab.inst.backend else {
+unsafe fn hnsw_topk(vtab: &Vec0Vtab, query: &[f32], k: usize) -> Result<Vec<ScoredRow>, String> {
+    let Backend::Hnsw {
+        m,
+        ef_construction,
+        ef_search,
+    } = vtab.inst.backend
+    else {
         return Err("vec0: hnsw_topk called on non-HNSW backend".to_string());
     };
     let db = vtab.db;
     let inst = &vtab.inst;
     if vtab.hnsw_cache.borrow().is_none() {
         let (cur_count, cur_max) = source_fingerprint(db, inst)?;
-        if let Some(blob) =
-            load_persisted(db, &inst.table_name, "hnsw", cur_count, cur_max)?
-        {
+        if let Some(blob) = load_persisted(db, &inst.table_name, "hnsw", cur_count, cur_max)? {
             if let Ok(idx) = postcard::from_bytes::<crate::hnsw::Index>(&blob) {
                 *vtab.hnsw_cache.borrow_mut() = Some(idx);
             }
@@ -588,11 +586,16 @@ unsafe fn hnsw_topk(
     }
     let mut scored: Vec<ScoredRow> = Vec::with_capacity(candidate_rowids.len());
     for rid in candidate_rowids {
-        let Some(&i) = rid_to_idx.get(&rid) else { continue };
+        let Some(&i) = rid_to_idx.get(&rid) else {
+            continue;
+        };
         let v = &idx.vectors[i];
         if let Some(d) = inst.metric.distance(query, v) {
             if !d.is_nan() {
-                scored.push(ScoredRow { rowid: rid, distance: d });
+                scored.push(ScoredRow {
+                    rowid: rid,
+                    distance: d,
+                });
             }
         }
     }
@@ -600,21 +603,20 @@ unsafe fn hnsw_topk(
     Ok(scored)
 }
 
-unsafe fn hnsw8_topk(
-    vtab: &Vec0Vtab,
-    query: &[f32],
-    k: usize,
-) -> Result<Vec<ScoredRow>, String> {
-    let Backend::Hnsw8 { m, ef_construction, ef_search } = vtab.inst.backend else {
+unsafe fn hnsw8_topk(vtab: &Vec0Vtab, query: &[f32], k: usize) -> Result<Vec<ScoredRow>, String> {
+    let Backend::Hnsw8 {
+        m,
+        ef_construction,
+        ef_search,
+    } = vtab.inst.backend
+    else {
         return Err("vec0: hnsw8_topk called on non-Hnsw8 backend".to_string());
     };
     let db = vtab.db;
     let inst = &vtab.inst;
     if vtab.hnsw8_cache.borrow().is_none() {
         let (cur_count, cur_max) = source_fingerprint(db, inst)?;
-        if let Some(blob) =
-            load_persisted(db, &inst.table_name, "hnsw8", cur_count, cur_max)?
-        {
+        if let Some(blob) = load_persisted(db, &inst.table_name, "hnsw8", cur_count, cur_max)? {
             if let Ok(idx) = postcard::from_bytes::<crate::hnsw8::Index>(&blob) {
                 *vtab.hnsw8_cache.borrow_mut() = Some(idx);
             }
@@ -622,8 +624,7 @@ unsafe fn hnsw8_topk(
     }
     if vtab.hnsw8_cache.borrow().is_none() {
         let f32_vectors = scan_vectors(db, inst)?;
-        let just_f32: Vec<Vec<f32>> =
-            f32_vectors.iter().map(|(_, v)| v.clone()).collect();
+        let just_f32: Vec<Vec<f32>> = f32_vectors.iter().map(|(_, v)| v.clone()).collect();
         let scale = crate::hnsw8::compute_scale(&just_f32);
         let quantized: Vec<(i64, Vec<i8>)> = f32_vectors
             .into_iter()
@@ -641,7 +642,11 @@ unsafe fn hnsw8_topk(
     let (last_count, last_max, scale) = {
         let cache = vtab.hnsw8_cache.borrow();
         let idx = cache.as_ref().unwrap();
-        (idx.last_indexed_count, idx.last_indexed_max_rowid, idx.global_scale)
+        (
+            idx.last_indexed_count,
+            idx.last_indexed_max_rowid,
+            idx.global_scale,
+        )
     };
     let mut inserts: Vec<(i64, Vec<i8>)> = Vec::new();
     poll_inserts_generic(db, inst, last_count, last_max, |rid, v| {
@@ -667,7 +672,9 @@ unsafe fn hnsw8_topk(
     let inv_scale_sq = 1.0 / ((idx.global_scale as f64) * (idx.global_scale as f64));
     let mut scored: Vec<ScoredRow> = Vec::with_capacity(candidate_rowids.len());
     for rid in candidate_rowids {
-        let Some(&i) = rid_to_idx.get(&rid) else { continue };
+        let Some(&i) = rid_to_idx.get(&rid) else {
+            continue;
+        };
         let v = &idx.vectors[i];
         let mut s: i64 = 0;
         for j in 0..q_i8.len().min(v.len()) {
@@ -675,27 +682,28 @@ unsafe fn hnsw8_topk(
             s += (d as i64) * (d as i64);
         }
         let d = (s as f64) * inv_scale_sq;
-        scored.push(ScoredRow { rowid: rid, distance: d.sqrt() });
+        scored.push(ScoredRow {
+            rowid: rid,
+            distance: d.sqrt(),
+        });
     }
     sort_truncate(&mut scored, k);
     Ok(scored)
 }
 
-unsafe fn lsh_topk(
-    vtab: &Vec0Vtab,
-    query: &[f32],
-    k: usize,
-) -> Result<Vec<ScoredRow>, String> {
-    let Backend::Lsh { d_signature, n_probes } = vtab.inst.backend else {
+unsafe fn lsh_topk(vtab: &Vec0Vtab, query: &[f32], k: usize) -> Result<Vec<ScoredRow>, String> {
+    let Backend::Lsh {
+        d_signature,
+        n_probes,
+    } = vtab.inst.backend
+    else {
         return Err("vec0: lsh_topk called on non-LSH backend".to_string());
     };
     let db = vtab.db;
     let inst = &vtab.inst;
     if vtab.lsh_cache.borrow().is_none() {
         let (cur_count, cur_max) = source_fingerprint(db, inst)?;
-        if let Some(blob) =
-            load_persisted(db, &inst.table_name, "lsh", cur_count, cur_max)?
-        {
+        if let Some(blob) = load_persisted(db, &inst.table_name, "lsh", cur_count, cur_max)? {
             if let Ok(idx) = postcard::from_bytes::<crate::lsh::Index>(&blob) {
                 *vtab.lsh_cache.borrow_mut() = Some(idx);
             }
@@ -744,7 +752,10 @@ unsafe fn lsh_topk(
     for (rid, v) in candidates {
         if let Some(d) = inst.metric.distance(query, &v) {
             if !d.is_nan() {
-                scored.push(ScoredRow { rowid: rid, distance: d });
+                scored.push(ScoredRow {
+                    rowid: rid,
+                    distance: d,
+                });
             }
         }
     }
@@ -787,10 +798,7 @@ unsafe fn vec0_destroy_vtab(state: *mut ()) {
     drop(Box::from_raw(v));
 }
 
-unsafe fn vec0_best_index(
-    _state: *mut (),
-    info: &mut BestIndexInfo,
-) -> Result<(), String> {
+unsafe fn vec0_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result<(), String> {
     // Packed idx_num: low 8 bits = embedding argv slot, bits
     // 8..16 = k argv slot. 0 means "not bound; defaults apply".
     let mut argv_idx: i32 = 0;
@@ -821,10 +829,7 @@ unsafe fn vec0_best_index(
     Ok(())
 }
 
-unsafe fn vec0_make_cursor(
-    vtab_state: *mut (),
-    _db: *mut libsqlite3_sys::sqlite3,
-) -> *mut () {
+unsafe fn vec0_make_cursor(vtab_state: *mut (), _db: *mut libsqlite3_sys::sqlite3) -> *mut () {
     Box::into_raw(Box::new(Vec0Cursor {
         vtab: vtab_state as *const Vec0Vtab,
         rows: Vec::new(),
@@ -865,7 +870,9 @@ unsafe fn vec0_filter(
     } else {
         10
     };
-    let Some(qb) = query_blob else { return Ok(()); };
+    let Some(qb) = query_blob else {
+        return Ok(());
+    };
     let query = kernels::from_blob(qb).map_err(|e| format!("vec0: query vector: {e}"))?;
     let vtab = &*c.vtab;
     let scored = match vtab.inst.backend {
@@ -890,10 +897,7 @@ unsafe fn vec0_eof(state: *mut ()) -> bool {
     c.idx >= c.rows.len()
 }
 
-unsafe fn vec0_column(
-    state: *mut (),
-    col: i32,
-) -> Result<SqlValueOwned, String> {
+unsafe fn vec0_column(state: *mut (), col: i32) -> Result<SqlValueOwned, String> {
     let c = &*(state as *const Vec0Cursor);
     let Some(row) = c.rows.get(c.idx) else {
         return Err("vec0: row past EOF".to_string());
@@ -966,7 +970,9 @@ fn call_scalar_with_db(
             // session rebuilds rather than re-hydrating the stale
             // snapshot. Errors swallowed (read-only db); the cache
             // drop is the load-bearing half.
-            unsafe { let _ = drop_persisted(db, name); }
+            unsafe {
+                let _ = drop_persisted(db, name);
+            }
             Ok(SqlValueOwned::Integer(hit as i64))
         }
         FID_VEC0_DELETE => {
@@ -998,7 +1004,9 @@ fn call_scalar_with_db(
                 idx.tombstones.insert(*rowid);
                 hit = true;
             }
-            unsafe { let _ = drop_persisted(db, name); }
+            unsafe {
+                let _ = drop_persisted(db, name);
+            }
             Ok(SqlValueOwned::Integer(hit as i64))
         }
         other => Err(format!("vec0: unknown func id {other}")),
@@ -1028,4 +1036,3 @@ pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {
     let f: CallFnWithDb = call_scalar_with_db;
     register_scalars_with_db(db, SCALARS, f)
 }
-

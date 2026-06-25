@@ -69,7 +69,12 @@ fn is_private(raw: &str) -> Option<bool> {
     if n.len() != 9 {
         return None;
     }
-    Some(n.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false))
+    Some(
+        n.chars()
+            .next()
+            .map(|c| c.is_ascii_alphabetic())
+            .unwrap_or(false),
+    )
 }
 
 fn to_isin(raw: &str) -> Option<String> {
@@ -95,7 +100,11 @@ fn to_isin(raw: &str) -> Option<String> {
         let d = ch.to_digit(10)?;
         let v = if alt {
             let x = d * 2;
-            if x > 9 { x - 9 } else { x }
+            if x > 9 {
+                x - 9
+            } else {
+                x
+            }
         } else {
             d
         };
@@ -113,10 +122,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "cusip")?;
     let n = normalize(&raw);
 
@@ -150,12 +156,42 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,    name: b"cusip_validate\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CHECK_DIGIT, name: b"cusip_check_digit\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ISSUER,      name: b"cusip_issuer\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ISSUE,       name: b"cusip_issue\0",       num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_IS_PRIVATE,  name: b"cusip_is_private\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TO_ISIN,     name: b"cusip_to_isin\0",     num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"cusip_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CHECK_DIGIT,
+        name: b"cusip_check_digit\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ISSUER,
+        name: b"cusip_issuer\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ISSUE,
+        name: b"cusip_issue\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_IS_PRIVATE,
+        name: b"cusip_is_private\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TO_ISIN,
+        name: b"cusip_to_isin\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

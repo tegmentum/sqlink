@@ -37,10 +37,7 @@ fn arg_text<'a>(v: &'a SqlValueOwned, name: &str) -> Result<&'a str, String> {
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     // NULL  NULL across the board.
     if args.iter().any(|v| matches!(v, SqlValueOwned::Null)) {
         return Ok(SqlValueOwned::Null);
@@ -67,16 +64,56 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_SHA1,    name: b"sha1\0",          num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SHA256,  name: b"sha256\0",        num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SHA512,  name: b"sha512\0",        num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MD5,     name: b"md5\0",           num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_SHA1,
+        name: b"sha1\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SHA256,
+        name: b"sha256\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SHA512,
+        name: b"sha512\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MD5,
+        name: b"md5\0",
+        num_args: 1,
+        deterministic: true,
+    },
     // hex / unhex shadow SQLite's built-ins; the embed registration
     // wins for the duration of the connection.
-    ScalarSpec { func_id: FID_HEX,     name: b"hex\0",           num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_UNHEX,   name: b"unhex\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_B64_ENC, name: b"base64_encode\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_B64_DEC, name: b"base64_decode\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_HEX,
+        name: b"hex\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_UNHEX,
+        name: b"unhex\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_B64_ENC,
+        name: b"base64_encode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_B64_DEC,
+        name: b"base64_decode\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

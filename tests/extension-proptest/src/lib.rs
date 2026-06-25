@@ -19,8 +19,8 @@ pub fn probe_raw(
     sql: impl Into<String>,
     grants: &[String],
 ) -> Result<String, String> {
-    let component: PathBuf = component_path(plugin)
-        .ok_or_else(|| format!("no .component.wasm for plugin {plugin}"))?;
+    let component: PathBuf =
+        component_path(plugin).ok_or_else(|| format!("no .component.wasm for plugin {plugin}"))?;
     let probe = Probe {
         sql: sql.into(),
         expects: None,

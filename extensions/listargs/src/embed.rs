@@ -10,11 +10,9 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::ffi::c_int;
-use sqlite_embed::{
-    register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec,
-};
+use sqlite_embed::{register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec};
 
-const COL_IDX:   i32 = 0;
+const COL_IDX: i32 = 0;
 const COL_VALUE: i32 = 1;
 const COL_INPUT: i32 = 2;
 

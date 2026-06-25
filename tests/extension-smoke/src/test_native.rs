@@ -51,9 +51,7 @@ fn run_kind_native(plugin: &str, kind: &'static str, probe: Option<&Probe>) {
     let component: PathBuf = match component_path(plugin) {
         Some(p) => p,
         None => {
-            eprintln!(
-                "native smoke {plugin}/{kind}: SKIP (no .component.wasm built)"
-            );
+            eprintln!("native smoke {plugin}/{kind}: SKIP (no .component.wasm built)");
             return;
         }
     };
@@ -62,7 +60,12 @@ fn run_kind_native(plugin: &str, kind: &'static str, probe: Option<&Probe>) {
         ProbeOutcome::Pass => {
             eprintln!("native smoke {plugin}/{kind}: PASS");
         }
-        ProbeOutcome::OutputMismatch { got, want, stderr, stdout } => {
+        ProbeOutcome::OutputMismatch {
+            got,
+            want,
+            stderr,
+            stdout,
+        } => {
             panic!(
                 "native smoke {plugin}/{kind} OUTPUT MISMATCH\n  sql:  {}\n  want: {}\n  got:  {}\n--- raw stdout ---\n{}\n--- raw stderr ---\n{}",
                 probe.sql, want, got, stdout, stderr

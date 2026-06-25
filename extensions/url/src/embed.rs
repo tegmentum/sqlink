@@ -30,10 +30,7 @@ fn parse_or_null(s: &str) -> Option<Url> {
     Url::parse(s).ok()
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     // First arg is always the URL; parse once.
     let url_str = arg_text(&args, 0, "url")?;
     let url = parse_or_null(&url_str);
@@ -87,15 +84,60 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_SCHEME,    name: b"url_scheme\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_HOST,      name: b"url_host\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_PORT,      name: b"url_port\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_PATH,      name: b"url_path\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_QUERY,     name: b"url_query\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_FRAGMENT,  name: b"url_fragment\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NORMALIZE, name: b"url_normalize\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_JOIN,      name: b"url_join\0",      num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_PARAM,     name: b"url_param\0",     num_args: 2, deterministic: true },
+    ScalarSpec {
+        func_id: FID_SCHEME,
+        name: b"url_scheme\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_HOST,
+        name: b"url_host\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PORT,
+        name: b"url_port\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PATH,
+        name: b"url_path\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_QUERY,
+        name: b"url_query\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FRAGMENT,
+        name: b"url_fragment\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NORMALIZE,
+        name: b"url_normalize\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JOIN,
+        name: b"url_join\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PARAM,
+        name: b"url_param\0",
+        num_args: 2,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

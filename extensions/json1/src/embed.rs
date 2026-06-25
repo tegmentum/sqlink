@@ -52,10 +52,7 @@ fn out_to_sql(o: Out) -> SqlValueOwned {
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let mapped: Vec<Arg> = args.iter().map(sql_to_arg).collect();
     let out = match func_id {
         FID_JSON => funcs::json(&mapped),
@@ -80,19 +77,84 @@ pub fn call_scalar(
 // matching the WIT manifest's `-1` convention. Names that collide
 // with sqlite's builtin json1 are intentional  see module docs.
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_JSON,              name: b"json\0",              num_args:  1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_VALID,        name: b"json_valid\0",        num_args:  1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_TYPE,         name: b"json_type\0",         num_args: -1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_QUOTE,        name: b"json_quote\0",        num_args:  1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_EXTRACT,      name: b"json_extract\0",      num_args: -1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_ARRAY,        name: b"json_array\0",        num_args: -1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_OBJECT,       name: b"json_object\0",       num_args: -1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_ARRAY_LENGTH, name: b"json_array_length\0", num_args: -1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_PATCH,        name: b"json_patch\0",        num_args:  2, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_REMOVE,       name: b"json_remove\0",       num_args: -1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_SET,          name: b"json_set\0",          num_args: -1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_REPLACE,      name: b"json_replace\0",      num_args: -1, deterministic: true },
-    ScalarSpec { func_id: FID_JSON_INSERT,       name: b"json_insert\0",       num_args: -1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_JSON,
+        name: b"json\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_VALID,
+        name: b"json_valid\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_TYPE,
+        name: b"json_type\0",
+        num_args: -1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_QUOTE,
+        name: b"json_quote\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_EXTRACT,
+        name: b"json_extract\0",
+        num_args: -1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_ARRAY,
+        name: b"json_array\0",
+        num_args: -1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_OBJECT,
+        name: b"json_object\0",
+        num_args: -1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_ARRAY_LENGTH,
+        name: b"json_array_length\0",
+        num_args: -1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_PATCH,
+        name: b"json_patch\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_REMOVE,
+        name: b"json_remove\0",
+        num_args: -1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_SET,
+        name: b"json_set\0",
+        num_args: -1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_REPLACE,
+        name: b"json_replace\0",
+        num_args: -1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JSON_INSERT,
+        name: b"json_insert\0",
+        num_args: -1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

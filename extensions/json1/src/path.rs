@@ -127,10 +127,7 @@ pub fn resolve<'a>(root: &'a Value, segs: &[Segment]) -> Option<&'a Value> {
 
 /// Mutable variant. Returns the slot at the path or None on miss.
 #[allow(dead_code)]
-pub fn resolve_mut<'a>(
-    root: &'a mut Value,
-    segs: &[Segment],
-) -> Option<&'a mut Value> {
+pub fn resolve_mut<'a>(root: &'a mut Value, segs: &[Segment]) -> Option<&'a mut Value> {
     let mut cur = root;
     for seg in segs {
         cur = match seg {

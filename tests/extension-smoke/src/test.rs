@@ -56,7 +56,12 @@ fn run_kind(plugin: &str, kind: &'static str, probe: Option<&Probe>) {
         ProbeOutcome::Pass => {
             eprintln!("smoke {plugin}/{kind}: PASS");
         }
-        ProbeOutcome::OutputMismatch { got, want, stderr, stdout } => {
+        ProbeOutcome::OutputMismatch {
+            got,
+            want,
+            stderr,
+            stdout,
+        } => {
             panic!(
                 "smoke {plugin}/{kind} OUTPUT MISMATCH\n  sql:  {}\n  want: {}\n  got:  {}\n--- raw stdout ---\n{}\n--- raw stderr ---\n{}",
                 probe.sql, want, got, stdout, stderr

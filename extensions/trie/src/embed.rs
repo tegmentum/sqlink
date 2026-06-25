@@ -9,12 +9,10 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::ffi::c_int;
+use sqlite_embed::{exec_query, register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec};
 use std::collections::HashMap;
-use sqlite_embed::{
-    exec_query, register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec,
-};
 
-const COL_WORD:   i32 = 0;
+const COL_WORD: i32 = 0;
 const COL_PREFIX: i32 = 1;
 
 const SQLITE_INDEX_CONSTRAINT_EQ: u8 = 2;
@@ -78,7 +76,9 @@ fn strip_quotes(s: &str) -> &str {
         .strip_prefix('\'')
         .and_then(|s| s.strip_suffix('\''))
         .unwrap_or(s);
-    s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s)
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(s)
 }
 
 unsafe fn tr_make_vtab(
@@ -97,15 +97,12 @@ unsafe fn tr_make_vtab(
         match k.trim() {
             "source" => source = Some(v.to_string()),
             "key_column" => key_column = Some(v.to_string()),
-            "case_insensitive" => {
-                case_insensitive = matches!(v, "1" | "true" | "yes")
-            }
+            "case_insensitive" => case_insensitive = matches!(v, "1" | "true" | "yes"),
             other => return Err(format!("trie: unknown arg {other:?}")),
         }
     }
     let source = source.ok_or_else(|| "trie: source= is required".to_string())?;
-    let key_column =
-        key_column.ok_or_else(|| "trie: key_column= is required".to_string())?;
+    let key_column = key_column.ok_or_else(|| "trie: key_column= is required".to_string())?;
     let v = Box::new(TrieVtab {
         db,
         source,
@@ -139,10 +136,7 @@ unsafe fn tr_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result<(),
     Ok(())
 }
 
-unsafe fn tr_make_cursor(
-    vtab_state: *mut (),
-    _db: *mut libsqlite3_sys::sqlite3,
-) -> *mut () {
+unsafe fn tr_make_cursor(vtab_state: *mut (), _db: *mut libsqlite3_sys::sqlite3) -> *mut () {
     Box::into_raw(Box::new(TrieCursor {
         vtab: vtab_state as *const TrieVtab,
         matches: Vec::new(),
@@ -163,8 +157,7 @@ unsafe fn ensure_built(vtab: &TrieVtab) -> Result<(), String> {
         key = vtab.key_column,
         src = vtab.source,
     );
-    let rows = exec_query(vtab.db, &sql, &[])
-        .map_err(|e| format!("trie: scan source: {e}"))?;
+    let rows = exec_query(vtab.db, &sql, &[]).map_err(|e| format!("trie: scan source: {e}"))?;
     let mut root = Box::new(TrieNode::new());
     for row in &rows {
         if let Some(SqlValueOwned::Text(word)) = row.first() {

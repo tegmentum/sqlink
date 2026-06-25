@@ -224,17 +224,12 @@ pub mod ivf {
         use alloc::vec::Vec;
         use serde::{Deserialize, Deserializer, Serialize, Serializer};
         use std::collections::HashSet;
-        pub fn serialize<S: Serializer>(
-            v: &HashSet<i64>,
-            s: S,
-        ) -> Result<S::Ok, S::Error> {
+        pub fn serialize<S: Serializer>(v: &HashSet<i64>, s: S) -> Result<S::Ok, S::Error> {
             let mut sorted: Vec<i64> = v.iter().copied().collect();
             sorted.sort();
             sorted.serialize(s)
         }
-        pub fn deserialize<'de, D: Deserializer<'de>>(
-            d: D,
-        ) -> Result<HashSet<i64>, D::Error> {
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<HashSet<i64>, D::Error> {
             let v: Vec<i64> = Vec::deserialize(d)?;
             Ok(v.into_iter().collect())
         }
@@ -255,11 +250,7 @@ pub mod ivf {
     /// xorshift PRNG keyed off the byte-content of the first
     /// vector, so identical inputs produce identical indexes.
     /// Stops when no assignments change or `max_iter` is reached.
-    pub fn kmeans(
-        points: &[Vec<f32>],
-        k: usize,
-        max_iter: usize,
-    ) -> (Vec<Vec<f32>>, Vec<usize>) {
+    pub fn kmeans(points: &[Vec<f32>], k: usize, max_iter: usize) -> (Vec<Vec<f32>>, Vec<usize>) {
         let n = points.len();
         if n == 0 {
             return (Vec::new(), Vec::new());
@@ -337,9 +328,7 @@ pub mod ivf {
             //    centroid  reseeding them is a refinement; for
             //    v1 we accept the slight skew if a centroid
             //    happens to win zero points.
-            let mut sums: Vec<Vec<f32>> = (0..k)
-                .map(|_| alloc::vec![0.0f32; dim])
-                .collect();
+            let mut sums: Vec<Vec<f32>> = (0..k).map(|_| alloc::vec![0.0f32; dim]).collect();
             let mut counts: Vec<usize> = alloc::vec![0; k];
             for (i, p) in points.iter().enumerate() {
                 let c_i = assignments[i];
@@ -397,8 +386,7 @@ pub mod ivf {
         let just_points: Vec<Vec<f32>> = vectors.iter().map(|(_, v)| v.clone()).collect();
         let (centroids, assignments) = kmeans(&just_points, n_partitions, max_iter);
         let k = centroids.len();
-        let mut partitions: Vec<Vec<(i64, Vec<f32>)>> =
-            (0..k).map(|_| Vec::new()).collect();
+        let mut partitions: Vec<Vec<(i64, Vec<f32>)>> = (0..k).map(|_| Vec::new()).collect();
         let count = vectors.len();
         let max_rowid = vectors.iter().map(|(r, _)| *r).max().unwrap_or(0);
         for (idx, (rid, v)) in vectors.into_iter().enumerate() {
@@ -450,9 +438,7 @@ pub mod ivf {
             .enumerate()
             .map(|(i, c)| (squared_l2(query, c), i))
             .collect();
-        scored.sort_by(|a, b| {
-            a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal)
-        });
+        scored.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(core::cmp::Ordering::Equal));
         scored
             .into_iter()
             .take(idx.n_probes)
@@ -492,9 +478,8 @@ pub mod ivf {
 
         #[test]
         fn build_then_probe_keeps_query_in_own_partition() {
-            let vectors: Vec<(i64, Vec<f32>)> = (0..20)
-                .map(|i| (i, alloc::vec![i as f32, 0.0]))
-                .collect();
+            let vectors: Vec<(i64, Vec<f32>)> =
+                (0..20).map(|i| (i, alloc::vec![i as f32, 0.0])).collect();
             let idx = build(vectors, 4, 1, 50);
             assert_eq!(idx.n_partitions(), 4);
             // Query near 0 should pick the partition containing
@@ -580,7 +565,7 @@ pub mod hnsw {
     #[derive(Serialize, Deserialize)]
     pub struct Index {
         pub m: usize,
-        pub m_max: usize, // hard cap per neighbor list at layer > 0
+        pub m_max: usize,  // hard cap per neighbor list at layer > 0
         pub m_max0: usize, // hard cap per neighbor list at layer 0
         pub ef_construction: usize,
         pub ef_search: usize,
@@ -607,17 +592,12 @@ pub mod hnsw {
         use alloc::vec::Vec;
         use serde::{Deserialize, Deserializer, Serialize, Serializer};
         use std::collections::HashSet;
-        pub fn serialize<S: Serializer>(
-            v: &HashSet<i64>,
-            s: S,
-        ) -> Result<S::Ok, S::Error> {
+        pub fn serialize<S: Serializer>(v: &HashSet<i64>, s: S) -> Result<S::Ok, S::Error> {
             let mut sorted: Vec<i64> = v.iter().copied().collect();
             sorted.sort();
             sorted.serialize(s)
         }
-        pub fn deserialize<'de, D: Deserializer<'de>>(
-            d: D,
-        ) -> Result<HashSet<i64>, D::Error> {
+        pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<HashSet<i64>, D::Error> {
             let v: Vec<i64> = Vec::deserialize(d)?;
             Ok(v.into_iter().collect())
         }
@@ -637,11 +617,7 @@ pub mod hnsw {
         kernels::l2(a, b).unwrap_or(f64::INFINITY)
     }
 
-    pub fn new(
-        m: usize,
-        ef_construction: usize,
-        ef_search: usize,
-    ) -> Index {
+    pub fn new(m: usize, ef_construction: usize, ef_search: usize) -> Index {
         let m = m.max(2);
         Index {
             m,
@@ -703,7 +679,10 @@ pub mod hnsw {
         let mut visited: HashSet<u32> = HashSet::with_capacity(ef * 4);
         visited.insert(entry);
         let ep_d = dist(query, &idx.vectors[entry as usize]);
-        let ep = Scored { distance: ep_d, node: entry };
+        let ep = Scored {
+            distance: ep_d,
+            node: entry,
+        };
         // candidates: min-heap (next to expand). Use Reverse to
         // flip BinaryHeap's max-heap default.
         let mut candidates: BinaryHeap<Reverse<Scored>> = BinaryHeap::new();
@@ -731,7 +710,10 @@ pub mod hnsw {
                     continue;
                 }
                 let d = dist(query, &idx.vectors[n as usize]);
-                let s = Scored { distance: d, node: n };
+                let s = Scored {
+                    distance: d,
+                    node: n,
+                };
                 if results.len() < ef {
                     candidates.push(Reverse(s));
                     results.push(s);
@@ -813,7 +795,11 @@ pub mod hnsw {
         let mut cur_layer = target_top;
         loop {
             let candidates = search_layer(idx, &q, cur_ep, idx.ef_construction, cur_layer);
-            let m_cap = if cur_layer == 0 { idx.m_max0 } else { idx.m_max };
+            let m_cap = if cur_layer == 0 {
+                idx.m_max0
+            } else {
+                idx.m_max
+            };
             let selected = select_neighbors(&candidates, idx.m);
             new_neighbors[cur_layer] = selected.clone();
             for nb in &selected {
@@ -979,9 +965,8 @@ pub mod hnsw {
             // is close to it; rowid 9 at [9,0] is the best of a
             // bad lot. We insert a new row at [100,0] (exact
             // match for the query) and verify it surfaces.
-            let pts: Vec<(i64, Vec<f32>)> = (0..10)
-                .map(|i| (i, alloc::vec![i as f32, 0.0]))
-                .collect();
+            let pts: Vec<(i64, Vec<f32>)> =
+                (0..10).map(|i| (i, alloc::vec![i as f32, 0.0])).collect();
             let mut idx = build(pts, 8, 50, 50);
             assert_eq!(search(&idx, &[100.0, 0.0], 1), alloc::vec![9i64]);
             insert_one(&mut idx, 999, alloc::vec![100.0, 0.0]);
@@ -992,9 +977,8 @@ pub mod hnsw {
 
         #[test]
         fn tombstones_filter_out_results() {
-            let pts: Vec<(i64, Vec<f32>)> = (0..5)
-                .map(|i| (i, alloc::vec![i as f32, 0.0]))
-                .collect();
+            let pts: Vec<(i64, Vec<f32>)> =
+                (0..5).map(|i| (i, alloc::vec![i as f32, 0.0])).collect();
             let mut idx = build(pts, 8, 50, 50);
             assert_eq!(search(&idx, &[0.0, 0.0], 2), alloc::vec![0i64, 1]);
             idx.tombstones.insert(0);
@@ -1182,17 +1166,14 @@ pub mod hnsw8 {
         }
     }
 
-    fn search_layer(
-        idx: &Index,
-        query: &[i8],
-        entry: u32,
-        ef: usize,
-        layer: usize,
-    ) -> Vec<Scored> {
+    fn search_layer(idx: &Index, query: &[i8], entry: u32, ef: usize, layer: usize) -> Vec<Scored> {
         let mut visited: HashSet<u32> = HashSet::with_capacity(ef * 4);
         visited.insert(entry);
         let ep_d = dist(query, &idx.vectors[entry as usize]);
-        let ep = Scored { distance: ep_d, node: entry };
+        let ep = Scored {
+            distance: ep_d,
+            node: entry,
+        };
         let mut candidates: BinaryHeap<Reverse<Scored>> = BinaryHeap::new();
         candidates.push(Reverse(ep));
         let mut results: BinaryHeap<Scored> = BinaryHeap::new();
@@ -1212,7 +1193,10 @@ pub mod hnsw8 {
                     continue;
                 }
                 let d = dist(query, &idx.vectors[n as usize]);
-                let s = Scored { distance: d, node: n };
+                let s = Scored {
+                    distance: d,
+                    node: n,
+                };
                 if results.len() < ef {
                     candidates.push(Reverse(s));
                     results.push(s);
@@ -1270,7 +1254,11 @@ pub mod hnsw8 {
         let mut cur_layer = target_top;
         loop {
             let candidates = search_layer(idx, &q, cur_ep, idx.ef_construction, cur_layer);
-            let m_cap = if cur_layer == 0 { idx.m_max0 } else { idx.m_max };
+            let m_cap = if cur_layer == 0 {
+                idx.m_max0
+            } else {
+                idx.m_max
+            };
             let selected = select_neighbors(&candidates, idx.m);
             new_neighbors[cur_layer] = selected.clone();
             for nb in &selected {
@@ -1288,7 +1276,8 @@ pub mod hnsw8 {
                             .collect();
                         let mut sorted = scored;
                         sorted.sort();
-                        let kept: Vec<u32> = sorted.into_iter().take(m_cap).map(|s| s.node).collect();
+                        let kept: Vec<u32> =
+                            sorted.into_iter().take(m_cap).map(|s| s.node).collect();
                         idx.neighbors[*nb as usize][cur_layer] = kept;
                     }
                 }
@@ -1388,9 +1377,7 @@ pub mod hnsw8 {
 
         #[test]
         fn build_then_search() {
-            let f32_vecs: Vec<Vec<f32>> = (0..10)
-                .map(|i| alloc::vec![i as f32, 0.0])
-                .collect();
+            let f32_vecs: Vec<Vec<f32>> = (0..10).map(|i| alloc::vec![i as f32, 0.0]).collect();
             let scale = compute_scale(&f32_vecs);
             let qvecs: Vec<(i64, Vec<i8>)> = f32_vecs
                 .iter()
@@ -1549,11 +1536,7 @@ pub mod lsh {
         s.max(1)
     }
 
-    pub fn build(
-        vectors: Vec<(i64, Vec<f32>)>,
-        d_signature: usize,
-        n_probes: usize,
-    ) -> Index {
+    pub fn build(vectors: Vec<(i64, Vec<f32>)>, d_signature: usize, n_probes: usize) -> Index {
         let d_signature = d_signature.max(8);
         let n_probes = n_probes.max(1);
         let source_dim = vectors.first().map(|(_, v)| v.len()).unwrap_or(0);
@@ -1645,8 +1628,7 @@ pub mod lsh {
                 .map(|i| (i, alloc::vec![i as f32, 0.0, 0.0, 0.0]))
                 .collect();
             let idx = build(pts, 32, 5);
-            let planes =
-                hyperplanes(idx.hyperplane_seed, idx.d_signature, idx.source_dim);
+            let planes = hyperplanes(idx.hyperplane_seed, idx.d_signature, idx.source_dim);
             let query_sig = signature(&planes, &[100.0, 0.0, 0.0, 0.0]);
             let cand = search(&idx, &query_sig, 3);
             // Candidates non-empty; at least k entries with
@@ -1682,12 +1664,12 @@ mod wasm_export {
     use bindings::exports::sqlite::extension::metadata::{
         Guest as MetadataGuest, Manifest, ScalarFunctionSpec, VtabSpec,
     };
-    use bindings::sqlite::extension::types::FunctionFlags;
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::sqlite::extension::spi;
+    use bindings::sqlite::extension::types::FunctionFlags;
     use bindings::sqlite::extension::types::SqlValue;
 
     const VTAB_ID_VEC0: u64 = 1;
@@ -1745,10 +1727,7 @@ mod wasm_export {
         /// distance bucketing; full f32 kept for re-ranking
         /// candidates. ~32x memory reduction in the signature
         /// space; 5-15% recall hit typical.
-        Lsh {
-            d_signature: usize,
-            n_probes: usize,
-        },
+        Lsh { d_signature: usize, n_probes: usize },
     }
 
     #[derive(Debug, Clone, Copy)]
@@ -1879,18 +1858,13 @@ mod wasm_export {
                     let Some(SqlValue::Text(name)) = args.first() else {
                         return Err("vec0_refresh: TEXT table name required".to_string());
                     };
-                    let inst_id = NAME_TO_INSTANCE
-                        .with(|m| m.borrow().get(name).copied());
+                    let inst_id = NAME_TO_INSTANCE.with(|m| m.borrow().get(name).copied());
                     let mut hit = false;
                     if let Some(inst_id) = inst_id {
-                        hit |= IVF_CACHE
-                            .with(|m| m.borrow_mut().remove(&inst_id).is_some());
-                        hit |= HNSW_CACHE
-                            .with(|m| m.borrow_mut().remove(&inst_id).is_some());
-                        hit |= HNSW8_CACHE
-                            .with(|m| m.borrow_mut().remove(&inst_id).is_some());
-                        hit |= LSH_CACHE
-                            .with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                        hit |= IVF_CACHE.with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                        hit |= HNSW_CACHE.with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                        hit |= HNSW8_CACHE.with(|m| m.borrow_mut().remove(&inst_id).is_some());
+                        hit |= LSH_CACHE.with(|m| m.borrow_mut().remove(&inst_id).is_some());
                     }
                     // Best-effort: drop the persisted blob too
                     // so the next session rebuilds rather than
@@ -1911,8 +1885,7 @@ mod wasm_export {
                     let Some(SqlValue::Integer(rowid)) = args.get(1) else {
                         return Err("vec0_delete: integer rowid required".to_string());
                     };
-                    let inst_id = NAME_TO_INSTANCE
-                        .with(|m| m.borrow().get(name).copied());
+                    let inst_id = NAME_TO_INSTANCE.with(|m| m.borrow().get(name).copied());
                     let Some(inst_id) = inst_id else {
                         return Ok(SqlValue::Integer(0));
                     };
@@ -1981,31 +1954,23 @@ mod wasm_export {
                 "metric" => metric = Metric::parse(v)?,
                 "index" => index = v.to_ascii_lowercase(),
                 "n_partitions" => {
-                    n_partitions = Some(
-                        v.parse()
-                            .map_err(|e| format!("vec0: n_partitions: {e}"))?,
-                    )
+                    n_partitions = Some(v.parse().map_err(|e| format!("vec0: n_partitions: {e}"))?)
                 }
                 "n_probes" => {
-                    n_probes = Some(
-                        v.parse().map_err(|e| format!("vec0: n_probes: {e}"))?,
-                    )
+                    n_probes = Some(v.parse().map_err(|e| format!("vec0: n_probes: {e}"))?)
                 }
-                "max_iter" => {
-                    max_iter = v.parse().map_err(|e| format!("vec0: max_iter: {e}"))?
-                }
+                "max_iter" => max_iter = v.parse().map_err(|e| format!("vec0: max_iter: {e}"))?,
                 "m" => m = v.parse().map_err(|e| format!("vec0: m: {e}"))?,
                 "ef_construction" => {
-                    ef_construction =
-                        v.parse().map_err(|e| format!("vec0: ef_construction: {e}"))?
+                    ef_construction = v
+                        .parse()
+                        .map_err(|e| format!("vec0: ef_construction: {e}"))?
                 }
                 "ef_search" => {
                     ef_search = v.parse().map_err(|e| format!("vec0: ef_search: {e}"))?
                 }
                 "d_signature" => {
-                    d_signature = v
-                        .parse()
-                        .map_err(|e| format!("vec0: d_signature: {e}"))?
+                    d_signature = v.parse().map_err(|e| format!("vec0: d_signature: {e}"))?
                 }
                 other => return Err(format!("vec0: unknown arg {other:?}")),
             }
@@ -2166,8 +2131,7 @@ mod wasm_export {
             rid = inst.rowid_column,
             src = inst.source,
         );
-        let result = spi::execute(&sql, &[])
-            .map_err(|e| format!("vec0: fingerprint: {e:?}"))?;
+        let result = spi::execute(&sql, &[]).map_err(|e| format!("vec0: fingerprint: {e:?}"))?;
         let Some(row) = result.rows.first() else {
             return Ok((0, 0));
         };
@@ -2208,8 +2172,7 @@ mod wasm_export {
             emb = inst.embedding_column,
             src = inst.source,
         );
-        let result = spi::execute(&sql, &[])
-            .map_err(|e| format!("vec0: scan source: {e:?}"))?;
+        let result = spi::execute(&sql, &[]).map_err(|e| format!("vec0: scan source: {e:?}"))?;
         let mut scored: Vec<ScoredRow> = Vec::with_capacity(result.rows.len());
         for row in &result.rows {
             let Some(SqlValue::Integer(rid)) = row.first() else {
@@ -2260,9 +2223,7 @@ mod wasm_export {
             // bookkeeping after build.
             let (cur_count, cur_max) = source_fingerprint(inst)?;
             // Try a persisted load before paying the rebuild cost.
-            if let Some(blob) =
-                load_persisted(&inst.table_name, "ivf", cur_count, cur_max)?
-            {
+            if let Some(blob) = load_persisted(&inst.table_name, "ivf", cur_count, cur_max)? {
                 if let Ok(idx) = postcard::from_bytes::<super::ivf::Index>(&blob) {
                     IVF_CACHE.with(|m| m.borrow_mut().insert(inst_id, idx));
                 }
@@ -2276,10 +2237,9 @@ mod wasm_export {
                 emb = inst.embedding_column,
                 src = inst.source,
             );
-            let result = spi::execute(&sql, &[])
-                .map_err(|e| format!("vec0: scan source: {e:?}"))?;
-            let mut vectors: Vec<(i64, Vec<f32>)> =
-                Vec::with_capacity(result.rows.len());
+            let result =
+                spi::execute(&sql, &[]).map_err(|e| format!("vec0: scan source: {e:?}"))?;
+            let mut vectors: Vec<(i64, Vec<f32>)> = Vec::with_capacity(result.rows.len());
             for row in &result.rows {
                 let Some(SqlValue::Integer(rid)) = row.first() else {
                     continue;
@@ -2312,13 +2272,7 @@ mod wasm_export {
             let cur_count = idx.last_indexed_count;
             let cur_max = idx.last_indexed_max_rowid;
             if let Ok(encoded) = postcard::to_allocvec(&idx) {
-                let _ = persist_index(
-                    &inst.table_name,
-                    "ivf",
-                    cur_count,
-                    cur_max,
-                    encoded,
-                );
+                let _ = persist_index(&inst.table_name, "ivf", cur_count, cur_max, encoded);
             }
             IVF_CACHE.with(|m| m.borrow_mut().insert(inst_id, idx));
         }
@@ -2376,15 +2330,13 @@ mod wasm_export {
             rid = inst.rowid_column,
             src = inst.source,
         );
-        let probe = spi::execute(&probe_sql, &[])
-            .map_err(|e| format!("vec0: poll source: {e:?}"))?;
+        let probe =
+            spi::execute(&probe_sql, &[]).map_err(|e| format!("vec0: poll source: {e:?}"))?;
         let Some(row) = probe.rows.first() else {
             return Ok(());
         };
         let (cur_count, cur_max) = match (row.first(), row.get(1)) {
-            (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => {
-                (*c as usize, *m)
-            }
+            (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => (*c as usize, *m),
             _ => return Ok(()),
         };
         // Same count + same max means no new rows. Skip the
@@ -2406,8 +2358,12 @@ mod wasm_export {
                 return;
             };
             for row in &new_rows.rows {
-                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
-                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                let Some(SqlValue::Integer(rid)) = row.first() else {
+                    continue;
+                };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else {
+                    continue;
+                };
                 if let Ok(v) = kernels::from_blob(emb) {
                     super::ivf::insert_one(idx, *rid, v);
                 }
@@ -2439,9 +2395,7 @@ mod wasm_export {
         let needs_build = HNSW_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
         if needs_build {
             let (cur_count, cur_max) = source_fingerprint(inst)?;
-            if let Some(blob) =
-                load_persisted(&inst.table_name, "hnsw", cur_count, cur_max)?
-            {
+            if let Some(blob) = load_persisted(&inst.table_name, "hnsw", cur_count, cur_max)? {
                 if let Ok(idx) = postcard::from_bytes::<super::hnsw::Index>(&blob) {
                     HNSW_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
                 }
@@ -2455,12 +2409,16 @@ mod wasm_export {
                 emb = inst.embedding_column,
                 src = inst.source,
             );
-            let result = spi::execute(&sql, &[])
-                .map_err(|e| format!("vec0: scan source: {e:?}"))?;
+            let result =
+                spi::execute(&sql, &[]).map_err(|e| format!("vec0: scan source: {e:?}"))?;
             let mut vectors: Vec<(i64, Vec<f32>)> = Vec::with_capacity(result.rows.len());
             for row in &result.rows {
-                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
-                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                let Some(SqlValue::Integer(rid)) = row.first() else {
+                    continue;
+                };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else {
+                    continue;
+                };
                 if let Ok(v) = kernels::from_blob(emb) {
                     vectors.push((*rid, v));
                 }
@@ -2469,13 +2427,7 @@ mod wasm_export {
             let cur_count = idx.last_indexed_count;
             let cur_max = idx.last_indexed_max_rowid;
             if let Ok(encoded) = postcard::to_allocvec(&idx) {
-                let _ = persist_index(
-                    &inst.table_name,
-                    "hnsw",
-                    cur_count,
-                    cur_max,
-                    encoded,
-                );
+                let _ = persist_index(&inst.table_name, "hnsw", cur_count, cur_max, encoded);
             }
             HNSW_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
         }
@@ -2500,11 +2452,16 @@ mod wasm_export {
             }
             let mut scored: Vec<ScoredRow> = Vec::with_capacity(candidate_rowids.len());
             for rid in candidate_rowids {
-                let Some(&i) = rid_to_idx.get(&rid) else { continue };
+                let Some(&i) = rid_to_idx.get(&rid) else {
+                    continue;
+                };
                 let v = &idx.vectors[i];
                 if let Some(d) = inst.metric.distance(query, v) {
                     if !d.is_nan() {
-                        scored.push(ScoredRow { rowid: rid, distance: d });
+                        scored.push(ScoredRow {
+                            rowid: rid,
+                            distance: d,
+                        });
                     }
                 }
             }
@@ -2525,15 +2482,13 @@ mod wasm_export {
             rid = inst.rowid_column,
             src = inst.source,
         );
-        let probe = spi::execute(&probe_sql, &[])
-            .map_err(|e| format!("vec0: poll source: {e:?}"))?;
+        let probe =
+            spi::execute(&probe_sql, &[]).map_err(|e| format!("vec0: poll source: {e:?}"))?;
         let Some(row) = probe.rows.first() else {
             return Ok(());
         };
         let (cur_count, cur_max) = match (row.first(), row.get(1)) {
-            (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => {
-                (*c as usize, *m)
-            }
+            (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => (*c as usize, *m),
             _ => return Ok(()),
         };
         if cur_count == last_count && cur_max == last_max {
@@ -2549,10 +2504,16 @@ mod wasm_export {
             .map_err(|e| format!("vec0: fetch new rows: {e:?}"))?;
         HNSW_CACHE.with(|m| {
             let mut cache = m.borrow_mut();
-            let Some(idx) = cache.get_mut(&inst_id) else { return };
+            let Some(idx) = cache.get_mut(&inst_id) else {
+                return;
+            };
             for row in &new_rows.rows {
-                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
-                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                let Some(SqlValue::Integer(rid)) = row.first() else {
+                    continue;
+                };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else {
+                    continue;
+                };
                 if let Ok(v) = kernels::from_blob(emb) {
                     super::hnsw::insert_one(idx, *rid, v);
                 }
@@ -2589,9 +2550,7 @@ mod wasm_export {
         let needs_build = HNSW8_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
         if needs_build {
             let (cur_count, cur_max) = source_fingerprint(inst)?;
-            if let Some(blob) =
-                load_persisted(&inst.table_name, "hnsw8", cur_count, cur_max)?
-            {
+            if let Some(blob) = load_persisted(&inst.table_name, "hnsw8", cur_count, cur_max)? {
                 if let Ok(idx) = postcard::from_bytes::<super::hnsw8::Index>(&blob) {
                     HNSW8_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
                 }
@@ -2605,21 +2564,23 @@ mod wasm_export {
                 emb = inst.embedding_column,
                 src = inst.source,
             );
-            let result = spi::execute(&sql, &[])
-                .map_err(|e| format!("vec0: scan source: {e:?}"))?;
+            let result =
+                spi::execute(&sql, &[]).map_err(|e| format!("vec0: scan source: {e:?}"))?;
             // Pass 1: load all f32 vectors so we can compute the
             // global scale before quantizing.
-            let mut f32_vectors: Vec<(i64, Vec<f32>)> =
-                Vec::with_capacity(result.rows.len());
+            let mut f32_vectors: Vec<(i64, Vec<f32>)> = Vec::with_capacity(result.rows.len());
             for row in &result.rows {
-                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
-                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                let Some(SqlValue::Integer(rid)) = row.first() else {
+                    continue;
+                };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else {
+                    continue;
+                };
                 if let Ok(v) = kernels::from_blob(emb) {
                     f32_vectors.push((*rid, v));
                 }
             }
-            let just_f32: Vec<Vec<f32>> =
-                f32_vectors.iter().map(|(_, v)| v.clone()).collect();
+            let just_f32: Vec<Vec<f32>> = f32_vectors.iter().map(|(_, v)| v.clone()).collect();
             let scale = super::hnsw8::compute_scale(&just_f32);
             // Pass 2: quantize each vector.
             let quantized: Vec<(i64, Vec<i8>)> = f32_vectors
@@ -2658,7 +2619,9 @@ mod wasm_export {
             let inv_scale_sq = 1.0 / ((idx.global_scale as f64) * (idx.global_scale as f64));
             let mut scored: Vec<ScoredRow> = Vec::with_capacity(candidate_rowids.len());
             for rid in candidate_rowids {
-                let Some(&i) = rid_to_idx.get(&rid) else { continue };
+                let Some(&i) = rid_to_idx.get(&rid) else {
+                    continue;
+                };
                 let v = &idx.vectors[i];
                 let mut s: i64 = 0;
                 for j in 0..q_i8.len().min(v.len()) {
@@ -2670,7 +2633,10 @@ mod wasm_export {
                 // L1 we'd need the original f32 vectors; v1
                 // exposes l2 only when index=hnsw8.
                 let d = (s as f64) * inv_scale_sq;
-                scored.push(ScoredRow { rowid: rid, distance: d.sqrt() });
+                scored.push(ScoredRow {
+                    rowid: rid,
+                    distance: d.sqrt(),
+                });
             }
             sort_truncate(&mut scored, k);
             Ok(scored)
@@ -2689,9 +2655,11 @@ mod wasm_export {
             rid = inst.rowid_column,
             src = inst.source,
         );
-        let probe = spi::execute(&probe_sql, &[])
-            .map_err(|e| format!("vec0: poll source: {e:?}"))?;
-        let Some(row) = probe.rows.first() else { return Ok(()); };
+        let probe =
+            spi::execute(&probe_sql, &[]).map_err(|e| format!("vec0: poll source: {e:?}"))?;
+        let Some(row) = probe.rows.first() else {
+            return Ok(());
+        };
         let (cur_count, cur_max) = match (row.first(), row.get(1)) {
             (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => (*c as usize, *m),
             _ => return Ok(()),
@@ -2709,11 +2677,17 @@ mod wasm_export {
             .map_err(|e| format!("vec0: fetch new rows: {e:?}"))?;
         HNSW8_CACHE.with(|m| {
             let mut cache = m.borrow_mut();
-            let Some(idx) = cache.get_mut(&inst_id) else { return };
+            let Some(idx) = cache.get_mut(&inst_id) else {
+                return;
+            };
             let scale = idx.global_scale;
             for row in &new_rows.rows {
-                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
-                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                let Some(SqlValue::Integer(rid)) = row.first() else {
+                    continue;
+                };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else {
+                    continue;
+                };
                 if let Ok(v) = kernels::from_blob(emb) {
                     let q = super::hnsw8::quantize(&v, scale);
                     super::hnsw8::insert_one(idx, *rid, q);
@@ -2735,15 +2709,17 @@ mod wasm_export {
         query: &[f32],
         k: usize,
     ) -> Result<Vec<ScoredRow>, String> {
-        let Backend::Lsh { d_signature, n_probes } = inst.backend else {
+        let Backend::Lsh {
+            d_signature,
+            n_probes,
+        } = inst.backend
+        else {
             return Err("vec0: lsh_topk called on non-LSH backend".to_string());
         };
         let needs_build = LSH_CACHE.with(|m| !m.borrow().contains_key(&inst_id));
         if needs_build {
             let (cur_count, cur_max) = source_fingerprint(inst)?;
-            if let Some(blob) =
-                load_persisted(&inst.table_name, "lsh", cur_count, cur_max)?
-            {
+            if let Some(blob) = load_persisted(&inst.table_name, "lsh", cur_count, cur_max)? {
                 if let Ok(idx) = postcard::from_bytes::<super::lsh::Index>(&blob) {
                     LSH_CACHE.with(|cache| cache.borrow_mut().insert(inst_id, idx));
                 }
@@ -2757,12 +2733,16 @@ mod wasm_export {
                 emb = inst.embedding_column,
                 src = inst.source,
             );
-            let result = spi::execute(&sql, &[])
-                .map_err(|e| format!("vec0: scan source: {e:?}"))?;
+            let result =
+                spi::execute(&sql, &[]).map_err(|e| format!("vec0: scan source: {e:?}"))?;
             let mut vectors: Vec<(i64, Vec<f32>)> = Vec::with_capacity(result.rows.len());
             for row in &result.rows {
-                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
-                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                let Some(SqlValue::Integer(rid)) = row.first() else {
+                    continue;
+                };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else {
+                    continue;
+                };
                 if let Ok(v) = kernels::from_blob(emb) {
                     vectors.push((*rid, v));
                 }
@@ -2789,11 +2769,8 @@ mod wasm_export {
             let idx = map
                 .get(&inst_id)
                 .ok_or_else(|| "vec0: LSH cache missing after build".to_string())?;
-            let planes = super::lsh::hyperplanes(
-                idx.hyperplane_seed,
-                idx.d_signature,
-                idx.source_dim,
-            );
+            let planes =
+                super::lsh::hyperplanes(idx.hyperplane_seed, idx.d_signature, idx.source_dim);
             let query_sig = super::lsh::signature(&planes, query);
             // Pull max(k, n_probes) candidates. The candidates
             // come back with their full f32; we score with the
@@ -2803,7 +2780,10 @@ mod wasm_export {
             for (rid, v) in candidates {
                 if let Some(d) = inst.metric.distance(query, &v) {
                     if !d.is_nan() {
-                        scored.push(ScoredRow { rowid: rid, distance: d });
+                        scored.push(ScoredRow {
+                            rowid: rid,
+                            distance: d,
+                        });
                     }
                 }
             }
@@ -2824,9 +2804,11 @@ mod wasm_export {
             rid = inst.rowid_column,
             src = inst.source,
         );
-        let probe = spi::execute(&probe_sql, &[])
-            .map_err(|e| format!("vec0: poll source: {e:?}"))?;
-        let Some(row) = probe.rows.first() else { return Ok(()); };
+        let probe =
+            spi::execute(&probe_sql, &[]).map_err(|e| format!("vec0: poll source: {e:?}"))?;
+        let Some(row) = probe.rows.first() else {
+            return Ok(());
+        };
         let (cur_count, cur_max) = match (row.first(), row.get(1)) {
             (Some(SqlValue::Integer(c)), Some(SqlValue::Integer(m))) => (*c as usize, *m),
             _ => return Ok(()),
@@ -2844,10 +2826,16 @@ mod wasm_export {
             .map_err(|e| format!("vec0: fetch new rows: {e:?}"))?;
         LSH_CACHE.with(|m| {
             let mut cache = m.borrow_mut();
-            let Some(idx) = cache.get_mut(&inst_id) else { return };
+            let Some(idx) = cache.get_mut(&inst_id) else {
+                return;
+            };
             for row in &new_rows.rows {
-                let Some(SqlValue::Integer(rid)) = row.first() else { continue };
-                let Some(SqlValue::Blob(emb)) = row.get(1) else { continue };
+                let Some(SqlValue::Integer(rid)) = row.first() else {
+                    continue;
+                };
+                let Some(SqlValue::Blob(emb)) = row.get(1) else {
+                    continue;
+                };
                 if let Ok(v) = kernels::from_blob(emb) {
                     super::lsh::insert_one(idx, *rid, v);
                 }
@@ -2866,8 +2854,13 @@ mod wasm_export {
     }
 
     fn strip_quotes(s: &str) -> &str {
-        let s = s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')).unwrap_or(s);
-        s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s)
+        let s = s
+            .strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .unwrap_or(s);
+        s.strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(s)
     }
 
     fn schema_str() -> String {
@@ -2894,8 +2887,7 @@ mod wasm_export {
             // would collide on the same table name; we accept
             // last-writer-wins for v1  the underlying cache
             // entries differ by instance_id anyway.
-            NAME_TO_INSTANCE
-                .with(|m| m.borrow_mut().insert(table_name, instance_id));
+            NAME_TO_INSTANCE.with(|m| m.borrow_mut().insert(table_name, instance_id));
             Ok(schema_str())
         }
 
@@ -2915,8 +2907,7 @@ mod wasm_export {
             HNSW_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
             HNSW8_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
             LSH_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
-            NAME_TO_INSTANCE
-                .with(|m| m.borrow_mut().retain(|_, v| *v != instance_id));
+            NAME_TO_INSTANCE.with(|m| m.borrow_mut().retain(|_, v| *v != instance_id));
             Ok(())
         }
         fn disconnect(_vtab_id: u64, instance_id: u64) -> Result<(), String> {
@@ -2925,8 +2916,7 @@ mod wasm_export {
             HNSW_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
             HNSW8_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
             LSH_CACHE.with(|m| m.borrow_mut().remove(&instance_id));
-            NAME_TO_INSTANCE
-                .with(|m| m.borrow_mut().retain(|_, v| *v != instance_id));
+            NAME_TO_INSTANCE.with(|m| m.borrow_mut().retain(|_, v| *v != instance_id));
             Ok(())
         }
 
@@ -2995,11 +2985,7 @@ mod wasm_export {
             })
         }
 
-        fn open(
-            _vtab_id: u64,
-            instance_id: u64,
-            cursor_id: u64,
-        ) -> Result<(), String> {
+        fn open(_vtab_id: u64, instance_id: u64, cursor_id: u64) -> Result<(), String> {
             CURSORS.with(|m| {
                 m.borrow_mut().insert(
                     cursor_id,
@@ -3063,12 +3049,15 @@ mod wasm_export {
                 });
                 return Ok(());
             };
-            let query = kernels::from_blob(qb)
-                .map_err(|e| format!("vec0: query vector: {e}"))?;
+            let query = kernels::from_blob(qb).map_err(|e| format!("vec0: query vector: {e}"))?;
             let inst_id = CURSORS.with(|cm| {
-                cm.borrow().get(&cursor_id).map(|c| c.instance_id).unwrap_or(0)
+                cm.borrow()
+                    .get(&cursor_id)
+                    .map(|c| c.instance_id)
+                    .unwrap_or(0)
             });
-            let inst = INSTANCES.with(|m| m.borrow().get(&inst_id).cloned())
+            let inst = INSTANCES
+                .with(|m| m.borrow().get(&inst_id).cloned())
                 .ok_or_else(|| "vec0: instance not connected".to_string())?;
 
             // spi.execute requires a file-backed db (--db PATH on the
@@ -3111,11 +3100,7 @@ mod wasm_export {
             })
         }
 
-        fn column(
-            _vtab_id: u64,
-            cursor_id: u64,
-            col: i32,
-        ) -> Result<SqlValue, String> {
+        fn column(_vtab_id: u64, cursor_id: u64, col: i32) -> Result<SqlValue, String> {
             CURSORS.with(|m| {
                 let cursors = m.borrow();
                 let c = cursors
@@ -3146,7 +3131,7 @@ mod wasm_export {
                     .ok_or_else(|| "vec0: cursor not open".to_string())
             })
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             cursor_id: u64,
@@ -3163,10 +3148,10 @@ mod wasm_export {
                     out.push(VtabRow {
                         rowid: row.rowid,
                         columns: alloc::vec![
-                            SqlValue::Integer(row.rowid),     // COL_ROWID
-                            SqlValue::Real(row.distance),     // COL_DISTANCE
-                            SqlValue::Null,                   // COL_EMBEDDING (HIDDEN)
-                            SqlValue::Null,                   // COL_K (HIDDEN)
+                            SqlValue::Integer(row.rowid), // COL_ROWID
+                            SqlValue::Real(row.distance), // COL_DISTANCE
+                            SqlValue::Null,               // COL_EMBEDDING (HIDDEN)
+                            SqlValue::Null,               // COL_K (HIDDEN)
                         ],
                     });
                     c.idx += 1;
@@ -3174,7 +3159,7 @@ mod wasm_export {
                 Ok(out)
             })
         }
-}
+    }
 
     bindings::export!(Vec0 with_types_in bindings);
 }

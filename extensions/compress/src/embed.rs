@@ -9,7 +9,7 @@ use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 const FID_COMPRESS_2: u64 = 1;
 const FID_COMPRESS_3: u64 = 2;
 const FID_DECOMPRESS: u64 = 3;
-const FID_VERSION:    u64 = 4;
+const FID_VERSION: u64 = 4;
 const FID_ALGORITHMS: u64 = 5;
 
 fn arg_bytes(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<Vec<u8>, String> {
@@ -29,7 +29,13 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
 
 fn arg_level(args: &[SqlValueOwned]) -> u8 {
     args.get(2)
-        .and_then(|v| if let SqlValueOwned::Integer(n) = v { Some(*n as u8) } else { None })
+        .and_then(|v| {
+            if let SqlValueOwned::Integer(n) = v {
+                Some(*n as u8)
+            } else {
+                None
+            }
+        })
         .unwrap_or(6)
 }
 
@@ -40,7 +46,11 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
         FID_COMPRESS_2 | FID_COMPRESS_3 => {
             let input = arg_bytes(&args, 0, "compress")?;
             let algo = arg_text(&args, 1, "compress")?;
-            let level = if func_id == FID_COMPRESS_3 { arg_level(&args) } else { 6 };
+            let level = if func_id == FID_COMPRESS_3 {
+                arg_level(&args)
+            } else {
+                6
+            };
             crate::compress(&input, &algo, level)
                 .map(SqlValueOwned::Blob)
                 .map_err(|e| format!("compress: {e}"))
@@ -56,11 +66,36 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_COMPRESS_2, name: b"compress\0",            num_args: 2,  deterministic: true },
-    ScalarSpec { func_id: FID_COMPRESS_3, name: b"compress\0",            num_args: 3,  deterministic: true },
-    ScalarSpec { func_id: FID_DECOMPRESS, name: b"decompress\0",          num_args: 1,  deterministic: true },
-    ScalarSpec { func_id: FID_VERSION,    name: b"compress_version\0",    num_args: 0,  deterministic: false },
-    ScalarSpec { func_id: FID_ALGORITHMS, name: b"compress_algorithms\0", num_args: 0,  deterministic: false },
+    ScalarSpec {
+        func_id: FID_COMPRESS_2,
+        name: b"compress\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_COMPRESS_3,
+        name: b"compress\0",
+        num_args: 3,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECOMPRESS,
+        name: b"decompress\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VERSION,
+        name: b"compress_version\0",
+        num_args: 0,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_ALGORITHMS,
+        name: b"compress_algorithms\0",
+        num_args: 0,
+        deterministic: false,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

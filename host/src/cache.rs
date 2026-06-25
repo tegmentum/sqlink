@@ -54,9 +54,9 @@ impl Cache {
     /// all CAS ops through a fresh `Connection` against the
     /// file. Used by `.cache use-internal`.
     pub fn open_internal(db_path: PathBuf) -> Result<Self> {
-        let path_str = db_path.to_str().ok_or_else(|| {
-            anyhow!("non-UTF8 db path: {}", db_path.display())
-        })?;
+        let path_str = db_path
+            .to_str()
+            .ok_or_else(|| anyhow!("non-UTF8 db path: {}", db_path.display()))?;
         let conn = Connection::open(path_str, OpenFlags::DEFAULT)
             .map_err(|e| anyhow!("open internal cas at {path_str}: {}", e.message))?;
         let store = SqliteCasStore::open_internal(conn)

@@ -7,11 +7,11 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_VALIDATE:    u64 = 1;
+const FID_VALIDATE: u64 = 1;
 const FID_CHECK_DIGIT: u64 = 2;
-const FID_OWNER:       u64 = 3;
-const FID_CATEGORY:    u64 = 4;
-const FID_SERIAL:      u64 = 5;
+const FID_OWNER: u64 = 3;
+const FID_CATEGORY: u64 = 4;
+const FID_SERIAL: u64 = 5;
 
 /// ISO 6346 character value (BIC table): digits = themselves,
 /// letters skip 11, 22, 33 (multiples of 11).
@@ -20,11 +20,31 @@ fn iso6346_value(c: char) -> Option<u32> {
         return Some(c.to_digit(10).unwrap());
     }
     let table = [
-        ('A', 10), ('B', 12), ('C', 13), ('D', 14), ('E', 15),
-        ('F', 16), ('G', 17), ('H', 18), ('I', 19), ('J', 20),
-        ('K', 21), ('L', 23), ('M', 24), ('N', 25), ('O', 26),
-        ('P', 27), ('Q', 28), ('R', 29), ('S', 30), ('T', 31),
-        ('U', 32), ('V', 34), ('W', 35), ('X', 36), ('Y', 37),
+        ('A', 10),
+        ('B', 12),
+        ('C', 13),
+        ('D', 14),
+        ('E', 15),
+        ('F', 16),
+        ('G', 17),
+        ('H', 18),
+        ('I', 19),
+        ('J', 20),
+        ('K', 21),
+        ('L', 23),
+        ('M', 24),
+        ('N', 25),
+        ('O', 26),
+        ('P', 27),
+        ('Q', 28),
+        ('R', 29),
+        ('S', 30),
+        ('T', 31),
+        ('U', 32),
+        ('V', 34),
+        ('W', 35),
+        ('X', 36),
+        ('Y', 37),
         ('Z', 38),
     ];
     let up = c.to_ascii_uppercase();
@@ -84,10 +104,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "container")?;
     let n = normalize(&raw);
 
@@ -120,11 +137,36 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,    name: b"container_validate\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CHECK_DIGIT, name: b"container_check_digit\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_OWNER,       name: b"container_owner\0",       num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CATEGORY,    name: b"container_category\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SERIAL,      name: b"container_serial\0",      num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"container_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CHECK_DIGIT,
+        name: b"container_check_digit\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_OWNER,
+        name: b"container_owner\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CATEGORY,
+        name: b"container_category\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SERIAL,
+        name: b"container_serial\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

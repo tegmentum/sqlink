@@ -6,12 +6,10 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::ffi::c_int;
-use sqlite_embed::{
-    register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec,
-};
+use sqlite_embed::{register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec};
 
-const COL_IDX:    i32 = 0;
-const COL_VALUE:  i32 = 1;
+const COL_IDX: i32 = 0;
+const COL_VALUE: i32 = 1;
 const COL_VECTOR: i32 = 2;
 
 const SQLITE_INDEX_CONSTRAINT_EQ: u8 = 2;
@@ -54,10 +52,7 @@ unsafe fn ve_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result<(),
     Ok(())
 }
 
-unsafe fn ve_make_cursor(
-    _vtab_state: *mut (),
-    _db: *mut libsqlite3_sys::sqlite3,
-) -> *mut () {
+unsafe fn ve_make_cursor(_vtab_state: *mut (), _db: *mut libsqlite3_sys::sqlite3) -> *mut () {
     alloc::boxed::Box::into_raw(alloc::boxed::Box::new(VecEachCursor {
         values: Vec::new(),
         idx: 0,

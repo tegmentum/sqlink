@@ -29,10 +29,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    _args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, _args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_EVAL_1 | FID_EVAL_2 => Err(String::from(
             "eval: embed path does not have spi host; load the wasi component with --grant=spi to use eval",
@@ -45,8 +42,18 @@ const SCALARS: &[ScalarSpec] = &[
     // eval is non-deterministic (the SQL it would run can read
     // mutable state, time, rand, etc.)  preserved for surface
     // parity with the WIT path even though embedded calls error.
-    ScalarSpec { func_id: FID_EVAL_1, name: b"eval\0", num_args: 1, deterministic: false },
-    ScalarSpec { func_id: FID_EVAL_2, name: b"eval\0", num_args: 2, deterministic: false },
+    ScalarSpec {
+        func_id: FID_EVAL_1,
+        name: b"eval\0",
+        num_args: 1,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_EVAL_2,
+        name: b"eval\0",
+        num_args: 2,
+        deterministic: false,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

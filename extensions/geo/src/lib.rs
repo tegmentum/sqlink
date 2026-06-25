@@ -23,7 +23,8 @@ pub fn h3_to_cell(lat: f64, lon: f64, res: i64) -> Result<String, String> {
 }
 
 fn parse_cell(s: &str) -> Result<CellIndex, String> {
-    s.parse::<CellIndex>().map_err(|e| alloc::format!("h3: bad cell {s:?}: {e}"))
+    s.parse::<CellIndex>()
+        .map_err(|e| alloc::format!("h3: bad cell {s:?}: {e}"))
 }
 
 pub fn h3_to_geo(cell: &str) -> Result<String, String> {
@@ -44,10 +45,10 @@ pub fn h3_neighbors(cell: &str) -> Result<String, String> {
         .filter(|n| *n != c)
         .map(|n| n.to_string())
         .collect();
-    Ok(serde_json::Value::Array(
-        names.into_iter().map(serde_json::Value::String).collect(),
+    Ok(
+        serde_json::Value::Array(names.into_iter().map(serde_json::Value::String).collect())
+            .to_string(),
     )
-    .to_string())
 }
 
 pub fn h3_is_pentagon(cell: &str) -> Result<bool, String> {
@@ -178,7 +179,10 @@ pub fn geohash_neighbors(hash: &str) -> Result<String, String> {
     neighbors.sort();
     neighbors.dedup();
     Ok(serde_json::Value::Array(
-        neighbors.into_iter().map(serde_json::Value::String).collect(),
+        neighbors
+            .into_iter()
+            .map(serde_json::Value::String)
+            .collect(),
     )
     .to_string())
 }
@@ -277,7 +281,11 @@ pub fn maidenhead_decode(grid: &str) -> Result<String, String> {
         lat_size /= 10.0;
     }
     // Center of the grid cell.
-    Ok(alloc::format!("{},{}", lat + lat_size / 2.0, lon + lon_size / 2.0))
+    Ok(alloc::format!(
+        "{},{}",
+        lat + lat_size / 2.0,
+        lon + lon_size / 2.0
+    ))
 }
 
 #[cfg(test)]
@@ -432,12 +440,14 @@ mod wasm_export {
                     let res = arg_int(&args, 2, "h3_to_cell")?;
                     super::h3_to_cell(lat, lon, res).map(SqlValue::Text)
                 }
-                FID_H3_GEO => super::h3_to_geo(&arg_text(&args, 0, "h3_to_geo")?)
-                    .map(SqlValue::Text),
+                FID_H3_GEO => {
+                    super::h3_to_geo(&arg_text(&args, 0, "h3_to_geo")?).map(SqlValue::Text)
+                }
                 FID_H3_RES => super::h3_resolution(&arg_text(&args, 0, "h3_resolution")?)
                     .map(SqlValue::Integer),
-                FID_H3_NEIGH => super::h3_neighbors(&arg_text(&args, 0, "h3_neighbors")?)
-                    .map(SqlValue::Text),
+                FID_H3_NEIGH => {
+                    super::h3_neighbors(&arg_text(&args, 0, "h3_neighbors")?).map(SqlValue::Text)
+                }
                 FID_H3_PENT => super::h3_is_pentagon(&arg_text(&args, 0, "h3_is_pentagon")?)
                     .map(|b| SqlValue::Integer(b as i64)),
                 FID_GH_ENC => {
@@ -448,8 +458,9 @@ mod wasm_export {
                 }
                 FID_GH_DEC => super::geohash_decode(&arg_text(&args, 0, "geohash_decode")?)
                     .map(SqlValue::Text),
-                FID_GH_BBOX => super::geohash_bbox(&arg_text(&args, 0, "geohash_bbox")?)
-                    .map(SqlValue::Text),
+                FID_GH_BBOX => {
+                    super::geohash_bbox(&arg_text(&args, 0, "geohash_bbox")?).map(SqlValue::Text)
+                }
                 FID_GH_NEIGH => super::geohash_neighbors(&arg_text(&args, 0, "geohash_neighbors")?)
                     .map(SqlValue::Text),
                 FID_MH_ENC => {

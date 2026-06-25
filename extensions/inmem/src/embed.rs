@@ -8,10 +8,8 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::ffi::c_int;
+use sqlite_embed::{register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec};
 use std::collections::HashMap;
-use sqlite_embed::{
-    register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec,
-};
 
 struct Row {
     key: String,
@@ -61,10 +59,7 @@ unsafe fn inmem_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result<
     Ok(())
 }
 
-unsafe fn inmem_make_cursor(
-    vtab_state: *mut (),
-    _db: *mut libsqlite3_sys::sqlite3,
-) -> *mut () {
+unsafe fn inmem_make_cursor(vtab_state: *mut (), _db: *mut libsqlite3_sys::sqlite3) -> *mut () {
     Box::into_raw(Box::new(InmemCursor {
         vtab: vtab_state as *const InmemVtab,
         snapshot: Vec::new(),
@@ -129,10 +124,7 @@ unsafe fn inmem_rowid(state: *mut ()) -> Result<i64, String> {
         .ok_or_else(|| "inmem: past EOF".to_string())
 }
 
-unsafe fn inmem_update(
-    vtab_state: *mut (),
-    args: &[SqlValueOwned],
-) -> Result<i64, String> {
+unsafe fn inmem_update(vtab_state: *mut (), args: &[SqlValueOwned]) -> Result<i64, String> {
     let v = &*(vtab_state as *const InmemVtab);
     let mut rows = v.rows.borrow_mut();
     let mut journal = v.journal.borrow_mut();
@@ -190,7 +182,10 @@ unsafe fn inmem_update(
                 .remove(old_rid)
                 .ok_or_else(|| format!("inmem: row {old_rid} not found"))?;
             if in_txn {
-                journal.push(JournalEntry::Updated { rowid: *old_rid, prev });
+                journal.push(JournalEntry::Updated {
+                    rowid: *old_rid,
+                    prev,
+                });
             }
             rows.insert(new_rid, Row { key, value });
             Ok(0)
@@ -226,8 +221,7 @@ unsafe fn inmem_rollback(state: *mut ()) -> Result<(), String> {
             JournalEntry::Inserted(rid) => {
                 rows.remove(&rid);
             }
-            JournalEntry::Updated { rowid, prev }
-            | JournalEntry::Deleted { rowid, prev } => {
+            JournalEntry::Updated { rowid, prev } | JournalEntry::Deleted { rowid, prev } => {
                 rows.insert(rowid, prev);
             }
         }

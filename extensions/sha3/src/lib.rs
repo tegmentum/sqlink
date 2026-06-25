@@ -134,7 +134,7 @@ mod wasm_export {
                 func_flags: flags,
             };
             Manifest {
-                name: "sha3".to_string(),  // matches the SQLite shathree extension naming
+                name: "sha3".to_string(), // matches the SQLite shathree extension naming
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
                     // Matches the SQLite shathree.c surface:

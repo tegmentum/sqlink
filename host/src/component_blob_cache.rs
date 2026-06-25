@@ -75,11 +75,7 @@ fn wasmtime_version() -> &'static str {
 
 /// Look up + HMAC-verify a row. Returns None on miss, garbage
 /// row, or HMAC failure. Updates `last_used_at` on hit.
-pub fn lookup(
-    conn: &Connection,
-    digest_hex: &str,
-    hmac_key: &[u8],
-) -> Result<Option<Vec<u8>>> {
+pub fn lookup(conn: &Connection, digest_hex: &str, hmac_key: &[u8]) -> Result<Option<Vec<u8>>> {
     let (engine_version, target_triple) = engine_identity();
     let mut stmt = conn
         .prepare(

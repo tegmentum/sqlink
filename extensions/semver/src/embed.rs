@@ -10,14 +10,14 @@ use core::str::FromStr;
 use semver::{Version, VersionReq};
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_VALIDATE:  u64 = 1;
-const FID_MAJOR:     u64 = 2;
-const FID_MINOR:     u64 = 3;
-const FID_PATCH:     u64 = 4;
-const FID_PRE:       u64 = 5;
-const FID_BUILD:     u64 = 6;
-const FID_COMPARE:   u64 = 7;
-const FID_MAX:       u64 = 8;
+const FID_VALIDATE: u64 = 1;
+const FID_MAJOR: u64 = 2;
+const FID_MINOR: u64 = 3;
+const FID_PATCH: u64 = 4;
+const FID_PRE: u64 = 5;
+const FID_BUILD: u64 = 6;
+const FID_COMPARE: u64 = 7;
+const FID_MAX: u64 = 8;
 const FID_SATISFIES: u64 = 9;
 const FID_INCREMENT: u64 = 10;
 
@@ -32,10 +32,7 @@ fn parse_or_null(s: &str) -> Option<Version> {
     Version::parse(s).ok()
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_VALIDATE => {
             let v = arg_text(&args, 0, "semver_validate")?;
@@ -138,16 +135,66 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,  name: b"semver_validate\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MAJOR,     name: b"semver_major\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MINOR,     name: b"semver_minor\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_PATCH,     name: b"semver_patch\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_PRE,       name: b"semver_pre\0",       num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_BUILD,     name: b"semver_build\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_COMPARE,   name: b"semver_compare\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_MAX,       name: b"semver_max\0",       num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_SATISFIES, name: b"semver_satisfies\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_INCREMENT, name: b"semver_increment\0", num_args: 2, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"semver_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MAJOR,
+        name: b"semver_major\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MINOR,
+        name: b"semver_minor\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PATCH,
+        name: b"semver_patch\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PRE,
+        name: b"semver_pre\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BUILD,
+        name: b"semver_build\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_COMPARE,
+        name: b"semver_compare\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MAX,
+        name: b"semver_max\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SATISFIES,
+        name: b"semver_satisfies\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_INCREMENT,
+        name: b"semver_increment\0",
+        num_args: 2,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

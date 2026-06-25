@@ -88,7 +88,10 @@ fn set_uri_replaces_prior_binding() {
 #[test]
 fn resolve_uri_miss_returns_none() {
     let (_d, mut s) = fresh_external();
-    assert!(s.resolve_uri("https://nothing.example/x").unwrap().is_none());
+    assert!(s
+        .resolve_uri("https://nothing.example/x")
+        .unwrap()
+        .is_none());
 }
 
 #[test]
@@ -191,7 +194,10 @@ fn default_external_path_uses_sqlink_cache_subdir() {
     let s = p.to_string_lossy();
     assert!(s.contains(".cache"), "missing .cache segment: {s}");
     assert!(s.contains("sqlink"), "missing sqlink segment: {s}");
-    assert!(s.ends_with("cas.sqlite"), "missing cas.sqlite filename: {s}");
+    assert!(
+        s.ends_with("cas.sqlite"),
+        "missing cas.sqlite filename: {s}"
+    );
 }
 
 #[test]
@@ -213,5 +219,8 @@ fn config_round_trips_via_set_config() {
     let new = sqlite_cas_cache::StoreConfig { max_bytes: 42 };
     s.set_config(new);
     assert_eq!(s.config().max_bytes, 42, "set_config did not persist");
-    assert_ne!(default_max, 42, "test premise: default should differ from 42");
+    assert_ne!(
+        default_max, 42,
+        "test premise: default should differ from 42"
+    );
 }

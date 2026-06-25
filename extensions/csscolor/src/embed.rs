@@ -8,11 +8,11 @@ use core::ffi::c_int;
 use csscolorparser::Color;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_NAME:     u64 = 2;
-const FID_RED:      u64 = 6;
-const FID_GREEN:    u64 = 7;
-const FID_BLUE:     u64 = 8;
-const FID_ALPHA:    u64 = 9;
+const FID_NAME: u64 = 2;
+const FID_RED: u64 = 6;
+const FID_GREEN: u64 = 7;
+const FID_BLUE: u64 = 8;
+const FID_ALPHA: u64 = 9;
 
 fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, String> {
     match args.get(i) {
@@ -25,10 +25,7 @@ fn parse_or_null(s: &str) -> Option<Color> {
     s.parse::<Color>().ok()
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let css = arg_text(&args, 0, "color")?;
     let parsed = parse_or_null(&css);
 
@@ -55,11 +52,36 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_NAME,     name: b"color_name\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_RED,      name: b"color_red\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_GREEN,    name: b"color_green\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_BLUE,     name: b"color_blue\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ALPHA,    name: b"color_alpha\0",    num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_NAME,
+        name: b"color_name\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_RED,
+        name: b"color_red\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_GREEN,
+        name: b"color_green\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BLUE,
+        name: b"color_blue\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ALPHA,
+        name: b"color_alpha\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

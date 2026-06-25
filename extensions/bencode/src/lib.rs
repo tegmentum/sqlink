@@ -108,16 +108,15 @@ mod wasm_export {
                     JValue::String(format!("!base64:{b64}"))
                 }
             },
-            BValue::List(items) => {
-                JValue::Array(items.iter().map(bencode_to_json).collect())
-            }
+            BValue::List(items) => JValue::Array(items.iter().map(bencode_to_json).collect()),
             BValue::Dict(map) => {
                 let mut obj = serde_json::Map::new();
                 for (k, v) in map.iter() {
                     let key = std::str::from_utf8(k.as_slice())
                         .map(|s| s.to_string())
                         .unwrap_or_else(|_| {
-                            let b64 = base64::engine::general_purpose::STANDARD.encode(k.as_slice());
+                            let b64 =
+                                base64::engine::general_purpose::STANDARD.encode(k.as_slice());
                             format!("!base64:{b64}")
                         });
                     obj.insert(key, bencode_to_json(v));
@@ -169,8 +168,8 @@ mod wasm_export {
                     let parsed: JValue = serde_json::from_str(&json)
                         .map_err(|e| format!("bencode_encode: parse JSON: {e}"))?;
                     let benc = json_to_bencode(&parsed)?;
-                    let bytes = bt_bencode::to_vec(&benc)
-                        .map_err(|e| format!("bencode_encode: {e}"))?;
+                    let bytes =
+                        bt_bencode::to_vec(&benc).map_err(|e| format!("bencode_encode: {e}"))?;
                     Ok(SqlValue::Blob(bytes))
                 }
                 FID_DECODE => {

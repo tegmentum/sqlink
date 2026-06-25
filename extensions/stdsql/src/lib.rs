@@ -19,12 +19,16 @@ mod algo {
     use alloc::vec::Vec;
 
     pub fn left(s: &str, n: i64) -> String {
-        if n <= 0 { return String::new(); }
+        if n <= 0 {
+            return String::new();
+        }
         s.chars().take(n as usize).collect()
     }
 
     pub fn right(s: &str, n: i64) -> String {
-        if n <= 0 { return String::new(); }
+        if n <= 0 {
+            return String::new();
+        }
         let chars: Vec<char> = s.chars().collect();
         let start = chars.len().saturating_sub(n as usize);
         chars[start..].iter().collect()
@@ -42,7 +46,9 @@ mod algo {
         let pad_chars: Vec<char> = pad.chars().collect();
         let need = target - cur.len();
         let mut out = String::with_capacity(need + s.len());
-        for i in 0..need { out.push(pad_chars[i % pad_chars.len()]); }
+        for i in 0..need {
+            out.push(pad_chars[i % pad_chars.len()]);
+        }
         out.extend(cur);
         out
     }
@@ -60,17 +66,23 @@ mod algo {
         let need = target - cur.len();
         let mut out: String = cur.iter().collect();
         out.reserve(need);
-        for i in 0..need { out.push(pad_chars[i % pad_chars.len()]); }
+        for i in 0..need {
+            out.push(pad_chars[i % pad_chars.len()]);
+        }
         out
     }
 
     pub fn repeat(s: &str, n: i64) -> String {
-        if n <= 0 { return String::new(); }
+        if n <= 0 {
+            return String::new();
+        }
         s.repeat(n as usize)
     }
 
     pub fn space(n: i64) -> String {
-        if n <= 0 { return String::new(); }
+        if n <= 0 {
+            return String::new();
+        }
         " ".repeat(n as usize)
     }
 
@@ -143,7 +155,9 @@ mod algo {
     }
 
     pub fn chr(n: i64) -> Option<String> {
-        if n < 0 { return None; }
+        if n < 0 {
+            return None;
+        }
         char::from_u32(n as u32).map(|c| alloc::string::ToString::to_string(&c))
     }
 
@@ -153,7 +167,9 @@ mod algo {
         let mut buf = Vec::with_capacity(s.len() / 2);
         let mut nibble: Option<u8> = None;
         for c in s.chars() {
-            if c.is_ascii_whitespace() { continue; }
+            if c.is_ascii_whitespace() {
+                continue;
+            }
             let h = match c {
                 '0'..='9' => c as u8 - b'0',
                 'a'..='f' => c as u8 - b'a' + 10,
@@ -168,7 +184,9 @@ mod algo {
                 }
             }
         }
-        if nibble.is_some() { return Err(()); }
+        if nibble.is_some() {
+            return Err(());
+        }
         Ok(buf)
     }
 }
@@ -196,51 +214,51 @@ mod wasm_export {
 
     // Stable function IDs  each Postgres-flavoured semantic gets
     // exactly one. Multi-arity variants get separate IDs.
-    pub const FID_GREATEST:     u64 = 1;
-    pub const FID_LEAST:        u64 = 2;
-    pub const FID_LEFT:         u64 = 3;
-    pub const FID_RIGHT:        u64 = 4;
-    pub const FID_LPAD_2:       u64 = 5;
-    pub const FID_LPAD_3:       u64 = 6;
-    pub const FID_RPAD_2:       u64 = 7;
-    pub const FID_RPAD_3:       u64 = 8;
-    pub const FID_REPEAT:       u64 = 9;
-    pub const FID_SPACE:        u64 = 10;
-    pub const FID_STARTS_WITH:  u64 = 11;
-    pub const FID_ENDS_WITH:    u64 = 12;
-    pub const FID_TRANSLATE:    u64 = 13;
-    pub const FID_TO_HEX:       u64 = 14;
-    pub const FID_BIT_LENGTH:   u64 = 15;
-    pub const FID_INITCAP:      u64 = 16;
-    pub const FID_IF:           u64 = 17;
-    pub const FID_CHR:          u64 = 18;
-    pub const FID_ASCII:        u64 = 19;
-    pub const FID_CHAR_LENGTH:  u64 = 20;
+    pub const FID_GREATEST: u64 = 1;
+    pub const FID_LEAST: u64 = 2;
+    pub const FID_LEFT: u64 = 3;
+    pub const FID_RIGHT: u64 = 4;
+    pub const FID_LPAD_2: u64 = 5;
+    pub const FID_LPAD_3: u64 = 6;
+    pub const FID_RPAD_2: u64 = 7;
+    pub const FID_RPAD_3: u64 = 8;
+    pub const FID_REPEAT: u64 = 9;
+    pub const FID_SPACE: u64 = 10;
+    pub const FID_STARTS_WITH: u64 = 11;
+    pub const FID_ENDS_WITH: u64 = 12;
+    pub const FID_TRANSLATE: u64 = 13;
+    pub const FID_TO_HEX: u64 = 14;
+    pub const FID_BIT_LENGTH: u64 = 15;
+    pub const FID_INITCAP: u64 = 16;
+    pub const FID_IF: u64 = 17;
+    pub const FID_CHR: u64 = 18;
+    pub const FID_ASCII: u64 = 19;
+    pub const FID_CHAR_LENGTH: u64 = 20;
     pub const FID_CHARACTER_LENGTH: u64 = 21;
-    pub const FID_FROM_HEX:     u64 = 22;
+    pub const FID_FROM_HEX: u64 = 22;
     // ClickHouse camelCase variants  share FIDs with the canonical
     // snake_case names where the semantics line up exactly.
-    pub const FID_CH_STARTS_WITH:  u64 = 23;
-    pub const FID_CH_ENDS_WITH:    u64 = 24;
-    pub const FID_CH_LENGTH:       u64 = 25;
-    pub const FID_CH_LOWER_UTF8:   u64 = 26;
-    pub const FID_CH_UPPER_UTF8:   u64 = 27;
-    pub const FID_CH_TO_STRING:    u64 = 28;
-    pub const FID_CH_EMPTY:        u64 = 29;
-    pub const FID_CH_NOT_EMPTY:    u64 = 30;
-    pub const FID_CH_REPLACE_ALL:  u64 = 31;
+    pub const FID_CH_STARTS_WITH: u64 = 23;
+    pub const FID_CH_ENDS_WITH: u64 = 24;
+    pub const FID_CH_LENGTH: u64 = 25;
+    pub const FID_CH_LOWER_UTF8: u64 = 26;
+    pub const FID_CH_UPPER_UTF8: u64 = 27;
+    pub const FID_CH_TO_STRING: u64 = 28;
+    pub const FID_CH_EMPTY: u64 = 29;
+    pub const FID_CH_NOT_EMPTY: u64 = 30;
+    pub const FID_CH_REPLACE_ALL: u64 = 31;
     pub const FID_CH_POSITION_UTF8: u64 = 32;
     // PG to_* + quote_* family:
-    pub const FID_TO_BIN:        u64 = 33;
-    pub const FID_TO_OCT:        u64 = 34;
-    pub const FID_TO_ASCII:      u64 = 35;
-    pub const FID_QUOTE_IDENT:   u64 = 36;
+    pub const FID_TO_BIN: u64 = 33;
+    pub const FID_TO_OCT: u64 = 34;
+    pub const FID_TO_ASCII: u64 = 35;
+    pub const FID_QUOTE_IDENT: u64 = 36;
     pub const FID_QUOTE_LITERAL: u64 = 37;
     pub const FID_QUOTE_NULLABLE: u64 = 38;
-    pub const FID_GET_BIT:       u64 = 39;
-    pub const FID_SET_BIT:       u64 = 40;
-    pub const FID_GET_BYTE:      u64 = 41;
-    pub const FID_SET_BYTE:      u64 = 42;
+    pub const FID_GET_BIT: u64 = 39;
+    pub const FID_SET_BIT: u64 = 40;
+    pub const FID_GET_BYTE: u64 = 41;
+    pub const FID_SET_BYTE: u64 = 42;
 
     struct Ext;
 
@@ -258,7 +276,9 @@ mod wasm_export {
         match v {
             SqlValue::Integer(n) => Ok(*n),
             SqlValue::Real(r) => Ok(*r as i64),
-            SqlValue::Text(s) => s.parse::<i64>().map_err(|_| format!("{fname}: arg {i} not integer")),
+            SqlValue::Text(s) => s
+                .parse::<i64>()
+                .map_err(|_| format!("{fname}: arg {i} not integer")),
             _ => Err(format!("{fname}: INTEGER arg at {i}")),
         }
     }
@@ -271,8 +291,12 @@ mod wasm_export {
         match (a, b) {
             (SqlValue::Integer(x), SqlValue::Integer(y)) => x.cmp(y),
             (SqlValue::Real(x), SqlValue::Real(y)) => x.partial_cmp(y).unwrap_or(Ordering::Equal),
-            (SqlValue::Integer(x), SqlValue::Real(y)) => (*x as f64).partial_cmp(y).unwrap_or(Ordering::Equal),
-            (SqlValue::Real(x), SqlValue::Integer(y)) => x.partial_cmp(&(*y as f64)).unwrap_or(Ordering::Equal),
+            (SqlValue::Integer(x), SqlValue::Real(y)) => {
+                (*x as f64).partial_cmp(y).unwrap_or(Ordering::Equal)
+            }
+            (SqlValue::Real(x), SqlValue::Integer(y)) => {
+                x.partial_cmp(&(*y as f64)).unwrap_or(Ordering::Equal)
+            }
             (SqlValue::Text(x), SqlValue::Text(y)) => x.cmp(y),
             (SqlValue::Blob(x), SqlValue::Blob(y)) => x.cmp(y),
             // Mixed: numeric < text < blob (matches SQLite).
@@ -313,51 +337,51 @@ mod wasm_export {
                 name: "stdsql".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
-                    s(FID_GREATEST,         "greatest",         -1),
-                    s(FID_LEAST,            "least",            -1),
-                    s(FID_LEFT,             "left",              2),
-                    s(FID_RIGHT,            "right",             2),
-                    s(FID_LPAD_2,           "lpad",              2),
-                    s(FID_LPAD_3,           "lpad",              3),
-                    s(FID_RPAD_2,           "rpad",              2),
-                    s(FID_RPAD_3,           "rpad",              3),
-                    s(FID_REPEAT,           "repeat",            2),
-                    s(FID_SPACE,            "space",             1),
-                    s(FID_STARTS_WITH,      "starts_with",       2),
-                    s(FID_ENDS_WITH,        "ends_with",         2),
-                    s(FID_TRANSLATE,        "translate",         3),
-                    s(FID_TO_HEX,           "to_hex",            1),
-                    s(FID_BIT_LENGTH,       "bit_length",        1),
-                    s(FID_INITCAP,          "initcap",           1),
-                    s(FID_IF,               "if",                3),
-                    s(FID_CHR,              "chr",               1),
-                    s(FID_ASCII,            "ascii",             1),
-                    s(FID_CHAR_LENGTH,      "char_length",       1),
-                    s(FID_CHARACTER_LENGTH, "character_length",  1),
-                    s(FID_FROM_HEX,         "from_hex",          1),
+                    s(FID_GREATEST, "greatest", -1),
+                    s(FID_LEAST, "least", -1),
+                    s(FID_LEFT, "left", 2),
+                    s(FID_RIGHT, "right", 2),
+                    s(FID_LPAD_2, "lpad", 2),
+                    s(FID_LPAD_3, "lpad", 3),
+                    s(FID_RPAD_2, "rpad", 2),
+                    s(FID_RPAD_3, "rpad", 3),
+                    s(FID_REPEAT, "repeat", 2),
+                    s(FID_SPACE, "space", 1),
+                    s(FID_STARTS_WITH, "starts_with", 2),
+                    s(FID_ENDS_WITH, "ends_with", 2),
+                    s(FID_TRANSLATE, "translate", 3),
+                    s(FID_TO_HEX, "to_hex", 1),
+                    s(FID_BIT_LENGTH, "bit_length", 1),
+                    s(FID_INITCAP, "initcap", 1),
+                    s(FID_IF, "if", 3),
+                    s(FID_CHR, "chr", 1),
+                    s(FID_ASCII, "ascii", 1),
+                    s(FID_CHAR_LENGTH, "char_length", 1),
+                    s(FID_CHARACTER_LENGTH, "character_length", 1),
+                    s(FID_FROM_HEX, "from_hex", 1),
                     // ClickHouse camelCase aliases. share FIDs with
                     // the existing implementations where semantics match.
-                    s(FID_STARTS_WITH,      "startsWith",        2),
-                    s(FID_ENDS_WITH,        "endsWith",          2),
-                    s(FID_CH_LENGTH,        "lengthUTF8",        1),
-                    s(FID_CH_LOWER_UTF8,    "lowerUTF8",         1),
-                    s(FID_CH_UPPER_UTF8,    "upperUTF8",         1),
-                    s(FID_CH_TO_STRING,     "toString",          1),
-                    s(FID_CH_EMPTY,         "empty",             1),
-                    s(FID_CH_NOT_EMPTY,     "notEmpty",          1),
-                    s(FID_CH_REPLACE_ALL,   "replaceAll",        3),
-                    s(FID_CH_POSITION_UTF8, "positionUTF8",      2),
+                    s(FID_STARTS_WITH, "startsWith", 2),
+                    s(FID_ENDS_WITH, "endsWith", 2),
+                    s(FID_CH_LENGTH, "lengthUTF8", 1),
+                    s(FID_CH_LOWER_UTF8, "lowerUTF8", 1),
+                    s(FID_CH_UPPER_UTF8, "upperUTF8", 1),
+                    s(FID_CH_TO_STRING, "toString", 1),
+                    s(FID_CH_EMPTY, "empty", 1),
+                    s(FID_CH_NOT_EMPTY, "notEmpty", 1),
+                    s(FID_CH_REPLACE_ALL, "replaceAll", 3),
+                    s(FID_CH_POSITION_UTF8, "positionUTF8", 2),
                     // PostgreSQL to_* + quote_* + bit accessors:
-                    s(FID_TO_BIN,        "to_bin",         1),
-                    s(FID_TO_OCT,        "to_oct",         1),
-                    s(FID_TO_ASCII,      "to_ascii",       1),
-                    s(FID_QUOTE_IDENT,   "quote_ident",    1),
-                    s(FID_QUOTE_LITERAL, "quote_literal",  1),
-                    s(FID_QUOTE_NULLABLE,"quote_nullable", 1),
-                    s(FID_GET_BIT,       "get_bit",        2),
-                    s(FID_SET_BIT,       "set_bit",        3),
-                    s(FID_GET_BYTE,      "get_byte",       2),
-                    s(FID_SET_BYTE,      "set_byte",       3),
+                    s(FID_TO_BIN, "to_bin", 1),
+                    s(FID_TO_OCT, "to_oct", 1),
+                    s(FID_TO_ASCII, "to_ascii", 1),
+                    s(FID_QUOTE_IDENT, "quote_ident", 1),
+                    s(FID_QUOTE_LITERAL, "quote_literal", 1),
+                    s(FID_QUOTE_NULLABLE, "quote_nullable", 1),
+                    s(FID_GET_BIT, "get_bit", 2),
+                    s(FID_SET_BIT, "set_bit", 3),
+                    s(FID_GET_BYTE, "get_byte", 2),
+                    s(FID_SET_BYTE, "set_byte", 3),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -460,7 +484,11 @@ mod wasm_export {
                         SqlValue::Text(s) => !s.is_empty(),
                         SqlValue::Blob(b) => !b.is_empty(),
                     };
-                    Ok(if truthy { args[1].clone() } else { args[2].clone() })
+                    Ok(if truthy {
+                        args[1].clone()
+                    } else {
+                        args[2].clone()
+                    })
                 }
                 FID_CHR => {
                     let n = as_int(&args[0], "chr", 0)?;
@@ -544,15 +572,13 @@ mod wasm_export {
                     let s = as_text(&args[0], "quote_literal", 0)?;
                     Ok(SqlValue::Text(format!("'{}'", s.replace('\'', "''"))))
                 }
-                FID_QUOTE_NULLABLE => {
-                    match args.first() {
-                        Some(SqlValue::Null) => Ok(SqlValue::Text("NULL".to_string())),
-                        _ => {
-                            let s = as_text(&args[0], "quote_nullable", 0)?;
-                            Ok(SqlValue::Text(format!("'{}'", s.replace('\'', "''"))))
-                        }
+                FID_QUOTE_NULLABLE => match args.first() {
+                    Some(SqlValue::Null) => Ok(SqlValue::Text("NULL".to_string())),
+                    _ => {
+                        let s = as_text(&args[0], "quote_nullable", 0)?;
+                        Ok(SqlValue::Text(format!("'{}'", s.replace('\'', "''"))))
                     }
-                }
+                },
                 FID_GET_BIT => {
                     let n = as_int(&args[0], "get_bit", 0)?;
                     let i = as_int(&args[1], "get_bit", 1)?;
@@ -563,7 +589,11 @@ mod wasm_export {
                     let i = as_int(&args[1], "set_bit", 1)?;
                     let v = as_int(&args[2], "set_bit", 2)? & 1;
                     let mask = 1u64 << i;
-                    let result = if v == 1 { (n as u64) | mask } else { (n as u64) & !mask };
+                    let result = if v == 1 {
+                        (n as u64) | mask
+                    } else {
+                        (n as u64) & !mask
+                    };
                     Ok(SqlValue::Integer(result as i64))
                 }
                 FID_GET_BYTE => {
@@ -587,7 +617,10 @@ mod wasm_export {
                     let nchars: Vec<char> = n.chars().collect();
                     let mut idx = 0i64;
                     for i in 0..=chars.len().saturating_sub(nchars.len()) {
-                        if chars[i..i + nchars.len()] == *nchars { idx = (i + 1) as i64; break; }
+                        if chars[i..i + nchars.len()] == *nchars {
+                            idx = (i + 1) as i64;
+                            break;
+                        }
                     }
                     Ok(SqlValue::Integer(idx))
                 }

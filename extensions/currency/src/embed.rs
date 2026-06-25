@@ -21,10 +21,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let code = arg_text(&args, 0, "currency")?;
     let entry = lookup(&code);
     Ok(match func_id {
@@ -45,10 +42,30 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_NAME,     name: b"currency_name\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SYMBOL,   name: b"currency_symbol\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DECIMALS, name: b"currency_decimals\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NUMERIC,  name: b"currency_numeric\0",  num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_NAME,
+        name: b"currency_name\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SYMBOL,
+        name: b"currency_symbol\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECIMALS,
+        name: b"currency_decimals\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NUMERIC,
+        name: b"currency_numeric\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

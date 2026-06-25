@@ -34,10 +34,7 @@ where
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_COUNT => {
             let t = arg_text(&args, 0, "emoji_count")?;
@@ -87,7 +84,9 @@ pub fn call_scalar(
         FID_GROUP => {
             let t = arg_text(&args, 0, "emoji_group")?;
             match emojis::get(&t) {
-                Some(e) => Ok(SqlValueOwned::Text(format!("{:?}", e.group()).to_lowercase())),
+                Some(e) => Ok(SqlValueOwned::Text(
+                    format!("{:?}", e.group()).to_lowercase(),
+                )),
                 None => Ok(SqlValueOwned::Null),
             }
         }
@@ -96,13 +95,48 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_COUNT,          name: b"emoji_count\0",          num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_EXTRACT,        name: b"emoji_extract\0",        num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_STRIP,          name: b"emoji_strip\0",          num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_FROM_SHORTCODE, name: b"emoji_from_shortcode\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SHORTCODE,      name: b"emoji_shortcode\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NAME,           name: b"emoji_name\0",           num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_GROUP,          name: b"emoji_group\0",          num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_COUNT,
+        name: b"emoji_count\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_EXTRACT,
+        name: b"emoji_extract\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_STRIP,
+        name: b"emoji_strip\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FROM_SHORTCODE,
+        name: b"emoji_from_shortcode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SHORTCODE,
+        name: b"emoji_shortcode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NAME,
+        name: b"emoji_name\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_GROUP,
+        name: b"emoji_group\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

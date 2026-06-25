@@ -54,9 +54,7 @@ fn canonical_ext_path() -> Option<PathBuf> {
 #[tokio::test]
 async fn loads_and_unloads_an_extension() {
     let Some(path) = canonical_ext_path() else {
-        eprintln!(
-            "skipping: test_extension.wasm not found (build sqlink-loader's test-extension)"
-        );
+        eprintln!("skipping: test_extension.wasm not found (build sqlink-loader's test-extension)");
         return;
     };
 
@@ -230,7 +228,10 @@ async fn run_tenant_scoping_isolates_providers() {
         .run_wasm_as(wasm_path.clone(), Policy::deny_all(), "alpha")
         .await
         .expect("alpha");
-    assert!(out_alpha.contains("2 table(s)"), "alpha output: {out_alpha:?}");
+    assert!(
+        out_alpha.contains("2 table(s)"),
+        "alpha output: {out_alpha:?}"
+    );
 
     let out_beta = host
         .run_wasm_as(wasm_path.clone(), Policy::deny_all(), "beta")
@@ -251,8 +252,12 @@ async fn run_tenant_scoping_isolates_providers() {
 
     // list_compose_providers exposes per-tenant rows.
     let listed = host.list_compose_providers();
-    assert!(listed.iter().any(|(t, id, _)| t == "alpha" && id == "sqlite-runtime"));
-    assert!(listed.iter().any(|(t, id, _)| t == "beta" && id == "sqlite-runtime"));
+    assert!(listed
+        .iter()
+        .any(|(t, id, _)| t == "alpha" && id == "sqlite-runtime"));
+    assert!(listed
+        .iter()
+        .any(|(t, id, _)| t == "beta" && id == "sqlite-runtime"));
 }
 
 /// Provider trust policy gates wasm-component registration by
@@ -383,7 +388,10 @@ async fn std_encoding_provider() {
 
     let encode_req = |bytes: Vec<u8>| -> Vec<u8> {
         let mut buf = Vec::new();
-        let map = CborValue::Map(vec![(CborValue::Text("data".into()), CborValue::Bytes(bytes))]);
+        let map = CborValue::Map(vec![(
+            CborValue::Text("data".into()),
+            CborValue::Bytes(bytes),
+        )]);
         ciborium::ser::into_writer(&map, &mut buf).unwrap();
         buf
     };

@@ -95,7 +95,12 @@ mod tests {
     fn cbor_is_smaller_than_json_for_repetitive() {
         let json = "[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15]";
         let b = cbor_encode(json).unwrap();
-        assert!(b.len() < json.len(), "CBOR {} >= JSON {}", b.len(), json.len());
+        assert!(
+            b.len() < json.len(),
+            "CBOR {} >= JSON {}",
+            b.len(),
+            json.len()
+        );
     }
 }
 

@@ -233,7 +233,7 @@ mod wasm_export {
     const FID_MERGE: u64 = 2;
     const FID_VERSION: u64 = 3;
     const FID_HLL_AGG: u64 = 100;
-    const FID_APPROX_COUNT_DISTINCT: u64 = 101;  // hll() then cardinality at finalize
+    const FID_APPROX_COUNT_DISTINCT: u64 = 101; // hll() then cardinality at finalize
 
     thread_local! {
         static CTX: RefCell<HashMap<u64, Vec<u8>>> = RefCell::new(HashMap::new());
@@ -301,9 +301,7 @@ mod wasm_export {
             match func_id {
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 FID_CARDINALITY => match args.first() {
-                    Some(SqlValue::Blob(b)) => {
-                        Ok(SqlValue::Integer(super::cardinality(b) as i64))
-                    }
+                    Some(SqlValue::Blob(b)) => Ok(SqlValue::Integer(super::cardinality(b) as i64)),
                     _ => Err("hll_cardinality: BLOB required".to_string()),
                 },
                 FID_MERGE => {
@@ -325,11 +323,7 @@ mod wasm_export {
     }
 
     impl AggregateGuest for Ext {
-        fn step(
-            func_id: u64,
-            context_id: u64,
-            args: Vec<SqlValue>,
-        ) -> Result<(), String> {
+        fn step(func_id: u64, context_id: u64, args: Vec<SqlValue>) -> Result<(), String> {
             if matches!(args.first(), Some(SqlValue::Null) | None) {
                 return Ok(());
             }

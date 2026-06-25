@@ -14,11 +14,11 @@ use core::ffi::c_int;
 use icalendar::{Calendar, CalendarComponent, Component};
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_VALIDATE:    u64 = 1;
+const FID_VALIDATE: u64 = 1;
 const FID_EVENT_COUNT: u64 = 2;
-const FID_TODO_COUNT:  u64 = 3;
-const FID_EVENTS:      u64 = 4;
-const FID_SUMMARIES:   u64 = 5;
+const FID_TODO_COUNT: u64 = 3;
+const FID_EVENTS: u64 = 4;
+const FID_SUMMARIES: u64 = 5;
 
 fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, String> {
     match args.get(i) {
@@ -42,10 +42,7 @@ fn event_record(ev: &icalendar::Event) -> serde_json::Value {
     })
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let t = arg_text(&args, 0, "ical")?;
     let parsed = parse(&t);
 
@@ -82,8 +79,7 @@ pub fn call_scalar(
                     })
                     .collect();
                 Ok(SqlValueOwned::Text(
-                    serde_json::to_string(&events)
-                        .unwrap_or_else(|_| "[]".to_string()),
+                    serde_json::to_string(&events).unwrap_or_else(|_| "[]".to_string()),
                 ))
             }
             None => Ok(SqlValueOwned::Null),
@@ -94,15 +90,12 @@ pub fn call_scalar(
                     .components
                     .iter()
                     .filter_map(|c| match c {
-                        CalendarComponent::Event(ev) => {
-                            ev.get_summary().map(|s| s.to_string())
-                        }
+                        CalendarComponent::Event(ev) => ev.get_summary().map(|s| s.to_string()),
                         _ => None,
                     })
                     .collect();
                 Ok(SqlValueOwned::Text(
-                    serde_json::to_string(&summaries)
-                        .unwrap_or_else(|_| "[]".to_string()),
+                    serde_json::to_string(&summaries).unwrap_or_else(|_| "[]".to_string()),
                 ))
             }
             None => Ok(SqlValueOwned::Null),
@@ -112,11 +105,36 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,    name: b"ical_validate\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_EVENT_COUNT, name: b"ical_event_count\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TODO_COUNT,  name: b"ical_todo_count\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_EVENTS,      name: b"ical_events\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SUMMARIES,   name: b"ical_summaries\0",   num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"ical_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_EVENT_COUNT,
+        name: b"ical_event_count\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TODO_COUNT,
+        name: b"ical_todo_count\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_EVENTS,
+        name: b"ical_events\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SUMMARIES,
+        name: b"ical_summaries\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

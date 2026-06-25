@@ -28,8 +28,8 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
     const VTAB_ID: u64 = 1;
@@ -72,8 +72,13 @@ mod wasm_export {
     }
 
     fn strip_quotes(s: &str) -> &str {
-        let s = s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')).unwrap_or(s);
-        s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s)
+        let s = s
+            .strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .unwrap_or(s);
+        s.strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(s)
     }
 
     fn build_schema_sql() -> String {
@@ -82,8 +87,8 @@ mod wasm_export {
 
     fn load(path: &str) -> Result<(Vec<TileInfo>, Vec<u8>, u64), String> {
         let bytes = std::fs::read(path).map_err(|e| format!("pmtiles: open {path}: {e}"))?;
-        let reader = PmTilesReader::from_bytes(bytes)
-            .map_err(|e| format!("pmtiles: parse header: {e}"))?;
+        let reader =
+            PmTilesReader::from_bytes(bytes).map_err(|e| format!("pmtiles: parse header: {e}"))?;
         let tile_data_offset = reader.header.tile_data_offset;
         let tiles = reader
             .enumerate_tiles()
@@ -175,8 +180,7 @@ mod wasm_export {
         ) -> Result<String, String> {
             let path = parse_args(&args)?;
             // Validate by trying to parse the header.
-            let bytes = std::fs::read(&path)
-                .map_err(|e| format!("pmtiles: open {path}: {e}"))?;
+            let bytes = std::fs::read(&path).map_err(|e| format!("pmtiles: open {path}: {e}"))?;
             let _ = PmTilesReader::from_bytes(bytes)
                 .map_err(|e| format!("pmtiles: parse header: {e}"))?;
             INSTANCES.with(|m| m.borrow_mut().insert(instance_id, Instance { path }));
@@ -204,7 +208,10 @@ mod wasm_export {
                 constraint_usage: info
                     .constraints
                     .iter()
-                    .map(|_| ConstraintUsage { argv_index: 0, omit: false })
+                    .map(|_| ConstraintUsage {
+                        argv_index: 0,
+                        omit: false,
+                    })
                     .collect(),
                 idx_num: 0,
                 idx_str: None,
@@ -239,8 +246,12 @@ mod wasm_export {
             _: Option<String>,
             _: Vec<SqlValue>,
         ) -> Result<(), String> {
-            let inst_id = CURSORS
-                .with(|cm| cm.borrow().get(&cursor_id).map(|c| c.instance_id).unwrap_or(0));
+            let inst_id = CURSORS.with(|cm| {
+                cm.borrow()
+                    .get(&cursor_id)
+                    .map(|c| c.instance_id)
+                    .unwrap_or(0)
+            });
             let inst = INSTANCES
                 .with(|m| m.borrow().get(&inst_id).cloned())
                 .ok_or_else(|| "pmtiles: instance not connected".to_string())?;
@@ -277,7 +288,10 @@ mod wasm_export {
                 let c = cursors
                     .get(&cursor_id)
                     .ok_or_else(|| "pmtiles: cursor not open".to_string())?;
-                let t = c.tiles.get(c.idx).ok_or_else(|| "pmtiles: row past EOF".to_string())?;
+                let t = c
+                    .tiles
+                    .get(c.idx)
+                    .ok_or_else(|| "pmtiles: row past EOF".to_string())?;
                 Ok(match col {
                     0 => SqlValue::Integer(t.tile_id as i64),
                     1 => SqlValue::Integer(t.z as i64),
@@ -296,7 +310,7 @@ mod wasm_export {
                     .ok_or_else(|| "pmtiles: cursor past EOF".to_string())
             })
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             cursor_id: u64,
@@ -326,7 +340,7 @@ mod wasm_export {
                 Ok(out)
             })
         }
-}
+    }
 
     bindings::export!(Ext with_types_in bindings);
 }

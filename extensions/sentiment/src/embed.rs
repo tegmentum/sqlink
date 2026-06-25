@@ -42,16 +42,15 @@ fn label_from_compound(c: f64) -> &'static str {
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let t = arg_text(&args, 0, "sentiment")?;
     let (pos, neu, neg, compound) = score_all(&t);
 
     match func_id {
         FID_SCORE => Ok(SqlValueOwned::Real(compound)),
-        FID_LABEL => Ok(SqlValueOwned::Text(label_from_compound(compound).to_string())),
+        FID_LABEL => Ok(SqlValueOwned::Text(
+            label_from_compound(compound).to_string(),
+        )),
         FID_BREAKDOWN => {
             let body = serde_json::json!({
                 "pos": pos,
@@ -69,12 +68,42 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_SCORE,     name: b"sentiment_score\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_LABEL,     name: b"sentiment_label\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_BREAKDOWN, name: b"sentiment_breakdown\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_POSITIVE,  name: b"sentiment_positive\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NEGATIVE,  name: b"sentiment_negative\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NEUTRAL,   name: b"sentiment_neutral\0",   num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_SCORE,
+        name: b"sentiment_score\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LABEL,
+        name: b"sentiment_label\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_BREAKDOWN,
+        name: b"sentiment_breakdown\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_POSITIVE,
+        name: b"sentiment_positive\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NEGATIVE,
+        name: b"sentiment_negative\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NEUTRAL,
+        name: b"sentiment_neutral\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

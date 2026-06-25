@@ -12,8 +12,8 @@ use std::ptr;
 use sqlink_host::bindings::sqlite::extension::types::SqlValue;
 
 use crate::api::{
-    sqlite3_context, sqlite3_value, ApiRoutines, SQLITE_BLOB, SQLITE_FLOAT,
-    SQLITE_INTEGER, SQLITE_NULL, SQLITE_TEXT, SQLITE_TRANSIENT,
+    sqlite3_context, sqlite3_value, ApiRoutines, SQLITE_BLOB, SQLITE_FLOAT, SQLITE_INTEGER,
+    SQLITE_NULL, SQLITE_TEXT, SQLITE_TRANSIENT,
 };
 
 /// Decode one sqlite3_value into the WIT-side `SqlValue` shape
@@ -26,12 +26,8 @@ pub unsafe fn read_value(api: &ApiRoutines, v: *mut sqlite3_value) -> SqlValue {
     let kind = api.value_type.expect("value_type")(v);
     match kind {
         x if x == SQLITE_NULL => SqlValue::Null,
-        x if x == SQLITE_INTEGER => {
-            SqlValue::Integer(api.value_int64.expect("value_int64")(v))
-        }
-        x if x == SQLITE_FLOAT => {
-            SqlValue::Real(api.value_double.expect("value_double")(v))
-        }
+        x if x == SQLITE_INTEGER => SqlValue::Integer(api.value_int64.expect("value_int64")(v)),
+        x if x == SQLITE_FLOAT => SqlValue::Real(api.value_double.expect("value_double")(v)),
         x if x == SQLITE_TEXT => {
             let p = api.value_text.expect("value_text")(v);
             if p.is_null() {
@@ -110,11 +106,7 @@ pub unsafe fn write_error(api: &ApiRoutines, ctx: *mut sqlite3_context, msg: &st
     let api = api.as_ref();
     let bytes = msg.as_bytes();
     let n = bytes.len() as c_int;
-    api.result_error.expect("result_error")(
-        ctx,
-        bytes.as_ptr() as *const c_char,
-        n,
-    );
+    api.result_error.expect("result_error")(ctx, bytes.as_ptr() as *const c_char, n);
 }
 
 #[cfg(test)]
@@ -231,12 +223,19 @@ mod tests {
         // production code passes SQLITE_TRANSIENT (-1 as ptr) for
         // the destructor; the test asserts that. Length must be the
         // exact byte count, not -1 (no scan).
-        let trans = std::mem::transmute::<isize, Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>>(
-            SQLITE_TRANSIENT,
-        );
+        let trans = std::mem::transmute::<
+            isize,
+            Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>,
+        >(SQLITE_TRANSIENT);
         // Compare by transmuting both to isize.
-        let got = std::mem::transmute::<Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>, isize>(destructor);
-        let want = std::mem::transmute::<Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>, isize>(trans);
+        let got = std::mem::transmute::<
+            Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>,
+            isize,
+        >(destructor);
+        let want = std::mem::transmute::<
+            Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>,
+            isize,
+        >(trans);
         assert_eq!(got, want, "result_text must use SQLITE_TRANSIENT");
         assert!(n >= 0, "byte count must be explicit, not -1");
         let bytes = std::slice::from_raw_parts(s as *const u8, n as usize).to_vec();
@@ -249,20 +248,23 @@ mod tests {
         destructor: Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>,
     ) {
         // Same TRANSIENT assertion as text.
-        let trans = std::mem::transmute::<isize, Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>>(
-            SQLITE_TRANSIENT,
-        );
-        let got = std::mem::transmute::<Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>, isize>(destructor);
-        let want = std::mem::transmute::<Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>, isize>(trans);
+        let trans = std::mem::transmute::<
+            isize,
+            Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>,
+        >(SQLITE_TRANSIENT);
+        let got = std::mem::transmute::<
+            Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>,
+            isize,
+        >(destructor);
+        let want = std::mem::transmute::<
+            Option<unsafe extern "C" fn(*mut std::os::raw::c_void)>,
+            isize,
+        >(trans);
         assert_eq!(got, want, "result_blob must use SQLITE_TRANSIENT");
         let bytes = std::slice::from_raw_parts(p as *const u8, n as usize).to_vec();
         FAKE.with(|f| f.borrow_mut().result_blob = Some(bytes));
     }
-    unsafe extern "C" fn fake_result_error(
-        _ctx: *mut sqlite3_context,
-        s: *const c_char,
-        n: c_int,
-    ) {
+    unsafe extern "C" fn fake_result_error(_ctx: *mut sqlite3_context, s: *const c_char, n: c_int) {
         let bytes = std::slice::from_raw_parts(s as *const u8, n as usize).to_vec();
         FAKE.with(|f| f.borrow_mut().result_error = Some(bytes));
     }
@@ -472,11 +474,7 @@ mod tests {
         reset();
         let table = fake_api_table();
         unsafe {
-            write_result(
-                &wrap(&table),
-                dummy_ctx(),
-                SqlValue::Blob(vec![1, 2, 3]),
-            );
+            write_result(&wrap(&table), dummy_ctx(), SqlValue::Blob(vec![1, 2, 3]));
         }
         let got = FAKE.with(|f| f.borrow().result_blob.clone()).unwrap();
         assert_eq!(got, vec![1, 2, 3]);

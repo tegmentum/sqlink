@@ -8,10 +8,10 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use core::ops::ControlFlow;
 
+use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 use sqlparser::ast::{ObjectName, Statement, VisitorMut};
 use sqlparser::dialect::GenericDialect;
 use sqlparser::parser::Parser;
-use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
 const FID_VALIDATE: u64 = 1;
 const FID_STMT_TYPE: u64 = 2;
@@ -83,10 +83,7 @@ fn collect_tables(stmts: &mut Vec<Statement>) -> Vec<String> {
     c.out
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_DIALECT => Ok(SqlValueOwned::Text("generic".to_string())),
         FID_VALIDATE => {
@@ -124,9 +121,9 @@ pub fn call_scalar(
         FID_READONLY => {
             let t = arg_text(&args, 0, "sql_is_readonly")?;
             match parse(&t) {
-                Ok(stmts) if !stmts.is_empty() => Ok(SqlValueOwned::Integer(
-                    stmts.iter().all(is_readonly) as i64,
-                )),
+                Ok(stmts) if !stmts.is_empty() => {
+                    Ok(SqlValueOwned::Integer(stmts.iter().all(is_readonly) as i64))
+                }
                 _ => Ok(SqlValueOwned::Null),
             }
         }
@@ -135,12 +132,42 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,   name: b"sql_validate\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_STMT_TYPE,  name: b"sql_statement_type\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_STMT_COUNT, name: b"sql_statement_count\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TABLES,     name: b"sql_tables\0",           num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_READONLY,   name: b"sql_is_readonly\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DIALECT,    name: b"sql_dialect\0",          num_args: 0, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"sql_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_STMT_TYPE,
+        name: b"sql_statement_type\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_STMT_COUNT,
+        name: b"sql_statement_count\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TABLES,
+        name: b"sql_tables\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_READONLY,
+        name: b"sql_is_readonly\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DIALECT,
+        name: b"sql_dialect\0",
+        num_args: 0,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

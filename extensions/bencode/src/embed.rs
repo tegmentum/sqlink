@@ -106,18 +106,14 @@ fn bencode_to_json(v: &BValue) -> JValue {
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_ENCODE => {
             let json = arg_text(&args, 0, "bencode_encode")?;
             let parsed: JValue = serde_json::from_str(&json)
                 .map_err(|e| format!("bencode_encode: parse JSON: {e}"))?;
             let benc = json_to_bencode(&parsed)?;
-            let bytes =
-                bt_bencode::to_vec(&benc).map_err(|e| format!("bencode_encode: {e}"))?;
+            let bytes = bt_bencode::to_vec(&benc).map_err(|e| format!("bencode_encode: {e}"))?;
             Ok(SqlValueOwned::Blob(bytes))
         }
         FID_DECODE => {
@@ -137,9 +133,24 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_ENCODE,   name: b"bencode_encode\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DECODE,   name: b"bencode_decode\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VALIDATE, name: b"bencode_validate\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_ENCODE,
+        name: b"bencode_encode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DECODE,
+        name: b"bencode_decode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"bencode_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

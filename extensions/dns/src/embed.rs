@@ -18,24 +18,22 @@ use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
 const FID_RESOLVE: u64 = 1;
 
-pub fn call_scalar(
-    func_id: u64,
-    _args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, _args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
-        FID_RESOLVE => Err(
-            "dns_resolve: not available in embed build (host dns SPI \
+        FID_RESOLVE => Err("dns_resolve: not available in embed build (host dns SPI \
              is wasi-component-only); use the `.load`-able \
              dns_extension.component.wasm with --grant=dns instead"
-                .into(),
-        ),
+            .into()),
         other => Err(format!("dns: unknown func id {other}")),
     }
 }
 
-const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_RESOLVE, name: b"dns_resolve\0", num_args: 2, deterministic: false },
-];
+const SCALARS: &[ScalarSpec] = &[ScalarSpec {
+    func_id: FID_RESOLVE,
+    name: b"dns_resolve\0",
+    num_args: 2,
+    deterministic: false,
+}];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {
     register_scalars(db, SCALARS, call_scalar)

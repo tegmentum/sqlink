@@ -70,10 +70,7 @@ unsafe fn pf_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result<(),
     Ok(())
 }
 
-unsafe fn pf_make_cursor(
-    _vtab_state: *mut (),
-    _db: *mut libsqlite3_sys::sqlite3,
-) -> *mut () {
+unsafe fn pf_make_cursor(_vtab_state: *mut (), _db: *mut libsqlite3_sys::sqlite3) -> *mut () {
     alloc::boxed::Box::into_raw(alloc::boxed::Box::new(PrefixesCursor {
         prefixes: Vec::new(),
         idx: 0,

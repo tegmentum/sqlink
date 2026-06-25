@@ -79,7 +79,9 @@ mod wasm_export {
                 current.push(c);
             } else {
                 if !current.is_empty() {
-                    if let Ok(n) = current.parse::<f64>() { nums.push(n); }
+                    if let Ok(n) = current.parse::<f64>() {
+                        nums.push(n);
+                    }
                     current.clear();
                 }
                 if c.is_ascii_alphabetic() {
@@ -91,20 +93,26 @@ mod wasm_export {
             }
         }
         if !current.is_empty() {
-            if let Ok(n) = current.parse::<f64>() { nums.push(n); }
+            if let Ok(n) = current.parse::<f64>() {
+                nums.push(n);
+            }
         }
         if nums.is_empty() || nums.len() > 3 {
             return None;
         }
         let mut dd = nums[0];
-        if nums.len() > 1 { dd += nums[1] / 60.0; }
-        if nums.len() > 2 { dd += nums[2] / 3600.0; }
+        if nums.len() > 1 {
+            dd += nums[1] / 60.0;
+        }
+        if nums.len() > 2 {
+            dd += nums[2] / 3600.0;
+        }
         // Hemisphere applies sign. If absent, retain whatever sign
         // was given on the degrees part (so "-40" stays negative).
         match hemi {
             Some('S') | Some('W') => Some(-dd.abs()),
             Some('N') | Some('E') => Some(dd.abs()),
-            _ => Some(dd),  // raw signed value
+            _ => Some(dd), // raw signed value
         }
     }
 
@@ -113,7 +121,11 @@ mod wasm_export {
     /// to match the conventional [-180, 180) half-open interval).
     fn normalize_lon(x: f64) -> f64 {
         let r = ((x + 180.0) % 360.0 + 360.0) % 360.0 - 180.0;
-        if r == 180.0 { -180.0 } else { r }
+        if r == 180.0 {
+            -180.0
+        } else {
+            r
+        }
     }
 
     /// Clamp latitude to [-90, 90]. Latitudes do NOT wrap  there's

@@ -89,8 +89,7 @@ mod wasm_export {
                     let rtype = parse_record_type(&rtype_str);
                     match dns::resolve(&name, &rtype) {
                         Ok(records) => Ok(SqlValue::Text(
-                            serde_json::to_string(&records)
-                                .unwrap_or_else(|_| "[]".to_string()),
+                            serde_json::to_string(&records).unwrap_or_else(|_| "[]".to_string()),
                         )),
                         Err(dns::DnsError::Nxdomain) => Ok(SqlValue::Text("[]".to_string())),
                         Err(dns::DnsError::Refused(msg)) => {
@@ -99,9 +98,7 @@ mod wasm_export {
                         Err(dns::DnsError::TimedOut) => {
                             Err("dns_resolve: lookup timed out".to_string())
                         }
-                        Err(dns::DnsError::Other(msg)) => {
-                            Err(format!("dns_resolve: {msg}"))
-                        }
+                        Err(dns::DnsError::Other(msg)) => Err(format!("dns_resolve: {msg}")),
                     }
                 }
                 other => Err(format!("dns: unknown func id {other}")),

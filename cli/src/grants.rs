@@ -72,7 +72,9 @@ pub fn get(extension_name: &str) -> Result<Option<StoredGrant>, SqliteError> {
          FROM _capability_grants WHERE extension_name = ?1",
         &[SqlValue::Text(extension_name.into())],
     )?;
-    let Some(row) = result.rows.into_iter().next() else { return Ok(None) };
+    let Some(row) = result.rows.into_iter().next() else {
+        return Ok(None);
+    };
     Ok(Some(row_to_grant(row)))
 }
 
@@ -151,33 +153,33 @@ fn row_to_grant(row: Vec<SqlValue>) -> StoredGrant {
     let mut it = row.into_iter();
     StoredGrant {
         extension_name: it.next().map(text).unwrap_or_default(),
-        digest_hex:     it.next().and_then(text_opt),
-        policy_json:    it.next().map(text).unwrap_or_default(),
-        granted_at:     it.next().map(text).unwrap_or_default(),
-        granted_by:     it.next().and_then(text_opt),
-        notes:          it.next().and_then(text_opt),
+        digest_hex: it.next().and_then(text_opt),
+        policy_json: it.next().map(text).unwrap_or_default(),
+        granted_at: it.next().map(text).unwrap_or_default(),
+        granted_by: it.next().and_then(text_opt),
+        notes: it.next().and_then(text_opt),
     }
 }
 
 fn text(v: SqlValue) -> String {
     match v {
         SqlValue::Text(s) => s,
-        SqlValue::Null    => String::new(),
-        other             => format!("{other:?}"),
+        SqlValue::Null => String::new(),
+        other => format!("{other:?}"),
     }
 }
 
 fn text_opt(v: SqlValue) -> Option<String> {
     match v {
-        SqlValue::Null    => None,
+        SqlValue::Null => None,
         SqlValue::Text(s) => Some(s),
-        other             => Some(format!("{other:?}")),
+        other => Some(format!("{other:?}")),
     }
 }
 
 fn opt_text(s: Option<&str>) -> SqlValue {
     match s {
         Some(t) => SqlValue::Text(t.into()),
-        None    => SqlValue::Null,
+        None => SqlValue::Null,
     }
 }

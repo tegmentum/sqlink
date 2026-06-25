@@ -102,8 +102,7 @@ async fn main() -> Result<()> {
         .init();
 
     let args = Args::parse();
-    let conn = Connection::open(&args.db)
-        .with_context(|| format!("open db {}", &args.db))?;
+    let conn = Connection::open(&args.db).with_context(|| format!("open db {}", &args.db))?;
     let shared: Arc<SharedConn> = Arc::new(std::sync::Mutex::new(conn));
 
     if args.init_routes {
@@ -126,7 +125,11 @@ async fn main() -> Result<()> {
         None
     };
 
-    let scheme = if tls_config.is_some() { "https" } else { "http" };
+    let scheme = if tls_config.is_some() {
+        "https"
+    } else {
+        "http"
+    };
     tracing::info!(
         "{scheme}://{addr}  db={}  POST /sql | GET /sql?q=...",
         args.db,
@@ -139,7 +142,9 @@ async fn main() -> Result<()> {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
 
-    let acceptor = tls_config.as_ref().map(|c| tokio_rustls::TlsAcceptor::from(c.clone()));
+    let acceptor = tls_config
+        .as_ref()
+        .map(|c| tokio_rustls::TlsAcceptor::from(c.clone()));
 
     // Wasm dispatcher  None until --load wires something up.
     // Each --load NAME=PATH (or just PATH; stem becomes name)
@@ -172,7 +177,9 @@ async fn main() -> Result<()> {
         let acceptor = acceptor.clone();
         let wasm = wasm.clone();
         tokio::spawn(async move {
-            if let Err(e) = serve_one(stream, acceptor.as_ref(), peer, conn, routes_table, wasm).await {
+            if let Err(e) =
+                serve_one(stream, acceptor.as_ref(), peer, conn, routes_table, wasm).await
+            {
                 tracing::debug!("conn {peer}: {e}");
             }
         });
@@ -209,7 +216,9 @@ fn parse_loads(raw: &[String]) -> Result<Vec<(String, PathBuf)>> {
             return Err(anyhow!("--load {entry}: not a file: {}", path.display()));
         }
         if !seen.insert(name.clone()) {
-            return Err(anyhow!("--load {entry}: handler name `{name}` already registered"));
+            return Err(anyhow!(
+                "--load {entry}: handler name `{name}` already registered"
+            ));
         }
         out.push((name, path));
     }
@@ -227,9 +236,8 @@ fn parse_envs(raw: &[String]) -> Result<Vec<(String, String)>> {
         let (k, v) = match entry.find('=') {
             Some(i) => (entry[..i].to_string(), entry[i + 1..].to_string()),
             None => {
-                let val = std::env::var(entry).map_err(|_| {
-                    anyhow!("--env {entry}: variable not set in process env")
-                })?;
+                let val = std::env::var(entry)
+                    .map_err(|_| anyhow!("--env {entry}: variable not set in process env"))?;
                 (entry.clone(), val)
             }
         };
@@ -276,4 +284,3 @@ async fn serve_one(
     }
     Ok(())
 }
-

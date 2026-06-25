@@ -50,10 +50,7 @@ fn after_dt(after_ts: i64) -> DateTime<Utc> {
     DateTime::<Utc>::from_timestamp(after_ts, 0).unwrap_or_else(Utc::now)
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_VALIDATE => {
             let e = arg_text(&args, 0, "cron_validate")?;
@@ -89,9 +86,24 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE, name: b"cron_validate\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NEXT,     name: b"cron_next\0",     num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_UPCOMING, name: b"cron_upcoming\0", num_args: 3, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"cron_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NEXT,
+        name: b"cron_next\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_UPCOMING,
+        name: b"cron_upcoming\0",
+        num_args: 3,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

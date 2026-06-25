@@ -25,10 +25,9 @@ use wasmtime_wasi::WasiCtxBuilder;
 
 fn probe_component_path() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest
-        .parent()
-        .unwrap()
-        .join("probe/tvm-vfs-wasip2/target/wasm32-wasip2/release/probe_tvm_vfs_wasip2.component.wasm")
+    manifest.parent().unwrap().join(
+        "probe/tvm-vfs-wasip2/target/wasm32-wasip2/release/probe_tvm_vfs_wasip2.component.wasm",
+    )
 }
 
 struct ProbeState {
@@ -101,9 +100,7 @@ fn vfs_through_tvm_round_trip() {
         "probe returned {count}; expected {ROWS}  codes 7001..7009 are step-level probe failures"
     );
 
-    let (probe_file_count,) = file_count_fn
-        .call(&mut store, ())
-        .expect("call file-count");
+    let (probe_file_count,) = file_count_fn.call(&mut store, ()).expect("call file-count");
     assert!(
         probe_file_count >= 1,
         "probe's FILES table should hold at least the main db; got {probe_file_count}"

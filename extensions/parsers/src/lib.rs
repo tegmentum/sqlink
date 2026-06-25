@@ -31,7 +31,11 @@ pub fn rgb_to_hsl(r: u8, g: u8, b: u8) -> (f64, f64, f64) {
         return (0.0, 0.0, l);
     }
     let d = max - min;
-    let s = if l > 0.5 { d / (2.0 - max - min) } else { d / (max + min) };
+    let s = if l > 0.5 {
+        d / (2.0 - max - min)
+    } else {
+        d / (max + min)
+    };
     let h = if (max - rf).abs() < 1e-9 {
         (gf - bf) / d + if gf < bf { 6.0 } else { 0.0 }
     } else if (max - gf).abs() < 1e-9 {
@@ -180,9 +184,11 @@ mod wasm_export {
                     let (h, s, l) = super::rgb_to_hsl(r, g, b);
                     Ok(SqlValue::Text(format!("{h},{s},{l}")))
                 }
-                FID_LUHN => Ok(SqlValue::Integer(
-                    super::luhn_check(&arg_text(&args, 0, "luhn_check")?) as i64,
-                )),
+                FID_LUHN => {
+                    Ok(SqlValue::Integer(
+                        super::luhn_check(&arg_text(&args, 0, "luhn_check")?) as i64,
+                    ))
+                }
                 other => Err(format!("parsers: unknown func id {other}")),
             }
         }

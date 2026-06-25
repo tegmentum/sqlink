@@ -140,8 +140,7 @@ pub const SQLITE_STATIC: isize = 0;
 
 #[repr(C)]
 pub struct sqlite3_api_routines {
-    pub aggregate_context:
-        Option<unsafe extern "C" fn(*mut sqlite3_context, c_int) -> *mut c_void>,
+    pub aggregate_context: Option<unsafe extern "C" fn(*mut sqlite3_context, c_int) -> *mut c_void>,
     pub aggregate_count: Option<unsafe extern "C" fn(*mut sqlite3_context) -> c_int>,
     pub bind_blob: Option<
         unsafe extern "C" fn(
@@ -152,14 +151,11 @@ pub struct sqlite3_api_routines {
             Option<unsafe extern "C" fn(*mut c_void)>,
         ) -> c_int,
     >,
-    pub bind_double:
-        Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int, f64) -> c_int>,
+    pub bind_double: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int, f64) -> c_int>,
     pub bind_int: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int, c_int) -> c_int>,
-    pub bind_int64:
-        Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int, sqlite_int64) -> c_int>,
+    pub bind_int64: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int, sqlite_int64) -> c_int>,
     pub bind_null: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> c_int>,
-    pub bind_parameter_count:
-        Option<unsafe extern "C" fn(*mut sqlite3_stmt) -> c_int>,
+    pub bind_parameter_count: Option<unsafe extern "C" fn(*mut sqlite3_stmt) -> c_int>,
     pub bind_parameter_index:
         Option<unsafe extern "C" fn(*mut sqlite3_stmt, *const c_char) -> c_int>,
     pub bind_parameter_name:
@@ -181,9 +177,7 @@ pub struct sqlite3_api_routines {
     pub close: *const c_void,
     pub collation_needed: *const c_void,
     pub collation_needed16: *const c_void,
-    pub column_blob: Option<
-        unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> *const c_void,
-    >,
+    pub column_blob: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> *const c_void>,
     pub column_bytes: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> c_int>,
     pub column_bytes16: *const c_void,
     pub column_count: Option<unsafe extern "C" fn(*mut sqlite3_stmt) -> c_int>,
@@ -191,20 +185,16 @@ pub struct sqlite3_api_routines {
     pub column_database_name16: *const c_void,
     pub column_decltype: *const c_void,
     pub column_decltype16: *const c_void,
-    pub column_double:
-        Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> f64>,
+    pub column_double: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> f64>,
     pub column_int: *const c_void,
-    pub column_int64:
-        Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> sqlite_int64>,
+    pub column_int64: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> sqlite_int64>,
     pub column_name: *const c_void,
     pub column_name16: *const c_void,
     pub column_origin_name: *const c_void,
     pub column_origin_name16: *const c_void,
     pub column_table_name: *const c_void,
     pub column_table_name16: *const c_void,
-    pub column_text: Option<
-        unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> *const c_uchar,
-    >,
+    pub column_text: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> *const c_uchar>,
     pub column_text16: *const c_void,
     pub column_type: Option<unsafe extern "C" fn(*mut sqlite3_stmt, c_int) -> c_int>,
     pub column_value: *const c_void,
@@ -254,15 +244,11 @@ pub struct sqlite3_api_routines {
             Option<unsafe extern "C" fn(*mut c_void)>,
         ),
     >,
-    pub result_double:
-        Option<unsafe extern "C" fn(*mut sqlite3_context, f64)>,
-    pub result_error: Option<
-        unsafe extern "C" fn(*mut sqlite3_context, *const c_char, c_int),
-    >,
+    pub result_double: Option<unsafe extern "C" fn(*mut sqlite3_context, f64)>,
+    pub result_error: Option<unsafe extern "C" fn(*mut sqlite3_context, *const c_char, c_int)>,
     pub result_error16: *const c_void,
     pub result_int: Option<unsafe extern "C" fn(*mut sqlite3_context, c_int)>,
-    pub result_int64:
-        Option<unsafe extern "C" fn(*mut sqlite3_context, sqlite_int64)>,
+    pub result_int64: Option<unsafe extern "C" fn(*mut sqlite3_context, sqlite_int64)>,
     pub result_null: Option<unsafe extern "C" fn(*mut sqlite3_context)>,
     pub result_text: Option<
         unsafe extern "C" fn(
@@ -287,20 +273,15 @@ pub struct sqlite3_api_routines {
     pub trace: *const c_void,
     pub transfer_bindings: *const c_void,
     pub update_hook: *const c_void,
-    pub user_data:
-        Option<unsafe extern "C" fn(*mut sqlite3_context) -> *mut c_void>,
-    pub value_blob:
-        Option<unsafe extern "C" fn(*mut sqlite3_value) -> *const c_void>,
+    pub user_data: Option<unsafe extern "C" fn(*mut sqlite3_context) -> *mut c_void>,
+    pub value_blob: Option<unsafe extern "C" fn(*mut sqlite3_value) -> *const c_void>,
     pub value_bytes: Option<unsafe extern "C" fn(*mut sqlite3_value) -> c_int>,
     pub value_bytes16: *const c_void,
-    pub value_double:
-        Option<unsafe extern "C" fn(*mut sqlite3_value) -> f64>,
+    pub value_double: Option<unsafe extern "C" fn(*mut sqlite3_value) -> f64>,
     pub value_int: *const c_void,
-    pub value_int64:
-        Option<unsafe extern "C" fn(*mut sqlite3_value) -> sqlite_int64>,
+    pub value_int64: Option<unsafe extern "C" fn(*mut sqlite3_value) -> sqlite_int64>,
     pub value_numeric_type: *const c_void,
-    pub value_text:
-        Option<unsafe extern "C" fn(*mut sqlite3_value) -> *const c_uchar>,
+    pub value_text: Option<unsafe extern "C" fn(*mut sqlite3_value) -> *const c_uchar>,
     pub value_text16: *const c_void,
     pub value_text16be: *const c_void,
     pub value_text16le: *const c_void,
@@ -349,12 +330,10 @@ pub struct sqlite3_api_routines {
     pub vfs_unregister: *const c_void,
     pub xthreadsafe: *const c_void,
     pub result_zeroblob: *const c_void,
-    pub result_error_code:
-        Option<unsafe extern "C" fn(*mut sqlite3_context, c_int)>,
+    pub result_error_code: Option<unsafe extern "C" fn(*mut sqlite3_context, c_int)>,
     pub test_control: *const c_void,
     pub randomness: *const c_void,
-    pub context_db_handle:
-        Option<unsafe extern "C" fn(*mut sqlite3_context) -> *mut sqlite3>,
+    pub context_db_handle: Option<unsafe extern "C" fn(*mut sqlite3_context) -> *mut sqlite3>,
     pub extended_result_codes: *const c_void,
     pub limit: *const c_void,
     pub next_stmt: *const c_void,
@@ -377,20 +356,8 @@ pub struct sqlite3_api_routines {
             c_int,
             c_int,
             *mut c_void,
-            Option<
-                unsafe extern "C" fn(
-                    *mut sqlite3_context,
-                    c_int,
-                    *mut *mut sqlite3_value,
-                ),
-            >,
-            Option<
-                unsafe extern "C" fn(
-                    *mut sqlite3_context,
-                    c_int,
-                    *mut *mut sqlite3_value,
-                ),
-            >,
+            Option<unsafe extern "C" fn(*mut sqlite3_context, c_int, *mut *mut sqlite3_value)>,
+            Option<unsafe extern "C" fn(*mut sqlite3_context, c_int, *mut *mut sqlite3_value)>,
             Option<unsafe extern "C" fn(*mut sqlite3_context)>,
             Option<unsafe extern "C" fn(*mut c_void)>,
         ) -> c_int,
@@ -489,22 +456,10 @@ pub struct sqlite3_api_routines {
             c_int,
             c_int,
             *mut c_void,
-            Option<
-                unsafe extern "C" fn(
-                    *mut sqlite3_context,
-                    c_int,
-                    *mut *mut sqlite3_value,
-                ),
-            >,
+            Option<unsafe extern "C" fn(*mut sqlite3_context, c_int, *mut *mut sqlite3_value)>,
             Option<unsafe extern "C" fn(*mut sqlite3_context)>,
             Option<unsafe extern "C" fn(*mut sqlite3_context)>,
-            Option<
-                unsafe extern "C" fn(
-                    *mut sqlite3_context,
-                    c_int,
-                    *mut *mut sqlite3_value,
-                ),
-            >,
+            Option<unsafe extern "C" fn(*mut sqlite3_context, c_int, *mut *mut sqlite3_value)>,
             Option<unsafe extern "C" fn(*mut c_void)>,
         ) -> c_int,
     >,

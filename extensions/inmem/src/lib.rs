@@ -30,8 +30,8 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::exports::sqlite::extension::vtab_update::Guest as VtabUpdateGuest;
     use bindings::sqlite::extension::types::SqlValue;
 
@@ -154,7 +154,10 @@ mod wasm_export {
             let usage = info
                 .constraints
                 .iter()
-                .map(|_| ConstraintUsage { argv_index: 0, omit: false })
+                .map(|_| ConstraintUsage {
+                    argv_index: 0,
+                    omit: false,
+                })
                 .collect();
             Ok(IndexPlan {
                 constraint_usage: usage,
@@ -169,7 +172,11 @@ mod wasm_export {
             CURSORS.with(|m| {
                 m.borrow_mut().insert(
                     cursor_id,
-                    Cursor { instance_id, snapshot: Vec::new(), idx: 0 },
+                    Cursor {
+                        instance_id,
+                        snapshot: Vec::new(),
+                        idx: 0,
+                    },
                 )
             });
             Ok(())
@@ -186,11 +193,16 @@ mod wasm_export {
             _: Vec<SqlValue>,
         ) -> Result<(), String> {
             let inst_id = CURSORS.with(|m| {
-                m.borrow().get(&cursor_id).map(|c| c.instance_id).unwrap_or(0)
+                m.borrow()
+                    .get(&cursor_id)
+                    .map(|c| c.instance_id)
+                    .unwrap_or(0)
             });
             let snapshot = INSTANCES.with(|m| {
                 let inst = m.borrow();
-                let Some(i) = inst.get(&inst_id) else { return Vec::new(); };
+                let Some(i) = inst.get(&inst_id) else {
+                    return Vec::new();
+                };
                 let mut rids: Vec<i64> = i.rows.keys().copied().collect();
                 rids.sort();
                 rids
@@ -222,12 +234,23 @@ mod wasm_export {
         fn column(_: u64, cursor_id: u64, col: i32) -> Result<SqlValue, String> {
             CURSORS.with(|cm| {
                 let cursors = cm.borrow();
-                let c = cursors.get(&cursor_id).ok_or_else(|| "inmem: cursor not open".to_string())?;
-                let rid = c.snapshot.get(c.idx).copied().ok_or_else(|| "inmem: past EOF".to_string())?;
+                let c = cursors
+                    .get(&cursor_id)
+                    .ok_or_else(|| "inmem: cursor not open".to_string())?;
+                let rid = c
+                    .snapshot
+                    .get(c.idx)
+                    .copied()
+                    .ok_or_else(|| "inmem: past EOF".to_string())?;
                 INSTANCES.with(|im| {
                     let instances = im.borrow();
-                    let inst = instances.get(&c.instance_id).ok_or_else(|| "inmem: instance not found".to_string())?;
-                    let row = inst.rows.get(&rid).ok_or_else(|| "inmem: rowid not found".to_string())?;
+                    let inst = instances
+                        .get(&c.instance_id)
+                        .ok_or_else(|| "inmem: instance not found".to_string())?;
+                    let row = inst
+                        .rows
+                        .get(&rid)
+                        .ok_or_else(|| "inmem: rowid not found".to_string())?;
                     Ok(match col {
                         0 => SqlValue::Text(row.key.clone()),
                         1 => row.value.clone(),
@@ -239,11 +262,16 @@ mod wasm_export {
         fn rowid(_: u64, cursor_id: u64) -> Result<i64, String> {
             CURSORS.with(|m| {
                 let cursors = m.borrow();
-                let c = cursors.get(&cursor_id).ok_or_else(|| "inmem: cursor not open".to_string())?;
-                c.snapshot.get(c.idx).copied().ok_or_else(|| "inmem: past EOF".to_string())
+                let c = cursors
+                    .get(&cursor_id)
+                    .ok_or_else(|| "inmem: cursor not open".to_string())?;
+                c.snapshot
+                    .get(c.idx)
+                    .copied()
+                    .ok_or_else(|| "inmem: past EOF".to_string())
             })
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             _cursor_id: u64,
@@ -251,14 +279,10 @@ mod wasm_export {
         ) -> Result<Vec<VtabRow>, String> {
             Err("fetch_batch: not implemented; host falls back to per-row".to_string())
         }
-}
+    }
 
     impl VtabUpdateGuest for Inmem {
-        fn update(
-            _: u64,
-            instance_id: u64,
-            args: Vec<SqlValue>,
-        ) -> Result<i64, String> {
+        fn update(_: u64, instance_id: u64, args: Vec<SqlValue>) -> Result<i64, String> {
             INSTANCES.with(|m| {
                 let mut instances = m.borrow_mut();
                 let inst = instances
@@ -269,7 +293,8 @@ mod wasm_export {
                     (1, Some(SqlValue::Integer(rid))) => {
                         if let Some(prev) = inst.rows.remove(rid) {
                             if in_txn {
-                                inst.journal.push(JournalEntry::Deleted { rowid: *rid, prev });
+                                inst.journal
+                                    .push(JournalEntry::Deleted { rowid: *rid, prev });
                             }
                         }
                         Ok(0)
@@ -285,8 +310,17 @@ mod wasm_export {
                         };
                         let value = args.get(3).cloned().unwrap_or(SqlValue::Null);
                         let rid = match proposed {
-                            Some(r) => { if r >= inst.next_rowid { inst.next_rowid = r + 1; } r }
-                            None => { let r = inst.next_rowid; inst.next_rowid += 1; r }
+                            Some(r) => {
+                                if r >= inst.next_rowid {
+                                    inst.next_rowid = r + 1;
+                                }
+                                r
+                            }
+                            None => {
+                                let r = inst.next_rowid;
+                                inst.next_rowid += 1;
+                                r
+                            }
                         };
                         inst.rows.insert(rid, Row { key, value });
                         if in_txn {
@@ -304,9 +338,15 @@ mod wasm_export {
                             _ => return Err("inmem: key (col 0) must be TEXT".to_string()),
                         };
                         let value = args.get(3).cloned().unwrap_or(SqlValue::Null);
-                        let prev = inst.rows.remove(old_rid).ok_or_else(|| format!("inmem: row {old_rid} not found"))?;
+                        let prev = inst
+                            .rows
+                            .remove(old_rid)
+                            .ok_or_else(|| format!("inmem: row {old_rid} not found"))?;
                         if in_txn {
-                            inst.journal.push(JournalEntry::Updated { rowid: *old_rid, prev });
+                            inst.journal.push(JournalEntry::Updated {
+                                rowid: *old_rid,
+                                prev,
+                            });
                         }
                         inst.rows.insert(new_rid, Row { key, value });
                         Ok(0)
@@ -324,7 +364,9 @@ mod wasm_export {
             });
             Ok(())
         }
-        fn sync(_: u64, _: u64) -> Result<(), String> { Ok(()) }
+        fn sync(_: u64, _: u64) -> Result<(), String> {
+            Ok(())
+        }
         fn commit(_: u64, instance_id: u64) -> Result<(), String> {
             INSTANCES.with(|m| {
                 if let Some(i) = m.borrow_mut().get_mut(&instance_id) {
@@ -339,9 +381,11 @@ mod wasm_export {
                 if let Some(i) = m.borrow_mut().get_mut(&instance_id) {
                     while let Some(entry) = i.journal.pop() {
                         match entry {
-                            JournalEntry::Inserted(rid) => { i.rows.remove(&rid); }
-                            JournalEntry::Updated { rowid, prev } |
-                            JournalEntry::Deleted { rowid, prev } => {
+                            JournalEntry::Inserted(rid) => {
+                                i.rows.remove(&rid);
+                            }
+                            JournalEntry::Updated { rowid, prev }
+                            | JournalEntry::Deleted { rowid, prev } => {
                                 i.rows.insert(rowid, prev);
                             }
                         }
@@ -351,25 +395,29 @@ mod wasm_export {
             });
             Ok(())
         }
-        fn rename(_: u64, _: u64, _: String) -> Result<(), String> { Ok(()) }
-        fn savepoint(_: u64, _: u64, _: i32) -> Result<(), String> { Ok(()) }
-        fn release(_: u64, _: u64, _: i32) -> Result<(), String> { Ok(()) }
-        fn rollback_to(_: u64, _: u64, _: i32) -> Result<(), String> { Ok(()) }
+        fn rename(_: u64, _: u64, _: String) -> Result<(), String> {
+            Ok(())
+        }
+        fn savepoint(_: u64, _: u64, _: i32) -> Result<(), String> {
+            Ok(())
+        }
+        fn release(_: u64, _: u64, _: i32) -> Result<(), String> {
+            Ok(())
+        }
+        fn rollback_to(_: u64, _: u64, _: i32) -> Result<(), String> {
+            Ok(())
+        }
         fn is_shadow_name(_: u64, name: String) -> bool {
             // Demonstration: claim `_inmem_*` as shadow tables.
             name.starts_with("_inmem_")
         }
-        fn integrity(
-            _: u64,
-            instance_id: u64,
-            _: String,
-            _: String,
-            _: u32,
-        ) -> Result<(), String> {
+        fn integrity(_: u64, instance_id: u64, _: String, _: String, _: u32) -> Result<(), String> {
             // Self-check: every rowid in `rows` must be < next_rowid.
             INSTANCES.with(|m| {
                 let inst = m.borrow();
-                let Some(i) = inst.get(&instance_id) else { return Ok(()); };
+                let Some(i) = inst.get(&instance_id) else {
+                    return Ok(());
+                };
                 for &rid in i.rows.keys() {
                     if rid >= i.next_rowid {
                         return Err(format!("inmem: rowid {rid} >= next_rowid {}", i.next_rowid));

@@ -91,9 +91,7 @@ mod wasm_export {
         }
     }
 
-    fn rows_to_json(
-        result: bindings::sqlite::extension::types::QueryResult,
-    ) -> serde_json::Value {
+    fn rows_to_json(result: bindings::sqlite::extension::types::QueryResult) -> serde_json::Value {
         let cols: Vec<String> = result.columns.clone();
         let arr: Vec<serde_json::Value> = result
             .rows
@@ -212,7 +210,11 @@ mod wasm_export {
                     // itself to its parent's children.
                     let mut tree_root: Vec<serde_json::Value> = Vec::new();
                     for id in &order {
-                        let (parent, detail, _) = nodes.get(id).cloned().unwrap_or((0, String::new(), Vec::new()));
+                        let (parent, detail, _) =
+                            nodes
+                                .get(id)
+                                .cloned()
+                                .unwrap_or((0, String::new(), Vec::new()));
                         let node = serde_json::json!({
                             "id": id,
                             "detail": detail,
@@ -229,10 +231,17 @@ mod wasm_export {
                     // resolved.
                     fn build(
                         id: i64,
-                        nodes: &alloc::collections::BTreeMap<i64, (i64, String, Vec<serde_json::Value>)>,
+                        nodes: &alloc::collections::BTreeMap<
+                            i64,
+                            (i64, String, Vec<serde_json::Value>),
+                        >,
                         order: &[i64],
                     ) -> serde_json::Value {
-                        let entry = nodes.get(&id).cloned().unwrap_or((0, String::new(), Vec::new()));
+                        let entry =
+                            nodes
+                                .get(&id)
+                                .cloned()
+                                .unwrap_or((0, String::new(), Vec::new()));
                         let children: Vec<serde_json::Value> = order
                             .iter()
                             .filter(|cid| nodes.get(cid).map(|n| n.0 == id).unwrap_or(false))

@@ -8,8 +8,8 @@ use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
 const FID_COMPARE: u64 = 1;
-const FID_KEY:     u64 = 2;
-const FID_LESS:    u64 = 3;
+const FID_KEY: u64 = 2;
+const FID_LESS: u64 = 3;
 
 /// Token is either an integer (with leading zeros preserved for
 /// pad info but compared numerically) or a text segment compared
@@ -54,12 +54,10 @@ fn compare(a: &str, b: &str) -> i64 {
     let tb = tokenize(b);
     for (xa, xb) in ta.iter().zip(tb.iter()) {
         let c = match (xa, xb) {
-            (Tok::Num(va, la), Tok::Num(vb, lb)) => {
-                match va.cmp(vb) {
-                    core::cmp::Ordering::Equal => la.cmp(lb),
-                    o => o,
-                }
-            }
+            (Tok::Num(va, la), Tok::Num(vb, lb)) => match va.cmp(vb) {
+                core::cmp::Ordering::Equal => la.cmp(lb),
+                o => o,
+            },
             (Tok::Text(sa), Tok::Text(sb)) => sa.cmp(sb),
             (Tok::Num(_, _), Tok::Text(_)) => core::cmp::Ordering::Less,
             (Tok::Text(_), Tok::Num(_, _)) => core::cmp::Ordering::Greater,
@@ -104,10 +102,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_COMPARE => {
             let a = arg_text(&args, 0, "natsort_compare")?;
@@ -121,16 +116,35 @@ pub fn call_scalar(
         FID_LESS => {
             let a = arg_text(&args, 0, "natsort_less")?;
             let b = arg_text(&args, 1, "natsort_less")?;
-            Ok(SqlValueOwned::Integer(if compare(&a, &b) < 0 { 1 } else { 0 }))
+            Ok(SqlValueOwned::Integer(if compare(&a, &b) < 0 {
+                1
+            } else {
+                0
+            }))
         }
         other => Err(format!("natsort: unknown func id {other}")),
     }
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_COMPARE, name: b"natsort_compare\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_KEY,     name: b"natsort_key\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_LESS,    name: b"natsort_less\0",    num_args: 2, deterministic: true },
+    ScalarSpec {
+        func_id: FID_COMPARE,
+        name: b"natsort_compare\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_KEY,
+        name: b"natsort_key\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LESS,
+        name: b"natsort_less\0",
+        num_args: 2,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

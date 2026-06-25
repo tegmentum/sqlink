@@ -364,9 +364,7 @@ mod wasm_export {
                         None => return Ok(SqlValue::Null),
                     };
                     Ok(parse_color(&raw)
-                        .map(|(r, g, b)| {
-                            SqlValue::Text(format!("[{r}, {g}, {b}]"))
-                        })
+                        .map(|(r, g, b)| SqlValue::Text(format!("[{r}, {g}, {b}]")))
                         .unwrap_or(SqlValue::Null))
                 }
                 FID_RGB_TO_HSL => {
@@ -455,9 +453,7 @@ mod wasm_export {
                         None => return Ok(SqlValue::Null),
                     };
                     Ok(match (parse_color(&a_raw), parse_color(&b_raw)) {
-                        (Some(ca), Some(cb)) => {
-                            SqlValue::Text(hex_of(mix_linear(ca, cb, t)))
-                        }
+                        (Some(ca), Some(cb)) => SqlValue::Text(hex_of(mix_linear(ca, cb, t))),
                         _ => SqlValue::Null,
                     })
                 }

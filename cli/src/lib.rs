@@ -70,7 +70,6 @@ thread_local! {
         RefCell::new(std::collections::HashMap::new());
 }
 
-
 // =========================================================================
 // wasi:cli/run — the component's entry point.
 // Reads argv[1] as an optional db path; reads stdin line by line,
@@ -195,7 +194,11 @@ impl RunGuest for CliCommand {
 /// stdout. Called once per eval result so `.once` consumes
 /// correctly.
 fn write_output(s: &str, stdout: &mut std::io::Stdout) {
-    enum Target { Once(String), Append(String), Stdout }
+    enum Target {
+        Once(String),
+        Append(String),
+        Stdout,
+    }
     let target = settings::SETTINGS.with(|set| {
         let mut g = set.borrow_mut();
         if let Some(p) = g.once_output_path.take() {
@@ -211,7 +214,11 @@ fn write_output(s: &str, stdout: &mut std::io::Stdout) {
             let _ = std::fs::write(&p, s);
         }
         Target::Append(p) => {
-            if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(&p) {
+            if let Ok(mut f) = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&p)
+            {
                 use std::io::Write;
                 let _ = f.write_all(s.as_bytes());
             }
@@ -226,7 +233,11 @@ fn write_output(s: &str, stdout: &mut std::io::Stdout) {
 fn current_prompt(buffered: &str) -> String {
     settings::SETTINGS.with(|s| {
         let g = s.borrow();
-        if buffered.is_empty() { g.prompt_main.clone() } else { g.prompt_cont.clone() }
+        if buffered.is_empty() {
+            g.prompt_main.clone()
+        } else {
+            g.prompt_cont.clone()
+        }
     })
 }
 
@@ -331,7 +342,9 @@ fn is_statement_complete(buffered: &str) -> bool {
         }
         // line comment
         if c == b'-' && i + 1 < n && bytes[i + 1] == b'-' {
-            while i < n && bytes[i] != b'\n' { i += 1; }
+            while i < n && bytes[i] != b'\n' {
+                i += 1;
+            }
             continue;
         }
         if c == b'/' && i + 1 < n && bytes[i + 1] == b'*' {
@@ -340,8 +353,16 @@ fn is_statement_complete(buffered: &str) -> bool {
             continue;
         }
         match c {
-            b'\'' | b'"' | b'`' => { in_string = Some(c); i += 1; continue; }
-            b';' => { last_semi = Some(i); i += 1; continue; }
+            b'\'' | b'"' | b'`' => {
+                in_string = Some(c);
+                i += 1;
+                continue;
+            }
+            b';' => {
+                last_semi = Some(i);
+                i += 1;
+                continue;
+            }
             _ => {}
         }
         // case-insensitive BEGIN / END word match at a word boundary
@@ -364,7 +385,9 @@ fn is_statement_complete(buffered: &str) -> bool {
         return false;
     }
     // Look for the last non-whitespace, non-comment-tail char.
-    last_semi.map(|idx| idx + 1 >= trailing_trivial_start(bytes)).unwrap_or(false)
+    last_semi
+        .map(|idx| idx + 1 >= trailing_trivial_start(bytes))
+        .unwrap_or(false)
 }
 
 fn is_ident_byte(b: u8) -> bool {
@@ -680,7 +703,7 @@ fn try_db_registry_resolve(name: &str, args: &str) -> Option<String> {
             // Retry dispatch  this time it lands in the session
             // registry the host just populated.
             let snapshot = build_cli_state_snapshot();
-        match extension_loader::dispatch_dot_command(name, args, &snapshot) {
+            match extension_loader::dispatch_dot_command(name, args, &snapshot) {
                 Ok(out) => {
                     for d in &out.state_deltas {
                         settings::apply_dotcmd_delta(&d.key, &d.value_json);
@@ -693,9 +716,7 @@ fn try_db_registry_resolve(name: &str, args: &str) -> Option<String> {
                 )),
             }
         }
-        Err(e) => Some(format!(
-            "auto-load {}: {} ({})\n", name, e.message, e.code,
-        )),
+        Err(e) => Some(format!("auto-load {}: {} ({})\n", name, e.message, e.code,)),
     }
 }
 
@@ -711,11 +732,16 @@ fn alloc_default_grants() -> Vec<bindings::sqlite::extension::policy::Capability
 /// per-statement without going through the dot-command dispatch.
 fn eval_sql(sql: &str) -> String {
     use settings::ExplainMode;
-    let (show_timer, show_changes, explain_mode, eqp, show_stats) =
-        settings::SETTINGS.with(|s| {
-            let g = s.borrow();
-            (g.show_timer, g.show_changes, g.explain_mode, g.eqp, g.show_stats)
-        });
+    let (show_timer, show_changes, explain_mode, eqp, show_stats) = settings::SETTINGS.with(|s| {
+        let g = s.borrow();
+        (
+            g.show_timer,
+            g.show_changes,
+            g.explain_mode,
+            g.eqp,
+            g.show_stats,
+        )
+    });
     // Form the effective SQL based on .explain. Off → as-is. On →
     // prepend EXPLAIN unless the user already typed it. Auto → run
     // as-is, but if the keyword EXPLAIN already leads the statement
@@ -731,7 +757,11 @@ fn eval_sql(sql: &str) -> String {
             }
         }
     };
-    let start = if show_timer { Some(std::time::Instant::now()) } else { None };
+    let start = if show_timer {
+        Some(std::time::Instant::now())
+    } else {
+        None
+    };
     let mut out = String::new();
     // EQP: prepend EXPLAIN QUERY PLAN output before running the
     // user's statement.
@@ -776,10 +806,14 @@ fn eval_sql_inner(sql: &str) -> String {
     // statement. The cli still owns format::format + the
     // settings::SETTINGS snapshot used to render.
     let named: Vec<spi::NamedParam> = settings::SETTINGS.with(|s| {
-        s.borrow().parameters.iter().map(|(name, v)| spi::NamedParam {
-            name: name.clone(),
-            value: v.clone(),
-        }).collect()
+        s.borrow()
+            .parameters
+            .iter()
+            .map(|(name, v)| spi::NamedParam {
+                name: name.clone(),
+                value: v.clone(),
+            })
+            .collect()
     });
     match spi::execute_multi(sql, &named) {
         Ok(results) => {
@@ -872,12 +906,10 @@ fn do_auth(arg: &str) -> String {
 fn do_log(arg: &str) -> String {
     let arg = arg.trim();
     if arg.is_empty() {
-        let label = settings::SETTINGS.with(|s| {
-            match &s.borrow().log_target {
-                None => "off".to_string(),
-                Some(None) => "on (stderr)".to_string(),
-                Some(Some(path)) => format!("on (file {path})"),
-            }
+        let label = settings::SETTINGS.with(|s| match &s.borrow().log_target {
+            None => "off".to_string(),
+            Some(None) => "on (stderr)".to_string(),
+            Some(Some(path)) => format!("on (file {path})"),
         });
         return format!("log: {label}\n");
     }
@@ -1025,8 +1057,8 @@ fn parse_grants(s: &str) -> Result<Vec<bindings::sqlite::extension::policy::Capa
 /// Default is empty grant (deny-all) — the user must opt extensions
 /// in. Matches the security-first defaults of the native loader.
 fn do_load(input: &str) -> String {
-    use bindings::sqlite::extension::policy::{DnsPolicy, HttpPolicy, LoadOptions, Method};
     use bindings::sqlink::wasm::extension_loader;
+    use bindings::sqlite::extension::policy::{DnsPolicy, HttpPolicy, LoadOptions, Method};
 
     let mut parts = input.split_whitespace();
     let path = match parts.next() {
@@ -1053,12 +1085,20 @@ fn do_load(input: &str) -> String {
                 Err(e) => return format!("Error: {e}\n"),
             },
             "--allowed-hosts" => {
-                allowed_hosts = Some(v.split(',').map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty()).collect());
+                allowed_hosts = Some(
+                    v.split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect(),
+                );
             }
             "--allowed-domains" => {
-                allowed_domains = Some(v.split(',').map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty()).collect());
+                allowed_domains = Some(
+                    v.split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect(),
+                );
             }
             "--fuel" => match v.parse::<u64>() {
                 Ok(n) => fuel = Some(n),
@@ -1074,19 +1114,20 @@ fn do_load(input: &str) -> String {
             },
             "--trust" => match v {
                 "manifest" => trust = TrustMode::Manifest,
-                "stored"   => trust = TrustMode::Stored,
-                "prompt"   => trust = TrustMode::Prompt,
+                "stored" => trust = TrustMode::Stored,
+                "prompt" => trust = TrustMode::Prompt,
                 other => {
-                    return format!(
-                        "Error: --trust={other} (expected manifest|stored|prompt)\n"
-                    )
+                    return format!("Error: --trust={other} (expected manifest|stored|prompt)\n")
                 }
             },
             _ => return format!("Unknown flag: {k}\n"),
         }
     }
 
-    let http_policy = if grant.iter().any(|c| matches!(c, bindings::sqlite::extension::policy::Capability::Http)) {
+    let http_policy = if grant
+        .iter()
+        .any(|c| matches!(c, bindings::sqlite::extension::policy::Capability::Http))
+    {
         // allowed_methods=None means "any method permitted"
         // per HttpPolicy::check_method. The earlier
         // hardcoded `vec![Method::Get, Method::Head]` round-
@@ -1111,7 +1152,10 @@ fn do_load(input: &str) -> String {
         None
     };
 
-    let dns_policy = if grant.iter().any(|c| matches!(c, bindings::sqlite::extension::policy::Capability::Dns)) {
+    let dns_policy = if grant
+        .iter()
+        .any(|c| matches!(c, bindings::sqlite::extension::policy::Capability::Dns))
+    {
         Some(DnsPolicy {
             allowed_domains: allowed_domains.unwrap_or_default(),
             timeout_ms: None,
@@ -1201,7 +1245,11 @@ fn do_load(input: &str) -> String {
         eprintln!(
             "  digest:    {} ({})",
             described.digest_hex,
-            if described.digest_hex.is_empty() { "missing" } else { "blake3" }
+            if described.digest_hex.is_empty() {
+                "missing"
+            } else {
+                "blake3"
+            }
         );
         if described.declared_caps.is_empty() {
             eprintln!("  capabilities: (none declared)");
@@ -1219,10 +1267,7 @@ fn do_load(input: &str) -> String {
         }
         let ok = matches!(answer.trim(), "y" | "Y" | "yes" | "YES");
         if !ok {
-            return format!(
-                "Error: --trust=prompt declined for '{}'\n",
-                described.name
-            );
+            return format!("Error: --trust=prompt declined for '{}'\n", described.name);
         }
         preload_msg.push_str(&format!(
             "User-confirmed load for '{}' (digest {}).\n",
@@ -1285,9 +1330,7 @@ fn do_load(input: &str) -> String {
     let mut c_count_host = 0;
     for spec in &manifest.collations {
         let r = bindings::sqlite::extension::spi_loader::register_collation(
-            &ext_name,
-            &spec.name,
-            spec.id,
+            &ext_name, &spec.name, spec.id,
         );
         if r.is_ok() {
             c_count_host += 1;
@@ -1375,18 +1418,36 @@ fn do_load(input: &str) -> String {
     let vtabs = v_count_host;
     let total = scalars + aggregates + collations + hooks + vtabs;
     let mut bits = Vec::new();
-    if scalars > 0 { bits.push(format!("{scalars} scalar")); }
-    if aggregates > 0 { bits.push(format!("{aggregates} aggregate")); }
-    if collations > 0 { bits.push(format!("{collations} collation")); }
-    if hooks > 0 { bits.push(format!("{hooks} hook")); }
-    if vtabs > 0 { bits.push(format!("{vtabs} vtab")); }
-    let detail = if bits.is_empty() { "0 functions".to_string() } else { bits.join(", ") };
+    if scalars > 0 {
+        bits.push(format!("{scalars} scalar"));
+    }
+    if aggregates > 0 {
+        bits.push(format!("{aggregates} aggregate"));
+    }
+    if collations > 0 {
+        bits.push(format!("{collations} collation"));
+    }
+    if hooks > 0 {
+        bits.push(format!("{hooks} hook"));
+    }
+    if vtabs > 0 {
+        bits.push(format!("{vtabs} vtab"));
+    }
+    let detail = if bits.is_empty() {
+        "0 functions".to_string()
+    } else {
+        bits.join(", ")
+    };
     let main = format!(
         "Loaded extension: {} {} from {} ({total} registered: {detail})\n",
         manifest.name, manifest.version, path
     );
     let prefix = format!("{preload_msg}{grants_msg}");
-    if prefix.is_empty() { main } else { format!("{prefix}{main}") }
+    if prefix.is_empty() {
+        main
+    } else {
+        format!("{prefix}{main}")
+    }
 }
 
 /// `--trust` flag for `.load`. PLAN-grants-db.md G1 +
@@ -1411,10 +1472,7 @@ enum TrustMode {
 /// of an extension; warn on digest mismatch on subsequent loads.
 /// Returns a diagnostic line to prepend to the load output, or
 /// None if nothing notable happened.
-fn grants_record_load(
-    ext_name: &str,
-    digest: Option<&str>,
-) -> Option<String> {
+fn grants_record_load(ext_name: &str, digest: Option<&str>) -> Option<String> {
     let existing = grants::get(ext_name).ok().flatten();
     let now = grants::now_iso8601();
     match (existing, digest) {
@@ -1460,17 +1518,23 @@ fn grants_record_load(
 /// matching Windows drive letters (single-letter scheme).
 fn looks_like_uri(s: &str) -> bool {
     if let Some(colon) = s.find(':') {
-        if colon < 2 { return false; }
+        if colon < 2 {
+            return false;
+        }
         let scheme = &s[..colon];
-        scheme.chars().all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.')
-    } else { false }
+        scheme
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '+' || c == '-' || c == '.')
+    } else {
+        false
+    }
 }
 
 /// `.run <path>` — run a runnable wasm component once. Each
 /// invocation creates a fresh Store; no state carries between calls.
 fn do_run(arg: &str) -> String {
-    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     use bindings::sqlink::wasm::extension_loader;
+    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     if arg.is_empty() {
         return "Usage: .run PATH [FLAVOR]\n".to_string();
     }
@@ -1499,12 +1563,27 @@ fn do_run(arg: &str) -> String {
             epoch_deadline_ms: None,
         };
         return match extension_loader::run_wasm(&path, &opts) {
-            Ok(out) => if out.ends_with('\n') { out } else { format!("{out}\n") },
-            Err(e) => format!("Error running wasm component {path}: {} (code {})\n", e.message, e.code),
+            Ok(out) => {
+                if out.ends_with('\n') {
+                    out
+                } else {
+                    format!("{out}\n")
+                }
+            }
+            Err(e) => format!(
+                "Error running wasm component {path}: {} (code {})\n",
+                e.message, e.code
+            ),
         };
     }
     match extension_loader::run_source(&path, &flavor) {
-        Ok(out) => if out.ends_with('\n') { out } else { format!("{out}\n") },
+        Ok(out) => {
+            if out.ends_with('\n') {
+                out
+            } else {
+                format!("{out}\n")
+            }
+        }
         Err(e) => format!("Error running {path}: {} (code {})\n", e.message, e.code),
     }
 }
@@ -1513,8 +1592,8 @@ fn do_run(arg: &str) -> String {
 /// Registers PATH as the runtime for files ending in `.EXT`.
 /// FLAVOR distinguishes multiple runtimes for the same EXT.
 fn do_register_runtime(arg: &str) -> String {
-    use bindings::sqlite::extension::policy::LoadOptions;
     use bindings::sqlink::wasm::extension_loader;
+    use bindings::sqlite::extension::policy::LoadOptions;
     let mut parts = arg.split_whitespace();
     let p1 = parts.next().unwrap_or("");
     let p2 = parts.next().unwrap_or("");
@@ -1560,8 +1639,12 @@ fn do_unregister_runtime(arg: &str) -> String {
         return "Usage: .unregister-runtime EXT [FLAVOR]\n".to_string();
     }
     match extension_loader::unregister_runtime(ext, flavor) {
-        Ok(()) => format!("Unregistered runtime: .{ext}{}\n",
-            if flavor.is_empty() { "" } else { ":" }) + flavor,
+        Ok(()) => {
+            format!(
+                "Unregistered runtime: .{ext}{}\n",
+                if flavor.is_empty() { "" } else { ":" }
+            ) + flavor
+        }
         Err(e) => format!("Error: {} (code {})\n", e.message, e.code),
     }
 }
@@ -1585,8 +1668,8 @@ fn do_list_runtimes() -> String {
 }
 
 fn do_register_resolver(arg: &str) -> String {
-    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     use bindings::sqlink::wasm::extension_loader;
+    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     let mut parts = arg.splitn(2, char::is_whitespace);
     let scheme = parts.next().unwrap_or("").trim();
     let path = parts.next().unwrap_or("").trim();
@@ -1604,7 +1687,10 @@ fn do_register_resolver(arg: &str) -> String {
     };
     match extension_loader::register_resolver(scheme, path, &opts) {
         Ok(name) => format!("Registered resolver: {scheme} -> {name}\n"),
-        Err(e) => format!("Error registering {scheme}: {} (code {})\n", e.message, e.code),
+        Err(e) => format!(
+            "Error registering {scheme}: {} (code {})\n",
+            e.message, e.code
+        ),
     }
 }
 
@@ -2091,10 +2177,12 @@ fn do_reload(input: &str) -> String {
         let remembered = RELOAD_SOURCES.with(|m| m.borrow().get(name).cloned());
         match remembered {
             Some(s) if !s.is_empty() => s,
-            _ => return format!(
-                "Error: .reload {name}: no remembered source; \
+            _ => {
+                return format!(
+                    "Error: .reload {name}: no remembered source; \
                  supply a path or URL: .reload {name} PATH\n"
-            ),
+                )
+            }
         }
     } else {
         rest.to_string()
@@ -2142,7 +2230,13 @@ fn do_open(arg: &str) -> String {
     let target = if path.is_empty() { ":memory:" } else { path };
     match bindings::sqlite::extension::spi::open_db(target) {
         Ok(()) => {
-            DB_PATH.with(|p| *p.borrow_mut() = if path.is_empty() { String::new() } else { path.to_string() });
+            DB_PATH.with(|p| {
+                *p.borrow_mut() = if path.is_empty() {
+                    String::new()
+                } else {
+                    path.to_string()
+                }
+            });
             if path.is_empty() {
                 "Opened :memory: (extensions reset)\n".to_string()
             } else {
@@ -2205,7 +2299,10 @@ fn do_import(arg: &str) -> String {
     use bindings::sqlite::extension::spi;
     use bindings::sqlite::extension::types::SqlValue;
     let col_count = data_rows[0].len();
-    let placeholders = std::iter::repeat("?").take(col_count).collect::<Vec<_>>().join(", ");
+    let placeholders = std::iter::repeat("?")
+        .take(col_count)
+        .collect::<Vec<_>>()
+        .join(", ");
     let sql = format!("INSERT INTO \"{table}\" VALUES ({placeholders})");
     if let Err(e) = spi::execute_batch("BEGIN") {
         return format!("Error: {}\n", e.message);
@@ -2216,7 +2313,9 @@ fn do_import(arg: &str) -> String {
             let _ = spi::execute_batch("ROLLBACK");
             return format!(
                 "Error: row {} has {} columns, expected {}\n",
-                i + 1, row.len(), col_count
+                i + 1,
+                row.len(),
+                col_count
             );
         }
         let vals: Vec<SqlValue> = row.iter().map(|s| SqlValue::Text(s.clone())).collect();
@@ -2301,7 +2400,8 @@ fn do_dump(arg: &str) -> String {
              WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' \
              ORDER BY CASE type WHEN 'table' THEN 1 WHEN 'index' THEN 2 \
                                 WHEN 'view' THEN 3 WHEN 'trigger' THEN 4 \
-                                ELSE 5 END".to_string()
+                                ELSE 5 END"
+            .to_string()
     } else {
         format!(
             "SELECT type, name, sql FROM sqlite_master \
@@ -2319,10 +2419,21 @@ fn do_dump(arg: &str) -> String {
     };
     let mut tables: Vec<String> = Vec::new();
     for row in &schema.rows {
-        let ty = match row.first() { Some(SqlValue::Text(s)) => s.as_str(), _ => "" };
-        let name = match row.get(1) { Some(SqlValue::Text(s)) => s.clone(), _ => String::new() };
-        let create = match row.get(2) { Some(SqlValue::Text(s)) => s.clone(), _ => String::new() };
-        if create.is_empty() { continue; }
+        let ty = match row.first() {
+            Some(SqlValue::Text(s)) => s.as_str(),
+            _ => "",
+        };
+        let name = match row.get(1) {
+            Some(SqlValue::Text(s)) => s.clone(),
+            _ => String::new(),
+        };
+        let create = match row.get(2) {
+            Some(SqlValue::Text(s)) => s.clone(),
+            _ => String::new(),
+        };
+        if create.is_empty() {
+            continue;
+        }
         out.push_str(&create);
         out.push_str(";\n");
         if ty == "table" {
@@ -2498,11 +2609,13 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
             out
         };
         let explain = match g.explain_mode {
-            ExplainMode::Off  => "off",
-            ExplainMode::On   => "on",
+            ExplainMode::Off => "off",
+            ExplainMode::On => "on",
             ExplainMode::Auto => "auto",
         };
-        let widths_str = g.column_widths.iter()
+        let widths_str = g
+            .column_widths
+            .iter()
             .map(|n| n.to_string())
             .collect::<Vec<_>>()
             .join(" ");
@@ -2512,23 +2625,23 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
         // with the rest of the snapshot.
         let db_path_now = DB_PATH.with(|p| p.borrow().clone());
         let mut out: Vec<(String, String)> = vec![
-            ("db/path".into(),         str_v(&db_path_now)),
-            ("io/echo".into(),         bool_v(g.echo)),
-            ("io/headers".into(),      bool_v(g.headers)),
-            ("io/timer".into(),        bool_v(g.show_timer)),
-            ("io/stats".into(),        bool_v(g.show_stats)),
-            ("io/changes".into(),      bool_v(g.show_changes)),
-            ("io/binary".into(),       bool_v(g.binary_output)),
-            ("io/eqp".into(),          bool_v(g.eqp)),
-            ("io/explain".into(),      str_v(explain)),
-            ("io/trace".into(),        bool_v(g.trace_on)),
-            ("bail/on-error".into(),   bool_v(g.bail)),
-            ("display/mode".into(),    str_v(g.mode.name())),
+            ("db/path".into(), str_v(&db_path_now)),
+            ("io/echo".into(), bool_v(g.echo)),
+            ("io/headers".into(), bool_v(g.headers)),
+            ("io/timer".into(), bool_v(g.show_timer)),
+            ("io/stats".into(), bool_v(g.show_stats)),
+            ("io/changes".into(), bool_v(g.show_changes)),
+            ("io/binary".into(), bool_v(g.binary_output)),
+            ("io/eqp".into(), bool_v(g.eqp)),
+            ("io/explain".into(), str_v(explain)),
+            ("io/trace".into(), bool_v(g.trace_on)),
+            ("bail/on-error".into(), bool_v(g.bail)),
+            ("display/mode".into(), str_v(g.mode.name())),
             ("display/nullvalue".into(), str_v(&g.null_value)),
             ("display/separator".into(), str_v(&g.separator)),
-            ("display/width".into(),   str_v(&widths_str)),
-            ("prompt/main".into(),     str_v(&g.prompt_main)),
-            ("prompt/cont".into(),     str_v(&g.prompt_cont)),
+            ("display/width".into(), str_v(&widths_str)),
+            ("prompt/main".into(), str_v(&g.prompt_main)),
+            ("prompt/cont".into(), str_v(&g.prompt_cont)),
         ];
         // Named parameters from the SETTINGS HashMap. One snapshot
         // entry per binding; the extension reads them via
@@ -2537,15 +2650,15 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
             let key = format!("params/value/{name}");
             use bindings::sqlite::extension::types::SqlValue as V;
             let encoded = match val {
-                V::Null      => "null".to_string(),
+                V::Null => "null".to_string(),
                 V::Integer(i) => i.to_string(),
-                V::Real(r)    => r.to_string(),
-                V::Text(s)    => str_v(s),
+                V::Real(r) => r.to_string(),
+                V::Text(s) => str_v(s),
                 // Blobs aren't snapshot-able through the
                 // JSON-ish encoding cli-state.get_text reads;
                 // emit a hex literal that round-trips through
                 // get_text.
-                V::Blob(b)    => {
+                V::Blob(b) => {
                     let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
                     str_v(&format!("X'{hex}'"))
                 }
@@ -2564,7 +2677,10 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
         }
         for (name, code) in DBCONFIG_BOOLEANS {
             if let Ok(b) = spi::db_config_bool(*code, false, false) {
-                out.push((format!("conn/db-config/{name}"), if b { "1".into() } else { "0".into() }));
+                out.push((
+                    format!("conn/db-config/{name}"),
+                    if b { "1".into() } else { "0".into() },
+                ));
             }
         }
         out
@@ -2577,50 +2693,56 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
 /// are stable ABI values that haven't changed since SQLite 3.0
 /// (and `SQLITE_LIMIT_WORKER_THREADS` since 3.8.7).
 pub(crate) const LIMIT_NAMES: &[(&str, std::os::raw::c_int)] = &[
-    ("length",                0),
-    ("sql_length",            1),
-    ("column",                2),
-    ("expr_depth",            3),
-    ("compound_select",       4),
-    ("vdbe_op",               5),
-    ("function_arg",          6),
-    ("attached",              7),
-    ("like_pattern_length",   8),
-    ("variable_number",       9),
-    ("trigger_depth",         10),
-    ("worker_threads",        11),
+    ("length", 0),
+    ("sql_length", 1),
+    ("column", 2),
+    ("expr_depth", 3),
+    ("compound_select", 4),
+    ("vdbe_op", 5),
+    ("function_arg", 6),
+    ("attached", 7),
+    ("like_pattern_length", 8),
+    ("variable_number", 9),
+    ("trigger_depth", 10),
+    ("worker_threads", 11),
 ];
 
 /// SQLITE_DBCONFIG_* bools pushed in the cli-state snapshot
 /// (read side of `.dbconfig`). Constants hardcoded per Stage 5f
 /// for the same reason as `LIMIT_NAMES`.
 pub(crate) const DBCONFIG_BOOLEANS: &[(&str, std::os::raw::c_int)] = &[
-    ("defensive",              1010),
-    ("dqs_dml",                1013),
-    ("dqs_ddl",                1014),
-    ("enable_fkey",            1002),
-    ("enable_trigger",         1003),
-    ("enable_view",            1015),
-    ("enable_load_extension",  1005),
-    ("enable_qpsg",            1007),
-    ("legacy_alter_table",     1012),
-    ("legacy_file_format",     1016),
-    ("trigger_eqp",            1008),
-    ("trusted_schema",         1017),
-    ("writable_schema",        1011),
+    ("defensive", 1010),
+    ("dqs_dml", 1013),
+    ("dqs_ddl", 1014),
+    ("enable_fkey", 1002),
+    ("enable_trigger", 1003),
+    ("enable_view", 1015),
+    ("enable_load_extension", 1005),
+    ("enable_qpsg", 1007),
+    ("legacy_alter_table", 1012),
+    ("legacy_file_format", 1016),
+    ("trigger_eqp", 1008),
+    ("trusted_schema", 1017),
+    ("writable_schema", 1011),
 ];
 
 /// Lookup by name; used by the delta path.
 pub(crate) fn limit_code(name: &str) -> Option<std::os::raw::c_int> {
-    LIMIT_NAMES.iter().find(|(n, _)| *n == name).map(|(_, c)| *c)
+    LIMIT_NAMES
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, c)| *c)
 }
 pub(crate) fn dbconfig_code(name: &str) -> Option<std::os::raw::c_int> {
-    DBCONFIG_BOOLEANS.iter().find(|(n, _)| *n == name).map(|(_, c)| *c)
+    DBCONFIG_BOOLEANS
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, c)| *c)
 }
 
 fn embed_core_dotcmd(grant_spawn_build: bool) {
-    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
     use bindings::sqlink::wasm::extension_loader;
+    use bindings::sqlite::extension::policy::{Capability, LoadOptions};
 
     const CORE_DOTCMD_BYTES: &[u8] = include_bytes!(
         "../../extensions/core-dotcmd/target/wasm32-wasip2/release/core_dotcmd_extension.component.wasm"
@@ -2711,11 +2833,7 @@ fn embed_core_dotcmd(grant_spawn_build: bool) {
         memory_limit_bytes: None,
         epoch_deadline_ms: None,
     };
-    match extension_loader::load_extension_from_bytes(
-        "core-dotcmd",
-        CORE_DOTCMD_BYTES,
-        &options,
-    ) {
+    match extension_loader::load_extension_from_bytes("core-dotcmd", CORE_DOTCMD_BYTES, &options) {
         Ok(_manifest) => {}
         Err(e) => {
             eprintln!(
@@ -2737,11 +2855,7 @@ fn embed_core_dotcmd(grant_spawn_build: bool) {
             );
         }
     }
-    match extension_loader::load_extension_from_bytes(
-        "sha3sum-cli",
-        SHA3SUM_CLI_BYTES,
-        &options,
-    ) {
+    match extension_loader::load_extension_from_bytes("sha3sum-cli", SHA3SUM_CLI_BYTES, &options) {
         Ok(_manifest) => {}
         Err(e) => {
             eprintln!(
@@ -2763,11 +2877,7 @@ fn embed_core_dotcmd(grant_spawn_build: bool) {
             );
         }
     }
-    match extension_loader::load_extension_from_bytes(
-        "archive-cli",
-        ARCHIVE_CLI_BYTES,
-        &options,
-    ) {
+    match extension_loader::load_extension_from_bytes("archive-cli", ARCHIVE_CLI_BYTES, &options) {
         Ok(_manifest) => {}
         Err(e) => {
             eprintln!(
@@ -2776,11 +2886,7 @@ fn embed_core_dotcmd(grant_spawn_build: bool) {
             );
         }
     }
-    match extension_loader::load_extension_from_bytes(
-        "session-cli",
-        SESSION_CLI_BYTES,
-        &options,
-    ) {
+    match extension_loader::load_extension_from_bytes("session-cli", SESSION_CLI_BYTES, &options) {
         Ok(_manifest) => {}
         Err(e) => {
             eprintln!(

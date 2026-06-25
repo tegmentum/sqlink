@@ -23,35 +23,38 @@ use alloc::string::{String, ToString};
 use core::ffi::c_int;
 use sqlite_embed::{register_aggregates, AggregateSpec, SqlValueOwned};
 
+use crate::aggs::{
+    AnyValue, ArrayAgg, BitOp, BitReduce, ModeTracker, Moments, Regression, Samples, StringAgg,
+    ValueKind, Welford,
+};
 use alloc::vec::Vec;
-use crate::aggs::{AnyValue, ArrayAgg, BitOp, BitReduce, ModeTracker, Moments, Regression, Samples, StringAgg, ValueKind, Welford};
 
-const FID_STDDEV_POP:       u64 = 1;
-const FID_STDDEV_SAMP:      u64 = 2;
-const FID_VAR_POP:          u64 = 3;
-const FID_VAR_SAMP:         u64 = 4;
-const FID_MEDIAN:           u64 = 5;
-const FID_PERCENTILE:       u64 = 6;
-const FID_MODE:             u64 = 7;
-const FID_PERCENTILE_CONT:  u64 = 8;
-const FID_PERCENTILE_DISC:  u64 = 9;
-const FID_SKEWNESS:         u64 = 10;
-const FID_KURTOSIS:         u64 = 11;
-const FID_REGR_SLOPE:       u64 = 12;
-const FID_REGR_INTERCEPT:   u64 = 13;
-const FID_REGR_R2:          u64 = 14;
+const FID_STDDEV_POP: u64 = 1;
+const FID_STDDEV_SAMP: u64 = 2;
+const FID_VAR_POP: u64 = 3;
+const FID_VAR_SAMP: u64 = 4;
+const FID_MEDIAN: u64 = 5;
+const FID_PERCENTILE: u64 = 6;
+const FID_MODE: u64 = 7;
+const FID_PERCENTILE_CONT: u64 = 8;
+const FID_PERCENTILE_DISC: u64 = 9;
+const FID_SKEWNESS: u64 = 10;
+const FID_KURTOSIS: u64 = 11;
+const FID_REGR_SLOPE: u64 = 12;
+const FID_REGR_INTERCEPT: u64 = 13;
+const FID_REGR_R2: u64 = 14;
 // Gap-analysis additions
-const FID_STDDEV:           u64 = 15;
-const FID_VARIANCE:         u64 = 16;
-const FID_CORR:             u64 = 17;
-const FID_COVAR_POP:        u64 = 18;
-const FID_COVAR_SAMP:       u64 = 19;
-const FID_ANY_VALUE:        u64 = 20;
-const FID_BIT_AND:          u64 = 21;
-const FID_BIT_OR:           u64 = 22;
-const FID_BIT_XOR:          u64 = 23;
-const FID_ARRAY_AGG:        u64 = 24;
-const FID_STRING_AGG:       u64 = 25;
+const FID_STDDEV: u64 = 15;
+const FID_VARIANCE: u64 = 16;
+const FID_CORR: u64 = 17;
+const FID_COVAR_POP: u64 = 18;
+const FID_COVAR_SAMP: u64 = 19;
+const FID_ANY_VALUE: u64 = 20;
+const FID_BIT_AND: u64 = 21;
+const FID_BIT_OR: u64 = 22;
+const FID_BIT_XOR: u64 = 23;
+const FID_ARRAY_AGG: u64 = 24;
+const FID_STRING_AGG: u64 = 25;
 
 fn val_f64(v: &SqlValueOwned) -> Option<f64> {
     match v {
@@ -80,10 +83,7 @@ unsafe fn welford_make() -> *mut () {
 unsafe fn welford_destroy(s: *mut ()) {
     drop(alloc::boxed::Box::from_raw(s as *mut Welford));
 }
-unsafe fn welford_step(
-    s: *mut (),
-    args: &[SqlValueOwned],
-) -> Result<(), String> {
+unsafe fn welford_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
     let w = &mut *(s as *mut Welford);
     if matches!(args.first(), Some(SqlValueOwned::Null) | None) {
         return Ok(());
@@ -134,10 +134,7 @@ unsafe fn samples_make() -> *mut () {
 unsafe fn samples_destroy(s: *mut ()) {
     drop(alloc::boxed::Box::from_raw(s as *mut PSamples));
 }
-unsafe fn samples_step_value(
-    s: *mut (),
-    args: &[SqlValueOwned],
-) -> Result<(), String> {
+unsafe fn samples_step_value(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
     let st = &mut *(s as *mut PSamples);
     if matches!(args.first(), Some(SqlValueOwned::Null) | None) {
         return Ok(());
@@ -146,10 +143,7 @@ unsafe fn samples_step_value(
     st.samples.add(x);
     Ok(())
 }
-unsafe fn samples_step_value_p(
-    s: *mut (),
-    args: &[SqlValueOwned],
-) -> Result<(), String> {
+unsafe fn samples_step_value_p(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
     let st = &mut *(s as *mut PSamples);
     if matches!(args.first(), Some(SqlValueOwned::Null) | None) {
         return Ok(());
@@ -209,12 +203,11 @@ unsafe fn mode_make() -> *mut () {
 unsafe fn mode_destroy(s: *mut ()) {
     drop(alloc::boxed::Box::from_raw(s as *mut ModeTracker));
 }
-unsafe fn mode_step(
-    s: *mut (),
-    args: &[SqlValueOwned],
-) -> Result<(), String> {
+unsafe fn mode_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
     let m = &mut *(s as *mut ModeTracker);
-    let Some(v) = args.first() else { return Ok(()); };
+    let Some(v) = args.first() else {
+        return Ok(());
+    };
     if let Some(k) = key_of(v) {
         m.add(k);
     }
@@ -222,8 +215,7 @@ unsafe fn mode_step(
 }
 unsafe fn mode_final(s: *mut ()) -> Result<SqlValueOwned, String> {
     let m = &*(s as *const ModeTracker);
-    Ok(m
-        .mode()
+    Ok(m.mode()
         .map(|(k, _)| SqlValueOwned::Text(k))
         .unwrap_or(SqlValueOwned::Null))
 }
@@ -236,10 +228,7 @@ unsafe fn moments_make() -> *mut () {
 unsafe fn moments_destroy(s: *mut ()) {
     drop(alloc::boxed::Box::from_raw(s as *mut Moments));
 }
-unsafe fn moments_step(
-    s: *mut (),
-    args: &[SqlValueOwned],
-) -> Result<(), String> {
+unsafe fn moments_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
     let m = &mut *(s as *mut Moments);
     if matches!(args.first(), Some(SqlValueOwned::Null) | None) {
         return Ok(());
@@ -269,10 +258,7 @@ unsafe fn regr_make() -> *mut () {
 unsafe fn regr_destroy(s: *mut ()) {
     drop(alloc::boxed::Box::from_raw(s as *mut Regression));
 }
-unsafe fn regr_step(
-    s: *mut (),
-    args: &[SqlValueOwned],
-) -> Result<(), String> {
+unsafe fn regr_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
     let r = &mut *(s as *mut Regression);
     if matches!(args.first(), Some(SqlValueOwned::Null) | None) {
         return Ok(());
@@ -341,7 +327,9 @@ unsafe fn bit_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
     let x = match args.first() {
         Some(SqlValueOwned::Integer(n)) => *n,
         Some(SqlValueOwned::Real(r)) => *r as i64,
-        Some(SqlValueOwned::Text(t)) => t.parse::<i64>().map_err(|_| "bit_*: non-integer".to_string())?,
+        Some(SqlValueOwned::Text(t)) => t
+            .parse::<i64>()
+            .map_err(|_| "bit_*: non-integer".to_string())?,
         Some(SqlValueOwned::Null) | None => return Ok(()),
         _ => return Err("bit_*: INTEGER arg expected".to_string()),
     };
@@ -365,27 +353,44 @@ unsafe fn any_destroy(s: *mut ()) {
 }
 unsafe fn any_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
     let av = &mut *(s as *mut AnyValue);
-    if av.seen { return Ok(()); }
+    if av.seen {
+        return Ok(());
+    }
     av.seen = true;
     match args.first() {
         Some(SqlValueOwned::Null) | None => av.kind = ValueKind::Null,
-        Some(SqlValueOwned::Integer(n)) => { av.kind = ValueKind::Integer; av.i = *n; }
-        Some(SqlValueOwned::Real(r)) => { av.kind = ValueKind::Real; av.r = *r; }
-        Some(SqlValueOwned::Text(t)) => { av.kind = ValueKind::Text; av.s = t.clone(); }
-        Some(SqlValueOwned::Blob(b)) => { av.kind = ValueKind::Blob; av.b = b.clone(); }
+        Some(SqlValueOwned::Integer(n)) => {
+            av.kind = ValueKind::Integer;
+            av.i = *n;
+        }
+        Some(SqlValueOwned::Real(r)) => {
+            av.kind = ValueKind::Real;
+            av.r = *r;
+        }
+        Some(SqlValueOwned::Text(t)) => {
+            av.kind = ValueKind::Text;
+            av.s = t.clone();
+        }
+        Some(SqlValueOwned::Blob(b)) => {
+            av.kind = ValueKind::Blob;
+            av.b = b.clone();
+        }
     }
     Ok(())
 }
 unsafe fn any_final(s: *mut ()) -> Result<SqlValueOwned, String> {
     let av = &*(s as *const AnyValue);
-    Ok(if !av.seen { SqlValueOwned::Null }
-    else { match av.kind {
-        ValueKind::Null => SqlValueOwned::Null,
-        ValueKind::Integer => SqlValueOwned::Integer(av.i),
-        ValueKind::Real => SqlValueOwned::Real(av.r),
-        ValueKind::Text => SqlValueOwned::Text(av.s.clone()),
-        ValueKind::Blob => SqlValueOwned::Blob(av.b.clone()),
-    }})
+    Ok(if !av.seen {
+        SqlValueOwned::Null
+    } else {
+        match av.kind {
+            ValueKind::Null => SqlValueOwned::Null,
+            ValueKind::Integer => SqlValueOwned::Integer(av.i),
+            ValueKind::Real => SqlValueOwned::Real(av.r),
+            ValueKind::Text => SqlValueOwned::Text(av.s.clone()),
+            ValueKind::Blob => SqlValueOwned::Blob(av.b.clone()),
+        }
+    })
 }
 
 // ── ArrayAgg ─────────────────────────────────────────────────
@@ -438,137 +443,265 @@ unsafe fn stringagg_step(s: *mut (), args: &[SqlValueOwned]) -> Result<(), Strin
 }
 unsafe fn stringagg_final(s: *mut ()) -> Result<SqlValueOwned, String> {
     let sa = &*(s as *const StringAgg);
-    Ok(sa.to_owned_string().map(SqlValueOwned::Text).unwrap_or(SqlValueOwned::Null))
+    Ok(sa
+        .to_owned_string()
+        .map(SqlValueOwned::Text)
+        .unwrap_or(SqlValueOwned::Null))
 }
 
 const AGGREGATES: &[AggregateSpec] = &[
     AggregateSpec {
-        func_id: FID_STDDEV_POP, name: b"stddev_pop\0", num_args: 1, deterministic: true,
-        make_state: welford_make, step_state: welford_step,
-        final_state: welford_final_stddev_pop, destroy_state: welford_destroy,
+        func_id: FID_STDDEV_POP,
+        name: b"stddev_pop\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: welford_make,
+        step_state: welford_step,
+        final_state: welford_final_stddev_pop,
+        destroy_state: welford_destroy,
     },
     AggregateSpec {
-        func_id: FID_STDDEV_SAMP, name: b"stddev_samp\0", num_args: 1, deterministic: true,
-        make_state: welford_make, step_state: welford_step,
-        final_state: welford_final_stddev_samp, destroy_state: welford_destroy,
+        func_id: FID_STDDEV_SAMP,
+        name: b"stddev_samp\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: welford_make,
+        step_state: welford_step,
+        final_state: welford_final_stddev_samp,
+        destroy_state: welford_destroy,
     },
     AggregateSpec {
-        func_id: FID_VAR_POP, name: b"var_pop\0", num_args: 1, deterministic: true,
-        make_state: welford_make, step_state: welford_step,
-        final_state: welford_final_var_pop, destroy_state: welford_destroy,
+        func_id: FID_VAR_POP,
+        name: b"var_pop\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: welford_make,
+        step_state: welford_step,
+        final_state: welford_final_var_pop,
+        destroy_state: welford_destroy,
     },
     AggregateSpec {
-        func_id: FID_VAR_SAMP, name: b"var_samp\0", num_args: 1, deterministic: true,
-        make_state: welford_make, step_state: welford_step,
-        final_state: welford_final_var_samp, destroy_state: welford_destroy,
+        func_id: FID_VAR_SAMP,
+        name: b"var_samp\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: welford_make,
+        step_state: welford_step,
+        final_state: welford_final_var_samp,
+        destroy_state: welford_destroy,
     },
     AggregateSpec {
-        func_id: FID_MEDIAN, name: b"median\0", num_args: 1, deterministic: true,
-        make_state: samples_make, step_state: samples_step_value,
-        final_state: samples_final_median, destroy_state: samples_destroy,
+        func_id: FID_MEDIAN,
+        name: b"median\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: samples_make,
+        step_state: samples_step_value,
+        final_state: samples_final_median,
+        destroy_state: samples_destroy,
     },
     AggregateSpec {
-        func_id: FID_PERCENTILE, name: b"percentile\0", num_args: 2, deterministic: true,
-        make_state: samples_make, step_state: samples_step_value_p,
-        final_state: samples_final_percentile, destroy_state: samples_destroy,
+        func_id: FID_PERCENTILE,
+        name: b"percentile\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: samples_make,
+        step_state: samples_step_value_p,
+        final_state: samples_final_percentile,
+        destroy_state: samples_destroy,
     },
     AggregateSpec {
-        func_id: FID_MODE, name: b"mode\0", num_args: 1, deterministic: true,
-        make_state: mode_make, step_state: mode_step,
-        final_state: mode_final, destroy_state: mode_destroy,
+        func_id: FID_MODE,
+        name: b"mode\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: mode_make,
+        step_state: mode_step,
+        final_state: mode_final,
+        destroy_state: mode_destroy,
     },
     AggregateSpec {
-        func_id: FID_PERCENTILE_CONT, name: b"percentile_cont\0", num_args: 2, deterministic: true,
-        make_state: samples_make, step_state: samples_step_value_p,
-        final_state: samples_final_percentile_cont, destroy_state: samples_destroy,
+        func_id: FID_PERCENTILE_CONT,
+        name: b"percentile_cont\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: samples_make,
+        step_state: samples_step_value_p,
+        final_state: samples_final_percentile_cont,
+        destroy_state: samples_destroy,
     },
     AggregateSpec {
-        func_id: FID_PERCENTILE_DISC, name: b"percentile_disc\0", num_args: 2, deterministic: true,
-        make_state: samples_make, step_state: samples_step_value_p,
-        final_state: samples_final_percentile_disc, destroy_state: samples_destroy,
+        func_id: FID_PERCENTILE_DISC,
+        name: b"percentile_disc\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: samples_make,
+        step_state: samples_step_value_p,
+        final_state: samples_final_percentile_disc,
+        destroy_state: samples_destroy,
     },
     AggregateSpec {
-        func_id: FID_SKEWNESS, name: b"skewness\0", num_args: 1, deterministic: true,
-        make_state: moments_make, step_state: moments_step,
-        final_state: moments_final_skew, destroy_state: moments_destroy,
+        func_id: FID_SKEWNESS,
+        name: b"skewness\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: moments_make,
+        step_state: moments_step,
+        final_state: moments_final_skew,
+        destroy_state: moments_destroy,
     },
     AggregateSpec {
-        func_id: FID_KURTOSIS, name: b"kurtosis\0", num_args: 1, deterministic: true,
-        make_state: moments_make, step_state: moments_step,
-        final_state: moments_final_kurt, destroy_state: moments_destroy,
+        func_id: FID_KURTOSIS,
+        name: b"kurtosis\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: moments_make,
+        step_state: moments_step,
+        final_state: moments_final_kurt,
+        destroy_state: moments_destroy,
     },
     AggregateSpec {
-        func_id: FID_REGR_SLOPE, name: b"regr_slope\0", num_args: 2, deterministic: true,
-        make_state: regr_make, step_state: regr_step,
-        final_state: regr_final_slope, destroy_state: regr_destroy,
+        func_id: FID_REGR_SLOPE,
+        name: b"regr_slope\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: regr_make,
+        step_state: regr_step,
+        final_state: regr_final_slope,
+        destroy_state: regr_destroy,
     },
     AggregateSpec {
-        func_id: FID_REGR_INTERCEPT, name: b"regr_intercept\0", num_args: 2, deterministic: true,
-        make_state: regr_make, step_state: regr_step,
-        final_state: regr_final_intercept, destroy_state: regr_destroy,
+        func_id: FID_REGR_INTERCEPT,
+        name: b"regr_intercept\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: regr_make,
+        step_state: regr_step,
+        final_state: regr_final_intercept,
+        destroy_state: regr_destroy,
     },
     AggregateSpec {
-        func_id: FID_REGR_R2, name: b"regr_r2\0", num_args: 2, deterministic: true,
-        make_state: regr_make, step_state: regr_step,
-        final_state: regr_final_r2, destroy_state: regr_destroy,
+        func_id: FID_REGR_R2,
+        name: b"regr_r2\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: regr_make,
+        step_state: regr_step,
+        final_state: regr_final_r2,
+        destroy_state: regr_destroy,
     },
     // Aliases that reuse existing Welford state with the sample variant.
     AggregateSpec {
-        func_id: FID_STDDEV, name: b"stddev\0", num_args: 1, deterministic: true,
-        make_state: welford_make, step_state: welford_step,
-        final_state: welford_final_stddev_samp, destroy_state: welford_destroy,
+        func_id: FID_STDDEV,
+        name: b"stddev\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: welford_make,
+        step_state: welford_step,
+        final_state: welford_final_stddev_samp,
+        destroy_state: welford_destroy,
     },
     AggregateSpec {
-        func_id: FID_VARIANCE, name: b"variance\0", num_args: 1, deterministic: true,
-        make_state: welford_make, step_state: welford_step,
-        final_state: welford_final_var_samp, destroy_state: welford_destroy,
+        func_id: FID_VARIANCE,
+        name: b"variance\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: welford_make,
+        step_state: welford_step,
+        final_state: welford_final_var_samp,
+        destroy_state: welford_destroy,
     },
     // Correlation + covariance reuse Regression's accumulators.
     AggregateSpec {
-        func_id: FID_CORR, name: b"corr\0", num_args: 2, deterministic: true,
-        make_state: regr_make, step_state: regr_step,
-        final_state: regr_final_corr, destroy_state: regr_destroy,
+        func_id: FID_CORR,
+        name: b"corr\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: regr_make,
+        step_state: regr_step,
+        final_state: regr_final_corr,
+        destroy_state: regr_destroy,
     },
     AggregateSpec {
-        func_id: FID_COVAR_POP, name: b"covar_pop\0", num_args: 2, deterministic: true,
-        make_state: regr_make, step_state: regr_step,
-        final_state: regr_final_covar_pop, destroy_state: regr_destroy,
+        func_id: FID_COVAR_POP,
+        name: b"covar_pop\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: regr_make,
+        step_state: regr_step,
+        final_state: regr_final_covar_pop,
+        destroy_state: regr_destroy,
     },
     AggregateSpec {
-        func_id: FID_COVAR_SAMP, name: b"covar_samp\0", num_args: 2, deterministic: true,
-        make_state: regr_make, step_state: regr_step,
-        final_state: regr_final_covar_samp, destroy_state: regr_destroy,
+        func_id: FID_COVAR_SAMP,
+        name: b"covar_samp\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: regr_make,
+        step_state: regr_step,
+        final_state: regr_final_covar_samp,
+        destroy_state: regr_destroy,
     },
     // Bitwise reduces over INTEGER columns.
     AggregateSpec {
-        func_id: FID_BIT_AND, name: b"bit_and\0", num_args: 1, deterministic: true,
-        make_state: bit_make_and, step_state: bit_step,
-        final_state: bit_final, destroy_state: bit_destroy,
+        func_id: FID_BIT_AND,
+        name: b"bit_and\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: bit_make_and,
+        step_state: bit_step,
+        final_state: bit_final,
+        destroy_state: bit_destroy,
     },
     AggregateSpec {
-        func_id: FID_BIT_OR, name: b"bit_or\0", num_args: 1, deterministic: true,
-        make_state: bit_make_or, step_state: bit_step,
-        final_state: bit_final, destroy_state: bit_destroy,
+        func_id: FID_BIT_OR,
+        name: b"bit_or\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: bit_make_or,
+        step_state: bit_step,
+        final_state: bit_final,
+        destroy_state: bit_destroy,
     },
     AggregateSpec {
-        func_id: FID_BIT_XOR, name: b"bit_xor\0", num_args: 1, deterministic: true,
-        make_state: bit_make_xor, step_state: bit_step,
-        final_state: bit_final, destroy_state: bit_destroy,
+        func_id: FID_BIT_XOR,
+        name: b"bit_xor\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: bit_make_xor,
+        step_state: bit_step,
+        final_state: bit_final,
+        destroy_state: bit_destroy,
     },
     AggregateSpec {
-        func_id: FID_ANY_VALUE, name: b"any_value\0", num_args: 1, deterministic: true,
-        make_state: any_make, step_state: any_step,
-        final_state: any_final, destroy_state: any_destroy,
+        func_id: FID_ANY_VALUE,
+        name: b"any_value\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: any_make,
+        step_state: any_step,
+        final_state: any_final,
+        destroy_state: any_destroy,
     },
     AggregateSpec {
-        func_id: FID_ARRAY_AGG, name: b"array_agg\0", num_args: 1, deterministic: true,
-        make_state: arrayagg_make, step_state: arrayagg_step,
-        final_state: arrayagg_final, destroy_state: arrayagg_destroy,
+        func_id: FID_ARRAY_AGG,
+        name: b"array_agg\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: arrayagg_make,
+        step_state: arrayagg_step,
+        final_state: arrayagg_final,
+        destroy_state: arrayagg_destroy,
     },
     AggregateSpec {
-        func_id: FID_STRING_AGG, name: b"string_agg\0", num_args: 2, deterministic: true,
-        make_state: stringagg_make, step_state: stringagg_step,
-        final_state: stringagg_final, destroy_state: stringagg_destroy,
+        func_id: FID_STRING_AGG,
+        name: b"string_agg\0",
+        num_args: 2,
+        deterministic: true,
+        make_state: stringagg_make,
+        step_state: stringagg_step,
+        final_state: stringagg_final,
+        destroy_state: stringagg_destroy,
     },
 ];
 

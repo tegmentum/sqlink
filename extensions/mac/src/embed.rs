@@ -11,15 +11,12 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_NIC:          u64 = 4;
+const FID_NIC: u64 = 4;
 const FID_IS_MULTICAST: u64 = 5;
-const FID_IS_LOCAL:     u64 = 6;
+const FID_IS_LOCAL: u64 = 6;
 
 fn parse_mac(s: &str) -> Option<[u8; 6]> {
-    let hex: String = s
-        .chars()
-        .filter(|c| c.is_ascii_hexdigit())
-        .collect();
+    let hex: String = s.chars().filter(|c| c.is_ascii_hexdigit()).collect();
     if hex.len() != 12 {
         return None;
     }
@@ -37,18 +34,13 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "mac")?;
     let parsed = parse_mac(&raw);
 
     match func_id {
         FID_NIC => Ok(parsed
-            .map(|b| SqlValueOwned::Text(format!(
-                "{:02X}{:02X}{:02X}", b[3], b[4], b[5]
-            )))
+            .map(|b| SqlValueOwned::Text(format!("{:02X}{:02X}{:02X}", b[3], b[4], b[5])))
             .unwrap_or(SqlValueOwned::Null)),
         FID_IS_MULTICAST => Ok(parsed
             .map(|b| SqlValueOwned::Integer((b[0] & 0x01) as i64))
@@ -61,9 +53,24 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_NIC,          name: b"mac_nic\0",          num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_IS_MULTICAST, name: b"mac_is_multicast\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_IS_LOCAL,     name: b"mac_is_local\0",     num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_NIC,
+        name: b"mac_nic\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_IS_MULTICAST,
+        name: b"mac_is_multicast\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_IS_LOCAL,
+        name: b"mac_is_local\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

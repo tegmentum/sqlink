@@ -169,8 +169,7 @@ mod wasm_export {
                             }
                         }
                         SqlValue::Text(
-                            serde_json::to_string(&all)
-                                .unwrap_or_else(|_| "[]".to_string()),
+                            serde_json::to_string(&all).unwrap_or_else(|_| "[]".to_string()),
                         )
                     })
                     .unwrap_or(SqlValue::Null)),

@@ -98,7 +98,9 @@ fn col_widths(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> Vec<usiz
         for (i, v) in row.iter().enumerate() {
             let cell = render(v, s);
             let cw = cell.chars().count();
-            if i < w.len() && cw > w[i] { w[i] = cw; }
+            if i < w.len() && cw > w[i] {
+                w[i] = cw;
+            }
         }
     }
     // User-set widths via `.width N N ...` act as a floor.
@@ -116,12 +118,16 @@ fn fmt_column(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
     if s.headers {
         for (i, c) in columns.iter().enumerate() {
             o.push_str(&format!("{c:<width$}", width = widths[i]));
-            if i + 1 < columns.len() { o.push_str("  "); }
+            if i + 1 < columns.len() {
+                o.push_str("  ");
+            }
         }
         o.push('\n');
         for (i, _) in columns.iter().enumerate() {
             o.push_str(&"-".repeat(widths[i]));
-            if i + 1 < columns.len() { o.push_str("  "); }
+            if i + 1 < columns.len() {
+                o.push_str("  ");
+            }
         }
         o.push('\n');
     }
@@ -130,7 +136,9 @@ fn fmt_column(columns: &[String], rows: &[Vec<Value>], s: &Settings) -> String {
             let cell = render(v, s);
             let w = *widths.get(i).unwrap_or(&cell.len());
             o.push_str(&format!("{cell:<w$}"));
-            if i + 1 < row.len() { o.push_str("  "); }
+            if i + 1 < row.len() {
+                o.push_str("  ");
+            }
         }
         o.push('\n');
     }
@@ -228,10 +236,14 @@ fn fmt_json(columns: &[String], rows: &[Vec<Value>], _s: &Settings) -> String {
     }
     let mut o = String::from("[");
     for (ri, row) in rows.iter().enumerate() {
-        if ri > 0 { o.push(','); }
+        if ri > 0 {
+            o.push(',');
+        }
         o.push('{');
         for (ci, v) in row.iter().enumerate() {
-            if ci > 0 { o.push(','); }
+            if ci > 0 {
+                o.push(',');
+            }
             o.push_str(&esc_str(columns.get(ci).map(|s| s.as_str()).unwrap_or("?")));
             o.push(':');
             o.push_str(&esc_val(v));

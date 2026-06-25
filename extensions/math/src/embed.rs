@@ -85,31 +85,44 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
         FID_SIGN => SqlValueOwned::Integer(funcs::sign(get1("sign")?)),
         FID_MOD => {
             let (x, y) = get2("mod")?;
-            if y == 0.0 { return Err("mod: division by zero".to_string()); }
+            if y == 0.0 {
+                return Err("mod: division by zero".to_string());
+            }
             SqlValueOwned::Real(libm::fmod(x, y))
         }
         FID_SQRT => {
             let x = get1("sqrt")?;
-            if x < 0.0 { return Err("sqrt: negative argument".to_string()); }
+            if x < 0.0 {
+                return Err("sqrt: negative argument".to_string());
+            }
             SqlValueOwned::Real(libm::sqrt(x))
         }
         FID_CBRT => SqlValueOwned::Real(libm::cbrt(get1("cbrt")?)),
-        FID_POW => { let (x, y) = get2("pow")?; SqlValueOwned::Real(libm::pow(x, y)) }
+        FID_POW => {
+            let (x, y) = get2("pow")?;
+            SqlValueOwned::Real(libm::pow(x, y))
+        }
         FID_EXP => SqlValueOwned::Real(libm::exp(get1("exp")?)),
         FID_EXP2 => SqlValueOwned::Real(libm::exp2(get1("exp2")?)),
         FID_LOG => {
             let x = get1("log")?;
-            if x <= 0.0 { return Err("log: non-positive argument".to_string()); }
+            if x <= 0.0 {
+                return Err("log: non-positive argument".to_string());
+            }
             SqlValueOwned::Real(libm::log(x))
         }
         FID_LOG2 => {
             let x = get1("log2")?;
-            if x <= 0.0 { return Err("log2: non-positive argument".to_string()); }
+            if x <= 0.0 {
+                return Err("log2: non-positive argument".to_string());
+            }
             SqlValueOwned::Real(libm::log2(x))
         }
         FID_LOG10 => {
             let x = get1("log10")?;
-            if x <= 0.0 { return Err("log10: non-positive argument".to_string()); }
+            if x <= 0.0 {
+                return Err("log10: non-positive argument".to_string());
+            }
             SqlValueOwned::Real(libm::log10(x))
         }
         FID_SIN => SqlValueOwned::Real(libm::sin(get1("sin")?)),
@@ -117,28 +130,39 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
         FID_TAN => SqlValueOwned::Real(libm::tan(get1("tan")?)),
         FID_ASIN => {
             let x = get1("asin")?;
-            if !(-1.0..=1.0).contains(&x) { return Err("asin: out of range".to_string()); }
+            if !(-1.0..=1.0).contains(&x) {
+                return Err("asin: out of range".to_string());
+            }
             SqlValueOwned::Real(libm::asin(x))
         }
         FID_ACOS => {
             let x = get1("acos")?;
-            if !(-1.0..=1.0).contains(&x) { return Err("acos: out of range".to_string()); }
+            if !(-1.0..=1.0).contains(&x) {
+                return Err("acos: out of range".to_string());
+            }
             SqlValueOwned::Real(libm::acos(x))
         }
         FID_ATAN => SqlValueOwned::Real(libm::atan(get1("atan")?)),
-        FID_ATAN2 => { let (y, x) = get2("atan2")?; SqlValueOwned::Real(libm::atan2(y, x)) }
+        FID_ATAN2 => {
+            let (y, x) = get2("atan2")?;
+            SqlValueOwned::Real(libm::atan2(y, x))
+        }
         FID_SINH => SqlValueOwned::Real(libm::sinh(get1("sinh")?)),
         FID_COSH => SqlValueOwned::Real(libm::cosh(get1("cosh")?)),
         FID_TANH => SqlValueOwned::Real(libm::tanh(get1("tanh")?)),
         FID_ASINH => SqlValueOwned::Real(libm::asinh(get1("asinh")?)),
         FID_ACOSH => {
             let x = get1("acosh")?;
-            if x < 1.0 { return Err("acosh: argument < 1".to_string()); }
+            if x < 1.0 {
+                return Err("acosh: argument < 1".to_string());
+            }
             SqlValueOwned::Real(libm::acosh(x))
         }
         FID_ATANH => {
             let x = get1("atanh")?;
-            if !(-1.0..1.0).contains(&x) { return Err("atanh: out of (-1, 1)".to_string()); }
+            if !(-1.0..1.0).contains(&x) {
+                return Err("atanh: out of (-1, 1)".to_string());
+            }
             SqlValueOwned::Real(libm::atanh(x))
         }
         FID_DEGREES => SqlValueOwned::Real(funcs::degrees(get1("degrees")?)),
@@ -151,38 +175,198 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_CEIL,    name: b"ceil\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_FLOOR,   name: b"floor\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TRUNC,   name: b"trunc\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ROUND,   name: b"round\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ABS,     name: b"abs\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SIGN,    name: b"sign\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MOD,     name: b"mod\0",     num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_SQRT,    name: b"sqrt\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CBRT,    name: b"cbrt\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_POW,     name: b"pow\0",     num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_EXP,     name: b"exp\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_EXP2,    name: b"exp2\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_LOG,     name: b"log\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_LOG2,    name: b"log2\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_LOG10,   name: b"log10\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SIN,     name: b"sin\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_COS,     name: b"cos\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TAN,     name: b"tan\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ASIN,    name: b"asin\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ACOS,    name: b"acos\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ATAN,    name: b"atan\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ATAN2,   name: b"atan2\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_SINH,    name: b"sinh\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_COSH,    name: b"cosh\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TANH,    name: b"tanh\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ASINH,   name: b"asinh\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ACOSH,   name: b"acosh\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_ATANH,   name: b"atanh\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DEGREES, name: b"degrees\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_RADIANS, name: b"radians\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_PI,      name: b"pi\0",      num_args: 0, deterministic: true },
-    ScalarSpec { func_id: FID_E,       name: b"e\0",       num_args: 0, deterministic: true },
+    ScalarSpec {
+        func_id: FID_CEIL,
+        name: b"ceil\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FLOOR,
+        name: b"floor\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TRUNC,
+        name: b"trunc\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ROUND,
+        name: b"round\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ABS,
+        name: b"abs\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SIGN,
+        name: b"sign\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MOD,
+        name: b"mod\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SQRT,
+        name: b"sqrt\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CBRT,
+        name: b"cbrt\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_POW,
+        name: b"pow\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_EXP,
+        name: b"exp\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_EXP2,
+        name: b"exp2\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LOG,
+        name: b"log\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LOG2,
+        name: b"log2\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LOG10,
+        name: b"log10\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SIN,
+        name: b"sin\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_COS,
+        name: b"cos\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TAN,
+        name: b"tan\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ASIN,
+        name: b"asin\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ACOS,
+        name: b"acos\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ATAN,
+        name: b"atan\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ATAN2,
+        name: b"atan2\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SINH,
+        name: b"sinh\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_COSH,
+        name: b"cosh\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TANH,
+        name: b"tanh\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ASINH,
+        name: b"asinh\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ACOSH,
+        name: b"acosh\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ATANH,
+        name: b"atanh\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DEGREES,
+        name: b"degrees\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_RADIANS,
+        name: b"radians\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_PI,
+        name: b"pi\0",
+        num_args: 0,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_E,
+        name: b"e\0",
+        num_args: 0,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

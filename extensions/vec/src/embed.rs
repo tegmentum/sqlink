@@ -120,20 +120,90 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VEC_F32,             name: b"vec_f32\0",             num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_TO_JSON,         name: b"vec_to_json\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_LENGTH,          name: b"vec_length\0",          num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_TYPE,            name: b"vec_type\0",            num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_VERSION,         name: b"vec_version\0",         num_args: 0, deterministic: false },
-    ScalarSpec { func_id: FID_VEC_DISTANCE_L1,     name: b"vec_distance_l1\0",     num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_DISTANCE_L2,     name: b"vec_distance_l2\0",     num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_DISTANCE_COSINE, name: b"vec_distance_cosine\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_ADD,             name: b"vec_add\0",             num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_SUB,             name: b"vec_sub\0",             num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_NORMALIZE,       name: b"vec_normalize\0",       num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_SLICE,           name: b"vec_slice\0",           num_args: 3, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_QUANTIZE_BINARY, name: b"vec_quantize_binary\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VEC_QUANTIZE_INT8,   name: b"vec_quantize_int8\0",   num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VEC_F32,
+        name: b"vec_f32\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_TO_JSON,
+        name: b"vec_to_json\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_LENGTH,
+        name: b"vec_length\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_TYPE,
+        name: b"vec_type\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_VERSION,
+        name: b"vec_version\0",
+        num_args: 0,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_DISTANCE_L1,
+        name: b"vec_distance_l1\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_DISTANCE_L2,
+        name: b"vec_distance_l2\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_DISTANCE_COSINE,
+        name: b"vec_distance_cosine\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_ADD,
+        name: b"vec_add\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_SUB,
+        name: b"vec_sub\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_NORMALIZE,
+        name: b"vec_normalize\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_SLICE,
+        name: b"vec_slice\0",
+        num_args: 3,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_QUANTIZE_BINARY,
+        name: b"vec_quantize_binary\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VEC_QUANTIZE_INT8,
+        name: b"vec_quantize_int8\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

@@ -56,10 +56,7 @@ fn unzorder(z: i64, n: u32, i: u32) -> Option<i64> {
     Some(out as i64)
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_UNZORDER => {
             let z = arg_int(&args, 0, "unzorder")?;
@@ -81,11 +78,36 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_ZORDER_2, name: b"zorder\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_ZORDER_3, name: b"zorder\0",   num_args: 3, deterministic: true },
-    ScalarSpec { func_id: FID_ZORDER_4, name: b"zorder\0",   num_args: 4, deterministic: true },
-    ScalarSpec { func_id: FID_ZORDER_5, name: b"zorder\0",   num_args: 5, deterministic: true },
-    ScalarSpec { func_id: FID_UNZORDER, name: b"unzorder\0", num_args: 3, deterministic: true },
+    ScalarSpec {
+        func_id: FID_ZORDER_2,
+        name: b"zorder\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ZORDER_3,
+        name: b"zorder\0",
+        num_args: 3,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ZORDER_4,
+        name: b"zorder\0",
+        num_args: 4,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ZORDER_5,
+        name: b"zorder\0",
+        num_args: 5,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_UNZORDER,
+        name: b"unzorder\0",
+        num_args: 3,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

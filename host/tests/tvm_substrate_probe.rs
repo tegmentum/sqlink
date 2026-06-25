@@ -77,8 +77,8 @@ fn tvm_memory_imports_resolve_for_a_wasip2_component() {
     let mut cfg = Config::new();
     cfg.wasm_component_model(true);
     let engine = Engine::new(&cfg).expect("engine");
-    let component = Component::from_file(&engine, probe_component_path())
-        .expect("load probe component");
+    let component =
+        Component::from_file(&engine, probe_component_path()).expect("load probe component");
 
     let mut linker: Linker<ProbeState> = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker).expect("WASI to linker");

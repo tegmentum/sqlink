@@ -153,66 +153,132 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
     SETTINGS.with(|s| {
         let mut g = s.borrow_mut();
         match key {
-            "io/echo"        => if let Some(b) = parse_bool(value_json)   { g.echo = b; },
-            "io/headers"     => if let Some(b) = parse_bool(value_json)   { g.headers = b; },
-            "io/timer"       => if let Some(b) = parse_bool(value_json)   { g.show_timer = b; },
-            "io/stats"       => if let Some(b) = parse_bool(value_json)   { g.show_stats = b; },
-            "io/changes"     => if let Some(b) = parse_bool(value_json)   { g.show_changes = b; },
-            "io/binary"      => if let Some(b) = parse_bool(value_json)   { g.binary_output = b; },
-            "io/eqp"         => if let Some(b) = parse_bool(value_json)   { g.eqp = b; },
-            "io/explain"     => if let Some(s) = parse_string(value_json) {
-                g.explain_mode = match s.as_str() {
-                    "on"   => ExplainMode::On,
-                    "auto" => ExplainMode::Auto,
-                    _      => ExplainMode::Off,
-                };
-            },
-            "io/trace"       => if let Some(b) = parse_bool(value_json)   { g.trace_on = b; },
-            "bail/on-error"  => if let Some(b) = parse_bool(value_json)   { g.bail = b; },
-            "display/mode"   => if let Some(s) = parse_string(value_json) {
-                g.mode = match s.as_str() {
-                    "csv"      => Mode::Csv,
-                    "line"     => Mode::Line,
-                    "column"   => Mode::Column,
-                    "table"    => Mode::Table,
-                    "markdown" => Mode::Markdown,
-                    "tabs"     => Mode::Tabs,
-                    "json"     => Mode::Json,
-                    _          => Mode::List,
-                };
-            },
-            "display/nullvalue" => if let Some(s) = parse_string(value_json) { g.null_value = s; },
-            "display/separator" => if let Some(s) = parse_string(value_json) { g.separator = s; },
-            "display/width"     => if let Some(s) = parse_string(value_json) {
-                // Space-separated non-negative ints; empty resets.
-                let mut widths = Vec::new();
-                let mut bad = false;
-                for tok in s.split_whitespace() {
-                    match tok.parse::<isize>() {
-                        Ok(n) => widths.push(n.max(0) as usize),
-                        Err(_) => { bad = true; break; }
+            "io/echo" => {
+                if let Some(b) = parse_bool(value_json) {
+                    g.echo = b;
+                }
+            }
+            "io/headers" => {
+                if let Some(b) = parse_bool(value_json) {
+                    g.headers = b;
+                }
+            }
+            "io/timer" => {
+                if let Some(b) = parse_bool(value_json) {
+                    g.show_timer = b;
+                }
+            }
+            "io/stats" => {
+                if let Some(b) = parse_bool(value_json) {
+                    g.show_stats = b;
+                }
+            }
+            "io/changes" => {
+                if let Some(b) = parse_bool(value_json) {
+                    g.show_changes = b;
+                }
+            }
+            "io/binary" => {
+                if let Some(b) = parse_bool(value_json) {
+                    g.binary_output = b;
+                }
+            }
+            "io/eqp" => {
+                if let Some(b) = parse_bool(value_json) {
+                    g.eqp = b;
+                }
+            }
+            "io/explain" => {
+                if let Some(s) = parse_string(value_json) {
+                    g.explain_mode = match s.as_str() {
+                        "on" => ExplainMode::On,
+                        "auto" => ExplainMode::Auto,
+                        _ => ExplainMode::Off,
+                    };
+                }
+            }
+            "io/trace" => {
+                if let Some(b) = parse_bool(value_json) {
+                    g.trace_on = b;
+                }
+            }
+            "bail/on-error" => {
+                if let Some(b) = parse_bool(value_json) {
+                    g.bail = b;
+                }
+            }
+            "display/mode" => {
+                if let Some(s) = parse_string(value_json) {
+                    g.mode = match s.as_str() {
+                        "csv" => Mode::Csv,
+                        "line" => Mode::Line,
+                        "column" => Mode::Column,
+                        "table" => Mode::Table,
+                        "markdown" => Mode::Markdown,
+                        "tabs" => Mode::Tabs,
+                        "json" => Mode::Json,
+                        _ => Mode::List,
+                    };
+                }
+            }
+            "display/nullvalue" => {
+                if let Some(s) = parse_string(value_json) {
+                    g.null_value = s;
+                }
+            }
+            "display/separator" => {
+                if let Some(s) = parse_string(value_json) {
+                    g.separator = s;
+                }
+            }
+            "display/width" => {
+                if let Some(s) = parse_string(value_json) {
+                    // Space-separated non-negative ints; empty resets.
+                    let mut widths = Vec::new();
+                    let mut bad = false;
+                    for tok in s.split_whitespace() {
+                        match tok.parse::<isize>() {
+                            Ok(n) => widths.push(n.max(0) as usize),
+                            Err(_) => {
+                                bad = true;
+                                break;
+                            }
+                        }
+                    }
+                    if !bad {
+                        g.column_widths = widths;
                     }
                 }
-                if !bad { g.column_widths = widths; }
-            },
-            "prompt/main"       => if let Some(s) = parse_string(value_json) { g.prompt_main = s; },
-            "prompt/cont"       => if let Some(s) = parse_string(value_json) { g.prompt_cont = s; },
-            "conn/busy-timeout" => if let Some(ms) = parse_int(value_json) {
-                // PLAN-cli-shared-conn.md Stage 4: now that eval_sql
-                // uses the host's shared connection (Stage 3c), we
-                // set busy_timeout there directly. Skips the cli's
-                // CLI_CONN entirely.
-                if let Ok(conn_ms) = i32::try_from(ms) {
-                    let _ = crate::bindings::sqlite::extension::spi::set_busy_timeout(conn_ms);
+            }
+            "prompt/main" => {
+                if let Some(s) = parse_string(value_json) {
+                    g.prompt_main = s;
                 }
-            },
+            }
+            "prompt/cont" => {
+                if let Some(s) = parse_string(value_json) {
+                    g.prompt_cont = s;
+                }
+            }
+            "conn/busy-timeout" => {
+                if let Some(ms) = parse_int(value_json) {
+                    // PLAN-cli-shared-conn.md Stage 4: now that eval_sql
+                    // uses the host's shared connection (Stage 3c), we
+                    // set busy_timeout there directly. Skips the cli's
+                    // CLI_CONN entirely.
+                    if let Ok(conn_ms) = i32::try_from(ms) {
+                        let _ = crate::bindings::sqlite::extension::spi::set_busy_timeout(conn_ms);
+                    }
+                }
+            }
             "params/clear" => {
                 g.parameters.clear();
             }
             other => {
                 // Map-shaped deltas with a `/<name>` suffix.
                 if let Some(name) = other.strip_prefix("params/set/") {
-                    g.parameters.insert(name.to_string(), parse_param_value(value_json));
+                    g.parameters
+                        .insert(name.to_string(), parse_param_value(value_json));
                 } else if let Some(name) = other.strip_prefix("params/unset/") {
                     g.parameters.remove(name);
                 } else if let Some(db_name) = other.strip_prefix("conn/deserialize/") {
@@ -224,8 +290,7 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
                 } else
                 // Connection-level deltas with a `/<name>` suffix.
                 if let Some(name) = other.strip_prefix("conn/limit/") {
-                    if let (Some(code), Some(n)) =
-                        (crate::limit_code(name), parse_int(value_json))
+                    if let (Some(code), Some(n)) = (crate::limit_code(name), parse_int(value_json))
                     {
                         if let Ok(v) = i32::try_from(n) {
                             crate::bindings::sqlite::extension::spi::limit(code, v);
@@ -235,9 +300,8 @@ pub fn apply_dotcmd_delta(key: &str, value_json: &str) {
                     if let (Some(code), Some(b)) =
                         (crate::dbconfig_code(name), parse_bool(value_json))
                     {
-                        let _ = crate::bindings::sqlite::extension::spi::db_config_bool(
-                            code, true, b,
-                        );
+                        let _ =
+                            crate::bindings::sqlite::extension::spi::db_config_bool(code, true, b);
                     }
                 }
                 // Other unknown keys are silently ignored.
@@ -257,7 +321,9 @@ fn parse_blob_hex(json: &str) -> Option<Vec<u8>> {
     let s = parse_string(json)?;
     let s = s.trim();
     let body = s.strip_prefix("X'")?.strip_suffix('\'')?;
-    if body.len() % 2 != 0 { return None; }
+    if body.len() % 2 != 0 {
+        return None;
+    }
     let mut out = Vec::with_capacity(body.len() / 2);
     let bytes = body.as_bytes();
     for chunk in bytes.chunks(2) {
@@ -274,12 +340,24 @@ fn parse_blob_hex(json: &str) -> Option<Vec<u8>> {
 /// bare, Text  "...", Blob  null sentinel, Null  null).
 fn parse_param_value(json: &str) -> Value {
     let t = json.trim();
-    if t == "null" { return Value::Null; }
-    if t == "true" { return Value::Integer(1); }
-    if t == "false" { return Value::Integer(0); }
-    if let Ok(i) = t.parse::<i64>() { return Value::Integer(i); }
-    if let Ok(f) = t.parse::<f64>() { return Value::Real(f); }
-    if let Some(s) = parse_string(json) { return Value::Text(s); }
+    if t == "null" {
+        return Value::Null;
+    }
+    if t == "true" {
+        return Value::Integer(1);
+    }
+    if t == "false" {
+        return Value::Integer(0);
+    }
+    if let Ok(i) = t.parse::<i64>() {
+        return Value::Integer(i);
+    }
+    if let Ok(f) = t.parse::<f64>() {
+        return Value::Real(f);
+    }
+    if let Some(s) = parse_string(json) {
+        return Value::Text(s);
+    }
     Value::Null
 }
 
@@ -316,7 +394,10 @@ fn parse_string(json: &str) -> Option<String> {
             Some('n') => out.push('\n'),
             Some('r') => out.push('\r'),
             Some('t') => out.push('\t'),
-            Some(other) => { out.push('\\'); out.push(other); }
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
             None => out.push('\\'),
         }
     }

@@ -71,14 +71,54 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_JP,            name: b"jsonpath\0",         num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_JP_FIRST,      name: b"jsonpath_first\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_JP_EXISTS,     name: b"jsonpath_exists\0",  num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_JP_COUNT,      name: b"jsonpath_count\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_H_EXTRACT,     name: b"html_extract\0",     num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_H_EXTRACT_ALL, name: b"html_extract_all\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_H_ATTR,        name: b"html_attr\0",        num_args: 3, deterministic: true },
-    ScalarSpec { func_id: FID_H_TEXT,        name: b"html_text\0",        num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_JP,
+        name: b"jsonpath\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JP_FIRST,
+        name: b"jsonpath_first\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JP_EXISTS,
+        name: b"jsonpath_exists\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_JP_COUNT,
+        name: b"jsonpath_count\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_H_EXTRACT,
+        name: b"html_extract\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_H_EXTRACT_ALL,
+        name: b"html_extract_all\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_H_ATTR,
+        name: b"html_attr\0",
+        num_args: 3,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_H_TEXT,
+        name: b"html_text\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

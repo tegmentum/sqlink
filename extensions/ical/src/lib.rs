@@ -131,8 +131,7 @@ mod wasm_export {
                             })
                             .collect();
                         Ok(SqlValue::Text(
-                            serde_json::to_string(&events)
-                                .unwrap_or_else(|_| "[]".to_string()),
+                            serde_json::to_string(&events).unwrap_or_else(|_| "[]".to_string()),
                         ))
                     }
                     None => Ok(SqlValue::Null),
@@ -150,8 +149,7 @@ mod wasm_export {
                             })
                             .collect();
                         Ok(SqlValue::Text(
-                            serde_json::to_string(&summaries)
-                                .unwrap_or_else(|_| "[]".to_string()),
+                            serde_json::to_string(&summaries).unwrap_or_else(|_| "[]".to_string()),
                         ))
                     }
                     None => Ok(SqlValue::Null),

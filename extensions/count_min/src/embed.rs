@@ -9,9 +9,9 @@ use sqlite_embed::{
 };
 
 const FID_ESTIMATE: u64 = 1;
-const FID_MERGE:    u64 = 2;
-const FID_VERSION:  u64 = 3;
-const FID_AGG:      u64 = 100;
+const FID_MERGE: u64 = 2;
+const FID_VERSION: u64 = 3;
+const FID_AGG: u64 = 100;
 
 fn val_bytes(v: &SqlValueOwned) -> Vec<u8> {
     match v {
@@ -83,26 +83,41 @@ unsafe fn cms_destroy(state: *mut ()) {
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_ESTIMATE, name: b"count_min_estimate\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_MERGE,    name: b"count_min_merge\0",    num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_VERSION,  name: b"count_min_version\0",  num_args: 0, deterministic: false },
-];
-
-const AGGREGATES: &[AggregateSpec] = &[
-    AggregateSpec {
-        func_id: FID_AGG,
-        name: b"count_min\0",
-        num_args: 1,
+    ScalarSpec {
+        func_id: FID_ESTIMATE,
+        name: b"count_min_estimate\0",
+        num_args: 2,
         deterministic: true,
-        make_state: cms_make,
-        step_state: cms_step,
-        final_state: cms_final,
-        destroy_state: cms_destroy,
+    },
+    ScalarSpec {
+        func_id: FID_MERGE,
+        name: b"count_min_merge\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VERSION,
+        name: b"count_min_version\0",
+        num_args: 0,
+        deterministic: false,
     },
 ];
 
+const AGGREGATES: &[AggregateSpec] = &[AggregateSpec {
+    func_id: FID_AGG,
+    name: b"count_min\0",
+    num_args: 1,
+    deterministic: true,
+    make_state: cms_make,
+    step_state: cms_step,
+    final_state: cms_final,
+    destroy_state: cms_destroy,
+}];
+
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {
     let rc = register_scalars(db, SCALARS, call_scalar);
-    if rc != libsqlite3_sys::SQLITE_OK { return rc; }
+    if rc != libsqlite3_sys::SQLITE_OK {
+        return rc;
+    }
     register_aggregates(db, AGGREGATES)
 }

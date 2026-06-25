@@ -99,8 +99,18 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_TOINTEGER, name: b"tointeger\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TOREAL,    name: b"toreal\0",    num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_TOINTEGER,
+        name: b"tointeger\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TOREAL,
+        name: b"toreal\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

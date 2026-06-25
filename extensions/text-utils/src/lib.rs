@@ -155,24 +155,24 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
     const FID_NORMALIZE: u64 = 1;
     // Gap-analysis additions:
-    const FID_POSITION:    u64 = 2;
-    const FID_INSERT:      u64 = 3;
-    const FID_SPLIT_PART:  u64 = 4;
-    const FID_LCASE:       u64 = 5;
-    const FID_UCASE:       u64 = 6;
-    const FID_LOCATE_2:    u64 = 7;
-    const FID_LOCATE_3:    u64 = 8;
+    const FID_POSITION: u64 = 2;
+    const FID_INSERT: u64 = 3;
+    const FID_SPLIT_PART: u64 = 4;
+    const FID_LCASE: u64 = 5;
+    const FID_UCASE: u64 = 6;
+    const FID_LOCATE_2: u64 = 7;
+    const FID_LOCATE_3: u64 = 8;
     // DuckDB / Snowflake additions:
-    const FID_SPLIT:       u64 = 9;
+    const FID_SPLIT: u64 = 9;
     const FID_STRING_SPLIT: u64 = 10;
-    const FID_STR_SPLIT:   u64 = 11;
-    const FID_REVERSE:     u64 = 12;
+    const FID_STR_SPLIT: u64 = 11;
+    const FID_REVERSE: u64 = 12;
     const VTAB_ID: u64 = 1;
     const COL_PREFIX: i32 = 0;
     const COL_INPUT: i32 = 1;
@@ -201,21 +201,21 @@ mod wasm_export {
                 name: "text-utils".to_string(),
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 scalar_functions: alloc::vec![
-                    s(FID_NORMALIZE,   "sql_normalize", 1),
+                    s(FID_NORMALIZE, "sql_normalize", 1),
                     // Cross-DB portability additions:
-                    s(FID_POSITION,    "position",      2),  // (substr, str) -> 1-based
-                    s(FID_INSERT,      "insert",        4),  // (s, pos, len, repl)
-                    s(FID_SPLIT_PART,  "split_part",    3),  // (s, delim, n)
-                    s(FID_LCASE,       "lcase",         1),  // alias of lower
-                    s(FID_UCASE,       "ucase",         1),  // alias of upper
-                    s(FID_LOCATE_2,    "locate",        2),  // (substr, str)
-                    s(FID_LOCATE_3,    "locate",        3),  // (substr, str, start)
+                    s(FID_POSITION, "position", 2), // (substr, str) -> 1-based
+                    s(FID_INSERT, "insert", 4),     // (s, pos, len, repl)
+                    s(FID_SPLIT_PART, "split_part", 3), // (s, delim, n)
+                    s(FID_LCASE, "lcase", 1),       // alias of lower
+                    s(FID_UCASE, "ucase", 1),       // alias of upper
+                    s(FID_LOCATE_2, "locate", 2),   // (substr, str)
+                    s(FID_LOCATE_3, "locate", 3),   // (substr, str, start)
                     // DuckDB / Snowflake: split a string into a JSON
                     // array  pairs nicely with the `list` extension.
-                    s(FID_SPLIT,         "split",         2),
-                    s(FID_STRING_SPLIT,  "string_split",  2),
-                    s(FID_STR_SPLIT,     "str_split",     2),
-                    s(FID_REVERSE,       "reverse",       1),
+                    s(FID_SPLIT, "split", 2),
+                    s(FID_STRING_SPLIT, "string_split", 2),
+                    s(FID_STR_SPLIT, "str_split", 2),
+                    s(FID_REVERSE, "reverse", 1),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -255,7 +255,9 @@ mod wasm_export {
                 match v {
                     SqlValue::Integer(n) => Ok(*n),
                     SqlValue::Real(r) => Ok(*r as i64),
-                    SqlValue::Text(s) => s.parse::<i64>().map_err(|_| format!("{name}: arg {i} not integer")),
+                    SqlValue::Text(s) => s
+                        .parse::<i64>()
+                        .map_err(|_| format!("{name}: arg {i} not integer")),
                     _ => Err(format!("{name}: INTEGER arg at {i}")),
                 }
             }
@@ -263,11 +265,15 @@ mod wasm_export {
             /// (not bytes), starting from `start` (1-based). 0 if
             /// not found.
             fn find_pos(haystack: &str, needle: &str, start: i64) -> i64 {
-                if needle.is_empty() { return 0; }
+                if needle.is_empty() {
+                    return 0;
+                }
                 let chars: Vec<char> = haystack.chars().collect();
                 let needle_chars: Vec<char> = needle.chars().collect();
                 let from = (start.max(1) as usize).saturating_sub(1);
-                if from >= chars.len() { return 0; }
+                if from >= chars.len() {
+                    return 0;
+                }
                 for i in from..=chars.len().saturating_sub(needle_chars.len()) {
                     if chars[i..i + needle_chars.len()] == *needle_chars {
                         return (i + 1) as i64;
@@ -277,9 +283,7 @@ mod wasm_export {
             }
             match func_id {
                 FID_NORMALIZE => match args.first() {
-                    Some(SqlValue::Text(s)) => {
-                        Ok(SqlValue::Text(super::normalize_sql(s)))
-                    }
+                    Some(SqlValue::Text(s)) => Ok(SqlValue::Text(super::normalize_sql(s))),
                     _ => Err("sql_normalize: TEXT arg required".to_string()),
                 },
                 FID_POSITION => {
@@ -317,14 +321,22 @@ mod wasm_export {
                     let delim = as_text(&args[1], "split_part", 1)?;
                     let n = as_int(&args[2], "split_part", 2)?;
                     if delim.is_empty() {
-                        return Ok(if n == 1 { SqlValue::Text(s) } else { SqlValue::Text(String::new()) });
+                        return Ok(if n == 1 {
+                            SqlValue::Text(s)
+                        } else {
+                            SqlValue::Text(String::new())
+                        });
                     }
                     let parts: Vec<&str> = s.split(delim.as_str()).collect();
-                    let idx = if n > 0 { (n - 1) as usize }
-                              else if n < 0 { (parts.len() as i64 + n) as usize }
-                              else { return Ok(SqlValue::Text(String::new())); };
+                    let idx = if n > 0 {
+                        (n - 1) as usize
+                    } else if n < 0 {
+                        (parts.len() as i64 + n) as usize
+                    } else {
+                        return Ok(SqlValue::Text(String::new()));
+                    };
                     Ok(SqlValue::Text(
-                        parts.get(idx).map(|s| s.to_string()).unwrap_or_default()
+                        parts.get(idx).map(|s| s.to_string()).unwrap_or_default(),
                     ))
                 }
                 FID_LCASE => {
@@ -357,7 +369,9 @@ mod wasm_export {
                     // JSON-encode for interop with the `list` ext.
                     let mut out = String::from("[");
                     for (i, p) in parts.iter().enumerate() {
-                        if i > 0 { out.push(','); }
+                        if i > 0 {
+                            out.push(',');
+                        }
                         let escaped = p.replace('\\', "\\\\").replace('"', "\\\"");
                         out.push('"');
                         out.push_str(&escaped);
@@ -380,45 +394,41 @@ mod wasm_export {
     }
 
     impl VtabGuest for Ext {
-        fn create(
-            _: u64,
-            _: u64,
-            _: String,
-            _: String,
-            _: Vec<String>,
-        ) -> Result<String, String> {
+        fn create(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {
             Ok(schema())
         }
-        fn connect(
-            _: u64,
-            _: u64,
-            _: String,
-            _: String,
-            _: Vec<String>,
-        ) -> Result<String, String> {
+        fn connect(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {
             Ok(schema())
         }
-        fn destroy(_: u64, _: u64) -> Result<(), String> { Ok(()) }
-        fn disconnect(_: u64, _: u64) -> Result<(), String> { Ok(()) }
+        fn destroy(_: u64, _: u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn disconnect(_: u64, _: u64) -> Result<(), String> {
+            Ok(())
+        }
 
-        fn best_index(
-            _: u64,
-            _: u64,
-            info: IndexInfo,
-        ) -> Result<IndexPlan, String> {
+        fn best_index(_: u64, _: u64, info: IndexInfo) -> Result<IndexPlan, String> {
             let mut usage: Vec<ConstraintUsage> = info
                 .constraints
                 .iter()
-                .map(|_| ConstraintUsage { argv_index: 0, omit: false })
+                .map(|_| ConstraintUsage {
+                    argv_index: 0,
+                    omit: false,
+                })
                 .collect();
             let mut bound = false;
             for (i, c) in info.constraints.iter().enumerate() {
                 if !c.usable || c.column != COL_INPUT || c.op != ConstraintOp::Eq {
                     continue;
                 }
-                if bound { continue; }
+                if bound {
+                    continue;
+                }
                 bound = true;
-                usage[i] = ConstraintUsage { argv_index: 1, omit: true };
+                usage[i] = ConstraintUsage {
+                    argv_index: 1,
+                    omit: true,
+                };
             }
             Ok(IndexPlan {
                 constraint_usage: usage,
@@ -432,7 +442,13 @@ mod wasm_export {
 
         fn open(_: u64, _: u64, cursor_id: u64) -> Result<(), String> {
             CURSORS.with(|m| {
-                m.borrow_mut().insert(cursor_id, Cursor { prefixes: Vec::new(), idx: 0 })
+                m.borrow_mut().insert(
+                    cursor_id,
+                    Cursor {
+                        prefixes: Vec::new(),
+                        idx: 0,
+                    },
+                )
             });
             Ok(())
         }
@@ -503,7 +519,7 @@ mod wasm_export {
                     .ok_or_else(|| "prefixes: cursor not open".to_string())
             })
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             cursor_id: u64,
@@ -529,7 +545,7 @@ mod wasm_export {
                 Ok(out)
             })
         }
-}
+    }
 
     bindings::export!(Ext with_types_in bindings);
 }

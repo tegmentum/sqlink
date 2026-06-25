@@ -88,10 +88,7 @@ pub unsafe extern "C" fn sqlite3_sqlinkloader_init(
     }
 }
 
-unsafe fn init_inner(
-    db: *mut sqlite3,
-    p_api: *const sqlite3_api_routines,
-) -> Result<()> {
+unsafe fn init_inner(db: *mut sqlite3, p_api: *const sqlite3_api_routines) -> Result<()> {
     state::set_api_routines(p_api)?;
     let api = state::api_routines().expect("set above");
     let host = state::host()?;
@@ -120,14 +117,7 @@ unsafe fn init_inner(
                 continue;
             }
             let policy = load::default_policy();
-            match load::load_and_install(
-                api,
-                db,
-                host.clone(),
-                rt.clone(),
-                entry,
-                policy,
-            ) {
+            match load::load_and_install(api, db, host.clone(), rt.clone(), entry, policy) {
                 Ok(counts) => {
                     tracing::info!(
                         ext = entry,
@@ -150,11 +140,7 @@ unsafe fn init_inner(
     Ok(())
 }
 
-unsafe fn set_err(
-    p_api: *const sqlite3_api_routines,
-    pz_err_msg: *mut *mut c_char,
-    msg: &str,
-) {
+unsafe fn set_err(p_api: *const sqlite3_api_routines, pz_err_msg: *mut *mut c_char, msg: &str) {
     if pz_err_msg.is_null() || p_api.is_null() {
         return;
     }
@@ -207,7 +193,11 @@ unsafe extern "C" fn sqlink_load_ext_xfunc(
     let lc: &LoaderXFnCtx = &*raw;
 
     if argc < 1 {
-        write_error(&api, ctx, "sqlink_load_ext: usage: sqlink_load_ext(name [, path])");
+        write_error(
+            &api,
+            ctx,
+            "sqlink_load_ext: usage: sqlink_load_ext(name [, path])",
+        );
         return;
     }
 
@@ -271,12 +261,7 @@ unsafe fn register_sqlink_load_ext(
     host: Host,
     rt: std::sync::Arc<tokio::runtime::Runtime>,
 ) -> Result<()> {
-    let boxed = Box::new(LoaderXFnCtx {
-        host,
-        rt,
-        api,
-        db,
-    });
+    let boxed = Box::new(LoaderXFnCtx { host, rt, api, db });
     let ptr_user = Box::into_raw(boxed) as *mut c_void;
     let name = CString::new("sqlink_load_ext").unwrap();
     let create = api.as_ref().create_function_v2.expect("create_function_v2");

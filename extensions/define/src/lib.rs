@@ -33,8 +33,8 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::sqlite::extension::spi;
     use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
@@ -100,8 +100,7 @@ mod wasm_export {
     }
 
     fn ensure_schema() -> Result<(), String> {
-        spi::execute_batch(SCHEMA_DDL)
-            .map_err(|e| format!("define: ensure schema: {e:?}"))?;
+        spi::execute_batch(SCHEMA_DDL).map_err(|e| format!("define: ensure schema: {e:?}"))?;
         Ok(())
     }
 
@@ -121,8 +120,8 @@ mod wasm_export {
         // primary unary route  see call() below.)
         let trimmed = s.trim();
         if trimmed.starts_with('[') {
-            let arr: Vec<serde_json::Value> =
-                serde_json::from_str(trimmed).map_err(|e| format!("define_call: args JSON: {e}"))?;
+            let arr: Vec<serde_json::Value> = serde_json::from_str(trimmed)
+                .map_err(|e| format!("define_call: args JSON: {e}"))?;
             let mut out = Vec::with_capacity(arr.len());
             for v in arr {
                 out.push(json_to_sql(v));
@@ -195,7 +194,12 @@ mod wasm_export {
                     };
                     let result = spi::execute(&body, &arglist)
                         .map_err(|e| format!("define_call: exec {name}: {e:?}"))?;
-                    match result.rows.into_iter().next().and_then(|r| r.into_iter().next()) {
+                    match result
+                        .rows
+                        .into_iter()
+                        .next()
+                        .and_then(|r| r.into_iter().next())
+                    {
                         Some(v) => Ok(v),
                         None => Ok(SqlValue::Null),
                     }
@@ -212,11 +216,8 @@ mod wasm_export {
                 }
                 FID_DEFINE_LIST => {
                     ensure_schema()?;
-                    let r = spi::execute(
-                        "SELECT name FROM _define_funcs ORDER BY name",
-                        &[],
-                    )
-                    .map_err(|e| format!("define_list: {e:?}"))?;
+                    let r = spi::execute("SELECT name FROM _define_funcs ORDER BY name", &[])
+                        .map_err(|e| format!("define_list: {e:?}"))?;
                     let names: Vec<String> = r
                         .rows
                         .into_iter()
@@ -249,43 +250,49 @@ mod wasm_export {
     // expose one. Every method errors so a stray CREATE VIRTUAL
     // TABLE  using _define_unused gets a clear message.
     impl VtabGuest for Define {
-        fn create(
-            _: u64, _: u64, _: String, _: String, _: Vec<String>,
-        ) -> Result<String, String> {
+        fn create(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {
             Err("define: _define_unused is a placeholder; not instantiable".to_string())
         }
-        fn connect(
-            _: u64, _: u64, _: String, _: String, _: Vec<String>,
-        ) -> Result<String, String> {
+        fn connect(_: u64, _: u64, _: String, _: String, _: Vec<String>) -> Result<String, String> {
             Err("define: _define_unused is a placeholder; not instantiable".to_string())
         }
-        fn destroy(_: u64, _: u64) -> Result<(), String> { Ok(()) }
-        fn disconnect(_: u64, _: u64) -> Result<(), String> { Ok(()) }
-        fn best_index(
-            _: u64, _: u64, _info: IndexInfo,
-        ) -> Result<IndexPlan, String> {
+        fn destroy(_: u64, _: u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn disconnect(_: u64, _: u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn best_index(_: u64, _: u64, _info: IndexInfo) -> Result<IndexPlan, String> {
             Err("define: placeholder vtab".to_string())
         }
         fn open(_: u64, _: u64, _: u64) -> Result<(), String> {
             Err("define: placeholder vtab".to_string())
         }
-        fn close(_: u64, _: u64) -> Result<(), String> { Ok(()) }
+        fn close(_: u64, _: u64) -> Result<(), String> {
+            Ok(())
+        }
         fn filter(
-            _: u64, _: u64, _: i32, _: Option<String>, _: Vec<SqlValue>,
+            _: u64,
+            _: u64,
+            _: i32,
+            _: Option<String>,
+            _: Vec<SqlValue>,
         ) -> Result<(), String> {
             Err("define: placeholder vtab".to_string())
         }
         fn next(_: u64, _: u64) -> Result<(), String> {
             Err("define: placeholder vtab".to_string())
         }
-        fn eof(_: u64, _: u64) -> bool { true }
+        fn eof(_: u64, _: u64) -> bool {
+            true
+        }
         fn column(_: u64, _: u64, _: i32) -> Result<SqlValue, String> {
             Err("define: placeholder vtab".to_string())
         }
         fn rowid(_: u64, _: u64) -> Result<i64, String> {
             Err("define: placeholder vtab".to_string())
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             _cursor_id: u64,
@@ -293,7 +300,7 @@ mod wasm_export {
         ) -> Result<Vec<VtabRow>, String> {
             Err("fetch_batch: not implemented; host falls back to per-row".to_string())
         }
-}
+    }
     // Silence the unused-import lint for ConstraintUsage  the
     // VtabGuest trait references the type via its method
     // signatures, but our placeholder doesn't use it directly.

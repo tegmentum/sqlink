@@ -57,8 +57,8 @@ pub fn host() -> Result<Host> {
 /// Stash the pApi pointer from the loader's entry point. Safe to
 /// call multiple times with the same pointer; first one wins.
 pub unsafe fn set_api_routines(ptr: *const sqlite3_api_routines) -> Result<()> {
-    let routines = ApiRoutines::from_raw(ptr)
-        .ok_or_else(|| anyhow!("null sqlite3_api_routines pointer"))?;
+    let routines =
+        ApiRoutines::from_raw(ptr).ok_or_else(|| anyhow!("null sqlite3_api_routines pointer"))?;
     let _ = API.set(routines);
     Ok(())
 }

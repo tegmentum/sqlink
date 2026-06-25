@@ -126,8 +126,7 @@ impl SqliteCasStore {
         if let Some(existing) = self.bundle_find_first_by_hash(set_hash)? {
             if let Some(n) = name {
                 if existing.name.is_none() {
-                    const REBIND_SQL: &str =
-                        "UPDATE __cas_bundle SET name = ?1 WHERE id = ?2";
+                    const REBIND_SQL: &str = "UPDATE __cas_bundle SET name = ?1 WHERE id = ?2";
                     self.with_stmt(REBIND_SQL, |stmt| {
                         stmt.bind_all(&[
                             Value::Text(n.to_string()),
@@ -234,10 +233,7 @@ impl SqliteCasStore {
     }
 
     /// Hash-prefix lookup.
-    pub fn bundle_find_by_hash_prefix(
-        &self,
-        prefix: &str,
-    ) -> Result<Vec<BundleSummary>> {
+    pub fn bundle_find_by_hash_prefix(&self, prefix: &str) -> Result<Vec<BundleSummary>> {
         // LOW-severity defensive fix: reject LIKE wildcards in the
         // user-supplied prefix. Without this `bundle_find_by_hash_prefix("%a%")`
         // would match any set_hash containing 'a' rather than the
@@ -465,7 +461,8 @@ impl SqliteCasStore {
         target_triple: &str,
         binary_path: &str,
     ) -> Result<()> {
-        const SQL: &str = "INSERT INTO __cas_bundle_binary(bundle_id, target_triple, binary_path, built_at) \
+        const SQL: &str =
+            "INSERT INTO __cas_bundle_binary(bundle_id, target_triple, binary_path, built_at) \
              VALUES (?1, ?2, ?3, ?4) \
              ON CONFLICT(bundle_id, target_triple) DO UPDATE SET \
                 binary_path = excluded.binary_path, \

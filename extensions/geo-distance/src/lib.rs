@@ -52,8 +52,7 @@ mod wasm_export {
         let phi2 = lat2 * to_rad;
         let dphi = (lat2 - lat1) * to_rad;
         let dlam = (lon2 - lon1) * to_rad;
-        let a = (dphi / 2.0).sin().powi(2)
-            + phi1.cos() * phi2.cos() * (dlam / 2.0).sin().powi(2);
+        let a = (dphi / 2.0).sin().powi(2) + phi1.cos() * phi2.cos() * (dlam / 2.0).sin().powi(2);
         let c = 2.0 * a.sqrt().atan2((1.0 - a).sqrt());
         EARTH_RADIUS_M * c
     }
@@ -83,9 +82,8 @@ mod wasm_export {
         let dlam = (lon2 - lon1) * to_rad;
         let bx = phi2.cos() * dlam.cos();
         let by = phi2.cos() * dlam.sin();
-        let phi_m = (phi1.sin() + phi2.sin()).atan2(
-            ((phi1.cos() + bx).powi(2) + by.powi(2)).sqrt(),
-        );
+        let phi_m =
+            (phi1.sin() + phi2.sin()).atan2(((phi1.cos() + bx).powi(2) + by.powi(2)).sqrt());
         let lam_m = lam1 + by.atan2(phi1.cos() + bx);
         (phi_m * to_deg, lam_m * to_deg)
     }

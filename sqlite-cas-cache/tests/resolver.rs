@@ -5,8 +5,7 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 use sqlite_cas_cache::{
-    ArtifactRef, ArtifactResolver, LocalFileResolver, ResolverRegistry, Source,
-    SqliteCasStore,
+    ArtifactRef, ArtifactResolver, LocalFileResolver, ResolverRegistry, Source, SqliteCasStore,
 };
 
 fn fresh_store() -> (tempfile::TempDir, SqliteCasStore) {
@@ -106,8 +105,7 @@ fn fetch_artifact_rejects_hash_mismatch() {
     let path = dir.path().join("a.bin");
     std::fs::write(&path, payload).unwrap();
     let wrong = blake3::hash(b"different-bytes");
-    let aref = ArtifactRef::from_source(Source::LocalFile { path })
-        .with_expected_hash(wrong);
+    let aref = ArtifactRef::from_source(Source::LocalFile { path }).with_expected_hash(wrong);
     let err = store
         .fetch_artifact(&aref, &ResolverRegistry::with_builtins())
         .unwrap_err();
@@ -192,7 +190,10 @@ fn fetch_artifact_rejects_uri_when_hash_mismatch() {
         .with_expected_hash(hash_b);
     let registry = ResolverRegistry::new();
     let res = store.fetch_artifact(&aref, &registry);
-    assert!(res.is_err(), "fetch_artifact returned URI-bound A despite expecting B");
+    assert!(
+        res.is_err(),
+        "fetch_artifact returned URI-bound A despite expecting B"
+    );
 }
 
 #[test]
@@ -201,12 +202,10 @@ fn fetch_artifact_binds_uri_on_success() {
     let payload = b"binds-uri";
     let path = dir.path().join("bound.bin");
     std::fs::write(&path, payload).unwrap();
-    let aref = ArtifactRef::from_source(Source::LocalFile { path })
-        .with_uri("local:bound");
+    let aref = ArtifactRef::from_source(Source::LocalFile { path }).with_uri("local:bound");
     let registry = ResolverRegistry::with_builtins();
     let (hash, _) = store.fetch_artifact(&aref, &registry).unwrap();
-    let (resolved_hash, resolved_bytes) =
-        store.resolve_uri("local:bound").unwrap().unwrap();
+    let (resolved_hash, resolved_bytes) = store.resolve_uri("local:bound").unwrap().unwrap();
     assert_eq!(resolved_hash, hash);
     assert_eq!(resolved_bytes, payload);
 }

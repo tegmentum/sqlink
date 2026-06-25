@@ -28,8 +28,8 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::exports::sqlite::extension::vtab::{
-        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-    VtabRow};
+        ConstraintOp, ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+    };
     use bindings::sqlite::extension::spi;
     use bindings::sqlite::extension::types::SqlValue;
 
@@ -55,7 +55,10 @@ mod wasm_export {
         fn insert(&mut self, word: &str) {
             let mut cur = self;
             for ch in word.chars() {
-                cur = cur.children.entry(ch).or_insert_with(|| Box::new(TrieNode::new()));
+                cur = cur
+                    .children
+                    .entry(ch)
+                    .or_insert_with(|| Box::new(TrieNode::new()));
             }
             cur.terminal = Some(word.to_string());
         }
@@ -117,15 +120,19 @@ mod wasm_export {
         }
         Ok(Instance {
             source: source.ok_or_else(|| "trie: source= is required".to_string())?,
-            key_column: key_column
-                .ok_or_else(|| "trie: key_column= is required".to_string())?,
+            key_column: key_column.ok_or_else(|| "trie: key_column= is required".to_string())?,
             case_insensitive,
         })
     }
 
     fn strip_quotes(s: &str) -> &str {
-        let s = s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')).unwrap_or(s);
-        s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s)
+        let s = s
+            .strip_prefix('\'')
+            .and_then(|s| s.strip_suffix('\''))
+            .unwrap_or(s);
+        s.strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(s)
     }
 
     fn schema() -> String {
@@ -199,15 +206,14 @@ mod wasm_export {
             Ok(())
         }
 
-        fn best_index(
-            _: u64,
-            _: u64,
-            info: IndexInfo,
-        ) -> Result<IndexPlan, String> {
+        fn best_index(_: u64, _: u64, info: IndexInfo) -> Result<IndexPlan, String> {
             let mut usage: Vec<ConstraintUsage> = info
                 .constraints
                 .iter()
-                .map(|_| ConstraintUsage { argv_index: 0, omit: false })
+                .map(|_| ConstraintUsage {
+                    argv_index: 0,
+                    omit: false,
+                })
                 .collect();
             let mut bound = false;
             for (i, c) in info.constraints.iter().enumerate() {
@@ -218,7 +224,10 @@ mod wasm_export {
                     continue;
                 }
                 bound = true;
-                usage[i] = ConstraintUsage { argv_index: 1, omit: true };
+                usage[i] = ConstraintUsage {
+                    argv_index: 1,
+                    omit: true,
+                };
             }
             Ok(IndexPlan {
                 constraint_usage: usage,
@@ -234,7 +243,11 @@ mod wasm_export {
             CURSORS.with(|m| {
                 m.borrow_mut().insert(
                     cursor_id,
-                    Cursor { instance_id, matches: Vec::new(), idx: 0 },
+                    Cursor {
+                        instance_id,
+                        matches: Vec::new(),
+                        idx: 0,
+                    },
                 )
             });
             Ok(())
@@ -261,7 +274,10 @@ mod wasm_export {
                 String::new()
             };
             let inst_id = CURSORS.with(|cm| {
-                cm.borrow().get(&cursor_id).map(|c| c.instance_id).unwrap_or(0)
+                cm.borrow()
+                    .get(&cursor_id)
+                    .map(|c| c.instance_id)
+                    .unwrap_or(0)
             });
             let inst = INSTANCES
                 .with(|m| m.borrow().get(&inst_id).cloned())
@@ -274,8 +290,7 @@ mod wasm_export {
                     key = inst.key_column,
                     src = inst.source,
                 );
-                let r = spi::execute(&sql, &[])
-                    .map_err(|e| format!("trie: scan source: {e:?}"))?;
+                let r = spi::execute(&sql, &[]).map_err(|e| format!("trie: scan source: {e:?}"))?;
                 let mut root = Box::new(TrieNode::new());
                 for row in &r.rows {
                     if let Some(SqlValue::Text(word)) = row.first() {
@@ -289,7 +304,11 @@ mod wasm_export {
                 }
                 TRIES.with(|m| m.borrow_mut().insert(inst_id, root));
             }
-            let p = if inst.case_insensitive { prefix.to_lowercase() } else { prefix };
+            let p = if inst.case_insensitive {
+                prefix.to_lowercase()
+            } else {
+                prefix
+            };
             let mut matches: Vec<String> = Vec::new();
             TRIES.with(|m| {
                 if let Some(root) = m.borrow().get(&inst_id) {
@@ -350,7 +369,7 @@ mod wasm_export {
                     .ok_or_else(|| "trie: cursor not open".to_string())
             })
         }
-    
+
         fn fetch_batch(
             _vtab_id: u64,
             cursor_id: u64,
@@ -376,7 +395,7 @@ mod wasm_export {
                 Ok(out)
             })
         }
-}
+    }
 
     bindings::export!(TrieExt with_types_in bindings);
 }

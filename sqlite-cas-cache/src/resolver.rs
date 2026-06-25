@@ -147,8 +147,9 @@ impl ArtifactResolver for LocalFileResolver {
     }
     fn resolve(&self, source: &Source) -> Result<Vec<u8>> {
         match source {
-            Source::LocalFile { path } => std::fs::read(path)
-                .with_context(|| format!("read local file {}", path.display())),
+            Source::LocalFile { path } => {
+                std::fs::read(path).with_context(|| format!("read local file {}", path.display()))
+            }
             other => Err(anyhow!("LocalFileResolver: wrong source kind: {other:?}")),
         }
     }

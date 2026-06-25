@@ -47,9 +47,7 @@ fn merge_from_adds_artifacts_and_uris() {
     let dst_dir = tempfile::tempdir().unwrap();
     let mut dst = SqliteCasStore::open_external(dst_dir.path().join("dst.sqlite")).unwrap();
     let _h_dst = dst.put(b"dst-only").unwrap();
-    let stats = dst
-        .merge_from(src_dir.path().join("src.sqlite"))
-        .unwrap();
+    let stats = dst.merge_from(src_dir.path().join("src.sqlite")).unwrap();
     assert_eq!(stats.artifacts_added, 1);
     assert_eq!(stats.uris_net_change, 1);
     assert!(dst.resolve_uri("u:src-only").unwrap().is_some());
@@ -70,9 +68,7 @@ fn merge_from_dedups_overlapping_artifacts() {
     let _ = dst.put(b"shared-bytes").unwrap();
     dst.set_uri("u:dst", &h).unwrap();
 
-    let stats = dst
-        .merge_from(src_dir.path().join("src.sqlite"))
-        .unwrap();
+    let stats = dst.merge_from(src_dir.path().join("src.sqlite")).unwrap();
     assert_eq!(stats.artifacts_added, 0); // no new artifacts
     assert_eq!(stats.uris_net_change, 1);
     assert_eq!(dst.artifact_count().unwrap(), 1);
@@ -119,10 +115,7 @@ fn drop_schema_clears_cas_tables_only() {
         sqlite_component_core::db::StepResult::Row => stmt.column_value(0),
         sqlite_component_core::db::StepResult::Done => panic!("no row"),
     };
-    assert!(matches!(
-        row,
-        sqlite_component_core::db::Value::Integer(1)
-    ));
+    assert!(matches!(row, sqlite_component_core::db::Value::Integer(1)));
     // And the __cas_* tables are gone.
     let probe = conn2.prepare("SELECT 1 FROM __cas_uri LIMIT 1");
     assert!(probe.is_err(), "expected __cas_uri to be dropped");

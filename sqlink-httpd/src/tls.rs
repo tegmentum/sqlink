@@ -18,10 +18,10 @@ use std::path::Path;
 use std::sync::Arc;
 
 pub fn config_from_files(cert_path: &Path, key_path: &Path) -> Result<Arc<ServerConfig>> {
-    let cert_bytes = fs::read(cert_path)
-        .with_context(|| format!("read tls cert {}", cert_path.display()))?;
-    let key_bytes = fs::read(key_path)
-        .with_context(|| format!("read tls key {}", key_path.display()))?;
+    let cert_bytes =
+        fs::read(cert_path).with_context(|| format!("read tls cert {}", cert_path.display()))?;
+    let key_bytes =
+        fs::read(key_path).with_context(|| format!("read tls key {}", key_path.display()))?;
 
     let certs = parse_certs(&cert_bytes)?;
     let key = parse_key(&key_bytes)?;
@@ -35,8 +35,7 @@ pub fn config_from_files(cert_path: &Path, key_path: &Path) -> Result<Arc<Server
 pub fn config_self_signed(hostnames: Vec<String>) -> Result<Arc<ServerConfig>> {
     // rcgen 0.13: generate_simple_self_signed returns a Certificate
     // value that exposes serialize_pem / serialize_der + a key pair.
-    let cert = rcgen::generate_simple_self_signed(hostnames)
-        .map_err(|e| anyhow!("rcgen: {e}"))?;
+    let cert = rcgen::generate_simple_self_signed(hostnames).map_err(|e| anyhow!("rcgen: {e}"))?;
     let cert_der = CertificateDer::from(cert.cert.der().to_vec());
     let key_der = PrivateKeyDer::try_from(cert.key_pair.serialize_der())
         .map_err(|e| anyhow!("self-signed key: {e}"))?;

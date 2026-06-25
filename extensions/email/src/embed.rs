@@ -22,10 +22,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let t = arg_text(&args, 0, "email")?;
     let trimmed = t.trim();
     let parsed = EmailAddress::from_str(trimmed).ok();
@@ -48,10 +45,30 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,  name: b"email_validate\0",  num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_LOCAL,     name: b"email_local\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_DOMAIN,    name: b"email_domain\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NORMALIZE, name: b"email_normalize\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"email_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_LOCAL,
+        name: b"email_local\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_DOMAIN,
+        name: b"email_domain\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NORMALIZE,
+        name: b"email_normalize\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

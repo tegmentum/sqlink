@@ -139,7 +139,9 @@ fn working_set_fits_in_tvm_not_in_wasm_linear_memory() {
         "probe returned {count}; expected {ROWS}  codes 8001..8011 are step-level probe failures"
     );
 
-    let (write_calls,) = tvm_write_count.call(&mut store, ()).expect("tvm-write-count");
+    let (write_calls,) = tvm_write_count
+        .call(&mut store, ())
+        .expect("tvm-write-count");
     let ((fetch, unpin, last_cachesize, last_shadow_count),) =
         diagnostics.call(&mut store, ()).expect("cache-diagnostics");
 

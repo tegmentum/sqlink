@@ -221,9 +221,7 @@ mod wasm_export {
                     Some(SqlValue::Blob(b)) => super::from_blob_be(b)
                         .map(SqlValue::Real)
                         .ok_or_else(|| "ieee754_from_blob: expected 8 bytes".to_string()),
-                    Some(SqlValue::Null) | None => {
-                        Err("ieee754_from_blob: null".to_string())
-                    }
+                    Some(SqlValue::Null) | None => Err("ieee754_from_blob: null".to_string()),
                     _ => Err("ieee754_from_blob: expected BLOB".to_string()),
                 },
                 FID_IEEE754_TO_BLOB => {

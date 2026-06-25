@@ -304,7 +304,10 @@ pub fn metaphone(word: &str) -> String {
     // Drop a silent leading consonant.
     if n >= 2 {
         let pair = (bytes[0], bytes[1]);
-        if matches!(pair, ('k', 'n') | ('g', 'n') | ('p', 'n') | ('w', 'r') | ('a', 'e')) {
+        if matches!(
+            pair,
+            ('k', 'n') | ('g', 'n') | ('p', 'n') | ('w', 'r') | ('a', 'e')
+        ) {
             i = 1;
         }
         if pair == ('x', 'x') {
@@ -388,7 +391,9 @@ pub fn metaphone(word: &str) -> String {
             }
             'h' => {
                 // H silent after a vowel; H elsewhere is H.
-                if i > 0 && is_vowel(bytes[i - 1]) && (next.map(is_vowel).unwrap_or(false) || next.is_none())
+                if i > 0
+                    && is_vowel(bytes[i - 1])
+                    && (next.map(is_vowel).unwrap_or(false) || next.is_none())
                 {
                     // silent
                 } else {
@@ -513,7 +518,11 @@ mod tests {
         // knight  silent k, NT.
         assert_eq!(metaphone("knight"), "NT");
         // philosophy  FLSF (ph  F, ph  F, s + y).
-        assert!(metaphone("philosophy").starts_with("FLSF"), "{}", metaphone("philosophy"));
+        assert!(
+            metaphone("philosophy").starts_with("FLSF"),
+            "{}",
+            metaphone("philosophy")
+        );
     }
 }
 

@@ -78,8 +78,12 @@ mod wasm_export {
         let n = u.to_ascii_lowercase();
         Some(match n.as_str() {
             "b" | "byte" | "bytes" => 1.0,
-            "kb" => 1e3, "mb" => 1e6, "gb" => 1e9,
-            "tb" => 1e12, "pb" => 1e15, "eb" => 1e18,
+            "kb" => 1e3,
+            "mb" => 1e6,
+            "gb" => 1e9,
+            "tb" => 1e12,
+            "pb" => 1e15,
+            "eb" => 1e18,
             "kib" | "k" => 1024.0,
             "mib" | "m" => 1024.0 * 1024.0,
             "gib" | "g" => 1024.0 * 1024.0 * 1024.0,
@@ -103,10 +107,18 @@ mod wasm_export {
         let m = (s % 3600) / 60;
         let sec = s % 60;
         let mut parts: Vec<String> = alloc::vec![];
-        if d > 0 { parts.push(format!("{d}d")); }
-        if h > 0 { parts.push(format!("{h}h")); }
-        if m > 0 { parts.push(format!("{m}m")); }
-        if sec > 0 && d == 0 { parts.push(format!("{sec}s")); }
+        if d > 0 {
+            parts.push(format!("{d}d"));
+        }
+        if h > 0 {
+            parts.push(format!("{h}h"));
+        }
+        if m > 0 {
+            parts.push(format!("{m}m"));
+        }
+        if sec > 0 && d == 0 {
+            parts.push(format!("{sec}s"));
+        }
         // Cap at 2 most-significant units  "1d 5h" not "1d 5h 23m 7s".
         parts.truncate(2);
         format!("{sign}{}", parts.join(" "))
@@ -148,8 +160,12 @@ mod wasm_export {
                 return None;
             }
         }
-        if !current.is_empty() { return None; }  // trailing number, no unit
-        if !any { return None; }
+        if !current.is_empty() {
+            return None;
+        } // trailing number, no unit
+        if !any {
+            return None;
+        }
         Some(total as i64)
     }
 

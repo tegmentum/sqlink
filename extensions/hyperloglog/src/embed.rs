@@ -9,9 +9,9 @@ use sqlite_embed::{
 };
 
 const FID_CARDINALITY: u64 = 1;
-const FID_MERGE:       u64 = 2;
-const FID_VERSION:     u64 = 3;
-const FID_HLL_AGG:     u64 = 100;
+const FID_MERGE: u64 = 2;
+const FID_VERSION: u64 = 3;
+const FID_HLL_AGG: u64 = 100;
 
 fn val_bytes(v: &SqlValueOwned) -> Vec<u8> {
     match v {
@@ -81,26 +81,41 @@ unsafe fn hll_destroy(state: *mut ()) {
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_CARDINALITY, name: b"hll_cardinality\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MERGE,       name: b"hll_merge\0",       num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_VERSION,     name: b"hll_version\0",     num_args: 0, deterministic: false },
-];
-
-const AGGREGATES: &[AggregateSpec] = &[
-    AggregateSpec {
-        func_id: FID_HLL_AGG,
-        name: b"hll\0",
+    ScalarSpec {
+        func_id: FID_CARDINALITY,
+        name: b"hll_cardinality\0",
         num_args: 1,
         deterministic: true,
-        make_state: hll_make,
-        step_state: hll_step,
-        final_state: hll_final,
-        destroy_state: hll_destroy,
+    },
+    ScalarSpec {
+        func_id: FID_MERGE,
+        name: b"hll_merge\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VERSION,
+        name: b"hll_version\0",
+        num_args: 0,
+        deterministic: false,
     },
 ];
 
+const AGGREGATES: &[AggregateSpec] = &[AggregateSpec {
+    func_id: FID_HLL_AGG,
+    name: b"hll\0",
+    num_args: 1,
+    deterministic: true,
+    make_state: hll_make,
+    step_state: hll_step,
+    final_state: hll_final,
+    destroy_state: hll_destroy,
+}];
+
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {
     let rc = register_scalars(db, SCALARS, call_scalar);
-    if rc != libsqlite3_sys::SQLITE_OK { return rc; }
+    if rc != libsqlite3_sys::SQLITE_OK {
+        return rc;
+    }
     register_aggregates(db, AGGREGATES)
 }

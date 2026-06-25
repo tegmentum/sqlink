@@ -218,16 +218,15 @@ mod wasm_export {
                         Some(a) => a,
                         None => return Ok(SqlValue::Null),
                     };
-                    let needle: Value = serde_json::from_str(&needle_s)
-                        .unwrap_or(Value::String(needle_s.clone()));
+                    let needle: Value =
+                        serde_json::from_str(&needle_s).unwrap_or(Value::String(needle_s.clone()));
                     Ok(SqlValue::Integer(contains(&arr, &needle) as i64))
                 }
                 FID_SUBSET => {
                     let a = arg_text(&args, 0, "set_subset")?;
                     let b = arg_text(&args, 1, "set_subset")?;
                     match (parse(&a), parse(&b)) {
-                        (Some(a), Some(b)) =>
-                            Ok(SqlValue::Integer(is_subset(&a, &b) as i64)),
+                        (Some(a), Some(b)) => Ok(SqlValue::Integer(is_subset(&a, &b) as i64)),
                         _ => Ok(SqlValue::Null),
                     }
                 }
@@ -235,8 +234,7 @@ mod wasm_export {
                     let a = arg_text(&args, 0, "set_disjoint")?;
                     let b = arg_text(&args, 1, "set_disjoint")?;
                     match (parse(&a), parse(&b)) {
-                        (Some(a), Some(b)) =>
-                            Ok(SqlValue::Integer(is_disjoint(&a, &b) as i64)),
+                        (Some(a), Some(b)) => Ok(SqlValue::Integer(is_disjoint(&a, &b) as i64)),
                         _ => Ok(SqlValue::Null),
                     }
                 }
@@ -244,8 +242,14 @@ mod wasm_export {
                     // 2-array  array operations.
                     let a = arg_text(&args, 0, "setops")?;
                     let b = arg_text(&args, 1, "setops")?;
-                    let av = match parse(&a) { Some(v) => v, None => return Ok(SqlValue::Null) };
-                    let bv = match parse(&b) { Some(v) => v, None => return Ok(SqlValue::Null) };
+                    let av = match parse(&a) {
+                        Some(v) => v,
+                        None => return Ok(SqlValue::Null),
+                    };
+                    let bv = match parse(&b) {
+                        Some(v) => v,
+                        None => return Ok(SqlValue::Null),
+                    };
                     let result = match func_id {
                         FID_UNION => union(av, bv),
                         FID_INTERSECTION => intersection(av, bv),

@@ -103,7 +103,12 @@ mod wasm_export {
         let runnable = optimized
             .into_runnable()
             .map_err(|e| format!("onnx_load: into_runnable: {e}"))?;
-        Ok(Session { model: runnable, input_names, output_names, input_shape })
+        Ok(Session {
+            model: runnable,
+            input_names,
+            output_names,
+            input_shape,
+        })
     }
 
     fn parse_f32_array(json: &str) -> Result<Vec<f32>, String> {

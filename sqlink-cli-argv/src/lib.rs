@@ -133,7 +133,12 @@ mod tests {
 
     #[test]
     fn single_preload() {
-        let a = argv(["sqlite_cli.wasm", "/tmp/x.db", "--load", "uuid.component.wasm"]);
+        let a = argv([
+            "sqlite_cli.wasm",
+            "/tmp/x.db",
+            "--load",
+            "uuid.component.wasm",
+        ]);
         let r = parse_argv(&a);
         assert_eq!(r.preload, vec!["uuid.component.wasm".to_string()]);
         assert!(!r.dot_seen);
@@ -144,14 +149,21 @@ mod tests {
         let a = argv([
             "sqlite_cli.wasm",
             "/tmp/x.db",
-            "--load", "a.wasm",
-            "--load", "b.wasm",
-            "--load", "c.wasm",
+            "--load",
+            "a.wasm",
+            "--load",
+            "b.wasm",
+            "--load",
+            "c.wasm",
         ]);
         let r = parse_argv(&a);
         assert_eq!(
             r.preload,
-            vec!["a.wasm".to_string(), "b.wasm".to_string(), "c.wasm".to_string()]
+            vec![
+                "a.wasm".to_string(),
+                "b.wasm".to_string(),
+                "c.wasm".to_string()
+            ]
         );
     }
 
@@ -180,7 +192,14 @@ mod tests {
 
     #[test]
     fn dot_cmd_with_args_collected() {
-        let a = argv(["sqlite_cli.wasm", "/tmp/x.db", ".bundle", "save", "myset", "--no-build"]);
+        let a = argv([
+            "sqlite_cli.wasm",
+            "/tmp/x.db",
+            ".bundle",
+            "save",
+            "myset",
+            "--no-build",
+        ]);
         let r = parse_argv(&a);
         assert!(r.dot_seen);
         assert_eq!(
@@ -204,10 +223,13 @@ mod tests {
             ".bundle",
             "save",
             "myset",
-            "--keep-open",     // this is now a dot-cmd arg, not a cli flag
+            "--keep-open", // this is now a dot-cmd arg, not a cli flag
         ]);
         let r = parse_argv(&a);
-        assert!(!r.keep_open, "--keep-open after dot-cmd is dot-arg, not flag");
+        assert!(
+            !r.keep_open,
+            "--keep-open after dot-cmd is dot-arg, not flag"
+        );
         assert!(r.dot_args.contains(&"--keep-open".to_string()));
     }
 
@@ -216,13 +238,23 @@ mod tests {
         let a = argv([
             "sqlite_cli.wasm",
             "/tmp/x.db",
-            "--load", "uuid.wasm",
-            ".bundle", "save", "myset",
+            "--load",
+            "uuid.wasm",
+            ".bundle",
+            "save",
+            "myset",
         ]);
         let r = parse_argv(&a);
         assert_eq!(r.preload, vec!["uuid.wasm".to_string()]);
         assert!(r.dot_seen);
-        assert_eq!(r.dot_args, vec![".bundle".to_string(), "save".to_string(), "myset".to_string()]);
+        assert_eq!(
+            r.dot_args,
+            vec![
+                ".bundle".to_string(),
+                "save".to_string(),
+                "myset".to_string()
+            ]
+        );
     }
 
     #[test]
@@ -230,9 +262,11 @@ mod tests {
         let a = argv([
             "sqlite_cli.wasm",
             "/tmp/x.db",
-            "--load", "a.wasm",
+            "--load",
+            "a.wasm",
             "--keep-open",
-            "--load", "b.wasm",
+            "--load",
+            "b.wasm",
         ]);
         let r = parse_argv(&a);
         assert!(r.keep_open);
@@ -245,7 +279,9 @@ mod tests {
             "sqlite_cli.wasm",
             "/tmp/x.db",
             "--bundle-grant-spawn-build",
-            ".bundle", "build", "myset",
+            ".bundle",
+            "build",
+            "myset",
         ]);
         let r = parse_argv(&a);
         assert!(r.bundle_grant_spawn_build);
@@ -258,14 +294,18 @@ mod tests {
         let a = argv([
             "sqlite_cli.wasm",
             "/tmp/x.db",
-            ".bundle", "build", "myset",
+            ".bundle",
+            "build",
+            "myset",
             "--bundle-grant-spawn-build",
         ]);
         let r = parse_argv(&a);
         assert!(r.bundle_grant_spawn_build);
         // It ALSO ends up in dot_args (whole-argv-search is
         // independent of the walk):
-        assert!(r.dot_args.contains(&"--bundle-grant-spawn-build".to_string()));
+        assert!(r
+            .dot_args
+            .contains(&"--bundle-grant-spawn-build".to_string()));
     }
 
     #[test]
@@ -284,13 +324,17 @@ mod tests {
             "/tmp/x.db",
             "--unknown-flag",
             "garbage",
-            ".bundle", "list",
+            ".bundle",
+            "list",
         ]);
         let r = parse_argv(&a);
         assert!(r.dot_seen);
         assert_eq!(r.dot_args, vec![".bundle".to_string(), "list".to_string()]);
         // The unknown stuff didn't leak into dot_args:
-        assert!(!r.dot_args.iter().any(|s| s == "--unknown-flag" || s == "garbage"));
+        assert!(!r
+            .dot_args
+            .iter()
+            .any(|s| s == "--unknown-flag" || s == "garbage"));
     }
 
     #[test]
@@ -313,7 +357,9 @@ mod tests {
         let a = argv([
             "sqlite_cli.wasm",
             "/tmp/x.db",
-            ".bundle", "save", "name with spaces",
+            ".bundle",
+            "save",
+            "name with spaces",
         ]);
         let r = parse_argv(&a);
         assert_eq!(r.dot_args.last(), Some(&"name with spaces".to_string()));
@@ -341,11 +387,16 @@ mod tests {
         let a = argv([
             "sqlite_cli.component.wasm",
             "data.sqlite",
-            "--load", "/cache/uuid.component.wasm",
-            "--load", "/cache/json1.component.wasm",
+            "--load",
+            "/cache/uuid.component.wasm",
+            "--load",
+            "/cache/json1.component.wasm",
             "--keep-open",
             "--bundle-grant-spawn-build",
-            ".bundle", "save", "myset", "--no-build",
+            ".bundle",
+            "save",
+            "myset",
+            "--no-build",
         ]);
         let r = parse_argv(&a);
         assert_eq!(r.db_path, "data.sqlite");

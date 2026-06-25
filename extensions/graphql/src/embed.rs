@@ -11,10 +11,10 @@ use graphql_parser::query::{
 };
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_VALIDATE:   u64 = 1;
+const FID_VALIDATE: u64 = 1;
 const FID_OPERATIONS: u64 = 2;
-const FID_FIELDS:     u64 = 3;
-const FID_NORMALIZE:  u64 = 4;
+const FID_FIELDS: u64 = 3;
+const FID_NORMALIZE: u64 = 4;
 
 fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, String> {
     match args.get(i) {
@@ -33,9 +33,7 @@ fn operations_json<'a>(doc: &Document<'a, &'a str>) -> String {
         if let Definition::Operation(op) = def {
             let (name, kind) = match op {
                 OperationDefinition::Query(q) => (q.name.unwrap_or("").to_string(), "query"),
-                OperationDefinition::Mutation(m) => {
-                    (m.name.unwrap_or("").to_string(), "mutation")
-                }
+                OperationDefinition::Mutation(m) => (m.name.unwrap_or("").to_string(), "mutation"),
                 OperationDefinition::Subscription(s) => {
                     (s.name.unwrap_or("").to_string(), "subscription")
                 }
@@ -79,10 +77,7 @@ fn fields_json<'a>(doc: &Document<'a, &'a str>) -> String {
     serde_json::to_string(&paths).unwrap_or_else(|_| "[]".to_string())
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let q = arg_text(&args, 0, "gql")?;
     match func_id {
         FID_VALIDATE => Ok(SqlValueOwned::Integer(parse(&q).is_ok() as i64)),
@@ -103,10 +98,30 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,   name: b"gql_validate\0",   num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_OPERATIONS, name: b"gql_operations\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_FIELDS,     name: b"gql_fields\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NORMALIZE,  name: b"gql_normalize\0",  num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"gql_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_OPERATIONS,
+        name: b"gql_operations\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_FIELDS,
+        name: b"gql_fields\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NORMALIZE,
+        name: b"gql_normalize\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

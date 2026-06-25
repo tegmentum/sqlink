@@ -34,10 +34,7 @@ mod wasm_export {
     /// ABA RTN check: sum(weight * digit) mod 10 == 0 with weights
     /// 3,7,1,3,7,1,3,7,1 from left to right.
     fn validate(routing: &str) -> bool {
-        let d: alloc::vec::Vec<u32> = routing
-            .chars()
-            .filter_map(|c| c.to_digit(10))
-            .collect();
+        let d: alloc::vec::Vec<u32> = routing.chars().filter_map(|c| c.to_digit(10)).collect();
         if d.len() != 9 {
             return false;
         }

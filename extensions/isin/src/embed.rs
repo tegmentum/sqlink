@@ -7,10 +7,10 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_VALIDATE:    u64 = 1;
+const FID_VALIDATE: u64 = 1;
 const FID_CHECK_DIGIT: u64 = 2;
-const FID_COUNTRY:     u64 = 3;
-const FID_NSIN:        u64 = 4;
+const FID_COUNTRY: u64 = 3;
+const FID_NSIN: u64 = 4;
 
 /// Expand each letter to its 2-digit value (A=10..Z=35) and
 /// each digit to itself, concatenated.
@@ -38,7 +38,11 @@ fn luhn_check_digit(s: &str) -> Option<u32> {
         let d = c.to_digit(10)?;
         let v = if alt {
             let x = d * 2;
-            if x > 9 { x - 9 } else { x }
+            if x > 9 {
+                x - 9
+            } else {
+                x
+            }
         } else {
             d
         };
@@ -78,10 +82,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let raw = arg_text(&args, 0, "isin")?;
     let n = normalize(&raw);
 
@@ -112,10 +113,30 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_VALIDATE,    name: b"isin_validate\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_CHECK_DIGIT, name: b"isin_check_digit\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_COUNTRY,     name: b"isin_country\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_NSIN,        name: b"isin_nsin\0",        num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"isin_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_CHECK_DIGIT,
+        name: b"isin_check_digit\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_COUNTRY,
+        name: b"isin_country\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_NSIN,
+        name: b"isin_nsin\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

@@ -27,10 +27,9 @@ use wasmtime_wasi::WasiCtxBuilder;
 
 fn probe_component_path() -> PathBuf {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    manifest
-        .parent()
-        .unwrap()
-        .join("probe/tvm-vfs-wasip2/target/wasm32-wasip2/release/probe_tvm_vfs_wasip2.component.wasm")
+    manifest.parent().unwrap().join(
+        "probe/tvm-vfs-wasip2/target/wasm32-wasip2/release/probe_tvm_vfs_wasip2.component.wasm",
+    )
 }
 
 struct ProbeState {
@@ -58,7 +57,10 @@ impl wasmtime_wasi::WasiView for ProbeState {
 fn vfs_holds_working_set_in_tvm() {
     let path = probe_component_path();
     if !path.exists() {
-        eprintln!("skipping: {} not built  see PLAN-tvm-integration Phase 4.2 setup", path.display());
+        eprintln!(
+            "skipping: {} not built  see PLAN-tvm-integration Phase 4.2 setup",
+            path.display()
+        );
         return;
     }
 

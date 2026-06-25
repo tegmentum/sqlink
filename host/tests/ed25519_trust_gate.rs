@@ -77,11 +77,7 @@ async fn matching_anchor_accepts_signed_provider() {
     let bytes = fixture_provider_bytes();
     std::fs::write(&provider_path, &bytes).unwrap();
     let sig = signing_key.sign(&bytes);
-    std::fs::write(
-        provider_path.with_extension("wasm.sig"),
-        sig.to_bytes(),
-    )
-    .unwrap();
+    std::fs::write(provider_path.with_extension("wasm.sig"), sig.to_bytes()).unwrap();
 
     let host = Host::new().unwrap();
     host.set_trust_policy(TrustPolicy::Ed25519Signed {
@@ -122,11 +118,7 @@ async fn wrong_anchor_rejects_signed_provider() {
     std::fs::write(&provider_path, &bytes).unwrap();
     // Sign with the wrong key — anchors list a different one.
     let sig = signing_key.sign(&bytes);
-    std::fs::write(
-        provider_path.with_extension("wasm.sig"),
-        sig.to_bytes(),
-    )
-    .unwrap();
+    std::fs::write(provider_path.with_extension("wasm.sig"), sig.to_bytes()).unwrap();
 
     let host = Host::new().unwrap();
     host.set_trust_policy(TrustPolicy::Ed25519Signed {

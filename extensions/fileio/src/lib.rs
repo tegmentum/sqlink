@@ -133,9 +133,7 @@ mod wasm_export {
                 }
                 FID_FILE_EXISTS => {
                     let p = arg_text(&args, 0, "file_exists")?;
-                    Ok(SqlValue::Integer(
-                        std::path::Path::new(&p).exists() as i64,
-                    ))
+                    Ok(SqlValue::Integer(std::path::Path::new(&p).exists() as i64))
                 }
                 FID_FILE_SIZE => {
                     let p = arg_text(&args, 0, "file_size")?;
@@ -146,7 +144,9 @@ mod wasm_export {
                 FID_FILE_IS_DIR => {
                     let p = arg_text(&args, 0, "file_is_dir")?;
                     Ok(SqlValue::Integer(
-                        std::fs::metadata(&p).map(|m| m.is_dir() as i64).unwrap_or(0),
+                        std::fs::metadata(&p)
+                            .map(|m| m.is_dir() as i64)
+                            .unwrap_or(0),
                     ))
                 }
                 other => Err(format!("fileio: unknown func id {other}")),

@@ -14,9 +14,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::cell::RefCell;
 use core::ffi::c_int;
-use sqlite_embed::{
-    register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec,
-};
+use sqlite_embed::{register_vtabs, BestIndexInfo, SqlValueOwned, VtabSpec};
 
 use crate::parser;
 
@@ -38,8 +36,13 @@ struct CsvCursor {
 }
 
 fn strip_quotes(s: &str) -> &str {
-    let s = s.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')).unwrap_or(s);
-    s.strip_prefix('"').and_then(|s| s.strip_suffix('"')).unwrap_or(s)
+    let s = s
+        .strip_prefix('\'')
+        .and_then(|s| s.strip_suffix('\''))
+        .unwrap_or(s);
+    s.strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .unwrap_or(s)
 }
 
 struct ParsedArgs {
@@ -72,8 +75,7 @@ fn parse_args(args: &[&str]) -> Result<ParsedArgs, String> {
 }
 
 fn load(path: &str) -> Result<Vec<Vec<String>>, String> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| format!("csv: read {path}: {e}"))?;
+    let text = std::fs::read_to_string(path).map_err(|e| format!("csv: read {path}: {e}"))?;
     Ok(parser::parse(&text))
 }
 
@@ -174,10 +176,7 @@ unsafe fn csv_best_index(_state: *mut (), info: &mut BestIndexInfo) -> Result<()
     Ok(())
 }
 
-unsafe fn csv_make_cursor(
-    vtab_state: *mut (),
-    _db: *mut libsqlite3_sys::sqlite3,
-) -> *mut () {
+unsafe fn csv_make_cursor(vtab_state: *mut (), _db: *mut libsqlite3_sys::sqlite3) -> *mut () {
     Box::into_raw(Box::new(CsvCursor {
         vtab: vtab_state as *const CsvVtab,
         snapshot: Vec::new(),
@@ -214,7 +213,10 @@ unsafe fn csv_eof(state: *mut ()) -> bool {
 
 unsafe fn csv_column(state: *mut (), col: i32) -> Result<SqlValueOwned, String> {
     let c = &*(state as *const CsvCursor);
-    let row = c.snapshot.get(c.idx).ok_or_else(|| "csv: row past EOF".to_string())?;
+    let row = c
+        .snapshot
+        .get(c.idx)
+        .ok_or_else(|| "csv: row past EOF".to_string())?;
     let cell = row.get(col as usize);
     Ok(match cell {
         Some(s) => SqlValueOwned::Text(s.clone()),
@@ -247,10 +249,7 @@ fn value_to_string(v: &SqlValueOwned) -> String {
     }
 }
 
-unsafe fn csv_update(
-    vtab_state: *mut (),
-    args: &[SqlValueOwned],
-) -> Result<i64, String> {
+unsafe fn csv_update(vtab_state: *mut (), args: &[SqlValueOwned]) -> Result<i64, String> {
     let v = &*(vtab_state as *const CsvVtab);
     let mut rows = v.rows.borrow_mut();
     *v.dirty.borrow_mut() = true;

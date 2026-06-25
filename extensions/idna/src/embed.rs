@@ -18,10 +18,7 @@ fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, Str
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let d = arg_text(&args, 0, "idn")?;
     match func_id {
         FID_TO_ASCII => Ok(idna::domain_to_ascii(&d)
@@ -42,9 +39,24 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_TO_ASCII,   name: b"idn_to_ascii\0",             num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TO_UNICODE, name: b"idn_to_unicode\0",           num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_IS_IDN,     name: b"idn_is_internationalized\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_TO_ASCII,
+        name: b"idn_to_ascii\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TO_UNICODE,
+        name: b"idn_to_unicode\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_IS_IDN,
+        name: b"idn_is_internationalized\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

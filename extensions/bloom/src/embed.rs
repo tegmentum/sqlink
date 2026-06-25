@@ -6,10 +6,10 @@ use alloc::vec::Vec;
 use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 
-const FID_CREATE:    u64 = 1;
-const FID_ADD:       u64 = 2;
-const FID_MIGHT:     u64 = 3;
-const FID_COUNT:     u64 = 4;
+const FID_CREATE: u64 = 1;
+const FID_ADD: u64 = 2;
+const FID_MIGHT: u64 = 3;
+const FID_COUNT: u64 = 4;
 const FID_SIZE_BITS: u64 = 5;
 
 fn val_bytes(v: &SqlValueOwned) -> Vec<u8> {
@@ -78,11 +78,36 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_CREATE,    name: b"bloom_create\0",         num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_ADD,       name: b"bloom_add\0",            num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_MIGHT,     name: b"bloom_might_contain\0",  num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_COUNT,     name: b"bloom_count\0",          num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_SIZE_BITS, name: b"bloom_size_bits\0",      num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_CREATE,
+        name: b"bloom_create\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_ADD,
+        name: b"bloom_add\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MIGHT,
+        name: b"bloom_might_contain\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_COUNT,
+        name: b"bloom_count\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SIZE_BITS,
+        name: b"bloom_size_bits\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

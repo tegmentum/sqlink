@@ -55,7 +55,10 @@ mod wasm_export {
                 Regex::new(r"^(GIR 0AA|[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2})$").unwrap()
             })),
             "CA" => Some(CA.get_or_init(|| {
-                Regex::new(r"^[A-CEGHJ-NPRSTVXY][0-9][A-CEGHJ-NPRSTV-Z] ?[0-9][A-CEGHJ-NPRSTV-Z][0-9]$").unwrap()
+                Regex::new(
+                    r"^[A-CEGHJ-NPRSTVXY][0-9][A-CEGHJ-NPRSTV-Z] ?[0-9][A-CEGHJ-NPRSTV-Z][0-9]$",
+                )
+                .unwrap()
             })),
             "DE" => Some(DE.get_or_init(|| Regex::new(r"^[0-9]{5}$").unwrap())),
             "FR" => Some(FR.get_or_init(|| Regex::new(r"^[0-9]{5}$").unwrap())),
@@ -88,9 +91,7 @@ mod wasm_export {
     fn validate_country(code: &str, cc: &str) -> bool {
         let n = normalize(code);
         let cc_n = cc.to_ascii_uppercase();
-        country_re(&cc_n)
-            .map(|re| re.is_match(&n))
-            .unwrap_or(false)
+        country_re(&cc_n).map(|re| re.is_match(&n)).unwrap_or(false)
     }
 
     // ---- Arg helpers ----

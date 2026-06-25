@@ -41,10 +41,7 @@ fn arg_int(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<i64, String>
 /// One match arm per scalar. Shape mirrors the WIT path's
 /// `ScalarFunctionGuest::call`  same algorithm calls, same error
 /// messages, just owned-types.
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     let data = match args.first() {
         Some(v) => bytes_of(v),
         None => return Err("sha3: missing data arg".into()),
@@ -66,12 +63,42 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_SHA3,     name: b"sha3\0",     num_args: -1, deterministic: true },
-    ScalarSpec { func_id: FID_SHA3_224, name: b"sha3_224\0", num_args: 1,  deterministic: true },
-    ScalarSpec { func_id: FID_SHA3_256, name: b"sha3_256\0", num_args: 1,  deterministic: true },
-    ScalarSpec { func_id: FID_SHA3_384, name: b"sha3_384\0", num_args: 1,  deterministic: true },
-    ScalarSpec { func_id: FID_SHA3_512, name: b"sha3_512\0", num_args: 1,  deterministic: true },
-    ScalarSpec { func_id: FID_SHA3_RAW, name: b"sha3_raw\0", num_args: -1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_SHA3,
+        name: b"sha3\0",
+        num_args: -1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SHA3_224,
+        name: b"sha3_224\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SHA3_256,
+        name: b"sha3_256\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SHA3_384,
+        name: b"sha3_384\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SHA3_512,
+        name: b"sha3_512\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_SHA3_RAW,
+        name: b"sha3_raw\0",
+        num_args: -1,
+        deterministic: true,
+    },
 ];
 
 /// Register sha3's scalar surface on `db`. Safety: see

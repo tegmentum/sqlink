@@ -70,7 +70,9 @@ extern "C" {
         nChangeset: c_int,
         pChangeset: *mut c_void,
         xFilter: Option<unsafe extern "C" fn(*mut c_void, *const c_char) -> c_int>,
-        xConflict: Option<unsafe extern "C" fn(*mut c_void, c_int, *mut sqlite3_changeset_iter) -> c_int>,
+        xConflict: Option<
+            unsafe extern "C" fn(*mut c_void, c_int, *mut sqlite3_changeset_iter) -> c_int,
+        >,
         pCtx: *mut c_void,
     ) -> c_int;
 }

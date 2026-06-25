@@ -234,7 +234,11 @@ fn bundles_delete_then_missing() {
         "delete",
         &stdout,
         &stderr,
-        &["bundle 'tmp' saved", "bundle 'tmp' deleted", "no bundle matches"],
+        &[
+            "bundle 'tmp' saved",
+            "bundle 'tmp' deleted",
+            "no bundle matches",
+        ],
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -339,7 +343,9 @@ fn bundles_build_with_grant_produces_component() {
     cmd.arg("--cache-dir").arg(&cache);
     cmd.arg("--grant").arg("spawn-build");
     cmd.arg(&cli);
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let mut child = cmd.spawn().expect("spawn sqlink");
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(script.as_bytes());
@@ -553,7 +559,9 @@ fn bundles_build_distinct_bundles_dont_collide_on_disk() {
     cmd.arg("--cache-dir").arg(&cache);
     cmd.arg("--grant").arg("spawn-build");
     cmd.arg(&cli);
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let mut child = cmd.spawn().expect("spawn sqlink");
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(script.as_bytes());
@@ -603,7 +611,11 @@ fn bundles_build_distinct_bundles_dont_collide_on_disk() {
         "expected two build success lines (bundle_a + bundle_b)\nstdout:\n{stdout}",
     );
     let extract_path = |line: &str| -> String {
-        line.split(": ").nth(1).expect("path after ': '").trim().to_string()
+        line.split(": ")
+            .nth(1)
+            .expect("path after ': '")
+            .trim()
+            .to_string()
     };
     let path_a = extract_path(build_lines[0]);
     let path_b = extract_path(build_lines[1]);
@@ -665,7 +677,9 @@ fn bundles_build_cache_hit_skips_rebuild() {
     cmd.arg("--cache-dir").arg(&cache);
     cmd.arg("--grant").arg("spawn-build");
     cmd.arg(&cli);
-    cmd.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    cmd.stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     let mut child = cmd.spawn().expect("spawn sqlink");
     if let Some(mut stdin) = child.stdin.take() {
         let _ = stdin.write_all(script.as_bytes());
@@ -757,7 +771,12 @@ fn bundles_launch_flag_dynamic_load() {
         json1.display(),
     );
     let (s_stdout, s_stderr) = drive(&sqlink, &cli, &cache, &db, &[], &save_script);
-    assert_ok("launch-load:save", &s_stdout, &s_stderr, &["bundle 'myset' saved"]);
+    assert_ok(
+        "launch-load:save",
+        &s_stdout,
+        &s_stderr,
+        &["bundle 'myset' saved"],
+    );
 
     // Second run: --bundle-load myset  host pre-loads members from
     // cas-cache. Confirm both ext function calls succeed once cli
@@ -794,8 +813,8 @@ fn bundles_launch_flag_dynamic_load() {
     // message contract. v1.1 will get a `.cache cache <path>` or
     // equivalent so the round-trip can complete in-process.
     let saw_pre_load = p_stderr.contains("[bundle] 'myset': dynamic-loaded");
-    let saw_cache_miss = p_stderr.contains("which isn't in cas-cache")
-        && p_stderr.contains("Run `.load");
+    let saw_cache_miss =
+        p_stderr.contains("which isn't in cas-cache") && p_stderr.contains("Run `.load");
     assert!(
         saw_pre_load || saw_cache_miss,
         "[launch-load:run] neither '[bundle] dynamic-loaded' nor the \

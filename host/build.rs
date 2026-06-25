@@ -12,8 +12,8 @@ fn main() {
     // build.rs compile time. Cargo caches the build-script binary
     // in target/; `env!` would bake the original path in and panic
     // after a workspace move (e.g. mv ~/git/sqlite-wasm ~/git/sqlink).
-    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR")
-        .expect("CARGO_MANIFEST_DIR must be set by cargo");
+    let manifest_dir =
+        std::env::var_os("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set by cargo");
     let manifest = PathBuf::from(manifest_dir).join("Cargo.toml");
     println!("cargo:rerun-if-changed={}", manifest.display());
     let text = fs::read_to_string(&manifest).expect("read Cargo.toml");

@@ -71,7 +71,10 @@ pub fn html_attr(doc: &str, selector: &str, attr: &str) -> Result<Option<String>
     let html = Html::parse_document(doc);
     let sel = Selector::parse(selector)
         .map_err(|e| alloc::format!("html_attr: selector {selector:?}: {e:?}"))?;
-    Ok(html.select(&sel).next().and_then(|el| el.value().attr(attr).map(|s| s.to_string())))
+    Ok(html
+        .select(&sel)
+        .next()
+        .and_then(|el| el.value().attr(attr).map(|s| s.to_string())))
 }
 
 pub fn html_text(doc: &str) -> Result<String, String> {

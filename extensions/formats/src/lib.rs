@@ -91,7 +91,9 @@ pub fn ini_to_json(text: &str) -> String {
 pub fn json_to_ini(text: &str) -> Result<String, String> {
     let v: serde_json::Value =
         serde_json::from_str(text).map_err(|e| alloc::format!("json_to_ini: {e}"))?;
-    let obj = v.as_object().ok_or_else(|| "json_to_ini: top-level must be object".to_string())?;
+    let obj = v
+        .as_object()
+        .ok_or_else(|| "json_to_ini: top-level must be object".to_string())?;
     let mut out = String::new();
     // First pass: scalar top-level keys.
     for (k, val) in obj {
@@ -190,7 +192,12 @@ fn parse_xml(doc: &str) -> Result<XmlElement, String> {
     Ok(stack.into_iter().next().unwrap())
 }
 
-fn xpath_step(steps: &[&str], el: &XmlElement, out: &mut Vec<XmlElement>, attr: &mut Option<String>) {
+fn xpath_step(
+    steps: &[&str],
+    el: &XmlElement,
+    out: &mut Vec<XmlElement>,
+    attr: &mut Option<String>,
+) {
     if steps.is_empty() {
         out.push(el.clone());
         return;
@@ -277,7 +284,11 @@ pub fn xml_extract(doc: &str, xpath: &str) -> Result<String, String> {
     if let Some(a) = attr {
         return Ok(a);
     }
-    Ok(hits.iter().map(|e| e.text_recursive()).collect::<Vec<_>>().join(""))
+    Ok(hits
+        .iter()
+        .map(|e| e.text_recursive())
+        .collect::<Vec<_>>()
+        .join(""))
 }
 
 pub fn xml_attr(doc: &str, xpath: &str, attr: &str) -> Result<String, String> {
@@ -311,14 +322,20 @@ fn element_to_json(el: &XmlElement) -> serde_json::Value {
     }
     let trimmed_text = el.text.trim();
     if !trimmed_text.is_empty() {
-        m.insert("#text".into(), serde_json::Value::String(trimmed_text.to_string()));
+        m.insert(
+            "#text".into(),
+            serde_json::Value::String(trimmed_text.to_string()),
+        );
     }
     // Group children by name; if a name appears multiple times
     // it becomes an array.
     let mut by_name: alloc::collections::BTreeMap<String, Vec<serde_json::Value>> =
         alloc::collections::BTreeMap::new();
     for c in &el.children {
-        by_name.entry(c.name.clone()).or_default().push(element_to_json(c));
+        by_name
+            .entry(c.name.clone())
+            .or_default()
+            .push(element_to_json(c));
     }
     for (name, vals) in by_name {
         if vals.len() == 1 {
@@ -442,15 +459,17 @@ mod wasm_export {
                     0,
                     "ini_to_json",
                 )?))),
-                FID_JSON_TO_INI => super::json_to_ini(&arg_text(&args, 0, "json_to_ini")?)
-                    .map(SqlValue::Text),
+                FID_JSON_TO_INI => {
+                    super::json_to_ini(&arg_text(&args, 0, "json_to_ini")?).map(SqlValue::Text)
+                }
                 FID_XML_EXTRACT => super::xml_extract(
                     &arg_text(&args, 0, "xml_extract")?,
                     &arg_text(&args, 1, "xml_extract")?,
                 )
                 .map(SqlValue::Text),
-                FID_XML_TO_JSON => super::xml_to_json(&arg_text(&args, 0, "xml_to_json")?)
-                    .map(SqlValue::Text),
+                FID_XML_TO_JSON => {
+                    super::xml_to_json(&arg_text(&args, 0, "xml_to_json")?).map(SqlValue::Text)
+                }
                 FID_XML_ATTR => super::xml_attr(
                     &arg_text(&args, 0, "xml_attr")?,
                     &arg_text(&args, 1, "xml_attr")?,

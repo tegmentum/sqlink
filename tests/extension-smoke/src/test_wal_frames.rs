@@ -170,9 +170,7 @@ fn assert_wal_frames_substrate(label: &str, stdout: &str, stderr: &str) {
 
     // -------- hookprobe_wal_header() --------
     let raw_header = find_tagged(stdout, "WAL_HEADER:").unwrap_or_else(|| {
-        panic!(
-            "[{label}] no WAL_HEADER: line in stdout.\nstdout:\n{stdout}\nstderr:\n{stderr}",
-        )
+        panic!("[{label}] no WAL_HEADER: line in stdout.\nstdout:\n{stdout}\nstderr:\n{stderr}",)
     });
     let header = parse_blob_literal(raw_header).unwrap_or_else(|| {
         panic!(
@@ -191,7 +189,10 @@ fn assert_wal_frames_substrate(label: &str, stdout: &str, stderr: &str) {
         "[{label}] wal header magic {:#010x}  not 0x377F0682 / 0x377F0683. \
          First 4 bytes: {:02X} {:02X} {:02X} {:02X}",
         magic,
-        header[0], header[1], header[2], header[3],
+        header[0],
+        header[1],
+        header[2],
+        header[3],
     );
     // Parse the page-size  used to size the read_frames assertion
     // below.
@@ -203,14 +204,10 @@ fn assert_wal_frames_substrate(label: &str, stdout: &str, stderr: &str) {
 
     // -------- hookprobe_read_frames(1, 1) --------
     let raw_frames = find_tagged(stdout, "READ_FRAMES:").unwrap_or_else(|| {
-        panic!(
-            "[{label}] no READ_FRAMES: line in stdout.\nstdout:\n{stdout}\nstderr:\n{stderr}",
-        )
+        panic!("[{label}] no READ_FRAMES: line in stdout.\nstdout:\n{stdout}\nstderr:\n{stderr}",)
     });
     let frames = parse_blob_literal(raw_frames).unwrap_or_else(|| {
-        panic!(
-            "[{label}] hookprobe_read_frames(1,1) returned NULL / unparseable: {raw_frames:?}",
-        )
+        panic!("[{label}] hookprobe_read_frames(1,1) returned NULL / unparseable: {raw_frames:?}",)
     });
     let expected_len = 24 + page_size;
     assert_eq!(
@@ -224,14 +221,10 @@ fn assert_wal_frames_substrate(label: &str, stdout: &str, stderr: &str) {
 
     // -------- hookprobe_serialize_main() --------
     let raw_serial = find_tagged(stdout, "SERIALIZE:").unwrap_or_else(|| {
-        panic!(
-            "[{label}] no SERIALIZE: line in stdout.\nstdout:\n{stdout}\nstderr:\n{stderr}",
-        )
+        panic!("[{label}] no SERIALIZE: line in stdout.\nstdout:\n{stdout}\nstderr:\n{stderr}",)
     });
     let serial = parse_blob_literal(raw_serial).unwrap_or_else(|| {
-        panic!(
-            "[{label}] hookprobe_serialize_main() returned NULL / unparseable: {raw_serial:?}",
-        )
+        panic!("[{label}] hookprobe_serialize_main() returned NULL / unparseable: {raw_serial:?}",)
     });
     assert!(
         serial.len() >= 16,
@@ -240,8 +233,7 @@ fn assert_wal_frames_substrate(label: &str, stdout: &str, stderr: &str) {
     );
     let magic16 = &serial[..16];
     assert_eq!(
-        magic16,
-        b"SQLite format 3\0",
+        magic16, b"SQLite format 3\0",
         "[{label}] serialize_main first 16 bytes != \"SQLite format 3\\0\". \
          Got: {:02X?}",
         magic16,

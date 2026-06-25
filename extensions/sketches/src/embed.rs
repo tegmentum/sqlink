@@ -10,14 +10,16 @@ use sqlite_embed::{
     register_aggregates, register_scalars, AggregateSpec, ScalarSpec, SqlValueOwned,
 };
 
-use crate::{td_deserialize, td_serialize, mh_jaccard, mh_serialize, MinHash, TDigest, MH_DEFAULT_K};
+use crate::{
+    mh_jaccard, mh_serialize, td_deserialize, td_serialize, MinHash, TDigest, MH_DEFAULT_K,
+};
 
 const FID_TD_QUANT: u64 = 1;
 const FID_TD_COUNT: u64 = 2;
-const FID_MH_JAC:   u64 = 3;
-const FID_VERSION:  u64 = 4;
-const FID_TD_AGG:   u64 = 100;
-const FID_MH_AGG:   u64 = 101;
+const FID_MH_JAC: u64 = 3;
+const FID_VERSION: u64 = 4;
+const FID_TD_AGG: u64 = 100;
+const FID_MH_AGG: u64 = 101;
 
 fn val_bytes(v: &SqlValueOwned) -> Vec<u8> {
     match v {
@@ -49,7 +51,10 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
             let q = val_f64(args.get(1).unwrap_or(&SqlValueOwned::Null))
                 .ok_or_else(|| "t_digest_quantile: numeric q".to_string())?;
             let mut td = td_deserialize(&blob)?;
-            Ok(td.quantile(q).map(SqlValueOwned::Real).unwrap_or(SqlValueOwned::Null))
+            Ok(td
+                .quantile(q)
+                .map(SqlValueOwned::Real)
+                .unwrap_or(SqlValueOwned::Null))
         }
         FID_TD_COUNT => {
             let blob = match args.first() {
@@ -75,12 +80,18 @@ pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwn
 }
 
 // t-digest aggregate
-struct TdState { td: TDigest }
+struct TdState {
+    td: TDigest,
+}
 unsafe fn td_make() -> *mut () {
-    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(TdState { td: TDigest::new(100.0) })) as *mut ()
+    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(TdState {
+        td: TDigest::new(100.0),
+    })) as *mut ()
 }
 unsafe fn td_step(state: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
-    if matches!(args.first(), Some(SqlValueOwned::Null) | None) { return Ok(()); }
+    if matches!(args.first(), Some(SqlValueOwned::Null) | None) {
+        return Ok(());
+    }
     let st = &mut *(state as *mut TdState);
     let x = val_f64(&args[0]).ok_or_else(|| "t_digest: numeric arg".to_string())?;
     st.td.add(x);
@@ -95,12 +106,18 @@ unsafe fn td_destroy(state: *mut ()) {
 }
 
 // minhash aggregate
-struct MhState { mh: MinHash }
+struct MhState {
+    mh: MinHash,
+}
 unsafe fn mh_make() -> *mut () {
-    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(MhState { mh: MinHash::new(MH_DEFAULT_K) })) as *mut ()
+    alloc::boxed::Box::into_raw(alloc::boxed::Box::new(MhState {
+        mh: MinHash::new(MH_DEFAULT_K),
+    })) as *mut ()
 }
 unsafe fn mh_step(state: *mut (), args: &[SqlValueOwned]) -> Result<(), String> {
-    if matches!(args.first(), Some(SqlValueOwned::Null) | None) { return Ok(()); }
+    if matches!(args.first(), Some(SqlValueOwned::Null) | None) {
+        return Ok(());
+    }
     let st = &mut *(state as *mut MhState);
     let bytes = val_bytes(&args[0]);
     st.mh.add(&bytes);
@@ -115,25 +132,59 @@ unsafe fn mh_destroy(state: *mut ()) {
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_TD_QUANT, name: b"t_digest_quantile\0", num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_TD_COUNT, name: b"t_digest_count\0",    num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_MH_JAC,   name: b"minhash_jaccard\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_VERSION,  name: b"sketches_version\0",  num_args: 0, deterministic: false },
+    ScalarSpec {
+        func_id: FID_TD_QUANT,
+        name: b"t_digest_quantile\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TD_COUNT,
+        name: b"t_digest_count\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_MH_JAC,
+        name: b"minhash_jaccard\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VERSION,
+        name: b"sketches_version\0",
+        num_args: 0,
+        deterministic: false,
+    },
 ];
 
 const AGGREGATES: &[AggregateSpec] = &[
     AggregateSpec {
-        func_id: FID_TD_AGG, name: b"t_digest\0", num_args: 1, deterministic: true,
-        make_state: td_make, step_state: td_step, final_state: td_final, destroy_state: td_destroy,
+        func_id: FID_TD_AGG,
+        name: b"t_digest\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: td_make,
+        step_state: td_step,
+        final_state: td_final,
+        destroy_state: td_destroy,
     },
     AggregateSpec {
-        func_id: FID_MH_AGG, name: b"minhash\0", num_args: 1, deterministic: true,
-        make_state: mh_make, step_state: mh_step, final_state: mh_final, destroy_state: mh_destroy,
+        func_id: FID_MH_AGG,
+        name: b"minhash\0",
+        num_args: 1,
+        deterministic: true,
+        make_state: mh_make,
+        step_state: mh_step,
+        final_state: mh_final,
+        destroy_state: mh_destroy,
     },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {
     let rc = register_scalars(db, SCALARS, call_scalar);
-    if rc != libsqlite3_sys::SQLITE_OK { return rc; }
+    if rc != libsqlite3_sys::SQLITE_OK {
+        return rc;
+    }
     register_aggregates(db, AGGREGATES)
 }

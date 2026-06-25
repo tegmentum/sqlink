@@ -171,9 +171,7 @@ mod wasm_export {
                         if k.to_ascii_lowercase() == want {
                             return Ok(SqlValue::Text(
                                 core::str::from_utf8(v)
-                                    .map_err(|e| {
-                                        format!("http_head_value: not UTF-8: {e}")
-                                    })?
+                                    .map_err(|e| format!("http_head_value: not UTF-8: {e}"))?
                                     .to_string(),
                             ));
                         }

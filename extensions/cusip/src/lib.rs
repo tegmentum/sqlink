@@ -89,7 +89,12 @@ mod wasm_export {
         if n.len() != 9 {
             return None;
         }
-        Some(n.chars().next().map(|c| c.is_ascii_alphabetic()).unwrap_or(false))
+        Some(
+            n.chars()
+                .next()
+                .map(|c| c.is_ascii_alphabetic())
+                .unwrap_or(false),
+        )
     }
 
     fn to_isin(raw: &str) -> Option<String> {
@@ -115,7 +120,11 @@ mod wasm_export {
             let d = ch.to_digit(10)?;
             let v = if alt {
                 let x = d * 2;
-                if x > 9 { x - 9 } else { x }
+                if x > 9 {
+                    x - 9
+                } else {
+                    x
+                }
             } else {
                 d
             };
@@ -225,9 +234,7 @@ mod wasm_export {
                 FID_IS_PRIVATE => Ok(is_private(&raw)
                     .map(|b| SqlValue::Integer(b as i64))
                     .unwrap_or(SqlValue::Null)),
-                FID_TO_ISIN => Ok(to_isin(&raw)
-                    .map(SqlValue::Text)
-                    .unwrap_or(SqlValue::Null)),
+                FID_TO_ISIN => Ok(to_isin(&raw).map(SqlValue::Text).unwrap_or(SqlValue::Null)),
                 other => Err(format!("cusip: unknown func id {other}")),
             }
         }

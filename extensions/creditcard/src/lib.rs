@@ -103,8 +103,11 @@ mod wasm_export {
         }
         // Maestro: 50, 56-69 (minus other brand prefixes), 12-19 digits
         if matches!(d.len(), 12..=19) {
-            if d.starts_with("50") || d.starts_with("56") || d.starts_with("57") ||
-               d.starts_with("58") || d.starts_with("67")
+            if d.starts_with("50")
+                || d.starts_with("56")
+                || d.starts_with("57")
+                || d.starts_with("58")
+                || d.starts_with("67")
             {
                 return Some("maestro");
             }
@@ -126,7 +129,11 @@ mod wasm_export {
             };
             let v = if alt {
                 let x = d * 2;
-                if x > 9 { x - 9 } else { x }
+                if x > 9 {
+                    x - 9
+                } else {
+                    x
+                }
             } else {
                 d
             };
@@ -231,9 +238,7 @@ mod wasm_export {
                 FID_TYPE => Ok(brand(&d)
                     .map(|t| SqlValue::Text(t.to_string()))
                     .unwrap_or(SqlValue::Null)),
-                FID_VALIDATE => Ok(SqlValue::Integer(
-                    (brand(&d).is_some() && luhn(&d)) as i64,
-                )),
+                FID_VALIDATE => Ok(SqlValue::Integer((brand(&d).is_some() && luhn(&d)) as i64)),
                 FID_MASK => Ok(if d.is_empty() {
                     SqlValue::Null
                 } else {

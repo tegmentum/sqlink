@@ -71,7 +71,11 @@ mod wasm_export {
         serde_json::to_string(&out).unwrap_or_else(|_| "[]".to_string())
     }
 
-    fn collect_fields_inner<'a>(ss: &SelectionSet<'a, &'a str>, prefix: &str, out: &mut Vec<String>) {
+    fn collect_fields_inner<'a>(
+        ss: &SelectionSet<'a, &'a str>,
+        prefix: &str,
+        out: &mut Vec<String>,
+    ) {
         for item in &ss.items {
             if let Selection::Field(f) = item {
                 let path = if prefix.is_empty() {

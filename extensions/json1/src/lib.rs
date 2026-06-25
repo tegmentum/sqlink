@@ -59,8 +59,8 @@ mod wasm_export {
     const FID_JSON_KEYS_1: u64 = 16;
     const FID_JSON_KEYS_2: u64 = 17;
     // SQL/JSON path family:
-    const FID_JSON_VALUE:  u64 = 18;
-    const FID_JSON_QUERY:  u64 = 19;
+    const FID_JSON_VALUE: u64 = 18;
+    const FID_JSON_QUERY: u64 = 19;
     const FID_JSON_EXISTS: u64 = 20;
 
     struct Json1Extension;
@@ -96,8 +96,8 @@ mod wasm_export {
                     s(FID_JSON_ARRAY_INSERT, "json_array_insert", -1),
                     s(FID_JSON_KEYS_1, "json_keys", 1),
                     s(FID_JSON_KEYS_2, "json_keys", 2),
-                    s(FID_JSON_VALUE,  "json_value",  2),
-                    s(FID_JSON_QUERY,  "json_query",  2),
+                    s(FID_JSON_VALUE, "json_value", 2),
+                    s(FID_JSON_QUERY, "json_query", 2),
                     s(FID_JSON_EXISTS, "json_exists", 2),
                     // PostgreSQL `jsonb_*` family  share FIDs with
                     // the `json_*` siblings. PG distinguishes jsonb
@@ -105,32 +105,32 @@ mod wasm_export {
                     // only has the text representation, so the
                     // function surface collapses to one set with
                     // both spellings.
-                    s(FID_JSON,               "jsonb",               1),
-                    s(FID_JSON_VALID,         "jsonb_valid",         1),
-                    s(FID_JSON_TYPE,          "jsonb_type",          -1),
-                    s(FID_JSON_TYPE,          "jsonb_typeof",        -1),
-                    s(FID_JSON_EXTRACT,       "jsonb_extract",       -1),
-                    s(FID_JSON_EXTRACT,       "jsonb_extract_path",  -1),
-                    s(FID_JSON_ARRAY,         "jsonb_array",         -1),
-                    s(FID_JSON_ARRAY,         "jsonb_build_array",   -1),
-                    s(FID_JSON_OBJECT,        "jsonb_object",        -1),
-                    s(FID_JSON_OBJECT,        "jsonb_build_object",  -1),
-                    s(FID_JSON_ARRAY_LENGTH,  "jsonb_array_length",  -1),
-                    s(FID_JSON_PATCH,         "jsonb_patch",         2),
-                    s(FID_JSON_REMOVE,        "jsonb_remove",        -1),
-                    s(FID_JSON_REMOVE,        "jsonb_delete",        -1),
-                    s(FID_JSON_SET,           "jsonb_set",           -1),
-                    s(FID_JSON_REPLACE,       "jsonb_replace",       -1),
-                    s(FID_JSON_INSERT,        "jsonb_insert",        -1),
-                    s(FID_JSON_ARRAY_APPEND,  "jsonb_array_append",  -1),
-                    s(FID_JSON_ARRAY_INSERT,  "jsonb_array_insert",  -1),
-                    s(FID_JSON_KEYS_1,        "jsonb_object_keys",   1),
-                    s(FID_JSON_KEYS_2,        "jsonb_object_keys",   2),
-                    s(FID_JSON_VALUE,         "jsonb_value",         2),
-                    s(FID_JSON_QUERY,         "jsonb_query",         2),
-                    s(FID_JSON_QUERY,         "jsonb_path_query",    2),
-                    s(FID_JSON_EXISTS,        "jsonb_exists",        2),
-                    s(FID_JSON_EXISTS,        "jsonb_path_exists",   2),
+                    s(FID_JSON, "jsonb", 1),
+                    s(FID_JSON_VALID, "jsonb_valid", 1),
+                    s(FID_JSON_TYPE, "jsonb_type", -1),
+                    s(FID_JSON_TYPE, "jsonb_typeof", -1),
+                    s(FID_JSON_EXTRACT, "jsonb_extract", -1),
+                    s(FID_JSON_EXTRACT, "jsonb_extract_path", -1),
+                    s(FID_JSON_ARRAY, "jsonb_array", -1),
+                    s(FID_JSON_ARRAY, "jsonb_build_array", -1),
+                    s(FID_JSON_OBJECT, "jsonb_object", -1),
+                    s(FID_JSON_OBJECT, "jsonb_build_object", -1),
+                    s(FID_JSON_ARRAY_LENGTH, "jsonb_array_length", -1),
+                    s(FID_JSON_PATCH, "jsonb_patch", 2),
+                    s(FID_JSON_REMOVE, "jsonb_remove", -1),
+                    s(FID_JSON_REMOVE, "jsonb_delete", -1),
+                    s(FID_JSON_SET, "jsonb_set", -1),
+                    s(FID_JSON_REPLACE, "jsonb_replace", -1),
+                    s(FID_JSON_INSERT, "jsonb_insert", -1),
+                    s(FID_JSON_ARRAY_APPEND, "jsonb_array_append", -1),
+                    s(FID_JSON_ARRAY_INSERT, "jsonb_array_insert", -1),
+                    s(FID_JSON_KEYS_1, "jsonb_object_keys", 1),
+                    s(FID_JSON_KEYS_2, "jsonb_object_keys", 2),
+                    s(FID_JSON_VALUE, "jsonb_value", 2),
+                    s(FID_JSON_QUERY, "jsonb_query", 2),
+                    s(FID_JSON_QUERY, "jsonb_path_query", 2),
+                    s(FID_JSON_EXISTS, "jsonb_exists", 2),
+                    s(FID_JSON_EXISTS, "jsonb_path_exists", 2),
                 ],
                 aggregate_functions: alloc::vec![],
                 collations: alloc::vec![],
@@ -170,8 +170,8 @@ mod wasm_export {
                 FID_JSON_ARRAY_APPEND => funcs::json_array_append(&mapped),
                 FID_JSON_ARRAY_INSERT => funcs::json_array_insert(&mapped),
                 FID_JSON_KEYS_1 | FID_JSON_KEYS_2 => funcs::json_keys(&mapped),
-                FID_JSON_VALUE  => funcs::json_value(&mapped),
-                FID_JSON_QUERY  => funcs::json_query(&mapped),
+                FID_JSON_VALUE => funcs::json_value(&mapped),
+                FID_JSON_QUERY => funcs::json_query(&mapped),
                 FID_JSON_EXISTS => funcs::json_exists(&mapped),
                 other => return Err(alloc::format!("json1: unknown func id {other}")),
             }?;

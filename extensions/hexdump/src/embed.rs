@@ -47,7 +47,11 @@ fn format_dump(bytes: &[u8], width: usize) -> String {
         out.push(' ');
         out.push('|');
         for &b in chunk {
-            out.push(if (0x20..0x7f).contains(&b) { b as char } else { '.' });
+            out.push(if (0x20..0x7f).contains(&b) {
+                b as char
+            } else {
+                '.'
+            });
         }
         for _ in chunk.len()..width {
             out.push(' ');
@@ -66,10 +70,7 @@ fn format_compact(bytes: &[u8]) -> String {
     out
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_HEXDUMP => {
             let b = arg_blob(&args, 0, "hexdump")?;
@@ -89,9 +90,24 @@ pub fn call_scalar(
 }
 
 const SCALARS: &[ScalarSpec] = &[
-    ScalarSpec { func_id: FID_HEXDUMP,         name: b"hexdump\0",         num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_HEXDUMP_WIDTH,   name: b"hexdump_width\0",   num_args: 2, deterministic: true },
-    ScalarSpec { func_id: FID_HEXDUMP_COMPACT, name: b"hexdump_compact\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_HEXDUMP,
+        name: b"hexdump\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_HEXDUMP_WIDTH,
+        name: b"hexdump_width\0",
+        num_args: 2,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_HEXDUMP_COMPACT,
+        name: b"hexdump_compact\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

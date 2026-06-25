@@ -9,17 +9,17 @@ use core::ffi::c_int;
 use sqlite_embed::{register_scalars, ScalarSpec, SqlValueOwned};
 use uuid::Uuid;
 
-const FID_UUID:              u64 = 1;
-const FID_UUIDV4:            u64 = 2;
-const FID_UUIDV7:            u64 = 3;
-const FID_VALIDATE:          u64 = 4;
-const FID_VERSION:           u64 = 5;
-const FID_NIL:               u64 = 6;
-const FID_TIMESTAMP_MS:      u64 = 7;
-const FID_VARIANT:           u64 = 8;
+const FID_UUID: u64 = 1;
+const FID_UUIDV4: u64 = 2;
+const FID_UUIDV7: u64 = 3;
+const FID_VALIDATE: u64 = 4;
+const FID_VERSION: u64 = 5;
+const FID_NIL: u64 = 6;
+const FID_TIMESTAMP_MS: u64 = 7;
+const FID_VARIANT: u64 = 8;
 // PLAN #5: explicit v7 surface (alias text, blob, timestamp).
-const FID_UUID_V7:           u64 = 9;
-const FID_UUID_V7_BLOB:      u64 = 10;
+const FID_UUID_V7: u64 = 9;
+const FID_UUID_V7_BLOB: u64 = 10;
 const FID_UUID_V7_TIMESTAMP: u64 = 11;
 
 fn arg_text(args: &[SqlValueOwned], i: usize, fname: &str) -> Result<String, String> {
@@ -42,10 +42,7 @@ fn parse_uuid_arg(args: &[SqlValueOwned], i: usize) -> Option<Uuid> {
     }
 }
 
-pub fn call_scalar(
-    func_id: u64,
-    args: Vec<SqlValueOwned>,
-) -> Result<SqlValueOwned, String> {
+pub fn call_scalar(func_id: u64, args: Vec<SqlValueOwned>) -> Result<SqlValueOwned, String> {
     match func_id {
         FID_UUID | FID_UUIDV4 => Ok(SqlValueOwned::Text(Uuid::new_v4().to_string())),
         FID_UUIDV7 | FID_UUID_V7 => Ok(SqlValueOwned::Text(Uuid::now_v7().to_string())),
@@ -102,18 +99,73 @@ pub fn call_scalar(
 
 const SCALARS: &[ScalarSpec] = &[
     // Generators flagged non-deterministic so the planner can't hoist them.
-    ScalarSpec { func_id: FID_UUID,              name: b"uuid\0",              num_args: 0, deterministic: false },
-    ScalarSpec { func_id: FID_UUIDV4,            name: b"uuidv4\0",            num_args: 0, deterministic: false },
-    ScalarSpec { func_id: FID_UUIDV7,            name: b"uuidv7\0",            num_args: 0, deterministic: false },
-    ScalarSpec { func_id: FID_NIL,               name: b"uuid_nil\0",          num_args: 0, deterministic: true },
-    ScalarSpec { func_id: FID_VALIDATE,          name: b"uuid_validate\0",     num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VERSION,           name: b"uuid_version\0",      num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_TIMESTAMP_MS,      name: b"uuid_timestamp_ms\0", num_args: 1, deterministic: true },
-    ScalarSpec { func_id: FID_VARIANT,           name: b"uuid_variant\0",      num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_UUID,
+        name: b"uuid\0",
+        num_args: 0,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_UUIDV4,
+        name: b"uuidv4\0",
+        num_args: 0,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_UUIDV7,
+        name: b"uuidv7\0",
+        num_args: 0,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_NIL,
+        name: b"uuid_nil\0",
+        num_args: 0,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VALIDATE,
+        name: b"uuid_validate\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VERSION,
+        name: b"uuid_version\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_TIMESTAMP_MS,
+        name: b"uuid_timestamp_ms\0",
+        num_args: 1,
+        deterministic: true,
+    },
+    ScalarSpec {
+        func_id: FID_VARIANT,
+        name: b"uuid_variant\0",
+        num_args: 1,
+        deterministic: true,
+    },
     // PLAN #5: v7 surface. Generators non-deterministic; parser deterministic.
-    ScalarSpec { func_id: FID_UUID_V7,           name: b"uuid_v7\0",           num_args: 0, deterministic: false },
-    ScalarSpec { func_id: FID_UUID_V7_BLOB,      name: b"uuid_v7_blob\0",      num_args: 0, deterministic: false },
-    ScalarSpec { func_id: FID_UUID_V7_TIMESTAMP, name: b"uuid_v7_timestamp\0", num_args: 1, deterministic: true },
+    ScalarSpec {
+        func_id: FID_UUID_V7,
+        name: b"uuid_v7\0",
+        num_args: 0,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_UUID_V7_BLOB,
+        name: b"uuid_v7_blob\0",
+        num_args: 0,
+        deterministic: false,
+    },
+    ScalarSpec {
+        func_id: FID_UUID_V7_TIMESTAMP,
+        name: b"uuid_v7_timestamp\0",
+        num_args: 1,
+        deterministic: true,
+    },
 ];
 
 pub unsafe fn register_into(db: *mut libsqlite3_sys::sqlite3) -> c_int {

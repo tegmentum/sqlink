@@ -152,11 +152,7 @@ impl Connection {
     /// the route kind). Returns None when there are zero rows
     /// callers turn that into a 404. Multiple rows: only the first
     /// is consumed.
-    pub fn query_blob_named(
-        &self,
-        sql: &str,
-        params: &[(&str, Value)],
-    ) -> Result<Option<Vec<u8>>> {
+    pub fn query_blob_named(&self, sql: &str, params: &[(&str, Value)]) -> Result<Option<Vec<u8>>> {
         let sql_c = CString::new(sql)?;
         let mut stmt: *mut ffi::sqlite3_stmt = ptr::null_mut();
         let rc = unsafe {
@@ -305,7 +301,9 @@ fn column_value(stmt: *mut ffi::sqlite3_stmt, c: c_int) -> Value {
             ffi::SQLITE_FLOAT => {
                 let f = ffi::sqlite3_column_double(stmt, c);
                 if f.is_finite() {
-                    serde_json::Number::from_f64(f).map(Value::Number).unwrap_or(Value::Null)
+                    serde_json::Number::from_f64(f)
+                        .map(Value::Number)
+                        .unwrap_or(Value::Null)
                 } else {
                     Value::Null
                 }

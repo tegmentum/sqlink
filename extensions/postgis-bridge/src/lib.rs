@@ -31,43 +31,43 @@ use bindings::exports::sqlite::extension::metadata::{
 };
 use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
 use bindings::exports::sqlite::extension::vtab::{
-    ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan,
-VtabRow};
+    ConstraintUsage, Guest as VtabGuest, IndexInfo, IndexPlan, VtabRow,
+};
 use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
 
 use bindings::postgis::wasm::postgis_accessors as pg_acc;
 use bindings::postgis::wasm::postgis_aggregates as pg_agg;
 use bindings::postgis::wasm::postgis_clustering as pg_cluster;
-use bindings::postgis::wasm::postgis_spatial_index as pg_strtree;
 use bindings::postgis::wasm::postgis_constructors as pg_ctor;
+use bindings::postgis::wasm::postgis_geocoder as pg_geo;
+use bindings::postgis::wasm::postgis_geodetic as pg_geog;
+use bindings::postgis::wasm::postgis_linear_ref as pg_lin;
 use bindings::postgis::wasm::postgis_measurements as pg_meas;
+use bindings::postgis::wasm::postgis_operators as pg_op;
 use bindings::postgis::wasm::postgis_output as pg_out;
 use bindings::postgis::wasm::postgis_predicates as pg_pred;
 use bindings::postgis::wasm::postgis_processing as pg_proc;
-use bindings::postgis::wasm::postgis_transformations as pg_xform;
-use bindings::postgis::wasm::postgis_linear_ref as pg_lin;
-use bindings::postgis::wasm::postgis_three_d as pg_threed;
-use bindings::postgis::wasm::postgis_types::{Geography, Geometry};
-use bindings::postgis::wasm::postgis_geodetic as pg_geog;
-use bindings::postgis::wasm::postgis_sfcgal as pg_sfcgal;
 use bindings::postgis::wasm::postgis_raster_accessors as pg_rast_acc;
 use bindings::postgis::wasm::postgis_raster_constructors as pg_rast_ctor;
-use bindings::postgis::wasm::postgis_raster_stats as pg_rast_stats;
 use bindings::postgis::wasm::postgis_raster_mapalgebra as pg_rast_ma;
-use bindings::postgis::wasm::postgis_topology_output as pg_topo_out;
+use bindings::postgis::wasm::postgis_raster_output as pg_rast_out;
+use bindings::postgis::wasm::postgis_raster_pixels as pg_rast_px;
+use bindings::postgis::wasm::postgis_raster_predicates as pg_rast_pred;
+use bindings::postgis::wasm::postgis_raster_processing as pg_rast_proc;
+use bindings::postgis::wasm::postgis_raster_stats as pg_rast_stats;
+use bindings::postgis::wasm::postgis_raster_types::Raster;
+use bindings::postgis::wasm::postgis_raster_vector as pg_rast_vec;
+use bindings::postgis::wasm::postgis_sfcgal as pg_sfcgal;
+use bindings::postgis::wasm::postgis_spatial_index as pg_strtree;
+use bindings::postgis::wasm::postgis_three_d as pg_threed;
 use bindings::postgis::wasm::postgis_topology_edit as pg_topo_edit;
+use bindings::postgis::wasm::postgis_topology_output as pg_topo_out;
 use bindings::postgis::wasm::postgis_topology_query as pg_topo_query;
 use bindings::postgis::wasm::postgis_topology_topogeom as pg_topogeom;
 use bindings::postgis::wasm::postgis_topology_topogeom::TopoGeometry;
 use bindings::postgis::wasm::postgis_topology_types::Topology;
-use bindings::postgis::wasm::postgis_operators as pg_op;
-use bindings::postgis::wasm::postgis_geocoder as pg_geo;
-use bindings::postgis::wasm::postgis_raster_pixels as pg_rast_px;
-use bindings::postgis::wasm::postgis_raster_output as pg_rast_out;
-use bindings::postgis::wasm::postgis_raster_predicates as pg_rast_pred;
-use bindings::postgis::wasm::postgis_raster_processing as pg_rast_proc;
-use bindings::postgis::wasm::postgis_raster_vector as pg_rast_vec;
-use bindings::postgis::wasm::postgis_raster_types::Raster;
+use bindings::postgis::wasm::postgis_transformations as pg_xform;
+use bindings::postgis::wasm::postgis_types::{Geography, Geometry};
 use bindings::sfcgal::component::geometry as sf_geom;
 use bindings::sfcgal::component::io as sf_io;
 
@@ -859,7 +859,11 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_VORONOI_POLYGONS, "st_voronoipolygons", 2),
                 s(FID_ST_VORONOI_LINES, "st_voronoilines", 2),
                 s(FID_ST_DELAUNAY_TRIANGLES, "st_delaunaytriangles", 2),
-                s(FID_ST_CONSTRAINED_DELAUNAY, "st_constraineddelaunaytriangles", 1),
+                s(
+                    FID_ST_CONSTRAINED_DELAUNAY,
+                    "st_constraineddelaunaytriangles",
+                    1
+                ),
                 s(FID_ST_GENERATE_POINTS, "st_generatepoints", 2),
                 s(FID_ST_SEGMENTIZE, "st_segmentize", 2),
                 s(FID_ST_FORCE_POLYGON_CW, "st_forcepolygoncw", 1),
@@ -899,9 +903,17 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_FORCE_SFS, "st_forcesfs", 1),
                 s(FID_ST_TRANSFORM, "st_transform", 2),
                 s(FID_ST_TRANSFORM_PIPELINE, "st_transformpipeline", 2),
-                s(FID_ST_INV_TRANSFORM_PIPELINE, "st_inversetransformpipeline", 2),
+                s(
+                    FID_ST_INV_TRANSFORM_PIPELINE,
+                    "st_inversetransformpipeline",
+                    2
+                ),
                 s(FID_ST_LINE_INTERPOLATE_POINT, "st_lineinterpolatepoint", 2),
-                s(FID_ST_LINE_INTERPOLATE_POINTS, "st_lineinterpolatepoints", 3),
+                s(
+                    FID_ST_LINE_INTERPOLATE_POINTS,
+                    "st_lineinterpolatepoints",
+                    3
+                ),
                 s(FID_ST_LINE_LOCATE_POINT, "st_linelocatepoint", 2),
                 s(FID_ST_LINE_SUBSTRING, "st_linesubstring", 3),
                 s(FID_ST_ADD_POINT, "st_addpoint", 2),
@@ -911,9 +923,21 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_LOCATE_ALONG, "st_locatealong", 2),
                 s(FID_ST_LOCATE_BETWEEN, "st_locatebetween", 3),
                 s(FID_ST_LINE_EXTEND, "st_lineextend", 3),
-                s(FID_ST_LINE_CROSSING_DIRECTION, "st_linecrossingdirection", 2),
-                s(FID_ST_LINE_INTERPOLATE_POINT_3D, "st_3dlineinterpolatepoint", 2),
-                s(FID_ST_LOCATE_BETWEEN_ELEVATIONS, "st_locatebetweenelevations", 3),
+                s(
+                    FID_ST_LINE_CROSSING_DIRECTION,
+                    "st_linecrossingdirection",
+                    2
+                ),
+                s(
+                    FID_ST_LINE_INTERPOLATE_POINT_3D,
+                    "st_3dlineinterpolatepoint",
+                    2
+                ),
+                s(
+                    FID_ST_LOCATE_BETWEEN_ELEVATIONS,
+                    "st_locatebetweenelevations",
+                    3
+                ),
                 s(FID_ST_REVERSE_3D, "st_3dreverse", 1),
                 s(FID_ST_CENTROID_3D, "st_3dcentroid", 1),
                 s(FID_ST_ENVELOPE_3D, "st_3denvelope", 1),
@@ -931,7 +955,11 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_GEOM_FROM_KML, "st_geomfromkml", 1),
                 s(FID_ST_GEOM_FROM_GML, "st_geomfromgml", 1),
                 s(FID_ST_GEOM_FROM_TWKB, "st_geomfromtwkb", 1),
-                s(FID_ST_LINE_FROM_ENCODED_POLY, "st_linefromencodedpolyline", 1),
+                s(
+                    FID_ST_LINE_FROM_ENCODED_POLY,
+                    "st_linefromencodedpolyline",
+                    1
+                ),
                 // Geodetic (geometry-typed)
                 s(FID_ST_DISTANCE_SPHERE, "st_distancesphere", 2),
                 s(FID_ST_PROJECT, "st_project", 3),
@@ -976,7 +1004,11 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_ST_DIFFERENCE_3D, "st_3ddifference", 2),
                 s(FID_ST_TESSELATE, "st_tesselate", 1),
                 s(FID_ST_STRAIGHT_SKELETON, "st_straightskeleton", 1),
-                s(FID_ST_APPROX_MEDIAL_AXIS, "st_sfcgalapproximatemedialaxis", 1),
+                s(
+                    FID_ST_APPROX_MEDIAL_AXIS,
+                    "st_sfcgalapproximatemedialaxis",
+                    1
+                ),
                 s(FID_ST_EXTRUDE, "st_extrude", 4),
                 s(FID_ST_MINKOWSKI_SUM, "st_minkowskisum", 2),
                 s(FID_ST_VOLUME, "st_volume", 1),
@@ -994,7 +1026,11 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_SFC_ALPHA_SHAPE, "st_sfc_alphashape", 2),
                 s(FID_SFC_OPTIMAL_ALPHA_SHAPE, "st_sfc_optimalalphashape", 1),
                 s(FID_SFC_EXTRUDE_STRAIGHT, "st_sfc_extrudestraight", 2),
-                s(FID_SFC_EXTRUDE_STRAIGHT_SKELETON, "st_sfc_extrudestraightskeleton", 2),
+                s(
+                    FID_SFC_EXTRUDE_STRAIGHT_SKELETON,
+                    "st_sfc_extrudestraightskeleton",
+                    2
+                ),
                 s(FID_SFC_MAKE_VALID, "st_sfc_makevalid", 1),
                 s(FID_SFC_IS_VALID, "st_sfc_isvalid", 1),
                 s(FID_SFC_AREA, "st_sfc_area", 1),
@@ -1025,8 +1061,16 @@ impl MetadataGuest for PostgisBridge {
                 s(FID_RST_PIXEL_AS_POINT, "st_rast_pixelaspoint", 3),
                 s(FID_RST_PIXEL_AS_POLYGON, "st_rast_pixelaspolygon", 3),
                 s(FID_RST_PIXEL_AS_CENTROID, "st_rast_pixelascentroid", 3),
-                s(FID_RST_RASTER_TO_WORLD_COORD_X, "st_rast_rastertoworldcoordx", 3),
-                s(FID_RST_RASTER_TO_WORLD_COORD_Y, "st_rast_rastertoworldcoordy", 3),
+                s(
+                    FID_RST_RASTER_TO_WORLD_COORD_X,
+                    "st_rast_rastertoworldcoordx",
+                    3
+                ),
+                s(
+                    FID_RST_RASTER_TO_WORLD_COORD_Y,
+                    "st_rast_rastertoworldcoordy",
+                    3
+                ),
                 s(FID_RST_AS_PNG, "st_rast_aspng", 2),
                 s(FID_RST_AS_TIFF, "st_rast_astiff", 1),
                 s(FID_RST_R_INTERSECTS, "st_rast_intersects", 2),
@@ -1195,8 +1239,8 @@ impl MetadataGuest for PostgisBridge {
                 id: VTAB_RASTER_POLYGON_DUMP,
                 name: "raster_polygon_dump".into(),
                 eponymous: false,
-                    mutable: false,
-                    batched: false,
+                mutable: false,
+                batched: false,
             }],
             has_authorizer: false,
             has_update_hook: false,
@@ -1206,8 +1250,8 @@ impl MetadataGuest for PostgisBridge {
             dot_commands: alloc::vec![],
             declared_capabilities: alloc::vec![],
             optional_capabilities: alloc::vec![],
-                preferred_prefix: None,
-                prefix_expansion: None,
+            preferred_prefix: None,
+            prefix_expansion: None,
         }
     }
 }
@@ -1303,9 +1347,7 @@ fn parse_pixel_type(
     })
 }
 
-fn pixel_type_str(
-    p: bindings::postgis::wasm::postgis_raster_types::PixelType,
-) -> &'static str {
+fn pixel_type_str(p: bindings::postgis::wasm::postgis_raster_types::PixelType) -> &'static str {
     use bindings::postgis::wasm::postgis_raster_types::PixelType as P;
     match p {
         P::Bool1 => "1BB",
@@ -1320,9 +1362,7 @@ fn pixel_type_str(
     }
 }
 
-fn raster_err_string(
-    e: bindings::postgis::wasm::postgis_raster_types::RasterError,
-) -> String {
+fn raster_err_string(e: bindings::postgis::wasm::postgis_raster_types::RasterError) -> String {
     use bindings::postgis::wasm::postgis_raster_types::RasterError as E;
     match e {
         E::ParseError(s) => format!("parse error: {s}"),
@@ -1343,7 +1383,9 @@ fn sfc_ensure_init() {
     // geometry / io fn (the world-level `init` export is not
     // importable through an interface boundary). Kept as a
     // no-op so the call-site comment still reads well.
-    SFC_INITED.with(|c| { *c.borrow_mut() = true; });
+    SFC_INITED.with(|c| {
+        *c.borrow_mut() = true;
+    });
 }
 
 /// Decode a `geometry-result` (handle or sfcgal-error).
@@ -1400,8 +1442,7 @@ fn postgis_err_string(e: bindings::postgis::wasm::postgis_types::PostgisError) -
 macro_rules! g_to_f64 {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
-        let r = $module::$fn(&g)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r = $module::$fn(&g).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Real(r))
     }};
 }
@@ -1418,8 +1459,7 @@ macro_rules! g_to_int {
 macro_rules! g_to_int_result {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
-        let r = $module::$fn(&g)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r = $module::$fn(&g).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Integer(r as i64))
     }};
 }
@@ -1444,8 +1484,7 @@ macro_rules! g_to_string {
 macro_rules! g_to_string_result {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
-        let s = $module::$fn(&g)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let s = $module::$fn(&g).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Text(s))
     }};
 }
@@ -1462,8 +1501,7 @@ macro_rules! g_to_blob {
 macro_rules! g_to_geom {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
-        let r = $module::$fn(&g)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r = $module::$fn(&g).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Blob(r.as_wkb()))
     }};
 }
@@ -1481,8 +1519,8 @@ macro_rules! gg_to_f64 {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
         let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
-        let r = $module::$fn(&a, &b)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r =
+            $module::$fn(&a, &b).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Real(r))
     }};
 }
@@ -1492,8 +1530,8 @@ macro_rules! gg_to_bool {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
         let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
-        let r = $module::$fn(&a, &b)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r =
+            $module::$fn(&a, &b).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Integer(r as i64))
     }};
 }
@@ -1503,8 +1541,8 @@ macro_rules! gg_to_geom {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
         let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
-        let r = $module::$fn(&a, &b)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r =
+            $module::$fn(&a, &b).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Blob(r.as_wkb()))
     }};
 }
@@ -1514,8 +1552,7 @@ macro_rules! gd_to_geom {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
         let d = arg_f64(&$args, 1, $name)?;
-        let r = $module::$fn(&g, d)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r = $module::$fn(&g, d).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Blob(r.as_wkb()))
     }};
 }
@@ -1526,8 +1563,8 @@ macro_rules! gff_to_geom {
         let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
         let a = arg_f64(&$args, 1, $name)?;
         let b = arg_f64(&$args, 2, $name)?;
-        let r = $module::$fn(&g, a, b)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r =
+            $module::$fn(&g, a, b).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Blob(r.as_wkb()))
     }};
 }
@@ -1538,8 +1575,8 @@ macro_rules! ggd_to_bool {
         let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
         let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
         let d = arg_f64(&$args, 2, $name)?;
-        let r = $module::$fn(&a, &b, d)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r =
+            $module::$fn(&a, &b, d).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Integer(r as i64))
     }};
 }
@@ -1550,8 +1587,8 @@ macro_rules! ggd_to_geom {
         let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
         let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
         let d = arg_f64(&$args, 2, $name)?;
-        let r = $module::$fn(&a, &b, d)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r =
+            $module::$fn(&a, &b, d).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Blob(r.as_wkb()))
     }};
 }
@@ -1561,8 +1598,8 @@ macro_rules! gg_to_string_result {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let a = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
         let b = from_wkb(arg_blob(&$args, 1, $name)?, $name)?;
-        let r = $module::$fn(&a, &b)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r =
+            $module::$fn(&a, &b).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Text(r))
     }};
 }
@@ -1579,8 +1616,7 @@ macro_rules! g_to_bool_inf {
 macro_rules! g_to_bool_result {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let g = from_wkb(arg_blob(&$args, 0, $name)?, $name)?;
-        let r = $module::$fn(&g)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let r = $module::$fn(&g).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Integer(r as i64))
     }};
 }
@@ -1613,8 +1649,7 @@ macro_rules! g_to_u64 {
 macro_rules! text_to_geom {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let t = arg_text(&$args, 0, $name)?;
-        let g = $module::$fn(t)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let g = $module::$fn(t).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Blob(g.as_wkb()))
     }};
 }
@@ -1623,8 +1658,7 @@ macro_rules! text_to_geom {
 macro_rules! blob_to_geom {
     ($args:expr, $name:expr, $module:ident :: $fn:ident) => {{
         let b = arg_blob(&$args, 0, $name)?;
-        let g = $module::$fn(b)
-            .map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
+        let g = $module::$fn(b).map_err(|e| format!("{}: {}", $name, postgis_err_string(e)))?;
         Ok(SqlValue::Blob(g.as_wkb()))
     }};
 }
@@ -1665,7 +1699,9 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let y = arg_f64(&args, 1, "st_makepointzm")?;
                 let z = arg_f64(&args, 2, "st_makepointzm")?;
                 let m = arg_f64(&args, 3, "st_makepointzm")?;
-                Ok(SqlValue::Blob(pg_ctor::st_make_point_zm(x, y, z, m).as_wkb()))
+                Ok(SqlValue::Blob(
+                    pg_ctor::st_make_point_zm(x, y, z, m).as_wkb(),
+                ))
             }
             FID_ST_MAKE_ENVELOPE => {
                 let xmin = arg_f64(&args, 0, "st_makeenvelope")?;
@@ -1748,12 +1784,22 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let g = from_wkb(arg_blob(&args, 0, "st_geometrytype")?, "st_geometrytype")?;
                 let name = match g.geometry_type() {
                     bindings::postgis::wasm::postgis_types::GeometryType::Point => "POINT",
-                    bindings::postgis::wasm::postgis_types::GeometryType::LineString => "LINESTRING",
+                    bindings::postgis::wasm::postgis_types::GeometryType::LineString => {
+                        "LINESTRING"
+                    }
                     bindings::postgis::wasm::postgis_types::GeometryType::Polygon => "POLYGON",
-                    bindings::postgis::wasm::postgis_types::GeometryType::MultiPoint => "MULTIPOINT",
-                    bindings::postgis::wasm::postgis_types::GeometryType::MultiLineString => "MULTILINESTRING",
-                    bindings::postgis::wasm::postgis_types::GeometryType::MultiPolygon => "MULTIPOLYGON",
-                    bindings::postgis::wasm::postgis_types::GeometryType::GeometryCollection => "GEOMETRYCOLLECTION",
+                    bindings::postgis::wasm::postgis_types::GeometryType::MultiPoint => {
+                        "MULTIPOINT"
+                    }
+                    bindings::postgis::wasm::postgis_types::GeometryType::MultiLineString => {
+                        "MULTILINESTRING"
+                    }
+                    bindings::postgis::wasm::postgis_types::GeometryType::MultiPolygon => {
+                        "MULTIPOLYGON"
+                    }
+                    bindings::postgis::wasm::postgis_types::GeometryType::GeometryCollection => {
+                        "GEOMETRYCOLLECTION"
+                    }
                 };
                 Ok(SqlValue::Text(format!("ST_{name}").to_string()))
             }
@@ -1767,7 +1813,9 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_ST_IS_RING => g_to_bool!(args, "st_isring", pg_pred::st_is_ring),
             FID_ST_NUM_POINTS => g_to_int!(args, "st_numpoints", pg_acc::st_num_points),
             FID_ST_NUM_GEOMETRIES => g_to_int!(args, "st_numgeometries", pg_acc::st_num_geometries),
-            FID_ST_NUM_INTERIOR_RINGS => g_to_int_result!(args, "st_numinteriorrings", pg_acc::st_num_interior_rings),
+            FID_ST_NUM_INTERIOR_RINGS => {
+                g_to_int_result!(args, "st_numinteriorrings", pg_acc::st_num_interior_rings)
+            }
             FID_ST_NPOINTS => g_to_int!(args, "st_npoints", pg_acc::st_npoints),
             FID_ST_EXTERIOR_RING => g_to_geom!(args, "st_exteriorring", pg_acc::st_exterior_ring),
             FID_ST_INTERIOR_RING_N => {
@@ -1807,13 +1855,23 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_ST_PERIMETER => g_to_f64!(args, "st_perimeter", pg_meas::st_perimeter),
             FID_ST_LENGTH_TWOD => g_to_f64!(args, "st_length2d", pg_meas::st_length_twod),
             FID_ST_LENGTH_THREED => g_to_f64!(args, "st_length3d", pg_meas::st_length_threed),
-            FID_ST_PERIMETER_THREED => g_to_f64!(args, "st_perimeter3d", pg_meas::st_perimeter_threed),
+            FID_ST_PERIMETER_THREED => {
+                g_to_f64!(args, "st_perimeter3d", pg_meas::st_perimeter_threed)
+            }
             FID_ST_DISTANCE => gg_to_f64!(args, "st_distance", pg_meas::st_distance),
-            FID_ST_DISTANCE_THREED => gg_to_f64!(args, "st_distance3d", pg_meas::st_distance_threed),
+            FID_ST_DISTANCE_THREED => {
+                gg_to_f64!(args, "st_distance3d", pg_meas::st_distance_threed)
+            }
             FID_ST_MAX_DISTANCE => gg_to_f64!(args, "st_maxdistance", pg_meas::st_max_distance),
-            FID_ST_MAX_DISTANCE_THREED => gg_to_f64!(args, "st_maxdistance3d", pg_meas::st_max_distance_threed),
-            FID_ST_HAUSDORFF_DISTANCE => gg_to_f64!(args, "st_hausdorffdistance", pg_meas::st_hausdorff_distance),
-            FID_ST_FRECHET_DISTANCE => gg_to_f64!(args, "st_frechetdistance", pg_meas::st_frechet_distance),
+            FID_ST_MAX_DISTANCE_THREED => {
+                gg_to_f64!(args, "st_maxdistance3d", pg_meas::st_max_distance_threed)
+            }
+            FID_ST_HAUSDORFF_DISTANCE => {
+                gg_to_f64!(args, "st_hausdorffdistance", pg_meas::st_hausdorff_distance)
+            }
+            FID_ST_FRECHET_DISTANCE => {
+                gg_to_f64!(args, "st_frechetdistance", pg_meas::st_frechet_distance)
+            }
 
             // ── Predicates ──
             FID_ST_INTERSECTS => gg_to_bool!(args, "st_intersects", pg_pred::st_intersects),
@@ -1826,8 +1884,12 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_ST_CROSSES => gg_to_bool!(args, "st_crosses", pg_pred::st_crosses),
             FID_ST_COVERED_BY => gg_to_bool!(args, "st_coveredby", pg_pred::st_covered_by),
             FID_ST_COVERS => gg_to_bool!(args, "st_covers", pg_pred::st_covers),
-            FID_ST_CONTAINS_PROPERLY => gg_to_bool!(args, "st_containsproperly", pg_pred::st_contains_properly),
-            FID_ST_3D_INTERSECTS => gg_to_bool!(args, "st_3dintersects", pg_pred::st_intersects_threed),
+            FID_ST_CONTAINS_PROPERLY => {
+                gg_to_bool!(args, "st_containsproperly", pg_pred::st_contains_properly)
+            }
+            FID_ST_3D_INTERSECTS => {
+                gg_to_bool!(args, "st_3dintersects", pg_pred::st_intersects_threed)
+            }
             // st-3d-disjoint isn't exported by postgis-wasm; alias to st-disjoint.
             FID_ST_3D_DISJOINT => gg_to_bool!(args, "st_3ddisjoint", pg_pred::st_disjoint),
 
@@ -1836,25 +1898,45 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_ST_INTERSECTION => gg_to_geom!(args, "st_intersection", pg_proc::st_intersection),
             FID_ST_UNION => gg_to_geom!(args, "st_union", pg_proc::st_union),
             FID_ST_DIFFERENCE => gg_to_geom!(args, "st_difference", pg_proc::st_difference),
-            FID_ST_SYM_DIFFERENCE => gg_to_geom!(args, "st_symdifference", pg_proc::st_sym_difference),
+            FID_ST_SYM_DIFFERENCE => {
+                gg_to_geom!(args, "st_symdifference", pg_proc::st_sym_difference)
+            }
             FID_ST_UNARY_UNION => g_to_geom!(args, "st_unaryunion", pg_proc::st_unary_union),
             FID_ST_SIMPLIFY => gd_to_geom!(args, "st_simplify", pg_proc::st_simplify),
-            FID_ST_SIMPLIFY_PT => gd_to_geom!(args, "st_simplifypreservetopology", pg_proc::st_simplify_preserve_topology),
+            FID_ST_SIMPLIFY_PT => gd_to_geom!(
+                args,
+                "st_simplifypreservetopology",
+                pg_proc::st_simplify_preserve_topology
+            ),
             FID_ST_SIMPLIFY_VW => gd_to_geom!(args, "st_simplifyvw", pg_proc::st_simplify_vw),
             FID_ST_CONVEX_HULL => g_to_geom!(args, "st_convexhull", pg_proc::st_convex_hull),
             FID_ST_CONCAVE_HULL => gd_to_geom!(args, "st_concavehull", pg_proc::st_concave_hull),
             FID_ST_CENTROID => g_to_geom!(args, "st_centroid", pg_proc::st_centroid),
-            FID_ST_POINT_ON_SURFACE => g_to_geom!(args, "st_pointonsurface", pg_proc::st_point_on_surface),
-            FID_ST_ORIENTED_ENVELOPE => g_to_geom!(args, "st_orientedenvelope", pg_proc::st_oriented_envelope),
-            FID_ST_MIN_BOUNDING_CIRCLE => g_to_geom!(args, "st_minimumboundingcircle", pg_proc::st_minimum_bounding_circle),
+            FID_ST_POINT_ON_SURFACE => {
+                g_to_geom!(args, "st_pointonsurface", pg_proc::st_point_on_surface)
+            }
+            FID_ST_ORIENTED_ENVELOPE => {
+                g_to_geom!(args, "st_orientedenvelope", pg_proc::st_oriented_envelope)
+            }
+            FID_ST_MIN_BOUNDING_CIRCLE => g_to_geom!(
+                args,
+                "st_minimumboundingcircle",
+                pg_proc::st_minimum_bounding_circle
+            ),
             FID_ST_LINE_MERGE => g_to_geom!(args, "st_linemerge", pg_proc::st_line_merge),
             FID_ST_MAKE_VALID => g_to_geom!(args, "st_makevalid", pg_proc::st_make_valid),
             FID_ST_REVERSE => g_to_geom!(args, "st_reverse", pg_proc::st_reverse),
-            FID_ST_FLIP_COORDINATES => g_to_geom!(args, "st_flipcoordinates", pg_xform::st_flip_coordinates),
+            FID_ST_FLIP_COORDINATES => {
+                g_to_geom!(args, "st_flipcoordinates", pg_xform::st_flip_coordinates)
+            }
             FID_ST_FORCE_2D => g_to_geom_inf!(args, "st_force2d", pg_xform::st_force_twod),
             FID_ST_FORCE_3D => g_to_geom_inf!(args, "st_force3d", pg_xform::st_force_threed),
             FID_ST_MULTI => g_to_geom!(args, "st_multi", pg_acc::st_multi),
-            FID_ST_COLLECTION_HOMOGENIZE => g_to_geom!(args, "st_collectionhomogenize", pg_acc::st_collection_homogenize),
+            FID_ST_COLLECTION_HOMOGENIZE => g_to_geom!(
+                args,
+                "st_collectionhomogenize",
+                pg_acc::st_collection_homogenize
+            ),
 
             // ── Output ──
             FID_ST_ASTEXT => g_to_string!(args, "st_astext", pg_out::st_as_text),
@@ -1883,57 +1965,69 @@ impl ScalarFunctionGuest for PostgisBridge {
             // ── v2 batch (accessors) ──
             FID_ST_Z => {
                 let g = from_wkb(arg_blob(&args, 0, "st_z")?, "st_z")?;
-                Ok(match pg_acc::st_z(&g)
-                    .map_err(|e| format!("st_z: {}", postgis_err_string(e)))?
-                {
-                    Some(z) => SqlValue::Real(z),
-                    None => SqlValue::Null,
-                })
+                Ok(
+                    match pg_acc::st_z(&g)
+                        .map_err(|e| format!("st_z: {}", postgis_err_string(e)))?
+                    {
+                        Some(z) => SqlValue::Real(z),
+                        None => SqlValue::Null,
+                    },
+                )
             }
             FID_ST_M => {
                 let g = from_wkb(arg_blob(&args, 0, "st_m")?, "st_m")?;
-                Ok(match pg_acc::st_m(&g)
-                    .map_err(|e| format!("st_m: {}", postgis_err_string(e)))?
-                {
-                    Some(z) => SqlValue::Real(z),
-                    None => SqlValue::Null,
-                })
+                Ok(
+                    match pg_acc::st_m(&g)
+                        .map_err(|e| format!("st_m: {}", postgis_err_string(e)))?
+                    {
+                        Some(z) => SqlValue::Real(z),
+                        None => SqlValue::Null,
+                    },
+                )
             }
             FID_ST_ZMIN => {
                 let g = from_wkb(arg_blob(&args, 0, "st_zmin")?, "st_zmin")?;
-                Ok(match pg_acc::st_zmin(&g)
-                    .map_err(|e| format!("st_zmin: {}", postgis_err_string(e)))?
-                {
-                    Some(z) => SqlValue::Real(z),
-                    None => SqlValue::Null,
-                })
+                Ok(
+                    match pg_acc::st_zmin(&g)
+                        .map_err(|e| format!("st_zmin: {}", postgis_err_string(e)))?
+                    {
+                        Some(z) => SqlValue::Real(z),
+                        None => SqlValue::Null,
+                    },
+                )
             }
             FID_ST_ZMAX => {
                 let g = from_wkb(arg_blob(&args, 0, "st_zmax")?, "st_zmax")?;
-                Ok(match pg_acc::st_zmax(&g)
-                    .map_err(|e| format!("st_zmax: {}", postgis_err_string(e)))?
-                {
-                    Some(z) => SqlValue::Real(z),
-                    None => SqlValue::Null,
-                })
+                Ok(
+                    match pg_acc::st_zmax(&g)
+                        .map_err(|e| format!("st_zmax: {}", postgis_err_string(e)))?
+                    {
+                        Some(z) => SqlValue::Real(z),
+                        None => SqlValue::Null,
+                    },
+                )
             }
             FID_ST_MMIN => {
                 let g = from_wkb(arg_blob(&args, 0, "st_mmin")?, "st_mmin")?;
-                Ok(match pg_acc::st_mmin(&g)
-                    .map_err(|e| format!("st_mmin: {}", postgis_err_string(e)))?
-                {
-                    Some(z) => SqlValue::Real(z),
-                    None => SqlValue::Null,
-                })
+                Ok(
+                    match pg_acc::st_mmin(&g)
+                        .map_err(|e| format!("st_mmin: {}", postgis_err_string(e)))?
+                    {
+                        Some(z) => SqlValue::Real(z),
+                        None => SqlValue::Null,
+                    },
+                )
             }
             FID_ST_MMAX => {
                 let g = from_wkb(arg_blob(&args, 0, "st_mmax")?, "st_mmax")?;
-                Ok(match pg_acc::st_mmax(&g)
-                    .map_err(|e| format!("st_mmax: {}", postgis_err_string(e)))?
-                {
-                    Some(z) => SqlValue::Real(z),
-                    None => SqlValue::Null,
-                })
+                Ok(
+                    match pg_acc::st_mmax(&g)
+                        .map_err(|e| format!("st_mmax: {}", postgis_err_string(e)))?
+                    {
+                        Some(z) => SqlValue::Real(z),
+                        None => SqlValue::Null,
+                    },
+                )
             }
             FID_ST_NRINGS => g_to_int!(args, "st_nrings", pg_acc::st_nrings),
             FID_ST_DIMENSION => g_to_s32!(args, "st_dimension", pg_acc::st_dimension),
@@ -1941,16 +2035,23 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_ST_NDIMS => g_to_u32!(args, "st_ndims", pg_acc::st_ndims),
             FID_ST_ZMFLAG => g_to_u32!(args, "st_zmflag", pg_acc::st_zmflag),
             FID_ST_MEM_SIZE => g_to_u64!(args, "st_memsize", pg_acc::st_mem_size),
-            FID_ST_IS_COLLECTION => g_to_bool_inf!(args, "st_iscollection", pg_acc::st_is_collection),
+            FID_ST_IS_COLLECTION => {
+                g_to_bool_inf!(args, "st_iscollection", pg_acc::st_is_collection)
+            }
             FID_ST_HAS_ARC_ACC => g_to_bool_inf!(args, "st_hasarc", pg_acc::st_has_arc),
             FID_ST_POINTS => {
                 let g = from_wkb(arg_blob(&args, 0, "st_points")?, "st_points")?;
                 Ok(SqlValue::Blob(pg_acc::st_points(&g).as_wkb()))
             }
-            FID_ST_BOUNDING_DIAGONAL => g_to_geom!(args, "st_boundingdiagonal", pg_acc::st_bounding_diagonal),
+            FID_ST_BOUNDING_DIAGONAL => {
+                g_to_geom!(args, "st_boundingdiagonal", pg_acc::st_bounding_diagonal)
+            }
             FID_ST_EXPAND => gd_to_geom!(args, "st_expand", pg_acc::st_expand),
             FID_ST_COLLECTION_EXTRACT => {
-                let g = from_wkb(arg_blob(&args, 0, "st_collectionextract")?, "st_collectionextract")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_collectionextract")?,
+                    "st_collectionextract",
+                )?;
                 let n = arg_i64(&args, 1, "st_collectionextract")? as u32;
                 let r = pg_acc::st_collection_extract(&g, n)
                     .map_err(|e| format!("st_collectionextract: {}", postgis_err_string(e)))?;
@@ -1959,11 +2060,17 @@ impl ScalarFunctionGuest for PostgisBridge {
 
             // ── v2 batch (measurements) ──
             FID_ST_CLOSEST_POINT => gg_to_geom!(args, "st_closestpoint", pg_meas::st_closest_point),
-            FID_ST_CLOSEST_POINT_3D => gg_to_geom!(args, "st_3dclosestpoint", pg_meas::st_closest_point_threed),
+            FID_ST_CLOSEST_POINT_3D => {
+                gg_to_geom!(args, "st_3dclosestpoint", pg_meas::st_closest_point_threed)
+            }
             FID_ST_SHORTEST_LINE => gg_to_geom!(args, "st_shortestline", pg_meas::st_shortest_line),
-            FID_ST_SHORTEST_LINE_3D => gg_to_geom!(args, "st_3dshortestline", pg_meas::st_shortest_line_threed),
+            FID_ST_SHORTEST_LINE_3D => {
+                gg_to_geom!(args, "st_3dshortestline", pg_meas::st_shortest_line_threed)
+            }
             FID_ST_LONGEST_LINE => gg_to_geom!(args, "st_longestline", pg_meas::st_longest_line),
-            FID_ST_LONGEST_LINE_3D => gg_to_geom!(args, "st_3dlongestline", pg_meas::st_longest_line_threed),
+            FID_ST_LONGEST_LINE_3D => {
+                gg_to_geom!(args, "st_3dlongestline", pg_meas::st_longest_line_threed)
+            }
             FID_ST_AZIMUTH => gg_to_f64!(args, "st_azimuth", pg_meas::st_azimuth),
             FID_ST_ANGLE => {
                 let a = from_wkb(arg_blob(&args, 0, "st_angle")?, "st_angle")?;
@@ -1973,16 +2080,28 @@ impl ScalarFunctionGuest for PostgisBridge {
                     .map_err(|e| format!("st_angle: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Real(r))
             }
-            FID_ST_MIN_CLEARANCE => g_to_f64!(args, "st_minimumclearance", pg_meas::st_minimum_clearance),
-            FID_ST_MIN_CLEARANCE_LINE => g_to_geom!(args, "st_minimumclearanceline", pg_meas::st_minimum_clearance_line),
+            FID_ST_MIN_CLEARANCE => {
+                g_to_f64!(args, "st_minimumclearance", pg_meas::st_minimum_clearance)
+            }
+            FID_ST_MIN_CLEARANCE_LINE => g_to_geom!(
+                args,
+                "st_minimumclearanceline",
+                pg_meas::st_minimum_clearance_line
+            ),
             FID_ST_DISTANCE_CPA => gg_to_f64!(args, "st_distancecpa", pg_meas::st_distance_cpa),
-            FID_ST_DISTANCE_SPHEROID => gg_to_f64!(args, "st_distancespheroid", pg_meas::st_distance_spheroid),
-            FID_ST_LENGTH_SPHEROID => g_to_f64!(args, "st_lengthspheroid", pg_meas::st_length_spheroid),
+            FID_ST_DISTANCE_SPHEROID => {
+                gg_to_f64!(args, "st_distancespheroid", pg_meas::st_distance_spheroid)
+            }
+            FID_ST_LENGTH_SPHEROID => {
+                g_to_f64!(args, "st_lengthspheroid", pg_meas::st_length_spheroid)
+            }
 
             // ── v2 batch (predicates) ──
             FID_ST_DWITHIN => ggd_to_bool!(args, "st_dwithin", pg_pred::st_dwithin),
             FID_ST_DWITHIN_3D => ggd_to_bool!(args, "st_3ddwithin", pg_pred::st_dwithin_threed),
-            FID_ST_DFULLY_WITHIN => ggd_to_bool!(args, "st_dfullywithin", pg_pred::st_dfully_within),
+            FID_ST_DFULLY_WITHIN => {
+                ggd_to_bool!(args, "st_dfullywithin", pg_pred::st_dfully_within)
+            }
             FID_ST_EQUALS_EXACT => ggd_to_bool!(args, "st_equalsexact", pg_pred::st_equals_exact),
             FID_ST_RELATE => gg_to_string_result!(args, "st_relate", pg_pred::st_relate),
             FID_ST_RELATE_MATCH => {
@@ -1994,17 +2113,34 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Integer(r as i64))
             }
             FID_ST_ORDERING_EQUALS => {
-                let a = from_wkb(arg_blob(&args, 0, "st_orderingequals")?, "st_orderingequals")?;
-                let b = from_wkb(arg_blob(&args, 1, "st_orderingequals")?, "st_orderingequals")?;
+                let a = from_wkb(
+                    arg_blob(&args, 0, "st_orderingequals")?,
+                    "st_orderingequals",
+                )?;
+                let b = from_wkb(
+                    arg_blob(&args, 1, "st_orderingequals")?,
+                    "st_orderingequals",
+                )?;
                 Ok(SqlValue::Integer(pg_pred::st_ordering_equals(&a, &b) as i64))
             }
             FID_ST_HAS_Z => g_to_bool_inf!(args, "st_hasz", pg_pred::st_has_z),
             FID_ST_HAS_M => g_to_bool_inf!(args, "st_hasm", pg_pred::st_has_m),
-            FID_ST_IS_POLYGON_CW => g_to_bool_result!(args, "st_ispolygoncw", pg_pred::st_is_polygon_cw),
-            FID_ST_IS_POLYGON_CCW => g_to_bool_result!(args, "st_ispolygonccw", pg_pred::st_is_polygon_ccw),
-            FID_ST_IS_VALID_TRAJECTORY => g_to_bool_result!(args, "st_isvalidtrajectory", pg_pred::st_is_valid_trajectory),
+            FID_ST_IS_POLYGON_CW => {
+                g_to_bool_result!(args, "st_ispolygoncw", pg_pred::st_is_polygon_cw)
+            }
+            FID_ST_IS_POLYGON_CCW => {
+                g_to_bool_result!(args, "st_ispolygonccw", pg_pred::st_is_polygon_ccw)
+            }
+            FID_ST_IS_VALID_TRAJECTORY => g_to_bool_result!(
+                args,
+                "st_isvalidtrajectory",
+                pg_pred::st_is_valid_trajectory
+            ),
             FID_ST_POINT_INSIDE_CIRCLE => {
-                let p = from_wkb(arg_blob(&args, 0, "st_pointinsidecircle")?, "st_pointinsidecircle")?;
+                let p = from_wkb(
+                    arg_blob(&args, 0, "st_pointinsidecircle")?,
+                    "st_pointinsidecircle",
+                )?;
                 let cx = arg_f64(&args, 1, "st_pointinsidecircle")?;
                 let cy = arg_f64(&args, 2, "st_pointinsidecircle")?;
                 let r = arg_f64(&args, 3, "st_pointinsidecircle")?;
@@ -2017,7 +2153,10 @@ impl ScalarFunctionGuest for PostgisBridge {
 
             // ── v2 batch (processing) ──
             FID_ST_CHAIKIN_SMOOTHING => {
-                let g = from_wkb(arg_blob(&args, 0, "st_chaikinsmoothing")?, "st_chaikinsmoothing")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_chaikinsmoothing")?,
+                    "st_chaikinsmoothing",
+                )?;
                 let n = arg_i64(&args, 1, "st_chaikinsmoothing")? as u32;
                 let r = pg_proc::st_chaikin_smoothing(&g, n)
                     .map_err(|e| format!("st_chaikinsmoothing: {}", postgis_err_string(e)))?;
@@ -2026,16 +2165,24 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_ST_FORCE_RHR => g_to_geom!(args, "st_forcerhr", pg_proc::st_force_rhr),
             FID_ST_NORMALIZE => g_to_geom!(args, "st_normalize", pg_proc::st_normalize),
             FID_ST_REMOVE_REPEATED_POINTS => {
-                let g = from_wkb(arg_blob(&args, 0, "st_removerepeatedpoints")?, "st_removerepeatedpoints")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_removerepeatedpoints")?,
+                    "st_removerepeatedpoints",
+                )?;
                 let r = pg_proc::st_remove_repeated_points(&g, None)
                     .map_err(|e| format!("st_removerepeatedpoints: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_SNAP_TO_GRID => gd_to_geom!(args, "st_snaptogrid", pg_proc::st_snap_to_grid),
             FID_ST_SNAP => ggd_to_geom!(args, "st_snap", pg_proc::st_snap),
-            FID_ST_REDUCE_PRECISION => gd_to_geom!(args, "st_reduceprecision", pg_proc::st_reduce_precision),
+            FID_ST_REDUCE_PRECISION => {
+                gd_to_geom!(args, "st_reduceprecision", pg_proc::st_reduce_precision)
+            }
             FID_ST_LINE_MERGE_DIRECTED => {
-                let g = from_wkb(arg_blob(&args, 0, "st_linemergedirected")?, "st_linemergedirected")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_linemergedirected")?,
+                    "st_linemergedirected",
+                )?;
                 let d = arg_i64(&args, 1, "st_linemergedirected")? != 0;
                 let r = pg_proc::st_line_merge_directed(&g, d)
                     .map_err(|e| format!("st_linemergedirected: {}", postgis_err_string(e)))?;
@@ -2043,20 +2190,35 @@ impl ScalarFunctionGuest for PostgisBridge {
             }
             FID_ST_OFFSET_CURVE => gd_to_geom!(args, "st_offsetcurve", pg_proc::st_offset_curve),
             FID_ST_SHARED_PATHS => gg_to_geom!(args, "st_sharedpaths", pg_proc::st_shared_paths),
-            FID_ST_VORONOI_POLYGONS => gd_to_geom!(args, "st_voronoipolygons", pg_proc::st_voronoi_polygons),
+            FID_ST_VORONOI_POLYGONS => {
+                gd_to_geom!(args, "st_voronoipolygons", pg_proc::st_voronoi_polygons)
+            }
             FID_ST_VORONOI_LINES => gd_to_geom!(args, "st_voronoilines", pg_proc::st_voronoi_lines),
-            FID_ST_DELAUNAY_TRIANGLES => gd_to_geom!(args, "st_delaunaytriangles", pg_proc::st_delaunay_triangles),
-            FID_ST_CONSTRAINED_DELAUNAY => g_to_geom!(args, "st_constraineddelaunaytriangles", pg_proc::st_constrained_delaunay_triangles),
+            FID_ST_DELAUNAY_TRIANGLES => {
+                gd_to_geom!(args, "st_delaunaytriangles", pg_proc::st_delaunay_triangles)
+            }
+            FID_ST_CONSTRAINED_DELAUNAY => g_to_geom!(
+                args,
+                "st_constraineddelaunaytriangles",
+                pg_proc::st_constrained_delaunay_triangles
+            ),
             FID_ST_GENERATE_POINTS => {
-                let g = from_wkb(arg_blob(&args, 0, "st_generatepoints")?, "st_generatepoints")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_generatepoints")?,
+                    "st_generatepoints",
+                )?;
                 let n = arg_i64(&args, 1, "st_generatepoints")? as u32;
                 let r = pg_proc::st_generate_points(&g, n)
                     .map_err(|e| format!("st_generatepoints: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_SEGMENTIZE => gd_to_geom!(args, "st_segmentize", pg_proc::st_segmentize),
-            FID_ST_FORCE_POLYGON_CW => g_to_geom!(args, "st_forcepolygoncw", pg_proc::st_force_polygon_cw),
-            FID_ST_FORCE_POLYGON_CCW => g_to_geom!(args, "st_forcepolygonccw", pg_proc::st_force_polygon_ccw),
+            FID_ST_FORCE_POLYGON_CW => {
+                g_to_geom!(args, "st_forcepolygoncw", pg_proc::st_force_polygon_cw)
+            }
+            FID_ST_FORCE_POLYGON_CCW => {
+                g_to_geom!(args, "st_forcepolygonccw", pg_proc::st_force_polygon_ccw)
+            }
             FID_ST_SPLIT => gg_to_geom!(args, "st_split", pg_proc::st_split),
             FID_ST_NODE => g_to_geom!(args, "st_node", pg_proc::st_node),
             FID_ST_POLYGONIZE => g_to_geom!(args, "st_polygonize", pg_proc::st_polygonize),
@@ -2071,14 +2233,28 @@ impl ScalarFunctionGuest for PostgisBridge {
                     .map_err(|e| format!("st_clipbybox2d: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
-            FID_ST_GEOMETRIC_MEDIAN => g_to_geom!(args, "st_geometricmedian", pg_proc::st_geometric_median),
-            FID_ST_MIN_BOUNDING_RADIUS => g_to_f64!(args, "st_minimumboundingradius", pg_proc::st_minimum_bounding_radius),
+            FID_ST_GEOMETRIC_MEDIAN => {
+                g_to_geom!(args, "st_geometricmedian", pg_proc::st_geometric_median)
+            }
+            FID_ST_MIN_BOUNDING_RADIUS => g_to_f64!(
+                args,
+                "st_minimumboundingradius",
+                pg_proc::st_minimum_bounding_radius
+            ),
             FID_ST_MEM_UNION => g_to_geom!(args, "st_memunion", pg_proc::st_mem_union),
-            FID_ST_MAX_INSCRIBED_CIRCLE => g_to_geom!(args, "st_maximuminscribedcircle", pg_proc::st_maximum_inscribed_circle),
+            FID_ST_MAX_INSCRIBED_CIRCLE => g_to_geom!(
+                args,
+                "st_maximuminscribedcircle",
+                pg_proc::st_maximum_inscribed_circle
+            ),
             FID_ST_NUM_CURVES => g_to_u32!(args, "st_numcurves", pg_proc::st_num_curves),
             FID_ST_LINE_TO_CURVE => g_to_geom!(args, "st_linetocurve", pg_proc::st_line_to_curve),
             FID_ST_FORCE_CURVE => g_to_geom!(args, "st_forcecurve", pg_proc::st_force_curve),
-            FID_ST_TRIANGULATE_POLYGON => g_to_geom!(args, "st_triangulatepolygon", pg_proc::st_triangulate_polygon),
+            FID_ST_TRIANGULATE_POLYGON => g_to_geom!(
+                args,
+                "st_triangulatepolygon",
+                pg_proc::st_triangulate_polygon
+            ),
 
             // ── v2 batch (output) ──
             FID_ST_AS_TWKB => {
@@ -2088,7 +2264,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(r))
             }
             FID_ST_AS_ENCODED_POLYLINE => {
-                let g = from_wkb(arg_blob(&args, 0, "st_asencodedpolyline")?, "st_asencodedpolyline")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_asencodedpolyline")?,
+                    "st_asencodedpolyline",
+                )?;
                 let r = pg_out::st_as_encoded_polyline(&g, None)
                     .map_err(|e| format!("st_asencodedpolyline: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Text(r))
@@ -2139,8 +2318,12 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_ST_FORCE_3DZ => g_to_geom_inf!(args, "st_force3dz", pg_xform::st_force_threedz),
             FID_ST_FORCE_3DM => g_to_geom_inf!(args, "st_force3dm", pg_xform::st_force_threedm),
             FID_ST_FORCE_4D => g_to_geom_inf!(args, "st_force4d", pg_xform::st_force_fourd),
-            FID_ST_FORCE_COLLECTION => g_to_geom_inf!(args, "st_forcecollection", pg_xform::st_force_collection),
-            FID_ST_SHIFT_LONGITUDE => g_to_geom!(args, "st_shiftlongitude", pg_xform::st_shift_longitude),
+            FID_ST_FORCE_COLLECTION => {
+                g_to_geom_inf!(args, "st_forcecollection", pg_xform::st_force_collection)
+            }
+            FID_ST_SHIFT_LONGITUDE => {
+                g_to_geom!(args, "st_shiftlongitude", pg_xform::st_shift_longitude)
+            }
             FID_ST_WRAP_X => {
                 let g = from_wkb(arg_blob(&args, 0, "st_wrapx")?, "st_wrapx")?;
                 let w = arg_f64(&args, 1, "st_wrapx")?;
@@ -2150,7 +2333,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_QUANTIZE_COORDS => {
-                let g = from_wkb(arg_blob(&args, 0, "st_quantizecoordinates")?, "st_quantizecoordinates")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_quantizecoordinates")?,
+                    "st_quantizecoordinates",
+                )?;
                 let px = arg_i64(&args, 1, "st_quantizecoordinates")? as u32;
                 let py = arg_i64(&args, 2, "st_quantizecoordinates")? as u32;
                 let r = pg_xform::st_quantize_coordinates(&g, px, py)
@@ -2166,31 +2352,47 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_TRANSFORM_PIPELINE => {
-                let g = from_wkb(arg_blob(&args, 0, "st_transformpipeline")?, "st_transformpipeline")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_transformpipeline")?,
+                    "st_transformpipeline",
+                )?;
                 let p = arg_text(&args, 1, "st_transformpipeline")?;
                 let r = pg_xform::st_transform_pipeline(&g, p)
                     .map_err(|e| format!("st_transformpipeline: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_INV_TRANSFORM_PIPELINE => {
-                let g = from_wkb(arg_blob(&args, 0, "st_inversetransformpipeline")?, "st_inversetransformpipeline")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_inversetransformpipeline")?,
+                    "st_inversetransformpipeline",
+                )?;
                 let p = arg_text(&args, 1, "st_inversetransformpipeline")?;
-                let r = pg_xform::st_inverse_transform_pipeline(&g, p)
-                    .map_err(|e| format!("st_inversetransformpipeline: {}", postgis_err_string(e)))?;
+                let r = pg_xform::st_inverse_transform_pipeline(&g, p).map_err(|e| {
+                    format!("st_inversetransformpipeline: {}", postgis_err_string(e))
+                })?;
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
 
             // ── v2 batch (linear-ref) ──
-            FID_ST_LINE_INTERPOLATE_POINT => gd_to_geom!(args, "st_lineinterpolatepoint", pg_lin::st_line_interpolate_point),
+            FID_ST_LINE_INTERPOLATE_POINT => gd_to_geom!(
+                args,
+                "st_lineinterpolatepoint",
+                pg_lin::st_line_interpolate_point
+            ),
             FID_ST_LINE_INTERPOLATE_POINTS => {
-                let g = from_wkb(arg_blob(&args, 0, "st_lineinterpolatepoints")?, "st_lineinterpolatepoints")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_lineinterpolatepoints")?,
+                    "st_lineinterpolatepoints",
+                )?;
                 let f = arg_f64(&args, 1, "st_lineinterpolatepoints")?;
                 let rep = arg_i64(&args, 2, "st_lineinterpolatepoints")? != 0;
                 let r = pg_lin::st_line_interpolate_points(&g, f, rep)
                     .map_err(|e| format!("st_lineinterpolatepoints: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
-            FID_ST_LINE_LOCATE_POINT => gg_to_f64!(args, "st_linelocatepoint", pg_lin::st_line_locate_point),
+            FID_ST_LINE_LOCATE_POINT => {
+                gg_to_f64!(args, "st_linelocatepoint", pg_lin::st_line_locate_point)
+            }
             FID_ST_LINE_SUBSTRING => {
                 let g = from_wkb(arg_blob(&args, 0, "st_linesubstring")?, "st_linesubstring")?;
                 let s = arg_f64(&args, 1, "st_linesubstring")?;
@@ -2247,19 +2449,33 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_LINE_CROSSING_DIRECTION => {
-                let a = from_wkb(arg_blob(&args, 0, "st_linecrossingdirection")?, "st_linecrossingdirection")?;
-                let b = from_wkb(arg_blob(&args, 1, "st_linecrossingdirection")?, "st_linecrossingdirection")?;
+                let a = from_wkb(
+                    arg_blob(&args, 0, "st_linecrossingdirection")?,
+                    "st_linecrossingdirection",
+                )?;
+                let b = from_wkb(
+                    arg_blob(&args, 1, "st_linecrossingdirection")?,
+                    "st_linecrossingdirection",
+                )?;
                 let r = pg_lin::st_line_crossing_direction(&a, &b)
                     .map_err(|e| format!("st_linecrossingdirection: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Integer(r as i64))
             }
-            FID_ST_LINE_INTERPOLATE_POINT_3D => gd_to_geom!(args, "st_3dlineinterpolatepoint", pg_lin::st_line_interpolate_point_threed),
+            FID_ST_LINE_INTERPOLATE_POINT_3D => gd_to_geom!(
+                args,
+                "st_3dlineinterpolatepoint",
+                pg_lin::st_line_interpolate_point_threed
+            ),
             FID_ST_LOCATE_BETWEEN_ELEVATIONS => {
-                let g = from_wkb(arg_blob(&args, 0, "st_locatebetweenelevations")?, "st_locatebetweenelevations")?;
+                let g = from_wkb(
+                    arg_blob(&args, 0, "st_locatebetweenelevations")?,
+                    "st_locatebetweenelevations",
+                )?;
                 let zmin = arg_f64(&args, 1, "st_locatebetweenelevations")?;
                 let zmax = arg_f64(&args, 2, "st_locatebetweenelevations")?;
-                let r = pg_lin::st_locate_between_elevations(&g, zmin, zmax)
-                    .map_err(|er| format!("st_locatebetweenelevations: {}", postgis_err_string(er)))?;
+                let r = pg_lin::st_locate_between_elevations(&g, zmin, zmax).map_err(|er| {
+                    format!("st_locatebetweenelevations: {}", postgis_err_string(er))
+                })?;
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
 
@@ -2270,14 +2486,30 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_ST_BOUNDARY_3D => g_to_geom!(args, "st_3dboundary", pg_threed::st_boundary_threed),
 
             // ── v2 batch (more constructors) ──
-            FID_ST_LINE_FROM_TEXT => text_to_geom!(args, "st_linefromtext", pg_ctor::st_line_from_text),
-            FID_ST_POLYGON_FROM_TEXT => text_to_geom!(args, "st_polygonfromtext", pg_ctor::st_polygon_from_text),
-            FID_ST_MPOINT_FROM_TEXT => text_to_geom!(args, "st_mpointfromtext", pg_ctor::st_mpoint_from_text),
-            FID_ST_MLINE_FROM_TEXT => text_to_geom!(args, "st_mlinefromtext", pg_ctor::st_mline_from_text),
-            FID_ST_MPOLY_FROM_TEXT => text_to_geom!(args, "st_mpolyfromtext", pg_ctor::st_mpoly_from_text),
-            FID_ST_GEOMCOLL_FROM_TEXT => text_to_geom!(args, "st_geomcollfromtext", pg_ctor::st_geomcoll_from_text),
-            FID_ST_GEOM_FROM_EWKB => blob_to_geom!(args, "st_geomfromewkb", pg_ctor::st_geom_from_ewkb),
-            FID_ST_GEOM_FROM_HEXEWKB => text_to_geom!(args, "st_geomfromhexewkb", pg_ctor::st_geom_from_hexewkb),
+            FID_ST_LINE_FROM_TEXT => {
+                text_to_geom!(args, "st_linefromtext", pg_ctor::st_line_from_text)
+            }
+            FID_ST_POLYGON_FROM_TEXT => {
+                text_to_geom!(args, "st_polygonfromtext", pg_ctor::st_polygon_from_text)
+            }
+            FID_ST_MPOINT_FROM_TEXT => {
+                text_to_geom!(args, "st_mpointfromtext", pg_ctor::st_mpoint_from_text)
+            }
+            FID_ST_MLINE_FROM_TEXT => {
+                text_to_geom!(args, "st_mlinefromtext", pg_ctor::st_mline_from_text)
+            }
+            FID_ST_MPOLY_FROM_TEXT => {
+                text_to_geom!(args, "st_mpolyfromtext", pg_ctor::st_mpoly_from_text)
+            }
+            FID_ST_GEOMCOLL_FROM_TEXT => {
+                text_to_geom!(args, "st_geomcollfromtext", pg_ctor::st_geomcoll_from_text)
+            }
+            FID_ST_GEOM_FROM_EWKB => {
+                blob_to_geom!(args, "st_geomfromewkb", pg_ctor::st_geom_from_ewkb)
+            }
+            FID_ST_GEOM_FROM_HEXEWKB => {
+                text_to_geom!(args, "st_geomfromhexewkb", pg_ctor::st_geom_from_hexewkb)
+            }
             FID_ST_GEOM_FROM_GEOHASH => {
                 let s = arg_text(&args, 0, "st_geomfromgeohash")?;
                 let g = pg_ctor::st_geom_from_geohash(s, None)
@@ -2290,18 +2522,27 @@ impl ScalarFunctionGuest for PostgisBridge {
                     .map_err(|e| format!("st_pointfromgeohash: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(g.as_wkb()))
             }
-            FID_ST_GEOM_FROM_KML => text_to_geom!(args, "st_geomfromkml", pg_ctor::st_geom_from_kml),
-            FID_ST_GEOM_FROM_GML => text_to_geom!(args, "st_geomfromgml", pg_ctor::st_geom_from_gml),
-            FID_ST_GEOM_FROM_TWKB => blob_to_geom!(args, "st_geomfromtwkb", pg_ctor::st_geom_from_twkb),
+            FID_ST_GEOM_FROM_KML => {
+                text_to_geom!(args, "st_geomfromkml", pg_ctor::st_geom_from_kml)
+            }
+            FID_ST_GEOM_FROM_GML => {
+                text_to_geom!(args, "st_geomfromgml", pg_ctor::st_geom_from_gml)
+            }
+            FID_ST_GEOM_FROM_TWKB => {
+                blob_to_geom!(args, "st_geomfromtwkb", pg_ctor::st_geom_from_twkb)
+            }
             FID_ST_LINE_FROM_ENCODED_POLY => {
                 let s = arg_text(&args, 0, "st_linefromencodedpolyline")?;
-                let g = pg_ctor::st_line_from_encoded_polyline(s, None)
-                    .map_err(|e| format!("st_linefromencodedpolyline: {}", postgis_err_string(e)))?;
+                let g = pg_ctor::st_line_from_encoded_polyline(s, None).map_err(|e| {
+                    format!("st_linefromencodedpolyline: {}", postgis_err_string(e))
+                })?;
                 Ok(SqlValue::Blob(g.as_wkb()))
             }
 
             // ── Geodetic (geometry-typed) ──
-            FID_ST_DISTANCE_SPHERE => gg_to_f64!(args, "st_distancesphere", pg_geog::st_distance_sphere),
+            FID_ST_DISTANCE_SPHERE => {
+                gg_to_f64!(args, "st_distancesphere", pg_geog::st_distance_sphere)
+            }
             FID_ST_PROJECT => {
                 let p = from_wkb(arg_blob(&args, 0, "st_project")?, "st_project")?;
                 let d = arg_f64(&args, 1, "st_project")?;
@@ -2346,7 +2587,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Real(pg_geog::st_geog_area(&g)))
             }
             FID_ST_GEOG_PERIMETER => {
-                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_perimeter")?, "st_geog_perimeter")?;
+                let g = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_perimeter")?,
+                    "st_geog_perimeter",
+                )?;
                 Ok(SqlValue::Real(pg_geog::st_geog_perimeter(&g)))
             }
             FID_ST_GEOG_DWITHIN => {
@@ -2372,7 +2616,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_GEOG_SEGMENTIZE => {
-                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_segmentize")?, "st_geog_segmentize")?;
+                let g = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_segmentize")?,
+                    "st_geog_segmentize",
+                )?;
                 let d = arg_f64(&args, 1, "st_geog_segmentize")?;
                 let r = pg_geog::st_geog_segmentize(&g, d)
                     .map_err(|e| format!("st_geog_segmentize: {}", postgis_err_string(e)))?;
@@ -2384,13 +2631,25 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Integer(pg_geog::st_geog_covers(&a, &b) as i64))
             }
             FID_ST_GEOG_COVERED_BY => {
-                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_coveredby")?, "st_geog_coveredby")?;
-                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_coveredby")?, "st_geog_coveredby")?;
+                let a = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_coveredby")?,
+                    "st_geog_coveredby",
+                )?;
+                let b = geog_from_wkb(
+                    arg_blob(&args, 1, "st_geog_coveredby")?,
+                    "st_geog_coveredby",
+                )?;
                 Ok(SqlValue::Integer(pg_geog::st_geog_covered_by(&a, &b) as i64))
             }
             FID_ST_GEOG_INTERSECTS => {
-                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_intersects")?, "st_geog_intersects")?;
-                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_intersects")?, "st_geog_intersects")?;
+                let a = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_intersects")?,
+                    "st_geog_intersects",
+                )?;
+                let b = geog_from_wkb(
+                    arg_blob(&args, 1, "st_geog_intersects")?,
+                    "st_geog_intersects",
+                )?;
                 Ok(SqlValue::Integer(pg_geog::st_geog_intersects(&a, &b) as i64))
             }
             FID_ST_GEOG_BUFFER => {
@@ -2401,7 +2660,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_GEOG_BUFFER_SEGS => {
-                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_buffer_segs")?, "st_geog_buffer_segs")?;
+                let g = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_buffer_segs")?,
+                    "st_geog_buffer_segs",
+                )?;
                 let d = arg_f64(&args, 1, "st_geog_buffer_segs")?;
                 let qs = arg_i64(&args, 2, "st_geog_buffer_segs")? as u32;
                 let r = pg_geog::st_geog_buffer_with_segs(&g, d, qs)
@@ -2415,8 +2677,14 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_GEOG_INTERSECTION => {
-                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_intersection")?, "st_geog_intersection")?;
-                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_intersection")?, "st_geog_intersection")?;
+                let a = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_intersection")?,
+                    "st_geog_intersection",
+                )?;
+                let b = geog_from_wkb(
+                    arg_blob(&args, 1, "st_geog_intersection")?,
+                    "st_geog_intersection",
+                )?;
                 let r = pg_geog::st_geog_intersection(&a, &b)
                     .map_err(|e| format!("st_geog_intersection: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
@@ -2429,15 +2697,27 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_GEOG_DIFFERENCE => {
-                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_difference")?, "st_geog_difference")?;
-                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_difference")?, "st_geog_difference")?;
+                let a = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_difference")?,
+                    "st_geog_difference",
+                )?;
+                let b = geog_from_wkb(
+                    arg_blob(&args, 1, "st_geog_difference")?,
+                    "st_geog_difference",
+                )?;
                 let r = pg_geog::st_geog_difference(&a, &b)
                     .map_err(|e| format!("st_geog_difference: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_GEOG_SYM_DIFFERENCE => {
-                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_symdifference")?, "st_geog_symdifference")?;
-                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_symdifference")?, "st_geog_symdifference")?;
+                let a = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_symdifference")?,
+                    "st_geog_symdifference",
+                )?;
+                let b = geog_from_wkb(
+                    arg_blob(&args, 1, "st_geog_symdifference")?,
+                    "st_geog_symdifference",
+                )?;
                 let r = pg_geog::st_geog_sym_difference(&a, &b)
                     .map_err(|e| format!("st_geog_symdifference: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
@@ -2450,8 +2730,14 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_GEOG_CLOSEST_POINT => {
-                let a = geog_from_wkb(arg_blob(&args, 0, "st_geog_closestpoint")?, "st_geog_closestpoint")?;
-                let b = geog_from_wkb(arg_blob(&args, 1, "st_geog_closestpoint")?, "st_geog_closestpoint")?;
+                let a = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_closestpoint")?,
+                    "st_geog_closestpoint",
+                )?;
+                let b = geog_from_wkb(
+                    arg_blob(&args, 1, "st_geog_closestpoint")?,
+                    "st_geog_closestpoint",
+                )?;
                 let r = pg_geog::st_geog_closest_point(&a, &b)
                     .map_err(|e| format!("st_geog_closestpoint: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
@@ -2465,7 +2751,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Text(pg_geog::st_geog_summary(&g)))
             }
             FID_ST_GEOG_GEOMETRY_TYPE => {
-                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_geometrytype")?, "st_geog_geometrytype")?;
+                let g = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_geometrytype")?,
+                    "st_geog_geometrytype",
+                )?;
                 Ok(SqlValue::Text(pg_geog::st_geog_geometry_type(&g)))
             }
             FID_ST_GEOG_IS_EMPTY => {
@@ -2481,13 +2770,19 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Integer(pg_geog::st_geog_is_closed(&g) as i64))
             }
             FID_ST_GEOG_CONVEX_HULL => {
-                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_convexhull")?, "st_geog_convexhull")?;
+                let g = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_convexhull")?,
+                    "st_geog_convexhull",
+                )?;
                 let r = pg_geog::st_geog_convex_hull(&g)
                     .map_err(|e| format!("st_geog_convexhull: {}", postgis_err_string(e)))?;
                 Ok(SqlValue::Blob(r.as_wkb()))
             }
             FID_ST_GEOG_TO_GEOMETRY => {
-                let g = geog_from_wkb(arg_blob(&args, 0, "st_geog_togeometry")?, "st_geog_togeometry")?;
+                let g = geog_from_wkb(
+                    arg_blob(&args, 0, "st_geog_togeometry")?,
+                    "st_geog_togeometry",
+                )?;
                 Ok(SqlValue::Blob(g.to_geometry().as_wkb()))
             }
             FID_ST_GEOMETRY_TO_GEOG => {
@@ -2543,8 +2838,9 @@ impl ScalarFunctionGuest for PostgisBridge {
             }
             FID_ST_APPROX_MEDIAL_AXIS => {
                 let w = arg_blob(&args, 0, "st_sfcgalapproximatemedialaxis")?;
-                let r = pg_sfcgal::st_approximate_medial_axis(w)
-                    .map_err(|e| format!("st_sfcgalapproximatemedialaxis: {}", postgis_err_string(e)))?;
+                let r = pg_sfcgal::st_approximate_medial_axis(w).map_err(|e| {
+                    format!("st_sfcgalapproximatemedialaxis: {}", postgis_err_string(e))
+                })?;
                 Ok(SqlValue::Blob(r))
             }
             FID_ST_EXTRUDE => {
@@ -2619,7 +2915,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Text(s?))
             }
             FID_SFC_AS_STL_BINARY => {
-                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_asstlbinary")?, "st_sfc_asstlbinary")?;
+                let h = sfc_read_wkb(
+                    arg_blob(&args, 0, "st_sfc_asstlbinary")?,
+                    "st_sfc_asstlbinary",
+                )?;
                 let bytes = sf_io::write_stl_binary(h);
                 sf_geom::destroy(h);
                 Ok(SqlValue::Blob(bytes))
@@ -2637,44 +2936,89 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Text(s?))
             }
             FID_SFC_ALPHA_SHAPE => {
-                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_alphashape")?, "st_sfc_alphashape")?;
+                let h = sfc_read_wkb(
+                    arg_blob(&args, 0, "st_sfc_alphashape")?,
+                    "st_sfc_alphashape",
+                )?;
                 let a = arg_f64(&args, 1, "st_sfc_alphashape")?;
                 match sfc_geom(sf_geom::alpha_shape(h, a), "st_sfc_alphashape") {
                     Ok(r) => {
                         sf_geom::destroy(h);
                         Ok(SqlValue::Blob(sfc_take_wkb(r)))
                     }
-                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                    Err(e) => {
+                        sf_geom::destroy(h);
+                        Err(e)
+                    }
                 }
             }
             FID_SFC_OPTIMAL_ALPHA_SHAPE => {
-                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_optimalalphashape")?, "st_sfc_optimalalphashape")?;
+                let h = sfc_read_wkb(
+                    arg_blob(&args, 0, "st_sfc_optimalalphashape")?,
+                    "st_sfc_optimalalphashape",
+                )?;
                 match sfc_geom(sf_geom::optimal_alpha_shape(h), "st_sfc_optimalalphashape") {
-                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
-                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                    Ok(r) => {
+                        sf_geom::destroy(h);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => {
+                        sf_geom::destroy(h);
+                        Err(e)
+                    }
                 }
             }
             FID_SFC_EXTRUDE_STRAIGHT => {
-                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_extrudestraight")?, "st_sfc_extrudestraight")?;
+                let h = sfc_read_wkb(
+                    arg_blob(&args, 0, "st_sfc_extrudestraight")?,
+                    "st_sfc_extrudestraight",
+                )?;
                 let height = arg_f64(&args, 1, "st_sfc_extrudestraight")?;
-                match sfc_geom(sf_geom::extrude_straight(h, height), "st_sfc_extrudestraight") {
-                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
-                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                match sfc_geom(
+                    sf_geom::extrude_straight(h, height),
+                    "st_sfc_extrudestraight",
+                ) {
+                    Ok(r) => {
+                        sf_geom::destroy(h);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => {
+                        sf_geom::destroy(h);
+                        Err(e)
+                    }
                 }
             }
             FID_SFC_EXTRUDE_STRAIGHT_SKELETON => {
-                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_extrudestraightskeleton")?, "st_sfc_extrudestraightskeleton")?;
+                let h = sfc_read_wkb(
+                    arg_blob(&args, 0, "st_sfc_extrudestraightskeleton")?,
+                    "st_sfc_extrudestraightskeleton",
+                )?;
                 let height = arg_f64(&args, 1, "st_sfc_extrudestraightskeleton")?;
-                match sfc_geom(sf_geom::extrude_straight_skeleton(h, height), "st_sfc_extrudestraightskeleton") {
-                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
-                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                match sfc_geom(
+                    sf_geom::extrude_straight_skeleton(h, height),
+                    "st_sfc_extrudestraightskeleton",
+                ) {
+                    Ok(r) => {
+                        sf_geom::destroy(h);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => {
+                        sf_geom::destroy(h);
+                        Err(e)
+                    }
                 }
             }
             FID_SFC_MAKE_VALID => {
                 let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_makevalid")?, "st_sfc_makevalid")?;
                 match sfc_geom(sf_geom::make_valid(h), "st_sfc_makevalid") {
-                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
-                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                    Ok(r) => {
+                        sf_geom::destroy(h);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => {
+                        sf_geom::destroy(h);
+                        Err(e)
+                    }
                 }
             }
             FID_SFC_IS_VALID => {
@@ -2727,41 +3071,95 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(sfc_take_wkb(h)))
             }
             FID_SFC_TESSELLATE => {
-                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_tessellate")?, "st_sfc_tessellate")?;
+                let h = sfc_read_wkb(
+                    arg_blob(&args, 0, "st_sfc_tessellate")?,
+                    "st_sfc_tessellate",
+                )?;
                 match sfc_geom(sf_geom::tessellate(h), "st_sfc_tessellate") {
-                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
-                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                    Ok(r) => {
+                        sf_geom::destroy(h);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => {
+                        sf_geom::destroy(h);
+                        Err(e)
+                    }
                 }
             }
             FID_SFC_CONVEX_HULL => {
-                let h = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_convexhull")?, "st_sfc_convexhull")?;
+                let h = sfc_read_wkb(
+                    arg_blob(&args, 0, "st_sfc_convexhull")?,
+                    "st_sfc_convexhull",
+                )?;
                 match sfc_geom(sf_geom::convex_hull(h), "st_sfc_convexhull") {
-                    Ok(r) => { sf_geom::destroy(h); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
-                    Err(e) => { sf_geom::destroy(h); Err(e) }
+                    Ok(r) => {
+                        sf_geom::destroy(h);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => {
+                        sf_geom::destroy(h);
+                        Err(e)
+                    }
                 }
             }
             FID_SFC_DIFFERENCE => {
-                let a = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_difference")?, "st_sfc_difference")?;
-                let b = sfc_read_wkb(arg_blob(&args, 1, "st_sfc_difference")?, "st_sfc_difference")?;
+                let a = sfc_read_wkb(
+                    arg_blob(&args, 0, "st_sfc_difference")?,
+                    "st_sfc_difference",
+                )?;
+                let b = sfc_read_wkb(
+                    arg_blob(&args, 1, "st_sfc_difference")?,
+                    "st_sfc_difference",
+                )?;
                 match sfc_geom(sf_geom::difference(a, b), "st_sfc_difference") {
-                    Ok(r) => { sf_geom::destroy(a); sf_geom::destroy(b); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
-                    Err(e) => { sf_geom::destroy(a); sf_geom::destroy(b); Err(e) }
+                    Ok(r) => {
+                        sf_geom::destroy(a);
+                        sf_geom::destroy(b);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => {
+                        sf_geom::destroy(a);
+                        sf_geom::destroy(b);
+                        Err(e)
+                    }
                 }
             }
             FID_SFC_INTERSECTION => {
-                let a = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_intersection")?, "st_sfc_intersection")?;
-                let b = sfc_read_wkb(arg_blob(&args, 1, "st_sfc_intersection")?, "st_sfc_intersection")?;
+                let a = sfc_read_wkb(
+                    arg_blob(&args, 0, "st_sfc_intersection")?,
+                    "st_sfc_intersection",
+                )?;
+                let b = sfc_read_wkb(
+                    arg_blob(&args, 1, "st_sfc_intersection")?,
+                    "st_sfc_intersection",
+                )?;
                 match sfc_geom(sf_geom::intersection(a, b), "st_sfc_intersection") {
-                    Ok(r) => { sf_geom::destroy(a); sf_geom::destroy(b); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
-                    Err(e) => { sf_geom::destroy(a); sf_geom::destroy(b); Err(e) }
+                    Ok(r) => {
+                        sf_geom::destroy(a);
+                        sf_geom::destroy(b);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => {
+                        sf_geom::destroy(a);
+                        sf_geom::destroy(b);
+                        Err(e)
+                    }
                 }
             }
             FID_SFC_UNION => {
                 let a = sfc_read_wkb(arg_blob(&args, 0, "st_sfc_union")?, "st_sfc_union")?;
                 let b = sfc_read_wkb(arg_blob(&args, 1, "st_sfc_union")?, "st_sfc_union")?;
                 match sfc_geom(sf_geom::union(a, b), "st_sfc_union") {
-                    Ok(r) => { sf_geom::destroy(a); sf_geom::destroy(b); Ok(SqlValue::Blob(sfc_take_wkb(r))) }
-                    Err(e) => { sf_geom::destroy(a); sf_geom::destroy(b); Err(e) }
+                    Ok(r) => {
+                        sf_geom::destroy(a);
+                        sf_geom::destroy(b);
+                        Ok(SqlValue::Blob(sfc_take_wkb(r)))
+                    }
+                    Err(e) => {
+                        sf_geom::destroy(a);
+                        sf_geom::destroy(b);
+                        Err(e)
+                    }
                 }
             }
 
@@ -2775,15 +3173,22 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Integer(pg_rast_acc::st_height(&r) as i64))
             }
             FID_RST_NUM_BANDS => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_numbands")?, "st_rast_numbands")?;
+                let r =
+                    rast_from_blob(arg_blob(&args, 0, "st_rast_numbands")?, "st_rast_numbands")?;
                 Ok(SqlValue::Integer(pg_rast_acc::st_num_bands(&r) as i64))
             }
             FID_RST_UPPER_LEFT_X => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_upperleftx")?, "st_rast_upperleftx")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_upperleftx")?,
+                    "st_rast_upperleftx",
+                )?;
                 Ok(SqlValue::Real(pg_rast_acc::st_upper_left_x(&r)))
             }
             FID_RST_UPPER_LEFT_Y => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_upperlefty")?, "st_rast_upperlefty")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_upperlefty")?,
+                    "st_rast_upperlefty",
+                )?;
                 Ok(SqlValue::Real(pg_rast_acc::st_upper_left_y(&r)))
             }
             FID_RST_SCALE_X => {
@@ -2807,7 +3212,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Integer(pg_rast_acc::st_srid(&r) as i64))
             }
             FID_RST_HAS_NO_BAND => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_hasnoband")?, "st_rast_hasnoband")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_hasnoband")?,
+                    "st_rast_hasnoband",
+                )?;
                 let b = arg_i64(&args, 1, "st_rast_hasnoband")? as u32;
                 Ok(SqlValue::Integer(pg_rast_acc::st_has_no_band(&r, b) as i64))
             }
@@ -2821,7 +3229,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Real(v))
             }
             FID_RST_NEAREST_VALUE => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_nearestvalue")?, "st_rast_nearestvalue")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_nearestvalue")?,
+                    "st_rast_nearestvalue",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_nearestvalue")? as u32;
                 let x = arg_i64(&args, 2, "st_rast_nearestvalue")? as u32;
                 let y = arg_i64(&args, 3, "st_rast_nearestvalue")? as u32;
@@ -2830,7 +3241,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Real(v))
             }
             FID_RST_PIXEL_AS_POINT => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_pixelaspoint")?, "st_rast_pixelaspoint")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_pixelaspoint")?,
+                    "st_rast_pixelaspoint",
+                )?;
                 let x = arg_i64(&args, 1, "st_rast_pixelaspoint")? as u32;
                 let y = arg_i64(&args, 2, "st_rast_pixelaspoint")? as u32;
                 let g = pg_rast_acc::st_pixel_as_point(&r, x, y)
@@ -2838,7 +3252,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(g.as_wkb()))
             }
             FID_RST_PIXEL_AS_POLYGON => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_pixelaspolygon")?, "st_rast_pixelaspolygon")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_pixelaspolygon")?,
+                    "st_rast_pixelaspolygon",
+                )?;
                 let x = arg_i64(&args, 1, "st_rast_pixelaspolygon")? as u32;
                 let y = arg_i64(&args, 2, "st_rast_pixelaspolygon")? as u32;
                 let g = pg_rast_px::st_pixel_as_polygon(&r, x, y)
@@ -2846,7 +3263,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(g.as_wkb()))
             }
             FID_RST_PIXEL_AS_CENTROID => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_pixelascentroid")?, "st_rast_pixelascentroid")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_pixelascentroid")?,
+                    "st_rast_pixelascentroid",
+                )?;
                 let x = arg_i64(&args, 1, "st_rast_pixelascentroid")? as u32;
                 let y = arg_i64(&args, 2, "st_rast_pixelascentroid")? as u32;
                 let g = pg_rast_px::st_pixel_as_centroid(&r, x, y)
@@ -2854,16 +3274,26 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(g.as_wkb()))
             }
             FID_RST_RASTER_TO_WORLD_COORD_X => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_rastertoworldcoordx")?, "st_rast_rastertoworldcoordx")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_rastertoworldcoordx")?,
+                    "st_rast_rastertoworldcoordx",
+                )?;
                 let col = arg_i64(&args, 1, "st_rast_rastertoworldcoordx")? as u32;
                 let row = arg_i64(&args, 2, "st_rast_rastertoworldcoordx")? as u32;
-                Ok(SqlValue::Real(pg_rast_px::st_raster_to_world_coord_x(&r, col, row)))
+                Ok(SqlValue::Real(pg_rast_px::st_raster_to_world_coord_x(
+                    &r, col, row,
+                )))
             }
             FID_RST_RASTER_TO_WORLD_COORD_Y => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_rastertoworldcoordy")?, "st_rast_rastertoworldcoordy")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_rastertoworldcoordy")?,
+                    "st_rast_rastertoworldcoordy",
+                )?;
                 let col = arg_i64(&args, 1, "st_rast_rastertoworldcoordy")? as u32;
                 let row = arg_i64(&args, 2, "st_rast_rastertoworldcoordy")? as u32;
-                Ok(SqlValue::Real(pg_rast_px::st_raster_to_world_coord_y(&r, col, row)))
+                Ok(SqlValue::Real(pg_rast_px::st_raster_to_world_coord_y(
+                    &r, col, row,
+                )))
             }
             FID_RST_AS_PNG => {
                 let r = rast_from_blob(arg_blob(&args, 0, "st_rast_aspng")?, "st_rast_aspng")?;
@@ -2879,39 +3309,75 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(bytes))
             }
             FID_RST_R_INTERSECTS => {
-                let a = rast_from_blob(arg_blob(&args, 0, "st_rast_intersects")?, "st_rast_intersects")?;
-                let b = rast_from_blob(arg_blob(&args, 1, "st_rast_intersects")?, "st_rast_intersects")?;
-                Ok(SqlValue::Integer(pg_rast_pred::st_raster_intersects(&a, &b) as i64))
+                let a = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_intersects")?,
+                    "st_rast_intersects",
+                )?;
+                let b = rast_from_blob(
+                    arg_blob(&args, 1, "st_rast_intersects")?,
+                    "st_rast_intersects",
+                )?;
+                Ok(SqlValue::Integer(
+                    pg_rast_pred::st_raster_intersects(&a, &b) as i64,
+                ))
             }
             FID_RST_R_CONTAINS => {
-                let a = rast_from_blob(arg_blob(&args, 0, "st_rast_contains")?, "st_rast_contains")?;
-                let b = rast_from_blob(arg_blob(&args, 1, "st_rast_contains")?, "st_rast_contains")?;
-                Ok(SqlValue::Integer(pg_rast_pred::st_raster_contains(&a, &b) as i64))
+                let a =
+                    rast_from_blob(arg_blob(&args, 0, "st_rast_contains")?, "st_rast_contains")?;
+                let b =
+                    rast_from_blob(arg_blob(&args, 1, "st_rast_contains")?, "st_rast_contains")?;
+                Ok(SqlValue::Integer(
+                    pg_rast_pred::st_raster_contains(&a, &b) as i64
+                ))
             }
             FID_RST_R_WITHIN => {
                 let a = rast_from_blob(arg_blob(&args, 0, "st_rast_within")?, "st_rast_within")?;
                 let b = rast_from_blob(arg_blob(&args, 1, "st_rast_within")?, "st_rast_within")?;
-                Ok(SqlValue::Integer(pg_rast_pred::st_raster_within(&a, &b) as i64))
+                Ok(SqlValue::Integer(
+                    pg_rast_pred::st_raster_within(&a, &b) as i64
+                ))
             }
             FID_RST_R_COVERS => {
                 let a = rast_from_blob(arg_blob(&args, 0, "st_rast_covers")?, "st_rast_covers")?;
                 let b = rast_from_blob(arg_blob(&args, 1, "st_rast_covers")?, "st_rast_covers")?;
-                Ok(SqlValue::Integer(pg_rast_pred::st_raster_covers(&a, &b) as i64))
+                Ok(SqlValue::Integer(
+                    pg_rast_pred::st_raster_covers(&a, &b) as i64
+                ))
             }
             FID_RST_R_OVERLAPS => {
-                let a = rast_from_blob(arg_blob(&args, 0, "st_rast_overlaps")?, "st_rast_overlaps")?;
-                let b = rast_from_blob(arg_blob(&args, 1, "st_rast_overlaps")?, "st_rast_overlaps")?;
-                Ok(SqlValue::Integer(pg_rast_pred::st_raster_overlaps(&a, &b) as i64))
+                let a =
+                    rast_from_blob(arg_blob(&args, 0, "st_rast_overlaps")?, "st_rast_overlaps")?;
+                let b =
+                    rast_from_blob(arg_blob(&args, 1, "st_rast_overlaps")?, "st_rast_overlaps")?;
+                Ok(SqlValue::Integer(
+                    pg_rast_pred::st_raster_overlaps(&a, &b) as i64
+                ))
             }
             FID_RST_R_INTERSECTS_GEOM => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_intersectsgeom")?, "st_rast_intersectsgeom")?;
-                let g = from_wkb(arg_blob(&args, 1, "st_rast_intersectsgeom")?, "st_rast_intersectsgeom")?;
-                Ok(SqlValue::Integer(pg_rast_pred::st_raster_intersects_geom(&r, &g) as i64))
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_intersectsgeom")?,
+                    "st_rast_intersectsgeom",
+                )?;
+                let g = from_wkb(
+                    arg_blob(&args, 1, "st_rast_intersectsgeom")?,
+                    "st_rast_intersectsgeom",
+                )?;
+                Ok(SqlValue::Integer(
+                    pg_rast_pred::st_raster_intersects_geom(&r, &g) as i64,
+                ))
             }
             FID_RST_R_CONTAINS_GEOM => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_containsgeom")?, "st_rast_containsgeom")?;
-                let g = from_wkb(arg_blob(&args, 1, "st_rast_containsgeom")?, "st_rast_containsgeom")?;
-                Ok(SqlValue::Integer(pg_rast_pred::st_raster_contains_geom(&r, &g) as i64))
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_containsgeom")?,
+                    "st_rast_containsgeom",
+                )?;
+                let g = from_wkb(
+                    arg_blob(&args, 1, "st_rast_containsgeom")?,
+                    "st_rast_containsgeom",
+                )?;
+                Ok(SqlValue::Integer(
+                    pg_rast_pred::st_raster_contains_geom(&r, &g) as i64,
+                ))
             }
             FID_RST_POLYGON_FROM_RAST => {
                 let r = rast_from_blob(arg_blob(&args, 0, "st_rast_polygon")?, "st_rast_polygon")?;
@@ -2921,7 +3387,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(g.as_wkb()))
             }
             FID_RST_CONVEX_HULL => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_convexhull")?, "st_rast_convexhull")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_convexhull")?,
+                    "st_rast_convexhull",
+                )?;
                 let g = pg_rast_pred::st_raster_convex_hull(&r)
                     .map_err(|e| format!("st_rast_convexhull: {}", raster_err_string(e)))?;
                 Ok(SqlValue::Blob(g.as_wkb()))
@@ -2941,7 +3410,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(out.as_binary()))
             }
             FID_RST_ROUGHNESS => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_roughness")?, "st_rast_roughness")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_roughness")?,
+                    "st_rast_roughness",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_roughness")? as u32;
                 let out = pg_rast_proc::st_roughness(&r, band)
                     .map_err(|e| format!("st_rast_roughness: {}", raster_err_string(e)))?;
@@ -2990,7 +3462,8 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(out.as_binary()))
             }
             FID_RST_SET_VALUE => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_setvalue")?, "st_rast_setvalue")?;
+                let r =
+                    rast_from_blob(arg_blob(&args, 0, "st_rast_setvalue")?, "st_rast_setvalue")?;
                 let band = arg_i64(&args, 1, "st_rast_setvalue")? as u32;
                 let x = arg_i64(&args, 2, "st_rast_setvalue")? as u32;
                 let y = arg_i64(&args, 3, "st_rast_setvalue")? as u32;
@@ -3031,7 +3504,8 @@ impl ScalarFunctionGuest for PostgisBridge {
                 })
             }
             FID_RST_QUANTILE => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_quantile")?, "st_rast_quantile")?;
+                let r =
+                    rast_from_blob(arg_blob(&args, 0, "st_rast_quantile")?, "st_rast_quantile")?;
                 let band = arg_i64(&args, 1, "st_rast_quantile")? as u32;
                 let q = arg_f64(&args, 2, "st_rast_quantile")?;
                 let v = pg_rast_stats::st_quantile(&r, band, q)
@@ -3039,21 +3513,30 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Real(v))
             }
             FID_RST_WORLD_TO_RAST_X => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_worldtorastercoordx")?, "st_rast_worldtorastercoordx")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_worldtorastercoordx")?,
+                    "st_rast_worldtorastercoordx",
+                )?;
                 let wx = arg_f64(&args, 1, "st_rast_worldtorastercoordx")?;
                 let wy = arg_f64(&args, 2, "st_rast_worldtorastercoordx")?;
                 let (col, _row) = pg_rast_px::st_world_to_raster_coord(&r, wx, wy);
                 Ok(SqlValue::Integer(col as i64))
             }
             FID_RST_WORLD_TO_RAST_Y => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_worldtorastercoordy")?, "st_rast_worldtorastercoordy")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_worldtorastercoordy")?,
+                    "st_rast_worldtorastercoordy",
+                )?;
                 let wx = arg_f64(&args, 1, "st_rast_worldtorastercoordy")?;
                 let wy = arg_f64(&args, 2, "st_rast_worldtorastercoordy")?;
                 let (_col, row) = pg_rast_px::st_world_to_raster_coord(&r, wx, wy);
                 Ok(SqlValue::Integer(row as i64))
             }
             FID_RST_HILL_SHADE => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_hillshade")?, "st_rast_hillshade")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_hillshade")?,
+                    "st_rast_hillshade",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_hillshade")? as u32;
                 let az = arg_f64(&args, 2, "st_rast_hillshade")?;
                 let alt = arg_f64(&args, 3, "st_rast_hillshade")?;
@@ -3080,14 +3563,20 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(out.as_binary()))
             }
             FID_RST_BAND_PIXEL_TYPE => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_bandpixeltype")?, "st_rast_bandpixeltype")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_bandpixeltype")?,
+                    "st_rast_bandpixeltype",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_bandpixeltype")? as u32;
                 let p = pg_rast_acc::st_band_pixel_type(&r, band)
                     .map_err(|e| format!("st_rast_bandpixeltype: {}", raster_err_string(e)))?;
                 Ok(SqlValue::Text(pixel_type_str(p).to_string()))
             }
             FID_RST_BAND_NODATA => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_bandnodatavalue")?, "st_rast_bandnodatavalue")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_bandnodatavalue")?,
+                    "st_rast_bandnodatavalue",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_bandnodatavalue")? as u32;
                 let v = pg_rast_acc::st_band_nodata_value(&r, band)
                     .map_err(|e| format!("st_rast_bandnodatavalue: {}", raster_err_string(e)))?;
@@ -3107,23 +3596,38 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Integer(t.srid() as i64))
             }
             FID_TOPO_PRECISION => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_precision")?, "st_topo_precision")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_precision")?,
+                    "st_topo_precision",
+                )?;
                 Ok(SqlValue::Real(t.precision()))
             }
             FID_TOPO_NODE_COUNT => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_nodecount")?, "st_topo_nodecount")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_nodecount")?,
+                    "st_topo_nodecount",
+                )?;
                 Ok(SqlValue::Integer(t.node_count() as i64))
             }
             FID_TOPO_EDGE_COUNT => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_edgecount")?, "st_topo_edgecount")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_edgecount")?,
+                    "st_topo_edgecount",
+                )?;
                 Ok(SqlValue::Integer(t.edge_count() as i64))
             }
             FID_TOPO_FACE_COUNT => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_facecount")?, "st_topo_facecount")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_facecount")?,
+                    "st_topo_facecount",
+                )?;
                 Ok(SqlValue::Integer(t.face_count() as i64))
             }
             FID_TOPO_AS_TOPOJSON => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_astopojson")?, "st_topo_astopojson")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_astopojson")?,
+                    "st_topo_astopojson",
+                )?;
                 Ok(SqlValue::Text(pg_topo_out::as_topojson(&t)))
             }
 
@@ -3184,34 +3688,47 @@ impl ScalarFunctionGuest for PostgisBridge {
 
             // ── Raster v3: JSON list returns (R1) ──
             FID_RST_HISTOGRAM_JSON => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_histogram")?, "st_rast_histogram")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_histogram")?,
+                    "st_rast_histogram",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_histogram")? as u32;
                 let bins = arg_i64(&args, 2, "st_rast_histogram")? as u32;
                 let v = pg_rast_stats::st_histogram(&r, band, bins)
                     .map_err(|e| format!("st_rast_histogram: {}", raster_err_string(e)))?;
                 let json: Vec<serde_json::Value> = v
                     .into_iter()
-                    .map(|b| serde_json::json!({
-                        "min": b.min, "max": b.max, "count": b.count
-                    }))
+                    .map(|b| {
+                        serde_json::json!({
+                            "min": b.min, "max": b.max, "count": b.count
+                        })
+                    })
                     .collect();
                 Ok(SqlValue::Text(serde_json::Value::Array(json).to_string()))
             }
             FID_RST_VALUECOUNT_JSON => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_valuecount")?, "st_rast_valuecount")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_valuecount")?,
+                    "st_rast_valuecount",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_valuecount")? as u32;
                 let v = pg_rast_stats::st_value_count(&r, band)
                     .map_err(|e| format!("st_rast_valuecount: {}", raster_err_string(e)))?;
                 let json: Vec<serde_json::Value> = v
                     .into_iter()
-                    .map(|vc| serde_json::json!({
-                        "value": vc.value, "count": vc.count
-                    }))
+                    .map(|vc| {
+                        serde_json::json!({
+                            "value": vc.value, "count": vc.count
+                        })
+                    })
                     .collect();
                 Ok(SqlValue::Text(serde_json::Value::Array(json).to_string()))
             }
             FID_RST_SUMMARYSTATS_JSON => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_summarystatsjson")?, "st_rast_summarystatsjson")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_summarystatsjson")?,
+                    "st_rast_summarystatsjson",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_summarystatsjson")? as u32;
                 let s = pg_rast_stats::st_summary_stats(&r, band)
                     .map_err(|e| format!("st_rast_summarystatsjson: {}", raster_err_string(e)))?;
@@ -3228,7 +3745,10 @@ impl ScalarFunctionGuest for PostgisBridge {
 
             // ── Raster v3: set_values (R2) ──
             FID_RST_SETVALUES => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_setvalues")?, "st_rast_setvalues")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_setvalues")?,
+                    "st_rast_setvalues",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_setvalues")? as u32;
                 let x = arg_i64(&args, 2, "st_rast_setvalues")? as u32;
                 let y = arg_i64(&args, 3, "st_rast_setvalues")? as u32;
@@ -3240,9 +3760,9 @@ impl ScalarFunctionGuest for PostgisBridge {
                     .ok_or_else(|| "st_rast_setvalues: expected 2D array".to_string())?;
                 let mut values: Vec<Vec<f64>> = Vec::with_capacity(rows.len());
                 for (i, row) in rows.iter().enumerate() {
-                    let row_arr = row.as_array().ok_or_else(|| {
-                        format!("st_rast_setvalues: row {i} not an array")
-                    })?;
+                    let row_arr = row
+                        .as_array()
+                        .ok_or_else(|| format!("st_rast_setvalues: row {i} not an array"))?;
                     let mut v = Vec::with_capacity(row_arr.len());
                     for (j, cell) in row_arr.iter().enumerate() {
                         v.push(cell.as_f64().ok_or_else(|| {
@@ -3263,7 +3783,8 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let factor = arg_f64(&args, 2, "st_rast_scale")?;
                 let expr = format!("val * {factor}");
                 let out = pg_rast_ma::st_map_algebra(
-                    &r, band,
+                    &r,
+                    band,
                     bindings::postgis::wasm::postgis_raster_types::PixelType::Float64,
                     &expr,
                 )
@@ -3271,14 +3792,18 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(out.as_binary()))
             }
             FID_RST_MA_THRESHOLD => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_threshold")?, "st_rast_threshold")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_threshold")?,
+                    "st_rast_threshold",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_threshold")? as u32;
                 let t = arg_f64(&args, 2, "st_rast_threshold")?;
                 let lo = arg_f64(&args, 3, "st_rast_threshold")?;
                 let hi = arg_f64(&args, 4, "st_rast_threshold")?;
                 let expr = format!("if val <= {t} {{ {lo} }} else {{ {hi} }}");
                 let out = pg_rast_ma::st_map_algebra(
-                    &r, band,
+                    &r,
+                    band,
                     bindings::postgis::wasm::postgis_raster_types::PixelType::Float64,
                     &expr,
                 )
@@ -3286,13 +3811,17 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(out.as_binary()))
             }
             FID_RST_MA_CLIPRANGE => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_cliprange")?, "st_rast_cliprange")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_cliprange")?,
+                    "st_rast_cliprange",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_cliprange")? as u32;
                 let lo = arg_f64(&args, 2, "st_rast_cliprange")?;
                 let hi = arg_f64(&args, 3, "st_rast_cliprange")?;
                 let expr = format!("math::min(math::max(val, {lo}), {hi})");
                 let out = pg_rast_ma::st_map_algebra(
-                    &r, band,
+                    &r,
+                    band,
                     bindings::postgis::wasm::postgis_raster_types::PixelType::Float64,
                     &expr,
                 )
@@ -3300,7 +3829,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Blob(out.as_binary()))
             }
             FID_RST_MA_LINRESCALE => {
-                let r = rast_from_blob(arg_blob(&args, 0, "st_rast_linrescale")?, "st_rast_linrescale")?;
+                let r = rast_from_blob(
+                    arg_blob(&args, 0, "st_rast_linrescale")?,
+                    "st_rast_linrescale",
+                )?;
                 let band = arg_i64(&args, 1, "st_rast_linrescale")? as u32;
                 let in_lo = arg_f64(&args, 2, "st_rast_linrescale")?;
                 let in_hi = arg_f64(&args, 3, "st_rast_linrescale")?;
@@ -3310,7 +3842,8 @@ impl ScalarFunctionGuest for PostgisBridge {
                     "{out_lo} + (val - {in_lo}) * ({out_hi} - {out_lo}) / ({in_hi} - {in_lo})"
                 );
                 let out = pg_rast_ma::st_map_algebra(
-                    &r, band,
+                    &r,
+                    band,
                     bindings::postgis::wasm::postgis_raster_types::PixelType::Float64,
                     &expr,
                 )
@@ -3325,28 +3858,32 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let json_text = arg_text(&args, 2, "st_rast_reclass")?;
                 let parsed: serde_json::Value = serde_json::from_str(json_text)
                     .map_err(|e| format!("st_rast_reclass: parse JSON: {e}"))?;
-                let ranges = parsed
-                    .as_array()
-                    .ok_or_else(|| "st_rast_reclass: expected array of [lo, hi, newval]".to_string())?;
+                let ranges = parsed.as_array().ok_or_else(|| {
+                    "st_rast_reclass: expected array of [lo, hi, newval]".to_string()
+                })?;
                 let mut rules = Vec::with_capacity(ranges.len());
                 for (i, range) in ranges.iter().enumerate() {
-                    let arr = range.as_array().ok_or_else(|| {
-                        format!("st_rast_reclass: range {i} not an array")
-                    })?;
+                    let arr = range
+                        .as_array()
+                        .ok_or_else(|| format!("st_rast_reclass: range {i} not an array"))?;
                     if arr.len() != 3 {
-                        return Err(format!(
-                            "st_rast_reclass: range {i} needs [lo, hi, newval]"
-                        ));
+                        return Err(format!("st_rast_reclass: range {i} needs [lo, hi, newval]"));
                     }
-                    let lo = arr[0].as_f64().ok_or_else(|| format!("st_rast_reclass: range {i} lo not numeric"))?;
-                    let hi = arr[1].as_f64().ok_or_else(|| format!("st_rast_reclass: range {i} hi not numeric"))?;
-                    let newval = arr[2].as_f64().ok_or_else(|| format!("st_rast_reclass: range {i} newval not numeric"))?;
+                    let lo = arr[0]
+                        .as_f64()
+                        .ok_or_else(|| format!("st_rast_reclass: range {i} lo not numeric"))?;
+                    let hi = arr[1]
+                        .as_f64()
+                        .ok_or_else(|| format!("st_rast_reclass: range {i} hi not numeric"))?;
+                    let newval = arr[2]
+                        .as_f64()
+                        .ok_or_else(|| format!("st_rast_reclass: range {i} newval not numeric"))?;
                     rules.push(format!("{lo}-{hi}:{newval}"));
                 }
                 let expr = rules.join(", ");
                 let pixel_t_str = arg_text(&args, 3, "st_rast_reclass")?;
-                let pixel_t = parse_pixel_type(pixel_t_str)
-                    .map_err(|e| format!("st_rast_reclass: {e}"))?;
+                let pixel_t =
+                    parse_pixel_type(pixel_t_str).map_err(|e| format!("st_rast_reclass: {e}"))?;
                 let out = pg_rast_ma::st_reclass(&r, band, &expr, pixel_t)
                     .map_err(|e| format!("st_rast_reclass: {}", raster_err_string(e)))?;
                 Ok(SqlValue::Blob(out.as_binary()))
@@ -3354,14 +3891,30 @@ impl ScalarFunctionGuest for PostgisBridge {
 
             // ── Operators ──
             FID_OP_BBOX_INTERSECTS_2D => {
-                let a = from_wkb(arg_blob(&args, 0, "op_bbox_intersects_2d")?, "op_bbox_intersects_2d")?;
-                let b = from_wkb(arg_blob(&args, 1, "op_bbox_intersects_2d")?, "op_bbox_intersects_2d")?;
-                Ok(SqlValue::Integer(pg_op::op_bbox_intersects_twod(&a, &b) as i64))
+                let a = from_wkb(
+                    arg_blob(&args, 0, "op_bbox_intersects_2d")?,
+                    "op_bbox_intersects_2d",
+                )?;
+                let b = from_wkb(
+                    arg_blob(&args, 1, "op_bbox_intersects_2d")?,
+                    "op_bbox_intersects_2d",
+                )?;
+                Ok(SqlValue::Integer(
+                    pg_op::op_bbox_intersects_twod(&a, &b) as i64
+                ))
             }
             FID_OP_BBOX_INTERSECTS_ND => {
-                let a = from_wkb(arg_blob(&args, 0, "op_bbox_intersects_nd")?, "op_bbox_intersects_nd")?;
-                let b = from_wkb(arg_blob(&args, 1, "op_bbox_intersects_nd")?, "op_bbox_intersects_nd")?;
-                Ok(SqlValue::Integer(pg_op::op_bbox_intersects_nd(&a, &b) as i64))
+                let a = from_wkb(
+                    arg_blob(&args, 0, "op_bbox_intersects_nd")?,
+                    "op_bbox_intersects_nd",
+                )?;
+                let b = from_wkb(
+                    arg_blob(&args, 1, "op_bbox_intersects_nd")?,
+                    "op_bbox_intersects_nd",
+                )?;
+                Ok(SqlValue::Integer(
+                    pg_op::op_bbox_intersects_nd(&a, &b) as i64
+                ))
             }
             FID_OP_KNN_DISTANCE => {
                 let a = from_wkb(arg_blob(&args, 0, "op_knn_distance")?, "op_knn_distance")?;
@@ -3374,8 +3927,14 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(SqlValue::Real(pg_op::op_bbox_distance(&a, &b)))
             }
             FID_OP_EQUALS_SPATIALLY => {
-                let a = from_wkb(arg_blob(&args, 0, "op_equals_spatially")?, "op_equals_spatially")?;
-                let b = from_wkb(arg_blob(&args, 1, "op_equals_spatially")?, "op_equals_spatially")?;
+                let a = from_wkb(
+                    arg_blob(&args, 0, "op_equals_spatially")?,
+                    "op_equals_spatially",
+                )?;
+                let b = from_wkb(
+                    arg_blob(&args, 1, "op_equals_spatially")?,
+                    "op_equals_spatially",
+                )?;
                 Ok(SqlValue::Integer(pg_op::op_equals_spatially(&a, &b) as i64))
             }
 
@@ -3407,21 +3966,30 @@ impl ScalarFunctionGuest for PostgisBridge {
 
             // ── Topology read (BLOB + id -> geometry) ──
             FID_TOPO_NODE_GEOM => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_node_geom")?, "st_topo_node_geom")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_node_geom")?,
+                    "st_topo_node_geom",
+                )?;
                 let id = arg_i64(&args, 1, "st_topo_node_geom")? as u32;
                 let g = pg_topo_out::get_node_geometry(&t, id)
                     .map_err(|e| format!("st_topo_node_geom: {e:?}"))?;
                 Ok(SqlValue::Blob(g.as_wkb()))
             }
             FID_TOPO_EDGE_GEOM => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_edge_geom")?, "st_topo_edge_geom")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_edge_geom")?,
+                    "st_topo_edge_geom",
+                )?;
                 let id = arg_i64(&args, 1, "st_topo_edge_geom")? as u32;
                 let g = pg_topo_out::get_edge_geometry(&t, id)
                     .map_err(|e| format!("st_topo_edge_geom: {e:?}"))?;
                 Ok(SqlValue::Blob(g.as_wkb()))
             }
             FID_TOPO_FACE_GEOM => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_face_geom")?, "st_topo_face_geom")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_face_geom")?,
+                    "st_topo_face_geom",
+                )?;
                 let id = arg_i64(&args, 1, "st_topo_face_geom")? as u32;
                 let g = pg_topo_out::get_face_geometry(&t, id)
                     .map_err(|e| format!("st_topo_face_geom: {e:?}"))?;
@@ -3430,28 +3998,39 @@ impl ScalarFunctionGuest for PostgisBridge {
 
             // ── Topology query (BLOB-based) ──
             FID_TOPO_NODE_BY_POINT => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_node_by_point")?, "st_topo_node_by_point")?;
-                let pt = from_wkb(arg_blob(&args, 1, "st_topo_node_by_point")?, "st_topo_node_by_point")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_node_by_point")?,
+                    "st_topo_node_by_point",
+                )?;
+                let pt = from_wkb(
+                    arg_blob(&args, 1, "st_topo_node_by_point")?,
+                    "st_topo_node_by_point",
+                )?;
                 let tol = arg_f64(&args, 2, "st_topo_node_by_point")?;
                 let id = pg_topo_query::get_node_by_point(&t, &pt, tol)
                     .map_err(|e| format!("st_topo_node_by_point: {e:?}"))?;
                 Ok(SqlValue::Integer(id as i64))
             }
             FID_TOPO_EDGE_BY_POINT => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_edge_by_point")?, "st_topo_edge_by_point")?;
-                let pt = from_wkb(arg_blob(&args, 1, "st_topo_edge_by_point")?, "st_topo_edge_by_point")?;
+                let t = topo_from_bytes(
+                    arg_blob(&args, 0, "st_topo_edge_by_point")?,
+                    "st_topo_edge_by_point",
+                )?;
+                let pt = from_wkb(
+                    arg_blob(&args, 1, "st_topo_edge_by_point")?,
+                    "st_topo_edge_by_point",
+                )?;
                 let tol = arg_f64(&args, 2, "st_topo_edge_by_point")?;
                 let id = pg_topo_query::get_edge_by_point(&t, &pt, tol)
                     .map_err(|e| format!("st_topo_edge_by_point: {e:?}"))?;
                 Ok(SqlValue::Integer(id as i64))
             }
             FID_TOPO_VALIDATE => {
-                let t = topo_from_bytes(arg_blob(&args, 0, "st_topo_validate")?, "st_topo_validate")?;
+                let t =
+                    topo_from_bytes(arg_blob(&args, 0, "st_topo_validate")?, "st_topo_validate")?;
                 let msgs = pg_topo_query::validate_topology(&t);
-                let json: Vec<serde_json::Value> = msgs
-                    .into_iter()
-                    .map(serde_json::Value::String)
-                    .collect();
+                let json: Vec<serde_json::Value> =
+                    msgs.into_iter().map(serde_json::Value::String).collect();
                 Ok(SqlValue::Text(serde_json::Value::Array(json).to_string()))
             }
 
@@ -3465,9 +4044,7 @@ impl ScalarFunctionGuest for PostgisBridge {
             }
             FID_TOPO_H_SERIALIZE => {
                 let h = arg_i64(&args, 0, "st_topo_serialize")? as u64;
-                with_topo_handle(h, "st_topo_serialize", |t| {
-                    Ok(SqlValue::Blob(t.to_bytes()))
-                })
+                with_topo_handle(h, "st_topo_serialize", |t| Ok(SqlValue::Blob(t.to_bytes())))
             }
             FID_TOPO_H_CLOSE => {
                 let h = arg_i64(&args, 0, "st_topo_close")? as u64;
@@ -3478,8 +4055,15 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let h = arg_i64(&args, 0, "st_topo_add_iso_node")? as u64;
                 // face arg: 0 -> None (no containing face), positive -> Some(face_id)
                 let face_arg = arg_i64(&args, 1, "st_topo_add_iso_node")?;
-                let face = if face_arg <= 0 { None } else { Some(face_arg as u32) };
-                let pt = from_wkb(arg_blob(&args, 2, "st_topo_add_iso_node")?, "st_topo_add_iso_node")?;
+                let face = if face_arg <= 0 {
+                    None
+                } else {
+                    Some(face_arg as u32)
+                };
+                let pt = from_wkb(
+                    arg_blob(&args, 2, "st_topo_add_iso_node")?,
+                    "st_topo_add_iso_node",
+                )?;
                 with_topo_handle(h, "st_topo_add_iso_node", |t| {
                     let id = pg_topo_edit::add_iso_node(t, face, &pt)
                         .map_err(|e| format!("st_topo_add_iso_node: {e:?}"))?;
@@ -3490,7 +4074,10 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let h = arg_i64(&args, 0, "st_topo_add_iso_edge")? as u64;
                 let anode = arg_i64(&args, 1, "st_topo_add_iso_edge")? as u32;
                 let bnode = arg_i64(&args, 2, "st_topo_add_iso_edge")? as u32;
-                let line = from_wkb(arg_blob(&args, 3, "st_topo_add_iso_edge")?, "st_topo_add_iso_edge")?;
+                let line = from_wkb(
+                    arg_blob(&args, 3, "st_topo_add_iso_edge")?,
+                    "st_topo_add_iso_edge",
+                )?;
                 with_topo_handle(h, "st_topo_add_iso_edge", |t| {
                     let id = pg_topo_edit::add_iso_edge(t, anode, bnode, &line)
                         .map_err(|e| format!("st_topo_add_iso_edge: {e:?}"))?;
@@ -3500,7 +4087,10 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_TOPO_H_MOD_EDGE_SPLIT => {
                 let h = arg_i64(&args, 0, "st_topo_mod_edge_split")? as u64;
                 let edge = arg_i64(&args, 1, "st_topo_mod_edge_split")? as u32;
-                let pt = from_wkb(arg_blob(&args, 2, "st_topo_mod_edge_split")?, "st_topo_mod_edge_split")?;
+                let pt = from_wkb(
+                    arg_blob(&args, 2, "st_topo_mod_edge_split")?,
+                    "st_topo_mod_edge_split",
+                )?;
                 with_topo_handle(h, "st_topo_mod_edge_split", |t| {
                     let id = pg_topo_edit::mod_edge_split(t, edge, &pt)
                         .map_err(|e| format!("st_topo_mod_edge_split: {e:?}"))?;
@@ -3510,7 +4100,10 @@ impl ScalarFunctionGuest for PostgisBridge {
             FID_TOPO_H_NEW_EDGES_SPLIT => {
                 let h = arg_i64(&args, 0, "st_topo_new_edges_split")? as u64;
                 let edge = arg_i64(&args, 1, "st_topo_new_edges_split")? as u32;
-                let pt = from_wkb(arg_blob(&args, 2, "st_topo_new_edges_split")?, "st_topo_new_edges_split")?;
+                let pt = from_wkb(
+                    arg_blob(&args, 2, "st_topo_new_edges_split")?,
+                    "st_topo_new_edges_split",
+                )?;
                 with_topo_handle(h, "st_topo_new_edges_split", |t| {
                     let id = pg_topo_edit::new_edges_split(t, edge, &pt)
                         .map_err(|e| format!("st_topo_new_edges_split: {e:?}"))?;
@@ -3559,13 +4152,11 @@ impl ScalarFunctionGuest for PostgisBridge {
                 })?;
                 let mut elements = Vec::with_capacity(arr.len());
                 for (i, item) in arr.iter().enumerate() {
-                    let pair = item.as_array().ok_or_else(|| {
-                        format!("st_topogeom_create: element {i} not an array")
-                    })?;
+                    let pair = item
+                        .as_array()
+                        .ok_or_else(|| format!("st_topogeom_create: element {i} not an array"))?;
                     if pair.len() != 2 {
-                        return Err(format!(
-                            "st_topogeom_create: element {i} needs [id, type]"
-                        ));
+                        return Err(format!("st_topogeom_create: element {i} needs [id, type]"));
                     }
                     let id = pair[0]
                         .as_u64()
@@ -3573,10 +4164,12 @@ impl ScalarFunctionGuest for PostgisBridge {
                         as u32;
                     let et = pair[1]
                         .as_u64()
-                        .ok_or_else(|| {
-                            format!("st_topogeom_create: element {i} type not u32")
-                        })? as u32;
-                    elements.push(pg_topogeom::TopoElement { id, element_type: et });
+                        .ok_or_else(|| format!("st_topogeom_create: element {i} type not u32"))?
+                        as u32;
+                    elements.push(pg_topogeom::TopoElement {
+                        id,
+                        element_type: et,
+                    });
                 }
                 with_topo_handle(topo_h, "st_topogeom_create", |t| {
                     let tg = pg_topogeom::create_topo_geom(t, topo_type, &elements)
@@ -3641,11 +4234,7 @@ impl ScalarFunctionGuest for PostgisBridge {
 // ───────────── Aggregate dispatch ─────────────
 
 impl AggregateGuest for PostgisBridge {
-    fn step(
-        func_id: u64,
-        context_id: u64,
-        args: Vec<SqlValue>,
-    ) -> Result<(), String> {
+    fn step(func_id: u64, context_id: u64, args: Vec<SqlValue>) -> Result<(), String> {
         // NULL arg = no-op (SQL aggregate convention).
         let arg0 = match args.first() {
             Some(SqlValue::Null) | None => return Ok(()),
@@ -3709,15 +4298,12 @@ impl AggregateGuest for PostgisBridge {
             use bindings::postgis::wasm::postgis_raster_aggregates as pg_rast_agg;
             let mut rasters = Vec::with_capacity(state.wkbs.len());
             for (i, blob) in state.wkbs.iter().enumerate() {
-                rasters.push(
-                    rast_from_blob(blob, &format!("st_rast_union_agg arg {i}"))?,
-                );
+                rasters.push(rast_from_blob(blob, &format!("st_rast_union_agg arg {i}"))?);
             }
             let refs: Vec<&bindings::postgis::wasm::postgis_raster_types::Raster> =
                 rasters.iter().collect();
-            let out = pg_rast_agg::st_rast_union_aggregate(&refs).map_err(|e| {
-                format!("st_rast_union_agg: {}", raster_err_string(e))
-            })?;
+            let out = pg_rast_agg::st_rast_union_aggregate(&refs)
+                .map_err(|e| format!("st_rast_union_agg: {}", raster_err_string(e)))?;
             return Ok(SqlValue::Blob(out.as_binary()));
         }
         // Reconstitute geometries.
@@ -3746,10 +4332,9 @@ impl AggregateGuest for PostgisBridge {
                 Ok(SqlValue::Blob(g.as_wkb()))
             }
             AGG_ST_CLUSTER_INTERSECTING => {
-                let parts = pg_agg::st_cluster_intersecting_aggregate(&refs)
-                    .map_err(|e| {
-                        format!("st_clusterintersecting_agg: {}", postgis_err_string(e))
-                    })?;
+                let parts = pg_agg::st_cluster_intersecting_aggregate(&refs).map_err(|e| {
+                    format!("st_clusterintersecting_agg: {}", postgis_err_string(e))
+                })?;
                 // SQL aggregates return a single value  collapse
                 // the cluster list into one GeometryCollection.
                 let part_refs: Vec<&Geometry> = parts.iter().collect();
@@ -3780,9 +4365,11 @@ impl AggregateGuest for PostgisBridge {
             }
             AGG_ST_CLUSTER_DBSCAN => {
                 // Returns JSON [clusterId or null per input row].
-                let eps = state.eps
+                let eps = state
+                    .eps
                     .ok_or_else(|| "st_clusterdbscan_agg: eps never seen".to_string())?;
-                let mp = state.min_points
+                let mp = state
+                    .min_points
                     .ok_or_else(|| "st_clusterdbscan_agg: min_points never seen".to_string())?;
                 let ids = pg_cluster::st_cluster_dbscan(&refs, eps, mp)
                     .map_err(|e| format!("st_clusterdbscan_agg: {}", postgis_err_string(e)))?;
@@ -3796,7 +4383,8 @@ impl AggregateGuest for PostgisBridge {
                 Ok(SqlValue::Text(format!("[{}]", json.join(","))))
             }
             AGG_ST_CLUSTER_KMEANS => {
-                let k = state.k
+                let k = state
+                    .k
                     .ok_or_else(|| "st_clusterkmeans_agg: k never seen".to_string())?;
                 let ids = pg_cluster::st_cluster_kmeans(&refs, k)
                     .map_err(|e| format!("st_clusterkmeans_agg: {}", postgis_err_string(e)))?;
@@ -3811,11 +4399,7 @@ impl AggregateGuest for PostgisBridge {
         Err("postgis agg: window mode not supported".to_string())
     }
 
-    fn inverse(
-        _func_id: u64,
-        _context_id: u64,
-        _args: Vec<SqlValue>,
-    ) -> Result<(), String> {
+    fn inverse(_func_id: u64, _context_id: u64, _args: Vec<SqlValue>) -> Result<(), String> {
         Err("postgis agg: window mode not supported".to_string())
     }
 }
@@ -3876,9 +4460,9 @@ fn parse_rpd_args(args: &[String]) -> Result<RpdArgs, String> {
         match k.trim() {
             "filename" => filename = Some(v.to_string()),
             "band" => {
-                band = v.parse::<u32>().map_err(|e| {
-                    format!("raster_polygon_dump: band={v:?} not a u32: {e}")
-                })?
+                band = v
+                    .parse::<u32>()
+                    .map_err(|e| format!("raster_polygon_dump: band={v:?} not a u32: {e}"))?
             }
             "mode" => {
                 mode = match v {
@@ -3955,11 +4539,7 @@ impl VtabGuest for PostgisBridge {
         Ok(())
     }
 
-    fn best_index(
-        _vtab_id: u64,
-        _instance_id: u64,
-        info: IndexInfo,
-    ) -> Result<IndexPlan, String> {
+    fn best_index(_vtab_id: u64, _instance_id: u64, info: IndexInfo) -> Result<IndexPlan, String> {
         let usage = info
             .constraints
             .iter()
@@ -4047,9 +4627,10 @@ impl VtabGuest for PostgisBridge {
                 let inst = instances
                     .get(&cursor.instance_id)
                     .ok_or_else(|| "raster_polygon_dump: instance not found".to_string())?;
-                let row = inst.rows.get(cursor.row_idx).ok_or_else(|| {
-                    "raster_polygon_dump: row past EOF".to_string()
-                })?;
+                let row = inst
+                    .rows
+                    .get(cursor.row_idx)
+                    .ok_or_else(|| "raster_polygon_dump: row past EOF".to_string())?;
                 Ok(match col {
                     0 => SqlValue::Blob(row.0.clone()),
                     1 => SqlValue::Real(row.1),
@@ -4069,13 +4650,9 @@ impl VtabGuest for PostgisBridge {
         })
     }
 
-        fn fetch_batch(
-            _vtab_id: u64,
-            _cursor_id: u64,
-            _max_rows: u32,
-        ) -> Result<Vec<VtabRow>, String> {
-            Err("fetch_batch: not implemented; host falls back to per-row".to_string())
-        }
+    fn fetch_batch(_vtab_id: u64, _cursor_id: u64, _max_rows: u32) -> Result<Vec<VtabRow>, String> {
+        Err("fetch_batch: not implemented; host falls back to per-row".to_string())
+    }
 }
 
 bindings::export!(PostgisBridge with_types_in bindings);

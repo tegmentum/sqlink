@@ -69,7 +69,11 @@ mod wasm_export {
             sum += char_value(c)? * WEIGHTS[i];
         }
         let r = sum % 11;
-        Some(if r == 10 { 'X' } else { char::from_digit(r, 10).unwrap() })
+        Some(if r == 10 {
+            'X'
+        } else {
+            char::from_digit(r, 10).unwrap()
+        })
     }
 
     fn normalize(s: &str) -> String {
@@ -216,14 +220,17 @@ mod wasm_export {
                     SqlValue::Null
                 }),
                 FID_MODEL_YEAR => Ok(if v.len() == 17 {
-                    v.chars().nth(9)
+                    v.chars()
+                        .nth(9)
                         .and_then(model_year_code)
                         .map(SqlValue::Integer)
                         .unwrap_or(SqlValue::Null)
                 } else {
                     SqlValue::Null
                 }),
-                FID_REGION => Ok(v.chars().next()
+                FID_REGION => Ok(v
+                    .chars()
+                    .next()
                     .map(|c| SqlValue::Text(region(c).to_string()))
                     .unwrap_or(SqlValue::Null)),
                 other => Err(format!("vin: unknown func id {other}")),

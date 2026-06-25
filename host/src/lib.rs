@@ -36,8 +36,8 @@ pub mod vtab;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{anyhow, Result};
@@ -478,19 +478,12 @@ impl OpenSslVerifier {
             .set_fuel(u64::MAX / 2)
             .map_err(|e| anyhow!("verifier set_fuel: {e}"))?;
         store.set_epoch_deadline(1_000_000_000_000);
-        let instance =
-            openssl_ext::VerifyOnly::instantiate_async(&mut store, &component, &linker)
-                .await
-                .map_err(|e| anyhow!("instantiate openssl-composed: {e}"))?;
-        let pkey_resource = instance
-            .openssl_component_pkey()
-            .pkey();
+        let instance = openssl_ext::VerifyOnly::instantiate_async(&mut store, &component, &linker)
+            .await
+            .map_err(|e| anyhow!("instantiate openssl-composed: {e}"))?;
+        let pkey_resource = instance.openssl_component_pkey().pkey();
         let pk = pkey_resource
-            .call_from_raw_public(
-                &mut store,
-                KeyType::Ed(EdwardsCurve::Ed25519),
-                &pubkey[..],
-            )
+            .call_from_raw_public(&mut store, KeyType::Ed(EdwardsCurve::Ed25519), &pubkey[..])
             .await
             .map_err(|e| anyhow!("from-raw-public trap: {e}"))?
             .map_err(|e| anyhow!("from-raw-public error: {e:?}"))?;
@@ -731,8 +724,8 @@ pub mod loaded_hooked {
     });
 }
 
-use bindings::sqlite::extension::policy::Capability as WitCapability;
 use bindings::sqlink::wasm::extension_loader::{LoaderError, Manifest};
+use bindings::sqlite::extension::policy::Capability as WitCapability;
 
 /// Convert one WIT capability to the host's Rust enum.
 fn from_wit_cap(c: &WitCapability) -> Capability {
@@ -865,12 +858,12 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
                 examples: d
                     .examples
                     .iter()
-                    .map(|(desc, cmd)| {
-                        bindings::sqlite::extension::metadata::DotCommandExample {
+                    .map(
+                        |(desc, cmd)| bindings::sqlite::extension::metadata::DotCommandExample {
                             description: desc.clone(),
                             command: cmd.clone(),
-                        }
-                    })
+                        },
+                    )
                     .collect(),
                 requires_write: d.requires_write,
                 no_args: d.no_args,
@@ -972,8 +965,7 @@ pub struct LoadedExtension {
     /// surface AND xUpdate / transactional callbacks — keeping
     /// xUpdate's writes visible to the cursor xRead path inside
     /// the same wasm Store.
-    pub cached_tabular_mutating:
-        Arc<tokio::sync::Mutex<Option<CachedTabularMutating>>>,
+    pub cached_tabular_mutating: Arc<tokio::sync::Mutex<Option<CachedTabularMutating>>>,
     /// Same idea for the `stateful` world (aggregate-function
     /// dispatch). Aggregator state keyed by `context-id` lives
     /// inside the loaded extension — a fresh instantiation per
@@ -1018,8 +1010,7 @@ pub struct LoadedExtension {
     /// Cached `dotcmd-aware`-world (Store, Instance) for dot-cmd
     /// dispatch. Built lazily on first `.NAME` against this
     /// extension; persists for the cli session.
-    pub cached_dotcmd_aware:
-        Arc<tokio::sync::Mutex<Option<CachedDotcmdAware>>>,
+    pub cached_dotcmd_aware: Arc<tokio::sync::Mutex<Option<CachedDotcmdAware>>>,
     /// Extension's declared short prefix (PLAN-prefixes.md). Set
     /// from manifest.preferred-prefix at load time. None means the
     /// manifest didn't declare one; the loader synthesizes a
@@ -1372,8 +1363,7 @@ fn check_dns_policy(
     use loaded_minimal_dns::sqlite::extension::dns::DnsError;
     let policy = policy.ok_or_else(|| {
         DnsError::Refused(
-            "dns policy denied: extension was not granted any dns policy at load time"
-                .to_string(),
+            "dns policy denied: extension was not granted any dns policy at load time".to_string(),
         )
     })?;
     policy
@@ -1387,7 +1377,8 @@ impl loaded_minimal_dns::sqlite::extension::dns::Host for LoadedState {
         &mut self,
         name: String,
         record_type: loaded_minimal_dns::sqlite::extension::dns::RecordType,
-    ) -> std::result::Result<Vec<String>, loaded_minimal_dns::sqlite::extension::dns::DnsError> {
+    ) -> std::result::Result<Vec<String>, loaded_minimal_dns::sqlite::extension::dns::DnsError>
+    {
         use hickory_resolver::config::{ResolverConfig, ResolverOpts};
         use hickory_resolver::proto::rr::RecordType as HRecordType;
         use hickory_resolver::TokioAsyncResolver;
@@ -1490,7 +1481,9 @@ fn spi_ensure_open(
     // while an outer .borrow() is alive  borrow_mut() would
     // panic. The first call opens the connection; subsequent
     // calls see it already populated and return.
-    if g.borrow().is_some() { return Ok(()); }
+    if g.borrow().is_some() {
+        return Ok(());
+    }
     let mut r = g.borrow_mut();
     if r.is_none() {
         // `:memory:` (or empty) opens an isolated in-memory db for
@@ -1538,7 +1531,9 @@ fn spi_ensure_open(
     Ok(())
 }
 
-fn db_err_to_spi(e: sqlite_component_core::db::Error) -> loaded::sqlite::extension::types::SqliteError {
+fn db_err_to_spi(
+    e: sqlite_component_core::db::Error,
+) -> loaded::sqlite::extension::types::SqliteError {
     loaded::sqlite::extension::types::SqliteError {
         code: e.code,
         extended_code: e.extended_code,
@@ -1546,7 +1541,9 @@ fn db_err_to_spi(e: sqlite_component_core::db::Error) -> loaded::sqlite::extensi
     }
 }
 
-fn spi_value_to_db(v: loaded::sqlite::extension::types::SqlValue) -> sqlite_component_core::db::Value {
+fn spi_value_to_db(
+    v: loaded::sqlite::extension::types::SqlValue,
+) -> sqlite_component_core::db::Value {
     use loaded::sqlite::extension::types::SqlValue as V;
     use sqlite_component_core::db;
     match v {
@@ -1613,7 +1610,9 @@ fn sql_value_to_json(v: loaded::sqlite::extension::types::SqlValue) -> String {
     }
 }
 
-fn db_value_to_spi(v: sqlite_component_core::db::Value) -> loaded::sqlite::extension::types::SqlValue {
+fn db_value_to_spi(
+    v: sqlite_component_core::db::Value,
+) -> loaded::sqlite::extension::types::SqlValue {
     use loaded::sqlite::extension::types::SqlValue as V;
     use sqlite_component_core::db;
     match v {
@@ -1630,7 +1629,9 @@ fn db_value_to_spi(v: sqlite_component_core::db::Value) -> loaded::sqlite::exten
 /// against the host's `bindings::sqlite::extension::types`. The
 /// cli's spi imports live on that side; LoadedState's impls
 /// stay on the `loaded` side.
-fn bindings_value_to_db(v: bindings::sqlite::extension::types::SqlValue) -> sqlite_component_core::db::Value {
+fn bindings_value_to_db(
+    v: bindings::sqlite::extension::types::SqlValue,
+) -> sqlite_component_core::db::Value {
     use bindings::sqlite::extension::types::SqlValue as V;
     use sqlite_component_core::db;
     match v {
@@ -1642,7 +1643,9 @@ fn bindings_value_to_db(v: bindings::sqlite::extension::types::SqlValue) -> sqli
     }
 }
 
-fn db_value_to_bindings(v: sqlite_component_core::db::Value) -> bindings::sqlite::extension::types::SqlValue {
+fn db_value_to_bindings(
+    v: sqlite_component_core::db::Value,
+) -> bindings::sqlite::extension::types::SqlValue {
     use bindings::sqlite::extension::types::SqlValue as V;
     use sqlite_component_core::db;
     match v {
@@ -1654,7 +1657,9 @@ fn db_value_to_bindings(v: sqlite_component_core::db::Value) -> bindings::sqlite
     }
 }
 
-fn db_err_to_bindings(e: sqlite_component_core::db::Error) -> bindings::sqlite::extension::types::SqliteError {
+fn db_err_to_bindings(
+    e: sqlite_component_core::db::Error,
+) -> bindings::sqlite::extension::types::SqliteError {
     bindings::sqlite::extension::types::SqliteError {
         code: e.code,
         extended_code: e.extended_code,
@@ -1675,18 +1680,21 @@ fn db_err_to_bindings(e: sqlite_component_core::db::Error) -> bindings::sqlite::
 /// this connection (eval_sql, register-host-*, etc.) sees a coherent
 /// in-memory state across the lifetime of the cli session, which is
 /// what the `:memory:` test fixtures expect.
-fn shared_spi_ensure_open(host: &Host) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
+fn shared_spi_ensure_open(
+    host: &Host,
+) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
     use sqlite_component_core::db;
     let path = host.db_path.read().clone();
     let g = host.shared_spi_conn.lock();
-    if g.borrow().is_some() { return Ok(()); }
+    if g.borrow().is_some() {
+        return Ok(());
+    }
     let mut r = g.borrow_mut();
     if r.is_none() {
         let conn = if path.is_empty() || path == ":memory:" {
             db::Connection::open_in_memory().map_err(db_err_to_bindings)?
         } else {
-            db::Connection::open(&path, db::OpenFlags::DEFAULT)
-                .map_err(db_err_to_bindings)?
+            db::Connection::open(&path, db::OpenFlags::DEFAULT).map_err(db_err_to_bindings)?
         };
         // PLAN-cli-stages-5-6.md Stage 5c: register each enabled
         // embed-* extension on the host's connection. Native Rust
@@ -1737,8 +1745,7 @@ fn sync_dispatch_dot_command(
     cli_state: Vec<(String, String)>,
 ) -> anyhow::Result<DotCommandOutcome> {
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current()
-            .block_on(host.dispatch_dot_command(name, args, cli_state))
+        tokio::runtime::Handle::current().block_on(host.dispatch_dot_command(name, args, cli_state))
     })
 }
 
@@ -1749,10 +1756,7 @@ fn sync_dispatch_dot_command(
 /// has always dropped state-deltas, so the missing snapshot
 /// only affects extensions that read cli-state from a SELECT
 /// (no real-world callers).
-unsafe fn register_host_dot_command_function(
-    db: *mut libsqlite3_sys::sqlite3,
-    host: Host,
-) {
+unsafe fn register_host_dot_command_function(db: *mut libsqlite3_sys::sqlite3, host: Host) {
     use std::os::raw::{c_char, c_int, c_void};
     // Box the Host clone (cheap  internally Arc) and hand the
     // raw pointer to sqlite3 as the function's user_data. The
@@ -1780,7 +1784,9 @@ unsafe fn register_host_dot_command_function(
         for i in 1..argc {
             let v = unsafe { *argv.add(i as usize) };
             let s = unsafe { sqlite3_value_to_string(v) };
-            if !joined.is_empty() { joined.push(' '); }
+            if !joined.is_empty() {
+                joined.push(' ');
+            }
             joined.push_str(&s);
         }
         let result = sync_dispatch_dot_command(host, &name, &joined, Vec::new());
@@ -1802,9 +1808,8 @@ unsafe fn register_host_dot_command_function(
                 if msg.contains("no dot-command") {
                     unsafe { libsqlite3_sys::sqlite3_result_null(ctx) };
                 } else {
-                    let cs = std::ffi::CString::new(format!(
-                        "dot_command({name}): {msg}"
-                    )).unwrap_or_default();
+                    let cs = std::ffi::CString::new(format!("dot_command({name}): {msg}"))
+                        .unwrap_or_default();
                     unsafe { libsqlite3_sys::sqlite3_result_error(ctx, cs.as_ptr(), -1) };
                 }
             }
@@ -1844,8 +1849,7 @@ fn sync_dispatch_scalar(
     args: Vec<bindings::sqlite::extension::types::SqlValue>,
 ) -> anyhow::Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current()
-            .block_on(host.dispatch_scalar(ext_name, func_id, args))
+        tokio::runtime::Handle::current().block_on(host.dispatch_scalar(ext_name, func_id, args))
     })
 }
 
@@ -1862,9 +1866,7 @@ unsafe fn sqlite3_value_to_bindings(
         x if x == libsqlite3_sys::SQLITE_INTEGER => {
             V::Integer(libsqlite3_sys::sqlite3_value_int64(v))
         }
-        x if x == libsqlite3_sys::SQLITE_FLOAT => {
-            V::Real(libsqlite3_sys::sqlite3_value_double(v))
-        }
+        x if x == libsqlite3_sys::SQLITE_FLOAT => V::Real(libsqlite3_sys::sqlite3_value_double(v)),
         x if x == libsqlite3_sys::SQLITE_TEXT => {
             let p = libsqlite3_sys::sqlite3_value_text(v);
             if p.is_null() {
@@ -1895,8 +1897,8 @@ unsafe fn bindings_to_sqlite3_result(
     ctx: *mut libsqlite3_sys::sqlite3_context,
     v: bindings::sqlite::extension::types::SqlValue,
 ) {
-    use std::os::raw::{c_char, c_int};
     use bindings::sqlite::extension::types::SqlValue as V;
+    use std::os::raw::{c_char, c_int};
     match v {
         V::Null => libsqlite3_sys::sqlite3_result_null(ctx),
         V::Integer(i) => libsqlite3_sys::sqlite3_result_int64(ctx, i),
@@ -1941,7 +1943,11 @@ unsafe fn register_host_loaded_scalar(
         func_id: u64,
     }
 
-    let boxed = Box::new(ScalarCtx { host, ext_name, func_id });
+    let boxed = Box::new(ScalarCtx {
+        host,
+        ext_name,
+        func_id,
+    });
     let ptr = Box::into_raw(boxed) as *mut c_void;
 
     extern "C" fn xfunc(
@@ -1949,12 +1955,11 @@ unsafe fn register_host_loaded_scalar(
         argc: std::os::raw::c_int,
         argv: *mut *mut libsqlite3_sys::sqlite3_value,
     ) {
-        let scalar_ctx = unsafe {
-            libsqlite3_sys::sqlite3_user_data(ctx) as *const ScalarCtx
-        };
+        let scalar_ctx = unsafe { libsqlite3_sys::sqlite3_user_data(ctx) as *const ScalarCtx };
         if scalar_ctx.is_null() {
             unsafe {
-                let msg = b"scalar trampoline: null context\0".as_ptr() as *const std::os::raw::c_char;
+                let msg =
+                    b"scalar trampoline: null context\0".as_ptr() as *const std::os::raw::c_char;
                 libsqlite3_sys::sqlite3_result_error(ctx, msg, -1);
             }
             return;
@@ -2042,8 +2047,7 @@ fn sync_dispatch_collation(
     b: &str,
 ) -> anyhow::Result<i32> {
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current()
-            .block_on(host.dispatch_collation(ext_name, coll_id, a, b))
+        tokio::runtime::Handle::current().block_on(host.dispatch_collation(ext_name, coll_id, a, b))
     })
 }
 
@@ -2065,7 +2069,11 @@ unsafe fn register_host_loaded_collation(
         coll_id: u64,
     }
 
-    let boxed = Box::new(CollCtx { host, ext_name, coll_id });
+    let boxed = Box::new(CollCtx {
+        host,
+        ext_name,
+        coll_id,
+    });
     let ptr = Box::into_raw(boxed) as *mut c_void;
 
     extern "C" fn xcompare(
@@ -2124,9 +2132,8 @@ fn sync_dispatch_aggregate_step(
     args: Vec<bindings::sqlite::extension::types::SqlValue>,
 ) -> anyhow::Result<std::result::Result<(), String>> {
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(
-            host.dispatch_aggregate_step(ext_name, func_id, context_id, args),
-        )
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_aggregate_step(ext_name, func_id, context_id, args))
     })
 }
 
@@ -2162,9 +2169,8 @@ fn sync_dispatch_aggregate_inverse(
     args: Vec<bindings::sqlite::extension::types::SqlValue>,
 ) -> anyhow::Result<std::result::Result<(), String>> {
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(
-            host.dispatch_aggregate_inverse(ext_name, func_id, context_id, args),
-        )
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_aggregate_inverse(ext_name, func_id, context_id, args))
     })
 }
 
@@ -2210,7 +2216,9 @@ struct HostLoadedAggregate {
 
 impl sqlite_component_core::db::Aggregate<u64> for HostLoadedAggregate {
     fn init(&self) -> u64 {
-        self.host.agg_ctx_counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        self.host
+            .agg_ctx_counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
     fn step(
@@ -2238,7 +2246,8 @@ impl sqlite_component_core::db::Aggregate<u64> for HostLoadedAggregate {
     fn finalize(
         &self,
         acc: Option<u64>,
-    ) -> std::result::Result<sqlite_component_core::db::Value, sqlite_component_core::db::Error> {
+    ) -> std::result::Result<sqlite_component_core::db::Value, sqlite_component_core::db::Error>
+    {
         let ctx_id = acc.unwrap_or(0);
         match sync_dispatch_aggregate_finalize(&self.host, &self.ext_name, self.func_id, ctx_id) {
             Ok(Ok(v)) => Ok(bindings_sql_to_db_value(v)),
@@ -2260,7 +2269,8 @@ impl sqlite_component_core::db::WindowAggregate<u64> for HostLoadedAggregate {
     fn value(
         &self,
         ctx: &u64,
-    ) -> std::result::Result<sqlite_component_core::db::Value, sqlite_component_core::db::Error> {
+    ) -> std::result::Result<sqlite_component_core::db::Value, sqlite_component_core::db::Error>
+    {
         match sync_dispatch_aggregate_value(&self.host, &self.ext_name, self.func_id, *ctx) {
             Ok(Ok(v)) => Ok(bindings_sql_to_db_value(v)),
             Ok(Err(e)) => Err(sqlite_component_core::db::Error {
@@ -2358,9 +2368,8 @@ fn sync_dispatch_authorize(
     a4: Option<String>,
 ) -> anyhow::Result<bindings::sqlite::extension::types::AuthResult> {
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(
-            host.dispatch_authorize(ext_name, action, a1, a2, a3, a4),
-        )
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_authorize(ext_name, action, a1, a2, a3, a4))
     })
 }
 
@@ -2398,9 +2407,8 @@ fn sync_dispatch_on_wal_hook(
     n_frames: u32,
 ) -> anyhow::Result<i32> {
     tokio::task::block_in_place(|| {
-        tokio::runtime::Handle::current().block_on(host.dispatch_on_wal_hook(
-            ext_name, hook_id, db_name, n_frames,
-        ))
+        tokio::runtime::Handle::current()
+            .block_on(host.dispatch_on_wal_hook(ext_name, hook_id, db_name, n_frames))
     })
 }
 
@@ -2479,7 +2487,7 @@ unsafe fn register_host_embedded_extensions(_db: *mut libsqlite3_sys::sqlite3) {
             eprintln!("embed-json1: register_into failed rc={rc}");
         }
     }
-#[cfg(feature = "embed-crc")]
+    #[cfg(feature = "embed-crc")]
     {
         let rc = crc_extension::embed::register_into(_db);
         if rc != libsqlite3_sys::SQLITE_OK {
@@ -3101,8 +3109,7 @@ unsafe fn apply_host_cli_pragmas(db: *mut libsqlite3_sys::sqlite3) {
             std::ptr::null_mut(),
         );
         if rc != libsqlite3_sys::SQLITE_OK {
-            let name = std::ffi::CStr::from_ptr(sql.as_ptr() as *const _)
-                .to_string_lossy();
+            let name = std::ffi::CStr::from_ptr(sql.as_ptr() as *const _).to_string_lossy();
             eprintln!("host cli pragma {name}: rc={rc}");
         }
     }
@@ -3111,7 +3118,9 @@ unsafe fn apply_host_cli_pragmas(db: *mut libsqlite3_sys::sqlite3) {
 /// Read an sqlite3_value as a String.
 unsafe fn sqlite3_value_to_string(v: *mut libsqlite3_sys::sqlite3_value) -> String {
     let p = libsqlite3_sys::sqlite3_value_text(v);
-    if p.is_null() { return String::new(); }
+    if p.is_null() {
+        return String::new();
+    }
     let len = libsqlite3_sys::sqlite3_value_bytes(v) as usize;
     let bytes = std::slice::from_raw_parts(p, len);
     String::from_utf8_lossy(bytes).into_owned()
@@ -3254,7 +3263,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
             sqlite_component_core::db::OpenFlags::DEFAULT,
         )
         .map_err(db_err_to_spi)?;
-        src.backup_into(&src_db, &dst, &dst_db).map_err(db_err_to_spi)
+        src.backup_into(&src_db, &dst, &dst_db)
+            .map_err(db_err_to_spi)
     }
 
     async fn restore_from(
@@ -3272,7 +3282,8 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         let dst_g = self.spi_conn.lock();
         let dst_r = dst_g.borrow();
         let dst = dst_r.as_ref().expect("ensured open");
-        src.backup_into(&src_db, dst, &dst_db).map_err(db_err_to_spi)
+        src.backup_into(&src_db, dst, &dst_db)
+            .map_err(db_err_to_spi)
     }
 
     async fn set_busy_timeout(
@@ -3348,21 +3359,9 @@ impl loaded::sqlite::extension::spi::Host for LoadedState {
         Err(loaded::sqlite::extension::types::SqliteError {
             code: 1,
             extended_code: 1,
-            message: "spi.open-db is only available on the cli's shared connection"
-                .to_string(),
+            message: "spi.open-db is only available on the cli's shared connection".to_string(),
         })
     }
-
-
-
-
-
-
-
-
-
-
-
 }
 
 /// `sqlite:extension/wal-frames` host dispatcher. Both methods
@@ -3385,10 +3384,7 @@ impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
     async fn get_wal_header(
         &mut self,
         db_name: String,
-    ) -> std::result::Result<
-        Option<Vec<u8>>,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
+    ) -> std::result::Result<Option<Vec<u8>>, loaded::sqlite::extension::types::SqliteError> {
         if !self.wal_frames_granted {
             return Err(wal_perm_err("get-wal-header"));
         }
@@ -3401,9 +3397,12 @@ impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
             Err(e) => return Err(wal_io_err("stat wal", &wal_path, &e)),
             _ => {}
         }
-        let bytes = tokio::fs::read(&wal_path).await
+        let bytes = tokio::fs::read(&wal_path)
+            .await
             .map_err(|e| wal_io_err("read wal", &wal_path, &e))?;
-        if bytes.len() < 32 { return Ok(None); }
+        if bytes.len() < 32 {
+            return Ok(None);
+        }
         Ok(Some(bytes[..32].to_vec()))
     }
 
@@ -3412,10 +3411,7 @@ impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
         db_name: String,
         start_frame: u32,
         n_frames: u32,
-    ) -> std::result::Result<
-        Vec<u8>,
-        loaded::sqlite::extension::types::SqliteError,
-    > {
+    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
         if !self.wal_frames_granted {
             return Err(wal_perm_err("read-frames"));
         }
@@ -3423,20 +3419,18 @@ impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
             return Err(loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_RANGE,
                 extended_code: libsqlite3_sys::SQLITE_RANGE,
-                message: "wal-frames.read-frames: start-frame is 1-based; 0 is invalid"
-                    .to_string(),
+                message: "wal-frames.read-frames: start-frame is 1-based; 0 is invalid".to_string(),
             });
         }
         let wal_path = wal_sidecar_path(self, &db_name)?.ok_or_else(|| {
             loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_NOTFOUND,
                 extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
-                message: format!(
-                    "wal-frames.read-frames: no WAL file for db {db_name:?}"
-                ),
+                message: format!("wal-frames.read-frames: no WAL file for db {db_name:?}"),
             }
         })?;
-        let bytes = tokio::fs::read(&wal_path).await
+        let bytes = tokio::fs::read(&wal_path)
+            .await
             .map_err(|e| wal_io_err("read wal", &wal_path, &e))?;
         if bytes.len() < 32 {
             return Err(loaded::sqlite::extension::types::SqliteError {
@@ -3467,13 +3461,13 @@ impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
         let frame_size = 24u64 + page_size as u64;
         let start_off = 32u64 + (start_frame as u64 - 1) * frame_size;
         let length = n_frames as u64 * frame_size;
-        let end_off = start_off
-            .checked_add(length)
-            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
+        let end_off = start_off.checked_add(length).ok_or_else(|| {
+            loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_RANGE,
                 extended_code: libsqlite3_sys::SQLITE_RANGE,
                 message: "wal-frames.read-frames: range overflow".to_string(),
-            })?;
+            }
+        })?;
         if end_off > bytes.len() as u64 {
             return Err(loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_RANGE,
@@ -3520,9 +3514,7 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
             crate::s3::op_get_object(endpoint, credentials, bucket, key, options)
         })
         .await
-        .map_err(|e| {
-            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
-        })?
+        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
     }
 
     async fn put_object(
@@ -3544,9 +3536,7 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
             crate::s3::op_put_object(endpoint, credentials, bucket, key, body, options)
         })
         .await
-        .map_err(|e| {
-            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
-        })?
+        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
     }
 
     async fn delete_object(
@@ -3563,9 +3553,7 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
             crate::s3::op_delete_object(endpoint, credentials, bucket, key)
         })
         .await
-        .map_err(|e| {
-            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
-        })?
+        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
     }
 
     async fn head_object(
@@ -3585,9 +3573,7 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
             crate::s3::op_head_object(endpoint, credentials, bucket, key)
         })
         .await
-        .map_err(|e| {
-            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
-        })?
+        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
     }
 
     async fn list_objects(
@@ -3607,9 +3593,7 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
             crate::s3::op_list_objects(endpoint, credentials, bucket, options)
         })
         .await
-        .map_err(|e| {
-            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
-        })?
+        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
     }
 
     async fn copy_object(
@@ -3638,9 +3622,7 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
             )
         })
         .await
-        .map_err(|e| {
-            loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}"))
-        })?
+        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
     }
 }
 
@@ -3684,10 +3666,9 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
             return Err(loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_PERM,
                 extended_code: libsqlite3_sys::SQLITE_PERM,
-                message:
-                    "build.spawn-build: capability not granted at load time \
+                message: "build.spawn-build: capability not granted at load time \
                      (add `spawn-build` to the load --grant list)"
-                        .to_string(),
+                    .to_string(),
             });
         }
 
@@ -3715,10 +3696,7 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
             return Err(loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_PERM,
                 extended_code: libsqlite3_sys::SQLITE_PERM,
-                message: format!(
-                    "build.spawn-build: target_triple {:?} {why}",
-                    target_triple
-                ),
+                message: format!("build.spawn-build: target_triple {:?} {why}", target_triple),
             });
         }
 
@@ -3747,10 +3725,8 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
             cmd.current_dir(&crate_root_path);
             apply_spawn_build_env(&mut cmd, &env_clone);
             let output = run_with_timeout(&mut cmd, SPAWN_BUILD_TIMEOUT, "cargo")?;
-            let stdout =
-                String::from_utf8_lossy(&output.stdout).into_owned();
-            let stderr =
-                String::from_utf8_lossy(&output.stderr).into_owned();
+            let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+            let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
             if !output.status.success() {
                 return Err(loaded::sqlite::extension::types::SqliteError {
                     code: libsqlite3_sys::SQLITE_ERROR,
@@ -3772,19 +3748,15 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                 Some(t) => crate_root_path.join("target").join(t).join("release"),
                 None => crate_root_path.join("target").join("release"),
             };
-            let binary_path = find_release_binary(
-                &release_dir,
-                package_clone.as_deref(),
-            ).ok_or_else(|| {
-                loaded::sqlite::extension::types::SqliteError {
+            let binary_path = find_release_binary(&release_dir, package_clone.as_deref())
+                .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
                     code: libsqlite3_sys::SQLITE_NOTFOUND,
                     extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
                     message: format!(
                         "build.spawn-build: cargo succeeded but no binary found under {}",
                         release_dir.display()
                     ),
-                }
-            })?;
+                })?;
             // Gap F: for wasm-component targets, cargo produces a
             // core wasm module; the canonical embed/load pipeline
             // expects a wasi-preview2 component. Run `wasm-tools
@@ -3808,11 +3780,9 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                 apply_spawn_build_env(&mut wt, &env_clone);
                 let wt_out = run_with_timeout(&mut wt, SPAWN_BUILD_TIMEOUT, "wasm-tools")?;
                 combined_stdout.push_str("\n--- wasm-tools stdout ---\n");
-                combined_stdout
-                    .push_str(&String::from_utf8_lossy(&wt_out.stdout));
+                combined_stdout.push_str(&String::from_utf8_lossy(&wt_out.stdout));
                 combined_stderr.push_str("\n--- wasm-tools stderr ---\n");
-                combined_stderr
-                    .push_str(&String::from_utf8_lossy(&wt_out.stderr));
+                combined_stderr.push_str(&String::from_utf8_lossy(&wt_out.stderr));
                 if !wt_out.status.success() {
                     return Err(loaded::sqlite::extension::types::SqliteError {
                         code: libsqlite3_sys::SQLITE_ERROR,
@@ -3821,10 +3791,7 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                             "build.spawn-build: wasm-tools component new exited {}\n\
                              stderr tail:\n{}",
                             wt_out.status,
-                            tail_lines(
-                                &String::from_utf8_lossy(&wt_out.stderr),
-                                40
-                            ),
+                            tail_lines(&String::from_utf8_lossy(&wt_out.stderr), 40),
                         ),
                     });
                 }
@@ -3876,11 +3843,9 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         // embedded NUL or control chars confuse sqlite bind_text
         // and downstream display.
         if let Some(n) = name.as_deref() {
-            validate_bundle_str(n, "name", BUNDLE_NAME_MAX)
-                .map_err(bundle_arg_err)?;
+            validate_bundle_str(n, "name", BUNDLE_NAME_MAX).map_err(bundle_arg_err)?;
         }
-        validate_bundle_str(&set_hash, "set_hash", BUNDLE_SET_HASH_MAX)
-            .map_err(bundle_arg_err)?;
+        validate_bundle_str(&set_hash, "set_hash", BUNDLE_SET_HASH_MAX).map_err(bundle_arg_err)?;
         for m in &members {
             validate_bundle_str(&m.extension_name, "extension_name", BUNDLE_NAME_MAX)
                 .map_err(bundle_arg_err)?;
@@ -3899,9 +3864,7 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         match guard.bundle_save(name.as_deref(), &set_hash, &members) {
             Ok(id) => Ok(id),
             Err(e) => {
-                if let Some(conflict) =
-                    e.downcast_ref::<sqlite_cas_cache::BundleAliasConflict>()
-                {
+                if let Some(conflict) = e.downcast_ref::<sqlite_cas_cache::BundleAliasConflict>() {
                     return Err(loaded::sqlite::extension::types::SqliteError {
                         code: libsqlite3_sys::SQLITE_CONSTRAINT,
                         extended_code: libsqlite3_sys::SQLITE_CONSTRAINT,
@@ -4050,18 +4013,17 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
                 message: format!("bundles.record-binary: bundle {id} not found"),
             })?;
         let src = std::path::PathBuf::from(&binary_path);
-        let basename = src.file_name().ok_or_else(|| {
-            loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_ERROR,
-                extended_code: libsqlite3_sys::SQLITE_ERROR,
-                message: format!(
-                    "bundles.record-binary: src path {binary_path:?} has no filename"
-                ),
-            }
-        })?;
-        let dest_dir = sqlite_cas_cache::SqliteCasStore::default_builds_dir(
-            &detail.summary.set_hash,
-        );
+        let basename =
+            src.file_name()
+                .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
+                    code: libsqlite3_sys::SQLITE_ERROR,
+                    extended_code: libsqlite3_sys::SQLITE_ERROR,
+                    message: format!(
+                        "bundles.record-binary: src path {binary_path:?} has no filename"
+                    ),
+                })?;
+        let dest_dir =
+            sqlite_cas_cache::SqliteCasStore::default_builds_dir(&detail.summary.set_hash);
         let dest = dest_dir.join(basename);
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
             loaded::sqlite::extension::types::SqliteError {
@@ -4073,16 +4035,14 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
                 ),
             }
         })?;
-        std::fs::copy(&src, &dest).map_err(|e| {
-            loaded::sqlite::extension::types::SqliteError {
-                code: libsqlite3_sys::SQLITE_IOERR,
-                extended_code: libsqlite3_sys::SQLITE_IOERR,
-                message: format!(
-                    "bundles.record-binary: copy {} -> {}: {e}",
-                    src.display(),
-                    dest.display()
-                ),
-            }
+        std::fs::copy(&src, &dest).map_err(|e| loaded::sqlite::extension::types::SqliteError {
+            code: libsqlite3_sys::SQLITE_IOERR,
+            extended_code: libsqlite3_sys::SQLITE_IOERR,
+            message: format!(
+                "bundles.record-binary: copy {} -> {}: {e}",
+                src.display(),
+                dest.display()
+            ),
         })?;
         let dest_str = dest.to_string_lossy().into_owned();
         guard
@@ -4116,25 +4076,28 @@ fn bundles_open_store(
                 .into(),
         });
     }
-    let host = state.host_ref.as_ref().ok_or_else(|| {
-        loaded::sqlite::extension::types::SqliteError {
-            code: libsqlite3_sys::SQLITE_INTERNAL,
-            extended_code: libsqlite3_sys::SQLITE_INTERNAL,
-            message: "bundles: host_ref not wired (extension must \
+    let host =
+        state
+            .host_ref
+            .as_ref()
+            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_INTERNAL,
+                extended_code: libsqlite3_sys::SQLITE_INTERNAL,
+                message: "bundles: host_ref not wired (extension must \
                       run under dotcmd-aware world to access bundles)"
-                .into(),
-        }
-    })?;
+                    .into(),
+            })?;
     let cache_guard = host.cache.read();
-    let cache = cache_guard.as_ref().ok_or_else(|| {
-        loaded::sqlite::extension::types::SqliteError {
-            code: libsqlite3_sys::SQLITE_CANTOPEN,
-            extended_code: libsqlite3_sys::SQLITE_CANTOPEN,
-            message: "bundles: cas-cache not initialized on host \
+    let cache =
+        cache_guard
+            .as_ref()
+            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_CANTOPEN,
+                extended_code: libsqlite3_sys::SQLITE_CANTOPEN,
+                message: "bundles: cas-cache not initialized on host \
                       (run a `.cache use-*` first or pass --cache-dir)"
-                .into(),
-        }
-    })?;
+                    .into(),
+            })?;
     Ok(cache.store())
 }
 
@@ -4289,8 +4252,7 @@ fn bundle_arg_err(msg: String) -> loaded::sqlite::extension::types::SqliteError 
 /// (cargo OR wasm-tools) may take. Hardcoded for v1; making this
 /// per-call configurable would let extensions request arbitrarily
 /// long jobs.
-const SPAWN_BUILD_TIMEOUT: std::time::Duration =
-    std::time::Duration::from_secs(600);
+const SPAWN_BUILD_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
 
 /// HIGH-severity defensive fix: clear the subprocess's environment
 /// before adding our own curated minimum. The prior implementation
@@ -4310,10 +4272,7 @@ const SPAWN_BUILD_TIMEOUT: std::time::Duration =
 /// Then any `(k, v)` pairs the extension supplied via the SPI `env`
 /// argument are appended on top. The extension can override the
 /// curated minimum but cannot READ the host's other env values.
-fn apply_spawn_build_env(
-    cmd: &mut std::process::Command,
-    extra: &[(String, String)],
-) {
+fn apply_spawn_build_env(cmd: &mut std::process::Command, extra: &[(String, String)]) {
     cmd.env_clear();
     for k in &["PATH", "HOME", "USER", "CARGO_HOME", "RUSTUP_HOME"] {
         if let Some(v) = std::env::var_os(k) {
@@ -4340,10 +4299,7 @@ fn run_with_timeout(
     cmd: &mut std::process::Command,
     timeout: std::time::Duration,
     label: &str,
-) -> std::result::Result<
-    std::process::Output,
-    loaded::sqlite::extension::types::SqliteError,
-> {
+) -> std::result::Result<std::process::Output, loaded::sqlite::extension::types::SqliteError> {
     use std::io::Read;
     let mut child = cmd
         .stdout(std::process::Stdio::piped())
@@ -4517,10 +4473,8 @@ fn wal_io_err(
 fn wal_sidecar_path(
     state: &LoadedState,
     db_name: &str,
-) -> std::result::Result<
-    Option<std::path::PathBuf>,
-    loaded::sqlite::extension::types::SqliteError,
-> {
+) -> std::result::Result<Option<std::path::PathBuf>, loaded::sqlite::extension::types::SqliteError>
+{
     spi_ensure_open(state)?;
     let g = state.spi_conn.lock();
     let r = g.borrow();
@@ -4534,9 +4488,9 @@ fn wal_sidecar_path(
         .file_name()
         .map(|s| s.to_os_string())
         .unwrap_or_default();
-    let mut file_name = file_name.into_string().unwrap_or_else(|os| {
-        os.to_string_lossy().into_owned()
-    });
+    let mut file_name = file_name
+        .into_string()
+        .unwrap_or_else(|os| os.to_string_lossy().into_owned());
     file_name.push_str("-wal");
     wal.set_file_name(file_name);
     Ok(Some(wal))
@@ -4555,7 +4509,9 @@ impl loaded::sqlite::extension::session::Host for LoadedState {
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
         let host = host_ref_required(self)?;
         if host.session_handles.lock().contains_key(&name) {
-            return Err(loaded_session_err(format!("session {name:?} already exists")));
+            return Err(loaded_session_err(format!(
+                "session {name:?} already exists"
+            )));
         }
         shared_spi_ensure_open_loaded(host)?;
         let db_c = std::ffi::CString::new(db_name.clone())
@@ -4568,7 +4524,9 @@ impl loaded::sqlite::extension::session::Host for LoadedState {
         let mut sess: *mut session_ffi::sqlite3_session = std::ptr::null_mut();
         let rc = unsafe { session_ffi::sqlite3session_create(raw_db, db_c.as_ptr(), &mut sess) };
         if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(loaded_session_err(format!("sqlite3session_create returned {rc}")));
+            return Err(loaded_session_err(format!(
+                "sqlite3session_create returned {rc}"
+            )));
         }
         host.session_handles.lock().insert(name, sess as usize);
         Ok(())
@@ -4588,10 +4546,15 @@ impl loaded::sqlite::extension::session::Host for LoadedState {
             ),
             _ => None,
         };
-        let ptr = table_c.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+        let ptr = table_c
+            .as_ref()
+            .map(|c| c.as_ptr())
+            .unwrap_or(std::ptr::null());
         let rc = unsafe { session_ffi::sqlite3session_attach(sess, ptr) };
         if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(loaded_session_err(format!("sqlite3session_attach returned {rc}")));
+            return Err(loaded_session_err(format!(
+                "sqlite3session_attach returned {rc}"
+            )));
         }
         Ok(())
     }
@@ -4638,7 +4601,9 @@ impl loaded::sqlite::extension::session::Host for LoadedState {
         let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
         let rc = unsafe { session_ffi::sqlite3session_changeset(sess, &mut n, &mut p) };
         if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(loaded_session_err(format!("sqlite3session_changeset returned {rc}")));
+            return Err(loaded_session_err(format!(
+                "sqlite3session_changeset returned {rc}"
+            )));
         }
         let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
         unsafe { libsqlite3_sys::sqlite3_free(p) };
@@ -4655,7 +4620,9 @@ impl loaded::sqlite::extension::session::Host for LoadedState {
         let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
         let rc = unsafe { session_ffi::sqlite3session_patchset(sess, &mut n, &mut p) };
         if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(loaded_session_err(format!("sqlite3session_patchset returned {rc}")));
+            return Err(loaded_session_err(format!(
+                "sqlite3session_patchset returned {rc}"
+            )));
         }
         let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
         unsafe { libsqlite3_sys::sqlite3_free(p) };
@@ -4753,7 +4720,9 @@ fn execute_multi_impl_loaded(
             Err(e) => return Err(db_err_to_spi(e)),
         };
         if stmt.is_empty() {
-            if tail >= remaining.len() { break; }
+            if tail >= remaining.len() {
+                break;
+            }
             remaining = &remaining[tail..];
             continue;
         }
@@ -4785,7 +4754,9 @@ fn execute_multi_impl_loaded(
             changes: conn.changes(),
             last_insert_rowid: conn.last_insert_rowid(),
         });
-        if tail >= remaining.len() { break; }
+        if tail >= remaining.len() {
+            break;
+        }
         remaining = &remaining[tail..];
     }
     Ok(results)
@@ -4905,35 +4876,54 @@ impl loaded_dotcmd_aware::sqlite::extension::cli_stderr::Host for LoadedState {
 
 impl loaded_dotcmd_aware::sqlite::extension::cli_state::Host for LoadedState {
     async fn get_text(&mut self, key: String) -> String {
-        let Some(j) = self.cli_state_snapshot.get(&key) else { return String::new() };
+        let Some(j) = self.cli_state_snapshot.get(&key) else {
+            return String::new();
+        };
         parse_json_text(j).unwrap_or_default()
     }
     async fn get_int(&mut self, key: String) -> i64 {
-        let Some(j) = self.cli_state_snapshot.get(&key) else { return 0 };
+        let Some(j) = self.cli_state_snapshot.get(&key) else {
+            return 0;
+        };
         // Accept bare integer or JSON int.
         j.trim().parse::<i64>().unwrap_or(0)
     }
     async fn get_bool(&mut self, key: String) -> bool {
-        let Some(j) = self.cli_state_snapshot.get(&key) else { return false };
+        let Some(j) = self.cli_state_snapshot.get(&key) else {
+            return false;
+        };
         matches!(j.trim(), "true" | "1")
     }
     async fn get_real(&mut self, key: String) -> f64 {
-        let Some(j) = self.cli_state_snapshot.get(&key) else { return 0.0 };
+        let Some(j) = self.cli_state_snapshot.get(&key) else {
+            return 0.0;
+        };
         j.trim().parse::<f64>().unwrap_or(0.0)
     }
-    async fn get_value(
-        &mut self,
-        key: String,
-    ) -> loaded::sqlite::extension::types::SqlValue {
+    async fn get_value(&mut self, key: String) -> loaded::sqlite::extension::types::SqlValue {
         use loaded::sqlite::extension::types::SqlValue as V;
-        let Some(j) = self.cli_state_snapshot.get(&key) else { return V::Null };
+        let Some(j) = self.cli_state_snapshot.get(&key) else {
+            return V::Null;
+        };
         let t = j.trim();
-        if t == "null" { return V::Null; }
-        if t == "true" { return V::Integer(1); }
-        if t == "false" { return V::Integer(0); }
-        if let Ok(i) = t.parse::<i64>() { return V::Integer(i); }
-        if let Ok(f) = t.parse::<f64>() { return V::Real(f); }
-        if let Some(s) = parse_json_text(t) { return V::Text(s); }
+        if t == "null" {
+            return V::Null;
+        }
+        if t == "true" {
+            return V::Integer(1);
+        }
+        if t == "false" {
+            return V::Integer(0);
+        }
+        if let Ok(i) = t.parse::<i64>() {
+            return V::Integer(i);
+        }
+        if let Ok(f) = t.parse::<f64>() {
+            return V::Real(f);
+        }
+        if let Some(s) = parse_json_text(t) {
+            return V::Text(s);
+        }
         V::Null
     }
     async fn list_keys(&mut self, prefix: String) -> Vec<String> {
@@ -4957,14 +4947,20 @@ fn parse_json_text(json: &str) -> Option<String> {
     let mut out = String::with_capacity(inner.len());
     let mut chars = inner.chars();
     while let Some(c) = chars.next() {
-        if c != '\\' { out.push(c); continue; }
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
         match chars.next() {
             Some('"') => out.push('"'),
             Some('\\') => out.push('\\'),
             Some('n') => out.push('\n'),
             Some('r') => out.push('\r'),
             Some('t') => out.push('\t'),
-            Some(other) => { out.push('\\'); out.push(other); }
+            Some(other) => {
+                out.push('\\');
+                out.push(other);
+            }
             None => out.push('\\'),
         }
     }
@@ -4988,16 +4984,21 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
         loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
     > {
         let Some(ref host) = self.host_ref else {
-            return Err(loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                code: 1,
-                message: "loader-bridge: host_ref not wired".into(),
-            });
+            return Err(
+                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                    code: 1,
+                    message: "loader-bridge: host_ref not wired".into(),
+                },
+            );
         };
         // v1 ignores extra_grants  uses the cli's default
         // policy. A future revision can map per-string capability
         // tokens onto a Policy + http/dns/fs sub-policies.
         let policy = Policy::default();
-        match host.load_extension_from_bytes(bytes, &name_hint, policy).await {
+        match host
+            .load_extension_from_bytes(bytes, &name_hint, policy)
+            .await
+        {
             Ok(name) => {
                 let components = host.components.read();
                 let Some(ext) = components.get(&name) else {
@@ -5022,29 +5023,40 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
                         }
                     })
                     .collect();
-                Ok(loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest {
-                    name: ext.name.clone(),
-                    version: ext.version.clone(),
-                    dot_commands,
-                })
+                Ok(
+                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest {
+                        name: ext.name.clone(),
+                        version: ext.version.clone(),
+                        dot_commands,
+                    },
+                )
             }
-            Err(e) => Err(loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
-                code: 1,
-                message: e.to_string(),
-            }),
+            Err(e) => Err(
+                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                    code: 1,
+                    message: e.to_string(),
+                },
+            ),
         }
     }
 
     async fn extension_digest(&mut self, name: String) -> String {
-        let Some(ref host) = self.host_ref else { return String::new() };
+        let Some(ref host) = self.host_ref else {
+            return String::new();
+        };
         let components = host.components.read();
-        components.get(&name).map(|e| e.digest.clone()).unwrap_or_default()
+        components
+            .get(&name)
+            .map(|e| e.digest.clone())
+            .unwrap_or_default()
     }
 
     async fn list_loaded_extensions(
         &mut self,
     ) -> Vec<loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension> {
-        let Some(ref host) = self.host_ref else { return Vec::new() };
+        let Some(ref host) = self.host_ref else {
+            return Vec::new();
+        };
         let components = host.components.read();
         let mut out: Vec<_> = components
             .values()
@@ -5269,8 +5281,7 @@ fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
     // always import tvm:memory/{types,manager,bytes,diagnostics}
     // because sqlite-pcache-tvm + sqlite-vfs-tvm use the
     // wit-bindgen-backed cold tiers on wasm32 unconditionally.
-    tvm_wasmtime::add_to_linker(&mut linker)
-        .map_err(|e| anyhow!("run linker tvm:memory: {e}"))?;
+    tvm_wasmtime::add_to_linker(&mut linker).map_err(|e| anyhow!("run linker tvm:memory: {e}"))?;
     Ok(linker)
 }
 
@@ -5290,16 +5301,13 @@ fn make_loaded_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
 /// Build a Linker pre-wired for a `minimal-http`-world loaded
 /// extension. Same imports as minimal, plus the http interface
 /// (gated by manifest http-policy at the per-call boundary).
-fn make_loaded_minimal_http_linker(
-    engine: &Engine,
-) -> Result<Linker<LoadedState>> {
+fn make_loaded_minimal_http_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_minimal_http::MinimalHttp::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
+    loaded_minimal_http::MinimalHttp::add_to_linker::<_, LoadedHostData>(&mut linker, |state| {
+        state
+    })
     .map_err(|e| anyhow!("loaded-ext minimal-http: {e}"))?;
     Ok(linker)
 }
@@ -5311,11 +5319,8 @@ fn make_loaded_minimal_dns_linker(engine: &Engine) -> Result<Linker<LoadedState>
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_minimal_dns::MinimalDns::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
-    .map_err(|e| anyhow!("loaded-ext minimal-dns: {e}"))?;
+    loaded_minimal_dns::MinimalDns::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
+        .map_err(|e| anyhow!("loaded-ext minimal-dns: {e}"))?;
     Ok(linker)
 }
 
@@ -5372,10 +5377,9 @@ fn make_loaded_dotcmd_aware_linker(engine: &Engine) -> Result<Linker<LoadedState
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
-    loaded_dotcmd_aware::DotcmdAware::add_to_linker::<_, LoadedHostData>(
-        &mut linker,
-        |state| state,
-    )
+    loaded_dotcmd_aware::DotcmdAware::add_to_linker::<_, LoadedHostData>(&mut linker, |state| {
+        state
+    })
     .map_err(|e| anyhow!("loaded-ext dotcmd-aware: {e}"))?;
     Ok(linker)
 }
@@ -5824,7 +5828,10 @@ pub struct ComponentCache {
 
 impl ComponentCache {
     fn new(cap: usize) -> Self {
-        Self { cap, entries: std::collections::VecDeque::with_capacity(cap) }
+        Self {
+            cap,
+            entries: std::collections::VecDeque::with_capacity(cap),
+        }
     }
 
     /// On hit, moves the entry to the back (most-recently-used)
@@ -5880,8 +5887,7 @@ pub const DEFAULT_TENANT: &str = "default";
 /// Outer map of `tenant → (provider-id → provider)`. Hidden behind
 /// `Host` and `RunState`; callers go through the tenant-aware
 /// methods on `Host` rather than touching this directly.
-pub type TenantedProviders =
-    HashMap<String, HashMap<String, compose_provider::ProviderHandle>>;
+pub type TenantedProviders = HashMap<String, HashMap<String, compose_provider::ProviderHandle>>;
 
 /// Decision the host applies before accepting a wasm-component
 /// provider via `Host::register_wasm_provider`. The blake3 digest
@@ -5984,10 +5990,7 @@ fn build_compile_cache() -> Result<Cache> {
         anyhow!("no cache directory available (HOME / XDG_CACHE_HOME unset and SQLITE_WASM_COMPILE_CACHE not set)")
     })?;
     if let Err(e) = std::fs::create_dir_all(&dir) {
-        return Err(anyhow!(
-            "create cache directory {}: {e}",
-            dir.display()
-        ));
+        return Err(anyhow!("create cache directory {}: {e}", dir.display()));
     }
     let mut cfg = CacheConfig::new();
     cfg.with_directory(&dir);
@@ -6090,8 +6093,8 @@ impl Host {
         // emitted code is the absence of fuel-decrement instructions.
         let mut run_config = config.clone();
         run_config.consume_fuel(false);
-        let engine_run = Engine::new(&run_config)
-            .map_err(|e| anyhow!("create wasmtime run-engine: {e}"))?;
+        let engine_run =
+            Engine::new(&run_config).map_err(|e| anyhow!("create wasmtime run-engine: {e}"))?;
 
         spawn_epoch_bumper(engine.clone());
         spawn_epoch_bumper(engine_run.clone());
@@ -6287,12 +6290,7 @@ impl Host {
     /// already inside a tokio runtime should use
     /// `register_wasm_provider_in_async` to avoid nesting
     /// runtimes.
-    pub fn register_wasm_provider_in(
-        &self,
-        tenant: &str,
-        id: &str,
-        path: PathBuf,
-    ) -> Result<()> {
+    pub fn register_wasm_provider_in(&self, tenant: &str, id: &str, path: PathBuf) -> Result<()> {
         let policy = self.trust_policy.read().clone();
         if matches!(policy, TrustPolicy::Ed25519Signed { .. }) {
             // Need to await the openssl-wasm verifier. If the caller
@@ -6631,10 +6629,7 @@ impl Host {
     /// Returns `None` if the extension isn't known (a registration for
     /// an unknown ext_name is a host-side bug; we log + skip the
     /// prefix work but still let SQLite registration proceed).
-    pub fn ensure_prefix_for_extension(
-        &self,
-        ext_name: &str,
-    ) -> Option<(String, String)> {
+    pub fn ensure_prefix_for_extension(&self, ext_name: &str) -> Option<(String, String)> {
         // Fast path: already cached.
         if let Some(v) = self.prefix_cache.lock().get(ext_name) {
             return Some(v.clone());
@@ -6643,10 +6638,7 @@ impl Host {
         let (preferred_prefix, prefix_expansion) = {
             let comps = self.components.read();
             match comps.get(ext_name) {
-                Some(ext) => (
-                    ext.preferred_prefix.clone(),
-                    ext.prefix_expansion.clone(),
-                ),
+                Some(ext) => (ext.preferred_prefix.clone(), ext.prefix_expansion.clone()),
                 None => {
                     tracing::warn!(
                         extension = ext_name,
@@ -6691,9 +6683,7 @@ impl Host {
                 );
                 return None;
             }
-            match prefix_registry::record_prefix_with_collision_fallback(
-                conn, &p, &e_, now,
-            ) {
+            match prefix_registry::record_prefix_with_collision_fallback(conn, &p, &e_, now) {
                 Ok(p2) => p2,
                 Err(err) => {
                     tracing::warn!(
@@ -6734,20 +6724,18 @@ impl Host {
             let g = self.shared_spi_conn.lock();
             let r = g.borrow();
             if let Some(conn) = r.as_ref() {
-                prefix_registry::record_function(
-                    conn, &expansion, name, n_args, ext_name, now,
-                )
-                .map_err(|e| {
-                    tracing::warn!(
-                        extension = ext_name,
-                        func = name,
-                        arity = n_args,
-                        err = %e,
-                        "record_function_for_extension: record_function failed"
-                    );
-                    e
-                })
-                .ok()
+                prefix_registry::record_function(conn, &expansion, name, n_args, ext_name, now)
+                    .map_err(|e| {
+                        tracing::warn!(
+                            extension = ext_name,
+                            func = name,
+                            arity = n_args,
+                            err = %e,
+                            "record_function_for_extension: record_function failed"
+                        );
+                        e
+                    })
+                    .ok()
             } else {
                 None
             }
@@ -6784,9 +6772,8 @@ impl Host {
     where
         F: FnOnce(&sqlite_component_core::db::Connection) -> R,
     {
-        shared_spi_ensure_open(self).map_err(|e| {
-            anyhow!("open shared spi: {} (code {})", e.message, e.code)
-        })?;
+        shared_spi_ensure_open(self)
+            .map_err(|e| anyhow!("open shared spi: {} (code {})", e.message, e.code))?;
         let g = self.shared_spi_conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("shared_spi_conn opened above");
@@ -6846,10 +6833,7 @@ impl Host {
     /// of the same path skips re-parse. Returns `(name, digest)`
     /// only; the full manifest re-emerges from `load_extension`
     /// when the cli actually loads.
-    pub async fn describe_extension(
-        &self,
-        path: PathBuf,
-    ) -> Result<(String, String)> {
+    pub async fn describe_extension(&self, path: PathBuf) -> Result<(String, String)> {
         let (name, digest, _caps) = self.describe_extension_full(path).await?;
         Ok((name, digest))
     }
@@ -6996,7 +6980,8 @@ impl Host {
         // Component is Arc-wrapped internally so the clone is a
         // cheap reference bump.
         let component = self.component_for_digest(&bytes, &digest, name_hint)?;
-        self.register_component(component, name_hint, policy, digest).await
+        self.register_component(component, name_hint, policy, digest)
+            .await
     }
 
     /// Resolve a `Component` for the given digest via the
@@ -7014,7 +6999,9 @@ impl Host {
         // SQLITE_WASM_DISABLE_COMPONENT_CACHE=1 skips both tiers
         // so benchmarks measure cold from_binary cost.
         if self.component_cache_disabled() {
-            self.component_cache_stats.bypassed.fetch_add(1, Ordering::Relaxed);
+            self.component_cache_stats
+                .bypassed
+                .fetch_add(1, Ordering::Relaxed);
             let t0 = std::time::Instant::now();
             let c = Component::from_binary(&self.engine, bytes)
                 .map_err(|e| anyhow!("compile {name_hint}: {e}"))?;
@@ -7042,7 +7029,9 @@ impl Host {
             self.component_cache_stats
                 .c2_hits
                 .fetch_add(1, Ordering::Relaxed);
-            self.component_cache.lock().insert(digest.to_string(), c.clone());
+            self.component_cache
+                .lock()
+                .insert(digest.to_string(), c.clone());
             return Ok(c);
         }
         // Cold path: parse + populate both caches.
@@ -7056,14 +7045,20 @@ impl Host {
             .cold_parses
             .fetch_add(1, Ordering::Relaxed);
         self.try_c2_store(digest, &component);
-        self.component_cache.lock().insert(digest.to_string(), component.clone());
+        self.component_cache
+            .lock()
+            .insert(digest.to_string(), component.clone());
         Ok(component)
     }
 
     fn try_c2_lookup(&self, digest: &str) -> Option<Component> {
         let key = self.blob_cache_key()?;
         let blob = self
-            .with_user_conn(|conn| component_blob_cache::lookup(conn, digest, key).ok().flatten())
+            .with_user_conn(|conn| {
+                component_blob_cache::lookup(conn, digest, key)
+                    .ok()
+                    .flatten()
+            })
             .flatten()?;
         tracing::debug!(
             target: "component_cache",
@@ -7344,16 +7339,19 @@ impl Host {
     ) -> Result<(u32, u32, u32, u32, u32)> {
         let ext = {
             let comps = self.components.read();
-            comps
-                .get(ext_name)
-                .cloned()
-                .ok_or_else(|| anyhow!("install_loaded_extension: extension {ext_name} not loaded"))?
+            comps.get(ext_name).cloned().ok_or_else(|| {
+                anyhow!("install_loaded_extension: extension {ext_name} not loaded")
+            })?
         };
         // The registration code paths need a live shared_spi_conn.
         // shared_spi_ensure_open mirrors what the WIT register-*
         // methods do at the top of each call.
         shared_spi_ensure_open(self).map_err(|e| {
-            anyhow!("install_loaded_extension: open shared spi: {} (code {})", e.message, e.code)
+            anyhow!(
+                "install_loaded_extension: open shared spi: {} (code {})",
+                e.message,
+                e.code
+            )
         })?;
 
         // Prefix-registry substrate (PLAN-prefixes.md): install the
@@ -7387,16 +7385,15 @@ impl Host {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs() as i64)
                 .unwrap_or(0);
-            let actual_prefix = match prefix_registry::record_prefix_with_collision_fallback(
-                conn, &p, &e_, now,
-            ) {
-                Ok(p2) => p2,
-                Err(err) => {
-                    tracing::warn!(extension = ext_name, err = %err,
+            let actual_prefix =
+                match prefix_registry::record_prefix_with_collision_fallback(conn, &p, &e_, now) {
+                    Ok(p2) => p2,
+                    Err(err) => {
+                        tracing::warn!(extension = ext_name, err = %err,
                         "prefix collision fallback exhausted; continuing without qualified form");
-                    p.clone()
-                }
-            };
+                        p.clone()
+                    }
+                };
             (actual_prefix, e_)
         };
 
@@ -7439,13 +7436,8 @@ impl Host {
                 let g = self.shared_spi_conn.lock();
                 let r = g.borrow();
                 let conn = r.as_ref().expect("shared_spi_conn open");
-                prefix_registry::should_register_bare(
-                    conn,
-                    &spec.name,
-                    spec.num_args,
-                    &expansion,
-                )
-                .unwrap_or(true)
+                prefix_registry::should_register_bare(conn, &spec.name, spec.num_args, &expansion)
+                    .unwrap_or(true)
             };
 
             let r_bare = if want_bare {
@@ -7613,17 +7605,20 @@ impl Host {
                 let r = g.borrow();
                 let conn = r.as_ref().expect("shared_spi_conn open");
                 prefix_registry::record_function(
-                    conn, &expansion, &spec.name, spec.num_args, ext_name, now,
+                    conn,
+                    &expansion,
+                    &spec.name,
+                    spec.num_args,
+                    ext_name,
+                    now,
                 )
             };
             let want_bare = {
                 let g = self.shared_spi_conn.lock();
                 let r = g.borrow();
                 let conn = r.as_ref().expect("shared_spi_conn open");
-                prefix_registry::should_register_bare(
-                    conn, &spec.name, spec.num_args, &expansion,
-                )
-                .unwrap_or(true)
+                prefix_registry::should_register_bare(conn, &spec.name, spec.num_args, &expansion)
+                    .unwrap_or(true)
             };
             let mk_agg = || HostLoadedAggregate {
                 host: self.clone(),
@@ -7787,9 +7782,7 @@ impl Host {
                           a3: Option<String>,
                           a4: Option<String>| {
                         let wit_action = sqlite_code_to_auth_action(action);
-                        match sync_dispatch_authorize(
-                            &host_c, &ext_n, wit_action, a1, a2, a3, a4,
-                        ) {
+                        match sync_dispatch_authorize(&host_c, &ext_n, wit_action, a1, a2, a3, a4) {
                             Ok(bindings::sqlite::extension::types::AuthResult::Ok) => {
                                 sqlite_component_core::db::AuthResult::Allow
                             }
@@ -7940,12 +7933,16 @@ impl Host {
         let snapshot: HashMap<String, String> = cli_state.into_iter().collect();
         cached.store.data_mut().cli_state_snapshot = snapshot;
 
-        let display_mode = cached.store.data()
+        let display_mode = cached
+            .store
+            .data()
             .cli_state_snapshot
             .get("display/mode")
             .and_then(|j| parse_json_text(j))
             .unwrap_or_else(|| "list".to_string());
-        let bail_on_error = cached.store.data()
+        let bail_on_error = cached
+            .store
+            .data()
             .cli_state_snapshot
             .get("bail/on-error")
             .map(|j| matches!(j.trim(), "true" | "1"))
@@ -8031,10 +8028,7 @@ impl Host {
                 ScalarRoute::Tabular
             } else if !ext.aggregate_functions.is_empty() {
                 ScalarRoute::Stateful
-            } else if ext.has_update_hook
-                || ext.has_commit_hook
-                || ext.has_wal_hook
-            {
+            } else if ext.has_update_hook || ext.has_commit_hook || ext.has_wal_hook {
                 // Cross-world coherence: scalars and hook
                 // callbacks share one Store so guest-side
                 // `thread_local!` / `OnceLock` / `static
@@ -8269,13 +8263,10 @@ impl Host {
         if guard.is_none() {
             let linker = make_loaded_stateful_linker(&self.engine)?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_stateful::Stateful::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
+            let instance =
+                loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
+                    .await
+                    .map_err(|e| anyhow!("instantiate {ext_name} as stateful: {e}"))?;
             *guard = Some(CachedStateful { store, instance });
         }
         refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
@@ -8300,8 +8291,7 @@ impl Host {
                 .ok_or_else(|| anyhow!("extension {ext_name} not loaded"))?
         };
         let linker = make_loaded_collating_linker(&self.engine)?;
-        let mut store =
-            build_loaded_store(&self.engine, &ext, self.db_path())?;
+        let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
         let instance =
             loaded_collating::Collating::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -8477,9 +8467,7 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
         info: bindings::sqlite::extension::vtab::IndexInfo,
-    ) -> Result<
-        std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>,
-    > {
+    ) -> Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>> {
         // Each arm's `call_best_index` returns the IndexPlan from
         // its own bindgen — converted to the wire-side IndexPlan
         // inside the arm so the outer types line up.
@@ -8680,9 +8668,7 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
         col: i32,
-    ) -> Result<
-        std::result::Result<bindings::sqlite::extension::types::SqlValue, String>,
-    > {
+    ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -8746,10 +8732,9 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
         max_rows: u32,
-    ) -> Result<std::result::Result<
-        Vec<loaded_tabular::exports::sqlite::extension::vtab::VtabRow>,
-        String,
-    >> {
+    ) -> Result<
+        std::result::Result<Vec<loaded_tabular::exports::sqlite::extension::vtab::VtabRow>, String>,
+    > {
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -8774,10 +8759,12 @@ impl Host {
                 rs.map(|res| {
                     res.map(|rows| {
                         rows.into_iter()
-                            .map(|r| loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
-                                rowid: r.rowid,
-                                columns: r.columns,
-                            })
+                            .map(
+                                |r| loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
+                                    rowid: r.rowid,
+                                    columns: r.columns,
+                                },
+                            )
                             .collect()
                     })
                 })
@@ -9019,13 +9006,9 @@ impl Host {
         if guard.is_none() {
             let linker = make_loaded_linker(&self.engine)?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded::Minimal::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as minimal: {e}"))?;
+            let instance = loaded::Minimal::instantiate_async(&mut store, &ext.component, &linker)
+                .await
+                .map_err(|e| anyhow!("instantiate {ext_name} as minimal: {e}"))?;
             *guard = Some(CachedMinimal { store, instance });
         }
         refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
@@ -9089,13 +9072,10 @@ impl Host {
         if guard.is_none() {
             let linker = make_loaded_hooked_linker(&self.engine)?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_hooked::Hooked::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
+            let instance =
+                loaded_hooked::Hooked::instantiate_async(&mut store, &ext.component, &linker)
+                    .await
+                    .map_err(|e| anyhow!("instantiate {ext_name} as hooked: {e}"))?;
             *guard = Some(CachedHooked { store, instance });
         }
         refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
@@ -9189,13 +9169,10 @@ impl Host {
         if guard.is_none() {
             let linker = make_loaded_tabular_linker(&self.engine)?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
-            let instance = loaded_tabular::Tabular::instantiate_async(
-                &mut store,
-                &ext.component,
-                &linker,
-            )
-            .await
-            .map_err(|e| anyhow!("instantiate {ext_name} as tabular: {e}"))?;
+            let instance =
+                loaded_tabular::Tabular::instantiate_async(&mut store, &ext.component, &linker)
+                    .await
+                    .map_err(|e| anyhow!("instantiate {ext_name} as tabular: {e}"))?;
             *guard = Some(CachedTabular { store, instance });
         }
         refresh_call_budget(&mut guard.as_mut().unwrap().store, &ext)?;
@@ -9515,9 +9492,7 @@ impl Host {
         let runtime = {
             let g = self.runtimes.read();
             g.get(&key).cloned().ok_or_else(|| {
-                anyhow!(
-                    "no runtime registered for ext={ext:?} variant={variant:?}"
-                )
+                anyhow!("no runtime registered for ext={ext:?} variant={variant:?}")
             })?
         };
         let linker = make_run_linker(&self.engine)?;
@@ -9543,7 +9518,10 @@ impl Host {
             .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
             .map_err(|e| anyhow!("set_fuel: {e}"))?;
         store.set_epoch_deadline(
-            runtime.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000),
+            runtime
+                .policy
+                .epoch_deadline_ms
+                .unwrap_or(1_000_000_000_000),
         );
         let instance = language_runtime::LanguageRuntime::instantiate_async(
             &mut store,
@@ -9580,8 +9558,8 @@ impl Host {
                 )
             })?
         };
-        let source = std::fs::read_to_string(path)
-            .map_err(|e| anyhow!("run-source: read {path}: {e}"))?;
+        let source =
+            std::fs::read_to_string(path).map_err(|e| anyhow!("run-source: read {path}: {e}"))?;
         let source_name = p
             .file_name()
             .and_then(|s| s.to_str())
@@ -9604,7 +9582,10 @@ impl Host {
             .set_fuel(runtime.policy.fuel_per_call.unwrap_or(u64::MAX / 2))
             .map_err(|e| anyhow!("set_fuel: {e}"))?;
         store.set_epoch_deadline(
-            runtime.policy.epoch_deadline_ms.unwrap_or(1_000_000_000_000),
+            runtime
+                .policy
+                .epoch_deadline_ms
+                .unwrap_or(1_000_000_000_000),
         );
         let instance = language_runtime::LanguageRuntime::instantiate_async(
             &mut store,
@@ -9682,10 +9663,8 @@ impl bindings::sqlink::wasm::extension_loader::Host for RunLoaderStub {
         _name: String,
         _args: String,
         _cli_state: Vec<(String, String)>,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::DotCommandResult,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DotCommandResult, LoaderError>
+    {
         Err(loader_stub_err("dispatch-dot-command"))
     }
 
@@ -9791,17 +9770,12 @@ impl bindings::sqlink::wasm::extension_loader::Host for RunLoaderStub {
 
     async fn get_cache_stats(
         &mut self,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::CacheStats,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheStats, LoaderError>
+    {
         Err(loader_stub_err("get-cache-stats"))
     }
 
-    async fn cache_set_max_bytes(
-        &mut self,
-        _max: u64,
-    ) -> std::result::Result<(), LoaderError> {
+    async fn cache_set_max_bytes(&mut self, _max: u64) -> std::result::Result<(), LoaderError> {
         Err(loader_stub_err("cache-set-max-bytes"))
     }
 
@@ -9809,34 +9783,23 @@ impl bindings::sqlink::wasm::extension_loader::Host for RunLoaderStub {
         Err(loader_stub_err("cache-gc"))
     }
 
-    async fn cache_evict(
-        &mut self,
-        _target_bytes: u64,
-    ) -> std::result::Result<u64, LoaderError> {
+    async fn cache_evict(&mut self, _target_bytes: u64) -> std::result::Result<u64, LoaderError> {
         Err(loader_stub_err("cache-evict"))
     }
 
-    async fn cache_export(
-        &mut self,
-        _path: String,
-    ) -> std::result::Result<(), LoaderError> {
+    async fn cache_export(&mut self, _path: String) -> std::result::Result<(), LoaderError> {
         Err(loader_stub_err("cache-export"))
     }
 
     async fn do_cache_import(
         &mut self,
         _path: String,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheMergeStats, LoaderError>
+    {
         Err(loader_stub_err("do-cache-import"))
     }
 
-    async fn cache_use_external(
-        &mut self,
-        _path: String,
-    ) -> std::result::Result<(), LoaderError> {
+    async fn cache_use_external(&mut self, _path: String) -> std::result::Result<(), LoaderError> {
         Err(loader_stub_err("cache-use-external"))
     }
 
@@ -9850,20 +9813,16 @@ impl bindings::sqlink::wasm::extension_loader::Host for RunLoaderStub {
     async fn cache_migrate_to_external(
         &mut self,
         _path: String,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheMergeStats, LoaderError>
+    {
         Err(loader_stub_err("cache-migrate-to-external"))
     }
 
     async fn cache_migrate_to_internal(
         &mut self,
         _db_path: String,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheMergeStats, LoaderError>
+    {
         Err(loader_stub_err("cache-migrate-to-internal"))
     }
 
@@ -10350,7 +10309,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
             sqlite_component_core::db::OpenFlags::DEFAULT,
         )
         .map_err(db_err_to_bindings)?;
-        src.backup_into(&src_db, &dst, &dst_db).map_err(db_err_to_bindings)
+        src.backup_into(&src_db, &dst, &dst_db)
+            .map_err(db_err_to_bindings)
     }
 
     async fn restore_from(
@@ -10368,7 +10328,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
         let dst = r.as_ref().expect("ensured open");
-        src.backup_into(&src_db, dst, &dst_db).map_err(db_err_to_bindings)
+        src.backup_into(&src_db, dst, &dst_db)
+            .map_err(db_err_to_bindings)
     }
 
     async fn set_busy_timeout(
@@ -10400,7 +10361,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
         if set {
-            conn.db_config_set_bool(op, value).map_err(db_err_to_bindings)
+            conn.db_config_set_bool(op, value)
+                .map_err(db_err_to_bindings)
         } else {
             conn.db_config_get_bool(op).map_err(db_err_to_bindings)
         }
@@ -10415,7 +10377,8 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let g = self.host.shared_spi_conn.lock();
         let r = g.borrow();
         let conn = r.as_ref().expect("ensured open");
-        conn.deserialize_db(&db_name, &bytes).map_err(db_err_to_bindings)
+        conn.deserialize_db(&db_name, &bytes)
+            .map_err(db_err_to_bindings)
     }
 
     async fn execute_multi(
@@ -10432,17 +10395,6 @@ impl<'a> bindings::sqlite::extension::spi::Host for HostWrap<'a> {
         let conn = r.as_ref().expect("ensured open");
         execute_multi_impl_bindings(conn, &sql, &named_params)
     }
-
-
-
-
-
-
-
-
-
-
-
 
     async fn open_db(
         &mut self,
@@ -10576,8 +10528,9 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         // in __sqlink_prefix_function and register the always-available
         // `prefix__name` qualified form alongside the bare name. Best-
         // effort  failures are logged but don't fail the registration.
-        if let Some(qualified) =
-            self.host.record_function_for_extension(&ext_name, &name, num_args)
+        if let Some(qualified) = self
+            .host
+            .record_function_for_extension(&ext_name, &name, num_args)
         {
             let rc_q = {
                 let g = self.host.shared_spi_conn.lock();
@@ -10650,9 +10603,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         // PLAN-prefixes.md hot-path: collations don't have arity in
         // the scalar/aggregate sense  use 0 as the sentinel
         // (matches install_loaded_extension's convention).
-        if let Some(qualified) =
-            self.host.record_function_for_extension(&ext_name, &name, 0)
-        {
+        if let Some(qualified) = self.host.record_function_for_extension(&ext_name, &name, 0) {
             let rc_q = {
                 let g = self.host.shared_spi_conn.lock();
                 let r = g.borrow();
@@ -10735,8 +10686,9 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             .or_default()
             .push((name.clone(), num_args));
         // PLAN-prefixes.md hot-path: record + register the qualified form.
-        if let Some(qualified) =
-            self.host.record_function_for_extension(&ext_name, &name, num_args)
+        if let Some(qualified) = self
+            .host
+            .record_function_for_extension(&ext_name, &name, num_args)
         {
             let res_q = {
                 let g = self.host.shared_spi_conn.lock();
@@ -10961,9 +10913,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         // PLAN-prefixes.md hot-path: record + register the qualified
         // USING module name. Vtabs have no arity in the scalar sense
         //  use 0 (matches install_loaded_extension's convention).
-        if let Some(qualified) =
-            self.host.record_function_for_extension(&ext_name, &name, 0)
-        {
+        if let Some(qualified) = self.host.record_function_for_extension(&ext_name, &name, 0) {
             let res_q = {
                 let g = self.host.shared_spi_conn.lock();
                 let r = g.borrow();
@@ -11004,26 +10954,54 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
 
     async fn unregister_extension(&mut self, ext_name: String) {
         let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
-        let colls = self.host.ext_collation_registrations.lock().remove(&ext_name);
-        let aggs = self.host.ext_aggregate_registrations.lock().remove(&ext_name);
+        let colls = self
+            .host
+            .ext_collation_registrations
+            .lock()
+            .remove(&ext_name);
+        let aggs = self
+            .host
+            .ext_aggregate_registrations
+            .lock()
+            .remove(&ext_name);
         let vtabs = self.host.ext_vtab_registrations.lock().remove(&ext_name);
         // Clear hook ownership only if THIS extension owned the slot.
         let drop_authorizer = {
             let mut g = self.host.ext_authorizer_owner.lock();
-            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
+            if g.as_deref() == Some(&ext_name) {
+                *g = None;
+                true
+            } else {
+                false
+            }
         };
         let drop_update_hook = {
             let mut g = self.host.ext_update_hook_owner.lock();
-            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
+            if g.as_deref() == Some(&ext_name) {
+                *g = None;
+                true
+            } else {
+                false
+            }
         };
         let drop_commit_hook = {
             let mut g = self.host.ext_commit_hook_owner.lock();
-            if g.as_deref() == Some(&ext_name) { *g = None; true } else { false }
+            if g.as_deref() == Some(&ext_name) {
+                *g = None;
+                true
+            } else {
+                false
+            }
         };
         let drop_wal_hook = {
             let mut g = self.host.ext_wal_hook_owner.lock();
             let owned = g.as_ref().is_some_and(|(n, _)| n == &ext_name);
-            if owned { *g = None; true } else { false }
+            if owned {
+                *g = None;
+                true
+            } else {
+                false
+            }
         };
         if scalars.is_none()
             && colls.is_none()
@@ -11041,25 +11019,21 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         let Some(conn) = r.as_ref() else { return };
         if let Some(entries) = scalars {
             for (name, num_args) in entries {
-                let _ = unsafe {
-                    unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
-                };
+                let _ =
+                    unsafe { unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args) };
             }
         }
         if let Some(entries) = colls {
             for name in entries {
-                let _ = unsafe {
-                    unregister_host_loaded_collation(conn.raw_handle(), &name)
-                };
+                let _ = unsafe { unregister_host_loaded_collation(conn.raw_handle(), &name) };
             }
         }
         if let Some(entries) = aggs {
             // Aggregates use the same FFI removal path as scalars
             // (sqlite3_create_function_v2 with null callbacks).
             for (name, num_args) in entries {
-                let _ = unsafe {
-                    unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args)
-                };
+                let _ =
+                    unsafe { unregister_host_loaded_scalar(conn.raw_handle(), &name, num_args) };
             }
         }
         if let Some(entries) = vtabs {
@@ -11095,15 +11069,10 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             // leaks the prior Box<F>. The leak is per-extension-
             // unload and is reclaimed at process exit.
             let _ = unsafe {
-                libsqlite3_sys::sqlite3_wal_hook(
-                    conn.raw_handle(),
-                    None,
-                    std::ptr::null_mut(),
-                )
+                libsqlite3_sys::sqlite3_wal_hook(conn.raw_handle(), None, std::ptr::null_mut())
             };
         }
     }
-
 }
 
 /// Stage 6: cli-facing session impl. Sessions attach to
@@ -11149,7 +11118,10 @@ impl<'a> bindings::sqlite::extension::session::Host for HostWrap<'a> {
             ),
             _ => None,
         };
-        let ptr = table_c.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+        let ptr = table_c
+            .as_ref()
+            .map(|c| c.as_ptr())
+            .unwrap_or(std::ptr::null());
         let rc = unsafe { session_ffi::sqlite3session_attach(sess, ptr) };
         if rc != libsqlite3_sys::SQLITE_OK {
             return Err(session_err(format!("sqlite3session_attach returned {rc}")));
@@ -11197,7 +11169,9 @@ impl<'a> bindings::sqlite::extension::session::Host for HostWrap<'a> {
         let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
         let rc = unsafe { session_ffi::sqlite3session_changeset(sess, &mut n, &mut p) };
         if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(session_err(format!("sqlite3session_changeset returned {rc}")));
+            return Err(session_err(format!(
+                "sqlite3session_changeset returned {rc}"
+            )));
         }
         let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
         unsafe { libsqlite3_sys::sqlite3_free(p) };
@@ -11213,7 +11187,9 @@ impl<'a> bindings::sqlite::extension::session::Host for HostWrap<'a> {
         let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
         let rc = unsafe { session_ffi::sqlite3session_patchset(sess, &mut n, &mut p) };
         if rc != libsqlite3_sys::SQLITE_OK {
-            return Err(session_err(format!("sqlite3session_patchset returned {rc}")));
+            return Err(session_err(format!(
+                "sqlite3session_patchset returned {rc}"
+            )));
         }
         let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
         unsafe { libsqlite3_sys::sqlite3_free(p) };
@@ -11280,7 +11256,9 @@ fn execute_multi_impl_bindings(
             Err(e) => return Err(db_err_to_bindings(e)),
         };
         if stmt.is_empty() {
-            if tail >= remaining.len() { break; }
+            if tail >= remaining.len() {
+                break;
+            }
             remaining = &remaining[tail..];
             continue;
         }
@@ -11312,7 +11290,9 @@ fn execute_multi_impl_bindings(
             changes: conn.changes(),
             last_insert_rowid: conn.last_insert_rowid(),
         });
-        if tail >= remaining.len() { break; }
+        if tail >= remaining.len() {
+            break;
+        }
         remaining = &remaining[tail..];
     }
     Ok(results)
@@ -11526,7 +11506,11 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         instance_id: u64,
     ) -> std::result::Result<(), String> {
-        match self.host.dispatch_vtab_destroy(&ext_name, vtab_id, instance_id).await {
+        match self
+            .host
+            .dispatch_vtab_destroy(&ext_name, vtab_id, instance_id)
+            .await
+        {
             Ok(r) => r,
             Err(e) => Err(e.to_string()),
         }
@@ -11538,7 +11522,11 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         instance_id: u64,
     ) -> std::result::Result<(), String> {
-        match self.host.dispatch_vtab_disconnect(&ext_name, vtab_id, instance_id).await {
+        match self
+            .host
+            .dispatch_vtab_disconnect(&ext_name, vtab_id, instance_id)
+            .await
+        {
             Ok(r) => r,
             Err(e) => Err(e.to_string()),
         }
@@ -11550,8 +11538,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         instance_id: u64,
         info: bindings::sqlite::extension::vtab::IndexInfo,
-    ) -> std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>
-    {
+    ) -> std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String> {
         match self
             .host
             .dispatch_vtab_best_index(&ext_name, vtab_id, instance_id, info)
@@ -11585,7 +11572,11 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         cursor_id: u64,
     ) -> std::result::Result<(), String> {
-        match self.host.dispatch_vtab_close(&ext_name, vtab_id, cursor_id).await {
+        match self
+            .host
+            .dispatch_vtab_close(&ext_name, vtab_id, cursor_id)
+            .await
+        {
             Ok(r) => r,
             Err(e) => Err(e.to_string()),
         }
@@ -11616,19 +11607,22 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         cursor_id: u64,
     ) -> std::result::Result<(), String> {
-        match self.host.dispatch_vtab_next(&ext_name, vtab_id, cursor_id).await {
+        match self
+            .host
+            .dispatch_vtab_next(&ext_name, vtab_id, cursor_id)
+            .await
+        {
             Ok(r) => r,
             Err(e) => Err(e.to_string()),
         }
     }
 
-    async fn vtab_eof(
-        &mut self,
-        ext_name: String,
-        vtab_id: u64,
-        cursor_id: u64,
-    ) -> bool {
-        match self.host.dispatch_vtab_eof(&ext_name, vtab_id, cursor_id).await {
+    async fn vtab_eof(&mut self, ext_name: String, vtab_id: u64, cursor_id: u64) -> bool {
+        match self
+            .host
+            .dispatch_vtab_eof(&ext_name, vtab_id, cursor_id)
+            .await
+        {
             Ok(b) => b,
             Err(e) => {
                 tracing::error!("vtab_eof {ext_name}: {e}");
@@ -11645,8 +11639,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         cursor_id: u64,
         col: i32,
-    ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String>
-    {
+    ) -> std::result::Result<bindings::sqlite::extension::types::SqlValue, String> {
         match self
             .host
             .dispatch_vtab_column(&ext_name, vtab_id, cursor_id, col)
@@ -11663,7 +11656,11 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         cursor_id: u64,
     ) -> std::result::Result<i64, String> {
-        match self.host.dispatch_vtab_rowid(&ext_name, vtab_id, cursor_id).await {
+        match self
+            .host
+            .dispatch_vtab_rowid(&ext_name, vtab_id, cursor_id)
+            .await
+        {
             Ok(r) => r,
             Err(e) => Err(e.to_string()),
         }
@@ -11675,10 +11672,7 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         cursor_id: u64,
         max_rows: u32,
-    ) -> std::result::Result<
-        Vec<bindings::sqlink::wasm::dispatch::VtabRow>,
-        String,
-    > {
+    ) -> std::result::Result<Vec<bindings::sqlink::wasm::dispatch::VtabRow>, String> {
         let res = self
             .host
             .dispatch_vtab_fetch_batch(&ext_name, vtab_id, cursor_id, max_rows)
@@ -11725,7 +11719,11 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         instance_id: u64,
     ) -> std::result::Result<(), String> {
-        match self.host.dispatch_vtab_begin(&ext_name, vtab_id, instance_id).await {
+        match self
+            .host
+            .dispatch_vtab_begin(&ext_name, vtab_id, instance_id)
+            .await
+        {
             Ok(r) => r,
             Err(e) => Err(e.to_string()),
         }
@@ -11737,7 +11735,11 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         instance_id: u64,
     ) -> std::result::Result<(), String> {
-        match self.host.dispatch_vtab_sync(&ext_name, vtab_id, instance_id).await {
+        match self
+            .host
+            .dispatch_vtab_sync(&ext_name, vtab_id, instance_id)
+            .await
+        {
             Ok(r) => r,
             Err(e) => Err(e.to_string()),
         }
@@ -11749,7 +11751,11 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         instance_id: u64,
     ) -> std::result::Result<(), String> {
-        match self.host.dispatch_vtab_commit(&ext_name, vtab_id, instance_id).await {
+        match self
+            .host
+            .dispatch_vtab_commit(&ext_name, vtab_id, instance_id)
+            .await
+        {
             Ok(r) => r,
             Err(e) => Err(e.to_string()),
         }
@@ -11761,7 +11767,11 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         vtab_id: u64,
         instance_id: u64,
     ) -> std::result::Result<(), String> {
-        match self.host.dispatch_vtab_rollback(&ext_name, vtab_id, instance_id).await {
+        match self
+            .host
+            .dispatch_vtab_rollback(&ext_name, vtab_id, instance_id)
+            .await
+        {
             Ok(r) => r,
             Err(e) => Err(e.to_string()),
         }
@@ -11835,13 +11845,12 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
         }
     }
 
-    async fn vtab_is_shadow_name(
-        &mut self,
-        ext_name: String,
-        vtab_id: u64,
-        name: String,
-    ) -> bool {
-        match self.host.dispatch_vtab_is_shadow_name(&ext_name, vtab_id, &name).await {
+    async fn vtab_is_shadow_name(&mut self, ext_name: String, vtab_id: u64, name: String) -> bool {
+        match self
+            .host
+            .dispatch_vtab_is_shadow_name(&ext_name, vtab_id, &name)
+            .await
+        {
             Ok(b) => b,
             Err(e) => {
                 tracing::error!("vtab_is_shadow_name {ext_name}/{vtab_id}: {e}");
@@ -11936,12 +11945,10 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
                 message: e.to_string(),
             })?;
         let components = self.host.components.read();
-        let ext = components
-            .get(&name)
-            .ok_or_else(|| LoaderError {
-                code: 1,
-                message: format!("load-from-bytes succeeded but {name} not in registry"),
-            })?;
+        let ext = components.get(&name).ok_or_else(|| LoaderError {
+            code: 1,
+            message: format!("load-from-bytes succeeded but {name} not in registry"),
+        })?;
         Ok(manifest_for_ext(ext))
     }
 
@@ -11950,27 +11957,27 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         name: String,
         args: String,
         cli_state: Vec<(String, String)>,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::DotCommandResult,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DotCommandResult, LoaderError>
+    {
         let outcome = self
             .host
             .dispatch_dot_command(&name, &args, cli_state)
             .await
             .map_err(|e| LoaderError {
-                code: if e.to_string().contains("no dot-command") { 404 } else { 500 },
+                code: if e.to_string().contains("no dot-command") {
+                    404
+                } else {
+                    500
+                },
                 message: e.to_string(),
             })?;
         let state_deltas = outcome
             .state_deltas
             .into_iter()
-            .map(
-                |d| bindings::sqlink::wasm::extension_loader::StateDelta {
-                    key: d.key,
-                    value_json: d.value_json,
-                },
-            )
+            .map(|d| bindings::sqlink::wasm::extension_loader::StateDelta {
+                key: d.key,
+                value_json: d.value_json,
+            })
             .collect();
         Ok(bindings::sqlink::wasm::extension_loader::DotCommandResult {
             text: outcome.text,
@@ -11987,7 +11994,11 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         // L3a: full-form describe carries declared_caps so the
         // cli's --trust=prompt mode can render them before
         // asking y/N.
-        match self.host.describe_extension_full(PathBuf::from(&path)).await {
+        match self
+            .host
+            .describe_extension_full(PathBuf::from(&path))
+            .await
+        {
             Ok((name, digest, declared_caps)) => {
                 Ok(bindings::sqlink::wasm::extension_loader::DescribedResult {
                     name,
@@ -12021,7 +12032,10 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
                         declared_caps,
                     })
                 }
-                Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
+                Err(e) => Err(LoaderError {
+                    code: 1,
+                    message: e.to_string(),
+                }),
             };
         }
         // PLAN-latent-cleanup.md L3b: every other scheme (blake3:,
@@ -12032,7 +12046,12 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         // enforcement now works against URI-loaded extensions.
         let bytes = match self.host.resolve_uri_to_bytes(&uri).await {
             Ok(b) => b,
-            Err(e) => return Err(LoaderError { code: 1, message: e.to_string() }),
+            Err(e) => {
+                return Err(LoaderError {
+                    code: 1,
+                    message: e.to_string(),
+                })
+            }
         };
         let hint = if let Some(hex) = uri.strip_prefix("blake3:") {
             format!("blake3:{}", &hex[..hex.len().min(8)])
@@ -12051,7 +12070,10 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
                     declared_caps,
                 })
             }
-            Err(e) => Err(LoaderError { code: 1, message: e.to_string() }),
+            Err(e) => Err(LoaderError {
+                code: 1,
+                message: e.to_string(),
+            }),
         }
     }
 
@@ -12125,11 +12147,10 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         expected_digest: String,
     ) -> std::result::Result<Vec<u8>, LoaderError> {
         let client = reqwest::Client::new();
-        let resp = client
-            .get(&uri)
-            .send()
-            .await
-            .map_err(|e| LoaderError { code: 1, message: format!("GET {uri}: {e}") })?;
+        let resp = client.get(&uri).send().await.map_err(|e| LoaderError {
+            code: 1,
+            message: format!("GET {uri}: {e}"),
+        })?;
         if !resp.status().is_success() {
             return Err(LoaderError {
                 code: resp.status().as_u16() as i32,
@@ -12139,7 +12160,10 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         let bytes = resp
             .bytes()
             .await
-            .map_err(|e| LoaderError { code: 1, message: format!("read body of {uri}: {e}") })?
+            .map_err(|e| LoaderError {
+                code: 1,
+                message: format!("read body of {uri}: {e}"),
+            })?
             .to_vec();
         let got = format!("blake3:{}", blake3::hash(&bytes).to_hex());
         if got != expected_digest {
@@ -12213,10 +12237,8 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
 
     async fn get_cache_stats(
         &mut self,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::CacheStats,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheStats, LoaderError>
+    {
         let cache = {
             let g = self.host.cache.read();
             g.as_ref()
@@ -12250,10 +12272,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         })
     }
 
-    async fn cache_set_max_bytes(
-        &mut self,
-        max: u64,
-    ) -> std::result::Result<(), LoaderError> {
+    async fn cache_set_max_bytes(&mut self, max: u64) -> std::result::Result<(), LoaderError> {
         let cache = {
             let g = self.host.cache.read();
             g.as_ref()
@@ -12280,10 +12299,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         store.gc().map_err(|e| cache_err(format!("gc: {e}")))
     }
 
-    async fn cache_evict(
-        &mut self,
-        target_bytes: u64,
-    ) -> std::result::Result<u64, LoaderError> {
+    async fn cache_evict(&mut self, target_bytes: u64) -> std::result::Result<u64, LoaderError> {
         let cache = {
             let g = self.host.cache.read();
             g.as_ref()
@@ -12297,10 +12313,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             .map_err(|e| cache_err(format!("evict_lru: {e}")))
     }
 
-    async fn cache_export(
-        &mut self,
-        path: String,
-    ) -> std::result::Result<(), LoaderError> {
+    async fn cache_export(&mut self, path: String) -> std::result::Result<(), LoaderError> {
         let cache = {
             let g = self.host.cache.read();
             g.as_ref()
@@ -12317,10 +12330,8 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     async fn do_cache_import(
         &mut self,
         path: String,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheMergeStats, LoaderError>
+    {
         let cache = {
             let g = self.host.cache.read();
             g.as_ref()
@@ -12338,10 +12349,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         })
     }
 
-    async fn cache_use_external(
-        &mut self,
-        path: String,
-    ) -> std::result::Result<(), LoaderError> {
+    async fn cache_use_external(&mut self, path: String) -> std::result::Result<(), LoaderError> {
         let new_cache = cache::Cache::open_external(PathBuf::from(path))
             .map_err(|e| cache_err(format!("open external: {e}")))?;
         self.host.set_cache(new_cache);
@@ -12361,10 +12369,8 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     async fn cache_migrate_to_external(
         &mut self,
         path: String,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheMergeStats, LoaderError>
+    {
         let target = PathBuf::from(&path);
         if target.exists() {
             return Err(cache_err(format!(
@@ -12415,10 +12421,8 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     async fn cache_migrate_to_internal(
         &mut self,
         db_path: String,
-    ) -> std::result::Result<
-        bindings::sqlink::wasm::extension_loader::CacheMergeStats,
-        LoaderError,
-    > {
+    ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::CacheMergeStats, LoaderError>
+    {
         let cache = {
             let g = self.host.cache.read();
             g.as_ref()
@@ -12459,11 +12463,7 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         options: bindings::sqlite::extension::policy::LoadOptions,
     ) -> std::result::Result<String, LoaderError> {
         let policy = policy_from_load_options(&options);
-        match self
-            .host
-            .run_wasm(PathBuf::from(&path), policy)
-            .await
-        {
+        match self.host.run_wasm(PathBuf::from(&path), policy).await {
             Ok(output) => Ok(output),
             Err(e) => Err(LoaderError {
                 code: 1,
@@ -12568,8 +12568,12 @@ mod http_policy_tests {
     use loaded::sqlite::extension::http::HttpError;
 
     fn is_policy_denied(err: &HttpError, must_contain: &[&str]) -> bool {
-        let HttpError::Other(s) = err else { return false };
-        if !s.contains("policy denied") { return false }
+        let HttpError::Other(s) = err else {
+            return false;
+        };
+        if !s.contains("policy denied") {
+            return false;
+        }
         must_contain.iter().all(|needle| s.contains(needle))
     }
 
@@ -12659,10 +12663,8 @@ mod spawn_build_validation_tests {
 
     #[test]
     fn target_triple_rejects_path_traversal() {
-        let err = validate_spawn_build_target_triple(Some(
-            "x86_64-unknown-linux-gnu/../../etc",
-        ))
-        .unwrap_err();
+        let err = validate_spawn_build_target_triple(Some("x86_64-unknown-linux-gnu/../../etc"))
+            .unwrap_err();
         assert!(err.contains("disallowed characters"));
     }
 
@@ -12703,15 +12705,10 @@ mod spawn_build_validation_tests {
         // prefix.
         let canon = tmp.canonicalize().unwrap();
         let allowed = allowed_crate_root_prefixes();
-        let under_allowed = allowed
-            .iter()
-            .any(|p| canon == *p || canon.starts_with(p));
+        let under_allowed = allowed.iter().any(|p| canon == *p || canon.starts_with(p));
         if !under_allowed {
             let err = validate_spawn_build_crate_root(&tmp).unwrap_err();
-            assert!(
-                err.contains("must canonicalize under one of"),
-                "got: {err}"
-            );
+            assert!(err.contains("must canonicalize under one of"), "got: {err}");
         }
         let _ = std::fs::remove_dir_all(&tmp);
     }
@@ -12769,10 +12766,7 @@ mod spawn_build_validation_tests {
         #[cfg(unix)]
         {
             let mut cmd = std::process::Command::new("/usr/bin/env");
-            apply_spawn_build_env(
-                &mut cmd,
-                &[("MY_BUILD_FLAG".to_string(), "ON".to_string())],
-            );
+            apply_spawn_build_env(&mut cmd, &[("MY_BUILD_FLAG".to_string(), "ON".to_string())]);
             let out = cmd.output().expect("env exec");
             let s = String::from_utf8_lossy(&out.stdout);
             assert!(
@@ -12816,11 +12810,7 @@ mod spawn_build_validation_tests {
         {
             let mut cmd = std::process::Command::new("/bin/sh");
             cmd.arg("-c").arg("sleep 60");
-            let r = run_with_timeout(
-                &mut cmd,
-                std::time::Duration::from_millis(200),
-                "sleeper",
-            );
+            let r = run_with_timeout(&mut cmd, std::time::Duration::from_millis(200), "sleeper");
             let err = r.unwrap_err();
             assert!(
                 err.message.contains("exceeded"),

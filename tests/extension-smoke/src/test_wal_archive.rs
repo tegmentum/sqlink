@@ -71,7 +71,9 @@ async fn spawn_mock_s3() -> MockS3 {
     builder.set_auth(s3s::auth::SimpleAuth::from_single(TEST_AK, TEST_SK));
     let service = builder.build();
 
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("mock s3 bind");
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("mock s3 bind");
     let addr = listener.local_addr().expect("mock s3 local_addr");
     let endpoint = format!("http://{}", addr);
 
@@ -237,7 +239,8 @@ fn assert_smoke(label: &str, stdout: &str, stderr: &str) {
     );
     // Bookmark should be > 0  the wal-hook fired + we drained frames.
     assert!(
-        status.contains("\"last_uploaded_frame\":") && !status.contains("\"last_uploaded_frame\":0"),
+        status.contains("\"last_uploaded_frame\":")
+            && !status.contains("\"last_uploaded_frame\":0"),
         "[{label}] bookmark not advanced past 0: {status}",
     );
 }
@@ -411,7 +414,12 @@ fn wal_archive_smoke_wasm_cli() {
         }
         let tmp = std::env::temp_dir().join("sqlink_walarch_smoke_wasm.db");
         cleanup_db(&tmp);
-        let (stdout, stderr) = drive(&sqlink, Some(&cli), &tmp, &script_smoke(&component, &endpoint));
+        let (stdout, stderr) = drive(
+            &sqlink,
+            Some(&cli),
+            &tmp,
+            &script_smoke(&component, &endpoint),
+        );
         assert_smoke("sqlink+wasm-cli", &stdout, &stderr);
     });
 }
@@ -442,7 +450,12 @@ fn wal_archive_snapshot_wasm_cli() {
         }
         let tmp = std::env::temp_dir().join("sqlink_walarch_snap_wasm.db");
         cleanup_db(&tmp);
-        let (stdout, stderr) = drive(&sqlink, Some(&cli), &tmp, &script_snapshot(&component, &endpoint));
+        let (stdout, stderr) = drive(
+            &sqlink,
+            Some(&cli),
+            &tmp,
+            &script_snapshot(&component, &endpoint),
+        );
         assert_snapshot("sqlink+wasm-cli", &stdout, &stderr);
     });
 }
@@ -473,7 +486,12 @@ fn wal_archive_e2e_wasm_cli() {
         }
         let tmp = std::env::temp_dir().join("sqlink_walarch_e2e_wasm.db");
         cleanup_db(&tmp);
-        let (stdout, stderr) = drive(&sqlink, Some(&cli), &tmp, &script_e2e(&component, &endpoint));
+        let (stdout, stderr) = drive(
+            &sqlink,
+            Some(&cli),
+            &tmp,
+            &script_e2e(&component, &endpoint),
+        );
         assert_e2e("sqlink+wasm-cli", &stdout, &stderr);
     });
 }
@@ -516,11 +534,7 @@ fn script_roundtrip_source(component: &Path, endpoint: &str) -> String {
 /// it to `target_path`. We tag the row count of the spi-side `t`
 /// (read from the deserialized main, not the target_path file) so
 /// the test can also confirm the deserialize half worked.
-fn script_roundtrip_restore(
-    component: &Path,
-    endpoint: &str,
-    target_path: &Path,
-) -> String {
+fn script_roundtrip_restore(component: &Path, endpoint: &str, target_path: &Path) -> String {
     format!(
         ".load {component} --grant=spi,wal-frames,s3\n\
          SELECT 'RESTORE_RET:' || wal_archive_restore('main', '{target}', {opts});\n\
@@ -562,7 +576,11 @@ fn which_sqlite3() -> Option<PathBuf> {
             return Some(pb);
         }
     }
-    for cand in ["/usr/bin/sqlite3", "/usr/local/bin/sqlite3", "/opt/homebrew/bin/sqlite3"] {
+    for cand in [
+        "/usr/bin/sqlite3",
+        "/usr/local/bin/sqlite3",
+        "/opt/homebrew/bin/sqlite3",
+    ] {
         let pb = PathBuf::from(cand);
         if pb.exists() {
             return Some(pb);
@@ -578,10 +596,8 @@ fn run_roundtrip(label: &str, source_bin: &Path, source_cli_arg: Option<&Path>) 
         let source_cli_arg = source_cli_arg.map(|p| p.to_path_buf());
         move |endpoint, component| {
             // First session: write rows + snapshot to S3.
-            let src_db =
-                std::env::temp_dir().join(format!("sqlink_walarch_rt_src_{label}.db"));
-            let target =
-                std::env::temp_dir().join(format!("sqlink_walarch_rt_tgt_{label}.db"));
+            let src_db = std::env::temp_dir().join(format!("sqlink_walarch_rt_src_{label}.db"));
+            let target = std::env::temp_dir().join(format!("sqlink_walarch_rt_tgt_{label}.db"));
             cleanup_db(&src_db);
             cleanup_db(&target);
             let cli_arg: Option<&Path> = source_cli_arg.as_deref();
