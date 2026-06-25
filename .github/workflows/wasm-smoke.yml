@@ -32,8 +32,10 @@ env:
   # for the per-crate configs; this job explicitly targets wasm
   # via --target on every cargo invocation, but we still want
   # native compilation of build.rs / proc-macros to use the runner
-  # triple. Empty CARGO_BUILD_TARGET = "let cargo pick".
-  CARGO_BUILD_TARGET: ""
+  # triple. Use explicit host triple; empty string breaks `cargo install`
+  # ("error: target was empty"). Wasm steps pass --target wasm32-wasip2
+  # explicitly to override this default.
+  CARGO_BUILD_TARGET: x86_64-unknown-linux-gnu
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_PROFILE_TEST_DEBUG: "0"
   # The vendored excel extension needs nightly features via stable

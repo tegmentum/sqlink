@@ -11,8 +11,9 @@ env:
   # native binaries (host crate, cache tests). Override to the runner's
   # native triple. `act` runs in a Linux container, so x86_64 is right
   # for amd64 runs and aarch64 for arm64 (act-by-default on Apple
-  # Silicon).
-  CARGO_BUILD_TARGET: ""
+  # Silicon). Use explicit triple instead of empty string: empty
+  # CARGO_BUILD_TARGET breaks `cargo install` ("error: target was empty").
+  CARGO_BUILD_TARGET: x86_64-unknown-linux-gnu
   # Drop debug info from the dev + test profiles. Linking the host
   # binary against wasmtime + rusqlite + reqwest pulls in a lot of
   # symbols; debuginfo dominates the final size and slows the linker
@@ -44,7 +45,10 @@ jobs:
 
       - name: cargo fmt --check
         working-directory: host
-        run: cargo fmt --all -- --check
+        # `cargo fmt --all -- --check` passes --check via the legacy
+        # rustfmt-arg form. Modern cargo fmt rejects this; --check is
+        # a cargo-fmt flag now, no `--` separator needed.
+        run: cargo fmt --all --check
 
       - name: cargo clippy
         working-directory: host
