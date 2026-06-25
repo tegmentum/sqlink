@@ -386,7 +386,24 @@ None (the wasm side is already in place).
 
 ### Status
 
-Documented v1.1 in both bundles + prefixes plans.
+DONE. The original framing ("add a dispatch_dot_command driver in
+extension-loader.js") was a red herring. Investigation surfaced
+that bundle-cli + prefix-cli are EMBEDDED in the composed cli
+component via `include_bytes!` in `cli/src/lib.rs` and dispatch
+INTERNAL to the wasm cli — the JS host-import path was never the
+right surface. The actual gap was a public method on
+`ComposedDatabase` (browser/src/sqlink-composed.js) to drive a
+single dot-command through the existing sentinel-bounded stdin
+pipe.
+
+Resolved by `ComposedDatabase.execDotCommand(line)` (commit
+`aca8d484`), the sibling of `exec()` that writes a raw dot-cmd line
++ sentinel SELECT through the persistent stdin queue and returns
+the cli's stdout window. `composed-bundle.spec.js` and
+`composed-prefix.spec.js` now exercise `.bundle save / list / show
+/ delete` and `.prefix add / list / expansion / delete`
+end-to-end against the composed cli with no skip — assertions
+substring-match the cli's actual stdout.
 
 ## P2: Bundle multi-name aliasing
 

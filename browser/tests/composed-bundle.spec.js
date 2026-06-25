@@ -1,28 +1,12 @@
 import { test, expect } from '@playwright/test'
 
-// v1.1 composed-bundle smoke.
-//
-// What this covers TODAY:
-//   - bundle_cli transpiled cleanly (PICK list addition + jco
-//     transpile succeeded).
-//   - The generated JS module is importable in the browser  all
-//     bundle_cli's WIT imports (bundles, build, loader-bridge, etc.)
-//     are satisfied by sqlite-lib's browser stubs at module-load
-//     time.
-//
-// What it explicitly does NOT cover (gap surfaced by v1.1 polish):
-//   - end-to-end `.bundle save myset --no-build`, `.bundle list`,
-//     `.bundle show myset`, `.bundle delete myset` round-trip.
-//     The browser composed-cli does not yet have a
-//     dispatch_dot_command driver in extension-loader.js
-//     (returns 404 in v1). Once that lands, this spec should
-//     extend to drive the bundles SPI through the transpiled
-//     module and assert the metadata round-trip.
-//
-// The substrate guarantee  importable module, all imports
-// resolved  is the smoke for v1.1; the round-trip is a v2 follow-
-// up.
-test('composed cli: bundle_cli substrate imports cleanly', async ({
+// #479 follow-up: end-to-end `.bundle save / list / show / delete`
+// round-trip through the browser composed cli. ComposedDatabase's
+// new execDotCommand pipe (sqlink-composed.js) drives stdin into
+// the cli; we assert the cli's own stdout (substring-shaped, since
+// dot-cmds print human-readable lines).
+
+test('composed cli: .bundle save/list/show/delete round-trip', async ({
   page,
 }) => {
   page.on('pageerror', (e) => console.error('[pageerror]', e))
@@ -34,25 +18,31 @@ test('composed cli: bundle_cli substrate imports cleanly', async ({
 
   await page.goto('/tests/composed-bundle.html')
   await page.waitForFunction(() => window.__bundleDone === true, {
-    timeout: 60_000,
+    timeout: 120_000,
   })
   const result = await page.evaluate(() => window.__bundleResult)
   console.log(JSON.stringify(result, null, 2))
 
   expect(result.error).toBeUndefined()
-  expect(result.imported).toBe(true)
-  // jco transpile with --instantiation async always emits an
-  // `instantiate` factory; its presence proves the transpile shape
-  // matches what the existing browser harness expects from other
-  // extensions.
-  expect(result.hasInstantiate).toBe(true)
-  expect(Array.isArray(result.exports)).toBe(true)
 
-  // Document the v2 gap explicitly; once dispatch_dot_command
-  // lands, this assertion can flip to a `.bundle save` round-trip.
-  test.skip(
-    result.dotCommandDriverGap === true,
-    'browser composed-cli has no dispatch_dot_command driver in v1 (extension-loader.js:12). ' +
-      "End-to-end `.bundle save myset --no-build` round-trip is a v2 follow-up.",
-  )
+  // .bundle save myset --no-build: the cli's own output names the
+  // alias it recorded. Substring match keeps the assertion robust
+  // against minor format tweaks (id=N, set_hash=..., etc.).
+  expect(result.saveOut).toMatch(/myset/)
+
+  // .bundle list should also surface the alias.
+  expect(result.listOut).toMatch(/myset/)
+
+  // .bundle show prints set_hash + member count line. We don't pin
+  // the exact set_hash (depends on extension order at save time)
+  // but the alias name + at least one of the metadata-row keys
+  // should appear.
+  expect(result.showOut).toMatch(/myset/)
+
+  // .bundle delete reports the alias is gone OR prints nothing on
+  // success — either way it should not error.
+  expect(result.deleteOut).not.toMatch(/error/i)
+
+  // After delete, list shouldn't show `myset` anymore.
+  expect(result.listAfterDelete).not.toMatch(/myset/)
 })
