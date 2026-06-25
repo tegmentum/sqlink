@@ -68,3 +68,9 @@ name = "spawn_build_path_validation"
 path = "fuzz_targets/spawn_build_path_validation.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "bundle_cli_argv"
+path = "fuzz_targets/bundle_cli_argv.rs"
+test = false
+doc = false

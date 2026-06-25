@@ -21,3 +21,6 @@ pub mod load_args;
 
 #[cfg(feature = "std")]
 pub mod spawn_build_validation;
+
+#[cfg(feature = "std")]
+pub mod bundle_cli_argv;
