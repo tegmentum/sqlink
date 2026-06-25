@@ -20,6 +20,14 @@ env:
   # enough to OOM smaller runners.
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_PROFILE_TEST_DEBUG: "0"
+  # libsqlite3-sys honors LIBSQLITE3_FLAGS to thread extra -D into
+  # its bundled amalgamation compile. host's session/changeset
+  # subcommand needs SESSION + PREUPDATE_HOOK. Mirrors the
+  # .cargo/config.toml.template's [env] block so CI builds match
+  # local dev. The template is gitignored after
+  # scripts/setup-cargo-config.sh substitutes wasi-sdk path; CI
+  # doesn't need wasi-sdk for native checks so export directly here.
+  LIBSQLITE3_FLAGS: "-DSQLITE_ENABLE_GEOPOLY -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_DEFAULT_MEMSTATUS=0 -DSQLITE_THREADSAFE=0 -DSQLITE_LIKE_DOESNT_MATCH_BLOBS -DSQLITE_MAX_EXPR_DEPTH=0 -DSQLITE_OMIT_DEPRECATED -DSQLITE_DEFAULT_AUTOMATIC_INDEX=0 -DSQLITE_USE_ALLOCA"
 
 jobs:
   host-checks:
