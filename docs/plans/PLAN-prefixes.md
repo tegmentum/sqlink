@@ -127,66 +127,131 @@ CREATE TABLE sqlite_sqlink_prefix_function (
     registered_at  INTEGER NOT NULL,
     PRIMARY KEY (expansion, function_name, n_args)
 ) WITHOUT ROWID;
+
+-- Optional operator-set pin: when multiple extensions register the
+-- same bare name + arity, this row says which one wins the bare
+-- name dispatch. NULL pin means "follow SQLite default" (last-
+-- registered wins).
+CREATE TABLE sqlite_sqlink_prefix_pin (
+    function_name TEXT NOT NULL,
+    n_args        INTEGER NOT NULL,
+    expansion     TEXT NOT NULL,     -- which expansion's impl wins bare-name
+    set_at        INTEGER NOT NULL,
+    PRIMARY KEY (function_name, n_args)
+) WITHOUT ROWID;
 ```
 
 Multiple prefixes can share an expansion (alias semantics). A
 single `expansion` row in `_prefix_function` is canonical; multiple
 short-name aliases in `_prefix` may reference it.
 
-### Conflict resolution: both-explicit
+### Conflict resolution: bare name preserves existing behavior; qualified forms are purely additive
 
-When extension A's `concat` (expansion `com.exta.tools`) and
-extension B's `concat` (expansion `org.extb.lib`) are both
-registered:
+**Hard constraint**: existing user SQL must not break. Users today
+write `SELECT uuid_v4()` without any prefix; that has to keep working
+exactly the same way after this feature lands, regardless of how
+many extensions are loaded or whether any of them collide on the
+bare name.
 
-1. Both become individually callable: `exta__concat(...)` and
-   `extb__concat(...)`.
-2. The bare name `concat(...)` is NOT registered with SQLite.
-3. A SQL call to `concat(...)` errors with SQLite's standard
-   "no such function" error.
-4. The cli intercepts that error and surfaces:
-   ```
-   no such function: concat
-   ambiguous between:
-     exta__concat (extension exta, expansion com.exta.tools)
-     extb__concat (extension extb, expansion org.extb.lib)
-   ```
+Three cases:
 
-When extension A registers `uuid_v4` and no other extension has
-that name:
-
-1. `uuid_v4(...)` is registered normally as the bare name.
+**Case 1 — no collision.** Extension A registers `uuid_v4`; no
+other extension has that name at the same arity:
+1. `uuid_v4(...)` is registered as the bare name (visible to all
+   existing SQL).
 2. `exta__uuid_v4(...)` is ALSO registered (always-available
-   qualified form).
+   qualified form, for operators who want explicit dispatch).
 
-So callers always have access to the qualified form, but only get
-the bare form when it's unambiguous.
+**Case 2 — collision, bare name preserved.** Extension A's `concat`
+(expansion `com.exta.tools`) is registered first. Extension B's
+`concat` (expansion `org.extb.lib`) loads later:
+1. The bare name `concat(...)` continues to follow SQLite's
+   default behavior — whichever extension's registration is current
+   in SQLite's function table wins. By default this is the
+   **last-registered** (B in this example), matching SQLite's
+   existing semantics. Existing SQL that calls `concat(...)` keeps
+   working; the IMPL it gets is whatever it would have gotten
+   without this feature.
+2. Both qualified forms are added: `exta__concat(...)` AND
+   `extb__concat(...)`. Always callable; always unambiguous.
+3. The cli logs a load-time warning: "function `concat/N` registered
+   by both `exta` (expansion=com.exta.tools) and `extb`
+   (expansion=org.extb.lib); bare call dispatches to `extb`. Use
+   `.prefix conflicts` to inspect; `exta__concat` and
+   `extb__concat` are available for explicit dispatch."
+4. Operator can `.prefix prefer concat exta` to pin the bare name
+   to a specific extension. This writes a row to
+   `sqlite_sqlink_prefix_pin` and re-registers the bare name
+   against the pinned extension's implementation.
+
+**Case 3 — extension unloaded.** Extension B unloads (releasing its
+`concat` registration). The bare name reverts to extension A's
+implementation (the remaining registration). Qualified
+`exta__concat` continues to work; `extb__concat` is no longer
+callable (extension B is gone).
+
+### What this feature is NOT
+
+- It does NOT change which implementation `concat()` dispatches to
+  when called bare. SQLite's default semantics + the operator's
+  optional `.prefix prefer` decide that.
+- It does NOT error on ambiguity at call time. Bare-name calls
+  always work as long as ANY extension has registered that name.
+- It does NOT require users to update existing SQL. The only new
+  syntax (`prefix__name`) is opt-in for callers who want explicit
+  dispatch.
+
+### What this feature IS
+
+- Always-available qualified forms (`prefix__name`) so a SQL
+  caller CAN unambiguously target a specific implementation when
+  they need to.
+- Load-time warnings + a `.prefix conflicts` view so operators
+  can SEE collisions that would otherwise be silent.
+- An optional `.prefix prefer` pin so operators can control which
+  implementation wins the bare name without changing extension
+  load order.
 
 ### Registration flow (in the loader-bridge wrapper)
 
-When an extension registers a scalar/aggregate/vtab function
-through `spi-loader.register-scalar` etc., the host's loader-bridge
-wrapper:
+When an extension registers a scalar/aggregate/vtab/hook function
+through `spi-loader.register-*`, the host's loader-bridge wrapper:
 
 1. Reads the extension's manifest for `(preferred-prefix, expansion)`.
-   If absent, error: extensions must declare a prefix.
+   If absent, falls back to the deprecation-window synthetic
+   expansion `sqlink-internal://<crate-name>` + warns. After
+   v1.1 this becomes a hard error.
 2. Looks up the prefix in `sqlite_sqlink_prefix`:
    - If exists with matching expansion → use it.
    - If exists with different expansion → fall back to numbered
-     alternative (`foaf2`, `foaf3`, ...) OR error per operator
-     policy. v1 default: fall back + warn; operator can
-     `.prefix rename` after.
+     alternative (`foaf2`, `foaf3`, ...) per Q1 resolution + warn.
+     Operator can `.prefix rename` after.
    - If absent → insert it.
 3. Inserts the function into `sqlite_sqlink_prefix_function` keyed
    by `(expansion, function_name, n_args)`.
-4. Registers the function with SQLite under `prefix__function_name`
-   (always).
-5. If no other expansion has a function named `function_name` with
-   the same arity, ALSO registers the bare `function_name`.
-6. If a SECOND extension later registers a function with the same
-   bare name + arity, deregister the bare name (it becomes
-   ambiguous from that point forward) and update `_prefix_function`
-   for both.
+4. **Always** registers the function with SQLite under
+   `prefix__function_name` (the qualified form). This is unconditional;
+   qualified forms are always available regardless of bare-name state.
+5. **Bare-name registration**: registers the function with SQLite
+   under `function_name` too. This may shadow an earlier registration
+   (per SQLite's last-wins semantics) — that's intentional, it
+   preserves current behavior.
+6. **Pin override**: if `sqlite_sqlink_prefix_pin` has a row for
+   `(function_name, n_args)` pinning a different expansion, after
+   the registration the wrapper re-registers the bare name pointing
+   at the PINNED expansion's implementation (so the pin survives
+   load-order changes).
+7. **Collision logging**: if step 3 detected ANY existing
+   `_prefix_function` row for the same `(function_name, n_args)`
+   from a different expansion, emit a load-time warning naming all
+   colliding extensions + which one currently owns the bare name +
+   the available qualified forms.
+
+The bare name dispatches per SQLite's normal function-table rules;
+the wrapper does NOT intercept call-time dispatch. The only call-
+time SQLite sees is whatever was last registered (or the pinned
+form if a pin is set). This keeps existing SQL working
+identically.
 
 ## Surface
 
@@ -212,8 +277,17 @@ wrapper:
                                    -- _prefix_function entries persist (other
                                    -- aliases for the same expansion still work)
 
+-- pin operator-controlled bare-name dispatch on collision
+.prefix prefer concat exta         -- bare `concat()` dispatches to exta's
+                                   -- implementation regardless of load
+                                   -- order. Writes _prefix_pin row.
+.prefix unprefer concat            -- removes the pin; bare-name reverts to
+                                   -- SQLite-default last-registered-wins.
+
 -- diagnostics
-.prefix conflicts                  -- bare-name ambiguities currently in effect
+.prefix conflicts                  -- bare-name ambiguities currently in
+                                   -- effect: function | n_args | bare owner
+                                   -- | other callable qualified forms | pin
 .prefix verify                     -- check that every _prefix_function row
                                    -- has an extension still loaded; warn on
                                    -- stale entries
@@ -240,9 +314,10 @@ ends in v1.1; the synthetic-expansion path becomes an error.
 | Call | Behavior |
 |---|---|
 | `foaf__name(...)` | Always works if `(foaf's expansion, "name")` is registered. |
-| `name(...)` (unique) | Works if exactly one expansion has `name` at that arity. |
-| `name(...)` (ambiguous) | `no such function: name` from SQLite + cli-side disambiguation hint. |
-| `unknown__name(...)` | `no such function: unknown__name` — short prefix unknown. |
+| `name(...)` (unique) | Works — dispatches to the one registered extension. |
+| `name(...)` (collision, no pin) | Works — dispatches per SQLite default (last-registered wins). Load-time warning logged. Qualified forms available for explicit dispatch. |
+| `name(...)` (collision, pinned via `.prefix prefer`) | Works — dispatches to the pinned extension regardless of load order. |
+| `unknown__name(...)` | `no such function: unknown__name` — short prefix unknown. (SQLite-default error message.) |
 
 ### Capability requirements
 
@@ -300,14 +375,16 @@ through `spi.execute`. The existing Spi capability gate suffices.
 | Piece | Effort |
 |---|---|
 | Schema additions + migration into existing dbs | 0.5 day |
-| Loader-bridge wrapper: registration with disambiguation | 1 day |
+| Loader-bridge wrapper: registration with disambiguation (scalar + aggregate) | 1 day |
+| Loader-bridge wrapper: vtab + hook shapes (Q4 broader scope) | 1.5 days |
 | Manifest field parsing + deprecation-window fallback | 0.5 day |
 | `prefix-cli` extension scaffold + six dot-commands | 1 day |
 | Function dispatch + bare-name shadowing on collision | 1 day |
-| Native integration tests (round-trip + collision + rename) | 1 day |
+| Native integration tests (round-trip + collision + rename, all 4 shapes) | 1.5 days |
 | Browser smoke + docs | 0.5 day |
 
-**Total: ~5.5 days for v1.**
+**Total: ~7.5 days for v1.** (Up from 5.5 days; Q4's "all four shapes
+uniformly" adds vtab + hook coverage to the wrapper + tests.)
 
 ## Dependencies
 
@@ -336,33 +413,73 @@ No new substrate / capability variants required.
    extensions, emit warnings for those missing the manifest
    declaration, propose `(prefix, expansion)` pairs for each.
 
-## Open questions
+## Resolved design decisions
 
-1. **Auto-fallback on prefix collision: numbered alternative or
-   error?** When extension A loads with `foaf` → `expansion-A` and
-   extension B later loads claiming `foaf` → `expansion-B`,
-   should the loader (a) auto-assign extension B the next free
-   `foaf2`, (b) refuse to load extension B, or (c) prompt the
-   operator? v1 default: (a) with a warning. Operator can
-   `.prefix rename` post-load.
+1. **Prefix-collision auto-fallback (Q1).** Auto-assign a numbered
+   alternative + warn. When extension B claims `foaf` but the prefix
+   is already bound to extension A's expansion, the loader binds
+   extension B to `foaf2` (or the next free `foafN`), logs both
+   expansions, and continues. Operator can `.prefix rename foaf2
+   <better>` after load. Always allows progress; surfaces the
+   collision in operator-visible warnings; works in non-interactive
+   contexts (scripts, browser, daemons) where prompting is impossible.
 
-2. **Should bare-name dispatch update `last_used_at`?** Trivial
-   write per function call; useful for `.prefix gc` later, but adds
-   write traffic per scalar invocation. v1 default: NO update on
-   call; only update on `.prefix` cli operations + `.prefix verify`.
+2. **`last_used_at` update policy (Q2).** Updated only on
+   operator-initiated CLI commands (`.prefix list / functions /
+   expansion / verify`). Function-dispatch events do NOT write.
+   Zero per-call overhead — important for tight query loops + WAL
+   contention avoidance. Tradeoff: a prefix used heavily in queries
+   but never explicitly inspected reads as "cold" to `.prefix gc`,
+   but pruning is operator-driven so the operator can adjust the
+   policy or `.prefix verify` periodically to refresh.
 
-3. **What's the deprecation window for extensions missing the
-   manifest declaration?** v1 warns + auto-assigns. When does the
-   warning escalate to a hard error? Suggest tying to a v1.x
-   release rather than calendar time.
+3. **Deprecation window (Q3).** Tied to the v1.1 release, NOT to
+   calendar time. v1 ships the synthetic-expansion fallback +
+   warning; v1.1 makes missing `preferred-prefix` /
+   `prefix-expansion` a hard load-rejection error. Operators get a
+   full release cycle of warnings to update out-of-tree extensions.
+   In-tree extension audit (per the sequencing list below) ensures
+   every workspace extension is migrated before the v1.1 cutover.
 
-4. **Should the loader-bridge wrapper apply to ALL function shapes
-   uniformly (scalar / aggregate / vtab / hook)** or just to
-   scalars + aggregates? Vtabs and hooks have a different namespace
-   in SQLite (vtab is `CREATE VIRTUAL TABLE`; hook is
-   `sqlite3_create_window_function` / collation / etc.). v1
-   recommendation: scalar + aggregate (the common collision
-   surface); vtab + hook deferred to v1.1.
+5. **Backwards compatibility for existing SQL (Q5, hard
+   constraint).** Users today call `uuid_v4()`, `json_extract()`,
+   etc. without any prefix. That must keep working exactly the
+   same way after this feature lands, regardless of how many
+   extensions are loaded or whether any of them collide on the
+   bare name. The conflict-resolution policy was REVISED from
+   the original "both-explicit" (which errored on bare-name
+   collision) to "**bare name preserves SQLite's existing
+   semantics; qualified forms are purely additive**":
+
+   - When no collision: bare name + qualified form both registered.
+   - When collision: bare name follows SQLite's last-registered-
+     wins default (existing behavior); qualified forms ALWAYS
+     available; load-time warning so the operator can see the
+     collision; operator can `.prefix prefer` to pin the bare
+     name to a specific extension.
+   - The feature is **strictly additive** — it never breaks an
+     existing SQL call, only adds new expressive capabilities
+     (qualified dispatch, visibility into collisions, operator
+     pin).
+
+   New `sqlite_sqlink_prefix_pin` table introduced to back the
+   operator-pin functionality.
+
+4. **Function-shape coverage (Q4).** All four shapes — scalar,
+   aggregate, vtab, hook — get prefix-namespaced uniformly in v1.
+   Bigger scope than my recommended "scalar + aggregate only", but
+   the user picked uniform treatment so the system is consistent
+   across the SQL surface from day one. Two edge cases this introduces:
+   - **Vtab USING syntax**: `CREATE VIRTUAL TABLE foo USING
+     foaf__myvtab(...)` — the prefix appears in the USING module
+     name. Operator picks the table name `foo` separately so no
+     implicit collision at the table-name layer, but the USING
+     module name shows the prefix.
+   - **Hook namespace**: collations / commit-hook / window-functions
+     each have their own SQLite dispatch surface. The wrapper needs
+     per-shape implementations of the bare-vs-qualified logic. v1.1+
+     can refine if specific hook shapes turn out to need different
+     semantics.
 
 ## References
 
