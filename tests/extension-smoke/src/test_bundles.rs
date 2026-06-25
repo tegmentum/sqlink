@@ -174,11 +174,9 @@ fn bundles_save_dedupe_on_same_set_hash() {
     let db = dir.join("probe.db");
     let cache = dir.join("cas");
     // Two saves with the same loaded set: the second call returns the
-    // existing bundle's id (no new row inserted). v1 alias semantics
-    // = "first name sticks"; the second name doesn't bind. True
-    // multi-name-per-set-hash aliasing is a v1.1 task (would need
-    // a separate __cas_bundle_alias table since the current schema
-    // has UNIQUE on bundles.name).
+    // existing bundle's id (no new row inserted) but the new name
+    // is bound as an additional alias against the same bundle row
+    // (v1.1 multi-name aliasing landed via __cas_bundle_alias).
     let script = format!(
         ".load {}\n.load {}\n\
          .bundle save first --no-build\n\
@@ -189,25 +187,30 @@ fn bundles_save_dedupe_on_same_set_hash() {
         json1.display(),
     );
     let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
-    // Both saves succeed (the second returns the same id silently).
     assert_ok(
         "dedupe",
         &stdout,
         &stderr,
         &["bundle 'first' saved", "bundle 'second' saved"],
     );
-    // Exactly ONE row in the list output (the first name wins).
+    // Exactly ONE bundle row in the list output  but the names
+    // column shows both aliases comma-joined.
     let bundle_rows = stdout
         .lines()
         .filter(|l| {
             let s = l.trim();
-            s.starts_with("first") || s.starts_with("second")
+            s.starts_with("first")
         })
         .count();
     assert_eq!(
         bundle_rows, 1,
-        "expected exactly one bundle row (first/second alias to same set_hash) \
+        "expected exactly one bundle row whose NAMES column starts with 'first'; \
          got {bundle_rows} matching rows\nstdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("first,second"),
+        "expected NAMES column to show both aliases as 'first,second' (multi-alias semantics); \
+         stdout:\n{stdout}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -820,6 +823,84 @@ fn bundles_launch_flag_dynamic_load() {
         "[launch-load:run] neither '[bundle] dynamic-loaded' nor the \
          cas-cache-miss error appeared; --bundle-load plumbing \
          is silent\nstdout:\n{p_stdout}\nstderr:\n{p_stderr}",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// v1.1 PLAN-followups P2: bundle multi-name aliasing.
+#[test]
+fn bundles_alias_two_names_same_set_hash() {
+    let Some((sqlink, cli, uuid, json1)) = gates() else {
+        eprintln!("bundles alias smoke: SKIP");
+        return;
+    };
+    let dir = make_tempdir("alias");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    let script = format!(
+        ".load {}\n.load {}\n\
+         .bundle save myset --no-build\n\
+         .bundle alias myset other\n\
+         .bundle list\n\
+         .bundle show other\n\
+         .exit\n",
+        uuid.display(),
+        json1.display(),
+    );
+    let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
+    assert_ok(
+        "alias",
+        &stdout,
+        &stderr,
+        &[
+            "bundle 'myset' saved",
+            "now aliased as 'other'",
+            // Both aliases visible in the list row.
+            "myset,other",
+            // And `.bundle show other` reaches the same bundle.
+            "members (",
+            "uuid",
+            "json1",
+        ],
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn bundles_unalias_keeps_bundle() {
+    let Some((sqlink, cli, uuid, json1)) = gates() else {
+        eprintln!("bundles unalias smoke: SKIP");
+        return;
+    };
+    let dir = make_tempdir("unalias");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    let script = format!(
+        ".load {}\n.load {}\n\
+         .bundle save myset --no-build\n\
+         .bundle alias myset other\n\
+         .bundle unalias other\n\
+         .bundle list\n\
+         .bundle show myset\n\
+         .exit\n",
+        uuid.display(),
+        json1.display(),
+    );
+    let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
+    assert_ok(
+        "unalias",
+        &stdout,
+        &stderr,
+        &[
+            "alias 'other' removed",
+            // myset still resolves.
+            "set_hash:",
+            "members (",
+        ],
+    );
+    assert!(
+        !stdout.contains("other"),
+        "expected 'other' alias not to appear after unalias; stdout:\n{stdout}",
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
