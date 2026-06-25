@@ -62,3 +62,9 @@ name = "parse_load_args"
 path = "fuzz_targets/parse_load_args.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "spawn_build_path_validation"
+path = "fuzz_targets/spawn_build_path_validation.rs"
+test = false
+doc = false
