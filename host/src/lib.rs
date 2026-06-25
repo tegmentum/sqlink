@@ -1422,7 +1422,7 @@ impl loaded_minimal_dns::sqlite::extension::dns::Host for LoadedState {
             }
         };
 
-        let mut out: Vec<String> = Vec::new();
+        let mut out: Vec<String> = Vec::with_capacity(lookup.record_iter().size_hint().0);
         for record in lookup.iter() {
             use hickory_resolver::proto::rr::RData;
             let s = match record {
