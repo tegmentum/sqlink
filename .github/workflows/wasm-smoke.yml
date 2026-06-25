@@ -173,6 +173,16 @@ jobs:
         # Idempotent w.r.t. the earlier pass.
         run: bash scripts/encode-extension-components.sh
 
+      - name: Build sqlink-native (test subprocess host)
+        # extension-smoke's native driver shells out to
+        # target/release/sqlink-native for each smoke test
+        # (Scenario 1: native loader running the wasm extension
+        # via tvm-wasmtime). Must exist before the test step runs;
+        # CARGO_BUILD_TARGET is set to the host triple at the
+        # workflow level so this build picks up the native target
+        # explicitly.
+        run: cargo build --release -p sqlink-native
+
       - name: Run extension-smoke (native driver)
         # --test-threads=1 because of a pre-existing SIGSEGV at default
         # parallelism with some fixtures sharing global SQLite state.
