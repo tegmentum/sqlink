@@ -7,11 +7,13 @@
 //! wasm32 so the browser CAS (PLAN-browser-runtime.md) just
 //! changes the storage location of cas.sqlite, not the impl.
 
+use std::cell::RefCell;
+use std::collections::{hash_map::Entry, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{anyhow, Context, Result};
-use sqlite_component_core::db::{Connection, OpenFlags, StepResult, Value};
+use sqlite_component_core::db::{Connection, OpenFlags, Statement, StepResult, Value};
 
 use crate::resolver::{ArtifactRef, ResolverRegistry, Source};
 use crate::schema::{INSTALL_SCHEMA, MIGRATE_V1_TO_V2, MIGRATE_V2_TO_V3, SCHEMA_VERSION};
@@ -74,7 +76,25 @@ impl Default for StoreConfig {
 
 /// SQLite-backed content-addressed store. See module docs.
 pub struct SqliteCasStore {
-    conn: Connection,
+    // ORDER MATTERS: `prepared` is declared BEFORE `conn` so it
+    // drops first  every cached Statement is finalized via its
+    // Drop impl before the Connection's `sqlite3_close` runs.
+    //
+    // The Statements stored here have their original `'_` (tied
+    // to `&self.conn`) lifetime-erased to `'static` via a
+    // transmute inside `with_stmt`. That is sound because:
+    //   1. `conn` is boxed  the Connection's address is stable
+    //      across moves of SqliteCasStore.
+    //   2. The cached Statements never escape `SqliteCasStore`
+    //      (they are only ever yielded as `&mut Statement<'static>`
+    //      to closures via `with_stmt`).
+    //   3. Field-declaration drop order ensures Statements drop
+    //      before Connection.
+    //   4. `RefCell` ensures no nested mutable access; `with_stmt`
+    //      panics on re-entry, which keeps the borrow rules
+    //      enforced at runtime.
+    prepared: RefCell<HashMap<&'static str, Statement<'static>>>,
+    conn: Box<Connection>,
     mode: StoreMode,
     config: StoreConfig,
 }
@@ -97,7 +117,8 @@ impl SqliteCasStore {
         let conn = Connection::open(path_str, OpenFlags::DEFAULT)
             .map_err(|e| anyhow!("open cas db {}: {}", path.display(), e.message))?;
         let mut store = Self {
-            conn,
+            prepared: RefCell::new(HashMap::new()),
+            conn: Box::new(conn),
             mode: StoreMode::External(path),
             config: StoreConfig::default(),
         };
@@ -110,7 +131,8 @@ impl SqliteCasStore {
     /// doesn't close the connection on drop.
     pub fn open_internal(conn: Connection) -> Result<Self> {
         let mut store = Self {
-            conn,
+            prepared: RefCell::new(HashMap::new()),
+            conn: Box::new(conn),
             mode: StoreMode::Internal,
             config: StoreConfig::default(),
         };
@@ -155,6 +177,49 @@ impl SqliteCasStore {
     /// statements without going through put/get/etc.
     pub fn conn(&self) -> &Connection {
         &self.conn
+    }
+
+    /// Run `f` against a cached prepared statement for `sql`.
+    /// Compiles + caches the statement on first use, then re-uses
+    /// it on every subsequent call (reset + clear_bindings before
+    /// each run so callers see a fresh statement state).
+    ///
+    /// The `sql` argument must be `&'static str` so the cache key
+    /// is stable across calls  pass string literals only.
+    ///
+    /// SAFETY ENVELOPE: must not be called re-entrantly from inside
+    /// `f` (the inner `RefCell::borrow_mut` would panic). cas-cache
+    /// doesn't nest queries today; if you need to from within a
+    /// closure body, fall back to `self.conn().prepare(...)` for
+    /// the one-off.
+    pub(crate) fn with_stmt<F, R>(&self, sql: &'static str, f: F) -> Result<R>
+    where
+        F: FnOnce(&mut Statement<'_>) -> Result<R>,
+    {
+        let mut cache = self.prepared.borrow_mut();
+        let stmt = match cache.entry(sql) {
+            Entry::Occupied(e) => e.into_mut(),
+            Entry::Vacant(e) => {
+                let s = self
+                    .conn
+                    .prepare(sql)
+                    .map_err(|err| anyhow!("prepare `{}`: {}", sql, err.message))?;
+                // SAFETY: extend lifetime to 'static. The Statement
+                // actually lives as long as `self.conn`, a
+                // `Box<Connection>` with stable heap address.
+                // PreparedCache (the RefCell field) is declared
+                // BEFORE conn in SqliteCasStore, so it drops first,
+                // finalizing all cached statements before
+                // sqlite3_close runs on the Connection.
+                let s: Statement<'static> = unsafe { std::mem::transmute(s) };
+                e.insert(s)
+            }
+        };
+        stmt.reset()
+            .map_err(|err| anyhow!("reset `{}`: {}", sql, err.message))?;
+        stmt.clear_bindings()
+            .map_err(|err| anyhow!("clear_bindings `{}`: {}", sql, err.message))?;
+        f(stmt)
     }
 
     pub fn config(&self) -> &StoreConfig {
