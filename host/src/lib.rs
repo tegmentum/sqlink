@@ -7105,6 +7105,24 @@ impl Host {
             .and_then(|s| s.to_str())
             .unwrap_or("extension")
             .to_string();
+        // PLAN-followups.md P2: auto-cache .load'd extension bytes
+        // by content-hash so a later `.bundle save` + restart can
+        // reach the extension via `sqlink --bundle-load` without
+        // the operator having to manually prime the cas-cache.
+        // Best-effort: a failure here just means the cas-cache
+        // priming didn't happen; the extension still loads. The
+        // URI is the path's file:// form  good enough for the
+        // .cache list / cli observability surface.
+        if let Some(cache) = self.cache.read().as_ref() {
+            let uri = format!("file://{}", path.display());
+            if let Err(e) = cache.put(&uri, &bytes) {
+                tracing::warn!(
+                    path = %path.display(),
+                    err = %e,
+                    "load_extension: cas-cache put failed; .bundle-load round-trip may need manual priming"
+                );
+            }
+        }
         self.load_extension_from_bytes(bytes, &hint, policy).await
     }
 
