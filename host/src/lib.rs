@@ -4056,6 +4056,40 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
             let _ = guard.bundle_touch(id);
         }
     }
+
+    async fn bundle_add_alias(
+        &mut self,
+        bundle_id: u64,
+        alias: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        guard
+            .bundle_add_alias(bundle_id, &alias)
+            .map_err(|e| bundles_err("bundles.add-alias", e))
+    }
+
+    async fn bundle_remove_alias(
+        &mut self,
+        alias: String,
+    ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        guard
+            .bundle_remove_alias(&alias)
+            .map_err(|e| bundles_err("bundles.remove-alias", e))
+    }
+
+    async fn bundle_aliases(
+        &mut self,
+        bundle_id: u64,
+    ) -> std::result::Result<Vec<String>, loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        guard
+            .bundle_aliases(bundle_id)
+            .map_err(|e| bundles_err("bundles.aliases", e))
+    }
 }
 
 /// Resolve the cas-cache `SqliteCasStore` handle from the LoadedState,
@@ -7071,6 +7105,24 @@ impl Host {
             .and_then(|s| s.to_str())
             .unwrap_or("extension")
             .to_string();
+        // PLAN-followups.md P2: auto-cache .load'd extension bytes
+        // by content-hash so a later `.bundle save` + restart can
+        // reach the extension via `sqlink --bundle-load` without
+        // the operator having to manually prime the cas-cache.
+        // Best-effort: a failure here just means the cas-cache
+        // priming didn't happen; the extension still loads. The
+        // URI is the path's file:// form  good enough for the
+        // .cache list / cli observability surface.
+        if let Some(cache) = self.cache.read().as_ref() {
+            let uri = format!("file://{}", path.display());
+            if let Err(e) = cache.put(&uri, &bytes) {
+                tracing::warn!(
+                    path = %path.display(),
+                    err = %e,
+                    "load_extension: cas-cache put failed; .bundle-load round-trip may need manual priming"
+                );
+            }
+        }
         self.load_extension_from_bytes(bytes, &hint, policy).await
     }
 

@@ -174,11 +174,9 @@ fn bundles_save_dedupe_on_same_set_hash() {
     let db = dir.join("probe.db");
     let cache = dir.join("cas");
     // Two saves with the same loaded set: the second call returns the
-    // existing bundle's id (no new row inserted). v1 alias semantics
-    // = "first name sticks"; the second name doesn't bind. True
-    // multi-name-per-set-hash aliasing is a v1.1 task (would need
-    // a separate __cas_bundle_alias table since the current schema
-    // has UNIQUE on bundles.name).
+    // existing bundle's id (no new row inserted) but the new name
+    // is bound as an additional alias against the same bundle row
+    // (v1.1 multi-name aliasing landed via __cas_bundle_alias).
     let script = format!(
         ".load {}\n.load {}\n\
          .bundle save first --no-build\n\
@@ -189,25 +187,30 @@ fn bundles_save_dedupe_on_same_set_hash() {
         json1.display(),
     );
     let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
-    // Both saves succeed (the second returns the same id silently).
     assert_ok(
         "dedupe",
         &stdout,
         &stderr,
         &["bundle 'first' saved", "bundle 'second' saved"],
     );
-    // Exactly ONE row in the list output (the first name wins).
+    // Exactly ONE bundle row in the list output  but the names
+    // column shows both aliases comma-joined.
     let bundle_rows = stdout
         .lines()
         .filter(|l| {
             let s = l.trim();
-            s.starts_with("first") || s.starts_with("second")
+            s.starts_with("first")
         })
         .count();
     assert_eq!(
         bundle_rows, 1,
-        "expected exactly one bundle row (first/second alias to same set_hash) \
+        "expected exactly one bundle row whose NAMES column starts with 'first'; \
          got {bundle_rows} matching rows\nstdout:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("first,second"),
+        "expected NAMES column to show both aliases as 'first,second' (multi-alias semantics); \
+         stdout:\n{stdout}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -806,12 +809,11 @@ fn bundles_launch_flag_dynamic_load() {
     //       cache miss path  the exact error from PLAN-bundles.md
     //       open-question pass decision #3.
     //
-    // In v1, `.load /path/to/foo.component.wasm` doesn't push bytes
-    // into the cas-cache by content-hash (only URI-keyed loads do).
-    // So under the typical test setup we'll see (b)  which still
-    // proves the flag is wired AND verifies the cache-miss error
-    // message contract. v1.1 will get a `.cache cache <path>` or
-    // equivalent so the round-trip can complete in-process.
+    // v1.1 PLAN-followups P2 landed `.load` auto-cache: `.load PATH`
+    // now puts the bytes into the cas-cache under file://PATH, so
+    // the second run sees (a). The cache-miss branch is preserved
+    // as a fallback for backward compat with old cas-cache files
+    // populated before the auto-cache feature landed.
     let saw_pre_load = p_stderr.contains("[bundle] 'myset': dynamic-loaded");
     let saw_cache_miss =
         p_stderr.contains("which isn't in cas-cache") && p_stderr.contains("Run `.load");
@@ -820,6 +822,143 @@ fn bundles_launch_flag_dynamic_load() {
         "[launch-load:run] neither '[bundle] dynamic-loaded' nor the \
          cas-cache-miss error appeared; --bundle-load plumbing \
          is silent\nstdout:\n{p_stdout}\nstderr:\n{p_stderr}",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// v1.1 PLAN-followups P2: bundle multi-name aliasing.
+#[test]
+fn bundles_alias_two_names_same_set_hash() {
+    let Some((sqlink, cli, uuid, json1)) = gates() else {
+        eprintln!("bundles alias smoke: SKIP");
+        return;
+    };
+    let dir = make_tempdir("alias");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    let script = format!(
+        ".load {}\n.load {}\n\
+         .bundle save myset --no-build\n\
+         .bundle alias myset other\n\
+         .bundle list\n\
+         .bundle show other\n\
+         .exit\n",
+        uuid.display(),
+        json1.display(),
+    );
+    let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
+    assert_ok(
+        "alias",
+        &stdout,
+        &stderr,
+        &[
+            "bundle 'myset' saved",
+            "now aliased as 'other'",
+            // Both aliases visible in the list row.
+            "myset,other",
+            // And `.bundle show other` reaches the same bundle.
+            "members (",
+            "uuid",
+            "json1",
+        ],
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn bundles_unalias_keeps_bundle() {
+    let Some((sqlink, cli, uuid, json1)) = gates() else {
+        eprintln!("bundles unalias smoke: SKIP");
+        return;
+    };
+    let dir = make_tempdir("unalias");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    let script = format!(
+        ".load {}\n.load {}\n\
+         .bundle save myset --no-build\n\
+         .bundle alias myset other\n\
+         .bundle unalias other\n\
+         .bundle list\n\
+         .bundle show myset\n\
+         .exit\n",
+        uuid.display(),
+        json1.display(),
+    );
+    let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
+    assert_ok(
+        "unalias",
+        &stdout,
+        &stderr,
+        &[
+            "alias 'other' removed",
+            // myset still resolves.
+            "set_hash:",
+            "members (",
+        ],
+    );
+    assert!(
+        !stdout.contains("other"),
+        "expected 'other' alias not to appear after unalias; stdout:\n{stdout}",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+// v1.1 PLAN-followups P2: .load auto-cache by content-hash. The
+// first session loads the extensions via `.load PATH` and saves
+// the bundle  the host's auto-cache feature should push the
+// bytes into the cas-cache under file://PATH. The second session
+// then runs `sqlink --bundle-load myset cli.wasm` against the
+// same cache dir and should see "[bundle] 'myset': dynamic-loaded"
+// for each member (NOT the cache-miss error).
+#[test]
+fn bundles_load_then_bundle_load_no_manual_priming() {
+    let Some((sqlink, cli, uuid, json1)) = gates() else {
+        eprintln!("bundles .load+--bundle-load smoke: SKIP");
+        return;
+    };
+    let dir = make_tempdir("autocache_roundtrip");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    let save_script = format!(
+        ".load {}\n.load {}\n.bundle save myset --no-build\n.exit\n",
+        uuid.display(),
+        json1.display(),
+    );
+    let (s_stdout, s_stderr) = drive(&sqlink, &cli, &cache, &db, &[], &save_script);
+    assert_ok(
+        "autocache:save",
+        &s_stdout,
+        &s_stderr,
+        &["bundle 'myset' saved"],
+    );
+
+    let probe_script = "SELECT json('[1,2,3]');\nSELECT uuid_v4();\n.exit\n";
+    let (p_stdout, p_stderr) = drive(
+        &sqlink,
+        &cli,
+        &cache,
+        &db,
+        &["--bundle-load", "myset"],
+        probe_script,
+    );
+    assert!(
+        !p_stderr.contains("panicked"),
+        "[autocache:run] cli stderr panicked:\nstdout:\n{p_stdout}\nstderr:\n{p_stderr}",
+    );
+    // The cas-cache should have been primed by the auto-cache, so
+    // we expect the "dynamic-loaded" path  NOT the cache-miss
+    // error. If we see the cache-miss error, the auto-cache feature
+    // didn't fire and we've regressed.
+    let saw_pre_load = p_stderr.contains("[bundle] 'myset': dynamic-loaded");
+    let saw_cache_miss =
+        p_stderr.contains("which isn't in cas-cache") && p_stderr.contains("Run `.load");
+    assert!(
+        saw_pre_load,
+        "[autocache:run] expected '[bundle] dynamic-loaded' (auto-cache) but \
+         got {} (saw_cache_miss={})\nstdout:\n{p_stdout}\nstderr:\n{p_stderr}",
+        if saw_pre_load { "pre-load" } else { "neither" },
+        saw_cache_miss,
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -16,7 +16,9 @@ use anyhow::{anyhow, Context, Result};
 use sqlite_component_core::db::{Connection, OpenFlags, Statement, StepResult, Value};
 
 use crate::resolver::{ArtifactRef, ResolverRegistry, Source};
-use crate::schema::{INSTALL_SCHEMA, MIGRATE_V1_TO_V2, MIGRATE_V2_TO_V3, SCHEMA_VERSION};
+use crate::schema::{
+    INSTALL_SCHEMA, MIGRATE_V1_TO_V2, MIGRATE_V2_TO_V3, MIGRATE_V3_TO_V4, SCHEMA_VERSION,
+};
 
 /// Blake3 hash, 32 bytes. Wrapped so callers can pass it around
 /// without reaching for the `blake3` crate directly.
@@ -279,6 +281,11 @@ impl SqliteCasStore {
                     self.conn
                         .execute_batch(MIGRATE_V2_TO_V3)
                         .map_err(|e| anyhow!("migrate v2 -> v3: {}", e.message))?;
+                }
+                "3" => {
+                    self.conn
+                        .execute_batch(MIGRATE_V3_TO_V4)
+                        .map_err(|e| anyhow!("migrate v3 -> v4: {}", e.message))?;
                 }
                 _ => {
                     return Err(anyhow!(

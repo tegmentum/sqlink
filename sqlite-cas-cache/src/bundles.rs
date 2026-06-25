@@ -110,6 +110,8 @@ impl SqliteCasStore {
         set_hash: &str,
         members: &[BundleMember],
     ) -> Result<u64> {
+        // Name-driven path: if the alias already exists, it must
+        // resolve to the same set_hash or we conflict.
         if let Some(n) = name {
             if let Some(existing) = self.bundle_find_by_name(n)? {
                 if existing.set_hash != set_hash {
@@ -123,25 +125,17 @@ impl SqliteCasStore {
                 return Ok(existing.id);
             }
         }
+        // Hash-driven path: bundle exists, we just need to bind
+        // the new name to it (if any) via the alias table.
         if let Some(existing) = self.bundle_find_first_by_hash(set_hash)? {
             if let Some(n) = name {
-                if existing.name.is_none() {
-                    const REBIND_SQL: &str = "UPDATE __cas_bundle SET name = ?1 WHERE id = ?2";
-                    self.with_stmt(REBIND_SQL, |stmt| {
-                        stmt.bind_all(&[
-                            Value::Text(n.to_string()),
-                            Value::Integer(existing.id as i64),
-                        ])
-                        .map_err(|e| anyhow!("bind alias-rebind: {}", e.message))?;
-                        stmt.step()
-                            .map_err(|e| anyhow!("step alias-rebind: {}", e.message))?;
-                        Ok(())
-                    })?;
-                }
+                self.bundle_add_alias(existing.id, n)?;
             }
             self.bundle_touch(existing.id)?;
             return Ok(existing.id);
         }
+        // Fresh bundle: insert the row, then bind the alias (if
+        // any), then populate members.
         const BUNDLE_INSERT_SQL: &str =
             "INSERT INTO __cas_bundle(name, set_hash, created_at, last_used_at) \
              VALUES (?1, ?2, ?3, ?3)";
@@ -164,6 +158,9 @@ impl SqliteCasStore {
             Ok(())
         })?;
         let id = self.conn().last_insert_rowid() as u64;
+        if let Some(n) = name {
+            self.bundle_add_alias(id, n)?;
+        }
         // Cached statement  the prepare cost is paid once for the
         // whole bundle's members; loop body just rebinds + steps.
         for m in members {
@@ -182,10 +179,118 @@ impl SqliteCasStore {
         Ok(id)
     }
 
-    /// Exact-name lookup.
+    /// Bind `alias` to an existing bundle. Idempotent if the alias
+    /// already points at `bundle_id`; errors with
+    /// [`BundleAliasConflict`] if it points at a different bundle.
+    pub fn bundle_add_alias(&mut self, bundle_id: u64, alias: &str) -> Result<()> {
+        const FIND_SQL: &str =
+            "SELECT bundle_id FROM __cas_bundle_alias WHERE name = ?1";
+        let existing_bundle = self.with_stmt(FIND_SQL, |stmt| {
+            stmt.bind_text_ref(1, alias)
+                .map_err(|e| anyhow!("bind alias-find: {}", e.message))?;
+            match stmt
+                .step()
+                .map_err(|e| anyhow!("step alias-find: {}", e.message))?
+            {
+                StepResult::Row => match stmt.column_value(0) {
+                    Value::Integer(i) => Ok(Some(i as u64)),
+                    _ => Err(anyhow!("alias bundle_id not integer")),
+                },
+                StepResult::Done => Ok(None),
+            }
+        })?;
+        match existing_bundle {
+            Some(id) if id == bundle_id => return Ok(()),
+            Some(other) => {
+                // Different bundle: surface as alias-conflict so
+                // callers (bundle_save in particular) can present
+                // the SAME error shape they did under the v1 UNIQUE
+                // model. Look up both bundles' set_hashes for the
+                // payload.
+                let new_hash = self
+                    .bundle_show(bundle_id)?
+                    .map(|d| d.summary.set_hash)
+                    .unwrap_or_default();
+                let existing_hash = self
+                    .bundle_show(other)?
+                    .map(|d| d.summary.set_hash)
+                    .unwrap_or_default();
+                return Err(anyhow!(BundleAliasConflict {
+                    name: alias.to_string(),
+                    existing_set_hash: existing_hash,
+                    new_set_hash: new_hash,
+                }));
+            }
+            None => {}
+        }
+        const INSERT_SQL: &str = "INSERT INTO __cas_bundle_alias(name, bundle_id, created_at) \
+             VALUES (?1, ?2, ?3)";
+        let now = unix_now();
+        self.with_stmt(INSERT_SQL, |stmt| {
+            stmt.bind_text_ref(1, alias)
+                .map_err(|e| anyhow!("bind alias-insert name: {}", e.message))?;
+            stmt.bind(2, &Value::Integer(bundle_id as i64))
+                .map_err(|e| anyhow!("bind alias-insert bundle_id: {}", e.message))?;
+            stmt.bind(3, &Value::Integer(now))
+                .map_err(|e| anyhow!("bind alias-insert now: {}", e.message))?;
+            stmt.step()
+                .map_err(|e| anyhow!("step alias-insert: {}", e.message))?;
+            Ok(())
+        })?;
+        Ok(())
+    }
+
+    /// Remove one short alias. Leaves the bundle in place even if
+    /// no aliases remain (the bundle can still be reached via
+    /// id / set_hash / hash-prefix lookups). Returns true if the
+    /// alias existed.
+    pub fn bundle_remove_alias(&mut self, alias: &str) -> Result<bool> {
+        const DELETE_SQL: &str = "DELETE FROM __cas_bundle_alias WHERE name = ?1";
+        let before = self.conn().changes() as u64;
+        self.with_stmt(DELETE_SQL, |stmt| {
+            stmt.bind_text_ref(1, alias)
+                .map_err(|e| anyhow!("bind alias-delete: {}", e.message))?;
+            stmt.step()
+                .map_err(|e| anyhow!("step alias-delete: {}", e.message))?;
+            Ok(())
+        })?;
+        Ok(self.conn().changes() as u64 > before)
+    }
+
+    /// All aliases for `bundle_id`, lexicographic.
+    pub fn bundle_aliases(&self, bundle_id: u64) -> Result<Vec<String>> {
+        const SQL: &str = "SELECT name FROM __cas_bundle_alias \
+             WHERE bundle_id = ?1 ORDER BY name";
+        self.with_stmt(SQL, |stmt| {
+            stmt.bind(1, &Value::Integer(bundle_id as i64))
+                .map_err(|e| anyhow!("bind bundle-aliases: {}", e.message))?;
+            let mut out = Vec::new();
+            while let StepResult::Row = stmt
+                .step()
+                .map_err(|e| anyhow!("step bundle-aliases: {}", e.message))?
+            {
+                match stmt.column_value(0) {
+                    Value::Text(s) => out.push(s),
+                    other => return Err(anyhow!("bundle-aliases name not text: {other:?}")),
+                }
+            }
+            Ok(out)
+        })
+    }
+
+    /// Exact-name lookup via the alias table. Falls through to the
+    /// legacy `__cas_bundle.name` column for any rows that haven't
+    /// been migrated into __cas_bundle_alias yet  belt + braces
+    /// for live caches that pre-date the v3->v4 migration step.
     pub fn bundle_find_by_name(&self, name: &str) -> Result<Option<BundleSummary>> {
-        const SQL: &str = "SELECT id, name, set_hash, created_at, last_used_at \
-             FROM __cas_bundle WHERE name = ?1";
+        const SQL: &str = "SELECT b.id, b.name, b.set_hash, b.created_at, b.last_used_at \
+             FROM __cas_bundle_alias a JOIN __cas_bundle b ON b.id = a.bundle_id \
+             WHERE a.name = ?1 \
+             UNION ALL \
+             SELECT id, name, set_hash, created_at, last_used_at \
+             FROM __cas_bundle WHERE name = ?1 \
+                 AND NOT EXISTS (SELECT 1 FROM __cas_bundle_alias WHERE name = ?1) \
+             LIMIT 1";
         let row = self.with_stmt(SQL, |stmt| {
             stmt.bind_text_ref(1, name)
                 .map_err(|e| anyhow!("bind find-by-name: {}", e.message))?;
