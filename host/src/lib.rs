@@ -1518,6 +1518,21 @@ fn spi_ensure_open(
                 }
             })?
         };
+        // PLAN-prefixes.md substrate: install the __sqlink_prefix*
+        // tables on this extension's view of the user db so that
+        // `spi.execute` calls from prefix-cli and any other
+        // registry-aware extension see the schema. install_schema
+        // uses CREATE TABLE IF NOT EXISTS  idempotent, cheap on
+        // subsequent opens. Failures are logged but non-fatal: the
+        // extension can still operate, just without prefix
+        // qualification visibility.
+        if let Err(e) = prefix_registry::install_schema(&conn) {
+            tracing::warn!(
+                db_path = %state.db_path,
+                err = %e,
+                "spi_ensure_open: prefix-registry schema install failed; continuing"
+            );
+        }
         *r = Some(conn);
     }
     Ok(())
@@ -1691,6 +1706,18 @@ fn shared_spi_ensure_open(host: &Host) -> std::result::Result<(), bindings::sqli
         // for the sync sqlite3 callback to call back into
         // Host::dispatch_dot_command's async path.
         unsafe { register_host_dot_command_function(conn.raw_handle(), host.clone()) };
+        // PLAN-prefixes.md substrate: install the __sqlink_prefix*
+        // tables on the shared SPI connection so any extension
+        // routed through the bindings-world spi.execute (e.g.
+        // prefix-cli's `.prefix list/add/...` queries) sees the
+        // schema. Idempotent via CREATE TABLE IF NOT EXISTS.
+        if let Err(e) = prefix_registry::install_schema(&conn) {
+            tracing::warn!(
+                db_path = %path,
+                err = %e,
+                "shared_spi_ensure_open: prefix-registry schema install failed; continuing"
+            );
+        }
         *r = Some(conn);
     }
     Ok(())
