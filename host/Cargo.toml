@@ -36,7 +36,7 @@ wasmtime = { version = "45.0.1", features = [
 wasmtime-wasi = "45.0.1"
 parking_lot = "0.12"
 tracing = "0.1"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util", "fs", "time"] }
 async-trait = "0.1"
 # Real http impl for the http-resolver component path. blocking to
 # stay sync within the (currently sync) Host trait method body —

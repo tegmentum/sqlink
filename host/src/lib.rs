@@ -437,7 +437,7 @@ impl OpenSslVerifier {
         if let Some(c) = g.as_ref() {
             return Ok(c.clone());
         }
-        let bytes = std::fs::read(&self.component_path).map_err(|e| {
+        let bytes = tokio::fs::read(&self.component_path).await.map_err(|e| {
             anyhow!(
                 "load openssl-composed.wasm from {}: {e} \
                  (set OPENSSL_WASM_PATH or build ~/git/openssl-wasm)",
@@ -3354,13 +3354,13 @@ impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
         let Some(wal_path) = wal_sidecar_path(self, &db_name)? else {
             return Ok(None);
         };
-        match std::fs::metadata(&wal_path) {
+        match tokio::fs::metadata(&wal_path).await {
             Ok(m) if m.len() < 32 => return Ok(None),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
             Err(e) => return Err(wal_io_err("stat wal", &wal_path, &e)),
             _ => {}
         }
-        let bytes = std::fs::read(&wal_path)
+        let bytes = tokio::fs::read(&wal_path).await
             .map_err(|e| wal_io_err("read wal", &wal_path, &e))?;
         if bytes.len() < 32 { return Ok(None); }
         Ok(Some(bytes[..32].to_vec()))
@@ -3395,7 +3395,7 @@ impl loaded::sqlite::extension::wal_frames::Host for LoadedState {
                 ),
             }
         })?;
-        let bytes = std::fs::read(&wal_path)
+        let bytes = tokio::fs::read(&wal_path).await
             .map_err(|e| wal_io_err("read wal", &wal_path, &e))?;
         if bytes.len() < 32 {
             return Err(loaded::sqlite::extension::types::SqliteError {
