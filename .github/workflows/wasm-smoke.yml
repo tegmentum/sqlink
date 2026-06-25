@@ -188,4 +188,11 @@ jobs:
         # parallelism with some fixtures sharing global SQLite state.
         # Documented in fix/preexisting-breakage; safe to drop once the
         # underlying isolation lands.
+        #
+        # SQLINK_NATIVE_BINARY overrides the test helper's default
+        # `target/release/sqlink-native` lookup. CARGO_BUILD_TARGET
+        # is set workflow-wide to x86_64-unknown-linux-gnu, so cargo
+        # writes the binary under target/<triple>/release/ instead.
+        env:
+          SQLINK_NATIVE_BINARY: ${{ github.workspace }}/target/x86_64-unknown-linux-gnu/release/sqlink-native
         run: cargo test -p extension-smoke --test extension_smoke_native -- --test-threads=1
