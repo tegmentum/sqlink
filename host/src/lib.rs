@@ -4220,6 +4220,9 @@ fn allowed_crate_root_prefixes() -> Vec<std::path::PathBuf> {
 ///
 /// Canonicalizes both sides (resolves symlinks + `..` segments) before
 /// comparison, defeating the `~/.cache/sqlink/builds/../etc` escape.
+/// Pure prefix-comparison step delegates to
+/// `sqlink_parsers::spawn_build_validation::check_canonical_under_prefix`
+/// so the fuzz harness can exercise the same code path.
 fn validate_spawn_build_crate_root(
     crate_root: &std::path::Path,
 ) -> std::result::Result<(), String> {
@@ -4227,19 +4230,7 @@ fn validate_spawn_build_crate_root(
         .canonicalize()
         .map_err(|e| format!("canonicalize failed: {e}"))?;
     let prefixes = allowed_crate_root_prefixes();
-    for pref in &prefixes {
-        if canon == *pref || canon.starts_with(pref) {
-            return Ok(());
-        }
-    }
-    Err(format!(
-        "must canonicalize under one of: {}",
-        prefixes
-            .iter()
-            .map(|p| p.display().to_string())
-            .collect::<Vec<_>>()
-            .join(", ")
-    ))
+    sqlink_parsers::spawn_build_validation::check_canonical_under_prefix(&canon, &prefixes)
 }
 
 /// Caps for extension-supplied bundle string args. names and
@@ -4397,17 +4388,9 @@ fn run_with_timeout(
 fn validate_spawn_build_target_triple(
     triple: Option<&str>,
 ) -> std::result::Result<(), &'static str> {
-    let Some(t) = triple else { return Ok(()) };
-    if t.is_empty() {
-        return Err("must be non-empty when specified");
-    }
-    if !t
-        .chars()
-        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_' || c == '-')
-    {
-        return Err("contains disallowed characters (only [a-z0-9_-] allowed)");
-    }
-    Ok(())
+    // Delegates to sqlink_parsers so the fuzz harness exercises
+    // the same code path.
+    sqlink_parsers::spawn_build_validation::validate_target_triple(triple)
 }
 
 /// Walk `release_dir` and return the first regular file that has

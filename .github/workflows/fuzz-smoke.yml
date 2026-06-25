@@ -25,6 +25,10 @@ jobs:
           - bundle_save_set_hash
           - parse_duration
           - parse_load_args
+          # Round-2 targets (PLAN-followups P3):
+          - spawn_build_path_validation
+          - bundle_cli_argv
+          - sqlink_cli_argv
     steps:
       - uses: actions/checkout@v4
         with:

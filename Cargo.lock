@@ -5464,6 +5464,7 @@ dependencies = [
  "setops-extension",
  "sha3-extension",
  "sketches-extension",
+ "sqlink-parsers",
  "sqlite-cas-cache",
  "sqlite-component-core",
  "sqlite-extension-policy",
