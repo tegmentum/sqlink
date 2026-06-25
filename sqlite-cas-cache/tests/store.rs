@@ -179,3 +179,39 @@ fn external_mode_persists_across_reopens() {
     assert_eq!(got_h, put_hash);
     assert_eq!(got_bytes, b"persistent bytes");
 }
+
+// Cheap mutant kills (cargo-mutants 2026-06-25):
+
+#[test]
+fn default_external_path_uses_sqlink_cache_subdir() {
+    // Mutant: replace default_external_path -> PathBuf with Default::default()
+    // (store.rs:154). Default::default() returns an empty PathBuf; assert
+    // the real path is non-empty and contains the expected segments.
+    let p = SqliteCasStore::default_external_path();
+    let s = p.to_string_lossy();
+    assert!(s.contains(".cache"), "missing .cache segment: {s}");
+    assert!(s.contains("sqlink"), "missing sqlink segment: {s}");
+    assert!(s.ends_with("cas.sqlite"), "missing cas.sqlite filename: {s}");
+}
+
+#[test]
+fn default_builds_dir_contains_set_hash() {
+    // Mutant: replace default_builds_dir -> PathBuf with Default::default()
+    // (store.rs:167).
+    let p = SqliteCasStore::default_builds_dir("deadbeef1234");
+    let s = p.to_string_lossy();
+    assert!(s.contains("builds"), "missing builds segment: {s}");
+    assert!(s.contains("deadbeef1234"), "missing set_hash segment: {s}");
+}
+
+#[test]
+fn config_round_trips_via_set_config() {
+    // Mutants: config -> &StoreConfig with Box::leak(Box::new(Default::default()))
+    // (store.rs:235); set_config with () (store.rs:239).
+    let (_d, mut s) = fresh_external();
+    let default_max = s.config().max_bytes;
+    let new = sqlite_cas_cache::StoreConfig { max_bytes: 42 };
+    s.set_config(new);
+    assert_eq!(s.config().max_bytes, 42, "set_config did not persist");
+    assert_ne!(default_max, 42, "test premise: default should differ from 42");
+}

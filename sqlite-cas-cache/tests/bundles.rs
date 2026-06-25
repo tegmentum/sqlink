@@ -339,3 +339,22 @@ fn find_by_hash_prefix_orders_most_recent_first() {
     let ids: Vec<u64> = hits.iter().map(|h| h.id).collect();
     assert_eq!(ids, vec![id_b, id_c, id_a]);
 }
+
+// Cheap mutant kill (cargo-mutants 2026-06-25):
+
+#[test]
+fn alias_conflict_display_includes_names_and_hashes() {
+    // Mutant: replace BundleAliasConflict::fmt -> std::fmt::Result with
+    // Ok(Default::default()) (bundles.rs:81). The default Result<()>::default()
+    // is Ok(()), and the formatter is left empty  the resulting string
+    // would be "". Real impl includes the bundle name and both hashes.
+    let conflict = sqlite_cas_cache::BundleAliasConflict {
+        name: "myset".to_string(),
+        existing_set_hash: "deadbeef".to_string(),
+        new_set_hash: "cafebabe".to_string(),
+    };
+    let s = format!("{conflict}");
+    assert!(s.contains("myset"), "missing bundle name: {s}");
+    assert!(s.contains("deadbeef"), "missing existing hash: {s}");
+    assert!(s.contains("cafebabe"), "missing new hash: {s}");
+}
