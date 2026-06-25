@@ -40,3 +40,6 @@ wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 blake3 = { version = "1", default-features = false }
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
+# no_std + alloc-only so it compiles for wasm32-wasip2; the
+# `load_args` module behind the std feature stays unbuilt here.
+sqlink-parsers = { path = "../../sqlink-parsers", default-features = false }
