@@ -434,3 +434,54 @@ fn get_api_for_ctx(_ctx: *mut sqlite3_context) -> Option<ApiRoutines> {
 
 // Silence unused.
 const _: c_int = SQLITE_OK;
+
+#[cfg(test)]
+mod tests {
+    //! register.rs is mostly `unsafe extern "C"` callbacks driven
+    //! by sqlite3 with a live Host + Runtime behind them. Useful
+    //! end-to-end coverage requires:
+    //!   * A real sqlite3 instance (or a pApi rich enough to fake
+    //!     create_function_v2 + aggregate_context cohesively)
+    //!   * A `Host` (wasmtime engine + compile cache)
+    //!   * A `Runtime` (multi-thread tokio)
+    //!   * A loaded wasm extension behind the dispatch routes
+    //!
+    //! Those are integration concerns; the host crate's
+    //! `tests/extension_smoke_*.rs` already cover the trampoline
+    //! happy paths end-to-end. Adding native unit tests here would
+    //! duplicate setup without isolating any logic the integration
+    //! tests don't already catch.
+    //!
+    //! What we CAN guard at unit-test cost: the public
+    //! `register_scalar` / `register_aggregate` signatures
+    //! survive future refactors. If either changes shape, the
+    //! compile-time function-pointer assignment below fails to
+    //! build  cheap regression net.
+    use super::*;
+
+    #[test]
+    fn register_signatures_are_stable() {
+        let _: unsafe fn(
+            ApiRoutines,
+            *mut sqlite3,
+            Host,
+            Arc<Runtime>,
+            &str,
+            &str,
+            i32,
+            u64,
+        ) -> c_int = register_scalar;
+
+        let _: unsafe fn(
+            ApiRoutines,
+            *mut sqlite3,
+            Host,
+            Arc<Runtime>,
+            &str,
+            &str,
+            i32,
+            u64,
+            bool,
+        ) -> c_int = register_aggregate;
+    }
+}
