@@ -401,6 +401,59 @@ class ComposedDatabase {
     return this._registry.get(name)?.manifest
   }
 
+  /**
+   * Run a single dot-command (`.bundle save myset`, `.prefix add foaf ...`,
+   * `.tables`, etc.) and return the cli's stdout window for that
+   * command. Same sentinel framing as `exec()` so the call is
+   * deterministic across concurrent users + JSPI suspensions.
+   *
+   * Unlike `exec()`, the input is not wrapped with a trailing `;`
+   * and is not assumed to be SQL. Caller passes the raw line as
+   * the cli sees it (e.g. `.bundle save myset --no-build`).
+   *
+   * Returns the stdout window as a plain string with the sentinel
+   * SELECT and its output stripped. Most dot-commands print
+   * human-readable output that's easier to substring-assert than
+   * to round-trip through `parseCliWindow`.
+   */
+  async execDotCommand(line) {
+    if (this._closed) throw new Error('database is closed')
+    if (!this._stdinQueue || this._runFinished) {
+      throw new Error('composed cli session is not running')
+    }
+    const release = await this._lock.acquire()
+    try {
+      const id = ++this._execCount
+      const sentinelValue = `${SENTINEL_PREFIX}${id}__`
+      const sentinelSelect = `SELECT '${sentinelValue}';`
+      const cursorBefore = this._stdoutBuffer.length
+      const trimmed = line.replace(/[\r\n]+$/, '')
+      const script = `${trimmed}\n${sentinelSelect}\n`
+      this._stdinQueue.push(script)
+      await this._waitForStdout(
+        (buf) => buf.indexOf(sentinelValue, cursorBefore) >= 0,
+        { timeoutMs: 60_000, label: `execDotCommand: ${trimmed}` },
+      )
+      const sentinelIdx = this._stdoutBuffer.indexOf(
+        sentinelValue,
+        cursorBefore,
+      )
+      let endIdx = this._stdoutBuffer.indexOf('\n', sentinelIdx)
+      if (endIdx < 0) endIdx = this._stdoutBuffer.length
+      else endIdx += 1
+      const window = this._stdoutBuffer.slice(cursorBefore, endIdx)
+      // Strip the sentinel SELECT echo + the sentinel value print so
+      // the caller sees only the dot-cmd's actual stdout (including
+      // any `sqlite> ` prompts the cli emits BEFORE the sentinel).
+      const sentinelLineStart = window.indexOf(`SELECT '${sentinelValue}'`)
+      const trimmedWindow =
+        sentinelLineStart >= 0 ? window.slice(0, sentinelLineStart) : window
+      return trimmedWindow
+    } finally {
+      release()
+    }
+  }
+
   async _issueDotLoad(name) {
     // Same framing approach as exec(): send the .load + a sentinel
     // and drain stdout until the sentinel value appears. Keeps the
