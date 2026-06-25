@@ -7,8 +7,15 @@
 #
 # WIT-closure tracking: each produced .component.wasm gets a
 # <name>.component.wasm.wit-hash sidecar containing the sha256 of
-# the union of WIT files it was encoded against. The sidecar is
-# the durable record of WIT provenance for that artifact.
+# the union of WIT files it was encoded against. On re-run the
+# script compares the recorded hash to the current closure; on
+# mismatch (or missing sidecar) it forces a cargo rebuild of the
+# extension before re-encoding so the resulting component binds
+# against the current SPI surface. Without this guard, stale
+# .wasm artifacts left behind from another branch silently
+# survive re-encoding and surface as wit-bindgen import-type
+# mismatches at test time ("failed to convert function to given
+# type").
 set -e
 cd "$(dirname "$0")/.."
 REPO_ROOT="$(pwd)"
@@ -71,8 +78,6 @@ compute_wit_hash() {
             files+=("$f")
         done
     fi
-    # Concat in sorted-path order and hash. `cat` over empty list
-    # would consume stdin; guard with the size check.
     if [ "${#files[@]}" -eq 0 ]; then
         printf '%s' "0000000000000000000000000000000000000000000000000000000000000000"
         return
@@ -89,16 +94,89 @@ pkg_from_wasm() {
     echo "${base//_/-}"
 }
 
+# Decide whether any WIT closure file is newer than the
+# .component.wasm at $1. Returns 0 if a newer WIT file exists
+# (= possibly skewed, recompute hash), 1 if all WIT files are
+# older (= cheap shortcut: safe to skip).
+wit_newer_than() {
+    local component="$1"
+    local pkg="$2"
+    local extdir="${PKG_DIR[$pkg]:-}"
+    # find -newer with -quit short-circuits at the first hit.
+    if find sqlite-loader-wit/wit sqlite-wasm/wit -name "*.wit" -type f -newer "$component" -print -quit 2>/dev/null | grep -q .; then
+        return 0
+    fi
+    if [ -n "$extdir" ] && [ -d "$extdir/wit" ]; then
+        if find "$extdir/wit" -name "*.wit" -type f -newer "$component" -print -quit 2>/dev/null | grep -q .; then
+            return 0
+        fi
+    fi
+    return 1
+}
+
+# Rebuild a package in the right cwd. Top-level workspace
+# extensions get `cargo build -p <pkg>` from the repo root;
+# per-extension excluded crates (e.g. postgis-bridge, bundle-cli)
+# get a directory-local `cargo build` because they're outside the
+# workspace.
+#
+# Args:
+#   $1 = cargo package name
+#   $2 = source .wasm path (used to decide which target dir owns it)
+# Returns 0 on success, non-zero on failure.
+rebuild_pkg() {
+    local pkg="$1"
+    local wasm="$2"
+    local extdir="${PKG_DIR[$pkg]:-}"
+    # extensions/<dir>/target/... means the package builds out of
+    # its own crate dir; everything else lives in the workspace
+    # target/ at the repo root.
+    case "$wasm" in
+        extensions/*/target/*)
+            if [ -z "$extdir" ]; then
+                return 1
+            fi
+            ( cd "$REPO_ROOT/$extdir" && cargo build --target wasm32-wasip2 --release >/dev/null 2>&1 )
+            ;;
+        *)
+            ( cd "$REPO_ROOT" && cargo build -p "$pkg" --target wasm32-wasip2 --release >/dev/null 2>&1 )
+            ;;
+    esac
+}
+
 ok=0; failed=0
 for wasm in $(find target/wasm32-wasip2/release extensions/*/target/wasm32-wasip2/release -maxdepth 1 -name "*.wasm" -not -name "*.component.wasm" 2>/dev/null); do
     out="${wasm%.wasm}.component.wasm"
     sidecar="$out.wit-hash"
 
-    # Compute the WIT-closure hash for this artifact now so we
-    # can record it on a successful encode. Skew detection +
-    # rebuild lands in the follow-up commit.
     pkg=$(pkg_from_wasm "$(basename "$wasm")")
+
+    # Perf shortcut: if the sidecar exists, the component exists,
+    # AND no WIT file is newer than the component, the artifact
+    # is up to date — skip everything.
+    if [ -f "$sidecar" ] && [ -f "$out" ] && ! wit_newer_than "$out" "$pkg"; then
+        ok=$((ok + 1))
+        continue
+    fi
+
+    # Otherwise compute current WIT-closure hash and decide.
     wit_hash=$(compute_wit_hash "$pkg")
+    sidecar_hash=""
+    [ -f "$sidecar" ] && sidecar_hash=$(cat "$sidecar" 2>/dev/null)
+
+    if [ "$wit_hash" != "$sidecar_hash" ]; then
+        # Sidecar missing or mismatched -> WIT closure changed
+        # (or unknown). Rebuild before re-encoding so the next
+        # `component new` reads bindgen output from the current WIT.
+        if ! rebuild_pkg "$pkg" "$wasm"; then
+            failed=$((failed + 1))
+            echo "FAILED rebuild: $pkg"
+            continue
+        fi
+        # The rebuild may have produced a new .wasm at the same
+        # path; loop expression already captured the path, fall
+        # through to encode.
+    fi
 
     # Try plain encode first
     if wasm-tools component new "$wasm" -o "$out" 2>/dev/null; then
