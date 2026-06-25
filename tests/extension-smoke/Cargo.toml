@@ -106,6 +106,15 @@ path = "src/test_spawn_build.rs"
 name = "extension_smoke_bundles"
 path = "src/test_bundles.rs"
 
+[[test]]
+# PLAN-prefixes.md operator surface. Drives the `.prefix` dot-cmd
+# against the substrate's __sqlink_prefix* registry that auto-
+# populates as cli-family extensions load. Tests cover the v1
+# add/list/expansion/rename/modify/delete/conflicts/verify path;
+# pin-effect testing (the bare-name redirect) is v1.1.
+name = "extension_smoke_prefixes"
+path = "src/test_prefixes.rs"
+
 [[bin]]
 name = "extension-smoke-report"
 path = "src/report.rs"
