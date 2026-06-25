@@ -65,6 +65,14 @@ const PICK = [
   //              from a future browser harness; composed-bundle.spec.js
   //              documents the gap.
   'bundle_cli',
+  // prefix_cli  PLAN-prefixes.md operator surface. Needs Spi only
+  //              (reads/writes the user db's __sqlink_prefix* tables
+  //              via spi.execute). End-to-end `.prefix list/add/...`
+  //              round-trip is gated on the same dispatch_dot_command
+  //              driver as bundle_cli. composed-prefix.spec.js
+  //              documents the gap; the substrate probe asserts
+  //              the transpiled module imports cleanly.
+  'prefix_cli',
   'detect',
   'ean',
   // hookprobe — test-bench extension exercising the dispatch-bridge
