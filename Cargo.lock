@@ -5367,6 +5367,7 @@ dependencies = [
  "once_cell",
  "sqlink-host",
  "sqlite-extension-policy",
+ "tempfile",
  "tokio",
  "tracing",
 ]
