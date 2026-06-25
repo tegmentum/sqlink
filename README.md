@@ -441,6 +441,44 @@ hashes each extension's WIT closure into a sidecar; on WIT drift,
 the next encode triggers a per-extension rebuild before re-encoding.
 See `scripts/test-encode-wit-skew.sh` for the round-trip smoke test.
 
+**Running CI workflows locally** (`nektos/act`). Useful for
+shaking out workflow bugs before push. Install:
+
+```bash
+brew install act                     # macOS
+gh extension install nektos/gh-act   # cross-platform via gh CLI
+```
+
+`act` needs a docker-compatible daemon (Docker Desktop, OrbStack,
+or colima). Repo defaults live in `.actrc`.
+
+```bash
+scripts/ci-local.sh --list             # show available workflows
+scripts/ci-local.sh ci                 # host-side fmt + clippy + tests
+scripts/ci-local.sh wasm-smoke         # wasm side + extension-smoke
+scripts/ci-local.sh fuzz-smoke         # 5 cargo-fuzz targets
+scripts/ci-local.sh mutants-nightly    # cargo-mutants (long; cron event)
+
+# pass extra args through to act
+scripts/ci-local.sh ci -j compose-tests --verbose
+```
+
+The wrapper handles colima / OrbStack quirks (auto-exports
+`DOCKER_HOST` from `docker context`) and picks the right event name
+from each workflow's `on:` clause. Caveats:
+
+- The container runs `actions/checkout@v4` which fetches submodules;
+  the private `tegmentum/*` submodules need a token. Drop a PAT into
+  `.secrets` as `GITHUB_TOKEN=ghp_...` (act reads `.secrets` by
+  default; the file is gitignored).
+- `mutants-nightly` mirrors a `cron` schedule; act synthesizes the
+  event payload. The job itself runs the full mutation suite — kill
+  early once the cargo-mutants step starts unless you want the full
+  60+ minutes.
+- `fuzz-smoke` requires a nightly Rust install inside the container;
+  the workflow installs it via `rustup install nightly`, so first
+  invocation downloads ~150 MB and is slow.
+
 ## Status
 
 Active project. Working surface (cli + host + ~110 extensions +

@@ -55,3 +55,4 @@ extensions/extensions.db
 
 # Plan triage scratchpad (Phase 5)
 triage-log.md
+.secrets
