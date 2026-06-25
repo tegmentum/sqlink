@@ -7186,15 +7186,99 @@ impl Host {
             anyhow!("install_loaded_extension: open shared spi: {} (code {})", e.message, e.code)
         })?;
 
+        // Prefix-registry substrate (PLAN-prefixes.md): install the
+        // three __sqlink_prefix* tables (idempotent), resolve this
+        // extension's (prefix, expansion) pair (manifest fields or
+        // synthetic fallback), and record the prefix row. Used by
+        // every per-function registration below to (a) register the
+        // always-available qualified form `prefix__name` alongside
+        // the bare name, and (b) record canonical (expansion, name,
+        // n_args) identity in __sqlink_prefix_function.
+        let (prefix, expansion) = {
+            let g = self.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("shared_spi_conn open");
+            if let Err(e) = prefix_registry::install_schema(conn) {
+                tracing::warn!(
+                    extension = ext_name,
+                    err = %e,
+                    "install_loaded_extension: prefix-registry schema install failed; \
+                     continuing without prefix qualification (bare-name only)"
+                );
+            }
+            let (p, e_, _synth) = prefix_registry::resolve_prefix_expansion(
+                ext_name,
+                ext.preferred_prefix.as_deref(),
+                ext.prefix_expansion.as_deref(),
+            );
+            // Q1 collision fallback: if `p` is already bound to a
+            // different expansion, get the next free numbered alias.
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0);
+            let actual_prefix = match prefix_registry::record_prefix_with_collision_fallback(
+                conn, &p, &e_, now,
+            ) {
+                Ok(p2) => p2,
+                Err(err) => {
+                    tracing::warn!(extension = ext_name, err = %err,
+                        "prefix collision fallback exhausted; continuing without qualified form");
+                    p.clone()
+                }
+            };
+            (actual_prefix, e_)
+        };
+
         let mut scalars = 0u32;
         let mut aggregates = 0u32;
         let mut collations = 0u32;
         let mut hooks = 0u32;
         let mut vtabs = 0u32;
 
-        // Scalars.
+        // Scalars. Each function gets up to TWO registrations:
+        //   * `prefix__name` qualified form: always registered
+        //     (always-available explicit dispatch path).
+        //   * bare `name`: registered unless a pin pinned the
+        //     bare-name dispatch to a different expansion (Q5).
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
         for spec in &ext.scalar_functions {
-            let r = {
+            // Record in __sqlink_prefix_function and detect collisions
+            // before registering. Other-expansions present at this
+            // (name, n_args) signal a load-time collision.
+            let other_expansions = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                prefix_registry::record_function(
+                    conn,
+                    &expansion,
+                    &spec.name,
+                    spec.num_args,
+                    ext_name,
+                    now,
+                )
+                .unwrap_or_default()
+            };
+
+            // Bare-name registration  pin-aware.
+            let want_bare = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                prefix_registry::should_register_bare(
+                    conn,
+                    &spec.name,
+                    spec.num_args,
+                    &expansion,
+                )
+                .unwrap_or(true)
+            };
+
+            let r_bare = if want_bare {
                 let g = self.shared_spi_conn.lock();
                 let r = g.borrow();
                 let conn = r.as_ref().expect("shared_spi_conn open");
@@ -7208,27 +7292,100 @@ impl Host {
                         spec.id,
                     )
                 }
+            } else {
+                libsqlite3_sys::SQLITE_OK
             };
-            if r == libsqlite3_sys::SQLITE_OK {
+
+            if r_bare == libsqlite3_sys::SQLITE_OK && want_bare {
                 scalars += 1;
                 self.ext_scalar_registrations
                     .lock()
                     .entry(ext_name.to_string())
                     .or_default()
                     .push((spec.name.clone(), spec.num_args));
-            } else {
+            } else if want_bare {
                 tracing::warn!(
                     extension = ext_name,
                     func = %spec.name,
                     arity = spec.num_args,
-                    rc = r,
-                    "register_scalar failed"
+                    rc = r_bare,
+                    "register_scalar (bare) failed"
+                );
+            }
+
+            // Qualified-form registration: always run, even if bare
+            // was skipped. Identical semantics + the same dispatch
+            // (ext_name + func_id) but under the prefix__name SQL
+            // identifier.
+            let qualified = prefix_registry::qualify(&prefix, &spec.name);
+            let r_qual = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                unsafe {
+                    register_host_loaded_scalar(
+                        conn.raw_handle(),
+                        self.clone(),
+                        ext_name.to_string(),
+                        &qualified,
+                        spec.num_args,
+                        spec.id,
+                    )
+                }
+            };
+            if r_qual == libsqlite3_sys::SQLITE_OK {
+                self.ext_scalar_registrations
+                    .lock()
+                    .entry(ext_name.to_string())
+                    .or_default()
+                    .push((qualified.clone(), spec.num_args));
+            } else {
+                tracing::warn!(
+                    extension = ext_name,
+                    func = %qualified,
+                    arity = spec.num_args,
+                    rc = r_qual,
+                    "register_scalar (qualified) failed"
+                );
+            }
+
+            if !other_expansions.is_empty() {
+                let bare_owner = if want_bare {
+                    prefix_registry::BareNameOwner::ThisExtension
+                } else {
+                    // Pin redirected; show the pinned expansion in the warning.
+                    let pinned = {
+                        let g = self.shared_spi_conn.lock();
+                        let r = g.borrow();
+                        let conn = r.as_ref().expect("shared_spi_conn open");
+                        prefix_registry::lookup_pin(conn, &spec.name, spec.num_args)
+                            .unwrap_or(None)
+                            .unwrap_or_else(|| expansion.clone())
+                    };
+                    prefix_registry::BareNameOwner::PinnedElsewhere(pinned)
+                };
+                prefix_registry::warn_function_collision(
+                    &spec.name,
+                    spec.num_args,
+                    ext_name,
+                    &expansion,
+                    &prefix,
+                    &other_expansions,
+                    bare_owner,
                 );
             }
         }
 
-        // Collations.
+        // Collations. Bare-name dispatch + always-available qualified
+        // form. Pins are scalar-shaped (function_name, n_args); for
+        // v1 collations don't honor pins (n_args == 0 sentinel).
         for spec in &ext.collations {
+            let _ = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                prefix_registry::record_function(conn, &expansion, &spec.name, 0, ext_name, now)
+            };
             let r = {
                 let g = self.shared_spi_conn.lock();
                 let r = g.borrow();
@@ -7251,67 +7408,140 @@ impl Host {
                     .or_default()
                     .push(spec.name.clone());
             } else {
-                tracing::warn!(
-                    extension = ext_name,
-                    coll = %spec.name,
-                    rc = r,
-                    "register_collation failed"
-                );
+                tracing::warn!(extension = ext_name, coll = %spec.name, rc = r,
+                    "register_collation (bare) failed");
+            }
+            let qualified = prefix_registry::qualify(&prefix, &spec.name);
+            let r_q = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                unsafe {
+                    register_host_loaded_collation(
+                        conn.raw_handle(),
+                        self.clone(),
+                        ext_name.to_string(),
+                        &qualified,
+                        spec.id,
+                    )
+                }
+            };
+            if r_q == libsqlite3_sys::SQLITE_OK {
+                self.ext_collation_registrations
+                    .lock()
+                    .entry(ext_name.to_string())
+                    .or_default()
+                    .push(qualified);
             }
         }
 
-        // Aggregates.
+        // Aggregates. Bare + always-available qualified. Pin-aware
+        // bare gate matches scalar policy.
         for spec in &ext.aggregate_functions {
-            let agg = HostLoadedAggregate {
+            let _ = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                prefix_registry::record_function(
+                    conn, &expansion, &spec.name, spec.num_args, ext_name, now,
+                )
+            };
+            let want_bare = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                prefix_registry::should_register_bare(
+                    conn, &spec.name, spec.num_args, &expansion,
+                )
+                .unwrap_or(true)
+            };
+            let mk_agg = || HostLoadedAggregate {
                 host: self.clone(),
                 ext_name: ext_name.to_string(),
                 func_id: spec.id,
             };
-            let res = {
+            if want_bare {
+                let res = {
+                    let g = self.shared_spi_conn.lock();
+                    let r = g.borrow();
+                    let conn = r.as_ref().expect("shared_spi_conn open");
+                    if spec.is_window {
+                        conn.create_window_function(
+                            &spec.name,
+                            spec.num_args,
+                            sqlite_component_core::db::FunctionFlags::UTF8
+                                | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                            mk_agg(),
+                        )
+                    } else {
+                        conn.create_aggregate_function(
+                            &spec.name,
+                            spec.num_args,
+                            sqlite_component_core::db::FunctionFlags::UTF8
+                                | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
+                            mk_agg(),
+                        )
+                    }
+                };
+                match res {
+                    Ok(()) => {
+                        aggregates += 1;
+                        self.ext_aggregate_registrations
+                            .lock()
+                            .entry(ext_name.to_string())
+                            .or_default()
+                            .push((spec.name.clone(), spec.num_args));
+                    }
+                    Err(e) => {
+                        tracing::warn!(extension = ext_name, func = %spec.name,
+                            arity = spec.num_args, err = %e.message,
+                            "register_aggregate (bare) failed");
+                    }
+                }
+            }
+            let qualified = prefix_registry::qualify(&prefix, &spec.name);
+            let res_q = {
                 let g = self.shared_spi_conn.lock();
                 let r = g.borrow();
                 let conn = r.as_ref().expect("shared_spi_conn open");
                 if spec.is_window {
                     conn.create_window_function(
-                        &spec.name,
+                        &qualified,
                         spec.num_args,
                         sqlite_component_core::db::FunctionFlags::UTF8
                             | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                        agg,
+                        mk_agg(),
                     )
                 } else {
                     conn.create_aggregate_function(
-                        &spec.name,
+                        &qualified,
                         spec.num_args,
                         sqlite_component_core::db::FunctionFlags::UTF8
                             | sqlite_component_core::db::FunctionFlags::DIRECTONLY,
-                        agg,
+                        mk_agg(),
                     )
                 }
             };
-            match res {
-                Ok(()) => {
-                    aggregates += 1;
-                    self.ext_aggregate_registrations
-                        .lock()
-                        .entry(ext_name.to_string())
-                        .or_default()
-                        .push((spec.name.clone(), spec.num_args));
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        extension = ext_name,
-                        func = %spec.name,
-                        arity = spec.num_args,
-                        err = %e.message,
-                        "register_aggregate failed"
-                    );
-                }
+            if res_q.is_ok() {
+                self.ext_aggregate_registrations
+                    .lock()
+                    .entry(ext_name.to_string())
+                    .or_default()
+                    .push((qualified, spec.num_args));
             }
         }
 
-        // Vtabs.
+        // Vtabs. Bare + always-available qualified module name.
+        // `CREATE VIRTUAL TABLE foo USING prefix__myvtab(...)` is the
+        // qualified form; users still pick `foo` separately so no
+        // implicit table-name collision.
         for spec in &ext.vtabs {
+            let _ = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                prefix_registry::record_function(conn, &expansion, &spec.name, 0, ext_name, now)
+            };
             let res = {
                 let g = self.shared_spi_conn.lock();
                 let r = g.borrow();
@@ -7339,13 +7569,34 @@ impl Host {
                         .push(spec.name.clone());
                 }
                 Err(e) => {
-                    tracing::warn!(
-                        extension = ext_name,
-                        vtab = %spec.name,
-                        err = %e,
-                        "register_vtab failed"
-                    );
+                    tracing::warn!(extension = ext_name, vtab = %spec.name, err = %e,
+                        "register_vtab (bare) failed");
                 }
+            }
+            let qualified = prefix_registry::qualify(&prefix, &spec.name);
+            let res_q = {
+                let g = self.shared_spi_conn.lock();
+                let r = g.borrow();
+                let conn = r.as_ref().expect("shared_spi_conn open");
+                unsafe {
+                    crate::vtab::register_vtab_module(
+                        conn.raw_handle(),
+                        self.clone(),
+                        &qualified,
+                        ext_name,
+                        spec.id,
+                        spec.eponymous,
+                        spec.mutable,
+                        spec.batched,
+                    )
+                }
+            };
+            if res_q.is_ok() {
+                self.ext_vtab_registrations
+                    .lock()
+                    .entry(ext_name.to_string())
+                    .or_default()
+                    .push(qualified);
             }
         }
 
