@@ -126,80 +126,78 @@ impl SqliteCasStore {
         if let Some(existing) = self.bundle_find_first_by_hash(set_hash)? {
             if let Some(n) = name {
                 if existing.name.is_none() {
-                    let mut upd = self
-                        .conn()
-                        .prepare("UPDATE __cas_bundle SET name = ?1 WHERE id = ?2")
-                        .map_err(|e| anyhow!("prepare alias-rebind: {}", e.message))?;
-                    upd.bind_all(&[
-                        Value::Text(n.to_string()),
-                        Value::Integer(existing.id as i64),
-                    ])
-                    .map_err(|e| anyhow!("bind alias-rebind: {}", e.message))?;
-                    upd.step()
-                        .map_err(|e| anyhow!("step alias-rebind: {}", e.message))?;
+                    const REBIND_SQL: &str =
+                        "UPDATE __cas_bundle SET name = ?1 WHERE id = ?2";
+                    self.with_stmt(REBIND_SQL, |stmt| {
+                        stmt.bind_all(&[
+                            Value::Text(n.to_string()),
+                            Value::Integer(existing.id as i64),
+                        ])
+                        .map_err(|e| anyhow!("bind alias-rebind: {}", e.message))?;
+                        stmt.step()
+                            .map_err(|e| anyhow!("step alias-rebind: {}", e.message))?;
+                        Ok(())
+                    })?;
                 }
             }
             self.bundle_touch(existing.id)?;
             return Ok(existing.id);
         }
+        const BUNDLE_INSERT_SQL: &str =
+            "INSERT INTO __cas_bundle(name, set_hash, created_at, last_used_at) \
+             VALUES (?1, ?2, ?3, ?3)";
+        const MEMBER_INSERT_SQL: &str =
+            "INSERT INTO __cas_bundle_member(bundle_id, extension_name, content_hash) \
+             VALUES (?1, ?2, ?3)";
         let now = unix_now();
-        let id: u64;
-        {
-            let mut ins = self
-                .conn()
-                .prepare(
-                    "INSERT INTO __cas_bundle(name, set_hash, created_at, last_used_at) \
-                     VALUES (?1, ?2, ?3, ?3)",
-                )
-                .map_err(|e| anyhow!("prepare bundle-insert: {}", e.message))?;
+        self.with_stmt(BUNDLE_INSERT_SQL, |stmt| {
             match name {
-                Some(n) => ins.bind_text_ref(1, n),
-                None => ins.bind(1, &Value::Null),
+                Some(n) => stmt.bind_text_ref(1, n),
+                None => stmt.bind(1, &Value::Null),
             }
             .map_err(|e| anyhow!("bind bundle-insert name: {}", e.message))?;
-            ins.bind_text_ref(2, set_hash).map_err(|e| anyhow!("bind bundle-insert hash: {}", e.message))?;
-            ins.bind(3, &Value::Integer(now)).map_err(|e| anyhow!("bind bundle-insert now: {}", e.message))?;
-            ins.step()
+            stmt.bind_text_ref(2, set_hash)
+                .map_err(|e| anyhow!("bind bundle-insert hash: {}", e.message))?;
+            stmt.bind(3, &Value::Integer(now))
+                .map_err(|e| anyhow!("bind bundle-insert now: {}", e.message))?;
+            stmt.step()
                 .map_err(|e| anyhow!("step bundle-insert: {}", e.message))?;
-            drop(ins);
-            id = self.conn().last_insert_rowid() as u64;
-        }
+            Ok(())
+        })?;
+        let id = self.conn().last_insert_rowid() as u64;
+        // Cached statement  the prepare cost is paid once for the
+        // whole bundle's members; loop body just rebinds + steps.
         for m in members {
-            let mut ins = self
-                .conn()
-                .prepare(
-                    "INSERT INTO __cas_bundle_member(bundle_id, extension_name, content_hash) \
-                     VALUES (?1, ?2, ?3)",
-                )
-                .map_err(|e| anyhow!("prepare member-insert: {}", e.message))?;
-            ins.bind(1, &Value::Integer(id as i64)).map_err(|e| anyhow!("bind member-insert id: {}", e.message))?;
-            ins.bind_text_ref(2, &m.extension_name).map_err(|e| anyhow!("bind member-insert ext: {}", e.message))?;
-            ins.bind_text_ref(3, &m.content_hash).map_err(|e| anyhow!("bind member-insert hash: {}", e.message))?;
-            ins.step()
-                .map_err(|e| anyhow!("step member-insert: {}", e.message))?;
+            self.with_stmt(MEMBER_INSERT_SQL, |stmt| {
+                stmt.bind(1, &Value::Integer(id as i64))
+                    .map_err(|e| anyhow!("bind member-insert id: {}", e.message))?;
+                stmt.bind_text_ref(2, &m.extension_name)
+                    .map_err(|e| anyhow!("bind member-insert ext: {}", e.message))?;
+                stmt.bind_text_ref(3, &m.content_hash)
+                    .map_err(|e| anyhow!("bind member-insert hash: {}", e.message))?;
+                stmt.step()
+                    .map_err(|e| anyhow!("step member-insert: {}", e.message))?;
+                Ok(())
+            })?;
         }
         Ok(id)
     }
 
     /// Exact-name lookup.
     pub fn bundle_find_by_name(&self, name: &str) -> Result<Option<BundleSummary>> {
-        let mut sel = self
-            .conn()
-            .prepare(
-                "SELECT id, name, set_hash, created_at, last_used_at \
-                 FROM __cas_bundle WHERE name = ?1",
-            )
-            .map_err(|e| anyhow!("prepare find-by-name: {}", e.message))?;
-        sel.bind_text_ref(1, name)
-            .map_err(|e| anyhow!("bind find-by-name: {}", e.message))?;
-        let row = match sel
-            .step()
-            .map_err(|e| anyhow!("step find-by-name: {}", e.message))?
-        {
-            StepResult::Row => Some(read_summary_row(&sel)?),
-            StepResult::Done => None,
-        };
-        drop(sel);
+        const SQL: &str = "SELECT id, name, set_hash, created_at, last_used_at \
+             FROM __cas_bundle WHERE name = ?1";
+        let row = self.with_stmt(SQL, |stmt| {
+            stmt.bind_text_ref(1, name)
+                .map_err(|e| anyhow!("bind find-by-name: {}", e.message))?;
+            match stmt
+                .step()
+                .map_err(|e| anyhow!("step find-by-name: {}", e.message))?
+            {
+                StepResult::Row => Ok(Some(read_summary_row(stmt)?)),
+                StepResult::Done => Ok(None),
+            }
+        })?;
         match row {
             Some(mut s) => {
                 self.fill_counts(&mut s)?;
@@ -212,24 +210,20 @@ impl SqliteCasStore {
     /// First bundle whose `set_hash` matches exactly. Used by
     /// `bundle_save`'s idempotency probe.
     pub fn bundle_find_first_by_hash(&self, set_hash: &str) -> Result<Option<BundleSummary>> {
-        let mut sel = self
-            .conn()
-            .prepare(
-                "SELECT id, name, set_hash, created_at, last_used_at \
-                 FROM __cas_bundle WHERE set_hash = ?1 \
-                 ORDER BY id LIMIT 1",
-            )
-            .map_err(|e| anyhow!("prepare find-first-by-hash: {}", e.message))?;
-        sel.bind_text_ref(1, set_hash)
-            .map_err(|e| anyhow!("bind find-first-by-hash: {}", e.message))?;
-        let row = match sel
-            .step()
-            .map_err(|e| anyhow!("step find-first-by-hash: {}", e.message))?
-        {
-            StepResult::Row => Some(read_summary_row(&sel)?),
-            StepResult::Done => None,
-        };
-        drop(sel);
+        const SQL: &str = "SELECT id, name, set_hash, created_at, last_used_at \
+             FROM __cas_bundle WHERE set_hash = ?1 \
+             ORDER BY id LIMIT 1";
+        let row = self.with_stmt(SQL, |stmt| {
+            stmt.bind_text_ref(1, set_hash)
+                .map_err(|e| anyhow!("bind find-first-by-hash: {}", e.message))?;
+            match stmt
+                .step()
+                .map_err(|e| anyhow!("step find-first-by-hash: {}", e.message))?
+            {
+                StepResult::Row => Ok(Some(read_summary_row(stmt)?)),
+                StepResult::Done => Ok(None),
+            }
+        })?;
         match row {
             Some(mut s) => {
                 self.fill_counts(&mut s)?;
@@ -262,25 +256,22 @@ impl SqliteCasStore {
                 bad
             ));
         }
-        let mut sel = self
-            .conn()
-            .prepare(
-                "SELECT id, name, set_hash, created_at, last_used_at \
-                 FROM __cas_bundle WHERE set_hash LIKE ?1 \
-                 ORDER BY last_used_at DESC, id",
-            )
-            .map_err(|e| anyhow!("prepare find-by-hash-prefix: {}", e.message))?;
+        const SQL: &str = "SELECT id, name, set_hash, created_at, last_used_at \
+             FROM __cas_bundle WHERE set_hash LIKE ?1 \
+             ORDER BY last_used_at DESC, id";
         let pattern = format!("{prefix}%");
-        sel.bind_all(&[Value::Text(pattern)])
-            .map_err(|e| anyhow!("bind find-by-hash-prefix: {}", e.message))?;
-        let mut rows = Vec::new();
-        while let StepResult::Row = sel
-            .step()
-            .map_err(|e| anyhow!("step find-by-hash-prefix: {}", e.message))?
-        {
-            rows.push(read_summary_row(&sel)?);
-        }
-        drop(sel);
+        let mut rows = self.with_stmt(SQL, |stmt| {
+            stmt.bind_all(&[Value::Text(pattern)])
+                .map_err(|e| anyhow!("bind find-by-hash-prefix: {}", e.message))?;
+            let mut out = Vec::new();
+            while let StepResult::Row = stmt
+                .step()
+                .map_err(|e| anyhow!("step find-by-hash-prefix: {}", e.message))?
+            {
+                out.push(read_summary_row(stmt)?);
+            }
+            Ok(out)
+        })?;
         for s in &mut rows {
             self.fill_counts(s)?;
         }
@@ -289,21 +280,18 @@ impl SqliteCasStore {
 
     /// Every bundle, last-used-at descending.
     pub fn bundle_list(&self) -> Result<Vec<BundleSummary>> {
-        let mut sel = self
-            .conn()
-            .prepare(
-                "SELECT id, name, set_hash, created_at, last_used_at \
-                 FROM __cas_bundle ORDER BY last_used_at DESC, id",
-            )
-            .map_err(|e| anyhow!("prepare bundle-list: {}", e.message))?;
-        let mut rows = Vec::new();
-        while let StepResult::Row = sel
-            .step()
-            .map_err(|e| anyhow!("step bundle-list: {}", e.message))?
-        {
-            rows.push(read_summary_row(&sel)?);
-        }
-        drop(sel);
+        const SQL: &str = "SELECT id, name, set_hash, created_at, last_used_at \
+             FROM __cas_bundle ORDER BY last_used_at DESC, id";
+        let mut rows = self.with_stmt(SQL, |stmt| {
+            let mut out = Vec::new();
+            while let StepResult::Row = stmt
+                .step()
+                .map_err(|e| anyhow!("step bundle-list: {}", e.message))?
+            {
+                out.push(read_summary_row(stmt)?);
+            }
+            Ok(out)
+        })?;
         for s in &mut rows {
             self.fill_counts(s)?;
         }
@@ -312,23 +300,22 @@ impl SqliteCasStore {
 
     /// Full detail (summary + members + binaries) for `id`.
     pub fn bundle_show(&self, id: u64) -> Result<Option<BundleDetail>> {
-        let mut sel = self
-            .conn()
-            .prepare(
-                "SELECT id, name, set_hash, created_at, last_used_at \
-                 FROM __cas_bundle WHERE id = ?1",
-            )
-            .map_err(|e| anyhow!("prepare bundle-show: {}", e.message))?;
-        sel.bind_all(&[Value::Integer(id as i64)])
-            .map_err(|e| anyhow!("bind bundle-show: {}", e.message))?;
-        let mut summary = match sel
-            .step()
-            .map_err(|e| anyhow!("step bundle-show: {}", e.message))?
-        {
-            StepResult::Row => read_summary_row(&sel)?,
-            StepResult::Done => return Ok(None),
+        const SQL: &str = "SELECT id, name, set_hash, created_at, last_used_at \
+             FROM __cas_bundle WHERE id = ?1";
+        let mut summary = match self.with_stmt(SQL, |stmt| {
+            stmt.bind_all(&[Value::Integer(id as i64)])
+                .map_err(|e| anyhow!("bind bundle-show: {}", e.message))?;
+            match stmt
+                .step()
+                .map_err(|e| anyhow!("step bundle-show: {}", e.message))?
+            {
+                StepResult::Row => Ok(Some(read_summary_row(stmt)?)),
+                StepResult::Done => Ok(None),
+            }
+        })? {
+            Some(s) => s,
+            None => return Ok(None),
         };
-        drop(sel);
         let members = self.bundle_members(id)?;
         let binaries = self.bundle_binaries(id)?;
         summary.member_count = members.len() as u32;
@@ -342,87 +329,80 @@ impl SqliteCasStore {
 
     /// Members of `id`, ordered by extension_name.
     pub fn bundle_members(&self, id: u64) -> Result<Vec<BundleMember>> {
-        let mut sel = self
-            .conn()
-            .prepare(
-                "SELECT extension_name, content_hash \
-                 FROM __cas_bundle_member WHERE bundle_id = ?1 \
-                 ORDER BY extension_name",
-            )
-            .map_err(|e| anyhow!("prepare bundle-members: {}", e.message))?;
-        sel.bind_all(&[Value::Integer(id as i64)])
-            .map_err(|e| anyhow!("bind bundle-members: {}", e.message))?;
-        let mut out = Vec::new();
-        while let StepResult::Row = sel
-            .step()
-            .map_err(|e| anyhow!("step bundle-members: {}", e.message))?
-        {
-            let extension_name = match sel.column_value(0) {
-                Value::Text(t) => t,
-                other => return Err(anyhow!("ext_name not text: {other:?}")),
-            };
-            let content_hash = match sel.column_value(1) {
-                Value::Text(t) => t,
-                other => return Err(anyhow!("content_hash not text: {other:?}")),
-            };
-            out.push(BundleMember {
-                extension_name,
-                content_hash,
-            });
-        }
-        Ok(out)
+        const SQL: &str = "SELECT extension_name, content_hash \
+             FROM __cas_bundle_member WHERE bundle_id = ?1 \
+             ORDER BY extension_name";
+        self.with_stmt(SQL, |stmt| {
+            stmt.bind_all(&[Value::Integer(id as i64)])
+                .map_err(|e| anyhow!("bind bundle-members: {}", e.message))?;
+            let mut out = Vec::new();
+            while let StepResult::Row = stmt
+                .step()
+                .map_err(|e| anyhow!("step bundle-members: {}", e.message))?
+            {
+                let extension_name = match stmt.column_value(0) {
+                    Value::Text(t) => t,
+                    other => return Err(anyhow!("ext_name not text: {other:?}")),
+                };
+                let content_hash = match stmt.column_value(1) {
+                    Value::Text(t) => t,
+                    other => return Err(anyhow!("content_hash not text: {other:?}")),
+                };
+                out.push(BundleMember {
+                    extension_name,
+                    content_hash,
+                });
+            }
+            Ok(out)
+        })
     }
 
     /// Binaries of `id`, ordered by target_triple.
     pub fn bundle_binaries(&self, id: u64) -> Result<Vec<BundleBinary>> {
-        let mut sel = self
-            .conn()
-            .prepare(
-                "SELECT target_triple, binary_path, built_at \
-                 FROM __cas_bundle_binary WHERE bundle_id = ?1 \
-                 ORDER BY target_triple",
-            )
-            .map_err(|e| anyhow!("prepare bundle-binaries: {}", e.message))?;
-        sel.bind_all(&[Value::Integer(id as i64)])
-            .map_err(|e| anyhow!("bind bundle-binaries: {}", e.message))?;
-        let mut out = Vec::new();
-        while let StepResult::Row = sel
-            .step()
-            .map_err(|e| anyhow!("step bundle-binaries: {}", e.message))?
-        {
-            let target_triple = match sel.column_value(0) {
-                Value::Text(t) => t,
-                other => return Err(anyhow!("target_triple not text: {other:?}")),
-            };
-            let binary_path = match sel.column_value(1) {
-                Value::Text(t) => t,
-                other => return Err(anyhow!("binary_path not text: {other:?}")),
-            };
-            let built_at = match sel.column_value(2) {
-                Value::Integer(n) => n as u64,
-                other => return Err(anyhow!("built_at not int: {other:?}")),
-            };
-            out.push(BundleBinary {
-                target_triple,
-                binary_path,
-                built_at,
-            });
-        }
-        Ok(out)
+        const SQL: &str = "SELECT target_triple, binary_path, built_at \
+             FROM __cas_bundle_binary WHERE bundle_id = ?1 \
+             ORDER BY target_triple";
+        self.with_stmt(SQL, |stmt| {
+            stmt.bind_all(&[Value::Integer(id as i64)])
+                .map_err(|e| anyhow!("bind bundle-binaries: {}", e.message))?;
+            let mut out = Vec::new();
+            while let StepResult::Row = stmt
+                .step()
+                .map_err(|e| anyhow!("step bundle-binaries: {}", e.message))?
+            {
+                let target_triple = match stmt.column_value(0) {
+                    Value::Text(t) => t,
+                    other => return Err(anyhow!("target_triple not text: {other:?}")),
+                };
+                let binary_path = match stmt.column_value(1) {
+                    Value::Text(t) => t,
+                    other => return Err(anyhow!("binary_path not text: {other:?}")),
+                };
+                let built_at = match stmt.column_value(2) {
+                    Value::Integer(n) => n as u64,
+                    other => return Err(anyhow!("built_at not int: {other:?}")),
+                };
+                out.push(BundleBinary {
+                    target_triple,
+                    binary_path,
+                    built_at,
+                });
+            }
+            Ok(out)
+        })
     }
 
     /// Delete the bundle row + cascade members + binaries.
     /// Returns true if a row was deleted.
     pub fn bundle_delete(&mut self, id: u64) -> Result<bool> {
-        let mut del = self
-            .conn()
-            .prepare("DELETE FROM __cas_bundle WHERE id = ?1")
-            .map_err(|e| anyhow!("prepare bundle-delete: {}", e.message))?;
-        del.bind_all(&[Value::Integer(id as i64)])
-            .map_err(|e| anyhow!("bind bundle-delete: {}", e.message))?;
-        del.step()
-            .map_err(|e| anyhow!("step bundle-delete: {}", e.message))?;
-        drop(del);
+        const SQL: &str = "DELETE FROM __cas_bundle WHERE id = ?1";
+        self.with_stmt(SQL, |stmt| {
+            stmt.bind_all(&[Value::Integer(id as i64)])
+                .map_err(|e| anyhow!("bind bundle-delete: {}", e.message))?;
+            stmt.step()
+                .map_err(|e| anyhow!("step bundle-delete: {}", e.message))?;
+            Ok(())
+        })?;
         Ok(self.conn().changes() > 0)
     }
 
@@ -431,48 +411,44 @@ impl SqliteCasStore {
     /// `last_used_at` is more than that many seconds in the past.
     /// Returns the ids that were deleted.
     pub fn bundle_gc(&mut self, policy: BundleGcPolicy) -> Result<Vec<u64>> {
+        const KEEP_SQL: &str = "SELECT id FROM __cas_bundle \
+             ORDER BY last_used_at DESC, id LIMIT -1 OFFSET ?1";
+        const AGE_SQL: &str = "SELECT id FROM __cas_bundle WHERE last_used_at < ?1";
         let now = unix_now() as u64;
         let mut victims: Vec<u64> = Vec::new();
         if let Some(keep) = policy.keep_last {
-            let mut sel = self
-                .conn()
-                .prepare(
-                    "SELECT id FROM __cas_bundle \
-                     ORDER BY last_used_at DESC, id LIMIT -1 OFFSET ?1",
-                )
-                .map_err(|e| anyhow!("prepare gc-keep: {}", e.message))?;
-            sel.bind_all(&[Value::Integer(keep as i64)])
-                .map_err(|e| anyhow!("bind gc-keep: {}", e.message))?;
-            while let StepResult::Row = sel
-                .step()
-                .map_err(|e| anyhow!("step gc-keep: {}", e.message))?
-            {
-                if let Value::Integer(n) = sel.column_value(0) {
-                    victims.push(n as u64);
+            self.with_stmt(KEEP_SQL, |stmt| {
+                stmt.bind_all(&[Value::Integer(keep as i64)])
+                    .map_err(|e| anyhow!("bind gc-keep: {}", e.message))?;
+                while let StepResult::Row = stmt
+                    .step()
+                    .map_err(|e| anyhow!("step gc-keep: {}", e.message))?
+                {
+                    if let Value::Integer(n) = stmt.column_value(0) {
+                        victims.push(n as u64);
+                    }
                 }
-            }
+                Ok(())
+            })?;
         }
         if let Some(age) = policy.older_than_secs {
             let cutoff = now.saturating_sub(age);
-            let mut sel = self
-                .conn()
-                .prepare(
-                    "SELECT id FROM __cas_bundle WHERE last_used_at < ?1",
-                )
-                .map_err(|e| anyhow!("prepare gc-age: {}", e.message))?;
-            sel.bind_all(&[Value::Integer(cutoff as i64)])
-                .map_err(|e| anyhow!("bind gc-age: {}", e.message))?;
-            while let StepResult::Row = sel
-                .step()
-                .map_err(|e| anyhow!("step gc-age: {}", e.message))?
-            {
-                if let Value::Integer(n) = sel.column_value(0) {
-                    let id = n as u64;
-                    if !victims.contains(&id) {
-                        victims.push(id);
+            self.with_stmt(AGE_SQL, |stmt| {
+                stmt.bind_all(&[Value::Integer(cutoff as i64)])
+                    .map_err(|e| anyhow!("bind gc-age: {}", e.message))?;
+                while let StepResult::Row = stmt
+                    .step()
+                    .map_err(|e| anyhow!("step gc-age: {}", e.message))?
+                {
+                    if let Value::Integer(n) = stmt.column_value(0) {
+                        let id = n as u64;
+                        if !victims.contains(&id) {
+                            victims.push(id);
+                        }
                     }
                 }
-            }
+                Ok(())
+            })?;
         }
         for &id in &victims {
             self.bundle_delete(id)?;
@@ -489,76 +465,71 @@ impl SqliteCasStore {
         target_triple: &str,
         binary_path: &str,
     ) -> Result<()> {
+        const SQL: &str = "INSERT INTO __cas_bundle_binary(bundle_id, target_triple, binary_path, built_at) \
+             VALUES (?1, ?2, ?3, ?4) \
+             ON CONFLICT(bundle_id, target_triple) DO UPDATE SET \
+                binary_path = excluded.binary_path, \
+                built_at    = excluded.built_at";
         let now = unix_now();
-        let mut ins = self
-            .conn()
-            .prepare(
-                "INSERT INTO __cas_bundle_binary(bundle_id, target_triple, binary_path, built_at) \
-                 VALUES (?1, ?2, ?3, ?4) \
-                 ON CONFLICT(bundle_id, target_triple) DO UPDATE SET \
-                    binary_path = excluded.binary_path, \
-                    built_at    = excluded.built_at",
-            )
-            .map_err(|e| anyhow!("prepare record-binary: {}", e.message))?;
-        ins.bind_all(&[
-            Value::Integer(bundle_id as i64),
-            Value::Text(target_triple.to_string()),
-            Value::Text(binary_path.to_string()),
-            Value::Integer(now),
-        ])
-        .map_err(|e| anyhow!("bind record-binary: {}", e.message))?;
-        ins.step()
-            .map_err(|e| anyhow!("step record-binary: {}", e.message))?;
-        Ok(())
+        self.with_stmt(SQL, |stmt| {
+            stmt.bind_all(&[
+                Value::Integer(bundle_id as i64),
+                Value::Text(target_triple.to_string()),
+                Value::Text(binary_path.to_string()),
+                Value::Integer(now),
+            ])
+            .map_err(|e| anyhow!("bind record-binary: {}", e.message))?;
+            stmt.step()
+                .map_err(|e| anyhow!("step record-binary: {}", e.message))?;
+            Ok(())
+        })
     }
 
     /// Bump `last_used_at` to now. Errors if no such row.
     pub fn bundle_touch(&self, id: u64) -> Result<()> {
+        const SQL: &str = "UPDATE __cas_bundle SET last_used_at = ?2 WHERE id = ?1";
         let now = unix_now();
-        let mut upd = self
-            .conn()
-            .prepare("UPDATE __cas_bundle SET last_used_at = ?2 WHERE id = ?1")
-            .map_err(|e| anyhow!("prepare bundle-touch: {}", e.message))?;
-        upd.bind_all(&[Value::Integer(id as i64), Value::Integer(now)])
-            .map_err(|e| anyhow!("bind bundle-touch: {}", e.message))?;
-        upd.step()
-            .map_err(|e| anyhow!("step bundle-touch: {}", e.message))?;
-        Ok(())
+        self.with_stmt(SQL, |stmt| {
+            stmt.bind_all(&[Value::Integer(id as i64), Value::Integer(now)])
+                .map_err(|e| anyhow!("bind bundle-touch: {}", e.message))?;
+            stmt.step()
+                .map_err(|e| anyhow!("step bundle-touch: {}", e.message))?;
+            Ok(())
+        })
     }
 
     fn fill_counts(&self, s: &mut BundleSummary) -> Result<()> {
-        {
-            let mut cm = self
-                .conn()
-                .prepare("SELECT COUNT(*) FROM __cas_bundle_member WHERE bundle_id = ?1")
-                .map_err(|e| anyhow!("prepare count-members: {}", e.message))?;
-            cm.bind_all(&[Value::Integer(s.id as i64)])
+        const COUNT_MEMBERS_SQL: &str =
+            "SELECT COUNT(*) FROM __cas_bundle_member WHERE bundle_id = ?1";
+        const COUNT_BINARIES_SQL: &str =
+            "SELECT COUNT(*) FROM __cas_bundle_binary WHERE bundle_id = ?1";
+        let id = s.id as i64;
+        s.member_count = self.with_stmt(COUNT_MEMBERS_SQL, |stmt| {
+            stmt.bind_all(&[Value::Integer(id)])
                 .map_err(|e| anyhow!("bind count-members: {}", e.message))?;
-            if let StepResult::Row = cm
+            if let StepResult::Row = stmt
                 .step()
                 .map_err(|e| anyhow!("step count-members: {}", e.message))?
             {
-                if let Value::Integer(n) = cm.column_value(0) {
-                    s.member_count = n as u32;
+                if let Value::Integer(n) = stmt.column_value(0) {
+                    return Ok(n as u32);
                 }
             }
-        }
-        {
-            let mut cb = self
-                .conn()
-                .prepare("SELECT COUNT(*) FROM __cas_bundle_binary WHERE bundle_id = ?1")
-                .map_err(|e| anyhow!("prepare count-binaries: {}", e.message))?;
-            cb.bind_all(&[Value::Integer(s.id as i64)])
+            Ok(0)
+        })?;
+        s.binary_count = self.with_stmt(COUNT_BINARIES_SQL, |stmt| {
+            stmt.bind_all(&[Value::Integer(id)])
                 .map_err(|e| anyhow!("bind count-binaries: {}", e.message))?;
-            if let StepResult::Row = cb
+            if let StepResult::Row = stmt
                 .step()
                 .map_err(|e| anyhow!("step count-binaries: {}", e.message))?
             {
-                if let Value::Integer(n) = cb.column_value(0) {
-                    s.binary_count = n as u32;
+                if let Value::Integer(n) = stmt.column_value(0) {
+                    return Ok(n as u32);
                 }
             }
-        }
+            Ok(0)
+        })?;
         Ok(())
     }
 }
