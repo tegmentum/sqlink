@@ -398,6 +398,49 @@ Total: ~110 wasm component extensions.
 | [PLAN-cli-stages-5-6.md](docs/plans/PLAN-cli-stages-5-6.md) | The CLI_CONN purge + `.session` port |
 | [analysis/README.md](analysis/README.md) | Function-catalog gap analysis (6 DBs) |
 
+## Testing infrastructure
+
+The workspace ships three layers of test tooling beyond
+`cargo test`:
+
+**Fuzz testing** (cargo-fuzz, libfuzzer-based). Targets live
+under `fuzz/fuzz_targets/`; the `fuzz/` crate is intentionally
+outside the workspace so its nightly toolchain pin doesn't
+leak. Smoke runs on every PR via `.github/workflows/fuzz-smoke.yml`
+(5-minute budget per target).
+
+```bash
+# one-shot local run, 60s budget
+cd fuzz && cargo +nightly fuzz run policy_check_manifest -- -max_total_time=60
+
+# all targets, names listed by cargo-fuzz
+cd fuzz && cargo +nightly fuzz list
+```
+
+Current targets: `policy_check_manifest` (capability gate),
+`cas_put_bytes_roundtrip` (cas-cache content-addressing),
+`bundle_save_set_hash` (bundle CRUD + alias conflict),
+`parse_duration` (`.bundle gc --older-than`), `parse_load_args`
+(`.load` argv).
+
+**Mutation testing** (cargo-mutants). Workspace config in
+`mutants.toml`. Nightly job runs against the dense crates per
+`.github/workflows/mutants-nightly.yml`; surviving mutants flag
+tests that pass too easily.
+
+```bash
+# list mutants without running (fast)
+cargo mutants -p sqlite-cas-cache --list
+
+# real run (slow — every mutant runs the full test suite)
+cargo mutants -p sqlite-cas-cache
+```
+
+**Stale-component guard.** `scripts/encode-extension-components.sh`
+hashes each extension's WIT closure into a sidecar; on WIT drift,
+the next encode triggers a per-extension rebuild before re-encoding.
+See `scripts/test-encode-wit-skew.sh` for the round-trip smoke test.
+
 ## Status
 
 Active project. Working surface (cli + host + ~110 extensions +
