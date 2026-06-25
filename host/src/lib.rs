@@ -4881,9 +4881,31 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
     }
 
     async fn env_var(&mut self, name: String) -> Option<String> {
+        // HIGH-severity defensive fix: the prior implementation
+        // returned ANY host env var to the extension, letting any
+        // Spi-granted extension exfiltrate secrets like
+        // AWS_SECRET_ACCESS_KEY, GITHUB_TOKEN, etc. The Gap-pass
+        // resolution in PLAN-bundles.md intended only the narrow
+        // SQLINK_DEV_ROOT override; this allowlist enforces that.
+        //
+        // Any future env-var added to ENV_VAR_ALLOWLIST should be
+        // reviewed for sensitivity  these are extension-readable.
+        if !ENV_VAR_ALLOWLIST.contains(&name.as_str()) {
+            tracing::warn!(
+                requested = %name,
+                allowed = ?ENV_VAR_ALLOWLIST,
+                "loader-bridge.env-var: extension requested a non-allowlisted host env var; returning None"
+            );
+            return None;
+        }
         std::env::var(&name).ok().filter(|v| !v.is_empty())
     }
 }
+
+/// Allowlist of host env vars an Spi-granted extension may read via
+/// `loader-bridge.env-var`. Adding here is a policy change  any new
+/// entry is readable by every extension with Spi.
+const ENV_VAR_ALLOWLIST: &[&str] = &["SQLINK_DEV_ROOT"];
 
 /// HasData tag for the loaded-extension linker setup.
 pub struct LoadedHostData;
@@ -11936,5 +11958,13 @@ mod spawn_build_validation_tests {
         // pass validation.
         let host_manifest = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         validate_spawn_build_crate_root(&host_manifest).unwrap();
+    }
+
+    #[test]
+    fn env_var_allowlist_is_narrow() {
+        // Guard against accidental widening. Any change to this
+        // assertion should be paired with a security review of what
+        // a granted-Spi extension would gain access to.
+        assert_eq!(ENV_VAR_ALLOWLIST, &["SQLINK_DEV_ROOT"]);
     }
 }
