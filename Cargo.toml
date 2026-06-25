@@ -17,6 +17,7 @@ members = [
     "host",
     "sqlink-loader",
     "sqlink-native",
+    "sqlink-parsers",
     "sqlite-cas-cache",
     "sqlink-httpd",
     "extensions/json1",
