@@ -285,6 +285,13 @@ impl SqliteCasStore {
     /// Store `bytes` and return its blake3 hash. Idempotent on
     /// hash collision (existing row's `last_used_at` updates).
     pub fn put(&mut self, bytes: &[u8]) -> Result<Hash> {
+        const SQL: &str = "INSERT INTO __cas_artifact \
+                (hash, sha256, bytes, bytes_len, created_at, last_used_at, use_count) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0) \
+             ON CONFLICT(hash) DO UPDATE SET \
+                sha256       = COALESCE(__cas_artifact.sha256, excluded.sha256), \
+                last_used_at = excluded.last_used_at, \
+                use_count    = use_count + 1";
         let hash = blake3::hash(bytes);
         let sha = sha256_of(bytes);
         let now = unix_now();
@@ -292,20 +299,8 @@ impl SqliteCasStore {
         // duplicate. Update last_used_at + use_count on hit; also
         // backfill sha256 on hit so v1-migrated rows pick up
         // their mirror digest the next time they're seen.
-        let mut insert = self
-            .conn
-            .prepare(
-                "INSERT INTO __cas_artifact \
-                    (hash, sha256, bytes, bytes_len, created_at, last_used_at, use_count) \
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0) \
-                 ON CONFLICT(hash) DO UPDATE SET \
-                    sha256       = COALESCE(__cas_artifact.sha256, excluded.sha256), \
-                    last_used_at = excluded.last_used_at, \
-                    use_count    = use_count + 1",
-            )
-            .map_err(|e| anyhow!("prepare put: {}", e.message))?;
-        insert
-            .bind_all(&[
+        self.with_stmt(SQL, |stmt| {
+            stmt.bind_all(&[
                 Value::Blob(hash.as_bytes().to_vec()),
                 Value::Blob(sha.to_vec()),
                 Value::Blob(bytes.to_vec()),
@@ -314,10 +309,12 @@ impl SqliteCasStore {
                 Value::Integer(now),
             ])
             .map_err(|e| anyhow!("bind put: {}", e.message))?;
-        match insert.step().map_err(|e| anyhow!("step put: {}", e.message))? {
-            StepResult::Done => Ok(hash),
-            StepResult::Row => Err(anyhow!("insert returned row")),
-        }
+            match stmt.step().map_err(|e| anyhow!("step put: {}", e.message))? {
+                StepResult::Done => Ok(()),
+                StepResult::Row => Err(anyhow!("insert returned row")),
+            }
+        })?;
+        Ok(hash)
     }
 
     /// Fetch bytes by sha-256 digest. CP8 mirror: bytes go in
@@ -325,45 +322,39 @@ impl SqliteCasStore {
     /// sha-256 still hit. Updates last_used_at + use_count
     /// when found, like `get`.
     pub fn get_by_sha256(&mut self, sha256: &[u8; 32]) -> Result<Option<Vec<u8>>> {
+        const SEL_SQL: &str = "SELECT bytes, hash FROM __cas_artifact WHERE sha256 = ?1";
+        const UPD_SQL: &str = "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
+             WHERE hash = ?1";
         let now = unix_now();
-        let mut sel = self
-            .conn
-            .prepare(
-                "SELECT bytes, hash FROM __cas_artifact WHERE sha256 = ?1",
-            )
-            .map_err(|e| anyhow!("prepare get_by_sha256: {}", e.message))?;
-        sel.bind_all(&[Value::Blob(sha256.to_vec())])
-            .map_err(|e| anyhow!("bind get_by_sha256: {}", e.message))?;
-        let (bytes, blake_hash) = match sel
-            .step()
-            .map_err(|e| anyhow!("step get_by_sha256: {}", e.message))?
-        {
-            StepResult::Row => {
-                let b = match sel.column_value(0) {
-                    Value::Blob(b) => b,
-                    other => return Err(anyhow!("bytes column not blob: {other:?}")),
-                };
-                let h = match sel.column_value(1) {
-                    Value::Blob(b) => b,
-                    other => return Err(anyhow!("hash column not blob: {other:?}")),
-                };
-                (Some(b), Some(h))
+        let (bytes, blake_hash) = self.with_stmt(SEL_SQL, |stmt| {
+            stmt.bind_all(&[Value::Blob(sha256.to_vec())])
+                .map_err(|e| anyhow!("bind get_by_sha256: {}", e.message))?;
+            match stmt
+                .step()
+                .map_err(|e| anyhow!("step get_by_sha256: {}", e.message))?
+            {
+                StepResult::Row => {
+                    let b = match stmt.column_value(0) {
+                        Value::Blob(b) => b,
+                        other => return Err(anyhow!("bytes column not blob: {other:?}")),
+                    };
+                    let h = match stmt.column_value(1) {
+                        Value::Blob(b) => b,
+                        other => return Err(anyhow!("hash column not blob: {other:?}")),
+                    };
+                    Ok((Some(b), Some(h)))
+                }
+                StepResult::Done => Ok((None, None)),
             }
-            StepResult::Done => (None, None),
-        };
-        drop(sel);
+        })?;
         if let Some(h) = blake_hash {
-            let mut upd = self
-                .conn
-                .prepare(
-                    "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
-                     WHERE hash = ?1",
-                )
-                .map_err(|e| anyhow!("prepare get-update: {}", e.message))?;
-            upd.bind_all(&[Value::Blob(h), Value::Integer(now)])
-                .map_err(|e| anyhow!("bind get-update: {}", e.message))?;
-            upd.step()
-                .map_err(|e| anyhow!("step get-update: {}", e.message))?;
+            self.with_stmt(UPD_SQL, |stmt| {
+                stmt.bind_all(&[Value::Blob(h), Value::Integer(now)])
+                    .map_err(|e| anyhow!("bind get-update: {}", e.message))?;
+                stmt.step()
+                    .map_err(|e| anyhow!("step get-update: {}", e.message))?;
+                Ok(())
+            })?;
         }
         Ok(bytes)
     }
@@ -371,39 +362,35 @@ impl SqliteCasStore {
     /// Fetch bytes for a hash, if cached. Updates
     /// `last_used_at` + bumps `use_count`.
     pub fn get(&mut self, hash: &Hash) -> Result<Option<Vec<u8>>> {
+        const SEL_SQL: &str = "SELECT bytes FROM __cas_artifact WHERE hash = ?1";
+        const UPD_SQL: &str = "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
+             WHERE hash = ?1";
         let now = unix_now();
         // Read + update in two statements; sqlite doesn't have
         // an UPDATE...RETURNING that returns bytes in a useful
         // shape across this wrapper. Two roundtrips, sequential.
-        let mut sel = self
-            .conn
-            .prepare("SELECT bytes FROM __cas_artifact WHERE hash = ?1")
-            .map_err(|e| anyhow!("prepare get: {}", e.message))?;
-        sel.bind_all(&[Value::Blob(hash.as_bytes().to_vec())])
-            .map_err(|e| anyhow!("bind get: {}", e.message))?;
-        let bytes = match sel.step().map_err(|e| anyhow!("step get: {}", e.message))? {
-            StepResult::Row => match sel.column_value(0) {
-                Value::Blob(b) => Some(b),
-                other => return Err(anyhow!("bytes column not blob: {other:?}")),
-            },
-            StepResult::Done => None,
-        };
-        drop(sel);
+        let bytes = self.with_stmt(SEL_SQL, |stmt| {
+            stmt.bind_all(&[Value::Blob(hash.as_bytes().to_vec())])
+                .map_err(|e| anyhow!("bind get: {}", e.message))?;
+            match stmt.step().map_err(|e| anyhow!("step get: {}", e.message))? {
+                StepResult::Row => match stmt.column_value(0) {
+                    Value::Blob(b) => Ok(Some(b)),
+                    other => Err(anyhow!("bytes column not blob: {other:?}")),
+                },
+                StepResult::Done => Ok(None),
+            }
+        })?;
         if bytes.is_some() {
-            let mut upd = self
-                .conn
-                .prepare(
-                    "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
-                     WHERE hash = ?1",
-                )
-                .map_err(|e| anyhow!("prepare get-update: {}", e.message))?;
-            upd.bind_all(&[
-                Value::Blob(hash.as_bytes().to_vec()),
-                Value::Integer(now),
-            ])
-            .map_err(|e| anyhow!("bind get-update: {}", e.message))?;
-            upd.step()
-                .map_err(|e| anyhow!("step get-update: {}", e.message))?;
+            self.with_stmt(UPD_SQL, |stmt| {
+                stmt.bind_all(&[
+                    Value::Blob(hash.as_bytes().to_vec()),
+                    Value::Integer(now),
+                ])
+                .map_err(|e| anyhow!("bind get-update: {}", e.message))?;
+                stmt.step()
+                    .map_err(|e| anyhow!("step get-update: {}", e.message))?;
+                Ok(())
+            })?;
         }
         Ok(bytes)
     }
@@ -412,60 +399,57 @@ impl SqliteCasStore {
     /// __cas_artifact (FK enforcement). Replaces any prior
     /// binding for the same URI.
     pub fn set_uri(&mut self, uri: &str, hash: &Hash) -> Result<()> {
+        const SQL: &str = "INSERT INTO __cas_uri(uri, hash, fetched_at, last_used_at) \
+             VALUES (?1, ?2, ?3, ?3) \
+             ON CONFLICT(uri) DO UPDATE SET \
+                hash         = excluded.hash, \
+                fetched_at   = excluded.fetched_at, \
+                last_used_at = excluded.last_used_at";
         let now = unix_now();
-        let mut stmt = self
-            .conn
-            .prepare(
-                "INSERT INTO __cas_uri(uri, hash, fetched_at, last_used_at) \
-                 VALUES (?1, ?2, ?3, ?3) \
-                 ON CONFLICT(uri) DO UPDATE SET \
-                    hash         = excluded.hash, \
-                    fetched_at   = excluded.fetched_at, \
-                    last_used_at = excluded.last_used_at",
-            )
-            .map_err(|e| anyhow!("prepare set_uri: {}", e.message))?;
-        stmt.bind_all(&[
-            Value::Text(uri.to_string()),
-            Value::Blob(hash.as_bytes().to_vec()),
-            Value::Integer(now),
-        ])
-        .map_err(|e| anyhow!("bind set_uri: {}", e.message))?;
-        stmt.step()
-            .map_err(|e| anyhow!("step set_uri: {}", e.message))?;
-        Ok(())
+        self.with_stmt(SQL, |stmt| {
+            stmt.bind_all(&[
+                Value::Text(uri.to_string()),
+                Value::Blob(hash.as_bytes().to_vec()),
+                Value::Integer(now),
+            ])
+            .map_err(|e| anyhow!("bind set_uri: {}", e.message))?;
+            stmt.step()
+                .map_err(|e| anyhow!("step set_uri: {}", e.message))?;
+            Ok(())
+        })
     }
 
     /// Look up the artifact bound to `uri` and return (hash,
     /// bytes). Updates last_used_at on both the uri row and the
     /// artifact row (artifact via `get`).
     pub fn resolve_uri(&mut self, uri: &str) -> Result<Option<(Hash, Vec<u8>)>> {
-        let mut sel = self
-            .conn
-            .prepare("SELECT hash FROM __cas_uri WHERE uri = ?1")
-            .map_err(|e| anyhow!("prepare resolve_uri: {}", e.message))?;
-        sel.bind_all(&[Value::Text(uri.to_string())])
-            .map_err(|e| anyhow!("bind resolve_uri: {}", e.message))?;
-        let hash_blob = match sel
-            .step()
-            .map_err(|e| anyhow!("step resolve_uri: {}", e.message))?
-        {
-            StepResult::Row => match sel.column_value(0) {
-                Value::Blob(b) => b,
-                other => return Err(anyhow!("hash column not blob: {other:?}")),
-            },
-            StepResult::Done => return Ok(None),
+        const SEL_SQL: &str = "SELECT hash FROM __cas_uri WHERE uri = ?1";
+        const UPD_SQL: &str = "UPDATE __cas_uri SET last_used_at = ?2 WHERE uri = ?1";
+        let hash_blob = match self.with_stmt(SEL_SQL, |stmt| {
+            stmt.bind_all(&[Value::Text(uri.to_string())])
+                .map_err(|e| anyhow!("bind resolve_uri: {}", e.message))?;
+            match stmt
+                .step()
+                .map_err(|e| anyhow!("step resolve_uri: {}", e.message))?
+            {
+                StepResult::Row => match stmt.column_value(0) {
+                    Value::Blob(b) => Ok(Some(b)),
+                    other => Err(anyhow!("hash column not blob: {other:?}")),
+                },
+                StepResult::Done => Ok(None),
+            }
+        })? {
+            Some(b) => b,
+            None => return Ok(None),
         };
-        drop(sel);
         let now = unix_now();
-        let mut upd = self
-            .conn
-            .prepare("UPDATE __cas_uri SET last_used_at = ?2 WHERE uri = ?1")
-            .map_err(|e| anyhow!("prepare uri-touch: {}", e.message))?;
-        upd.bind_all(&[Value::Text(uri.to_string()), Value::Integer(now)])
-            .map_err(|e| anyhow!("bind uri-touch: {}", e.message))?;
-        upd.step()
-            .map_err(|e| anyhow!("step uri-touch: {}", e.message))?;
-        drop(upd);
+        self.with_stmt(UPD_SQL, |stmt| {
+            stmt.bind_all(&[Value::Text(uri.to_string()), Value::Integer(now)])
+                .map_err(|e| anyhow!("bind uri-touch: {}", e.message))?;
+            stmt.step()
+                .map_err(|e| anyhow!("step uri-touch: {}", e.message))?;
+            Ok(())
+        })?;
         let hash = Hash::from_bytes(
             hash_blob
                 .as_slice()
