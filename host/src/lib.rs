@@ -3707,16 +3707,8 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                 cmd.arg("--target").arg(t);
             }
             cmd.current_dir(&crate_root_path);
-            for (k, v) in &env_clone {
-                cmd.env(k, v);
-            }
-            let output = cmd.output().map_err(|e| {
-                loaded::sqlite::extension::types::SqliteError {
-                    code: libsqlite3_sys::SQLITE_ERROR,
-                    extended_code: libsqlite3_sys::SQLITE_ERROR,
-                    message: format!("build.spawn-build: failed to spawn cargo: {e}"),
-                }
-            })?;
+            apply_spawn_build_env(&mut cmd, &env_clone);
+            let output = run_with_timeout(&mut cmd, SPAWN_BUILD_TIMEOUT, "cargo")?;
             let stdout =
                 String::from_utf8_lossy(&output.stdout).into_owned();
             let stderr =
@@ -3775,16 +3767,8 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
                     .arg(&final_path)
                     .arg("-o")
                     .arg(&component_path);
-                let wt_out = wt.output().map_err(|e| {
-                    loaded::sqlite::extension::types::SqliteError {
-                        code: libsqlite3_sys::SQLITE_ERROR,
-                        extended_code: libsqlite3_sys::SQLITE_ERROR,
-                        message: format!(
-                            "build.spawn-build: wasm-tools not found in PATH; \
-                             required to component-encode wasm target output: {e}"
-                        ),
-                    }
-                })?;
+                apply_spawn_build_env(&mut wt, &env_clone);
+                let wt_out = run_with_timeout(&mut wt, SPAWN_BUILD_TIMEOUT, "wasm-tools")?;
                 combined_stdout.push_str("\n--- wasm-tools stdout ---\n");
                 combined_stdout
                     .push_str(&String::from_utf8_lossy(&wt_out.stdout));
@@ -4205,6 +4189,119 @@ fn validate_spawn_build_crate_root(
             .collect::<Vec<_>>()
             .join(", ")
     ))
+}
+
+/// Maximum wall-clock time a single spawn-build subprocess invocation
+/// (cargo OR wasm-tools) may take. Hardcoded for v1; making this
+/// per-call configurable would let extensions request arbitrarily
+/// long jobs.
+const SPAWN_BUILD_TIMEOUT: std::time::Duration =
+    std::time::Duration::from_secs(600);
+
+/// HIGH-severity defensive fix: clear the subprocess's environment
+/// before adding our own curated minimum. The prior implementation
+/// inherited the host's full env, exposing secrets like
+/// AWS_SECRET_ACCESS_KEY / GITHUB_TOKEN / etc. to any build-script
+/// in the dep tree.
+///
+/// The curated minimum is what cargo and wasm-tools actually need
+/// to function:
+///   * PATH      cargo invokes rustc, linker, build scripts
+///   * HOME      where cargo's config lives by default
+///   * USER      some tooling looks at this; harmless
+///   * CARGO_HOME, RUSTUP_HOME  cargo + toolchain mgmt
+///   * RUSTC_BOOTSTRAP  ONLY preserved if already set; required for
+///     the typed-path / excel extension build path (see #444 lesson).
+///
+/// Then any `(k, v)` pairs the extension supplied via the SPI `env`
+/// argument are appended on top. The extension can override the
+/// curated minimum but cannot READ the host's other env values.
+fn apply_spawn_build_env(
+    cmd: &mut std::process::Command,
+    extra: &[(String, String)],
+) {
+    cmd.env_clear();
+    for k in &["PATH", "HOME", "USER", "CARGO_HOME", "RUSTUP_HOME"] {
+        if let Some(v) = std::env::var_os(k) {
+            cmd.env(k, v);
+        }
+    }
+    if let Some(v) = std::env::var_os("RUSTC_BOOTSTRAP") {
+        cmd.env("RUSTC_BOOTSTRAP", v);
+    }
+    for (k, v) in extra {
+        cmd.env(k, v);
+    }
+}
+
+/// MEDIUM-severity defensive fix: cap subprocess runtime. Without
+/// this a malicious or wedged extension could pin a tokio worker
+/// indefinitely via spawn-build (cargo's `--release` is normally
+/// minutes; an infinite-loop `build.rs` is unbounded).
+///
+/// Polls the child up to `timeout`; on expiry SIGKILLs and returns
+/// a clear SQLITE_ERROR. Runs synchronously inside `spawn_blocking`
+/// so std `Child::wait_timeout` semantics are correct.
+fn run_with_timeout(
+    cmd: &mut std::process::Command,
+    timeout: std::time::Duration,
+    label: &str,
+) -> std::result::Result<
+    std::process::Output,
+    loaded::sqlite::extension::types::SqliteError,
+> {
+    use std::io::Read;
+    let mut child = cmd
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|e| loaded::sqlite::extension::types::SqliteError {
+            code: libsqlite3_sys::SQLITE_ERROR,
+            extended_code: libsqlite3_sys::SQLITE_ERROR,
+            message: format!("build.spawn-build: failed to spawn {label}: {e}"),
+        })?;
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let mut stdout = Vec::new();
+                if let Some(mut s) = child.stdout.take() {
+                    let _ = s.read_to_end(&mut stdout);
+                }
+                let mut stderr = Vec::new();
+                if let Some(mut s) = child.stderr.take() {
+                    let _ = s.read_to_end(&mut stderr);
+                }
+                return Ok(std::process::Output {
+                    status,
+                    stdout,
+                    stderr,
+                });
+            }
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_ERROR,
+                        extended_code: libsqlite3_sys::SQLITE_ERROR,
+                        message: format!(
+                            "build.spawn-build: {label} exceeded {} second timeout",
+                            timeout.as_secs()
+                        ),
+                    });
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Err(e) => {
+                return Err(loaded::sqlite::extension::types::SqliteError {
+                    code: libsqlite3_sys::SQLITE_ERROR,
+                    extended_code: libsqlite3_sys::SQLITE_ERROR,
+                    message: format!("build.spawn-build: {label} wait: {e}"),
+                });
+            }
+        }
+    }
 }
 
 /// HIGH-severity defensive fix: reject target_triple values containing
@@ -11966,5 +12063,74 @@ mod spawn_build_validation_tests {
         // assertion should be paired with a security review of what
         // a granted-Spi extension would gain access to.
         assert_eq!(ENV_VAR_ALLOWLIST, &["SQLINK_DEV_ROOT"]);
+    }
+
+    #[test]
+    fn apply_env_clears_then_curates() {
+        // We can't directly inspect a Command's env after env_clear
+        // without running it, but we can run a trivial child (`/usr/bin/env`
+        // on unix, otherwise skip) and look at its stdout.
+        #[cfg(unix)]
+        {
+            // Pollute the host env with a sentinel that MUST NOT
+            // leak into the child.
+            // SAFETY: this test is single-threaded by virtue of
+            // running with --test-threads=1 (workspace convention);
+            // mutating process env elsewhere would race.
+            unsafe {
+                std::env::set_var("SQLINK_TEST_SECRET", "MUST_NOT_LEAK");
+            }
+            let mut cmd = std::process::Command::new("/usr/bin/env");
+            apply_spawn_build_env(&mut cmd, &[]);
+            let out = cmd.output().expect("env exec");
+            let s = String::from_utf8_lossy(&out.stdout);
+            assert!(
+                !s.contains("SQLINK_TEST_SECRET=MUST_NOT_LEAK"),
+                "child inherited unauthorized env: {s}"
+            );
+            // PATH should be present (curated minimum).
+            assert!(s.contains("PATH="), "PATH missing from curated env: {s}");
+            unsafe {
+                std::env::remove_var("SQLINK_TEST_SECRET");
+            }
+        }
+    }
+
+    #[test]
+    fn apply_env_passes_extra_through() {
+        #[cfg(unix)]
+        {
+            let mut cmd = std::process::Command::new("/usr/bin/env");
+            apply_spawn_build_env(
+                &mut cmd,
+                &[("MY_BUILD_FLAG".to_string(), "ON".to_string())],
+            );
+            let out = cmd.output().expect("env exec");
+            let s = String::from_utf8_lossy(&out.stdout);
+            assert!(
+                s.contains("MY_BUILD_FLAG=ON"),
+                "extension-supplied env not passed: {s}"
+            );
+        }
+    }
+
+    #[test]
+    fn run_with_timeout_kills_runaway() {
+        #[cfg(unix)]
+        {
+            let mut cmd = std::process::Command::new("/bin/sh");
+            cmd.arg("-c").arg("sleep 60");
+            let r = run_with_timeout(
+                &mut cmd,
+                std::time::Duration::from_millis(200),
+                "sleeper",
+            );
+            let err = r.unwrap_err();
+            assert!(
+                err.message.contains("exceeded"),
+                "expected timeout error, got: {}",
+                err.message
+            );
+        }
     }
 }
