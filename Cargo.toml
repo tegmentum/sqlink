@@ -42,6 +42,14 @@ exclude = [
     "extensions/iban",
     "extensions/sys-compat",
     "extensions/list",
+    # tvm-wasm is a submodule (sqlink/tvm-wasm/) with its own
+    # [workspace] root. Its crates use `edition.workspace = true`
+    # against tvm-wasm's own Cargo.toml; including them in sqlink's
+    # workspace would force inheritance from sqlink's root, which
+    # doesn't define `[workspace.package]`. Path-deps into the
+    # submodule (e.g. host -> tvm-wasmtime) still work; cargo
+    # resolves the dep against tvm-wasm's own workspace.
+    "tvm-wasm",
 ]
 
 # `cargo build` / `cargo test` at the workspace root operate on
