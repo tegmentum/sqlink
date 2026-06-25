@@ -3832,6 +3832,23 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         set_hash: String,
         members: Vec<loaded::sqlite::extension::bundles::BundleMember>,
     ) -> std::result::Result<u64, loaded::sqlite::extension::types::SqliteError> {
+        // MEDIUM-severity defensive fix: cap + sanitize all
+        // extension-supplied string args before they reach the
+        // cas-cache. Untrusted bytes-in: a 100MB name would alloc;
+        // embedded NUL or control chars confuse sqlite bind_text
+        // and downstream display.
+        if let Some(n) = name.as_deref() {
+            validate_bundle_str(n, "name", BUNDLE_NAME_MAX)
+                .map_err(bundle_arg_err)?;
+        }
+        validate_bundle_str(&set_hash, "set_hash", BUNDLE_SET_HASH_MAX)
+            .map_err(bundle_arg_err)?;
+        for m in &members {
+            validate_bundle_str(&m.extension_name, "extension_name", BUNDLE_NAME_MAX)
+                .map_err(bundle_arg_err)?;
+            validate_bundle_str(&m.content_hash, "content_hash", BUNDLE_SET_HASH_MAX)
+                .map_err(bundle_arg_err)?;
+        }
         let store = bundles_open_store(self)?;
         let mut guard = store.lock();
         let members: Vec<sqlite_cas_cache::BundleMember> = members
@@ -4189,6 +4206,45 @@ fn validate_spawn_build_crate_root(
             .collect::<Vec<_>>()
             .join(", ")
     ))
+}
+
+/// Caps for extension-supplied bundle string args. names and
+/// extension-names are operator-facing handles; 256 bytes is more
+/// than enough. set/content hashes are hex SHA-256/blake3 strings;
+/// 128 chars covers SHA-512 hex with headroom.
+const BUNDLE_NAME_MAX: usize = 256;
+const BUNDLE_SET_HASH_MAX: usize = 128;
+
+/// MEDIUM-severity defensive fix: cap + sanitize string args coming
+/// from extensions through `bundle_save`. Rejects oversize values
+/// (would alloc unboundedly downstream), control chars (corrupt
+/// terminal output), and NUL bytes (truncate sqlite bind_text).
+fn validate_bundle_str(
+    s: &str,
+    field: &'static str,
+    max_len: usize,
+) -> std::result::Result<(), String> {
+    if s.len() > max_len {
+        return Err(format!(
+            "bundles.save: {field} exceeds {max_len}-byte cap (got {})",
+            s.len()
+        ));
+    }
+    if let Some((i, c)) = s.char_indices().find(|(_, c)| c.is_control() || *c == '\0') {
+        return Err(format!(
+            "bundles.save: {field} contains control char {:?} at byte {i}",
+            c
+        ));
+    }
+    Ok(())
+}
+
+fn bundle_arg_err(msg: String) -> loaded::sqlite::extension::types::SqliteError {
+    loaded::sqlite::extension::types::SqliteError {
+        code: libsqlite3_sys::SQLITE_RANGE,
+        extended_code: libsqlite3_sys::SQLITE_RANGE,
+        message: msg,
+    }
 }
 
 /// Maximum wall-clock time a single spawn-build subprocess invocation
@@ -12112,6 +12168,34 @@ mod spawn_build_validation_tests {
                 "extension-supplied env not passed: {s}"
             );
         }
+    }
+
+    #[test]
+    fn bundle_str_caps_length() {
+        let too_long = "a".repeat(BUNDLE_NAME_MAX + 1);
+        let err = validate_bundle_str(&too_long, "name", BUNDLE_NAME_MAX).unwrap_err();
+        assert!(err.contains("exceeds"));
+    }
+
+    #[test]
+    fn bundle_str_rejects_nul_and_control() {
+        for bad in ["name\0nul", "name\x01ctrl", "tab\there"] {
+            assert!(
+                validate_bundle_str(bad, "name", BUNDLE_NAME_MAX).is_err(),
+                "expected reject for {bad:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn bundle_str_accepts_normal_names() {
+        validate_bundle_str("my-bundle_v1", "name", BUNDLE_NAME_MAX).unwrap();
+        validate_bundle_str(
+            "4c8e1aabcd123456789abcdef0123456",
+            "set_hash",
+            BUNDLE_SET_HASH_MAX,
+        )
+        .unwrap();
     }
 
     #[test]
