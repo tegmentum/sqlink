@@ -77,7 +77,10 @@ jobs:
         # test gracefully skips when the fiji_hello.wasm artifact is
         # absent — this job is native-only by design; wasm-side build
         # + extension-smoke are in .github/workflows/wasm-smoke.yml.
-        run: cargo test --all-features
+        # --test-threads=1: LIBSQLITE3_FLAGS sets SQLITE_THREADSAFE=0
+        # so parallel tests race on global VFS state ("no such vfs"
+        # / mid-init unwraps). Mirrors the wasm-smoke runner.
+        run: cargo test --all-features -- --test-threads=1
 
   cache-tests:
     name: CAS cache unit tests
@@ -100,7 +103,7 @@ jobs:
         # missing_bytes_treated_as_miss, default_root_honors_overrides,
         # put_writes_both_blake3_and_sha256, purge_removes_everything.
         working-directory: host
-        run: cargo test --lib cache --all-features
+        run: cargo test --lib cache --all-features -- --test-threads=1
 
   compose-tests:
     name: Compose protocol unit tests
@@ -122,7 +125,7 @@ jobs:
         # manifest_lists_methods, query_scalar_returns_count,
         # query_returns_rows, prepare_step_finalize_cycle.
         working-directory: host
-        run: cargo test --lib compose_provider --all-features
+        run: cargo test --lib compose_provider --all-features -- --test-threads=1
 
 # Wasm-side build + extension-smoke live in a separate workflow:
 # .github/workflows/wasm-smoke.yml. It downloads wasi-sdk, installs
