@@ -4,3 +4,6 @@
 [submodule "sqlite-wasm"]
 	path = sqlite-wasm
 	url = https://github.com/tegmentum/sqlite-wasm.git
+[submodule "compression-multiplexer"]
+	path = compression-multiplexer
+	url = https://github.com/tegmentum/compression-multiplexer.git
