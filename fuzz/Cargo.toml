@@ -1,0 +1,59 @@
+[package]
+name = "sqlink-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+# Top-level fuzz crate, intentionally OUTSIDE the workspace
+# `members` list (root Cargo.toml). cargo-fuzz needs nightly
+# for `-Z sanitizer=fuzzer`, and pinning the workspace to
+# stable would be poisoned if this crate joined it. The shim
+# `rust-toolchain.toml` next to this Cargo.toml scopes the
+# nightly override to this dir.
+#
+# Per-target binaries: each `[[bin]]` below maps to one
+# fuzz target under `fuzz_targets/<name>.rs`. To add a new
+# target, append a `[[bin]]` and create the matching file.
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+blake3 = "1"
+sha2 = "0.10"
+tempfile = "3"
+
+sqlite-extension-policy = { path = "../sqlite-loader-wit" }
+sqlite-cas-cache = { path = "../sqlite-cas-cache" }
+
+[[bin]]
+name = "policy_check_manifest"
+path = "fuzz_targets/policy_check_manifest.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "cas_put_bytes_roundtrip"
+path = "fuzz_targets/cas_put_bytes_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "bundle_save_set_hash"
+path = "fuzz_targets/bundle_save_set_hash.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "parse_duration"
+path = "fuzz_targets/parse_duration.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "parse_load_args"
+path = "fuzz_targets/parse_load_args.rs"
+test = false
+doc = false
