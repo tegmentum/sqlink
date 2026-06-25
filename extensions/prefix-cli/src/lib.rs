@@ -606,14 +606,14 @@ need explicit dispatch in the face of a collision.";
 
     /// `.prefix prefer NAME EXTENSION`  pin bare-name dispatch.
     /// NAME is the function name; EXTENSION is the extension to
-    /// pin to. v1 simplification: writes the pin row; pin takes
-    /// effect on next session (next `install_loaded_extension`).
+    /// pin to. PLAN-followups.md P1: after writing each
+    /// __sqlink_prefix_pin row, calls loader-bridge.apply-prefix-pin
+    /// so the bare SQLite trampoline re-binds against the pinned
+    /// extension immediately  no session restart needed.
     fn sub_prefer(rest: &[&str]) -> InvokeResult {
         if rest.len() != 2 {
             return err(
-                ".prefix prefer: usage `.prefix prefer FUNCTION_NAME EXTENSION`. \
-                 (NOTE: pin takes effect on next session.)"
-                    .into(),
+                ".prefix prefer: usage `.prefix prefer FUNCTION_NAME EXTENSION`.".into(),
             );
         }
         let fname = rest[0];
@@ -659,11 +659,28 @@ need explicit dispatch in the face of a collision.";
             ) {
                 return err_sqlite(e);
             }
+            // PLAN-followups.md P1 live-prefer: re-register the bare
+            // trampoline against the pinned extension's impl now.
+            // Best-effort: if apply_prefix_pin errors (e.g. pin
+            // targets a scalar that's not loaded), the INSERT
+            // succeeded so the pin still takes effect next session.
+            if let Err(e) = bindings::sqlite::extension::loader_bridge::apply_prefix_pin(
+                fname,
+                n_args as i32,
+            ) {
+                return text(format!(
+                    "pinned {} arity-variant(s) of {:?} to extension {:?}; \
+                     live re-register failed: {} (will take effect next session)\n",
+                    pinned + 1,
+                    sanitize_for_terminal(fname),
+                    sanitize_for_terminal(ext),
+                    sanitize_for_terminal(&e.message),
+                ));
+            }
             pinned += 1;
         }
         text(format!(
-            "pinned {} arity-variant(s) of {:?} to extension {:?}. \
-             (Takes effect on next session  re-load the cli for the pin to bind.)\n",
+            "pinned {} arity-variant(s) of {:?} to extension {:?} (live).\n",
             pinned,
             sanitize_for_terminal(fname),
             sanitize_for_terminal(ext),

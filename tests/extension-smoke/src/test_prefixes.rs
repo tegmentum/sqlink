@@ -319,6 +319,45 @@ fn prefix_add_rejects_duplicate_name() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// 9. PLAN-followups.md P1 live-prefer: `.prefix prefer` calls
+/// loader-bridge.apply-prefix-pin so the bare-name dispatch
+/// re-registers immediately. The success message ends in
+/// "(live)" on the happy path; "(will take effect next session)"
+/// on the bridge-call fallback. Asserting "(live)" confirms the
+/// end-to-end chain works: bindings  bridge impl  schema
+/// lookups  register_host_loaded_scalar.
+#[test]
+fn prefix_prefer_live_swap() {
+    let Some((sqlink, cli, uuid, _json1)) = gates() else {
+        eprintln!("prefix live-swap smoke: SKIP");
+        return;
+    };
+    let dir = make_tempdir("liveprefer");
+    let db = dir.join("probe.db");
+    let cache = dir.join("cas");
+    // Load uuid, then `.prefix prefer gen_random_uuid uuid`. uuid
+    // is the only loaded scalar so the pin trivially succeeds and
+    // the live re-register hits the same registration that was
+    // already in place  the assertion is on the (live) success
+    // wording, which exercises the full bridge chain.
+    let script = format!(
+        ".load {}\n.prefix prefer gen_random_uuid uuid\n.exit\n",
+        uuid.display(),
+    );
+    let (stdout, stderr) = drive(&sqlink, &cli, &cache, &db, &[], &script);
+    assert_contains(
+        "live-prefer",
+        &stdout,
+        &stderr,
+        &["pinned", "(live)"],
+    );
+    assert!(
+        !stdout.contains("will take effect next session"),
+        "[live-prefer] expected (live) success path but saw fallback\nstdout:\n{stdout}\nstderr:\n{stderr}",
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// 8. `.prefix prefer` writes a pin row and `.prefix conflicts`
 /// surfaces it in the per-function output. The pin doesn't take
 /// effect until next session per v1's simplification, so we only

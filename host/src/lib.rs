@@ -5103,6 +5103,208 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
         }
         std::env::var(&name).ok().filter(|v| !v.is_empty())
     }
+
+    async fn apply_prefix_pin(
+        &mut self,
+        function_name: String,
+        n_args: i32,
+    ) -> std::result::Result<
+        (),
+        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
+    > {
+        let Some(ref host) = self.host_ref else {
+            return Err(
+                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                    code: 1,
+                    message: "apply-prefix-pin: host_ref not wired".into(),
+                },
+            );
+        };
+        if let Err(e) = shared_spi_ensure_open(host) {
+            return Err(
+                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                    code: e.code,
+                    message: format!(
+                        "apply-prefix-pin: ensure shared spi open: {}",
+                        e.message
+                    ),
+                },
+            );
+        }
+        // Read pin row + the owning extension out of shared_spi_conn
+        // in one scope so we don't hold the borrow across the
+        // re-register call below.
+        let (expansion, ext_name, func_id) = {
+            let g = host.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("ensured open");
+            // Step 1: pin row -> expansion.
+            let expansion = {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT expansion FROM __sqlink_prefix_pin \
+                         WHERE function_name = ?1 AND n_args = ?2",
+                    )
+                    .map_err(|e| {
+                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                            code: 1,
+                            message: format!("prepare pin lookup: {}", e.message),
+                        }
+                    })?;
+                stmt.bind_all(&[
+                    sqlite_component_core::db::Value::Text(function_name.clone()),
+                    sqlite_component_core::db::Value::Integer(n_args as i64),
+                ])
+                .map_err(|e| {
+                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                        code: 1,
+                        message: format!("bind pin lookup: {}", e.message),
+                    }
+                })?;
+                match stmt.step().map_err(|e| {
+                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                        code: 1,
+                        message: format!("step pin lookup: {}", e.message),
+                    }
+                })? {
+                    sqlite_component_core::db::StepResult::Row => {
+                        match stmt.column_value(0) {
+                            sqlite_component_core::db::Value::Text(s) => s,
+                            other => {
+                                return Err(
+                                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                                        code: 1,
+                                        message: format!(
+                                            "pin row's expansion not text: {other:?}"
+                                        ),
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    sqlite_component_core::db::StepResult::Done => {
+                        return Err(
+                            loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                                code: 1,
+                                message: format!(
+                                    "no pin row for ({function_name}, {n_args})  did the caller write __sqlink_prefix_pin first?"
+                                ),
+                            },
+                        )
+                    }
+                }
+            };
+            // Step 2: __sqlink_prefix_function row -> extension_name.
+            let ext_name = {
+                let mut stmt = conn
+                    .prepare(
+                        "SELECT extension_name FROM __sqlink_prefix_function \
+                         WHERE expansion = ?1 AND function_name = ?2 AND n_args = ?3",
+                    )
+                    .map_err(|e| {
+                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                            code: 2,
+                            message: format!("prepare prefix_function lookup: {}", e.message),
+                        }
+                    })?;
+                stmt.bind_all(&[
+                    sqlite_component_core::db::Value::Text(expansion.clone()),
+                    sqlite_component_core::db::Value::Text(function_name.clone()),
+                    sqlite_component_core::db::Value::Integer(n_args as i64),
+                ])
+                .map_err(|e| {
+                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                        code: 2,
+                        message: format!("bind prefix_function lookup: {}", e.message),
+                    }
+                })?;
+                match stmt.step().map_err(|e| {
+                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                        code: 2,
+                        message: format!("step prefix_function lookup: {}", e.message),
+                    }
+                })? {
+                    sqlite_component_core::db::StepResult::Row => {
+                        match stmt.column_value(0) {
+                            sqlite_component_core::db::Value::Text(s) => s,
+                            other => {
+                                return Err(
+                                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                                        code: 2,
+                                        message: format!(
+                                            "prefix_function row's extension_name not text: {other:?}"
+                                        ),
+                                    },
+                                )
+                            }
+                        }
+                    }
+                    sqlite_component_core::db::StepResult::Done => {
+                        return Err(
+                            loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                                code: 2,
+                                message: format!(
+                                    "stale pin: expansion {expansion:?} has no entry for ({function_name}, {n_args}) in __sqlink_prefix_function. Use .prefix unprefer + re-pin."
+                                ),
+                            },
+                        )
+                    }
+                }
+            };
+            // Step 3: func_id from the live registration cache.
+            let func_id = host
+                .ext_scalar_func_ids
+                .lock()
+                .get(&(ext_name.clone(), function_name.clone(), n_args))
+                .copied()
+                .ok_or_else(|| {
+                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                        code: 3,
+                        message: format!(
+                            "extension {ext_name:?} has no scalar registration for ({function_name}, {n_args})  not yet loaded, OR pin targets a non-scalar shape (aggregates/collations/vtabs are not live-pinnable in v1)"
+                        ),
+                    }
+                })?;
+            (expansion, ext_name, func_id)
+        };
+        // Re-register the bare-name trampoline on the same shared
+        // connection. sqlite3_create_function_v2 with the same
+        // (name, num_args) replaces the existing registration; that
+        // is exactly the override the pin needs.
+        let rc = {
+            let g = host.shared_spi_conn.lock();
+            let r = g.borrow();
+            let conn = r.as_ref().expect("ensured open");
+            unsafe {
+                register_host_loaded_scalar(
+                    conn.raw_handle(),
+                    host.clone(),
+                    ext_name.clone(),
+                    &function_name,
+                    n_args,
+                    func_id,
+                )
+            }
+        };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(
+                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                    code: 3,
+                    message: format!(
+                        "re-register scalar {function_name}/{n_args} for pinned ext {ext_name:?} (expansion={expansion}): rc={rc}"
+                    ),
+                },
+            );
+        }
+        tracing::info!(
+            function = %function_name,
+            n_args,
+            pinned_ext = %ext_name,
+            expansion = %expansion,
+            "loader-bridge.apply-prefix-pin: bare-name dispatch re-registered against pinned extension"
+        );
+        Ok(())
+    }
 }
 
 /// Allowlist of host env vars an Spi-granted extension may read via
@@ -5673,6 +5875,13 @@ pub struct Host {
     /// down. Names are sqlite3 function names (the one the
     /// SQL caller types), not WIT entry names.
     ext_scalar_registrations: Arc<Mutex<HashMap<String, Vec<(String, i32)>>>>,
+    /// PLAN-followups.md P1 live-prefer: (ext_name, function_name, n_args)
+    ///  func_id so `loader-bridge.apply-prefix-pin` can re-register
+    /// the bare-name SQLite trampoline against the pinned extension's
+    /// implementation in the current session, without waiting for a
+    /// restart. Populated by `register_scalar` alongside
+    /// `ext_scalar_registrations`.
+    ext_scalar_func_ids: Arc<Mutex<HashMap<(String, String, i32), u64>>>,
     /// PLAN-prefixes.md hot-path cache: ext_name -> (prefix, expansion)
     /// after one-time resolution + __sqlink_prefix recording. The
     /// bindings-world register-* impls (cli auto-load path) consult
@@ -6118,6 +6327,7 @@ impl Host {
             user_conn: Arc::new(Mutex::new(None)),
             trace_buf: Arc::new(Mutex::new(Vec::new())),
             ext_scalar_registrations: Arc::new(Mutex::new(HashMap::new())),
+            ext_scalar_func_ids: Arc::new(Mutex::new(HashMap::new())),
             prefix_cache: Arc::new(Mutex::new(HashMap::new())),
             ext_collation_registrations: Arc::new(Mutex::new(HashMap::new())),
             ext_aggregate_registrations: Arc::new(Mutex::new(HashMap::new())),
@@ -10524,6 +10734,15 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             .entry(ext_name.clone())
             .or_default()
             .push((name.clone(), num_args));
+        // PLAN-followups.md P1 live-prefer cache: needed by
+        // loader-bridge.apply-prefix-pin to re-register the bare-name
+        // SQLite trampoline against the pinned extension's impl in the
+        // current session. Last registration wins on duplicate
+        // (ext_name, name, num_args)  same shape as SQLite.
+        self.host
+            .ext_scalar_func_ids
+            .lock()
+            .insert((ext_name.clone(), name.clone(), num_args), func_id);
         // PLAN-prefixes.md hot-path: record (expansion, name, n_args)
         // in __sqlink_prefix_function and register the always-available
         // `prefix__name` qualified form alongside the bare name. Best-
@@ -10954,6 +11173,15 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
 
     async fn unregister_extension(&mut self, ext_name: String) {
         let scalars = self.host.ext_scalar_registrations.lock().remove(&ext_name);
+        // PLAN-followups.md P1 live-prefer cache  drop every
+        // (ext_name, *, *) entry alongside the scalar registrations.
+        // Pin re-registrations targeting this extension stop working
+        // immediately; a follow-up call to apply-prefix-pin will see
+        // the miss and surface a clean error.
+        {
+            let mut g = self.host.ext_scalar_func_ids.lock();
+            g.retain(|(en, _, _), _| en != &ext_name);
+        }
         let colls = self
             .host
             .ext_collation_registrations
