@@ -121,3 +121,37 @@ fn evict_lru_keeps_shared_artifact_until_all_uris_drop() {
     assert_eq!(freed, 16);
     assert_eq!(s.artifact_count().unwrap(), 0);
 }
+
+// Mutant boundary tests: evict_lru phase loops use `> target_bytes`,
+// not `>= target_bytes`. The distinguishing case is when total exactly
+// equals target after some eviction; `>` stops, `>=` evicts one more.
+
+#[test]
+fn evict_lru_stops_at_exact_target_unbound() {
+    let (_d, mut s) = fresh();
+    let _a = s.put(b"aaaa").unwrap();
+    let _b = s.put(b"bb").unwrap();
+    let total = s.total_bytes().unwrap();
+    assert_eq!(total, 6);
+    // Target 4: evict_lru should drop the 2-byte artifact (oldest is
+    // first-inserted under same last_used_at, but pick may pick either;
+    // either way total ends at 4 = exact target, NOT below).
+    let freed = s.evict_lru(4).unwrap();
+    assert_eq!(s.total_bytes().unwrap(), 4);
+    assert_eq!(freed, 2);
+}
+
+#[test]
+fn evict_lru_stops_at_exact_target_uri_phase() {
+    let (_d, mut s) = fresh();
+    let h = s.put(b"shared12").unwrap();
+    s.set_uri("u:a", &h).unwrap();
+    s.set_uri("u:b", &h).unwrap();
+    assert_eq!(s.total_bytes().unwrap(), 8);
+    // Both URIs reference same artifact; gc keeps artifact alive while
+    // either URI exists. Phase 2 drops URIs oldest-first until target.
+    // Target 8 = exact: early-return path, freed == 0.
+    let freed = s.evict_lru(8).unwrap();
+    assert_eq!(s.total_bytes().unwrap(), 8);
+    assert_eq!(freed, 0);
+}
