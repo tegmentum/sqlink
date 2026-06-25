@@ -4056,6 +4056,40 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
             let _ = guard.bundle_touch(id);
         }
     }
+
+    async fn bundle_add_alias(
+        &mut self,
+        bundle_id: u64,
+        alias: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        guard
+            .bundle_add_alias(bundle_id, &alias)
+            .map_err(|e| bundles_err("bundles.add-alias", e))
+    }
+
+    async fn bundle_remove_alias(
+        &mut self,
+        alias: String,
+    ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let mut guard = store.lock();
+        guard
+            .bundle_remove_alias(&alias)
+            .map_err(|e| bundles_err("bundles.remove-alias", e))
+    }
+
+    async fn bundle_aliases(
+        &mut self,
+        bundle_id: u64,
+    ) -> std::result::Result<Vec<String>, loaded::sqlite::extension::types::SqliteError> {
+        let store = bundles_open_store(self)?;
+        let guard = store.lock();
+        guard
+            .bundle_aliases(bundle_id)
+            .map_err(|e| bundles_err("bundles.aliases", e))
+    }
 }
 
 /// Resolve the cas-cache `SqliteCasStore` handle from the LoadedState,
