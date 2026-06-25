@@ -63,8 +63,8 @@ mod wasm_export {
                 dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![],
                 optional_capabilities: alloc::vec![],
-                preferred_prefix: None,
-                prefix_expansion: None,
+                preferred_prefix: Some("sequence".into()),
+                prefix_expansion: Some("com.tegmentum.sqlink.ext.sequence".into()),
             }
         }
     }

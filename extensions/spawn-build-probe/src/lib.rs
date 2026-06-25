@@ -71,8 +71,8 @@ mod wasm_export {
                 // is missing it.
                 declared_capabilities: alloc::vec![Capability::SpawnBuild],
                 optional_capabilities: alloc::vec![],
-                preferred_prefix: None,
-                prefix_expansion: None,
+                preferred_prefix: Some("spawn_build_probe".into()),
+                prefix_expansion: Some("com.tegmentum.sqlink.ext.spawn_build_probe".into()),
             }
         }
     }

@@ -74,8 +74,8 @@ mod wasm_export {
                 dot_commands: alloc::vec![],
                 declared_capabilities: alloc::vec![Capability::Dns],
                 optional_capabilities: alloc::vec![],
-                preferred_prefix: None,
-                prefix_expansion: None,
+                preferred_prefix: Some("dns".into()),
+                prefix_expansion: Some("com.tegmentum.sqlink.ext.dns".into()),
             }
         }
     }

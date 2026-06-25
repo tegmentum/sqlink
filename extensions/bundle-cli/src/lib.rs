@@ -164,8 +164,8 @@ mod wasm_export {
                 // SpawnBuild is not granted) and lets .bundle save /
                 // list / show / delete / gc work normally.
                 optional_capabilities: alloc::vec![Capability::SpawnBuild],
-                preferred_prefix: None,
-                prefix_expansion: None,
+                preferred_prefix: Some("bundle".into()),
+                prefix_expansion: Some("com.tegmentum.sqlink.cli.bundle".into()),
             }
         }
     }
