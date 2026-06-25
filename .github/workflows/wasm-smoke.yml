@@ -116,16 +116,24 @@ jobs:
         # the workspace-level build because its postgis-wasm import
         # path needs a separate compose step.
         run: |
-          cargo build --workspace --target wasm32-wasip2 --release \
-            --exclude host \
-            --exclude sqlite-cas-cache \
-            --exclude sqlink-native \
-            --exclude sqlink-httpd \
-            --exclude sqlink-loader \
-            --exclude postgis-bridge-extension \
-            --exclude extension-smoke \
-            --exclude extension-proptest \
-            --exclude runnable-sqlite-demo
+          # Explicit `-p` list (not `--workspace --exclude`). Cargo's
+          # workspace resolver compiles shared transitive deps even
+          # when their direct dependents are excluded  host's tokio
+          # ends up compiled for wasm despite host being excluded,
+          # tripping tokio's `Only features sync,macros,io-util,rt,
+          # time are supported on wasm` compile_error. Naming the
+          # wasm-side packages directly avoids the shared-resolve.
+          cargo build --target wasm32-wasip2 --release \
+            -p sqlite-cli \
+            -p sqlink-cli-argv \
+            -p sqlink-parsers \
+            -p json1-extension \
+            -p csv-extension \
+            -p math-extension \
+            -p crypto-extension \
+            -p uuid-extension \
+            -p regexp-extension \
+            -p stats-extension
 
       - name: Build standalone-workspace extensions
         # extensions/color, formats, iban, sys-compat, list, excel are
