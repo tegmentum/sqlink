@@ -88,7 +88,7 @@ fn build_url(
 
     let (full_url, host_header) = if endpoint.path_style {
         let path = if bucket.is_empty() {
-            format!("{path_prefix}")
+            path_prefix.to_string()
         } else if key.is_empty() {
             format!("{path_prefix}/{bucket}")
         } else {
@@ -342,7 +342,7 @@ fn httpdate_parse(s: &str) -> Option<u64> {
     let y = if month <= 2 { year - 1 } else { year };
     let era = if y >= 0 { y / 400 } else { (y - 399) / 400 };
     let yoe = (y - era * 400) as u32;
-    let month_i: i32 = month as i32 + if month > 2 { -3 } else { 9 };
+    let month_i: i32 = month + if month > 2 { -3 } else { 9 };
     let doy = (153 * month_i as u32 + 2) / 5 + day - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days_since_epoch = (era * 146097 + doe as i32) - 719468;
@@ -368,13 +368,13 @@ fn parse_list_response(body: &str) -> Result<S3ListObjectsOutput, S3Error> {
 
     // Pull all <Contents>...</Contents> blocks.
     for block in xml_blocks(body, "Contents") {
-        let key = xml_tag(&block, "Key").unwrap_or_default();
-        let size: u64 = xml_tag(&block, "Size")
+        let key = xml_tag(block, "Key").unwrap_or_default();
+        let size: u64 = xml_tag(block, "Size")
             .and_then(|s| s.parse().ok())
             .unwrap_or(0);
-        let etag = xml_tag(&block, "ETag").map(|s| s.trim_matches('"').to_string());
-        let last_modified = xml_tag(&block, "LastModified").and_then(|s| iso8601_to_epoch(&s));
-        let storage_class = xml_tag(&block, "StorageClass");
+        let etag = xml_tag(block, "ETag").map(|s| s.trim_matches('"').to_string());
+        let last_modified = xml_tag(block, "LastModified").and_then(|s| iso8601_to_epoch(&s));
+        let storage_class = xml_tag(block, "StorageClass");
         objects.push(S3ObjectInfo {
             key,
             size,
@@ -384,7 +384,7 @@ fn parse_list_response(body: &str) -> Result<S3ListObjectsOutput, S3Error> {
         });
     }
     for block in xml_blocks(body, "CommonPrefixes") {
-        if let Some(p) = xml_tag(&block, "Prefix") {
+        if let Some(p) = xml_tag(block, "Prefix") {
             common_prefixes.push(p);
         }
     }
