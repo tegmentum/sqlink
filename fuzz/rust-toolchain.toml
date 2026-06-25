@@ -1,0 +1,11 @@
+# Scoped nightly override for this dir only. cargo-fuzz requires
+# `-Z sanitizer=fuzzer`, which is nightly-only. The workspace
+# itself stays pinned to stable (see ../rust-toolchain.toml).
+#
+# Cargo discovers rust-toolchain.toml by walking up from the
+# manifest dir, so anything under `fuzz/` uses nightly while
+# the rest of the workspace stays on stable.
+
+[toolchain]
+channel = "nightly"
+components = ["rustfmt"]
