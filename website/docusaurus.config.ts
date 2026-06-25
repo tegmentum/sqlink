@@ -20,11 +20,21 @@ const config: Config = {
   projectName: 'sqlink',
 
   onBrokenLinks: 'warn',
-  onBrokenMarkdownLinks: 'warn',
 
   i18n: {
     defaultLocale: 'en',
     locales: ['en'],
+  },
+
+  // PLAN docs use raw `<` for URLs + generics; parsing them as MDX
+  // fails (looks like a JSX tag). 'detect' parses .md as commonmark
+  // and .mdx as MDX  the concept pages keep MDX features; migrated
+  // PLAN files (all .md) stay strict markdown.
+  markdown: {
+    format: 'detect',
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
   },
 
   themes: [
