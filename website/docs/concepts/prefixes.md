@@ -69,8 +69,8 @@ prefix-expansion = "http://xmlns.com/foaf/0.1/"
 .prefix rename OLD NEW              -- change short alias (function identity unchanged)
 .prefix modify NAME DESC            -- update description
 .prefix delete NAME                 -- remove alias
-.prefix prefer NAME EXTENSION       -- pin bare-name dispatch on collision
-.prefix unprefer NAME               -- remove a pin
+.prefix prefer NAME EXTENSION       -- pin bare-name dispatch on collision (live)
+.prefix unprefer NAME               -- remove a pin (full revert next session)
 .prefix conflicts                   -- diagnose bare-name ambiguities
 .prefix verify                      -- registry summary
 ```
