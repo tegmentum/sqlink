@@ -540,8 +540,8 @@ fn changeset_concat(a: &[u8], b: &[u8]) -> Result<Vec<u8>> {
 }
 
 /// PLAN-bundles.md #446 launch-flag mode.
-#[derive(Debug, Clone, Copy)]
-enum BundleMode {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum BundleMode {
     /// `--bundle NAME`: exec baked binary for current target if
     /// present; otherwise fall back to dynamic-load.
     Auto,
@@ -550,6 +550,86 @@ enum BundleMode {
     /// `--bundle-load NAME`: skip any baked binary; dynamic-load
     /// every member from cas-cache.
     Load,
+}
+
+/// Pure-function parse result for the main sqlink argparse loop
+/// (the non-subcommand path beginning at line ~696). Side effects
+/// the original code performed (calling `usage()` on bad input,
+/// `std::env::set_var` for `--no-component-cache`) are replaced
+/// here by error returns and a flag the caller applies.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub(crate) struct ParsedMainArgs {
+    pub db_path: String,
+    pub cache_dir: Option<String>,
+    pub positional: Vec<String>,
+    pub bundle_request: Option<(String, BundleMode)>,
+    pub extra_guest_grants: Vec<String>,
+    /// `true` when `--no-component-cache` was seen. The caller is
+    /// responsible for translating into `SQLITE_WASM_DISABLE_COMPONENT_CACHE`.
+    pub disable_component_cache: bool,
+}
+
+/// Pure parser for the main argv loop. `args` is the full argv
+/// (element 0 is the program name). Errors describe the problem;
+/// production main passes them through `usage()`.
+pub(crate) fn parse_main_args(args: &[String]) -> Result<ParsedMainArgs> {
+    let mut out = ParsedMainArgs::default();
+    let mut after_dashes = false;
+    let mut i = 1;
+    while i < args.len() {
+        let a = &args[i];
+        if after_dashes {
+            out.positional.push(a.clone());
+        } else if a == "--" {
+            after_dashes = true;
+        } else if a == "--db" {
+            i += 1;
+            if i < args.len() {
+                out.db_path = args[i].clone();
+            } else {
+                return Err(anyhow!("--db expects a path"));
+            }
+        } else if a == "--cache-dir" {
+            i += 1;
+            if i < args.len() {
+                out.cache_dir = Some(args[i].clone());
+            } else {
+                return Err(anyhow!("--cache-dir expects a path"));
+            }
+        } else if a == "--bundle" || a == "--bundle-baked" || a == "--bundle-load" {
+            let mode = match a.as_str() {
+                "--bundle" => BundleMode::Auto,
+                "--bundle-baked" => BundleMode::Baked,
+                "--bundle-load" => BundleMode::Load,
+                _ => unreachable!(),
+            };
+            i += 1;
+            if i < args.len() {
+                out.bundle_request = Some((args[i].clone(), mode));
+            } else {
+                return Err(anyhow!("{a} expects a NAME or HASH-PREFIX"));
+            }
+        } else if a == "--grant" {
+            i += 1;
+            if i < args.len() {
+                for cap in args[i].split(',') {
+                    let cap = cap.trim().to_ascii_lowercase();
+                    if cap == "spawn-build" || cap == "spawn_build" {
+                        out.extra_guest_grants
+                            .push("--bundle-grant-spawn-build".to_string());
+                    }
+                }
+            } else {
+                return Err(anyhow!("--grant expects CAP[,CAP...]"));
+            }
+        } else if a == "--no-component-cache" {
+            out.disable_component_cache = true;
+        } else {
+            out.positional.push(a.clone());
+        }
+        i += 1;
+    }
+    Ok(out)
 }
 
 /// Resolve a bundle launch request against the cas-cache. For dynamic-
@@ -693,85 +773,21 @@ async fn main() -> Result<()> {
         return run_compose_subcommand(&args[2..]);
     }
 
-    let mut db_path = String::new();
-    let mut cache_dir: Option<String> = None;
-    let mut positional: Vec<String> = Vec::new();
-    let mut after_dashes = false;
-    // PLAN-bundles.md #446: launch a bundle. `--bundle NAME` is the
-    // auto path (exec baked binary if present for current target,
-    // else dynamic-load from cas-cache). `--bundle-baked` forces
-    // the baked path (errors if no binary). `--bundle-load` forces
-    // dynamic-load (skips any baked binary).
-    let mut bundle_request: Option<(String, BundleMode)> = None;
-    let mut extra_guest_grants: Vec<String> = Vec::new();
-    let mut i = 1;
-    while i < args.len() {
-        let a = &args[i];
-        if after_dashes {
-            positional.push(a.clone());
-        } else if a == "--" {
-            after_dashes = true;
-        } else if a == "--db" {
-            i += 1;
-            if i < args.len() {
-                db_path = args[i].clone();
-            } else {
-                eprintln!("--db expects a path");
-                usage();
-            }
-        } else if a == "--cache-dir" {
-            i += 1;
-            if i < args.len() {
-                cache_dir = Some(args[i].clone());
-            } else {
-                eprintln!("--cache-dir expects a path");
-                usage();
-            }
-        } else if a == "--bundle" || a == "--bundle-baked" || a == "--bundle-load" {
-            let mode = match a.as_str() {
-                "--bundle" => BundleMode::Auto,
-                "--bundle-baked" => BundleMode::Baked,
-                "--bundle-load" => BundleMode::Load,
-                _ => unreachable!(),
-            };
-            i += 1;
-            if i < args.len() {
-                bundle_request = Some((args[i].clone(), mode));
-            } else {
-                eprintln!("{a} expects a NAME or HASH-PREFIX");
-                usage();
-            }
-        } else if a == "--grant" {
-            // PLAN-bundles.md Gap C: `sqlink --grant CAP[,CAP...]`
-            // augments the grant set the cli applies to its auto-
-            // loaded embedded extensions. For v1 the only grant
-            // the cli's auto-load consults is `spawn-build` (which
-            // unlocks bundle-cli's `.bundle build` path). We
-            // translate that into the guest-side `--bundle-grant-
-            // spawn-build` flag that cli/src/lib.rs's
-            // embed_core_dotcmd reads. The flag is appended to
-            // guest_args after positional resolution below.
-            i += 1;
-            if i < args.len() {
-                for cap in args[i].split(',') {
-                    let cap = cap.trim().to_ascii_lowercase();
-                    if cap == "spawn-build" || cap == "spawn_build" {
-                        extra_guest_grants.push("--bundle-grant-spawn-build".to_string());
-                    }
-                }
-            } else {
-                eprintln!("--grant expects CAP[,CAP...]");
-                usage();
-            }
-        } else if a == "--no-component-cache" {
-            // PLAN-component-cache.md C3: cli flag plumbing.
-            // Set the env var the host's component_cache_disabled()
-            // reads — keeps the cache off for the whole process.
-            std::env::set_var("SQLITE_WASM_DISABLE_COMPONENT_CACHE", "1");
-        } else {
-            positional.push(a.clone());
+    let parsed = match parse_main_args(&args) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("{e}");
+            usage();
         }
-        i += 1;
+    };
+    let db_path = parsed.db_path;
+    let cache_dir = parsed.cache_dir;
+    let positional = parsed.positional;
+    let bundle_request = parsed.bundle_request;
+    let extra_guest_grants = parsed.extra_guest_grants;
+    if parsed.disable_component_cache {
+        // PLAN-component-cache.md C3: cli flag plumbing.
+        std::env::set_var("SQLITE_WASM_DISABLE_COMPONENT_CACHE", "1");
     }
     if positional.is_empty() {
         usage();
@@ -984,5 +1000,214 @@ async fn main() -> Result<()> {
     match result {
         Ok(()) => Ok(()),
         Err(()) => Err(anyhow!("component exited with error")),
+    }
+}
+
+#[cfg(test)]
+mod main_argparse_tests {
+    use super::{parse_main_args, BundleMode};
+
+    fn argv(rest: &[&str]) -> Vec<String> {
+        std::iter::once("sqlink")
+            .chain(rest.iter().copied())
+            .map(String::from)
+            .collect()
+    }
+
+    #[test]
+    fn empty_extras_produce_default_parsed() {
+        let p = parse_main_args(&argv(&[])).unwrap();
+        assert_eq!(p.db_path, "");
+        assert!(p.cache_dir.is_none());
+        assert!(p.positional.is_empty());
+        assert!(p.bundle_request.is_none());
+        assert!(p.extra_guest_grants.is_empty());
+        assert!(!p.disable_component_cache);
+    }
+
+    #[test]
+    fn db_flag_sets_db_path() {
+        let p = parse_main_args(&argv(&["--db", "/tmp/x.db"])).unwrap();
+        assert_eq!(p.db_path, "/tmp/x.db");
+    }
+
+    #[test]
+    fn db_flag_missing_value_errors() {
+        let e = parse_main_args(&argv(&["--db"])).unwrap_err();
+        assert!(e.to_string().contains("--db expects a path"));
+    }
+
+    #[test]
+    fn cache_dir_flag_sets_value() {
+        let p = parse_main_args(&argv(&["--cache-dir", "/tmp/cache"])).unwrap();
+        assert_eq!(p.cache_dir.as_deref(), Some("/tmp/cache"));
+    }
+
+    #[test]
+    fn cache_dir_missing_value_errors() {
+        let e = parse_main_args(&argv(&["--cache-dir"])).unwrap_err();
+        assert!(e.to_string().contains("--cache-dir expects a path"));
+    }
+
+    #[test]
+    fn bundle_auto_mode() {
+        let p = parse_main_args(&argv(&["--bundle", "myset"])).unwrap();
+        assert_eq!(p.bundle_request, Some(("myset".into(), BundleMode::Auto)));
+    }
+
+    #[test]
+    fn bundle_baked_mode() {
+        let p = parse_main_args(&argv(&["--bundle-baked", "myset"])).unwrap();
+        assert_eq!(p.bundle_request, Some(("myset".into(), BundleMode::Baked)));
+    }
+
+    #[test]
+    fn bundle_load_mode() {
+        let p = parse_main_args(&argv(&["--bundle-load", "myset"])).unwrap();
+        assert_eq!(p.bundle_request, Some(("myset".into(), BundleMode::Load)));
+    }
+
+    #[test]
+    fn bundle_hash_prefix_accepted_as_name() {
+        let p = parse_main_args(&argv(&["--bundle", "4c8e"])).unwrap();
+        assert_eq!(p.bundle_request, Some(("4c8e".into(), BundleMode::Auto)));
+    }
+
+    #[test]
+    fn bundle_missing_value_errors() {
+        let e = parse_main_args(&argv(&["--bundle"])).unwrap_err();
+        let s = e.to_string();
+        assert!(s.contains("--bundle"), "{s}");
+        assert!(s.contains("NAME or HASH-PREFIX"), "{s}");
+    }
+
+    #[test]
+    fn bundle_baked_missing_value_errors() {
+        let e = parse_main_args(&argv(&["--bundle-baked"])).unwrap_err();
+        assert!(e.to_string().contains("--bundle-baked"));
+    }
+
+    #[test]
+    fn multiple_bundle_flags_last_wins() {
+        let p = parse_main_args(&argv(&["--bundle", "first", "--bundle-load", "second"]))
+            .unwrap();
+        assert_eq!(p.bundle_request, Some(("second".into(), BundleMode::Load)));
+    }
+
+    #[test]
+    fn grant_spawn_build_kebab_translates_to_guest_flag() {
+        let p = parse_main_args(&argv(&["--grant", "spawn-build"])).unwrap();
+        assert_eq!(
+            p.extra_guest_grants,
+            vec!["--bundle-grant-spawn-build".to_string()]
+        );
+    }
+
+    #[test]
+    fn grant_spawn_build_snake_case_also_accepted() {
+        let p = parse_main_args(&argv(&["--grant", "spawn_build"])).unwrap();
+        assert_eq!(
+            p.extra_guest_grants,
+            vec!["--bundle-grant-spawn-build".to_string()]
+        );
+    }
+
+    #[test]
+    fn grant_multiple_caps_only_spawn_build_lifted() {
+        // v1 only lifts spawn-build; unknown caps are accepted
+        // but produce no guest flag (Gap C plumbing scope).
+        let p = parse_main_args(&argv(&["--grant", "spawn-build,bundles,filesystem"])).unwrap();
+        assert_eq!(
+            p.extra_guest_grants,
+            vec!["--bundle-grant-spawn-build".to_string()]
+        );
+    }
+
+    #[test]
+    fn grant_missing_value_errors() {
+        let e = parse_main_args(&argv(&["--grant"])).unwrap_err();
+        assert!(e.to_string().contains("--grant expects CAP"));
+    }
+
+    #[test]
+    fn grant_only_unknown_cap_no_guest_grants() {
+        let p = parse_main_args(&argv(&["--grant", "unknown-cap"])).unwrap();
+        assert!(p.extra_guest_grants.is_empty());
+    }
+
+    #[test]
+    fn no_component_cache_sets_flag() {
+        let p = parse_main_args(&argv(&["--no-component-cache"])).unwrap();
+        assert!(p.disable_component_cache);
+    }
+
+    #[test]
+    fn positional_args_collected_after_known_flags() {
+        let p = parse_main_args(&argv(&[
+            "--db",
+            "/tmp/x.db",
+            "cli.component.wasm",
+            "extra-arg",
+        ]))
+        .unwrap();
+        assert_eq!(p.db_path, "/tmp/x.db");
+        assert_eq!(
+            p.positional,
+            vec!["cli.component.wasm".to_string(), "extra-arg".to_string()]
+        );
+    }
+
+    #[test]
+    fn double_dash_starts_positional_collection() {
+        let p = parse_main_args(&argv(&[
+            "--db", "/tmp/x.db", "--", "--bundle", "myset",
+        ]))
+        .unwrap();
+        assert_eq!(p.db_path, "/tmp/x.db");
+        // After `--`, the --bundle flag is treated as positional,
+        // not a bundle request.
+        assert!(p.bundle_request.is_none());
+        assert_eq!(
+            p.positional,
+            vec!["--bundle".to_string(), "myset".to_string()]
+        );
+    }
+
+    #[test]
+    fn unknown_long_flag_becomes_positional() {
+        // Observed behavior: unrecognized args fall through to
+        // positional rather than erroring. The cli/embed flow
+        // surfaces errors for genuinely unknown component paths.
+        let p = parse_main_args(&argv(&["--bogus", "value"])).unwrap();
+        assert_eq!(
+            p.positional,
+            vec!["--bogus".to_string(), "value".to_string()]
+        );
+    }
+
+    #[test]
+    fn full_realistic_invocation() {
+        let p = parse_main_args(&argv(&[
+            "--db",
+            "/tmp/x.db",
+            "--cache-dir",
+            "/tmp/cache",
+            "--bundle-load",
+            "myset",
+            "--grant",
+            "spawn-build",
+            "--no-component-cache",
+            "cli.component.wasm",
+        ]))
+        .unwrap();
+        assert_eq!(p.db_path, "/tmp/x.db");
+        assert_eq!(p.cache_dir.as_deref(), Some("/tmp/cache"));
+        assert_eq!(p.bundle_request, Some(("myset".into(), BundleMode::Load)));
+        assert_eq!(
+            p.extra_guest_grants,
+            vec!["--bundle-grant-spawn-build".to_string()]
+        );
+        assert!(p.disable_component_cache);
+        assert_eq!(p.positional, vec!["cli.component.wasm".to_string()]);
     }
 }
