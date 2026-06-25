@@ -376,3 +376,131 @@ async fn main() -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn argv(args: &[&str]) -> Vec<String> {
+        std::iter::once("sqlink-native")
+            .chain(args.iter().copied())
+            .map(String::from)
+            .collect()
+    }
+
+    #[test]
+    fn empty_argv_returns_default() {
+        let r = parse_argv(&argv(&[])).unwrap();
+        match r {
+            ParseOutcome::Args(a) => assert_eq!(a, Args::default()),
+            _ => panic!("expected Args, got {r:?}"),
+        }
+    }
+
+    #[test]
+    fn dash_h_returns_help() {
+        let r = parse_argv(&argv(&["-h"])).unwrap();
+        assert!(matches!(r, ParseOutcome::Help));
+    }
+
+    #[test]
+    fn double_dash_help_returns_help() {
+        let r = parse_argv(&argv(&["--help"])).unwrap();
+        assert!(matches!(r, ParseOutcome::Help));
+    }
+
+    #[test]
+    fn db_flag_sets_db_path() {
+        let r = parse_argv(&argv(&["--db", "/tmp/x.db"])).unwrap();
+        match r {
+            ParseOutcome::Args(a) => assert_eq!(a.db_path, "/tmp/x.db"),
+            _ => panic!("expected Args"),
+        }
+    }
+
+    #[test]
+    fn db_flag_missing_value_errors() {
+        let e = parse_argv(&argv(&["--db"])).unwrap_err();
+        assert!(e.to_string().contains("--db expects a path"));
+    }
+
+    #[test]
+    fn dash_c_sets_inline_sql() {
+        let r = parse_argv(&argv(&["-c", "SELECT 1"])).unwrap();
+        match r {
+            ParseOutcome::Args(a) => assert_eq!(a.inline_sql.as_deref(), Some("SELECT 1")),
+            _ => panic!("expected Args"),
+        }
+    }
+
+    #[test]
+    fn dash_c_missing_value_errors() {
+        let e = parse_argv(&argv(&["-c"])).unwrap_err();
+        assert!(e.to_string().contains("-c expects a SQL string"));
+    }
+
+    #[test]
+    fn unknown_arg_errors() {
+        let e = parse_argv(&argv(&["--bogus"])).unwrap_err();
+        let s = e.to_string();
+        assert!(s.contains("unknown arg"), "{s}");
+        assert!(s.contains("--bogus"), "{s}");
+    }
+
+    #[test]
+    fn db_then_c_both_set() {
+        let r = parse_argv(&argv(&["--db", "/tmp/x.db", "-c", "SELECT 1"])).unwrap();
+        match r {
+            ParseOutcome::Args(a) => {
+                assert_eq!(a.db_path, "/tmp/x.db");
+                assert_eq!(a.inline_sql.as_deref(), Some("SELECT 1"));
+            }
+            _ => panic!("expected Args"),
+        }
+    }
+
+    #[test]
+    fn c_then_db_order_reversed_same_result() {
+        let r = parse_argv(&argv(&["-c", "SELECT 1", "--db", "/tmp/x.db"])).unwrap();
+        match r {
+            ParseOutcome::Args(a) => {
+                assert_eq!(a.db_path, "/tmp/x.db");
+                assert_eq!(a.inline_sql.as_deref(), Some("SELECT 1"));
+            }
+            _ => panic!("expected Args"),
+        }
+    }
+
+    #[test]
+    fn multiple_db_flags_last_wins() {
+        let r = parse_argv(&argv(&["--db", "/tmp/a.db", "--db", "/tmp/b.db"])).unwrap();
+        match r {
+            ParseOutcome::Args(a) => assert_eq!(a.db_path, "/tmp/b.db"),
+            _ => panic!("expected Args"),
+        }
+    }
+
+    #[test]
+    fn multiple_c_flags_last_wins() {
+        let r = parse_argv(&argv(&["-c", "SELECT 1", "-c", "SELECT 2"])).unwrap();
+        match r {
+            ParseOutcome::Args(a) => assert_eq!(a.inline_sql.as_deref(), Some("SELECT 2")),
+            _ => panic!("expected Args"),
+        }
+    }
+
+    #[test]
+    fn empty_db_path_value_accepted() {
+        let r = parse_argv(&argv(&["--db", ""])).unwrap();
+        match r {
+            ParseOutcome::Args(a) => assert_eq!(a.db_path, ""),
+            _ => panic!("expected Args"),
+        }
+    }
+
+    #[test]
+    fn unknown_arg_after_valid_flag_still_errors() {
+        let e = parse_argv(&argv(&["--db", "/tmp/x.db", "--bogus"])).unwrap_err();
+        assert!(e.to_string().contains("unknown arg"));
+    }
+}
