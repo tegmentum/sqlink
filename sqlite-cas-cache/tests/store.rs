@@ -224,3 +224,92 @@ fn config_round_trips_via_set_config() {
         "test premise: default should differ from 42"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Hostile filesystem: read-only parent dir.
+//
+// open_external creates the parent dir if missing, then sqlite opens
+// the file. On a read-only parent both create_dir_all-already-exists
+// AND the sqlite open will fail with EACCES/permission-denied; the
+// store must surface a graceful error rather than panic.
+//
+// permissions_ci_skip detects environments where chmod is a no-op
+// (some container setups strip permission bits). Without the skip,
+// the test would "pass" trivially because the chmod didn't actually
+// restrict anything.
+// ---------------------------------------------------------------------------
+
+#[cfg(unix)]
+mod hostile_fs {
+    use std::fs;
+    use std::os::unix::fs::PermissionsExt;
+    use std::path::PathBuf;
+
+    /// Returns true when the current runner ignores chmod (so the
+    /// EACCES test would yield a meaningless pass). Heuristic: drop
+    /// a tempdir to 0o000, attempt to write inside, see whether the
+    /// write succeeded.
+    fn permissions_ci_skip() -> bool {
+        let dir = match tempfile::tempdir() {
+            Ok(d) => d,
+            Err(_) => return true,
+        };
+        if fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o000)).is_err() {
+            return true;
+        }
+        let probe = dir.path().join("probe.tmp");
+        let wrote_anyway = fs::write(&probe, b"x").is_ok();
+        // Best-effort restore so TempDir's drop can clean up.
+        let _ = fs::set_permissions(dir.path(), fs::Permissions::from_mode(0o700));
+        wrote_anyway
+    }
+
+    #[test]
+    fn open_external_eacces_returns_error_not_panic() {
+        if permissions_ci_skip() {
+            eprintln!(
+                "hostile_fs::open_external_eacces_returns_error_not_panic: SKIP (chmod ignored)"
+            );
+            return;
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let parent: PathBuf = dir.path().join("locked");
+        fs::create_dir(&parent).unwrap();
+        // r-xr-xr-x: directory is traversable + listable but not writable.
+        // sqlite needs to create cas.sqlite + a journal file inside  EACCES.
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o555)).unwrap();
+
+        let cas_path = parent.join("cas.sqlite");
+        let result = sqlite_cas_cache::SqliteCasStore::open_external(&cas_path);
+
+        // Best-effort restore so TempDir can clean up.
+        let _ = fs::set_permissions(&parent, fs::Permissions::from_mode(0o700));
+
+        // expect_err requires Debug on the Ok variant; SqliteCasStore
+        // doesn't implement it. Match instead.
+        let err = match result {
+            Ok(_) => panic!("open_external against ro-parent should error, not succeed"),
+            Err(e) => e,
+        };
+        let msg = format!("{err:#}");
+        // sqlite collapses EACCES from the underlying open() into its
+        // generic "unable to open database file" message, so we accept
+        // either the explicit permission needles OR the sqlite phrasing.
+        let needles = [
+            "permission",
+            "Permission",
+            "denied",
+            "Denied",
+            "EACCES",
+            "read-only",
+            "Read-only",
+            "unable to open",
+            "unable to open database",
+        ];
+        let matched = needles.iter().any(|n| msg.contains(n));
+        assert!(
+            matched,
+            "expected permission-related error message, got: {msg}"
+        );
+    }
+}
