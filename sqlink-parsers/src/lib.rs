@@ -18,3 +18,6 @@ extern crate std;
 
 #[cfg(feature = "std")]
 pub mod load_args;
+
+#[cfg(feature = "std")]
+pub mod spawn_build_validation;

@@ -18,6 +18,11 @@ path = "src/lib.rs"
 # shared with sqlink-loader/runtimes/{wasmtime,wamr}.
 sqlite-extension-policy = { path = "../sqlite-loader-wit" }
 
+# Pure-fn parsers + spawn-build validators. Extracted so fuzz
+# harnesses can import the source-of-truth without the host's
+# tokio/wasmtime dep graph.
+sqlink-parsers = { path = "../sqlink-parsers" }
+
 anyhow = "1.0"
 wasmtime = { version = "45.0.1", features = [
     "component-model",
