@@ -99,6 +99,15 @@ pub struct SqliteCasStore {
     config: StoreConfig,
 }
 
+// SAFETY: The cached Statements hold raw `*mut sqlite3_stmt` pointers
+// which aren't `Send` by default. SqliteCasStore is `Send` because the
+// host enforces single-threaded access  the cas-cache lives inside
+// LoadedState, which wasmtime's async runtime may move between worker
+// threads but never accesses concurrently. The cache's `RefCell` further
+// panics on any nested access. Sync is NOT implemented (and shouldn't be:
+// concurrent reads would race on the cache's bind/step state).
+unsafe impl Send for SqliteCasStore {}
+
 impl SqliteCasStore {
     /// Open the external-mode store at `path`. Creates the file
     /// and installs the schema on first use.
