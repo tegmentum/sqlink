@@ -244,8 +244,8 @@ mod wasm_export {
                     Capability::S3,
                 ],
                 optional_capabilities: alloc::vec![],
-                preferred_prefix: None,
-                prefix_expansion: None,
+                preferred_prefix: Some("hookprobe".into()),
+                prefix_expansion: Some("com.tegmentum.sqlink.ext.hookprobe".into()),
             }
         }
     }
