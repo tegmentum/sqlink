@@ -107,22 +107,53 @@ jobs:
             "https://github.com/bytecodealliance/wasmtime/releases/download/v25.0.0/wasi_snapshot_preview1.reactor.wasm" \
             -o "$HOME/.cache/xtran/wasi_snapshot_preview1.reactor.wasm"
 
-      - name: Build wasm-side workspace members
-        # Workspace contains both native crates (host, sqlite-cas-cache,
-        # sqlink-native, sqlink-httpd, the test drivers) and wasm crates
-        # (cli, sqlink-loader, the in-workspace extension crates).
-        # --target wasm32-wasip2 with --exclude on every native crate
-        # builds only the wasm side. postgis-bridge is excluded from
-        # the workspace-level build because its postgis-wasm import
-        # path needs a separate compose step.
+      - name: Build standalone-workspace extensions (pre-cli-include_bytes)
+        # cli/src/lib.rs `include_bytes!`s the cli-family extensions'
+        # .component.wasm files at compile time. They must be built +
+        # encoded BEFORE sqlite-cli compiles. Each has its own
+        # [workspace] root  build per-directory.
+        #
+        # cli-family (12) embedded by sqlite-cli + other standalone
+        # extensions (color/formats/iban/sys-compat/list/excel)
+        # picked up by encode-extension-components.sh.
         run: |
-          # Explicit `-p` list (not `--workspace --exclude`). Cargo's
-          # workspace resolver compiles shared transitive deps even
-          # when their direct dependents are excluded  host's tokio
-          # ends up compiled for wasm despite host being excluded,
-          # tripping tokio's `Only features sync,macros,io-util,rt,
-          # time are supported on wasm` compile_error. Naming the
-          # wasm-side packages directly avoids the shared-resolve.
+          for d in \
+              extensions/archive-cli extensions/bundle-cli \
+              extensions/core-dotcmd extensions/prefix-cli \
+              extensions/serialize-cli extensions/session-cli \
+              extensions/sha3sum-cli extensions/sqlink-meta-cli \
+              extensions/sqlite-utils-data extensions/sqlite-utils-fts \
+              extensions/sqlite-utils-maint extensions/sqlite-utils-schema \
+              extensions/color extensions/formats extensions/iban \
+              extensions/sys-compat extensions/list extensions/excel; do
+            if [ -f "$d/Cargo.toml" ]; then
+              echo "::group::build $d"
+              (cd "$d" && cargo build --target wasm32-wasip2 --release)
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Encode .wasm -> .component.wasm (pre-cli)
+        # cli-family .component.wasm files must exist BEFORE building
+        # sqlite-cli. encode-extension-components.sh is idempotent;
+        # this run picks up the standalone-extension .wasm files just
+        # produced.
+        run: bash scripts/encode-extension-components.sh
+
+      - name: Build wasm-side workspace members
+        # Explicit `-p` list (not `--workspace --exclude`). Cargo's
+        # workspace resolver compiles shared transitive deps even
+        # when their direct dependents are excluded  host's tokio
+        # ends up compiled for wasm despite host being excluded,
+        # tripping tokio's `Only features sync,macros,io-util,rt,
+        # time are supported on wasm` compile_error. Naming the
+        # wasm-side packages directly avoids the shared-resolve.
+        #
+        # Runs AFTER the standalone extensions are built + encoded
+        # because sqlite-cli's `include_bytes!` needs the
+        # .component.wasm files from extensions/<X>-cli/target/
+        # wasm32-wasip2/release/.
+        run: |
           cargo build --target wasm32-wasip2 --release \
             -p sqlite-cli \
             -p sqlink-cli-argv \
@@ -135,27 +166,11 @@ jobs:
             -p regexp-extension \
             -p stats-extension
 
-      - name: Build standalone-workspace extensions
-        # extensions/color, formats, iban, sys-compat, list, excel are
-        # NOT workspace members (each has its own [workspace] root).
-        # The encode script picks up .wasm under their own target/ dirs.
-        # Build them explicitly so the encode step has something to
-        # encode.
-        run: |
-          for d in extensions/color extensions/formats extensions/iban \
-                   extensions/sys-compat extensions/list extensions/excel; do
-            if [ -f "$d/Cargo.toml" ]; then
-              echo "::group::build $d"
-              (cd "$d" && cargo build --target wasm32-wasip2 --release)
-              echo "::endgroup::"
-            fi
-          done
-
-      - name: Encode .wasm -> .component.wasm
-        # Idempotent. Walks target/wasm32-wasip2/release and the
-        # per-extension target/ dirs the prior step produced;
-        # wraps each .wasm via wasm-tools component new (with the
-        # wasi-p1 adapter fallback for reactor-shape artifacts).
+      - name: Encode .wasm -> .component.wasm (post-cli)
+        # Second pass to encode any in-workspace extension artifacts
+        # the prior step produced (json1, csv, math, crypto, uuid,
+        # regexp, stats) plus the sqlite-cli component itself.
+        # Idempotent w.r.t. the earlier pass.
         run: bash scripts/encode-extension-components.sh
 
       - name: Run extension-smoke (native driver)
