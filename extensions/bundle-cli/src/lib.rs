@@ -239,27 +239,12 @@ underlying set-hash row.";
     }
 
     fn sub_save(args: &[&str]) -> InvokeResult {
-        let mut name: Option<String> = None;
-        let mut no_build = false;
-        for a in args {
-            match *a {
-                "--no-build" => no_build = true,
-                "--name" => {} // alias for next positional; swallow
-                other if other.starts_with("--") => {
-                    return err(format!(".bundle save: unknown flag {other:?}"));
-                }
-                other => {
-                    if name.is_some() {
-                        return err(".bundle save: only one NAME positional accepted".into());
-                    }
-                    name = Some(other.to_string());
-                }
-            }
-        }
-        let name = match name {
-            Some(n) => n,
-            None => return err(".bundle save: NAME required (usage: .bundle save NAME [--no-build])".into()),
+        let parsed = match sqlink_parsers::bundle_cli_argv::parse_save(args) {
+            Ok(p) => p,
+            Err(e) => return err(e),
         };
+        let name = parsed.name;
+        let no_build = parsed.no_build;
         // Filter out the auto-loaded cli-family extensions  these
         // are baked into every sqlink-cli build by embed_core_dotcmd
         // and don't have `embed-*` feature flags in cli/Cargo.toml.
@@ -530,34 +515,12 @@ underlying set-hash row.";
     }
 
     fn sub_build(args: &[&str]) -> InvokeResult {
-        let mut name: Option<String> = None;
-        let mut target_override: Option<String> = None;
-        let mut i = 0;
-        while i < args.len() {
-            match args[i] {
-                "--target" => {
-                    i += 1;
-                    if i >= args.len() {
-                        return err(".bundle build: --target expects a triple".into());
-                    }
-                    target_override = Some(args[i].to_string());
-                }
-                other if other.starts_with("--") => {
-                    return err(format!(".bundle build: unknown flag {other:?}"));
-                }
-                other => {
-                    if name.is_some() {
-                        return err(".bundle build: only one NAME positional accepted".into());
-                    }
-                    name = Some(other.to_string());
-                }
-            }
-            i += 1;
-        }
-        let name = match name {
-            Some(n) => n,
-            None => return err(".bundle build: NAME required (usage: .bundle build NAME [--target TRIPLE])".into()),
+        let parsed = match sqlink_parsers::bundle_cli_argv::parse_build(args) {
+            Ok(p) => p,
+            Err(e) => return err(e),
         };
+        let name = parsed.name;
+        let target_override = parsed.target;
         let summary = match bundles::bundle_find_by_name(&name) {
             Ok(Some(s)) => s,
             Ok(None) => {
@@ -736,39 +699,21 @@ underlying set-hash row.";
     }
 
     fn sub_gc(args: &[&str]) -> InvokeResult {
-        let mut keep_last: Option<u32> = None;
-        let mut older_than_secs: Option<u64> = None;
-        let mut i = 0;
-        while i < args.len() {
-            match args[i] {
-                "--keep" => {
-                    i += 1;
-                    if i >= args.len() {
-                        return err(".bundle gc: --keep expects a count".into());
-                    }
-                    keep_last = match args[i].parse() {
-                        Ok(n) => Some(n),
-                        Err(_) => return err(format!(".bundle gc: --keep: not an integer: {:?}", args[i])),
-                    };
-                }
-                "--older-than" => {
-                    i += 1;
-                    if i >= args.len() {
-                        return err(".bundle gc: --older-than expects a duration (e.g. 30d, 12h, 86400s)".into());
-                    }
-                    older_than_secs = match parse_duration(args[i]) {
-                        Ok(n) => Some(n),
-                        Err(e) => return err(format!(".bundle gc: --older-than: {e}")),
-                    };
-                }
-                other => return err(format!(".bundle gc: unknown flag {other:?}")),
-            }
-            i += 1;
-        }
-        if keep_last.is_none() && older_than_secs.is_none() {
-            return err(".bundle gc: pass --keep N or --older-than DURATION (e.g. 30d)".into());
-        }
-        let policy = bundles::GcPolicy { keep_last, older_than_secs };
+        let parsed = match sqlink_parsers::bundle_cli_argv::parse_gc(args) {
+            Ok(p) => p,
+            Err(e) => return err(e),
+        };
+        let older_than_secs = match parsed.older_than {
+            Some(s) => match parse_duration(&s) {
+                Ok(n) => Some(n),
+                Err(e) => return err(format!(".bundle gc: --older-than: {e}")),
+            },
+            None => None,
+        };
+        let policy = bundles::GcPolicy {
+            keep_last: parsed.keep_last,
+            older_than_secs,
+        };
         let dropped = match bundles::bundle_gc(policy) {
             Ok(d) => d,
             Err(e) => return err(format!(".bundle gc: {}", e.message)),

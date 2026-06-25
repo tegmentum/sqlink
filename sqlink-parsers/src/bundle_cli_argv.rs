@@ -11,9 +11,9 @@
 //! extraction: bundle-cli imports from sqlink-parsers + the fuzz
 //! crate imports from sqlink-parsers, source-of-truth in one place.
 
-#![cfg(feature = "std")]
-
-extern crate std;
+// no_std + alloc only: bundle-cli runs on wasm32-wasip2 with
+// default-features=false on sqlink-parsers, so this module can't
+// require std. format! / String / ToString come from alloc.
 
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -93,17 +93,23 @@ pub fn parse_build(args: &[&str]) -> Result<BuildArgs, String> {
     Ok(BuildArgs { name, target })
 }
 
-/// Parsed shape of `.bundle gc [--keep N | --older-than DURATION]`.
+/// Parsed shape of `.bundle gc [--keep N] [--older-than DURATION]`.
+/// Both knobs may be set; the caller's policy decides ordering.
+/// At least one knob is required.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GcArgs {
-    pub keep: Option<u32>,
+    pub keep_last: Option<u32>,
+    /// Raw duration string (e.g. `30d`, `12h`). Caller parses via
+    /// `sqlink_parsers::duration::parse_duration` to apply policy.
+    /// Kept as a String here so this module stays no-std-compatible
+    /// across both consumers (the duration crate is no_std + alloc).
     pub older_than: Option<String>,
 }
 
-/// Parse argv for `.bundle gc`. Mutually-exclusive `--keep N` /
-/// `--older-than DURATION`; neither = full noop (caller decides).
+/// Parse argv for `.bundle gc`. `--keep N` / `--older-than DURATION`
+/// may be combined; at least one is required.
 pub fn parse_gc(args: &[&str]) -> Result<GcArgs, String> {
-    let mut keep: Option<u32> = None;
+    let mut keep_last: Option<u32> = None;
     let mut older_than: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
@@ -112,36 +118,40 @@ pub fn parse_gc(args: &[&str]) -> Result<GcArgs, String> {
             "--keep" => {
                 i += 1;
                 if i >= args.len() {
-                    return Err(".bundle gc: --keep requires N value".to_string());
+                    return Err(".bundle gc: --keep expects a count".to_string());
                 }
-                keep = Some(
-                    args[i]
-                        .parse::<u32>()
-                        .map_err(|e| format!(".bundle gc: --keep value not u32: {e}"))?,
-                );
+                keep_last = match args[i].parse::<u32>() {
+                    Ok(n) => Some(n),
+                    Err(_) => {
+                        return Err(format!(
+                            ".bundle gc: --keep: not an integer: {:?}",
+                            args[i]
+                        ))
+                    }
+                };
             }
             "--older-than" => {
                 i += 1;
                 if i >= args.len() {
-                    return Err(".bundle gc: --older-than requires DURATION value".to_string());
+                    return Err(
+                        ".bundle gc: --older-than expects a duration (e.g. 30d, 12h, 86400s)"
+                            .to_string(),
+                    );
                 }
                 older_than = Some(args[i].to_string());
             }
-            other if other.starts_with("--") => {
-                return Err(format!(".bundle gc: unknown flag {other:?}"));
-            }
             other => {
-                return Err(format!(
-                    ".bundle gc: unexpected positional {other:?} (expected --keep / --older-than)"
-                ));
+                return Err(format!(".bundle gc: unknown flag {other:?}"));
             }
         }
         i += 1;
     }
-    if keep.is_some() && older_than.is_some() {
-        return Err(".bundle gc: --keep + --older-than are mutually exclusive".to_string());
+    if keep_last.is_none() && older_than.is_none() {
+        return Err(
+            ".bundle gc: pass --keep N or --older-than DURATION (e.g. 30d)".to_string(),
+        );
     }
-    Ok(GcArgs { keep, older_than })
+    Ok(GcArgs { keep_last, older_than })
 }
 
 #[cfg(test)]
@@ -216,7 +226,7 @@ mod tests {
     fn gc_keep_value() {
         assert_eq!(
             parse_gc(&["--keep", "10"]),
-            Ok(GcArgs { keep: Some(10), older_than: None })
+            Ok(GcArgs { keep_last: Some(10), older_than: None })
         );
     }
 
@@ -224,13 +234,21 @@ mod tests {
     fn gc_older_than_value() {
         assert_eq!(
             parse_gc(&["--older-than", "30d"]),
-            Ok(GcArgs { keep: None, older_than: Some("30d".into()) })
+            Ok(GcArgs { keep_last: None, older_than: Some("30d".into()) })
         );
     }
 
     #[test]
-    fn gc_keep_and_older_than_mutually_exclusive() {
-        assert!(parse_gc(&["--keep", "10", "--older-than", "30d"]).is_err());
+    fn gc_keep_and_older_than_combine() {
+        assert_eq!(
+            parse_gc(&["--keep", "10", "--older-than", "30d"]),
+            Ok(GcArgs { keep_last: Some(10), older_than: Some("30d".into()) })
+        );
+    }
+
+    #[test]
+    fn gc_requires_at_least_one_knob() {
+        assert!(parse_gc(&[]).is_err());
     }
 
     #[test]
