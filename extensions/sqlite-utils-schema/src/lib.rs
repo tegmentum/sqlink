@@ -138,8 +138,8 @@ mod wasm_export {
                 wal_hook_id: 0,
                 declared_capabilities: vec![],
                 optional_capabilities: vec![],
-                preferred_prefix: None,
-                prefix_expansion: None,
+                preferred_prefix: Some("sqlite_schema".into()),
+                prefix_expansion: Some("org.sqlite.utils.schema".into()),
             }
         }
     }

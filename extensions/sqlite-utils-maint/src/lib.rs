@@ -158,8 +158,8 @@ mod wasm_export {
                 wal_hook_id: 0,
                 declared_capabilities: alloc::vec![],
                 optional_capabilities: alloc::vec![],
-                preferred_prefix: None,
-                prefix_expansion: None,
+                preferred_prefix: Some("sqlite_maint".into()),
+                prefix_expansion: Some("org.sqlite.utils.maint".into()),
             }
         }
     }
