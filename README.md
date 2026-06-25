@@ -394,7 +394,7 @@ implementation; operators can override via `.prefix prefer`.
 .prefix rename foaf bar            # change alias; identity preserved
 .prefix modify foaf "Updated desc"
 .prefix delete foaf                # remove alias (warns on orphan)
-.prefix prefer concat my-ext       # pin bare-name dispatch (next session)
+.prefix prefer concat my-ext       # pin bare-name dispatch (live)
 .prefix unprefer concat
 .prefix conflicts                  # bare-name ambiguities diagnostic
 .prefix verify                     # registry summary + orphan check
