@@ -1,0 +1,56 @@
+name: mutants-nightly
+
+on:
+  schedule:
+    # Mon-Fri 07:00 UTC. Single-crate matrix budget per night so
+    # the workflow finishes in a few hours per crate.
+    - cron: '0 7 * * 1-5'
+  workflow_dispatch: {}
+
+concurrency:
+  group: mutants-nightly-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mutate:
+    name: mutants/${{ matrix.crate }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - sqlite-cas-cache
+          - sqlite-extension-policy
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: install cargo-mutants
+        run: cargo install --locked cargo-mutants
+
+      - name: cache target dir
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: mutants-${{ matrix.crate }}
+
+      - name: run mutants for ${{ matrix.crate }}
+        run: |
+          cargo mutants \
+            --package ${{ matrix.crate }} \
+            --in-place \
+            --no-shuffle \
+            --output mutants-out \
+            --jobs 1
+
+      - name: upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutants-${{ matrix.crate }}
+          path: mutants-out
+          if-no-files-found: warn
