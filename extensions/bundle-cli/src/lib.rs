@@ -230,8 +230,10 @@ underlying set-hash row.";
             "delete" => sub_delete(&rest),
             "build" => sub_build(&rest),
             "gc" => sub_gc(&rest),
+            "alias" => sub_alias(&rest),
+            "unalias" => sub_unalias(&rest),
             other => err(format!(
-                ".bundle: unknown subcommand {other:?} (valid: save, list, show, delete, build, gc)"
+                ".bundle: unknown subcommand {other:?} (valid: save, list, show, delete, build, gc, alias, unalias)"
             )),
         }
     }
@@ -369,12 +371,20 @@ underlying set-hash row.";
             return ok();
         }
         let mut out = String::new();
-        out.push_str("NAME                 SET-HASH         MEMBERS  BINARIES  LAST-USED\n");
+        out.push_str("NAMES                SET-HASH         MEMBERS  BINARIES  LAST-USED\n");
         for s in &rows {
-            let name = s.name.clone().unwrap_or_else(|| "(unnamed)".to_string());
+            // v1.1 multi-alias: prefer the alias table; if no aliases
+            // are bound yet fall back to the legacy display-name
+            // column (which is what bundle_save originally inserted).
+            let aliases = bundles::bundle_aliases(s.id).unwrap_or_default();
+            let names_cell = if !aliases.is_empty() {
+                aliases.join(",")
+            } else {
+                s.name.clone().unwrap_or_else(|| "(unnamed)".to_string())
+            };
             out.push_str(&format!(
                 "{:<20} {:<16} {:>7}  {:>8}  {}\n",
-                truncate(&name, 20),
+                truncate(&names_cell, 20),
                 &s.set_hash[..16.min(s.set_hash.len())],
                 s.member_count,
                 s.binary_count,
@@ -383,6 +393,57 @@ underlying set-hash row.";
         }
         cli_stdout::write(&out);
         ok()
+    }
+
+    fn sub_alias(args: &[&str]) -> InvokeResult {
+        if args.len() != 2 {
+            return err(".bundle alias: usage `.bundle alias OLD NEW`".into());
+        }
+        let old = args[0];
+        let new = args[1];
+        let summary = match bundles::bundle_find_by_name(old) {
+            Ok(Some(s)) => s,
+            Ok(None) => {
+                return err(format!(
+                    ".bundle alias: bundle {:?} not found",
+                    sanitize_for_terminal(old)
+                ))
+            }
+            Err(e) => return err(format!(".bundle alias: {}", e.message)),
+        };
+        match bundles::bundle_add_alias(summary.id, new) {
+            Ok(()) => {
+                cli_stdout::write(&format!(
+                    "bundle id={} now aliased as '{}' (in addition to '{}')\n",
+                    summary.id,
+                    sanitize_for_terminal(new),
+                    sanitize_for_terminal(old),
+                ));
+                ok()
+            }
+            Err(e) => err(format!(".bundle alias: {}", e.message)),
+        }
+    }
+
+    fn sub_unalias(args: &[&str]) -> InvokeResult {
+        let alias = match args.first() {
+            Some(a) => *a,
+            None => return err(".bundle unalias: NAME required".into()),
+        };
+        match bundles::bundle_remove_alias(alias) {
+            Ok(true) => {
+                cli_stdout::write(&format!(
+                    "alias '{}' removed (bundle preserved; other aliases unchanged)\n",
+                    sanitize_for_terminal(alias),
+                ));
+                ok()
+            }
+            Ok(false) => err(format!(
+                ".bundle unalias: alias {:?} not found",
+                sanitize_for_terminal(alias)
+            )),
+            Err(e) => err(format!(".bundle unalias: {}", e.message)),
+        }
     }
 
     fn sub_show(args: &[&str]) -> InvokeResult {
