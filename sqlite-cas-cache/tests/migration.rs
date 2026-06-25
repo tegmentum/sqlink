@@ -155,15 +155,13 @@ fn internal_to_external_migration_flow() {
 // (the v1 -> v2 and v2 -> v3 match arms in the install_schema loop)
 // need fixtures that exercise the upgrade SQL.
 //
-// The current `install_schema` impl has a latent bug: INSTALL_SCHEMA's
-// `CREATE UNIQUE INDEX __cas_artifact_sha256 ON __cas_artifact(sha256)`
-// references the v2-introduced `sha256` column, which doesn't exist on
-// a v1 db. The install pipeline therefore can't open a v1 db end-to-end
-// today  the CREATE INDEX errors before the migration loop reads
-// schema_version. open_external_v1_currently_errors documents this so
-// it doesn't silently regress; the in-isolation migration SQL tests
-// cover the upgrade DDL itself and stay valid after a future
-// install_schema fix that flips the order to migrations-first.
+// `install_schema` now bootstraps `__cas_meta`, walks the migration
+// ladder for any pre-current version it finds, then runs INSTALL_SCHEMA
+// idempotently. The full pipeline can open a legacy v1 db on disk and
+// migrate it cleanly through v2 + v3 to the current SCHEMA_VERSION
+// (v4)  open_external_v1_migrates_to_current covers that round-trip;
+// the in-isolation MIGRATE_VN_TO_VN+1 tests stay valid as targeted
+// coverage of each upgrade arm.
 // ---------------------------------------------------------------------------
 
 const V1_DDL: &str = "\
@@ -427,15 +425,17 @@ fn migration_v2_to_v3_preserves_v2_data() {
 }
 
 #[test]
-#[ignore = "documents a real install_schema bug: INSTALL_SCHEMA's CREATE UNIQUE INDEX on sha256 fires before migrations, so v1 open_external errors with 'no such column: sha256'. Fix is to apply migrations BEFORE running INSTALL_SCHEMA. Tracked under PLAN-followups.md."]
-fn open_external_v1_currently_errors_aspirational() {
+fn open_external_v1_migrates_to_current() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("legacy.sqlite");
     let path_str = path.to_str().unwrap().to_string();
     legacy_v1_db_fixture(&path_str);
 
-    // ASPIRATIONAL: after the install_schema bug is fixed,
-    // this should succeed and migrate v1 -> v2 -> v3.
+    // SqliteCasStore::open_external on a v1 db now bootstraps
+    // __cas_meta, reads schema_version='1', walks
+    // MIGRATE_V1_TO_V2 + MIGRATE_V2_TO_V3 + MIGRATE_V3_TO_V4 in
+    // order, then runs INSTALL_SCHEMA idempotently. Round-trip
+    // coverage of the previously-latent v1 path.
     let _store = SqliteCasStore::open_external(&path).unwrap();
-    assert_eq!(schema_version(&path_str), "3");
+    assert_eq!(schema_version(&path_str), "4");
 }
