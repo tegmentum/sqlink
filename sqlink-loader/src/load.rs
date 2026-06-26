@@ -5,6 +5,24 @@
 //! `sqlink_load_ext(name, path)` route through. Same dispatch in
 //! both: resolve a path  call `host.load_extension`  walk the
 //! manifest  pApi-register scalars + aggregates on `db`.
+//!
+//! ## wit-value path (PLAN-wit-value-extension.md Phase B)
+//!
+//! The loader does NOT maintain its own TypedValueRegistry; it
+//! inherits the full Phase B path through `host.load_extension`
+//! (which drains `manifest.typed-values` into `host.typed_values`)
+//! and `host.dispatch_scalar` (which carries the WitValue arm
+//! through wit-bindgen-generated `call_call` directly to the
+//! bridge's wasm-side decoder). The loader's trampoline in
+//! `register.rs` calls `host.dispatch_scalar` for every SQL
+//! invocation; the bridge component does the canonical-CBOR ->
+//! WIT record marshaling on its own side of the wasm boundary
+//! using the decoder import declared in the manifest. The
+//! value.rs SQLite-result side already surfaces the canonical-
+//! CBOR bytes as BLOB so a SELECT returning a wit-value lands
+//! the wire form in the result column (the bridge's *next*
+//! invocation re-recovers the typed identity from the type-id
+//! in the registry — same as the host-driven path).
 
 use std::path::PathBuf;
 use std::sync::Arc;
