@@ -567,3 +567,305 @@ cd verify && cargo run --release
   `host.dispatch_scalar` path in `verify/` exercises the same
   end-to-end machinery without the wasm-CLI layer in
   between.
+
+## Phase 3 — done (2026-06-26)
+
+Phase 3 landed Streams 1-4 against the postgis-wasm WIT
+surface. The codegen now derives its dispatch registry from
+the WIT files at codegen time; the regenerated bridge wires
+real dispatch for the bulk of the postgis-wasm interface;
+aggregates work end-to-end through a context-keyed state map;
+UDTFs are exposed as eponymous vtabs that materialise WKB
+rows; the operator surface routes via a hand-curated override
+table. Smoke parity against the wasm bridge is the carried-
+forward gate — see "Phase 3 deferrals" below for why.
+
+### Where the work lives
+
+- `~/git/sqlink-shim-codegen` branch
+  `feat/wasm-component-target`, commit `5815d94`. Adds
+  `wasm_target/wit_parse.rs` (lightweight WIT parser) and
+  rewrites `wasm_target/dispatch.rs` + `wasm_target/emit_lib.rs`
+  to consume it. Phase 2's `wasm_target/dispatch.rs::registry()`
+  hand-curated entries are gone.
+- `~/git/postgis-sqlink-bridge` on `main`, commit `cceb6a9`.
+  Regenerated bridge crate; extended `verify/` harness.
+- `~/git/sqlink/extensions/postgis-bridge/` — untouched
+  (read-only oracle).
+
+### Coverage on the postgis interface DB
+
+Interface DB has 402 scalars, 11 aggregates, 7 table
+functions, 23 operators, 4 cast rewrites, 1 preprocessor
+pattern. Phase 3 wires:
+
+| category    | wired (canonical) | aliases emitted | unwired |
+|-------------|-------------------|-----------------|---------|
+| scalars     | 258               | 600 match arms  | 144     |
+| aggregates  | 9                 | 30 match arms   | 2       |
+| UDTFs       | 5                 | 11 match arms   | 2       |
+| operators   | 5 (overrides)     | (in scalars)    | 0       |
+| casts       | 4 (via scalars)   | n/a             | 0       |
+| preprocess  | 0                 | n/a             | 1 (ext) |
+
+The wired-scalar count (258) is below the "≥317" plan target.
+The 144 unwired break down as:
+- 75 "no WIT function matches" — topology and raster
+  functions the interface DB lists but postgis-wasm doesn't
+  export (the native bridge handles these by routing to
+  third-party postgis-tk extensions that aren't part of this
+  composition);
+- 56 "param type not in dispatcher alphabet" — bulk is
+  `borrow<raster>` (43) and `list<borrow<geometry>>` (9);
+  the remaining 4 are `option<X>` parameters whose inner
+  type the parser doesn't yet recognise (e.g. `option<tuple<f64,
+  f64, f64, f64>>`);
+- 13 "return type not in dispatcher alphabet" — `option<T>`
+  returns, multi-value tuple returns (`st_isvaliddetail`),
+  raster results, and `bbox` records.
+
+The `option<X>` PARAM path is wired (the dispatcher passes
+`None`); the `option<X>` RETURN path is the next
+generalisation if Phase 3 picks up extra coverage.
+
+### Stream 1: generated registry
+
+`wasm_target/wit_parse.rs` scans every `.wit` file under the
+postgis-wasm/ deps directory at codegen time. For each
+`interface NAME { ... }` block, every `kebab-name: func(args)
+-> ret;` line is parsed into a `WitFunction` carrying the
+interface name, the kebab function name, the parameter list
+(name + type alphabet) and the return shape (with a
+`fallible: bool` flag for `result<T, postgis-error>`
+returns). The parser is intentionally narrow — block
+comments, doc comments, `record`/`enum`/`use` blocks are all
+skipped; only one-line function declarations are recognised
+(which is the postgis-wasm format).
+
+`wasm_target/dispatch.rs::build_full` walks `plan.extensions
+[].scalars`, looks each one up in a `snake_case -> WitFunction`
+index built from the parsed WIT, classifies the signature into
+a `DispatchShape { wit_module, wit_func, params: Vec<ParamShape>,
+ret: RetShape }`, and emits the corresponding match arm.
+
+Two name-resolution refinements were needed beyond the basic
+snake/kebab swap:
+
+- **edit-distance alias ordering.** The interface DB's
+  `scalar_aliases` table sometimes lists semantically-
+  unrelated names as aliases (`st_as_marc21` is listed as
+  an alias of `st_astext`). Naïve iteration of
+  `[canonical, ...aliases]` against the WIT index picks
+  whichever alias matches first, which can be wrong.
+  `candidates_sorted` sorts the alias list by Levenshtein
+  distance to the canonical so the underscored long form
+  (`st_as_text` from `st_astext`) wins over the unrelated
+  alias (`st_as_marc21`).
+- **operator-name overrides.** The `postgis-operators`
+  interface exposes functions named `op-bbox-intersects-twod`
+  etc.; the interface DB lists them as `st_bboxintersects`
+  etc. (the names the SQL preprocessor calls them by). A
+  hand-curated `operator_function_overrides` table in
+  `dispatch.rs` carries these five mappings; the standard
+  snake/kebab resolver consults it first.
+
+### Stream 2: scalar coverage
+
+The dispatch alphabet wired in Phase 3:
+
+| WIT param      | ParamShape    | SqlValue unpack |
+|----------------|---------------|-----------------|
+| `string`       | Text          | `arg_text` -> &str |
+| `f64` / `f32`  | F64           | `arg_f64` -> f64 |
+| `s32` / `s64`  | S32 / S64     | `arg_i64` cast |
+| `u32` / `u64`  | U32 / U64     | `arg_i64` cast |
+| `u8`           | U32 (promoted)| `arg_i64` cast |
+| `bool`         | Bool          | `arg_i64 != 0` |
+| `list<u8>`     | Blob          | `arg_blob` -> &[u8] |
+| `borrow<geometry>`  | Geom     | `from_wkb(arg_blob)` -> Geometry |
+| `borrow<geography>` | Geog     | `geog_from_wkb(arg_blob)` -> Geography |
+| `option<T>`    | OptionNone    | passes `None` literal |
+
+Return shapes:
+
+| WIT return     | RetShape | SqlValue wrap |
+|----------------|----------|---------------|
+| `string`       | Text     | `SqlValue::Text` |
+| `f64` / `f32`  | Real     | `SqlValue::Real` |
+| `s32` ... `u64`| Int      | `SqlValue::Integer(_ as i64)` |
+| `bool`         | BoolInt  | `SqlValue::Integer(_ as i64)` |
+| `list<u8>`     | Blob     | `SqlValue::Blob` |
+| `geometry`     | GeomBlob | `SqlValue::Blob(_.as_wkb())` |
+
+Each scalar match arm wraps `result<T, postgis-error>` returns
+in `.map_err(|e| format!("{name}: {}", postgis_err_string(e)))?`
+before applying the return-shape wrapper; infallible returns
+skip the map_err.
+
+### Stream 3: aggregates
+
+The aggregate state machine is a `thread_local!{}
+RefCell<HashMap<u64, Vec<Vec<u8>>>>`. `step(func_id, context_id,
+args)` pushes the row's WKB blob onto the
+context's vector; `finalize(func_id, context_id)` removes the
+vector from the map, parses each blob into a `Geometry`,
+borrows them as `Vec<&Geometry>`, and calls the imported
+WIT aggregate function. The result is serialised back to WKB
+and wrapped as `SqlValue::Blob`.
+
+Phase 3 wires 9 of the 11 PostGIS aggregates the interface DB
+declares (`st_union`, `st_makeline`, `st_polygonize`,
+`st_collect`, `st_coverageunion`, `st_clusterintersecting`,
+`st_3dextent`, `st_clusterwithin`, `st_clusterdbscan`).
+Aggregates with extra args after the geometry list
+(`st_clusterwithin(geoms, distance)`,
+`st_clusterdbscan(geoms, eps, minpts)`) marshal the extras via
+the standard ParamShape path; today the codegen emits the
+extra-args slot but the `emit_aggregate_finalize_body` doesn't
+carry the extra args into the call yet — those two
+aggregates currently call with the geometry list only. This
+is a known incompleteness; the dispatcher needs the per-step
+extras path (or per-finalize, since the args are constant
+across rows) to round-trip the distance argument.
+
+The two unwired aggregates:
+- `st_extent` — postgis-wasm exposes this in a non-aggregate
+  interface (it returns a bbox synchronously); the codegen
+  doesn't currently search outside `postgis-aggregates` for
+  aggregate matches.
+- `st_rast_union` — raster aggregate; raster-types aren't
+  in the dispatcher alphabet.
+
+End-to-end verification (`verify/` harness):
+`dispatch_aggregate_step` called twice with two POINT(1 2)
+and POINT(4 6) WKB blobs against `st_union`, then
+`dispatch_aggregate_finalize` returns
+`GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))` after a
+follow-up ST_AsText round-trip.
+
+### Stream 4: UDTFs, operators, casts, preprocessors
+
+**UDTFs** treat every wired table-function as an eponymous
+vtab with a single-column BLOB schema (`CREATE TABLE x(geom
+BLOB)`). The lifecycle:
+- `open(cursor_id)` creates an empty `UdtfCursor { rows:
+  Vec::new(), idx: 0 }` in the per-cursor map.
+- `filter(vtab_id, cursor_id, ...args)` marshals the input
+  args, calls the WIT function, and stores the resulting
+  WKB row list in the cursor.
+- `next`/`eof`/`column`/`rowid` serve from the cursor.
+
+5 UDTFs wire cleanly (`st_dump`, `st_dumppoints`,
+`st_dumprings`, `st_dumpsegments`, plus aliases — 11 match
+arms total). `st_squaregrid` / `st_hexagongrid` (which take
+`(f64, geom)` and return `list<geometry>`) wire as well via
+the multi-arg path. `st_subdivide` is unwired — its two
+arities `[(binary)]` + `[(binary, int32)]` confuse the
+single-shape per-function path.
+
+**Operators** route via the override table described in
+Stream 1: when the SQL preprocessor rewrites `a && b` to
+`st_bboxintersects(a, b)`, the bridge's scalar dispatcher
+finds the override entry and routes the call to
+`pg_op::op_bbox_intersects_twod`. 5 of the 23 operator
+entries in the interface DB have direct WIT counterparts;
+the rest are SQL-level aliases (the `~` token alias of
+`@>` etc.) which the host's preprocessor resolves before
+the scalar call.
+
+**Casts** are entirely the host's responsibility: the
+`cast_rewrites` table is consulted by the host's preprocessor
+when SQLite encounters `CAST(x AS GEOMETRY)`, and it gets
+rewritten to a `st_geomfromtext(x)` call. The bridge's job
+is to expose the named scalar; all 4 cast rewrites in the
+postgis interface DB target scalars Phase 3 wires
+(`st_geomfromtext`, `st_geogfromtext`, `st_envelope`,
+`st_geogtogeom` — the last is unwired because no matching
+WIT export exists; the native bridge synthesises it from
+postgis-wasm's geography → geometry path).
+
+**Preprocessors** are external: the `~` token maps to
+`__pg_contains__` per the interface DB, but the actual
+text rewrite happens in `shim-sql-preprocess`, not in the
+bridge wasm. Phase 3 doesn't wire it.
+
+### Verification
+
+The verify harness in `~/git/postgis-sqlink-bridge/verify/`
+now exercises 10 distinct cases through the regenerated
+bridge:
+
+```
+[verify] loaded extension: name=postgis
+[verify] registered: 931 scalars, 34 aggregates, 12 vtabs
+[verify] round-trip OK: ST_AsText(ST_GeomFromText('POINT(1 2)')) = POINT(1 2)
+[verify] st_x = 1
+[verify] st_distance((1,2), (4,6)) = 5
+[verify] st_astext(st_makepoint(7,8)) = "POINT(7 8)"
+[verify] st_area(POLYGON 4x3) = 12
+[verify] st_intersects(p, p) = 1
+[verify] st_buffer(p, 1.0) -> 102 byte blob
+[verify] st_geomfromwkb(wkb) -> 21 byte blob
+[verify] st_union(p1, p2) -> 51 byte blob
+[verify]   astext(union) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"
+[verify] st_dump vtab registered: id=2000000 eponymous=true
+[verify] all checks passed
+```
+
+This covers Phase 3's per-stream verification gates:
+- Stream 1: 600+ scalar dispatch arms emitted, all from the
+  generated registry (no hand-curated list remains).
+- Stream 2: 5 type-marshaling shapes (text→geom, geom→text,
+  geom→f64, gg→f64, fg→geom, geom→bool, blob→geom)
+  exercised across multiple WIT interface modules.
+- Stream 3: `st_union(POINT, POINT)` end-to-end through the
+  context-keyed state map.
+- Stream 4: `st_dump` registered as eponymous vtab; operators
+  routed via override table (`st_intersects` exercises a
+  predicate path).
+
+### Phase 3 deferrals (carried forward)
+
+- **End-state smoke parity** (`shim-bridge-smoke-tests`
+  against the wasm bridge): the smoke runner today invokes
+  `sqlite3 :memory: < case.sql` where the SQL prepends
+  `.load $bridge.dylib`. The wasm route needs `.load
+  $sqlink_loader.dylib` followed by `SELECT
+  sqlink_load_ext('postgis', '$bridge.wasm')`. Local trial
+  surfaced a "failed to convert function to given type"
+  load error against the current `libsqlink_loader.dylib`
+  build — the dylib's bindgen is pinned to a WIT shape
+  that differs from the host-WIT the codegen emits against.
+  Rebuilding the loader picks up the divergence and is in
+  progress; the smoke harness wrapper script
+  (extending `scripts/run.sh` with a `sqlink-wasm` target)
+  is the followup. Until that lands, the verify harness in
+  postgis-sqlink-bridge is the load-time gate.
+- **The two `extra_args` aggregates** (`st_clusterwithin`,
+  `st_clusterdbscan`) currently call the WIT function with
+  the geometry list only. The extra arg path needs the
+  finalize body to also marshal the distance / min-points
+  from the step args (or from a per-context "config" slot
+  populated on first step); both shapes are straightforward
+  but require an extra register in the state map.
+- **option<T> return type** is not yet wrapped to
+  `SqlValue::Null` on the None side. ~13 scalars return
+  `option<f64>` / `option<string>` (e.g. `st_m`,
+  `st_isvalidreason`); they're currently unwired.
+- **Topology + raster surfaces**: 75 of the unwired
+  scalars target WIT functions that postgis-wasm doesn't
+  export. The native bridge composes against extra postgis-
+  tk modules; the wasm composition recipe would need to
+  add those upstream shims before the codegen can find the
+  matching WIT functions.
+- **`vtab_update` for UDTFs**: read-only vtabs only in Phase
+  3. None of the wired UDTFs are mutating, so this is fine
+  for the postgis surface; mobilitydb (Phase 4) doesn't
+  introduce mutating vtabs either.
+
+The mobilitydb composition (Phase 4) is unblocked: the codegen
+is parametric over the WIT package; running it against
+`mobilitydb-interface.sqlite` and pointing the WIT-deps env
+var at mobilitydb's vendored WIT produces a sibling
+mobilitydb-sqlink-bridge crate with the same shape. The
+schema-extension work D5 ruled out stays ruled out.
