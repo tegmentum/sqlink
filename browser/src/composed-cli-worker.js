@@ -549,6 +549,7 @@ async function handleInit(msg) {
   // { name, bytes }: the main thread passed the raw component
   // bytes for any embed: list it received.
   const embedNames = []
+  const manifests = {}
   for (const e of msg.embed ?? []) {
     const { name, bytes } = e
     if (!name || !bytes) {
@@ -561,12 +562,18 @@ async function handleInit(msg) {
     }
     await state.registry.addFromBytes(name, bytes)
     embedNames.push(name)
+    const m = state.registry.get(name)?.manifest
+    if (m) manifests[name] = m
   }
   for (const name of embedNames) {
     await issueDotLoad(name)
   }
 
-  return { embedNames }
+  return { embedNames, manifests }
+}
+
+async function handleListExtensions() {
+  return { names: state.registry?.names() ?? [] }
 }
 
 // ────────────────────────── exec/execDotCommand ──────────────────────────
@@ -694,6 +701,18 @@ async function handleLoadExtension(msg) {
   return { manifest: state.registry.get(name)?.manifest }
 }
 
+async function handleRegisterWalHook(msg) {
+  if (state.closed) throw new Error('database is closed')
+  if (!state.spiLoader || !state.spiLoader.impl) {
+    throw new Error(
+      'registerWalHook: spi-loader is not initialized yet — init must resolve first.',
+    )
+  }
+  const { extName, hookId } = msg
+  state.spiLoader.impl.registerWalHook(extName, hookId)
+  return {}
+}
+
 async function handleClose() {
   if (state.closed) return {}
   state.closed = true
@@ -747,6 +766,8 @@ const HANDLERS = {
   exec: handleExec,
   execDotCommand: handleExecDotCommand,
   loadExtension: handleLoadExtension,
+  listExtensions: handleListExtensions,
+  registerWalHook: handleRegisterWalHook,
   close: handleClose,
 }
 

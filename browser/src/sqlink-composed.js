@@ -30,6 +30,12 @@ class ComposedDatabase {
     this._closed = false
     this._nextId = 1
     this._pending = new Map() // id -> { resolve, reject }
+    // Main-side cache of registered extensions, updated by every
+    // loadExtension response and by init's embedNames list. Lets
+    // loadedExtensions() / manifest() be sync-shaped without round-
+    // tripping for each access.
+    this._loadedNames = new Set()
+    this._manifests = new Map()
     this._worker.onmessage = (ev) => this._onMessage(ev)
     this._worker.onerror = (ev) => {
       // Bubble unhandled worker errors to every pending request so
@@ -136,7 +142,52 @@ class ComposedDatabase {
       name,
       bytes,
     })
+    this._loadedNames.add(name)
+    if (manifest) this._manifests.set(name, manifest)
     return manifest
+  }
+
+  /**
+   * Install the loaded extension's `wal-hook.on-wal-hook` callback
+   * as the active WAL hook on the cli's shared connection. Calls
+   * the spi-loader's register-wal-hook impl in the worker — same
+   * shape as the main-thread API (rounds 1-5). Substrate primitive
+   * used by the wal-archive extension.
+   */
+  registerWalHook(extName, hookId) {
+    return this._postAndAwait('registerWalHook', {
+      extName,
+      hookId: typeof hookId === 'bigint' ? hookId : BigInt(hookId),
+    })
+  }
+
+  /**
+   * Return the list of currently-loaded extension names from the
+   * worker's registry. Synchronous-shaped API that returns a
+   * cached snapshot maintained main-side; the snapshot is refreshed
+   * after each successful `loadExtension` call. For a fresh probe
+   * use `getLoadedExtensions()` which does a round-trip.
+   */
+  loadedExtensions() {
+    return [...this._loadedNames]
+  }
+
+  /**
+   * Async variant of loadedExtensions that round-trips to the
+   * worker. Use when you want a guaranteed-fresh snapshot.
+   */
+  async getLoadedExtensions() {
+    const { names } = await this._postAndAwait('listExtensions', {})
+    return names
+  }
+
+  /**
+   * Return the manifest for a loaded extension by name. Reads from
+   * the main-side cache populated by the load-extension responses.
+   * Returns undefined if the name isn't loaded.
+   */
+  manifest(name) {
+    return this._manifests.get(name)
   }
 
   async close() {
@@ -246,11 +297,30 @@ export async function openDatabaseComposed(opts = {}) {
       if (!e.name) throw new Error('openDatabaseComposed: embed entry missing name')
       if (e.bytes) {
         embed.push({ name: e.name, bytes: e.bytes })
-      } else if (e.loader) {
-        throw new Error(
-          `openDatabaseComposed: embed.loader is not supported in the worker ` +
-            `host (round 6+). Pass { name, bytes } instead.`,
-        )
+      } else if (e.module || e.loader) {
+        // Worker host can't accept a transpiled module across the
+        // postMessage boundary (the module's `instantiate()`
+        // function isn't structured-cloneable). Auto-fetch bytes
+        // from the symlinked /<name>_extension.component.wasm.
+        // The legacy main-thread embed.module / embed.loader paths
+        // are honoured by treating them as a hint that the caller
+        // wants the named extension embedded — the actual bytes
+        // come from public/ on the worker side.
+        const url = `/${nameToBytesAsset(e.name)}`
+        const res = await fetch(url)
+        if (!res.ok) {
+          throw new Error(
+            `openDatabaseComposed: embed ${JSON.stringify(e.name)} requested ` +
+              `via { module: ... } but cannot fetch bytes from ${url} ` +
+              `(${res.status}). Symlink the .component.wasm into ` +
+              `browser/public/ via scripts/link-composed-wasm.mjs or pass ` +
+              `{ name, bytes } directly.`,
+          )
+        }
+        embed.push({
+          name: e.name,
+          bytes: new Uint8Array(await res.arrayBuffer()),
+        })
       } else {
         throw new Error(
           `openDatabaseComposed: embed entry ${JSON.stringify(e.name)} missing bytes.`,
@@ -264,7 +334,17 @@ export async function openDatabaseComposed(opts = {}) {
   // Issue init. The worker boots the wasm runtime, opens OPFS SAHs,
   // and waits for the cli's first sqlite> prompt before resolving.
   const db = new ComposedDatabase(worker)
-  await db._postAndAwait('init', { embed })
+  const initResult = await db._postAndAwait('init', { embed })
+  // Hydrate main-side cache from the init response so
+  // loadedExtensions() works without an extra round-trip.
+  for (const name of initResult?.embedNames ?? []) {
+    db._loadedNames.add(name)
+  }
+  if (initResult?.manifests) {
+    for (const [name, m] of Object.entries(initResult.manifests)) {
+      db._manifests.set(name, m)
+    }
+  }
   return db
 }
 
