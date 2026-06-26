@@ -4,7 +4,14 @@
 
 pub mod bundles;
 pub mod resolver;
-mod schema;
+// v1.5 (PLAN-followups.md): expose the schema DDL strings publicly
+// so the browser bundles polyfill can run the same migration ladder
+// against an OPFS/in-memory cas db reached through `sqlite-wasm`'s
+// dispatch-bridge.bridged-execute-cas. The strings are pure `&str`
+// constants (no runtime deps) so they're trivially reachable from a
+// `no_std + alloc` consumer if a future native unify lands. Native
+// (this crate's rusqlite path) keeps using them via `store.rs`.
+pub mod schema;
 pub mod store;
 
 pub use bundles::{
