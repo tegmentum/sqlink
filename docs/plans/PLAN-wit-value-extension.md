@@ -464,3 +464,220 @@ migration is a recompile, not a behavior change.
   ABI-skew rejection path uses the EXISTING `datalink-contract`
   guard (Phase A's tests pin its inverted behavior on the new
   major).
+
+## Phase B — done (2026-06-26)
+
+### Landed
+
+- **`db::Value::WitValue` variant + payload (`sqlite-wasm`
+  submodule, branch `feat/wit-value-phase-b`, commit `7bde4cb`):**
+  - `sqlite-wasm/core/src/db.rs:52` extends the `Value` enum
+    with a `WitValue(WitValuePayload)` arm. The payload struct
+    carries `type_id: [u8; 32]`, `bytes: Vec<u8>`, and
+    `symbolic_name: String` — mirroring the WIT
+    `wit-value-payload` record with type-id normalised to a
+    fixed-size array (the WIT lists `list<u8>` for flexibility,
+    every Phase B+ producer ships sha256 → 32 bytes).
+  - SQLite has no first-class typed-record cell; `Statement::
+    bind`, `set_result_value`, and the sqlink-loader's
+    `value::write_result` surface the `WitValue` arm as `BLOB`
+    on the SQLite C surface so the wire form round-trips through
+    a column store. The wasm bridge recovers typed identity on
+    subsequent dispatch via the per-extension `TypedValueRegistry`.
+
+- **Host crate (`host/src/lib.rs`):**
+  - Six site-by-site converters (`spi_value_to_db`, `db_value_
+    to_spi`, `bindings_value_to_db`, `db_value_to_bindings`,
+    `bindings_sql_to_db_value`, `db_value_to_bindings_sql`)
+    now carry the typed identity through field-by-field instead
+    of panicking via `unimplemented!`. Helper `type_id_from_wit`
+    normalises the variable WIT `list<u8>` to `[u8; 32]` with a
+    `tracing::warn` on length mismatch.
+  - `compose_provider::db_to_cbor` encodes `WitValue` as a CBOR
+    map preserving `type_id` + `bytes` + `symbolic_name` so the
+    compose-provider channel preserves the typed identity. The
+    `cbor_to_db` inverse remains deferred — compose-provider
+    feeds host-managed SQL params today, not bridge dispatch.
+  - `sqlink-native::render_value` adds a diagnostic
+    `<wit-value:NAME LEN bytes>` render so the native CLI
+    surface doesn't panic if a future Phase C bridge ferries a
+    `WitValue` out.
+
+- **`postgis-bridge` Phase A miss (sqlink commit `62e022d4`):**
+  - `extensions/postgis-bridge/wit/world.wit` bumped
+    `sqlite:extension/<iface>@0.1.0` → `@1.0.0` (the local
+    bridge WIT lagged the Phase A submodule bump).
+  - 16 unreachable `_ => unimplemented!` wildcards stripped
+    from matches that PRODUCE `SqlValue` (or match on something
+    other than `SqlValue`) — addresses Phase A's deferred
+    unreachable-pattern warnings.
+
+- **Per-extension type registry (`host/src/typed_value.rs`,
+  sqlink commit `41c6b9d9`):**
+  - New module. `TypedValueRegistry` maps 32-byte type-id →
+    `TypedValueBinding { extension_name, symbolic_name,
+    decoder_import, encoder_import }`. Conflict semantics:
+    same type-id with a different binding errors out at load
+    time (canon:wit drift is loud, never silently
+    overwritten); identical re-insertions are idempotent so
+    reload is safe.
+  - `TypedValueCodecs` holds `Arc<dyn TypedValueCodec>` keyed
+    by type-id. Phase B's test suite installs Rust closures
+    (synthetic identity / toggle-high-bit); Phase C codegen
+    will install `WasmCodec` that calls the bridge's
+    `<package>:wasm/serde-ops/<type>-from-canon-cbor` and
+    `-to-canon-cbor` exports via the cached wasmtime instance.
+  - `Host` gains `pub typed_values` + `pub typed_value_codecs`
+    fields; `Host::new` initialises both.
+  - `Host::register_component` drains `manifest.typed_values`
+    into `typed_values` after `metadata.describe()`, surfacing
+    `RegistryConflict` as a load failure. `Host::unload`
+    clears all bindings + codec slots owned by the
+    unregistered extension so a re-load with a re-hashed type
+    set doesn't trip the conflict guard.
+
+- **Decode / encode dispatch API (sqlink commit `f60314b6`):**
+  - `Host::decode_wit_value(&payload) → Result<Vec<u8>>`. Looks
+    up payload type-id in the registry; dispatches through the
+    installed codec to validate / normalise. Unknown type-id is
+    a hard error; missing codec falls back to identity
+    pass-through (Phase B has no real bridges; the bytes ARE
+    canonical-CBOR by construction).
+  - `Host::encode_wit_value(type_id, bytes) →
+    Result<WitValuePayload>`. Inverse path. Error context
+    surfaces the offending extension + symbolic name.
+  - `short_hex` helper renders the first 4 bytes of a type-id
+    with an ellipsis so error messages stay terse.
+
+- **sqlink-loader inheritance (sqlink commit `926ca467`):**
+  - `sqlink-loader/src/load.rs` documents that the loader does
+    NOT maintain its own registry. It inherits the full Phase B
+    path through `host.load_extension` (registry drain) and
+    `host.dispatch_scalar` (which carries WitValue through
+    wit-bindgen's `call_call` directly to the bridge's wasm-
+    side decoder). `value::write_result` already surfaces a
+    `WitValue` result as canonical-CBOR BLOB on the
+    sqlite3_context.
+
+- **Browser ExtensionRegistry mirror (sqlink commit `5511529a`):**
+  - `browser/src/extension-loader.js` adds
+    `_typedValuesByTypeId` keyed by lower-case-hex type-id.
+    Drains `manifest.typedValues` (jco lowering of
+    `typed-values`) at `add()` / `addFromBytes()` time with
+    the same conflict semantics as the Rust registry.
+  - `lookupTypedValue` / `typedValueBindings` / cleanup on
+    `delete()` + `forgetRegistrations()`.
+  - `bytesToHex` helper handles jco's `list<u8>` shape
+    (`Uint8Array` | `number[]` | ArrayLike).
+  - The browser path doesn't directly invoke decoders — the
+    composed-cli-worker drives the wasm cli over stdin/stdout
+    and SQL values cross the JS boundary as text. Registry IS
+    populated for introspection + Phase C+ host-driven
+    dispatch.
+
+- **Round-trip test (sqlink commit `742dd206`):**
+  - `host/src/typed_value.rs::tests` ships four `b7_*` tests
+    covering the Phase B acceptance gate.
+  - `b7_synthetic_decode_encode_roundtrip_is_byte_identical`:
+    synthetic canonical-CBOR payload → IdentityCodec.decode →
+    .encode → byte-identical bytes. Wraps the round-trip back
+    into a `db::Value::WitValue` to validate the marshaling
+    shape composes.
+  - `b7_codec_is_actually_invoked`: ToggleHighBitCodec
+    confirms the registry's dispatch actually runs the codec
+    rather than silently passing bytes through.
+  - `b7_unknown_type_id_lookup_misses` and
+    `b7_missing_codec_falls_back_to_identity_passthrough` pin
+    the error / identity-passthrough behaviour.
+
+### Verification
+
+- `cargo test -p sqlink-host --lib` — **64/64 pass** (Phase A
+  baseline 52 + 12 typed_value tests, of which 4 are the B7
+  acceptance set, plus 3 incidental from cache/blob).
+- `cargo check --workspace` — clean across every workspace
+  member. **0 unreachable-pattern warnings** (Phase A had ~16
+  in postgis-bridge; stripped in B1's regex sweep).
+- `cargo test -p sqlink-loader --lib -- --test-threads=1` —
+  45/45 pass.
+- Node smoke test against `browser/src/extension-loader.js`
+  ExtensionRegistry exercise: roundtrip lookup, conflict throws,
+  idempotent re-insert, forget — all pass.
+
+### Branches + commits
+
+- `sqlite-wasm` submodule, branch `feat/wit-value-phase-b`
+  (pushed to `origin` AND
+  `https://github.com/tegmentum/sqlite-wasm.git`):
+  - `7bde4cb` `feat(core)!: add Value::WitValue variant for
+    sql-value@1.0.0`.
+- `sqlink` branch `feat/wit-value-phase-b` (pushed to
+  `origin/feat/wit-value-phase-b`):
+  - `62e022d4` `feat(host)!: wire db::Value::WitValue
+    conversion through host crate`.
+  - `41c6b9d9` `feat(host): per-extension typed-value registry`.
+  - `f60314b6` `feat(host): wire decode_wit_value /
+    encode_wit_value dispatch API`.
+  - `926ca467` `docs(loader): document wit-value path
+    inheritance from host`.
+  - `5511529a` `feat(browser): per-extension typed-value
+    registry on ExtensionRegistry`.
+  - `742dd206` `test(host): wit-value synthetic round-trip +
+    B7 acceptance`.
+
+### Honest caveats / Phase C+ debt
+
+- **No real wasm-side decoder invocation yet.** The
+  `TypedValueCodec` trait is byte-in / byte-out; Phase B's test
+  installs Rust closures. Phase C codegen wires the real
+  `WasmCodec` that calls the bridge's
+  `<package>:wasm/serde-ops/<type>-from-canon-cbor` /
+  `-to-canon-cbor` exports via the cached wasmtime instance.
+  Until then `Host::decode_wit_value` / `encode_wit_value` take
+  the identity-passthrough branch (correct: the contract is
+  canonical-CBOR end-to-end; an extension that ships
+  non-canonical-CBOR is broken).
+
+- **No bridge ships `typed-value-binding` entries yet.** The
+  registry IS populated by `metadata.describe()`'s
+  `typed-values` field, but every catalog extension's
+  `manifest_for_ext` (host) + every bridge's manifest emit an
+  empty list. Phase C codegen starts populating it from the
+  upstream shim's WIT record definitions.
+
+- **`compose_provider::cbor_to_db` inverse is deferred.** The
+  forward path (`db_to_cbor`) emits the wit-value as a CBOR map;
+  the inverse is left as Phase C debt because compose-provider
+  currently feeds host-managed SQL params (not bridge dispatch)
+  and no host actually emits `WitValue` yet.
+
+- **Worktree environment misses `.cargo/config.toml`.** The
+  workspace ships only `config.toml.template`; the deployment
+  step expands `__WASI_SDK_PATH__` and installs the resolved
+  config. In this Phase B worktree the bundled libsqlite3-sys
+  build doesn't get `LIBSQLITE3_FLAGS = -DSQLITE_ENABLE_SESSION`,
+  so the `sqlink` bin's session FFI declarations fail at link.
+  Phase B unit tests run via `cargo test -p sqlink-host --lib`
+  which bypasses the bin build; the integration `host/tests/`
+  harness hits the same failure but is unrelated to wit-value
+  work and pre-dates Phase B. Out of scope to fix here.
+
+- **Browser end-to-end test deferred.** B6 added the JS
+  registry + node smoke test of the conflict / lookup
+  invariants. The composed-(bundle|prefix) playwright suites
+  exercise extensions that DON'T declare typed-values yet, so
+  the drain is a no-op there; once Phase C codegen emits a real
+  bridge with typed-values, a new playwright spec exercises the
+  registry through a browser load.
+
+### What didn't change (Phase C-F still owe)
+
+- Codegen consumption (Phase C): `sqlink-shim-codegen` learns
+  to read upstream shim WIT, emit dispatch arms using
+  `wit-value` for record-typed params/returns, emit
+  `typed-value-binding` entries in the manifest, and emit the
+  per-record `serde-ops` exports.
+- Codegen generalization (Phase D): decouple PostGIS-specific
+  paths (`emit_wit.rs:46-55`, `emit_lib.rs:52`, etc.).
+- `mobilitydb-sqlink-bridge` (Phase E).
+- Loader pre-check (#485 Phase 2 / Phase F).
