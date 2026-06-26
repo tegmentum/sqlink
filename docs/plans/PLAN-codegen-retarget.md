@@ -300,6 +300,22 @@ Unblocks:
   bridges handle it today. Phase 4 simplifies to a composition test;
   no codegen schema extension required.
 
+  **D5 update (2026-06-27): the claim holds at the interface-DB layer
+  but BREAKS at the WIT signature layer for non-postgis shims.**
+  Mobilitydb's interface DB says `tfloat_min: param=[["binary"]]` but
+  the actual WIT signature is `func(seq: tfloat-sequence) ->
+  option<f64>` — a record param, not `list<u8>`. PostGIS exposes
+  `Geometry::from_wkb(&[u8])` (a binary↔record decoder); mobilitydb-
+  wasm does NOT expose `tfloat_sequence_from_bytes` or equivalent. The
+  wasm-component bridge can ferry only `SqlValue { Text, Real,
+  Integer, Blob, Null }`; it has no way to construct mobilitydb's
+  record values from `SqlValue::Blob`. The native bridge sidesteps
+  this via `datafission_functions::FunctionValue` (a Rust enum
+  carrying record values), but the wasm-component path has no
+  equivalent. Phase 4 blocked here until this is resolved; the
+  codegen-generalization work (decoupling postgis-only assumptions
+  from emit_wit / emit_lib / dispatch) is sequenced behind it.
+
 ## References
 
 - `~/git/sqlink-shim-codegen/` — the codegen tooling.
@@ -1081,3 +1097,160 @@ through the host directly once needed.
   gap as the four scalars above.
 
 The mobilitydb composition (Phase 4) remains unblocked.
+
+## Phase 3 polish — done (2026-06-26)
+
+Round 3 closed the four misc scalars round 2 left unwired,
+raising the canonical-scalar count from 280 to 284. The
+remaining unwired scalar surface is now purely architectural
+(topology + raster).
+
+### Where the work lives
+
+- `~/git/sqlink-shim-codegen` branch `feat/wasm-component-target`,
+  commit `c3283c2`. Extends `WitType` with `Bbox` and `Tuple(...)`
+  variants on the parser side; adds `RetShape::BboxBlob` and
+  `RetShape::IsValidDetailText` on the dispatcher side; threads
+  `pg_ctor` / `pg_out` aliases into `used_aliases` for the new
+  shapes so the shared helpers stay in scope.
+- `~/git/postgis-sqlink-bridge` on `main`, commit `543f28c`.
+  Regenerated bridge crate; verify harness extended with three
+  new cases (Case 14: bbox record return; Case 15: tuple return;
+  Case 16: option<tuple> param).
+
+### Coverage delta
+
+| category    | round 2 wired | round 3 wired | new in round 3 |
+|-------------|---------------|---------------|----------------|
+| scalars     | 280           | 284           | +4 canonical   |
+| aggregates  | 11            | 11            | no change      |
+| UDTFs       | 5             | 5             | no change      |
+| operators   | 5             | 5             | no change      |
+| casts       | 4             | 4             | no change      |
+
+Unwired symbols drop from 122 to 118 (net -4). The remaining
+118 break down as:
+- 75 "no WIT function matches" — topology / raster / geocoder
+  scalars whose upstream postgis-wasm shim doesn't export them.
+- 43 "borrow<raster> param" — raster surface.
+
+Both buckets are architectural carry-forwards tracked in #490.
+
+### A: `bbox` record return
+
+The parser now recognises the postgis-types `bbox` record
+(four f64s: `min-x`, `min-y`, `max-x`, `max-y`) as
+`WitType::Bbox`. The dispatcher's `RetShape::BboxBlob`
+composes the existing constructor
+`pg_ctor::st_make_envelope(min_x, min_y, max_x, max_y).as_wkb()`
+to produce a WKB POLYGON envelope, honouring the interface
+DB's `binary` return type. Both `st_makebox2d` and
+`st_boxfromgeohash` live in `postgis-constructors`, so the
+`pg_ctor` alias is in scope when the arm fires; the emitter
+also pulls `pg_ctor` into `used_aliases` if any arm uses
+this shape (defensive — covers cases where a future
+bbox-returning scalar lives in a different interface).
+
+Verify Case 14 confirms:
+`st_astext(st_makebox2d(POINT(1 1), POINT(3 3)))` returns
+`POLYGON((1 1,3 1,3 3,1 3,1 1))` — the 4-corner envelope.
+
+### B: `tuple<bool, option<string>, option<geometry>>` return
+
+The parser now recognises `tuple<...>` as
+`WitType::Tuple(Vec<WitType>)`. The dispatcher matches the
+specific 3-tuple shape that `st-is-valid-detail` returns and
+renders it as a PostgreSQL composite-type text representation:
+
+```
+(valid,"reason","WKT-of-location")
+```
+
+…with empty strings for the `None` arms. This honours the
+interface DB's `text` return type. Pulls in
+`pg_out::st_as_text` for the location WKT; the emitter adds
+`pg_out` to `used_aliases` so the import is in scope even
+though `st-is-valid-detail` itself lives in
+`postgis-predicates`.
+
+Verify Case 15 confirms:
+`st_isvaliddetail(POINT(1 2))` returns `(true,"","")` (valid,
+no reason, no location).
+
+### C: `option<tuple<f64, f64, f64, f64>>` param
+
+The parser's `option<...>` arm recurses through the inner
+type. Round 3's `WitType::Tuple` variant means the recursion
+no longer falls into `WitType::Unsupported`; the parameter
+classifies as `Option(Tuple(...))`, which dispatches as
+`ParamShape::OptionNone` (the round-2 default).
+
+`st_tileenvelope` exposes 3 mandatory u32 params at the SQL
+surface and two optional WIT params (`bounds:
+option<tuple<f64, f64, f64, f64>>`, `margin: option<f64>`).
+The codegen passes `None, None` for the optionals so the
+function defaults (the standard Web-Mercator tile envelope)
+apply.
+
+Verify Case 16 confirms:
+`st_tileenvelope(0, 0, 0)` returns a non-empty 93-byte
+geometry blob (the level-0 Web-Mercator envelope).
+
+### Verification
+
+```
+[verify] loaded extension: name=postgis
+[verify] registered: 931 scalars, 34 aggregates, 12 vtabs
+[verify] round-trip OK: ST_AsText(ST_GeomFromText('POINT(1 2)')) = POINT(1 2)
+[verify] st_x = 1
+[verify] st_distance((1,2), (4,6)) = 5
+[verify] st_astext(st_makepoint(7,8)) = "POINT(7 8)"
+[verify] st_area(POLYGON 4x3) = 12
+[verify] st_intersects(p, p) = 1
+[verify] st_buffer(p, 1.0) -> 102 byte blob
+[verify] st_geomfromwkb(wkb) -> 21 byte blob
+[verify] st_union(p1, p2) -> 51 byte blob
+[verify]   astext(union) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"
+[verify] st_astext(st_collect(p1, p2)) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"
+[verify] st_m(POINT(1 2)) = NULL (option<f64> None path)
+[verify] st_m(POINT M(1 2 5)) = Real(5.0) (option<f64> Some path)
+[verify] st_clusterwithin(g, 100.0) -> 51 byte blob (first cluster)
+[verify] st_astext(st_makebox2d(P(1,1), P(3,3))) = "POLYGON((1 1,3 1,3 3,1 3,1 1))"
+[verify] st_isvaliddetail(POINT(1 2)) = "(true,\"\",\"\")"
+[verify] st_isvaliddetail(degenerate LINESTRING) = "(true,\"\",\"\")"
+[verify] st_tileenvelope(0, 0, 0) -> 93 byte blob
+[verify] st_dump vtab registered: id=2000000 eponymous=true
+[verify] all checks passed
+```
+
+### Smoke parity re-check
+
+```
+cases/postgis:
+  PASS 01-wkt-roundtrip
+  PASS 02-measurements
+  PASS 03-predicates
+  PASS 04-null-prop
+  PASS 05-cast-rewrite
+  pass=5 fail=0
+```
+
+Unchanged from rounds 1 and 2.
+
+### Round 3 deferrals (carried forward unchanged)
+
+- **Topology + raster surfaces (~118 scalars).** Architectural;
+  needs additional upstream shims composed
+  (postgis-topology-tk, postgis-raster-tk) before the codegen
+  can route to them. Tracked in #490.
+- **`sqlink-loader.dylib` vtab installation.** Unchanged:
+  `sqlink-loader/src/load.rs` returns the vtab count as
+  `skipped` rather than calling `sqlite3_create_module_v2`.
+  Tracked in #489.
+- **Aggregates `st_extent`, `st_coverageunion`, `st_3dextent`,
+  `st_rast_union`.** Same shape rationale as round 2; the 3D
+  extent's `bbox3d` record return could reuse round 3's bbox
+  handling, but the `BboxBlob` arm is bespoke to the scalar
+  dispatch path and threading it into the aggregate finalize
+  path is a small additional task left for a future polish
+  round.
