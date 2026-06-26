@@ -38,6 +38,12 @@ datalink-contract = { git = "https://github.com/tegmentum/datalink.git" }
 # bridge routes resolve/invoke/drop to them. datalink is PUBLIC.
 datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git" }
 
+# Shared, db-agnostic function-prefix namespacing (also consumed by the
+# ducklink host). The prefix__name resolution algorithm + the collision/pin
+# model behind a PrefixStore trait; this host backs that trait with its
+# __sqlink_prefix* SQLite tables (see prefix_registry.rs). datalink is PUBLIC.
+datalink-prefix = { git = "https://github.com/tegmentum/datalink.git" }
+
 anyhow = "1.0"
 wasmtime = { version = "46.0.1", features = [
     "component-model",
