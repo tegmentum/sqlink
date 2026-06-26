@@ -168,37 +168,67 @@ proxy back to the composed cli's own implementations:
 - `sqlite:extension/build` — spawn-build for `.bundle build`
   (used by bundle-cli).
 
-### Three viable shapes
+### Three viable shapes (RE-RANKED after attempted execution)
 
-1. **Per-interface polyfill handlers** that proxy each call back
-   to the running composed cli via shared JS state. Cleanest +
-   matches native semantics but requires careful state plumbing
-   per interface. Estimated: 2 days per interface × 4 = ~1 week.
+The original v1.3 recommendation was option 2 (~3 days). A fork
+investigation found the estimate was wrong because the
+cli-family extensions IMPORT host-side interfaces that no
+WAC-composable component EXPORTS today:
 
-2. **Pre-transpile + compose the cli-family as one component**
-   that the composed runtime instantiates as a unit — same
-   pattern sqlite-lib uses today. Sidesteps the runtime-bindgen
-   per-extension isolation entirely. Effort: ~3 days (mostly
-   composition + WIT plumbing).
+| Imported by | Interface | Defined in | Exported by |
+|---|---|---|---|
+| prefix-cli, sqlink-meta-cli | `sqlite:extension/loader-bridge` | `sqlite-loader-wit/wit/loader-bridge.wit` | (none — host impl only) |
+| core-dotcmd, sqlite-utils-maint | `sqlite:extension/cli-state` | `sqlite-loader-wit/wit/dotcmd.wit:138` | (none) |
+| serialize-cli, archive-cli | `sqlite:extension/cli-stdout` | `sqlite-loader-wit/wit/dotcmd.wit:90` | (none) |
+| bundle-cli | `sqlite:extension/build` | `sqlite-loader-wit/wit/host-spi.wit` | sqlite-lib (OK) |
 
-3. **Stub the SPI surfaces with no-ops** so the extensions
-   instantiate but their dot-cmds error gracefully on missing
-   functionality. Lets the test specs pass shallowly but loses
-   real round-trip coverage. Effort: ~1 day. Counterproductive
-   for the test specs' actual intent.
+The native sqlink-host implements `loader-bridge` / `cli-state` /
+`cli-stdout` in `host/src/lib.rs` as wasmtime host impls — never
+as wasm exports. WAC can't wire an import to "Rust code in a
+wasmtime runtime"; it needs a peer component.
+
+**Re-ranked options:**
+
+1. **Per-interface polyfill handlers** — NOW THE CHEAPEST. Add
+   JS handlers in the browser polyfill for `loader-bridge`,
+   `cli-state`, `cli-stdout` that proxy back to the cli runtime
+   via shared state. `build` is already partially in sqlite-lib.
+   Estimated: ~1 week (1-2 days per interface).
+
+2. **Extract cli-host-shim component + WAC recipe** — was the
+   original v1.3 plan; ACTUAL effort is ~10 days, not ~3:
+   - Carve `loader-bridge` / `cli-state` / `cli-stdout` impls out
+     of `host/src/lib.rs` into a separate `cli-host-shim` crate
+     with proper WIT exports (~1 week of WIT design + Rust
+     restructure).
+   - Then the 14-side WAC recipe extension (~3 days).
+   - Plus the cli's `extension-loader.load-extension-from-bytes`
+     calls need to either be no-ops or route through the shim.
+
+3. **Stub SPI surfaces with no-ops** — ~1 day. Lets the test
+   specs "pass" but with hollow assertions (dot-cmds that read
+   state would return empty; stdout writes would be lost). Loses
+   the round-trip coverage the specs are meant to provide.
+   Counterproductive.
 
 ### Recommendation
 
-Option 2 (pre-transpile + compose) seems cleanest. The composed
-sqlite-lib pattern proved out in sqlite-wasm's
-`build-composed-runtime.sh`; extending it to include the
-cli-family extensions in the same wac-compose step would
-eliminate the need to satisfy SPI imports in the browser
-polyfill entirely.
+**Option 1 (per-interface polyfill handlers)** is now the
+cheapest path to closing the test specs. It keeps the host-impl
+boundary clean (Rust stays in Rust; JS gets browser-flavored
+proxies). Option 2 is architecturally cleaner but ~2× the effort
+and requires touching host crate internals.
 
 ### Status
 
-Not started. Surfaces after #481's foundation merge.
+**Stopped per substrate-gap escape hatch after attempt at option
+2.** Fork (a85fd7c8) found WAC can't compose the cli-family
+because the import surfaces have no exporting component. PLAN
+updated with corrected analysis. Captured by task #482.
+
+Pick option 1 to actually close the test specs, or accept that
+the foundation merge (#481) is enough and the specs stay
+in their broken-since-#479 state.
 
 ---
 
