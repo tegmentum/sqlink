@@ -1508,6 +1508,20 @@ fn db_err_to_spi(
     }
 }
 
+/// Short hex render (first 4 bytes + ellipsis) of a 32-byte
+/// `type-id` for diagnostics. Full 32 bytes is noisy in error
+/// messages; the prefix is enough to disambiguate within a
+/// session.
+fn short_hex(b: &[u8; 32]) -> String {
+    use std::fmt::Write;
+    let mut s = String::with_capacity(10);
+    for byte in &b[..4] {
+        let _ = write!(s, "{byte:02x}");
+    }
+    s.push('…');
+    s
+}
+
 /// Convert a WIT `list<u8>` type-id (variable-length, by the
 /// schema's letter of the law) into the fixed 32-byte `[u8; 32]`
 /// the `db::Value::WitValue` arm uses internally. Phase B's
@@ -9771,6 +9785,95 @@ impl Host {
             .await
             .map_err(|e| anyhow!("fiji.run trap: {e}"))?;
         r.map_err(|e| anyhow!("fiji.run returned error: {e}"))
+    }
+
+    /// PLAN-wit-value-extension.md Phase B (B3 decode path).
+    ///
+    /// Decode a `SqlValue::WitValue` payload that arrived from the
+    /// SQL layer (or a cross-component crossing) into canonical-
+    /// CBOR bytes the receiving bridge can hand to its serde-ops
+    /// `<type>-from-canon-cbor` import. The caller is the scalar /
+    /// aggregate / vtab dispatcher about to invoke the bridge's
+    /// scalar-function.call (or sibling) with this as one of the
+    /// args.
+    ///
+    /// Returns `Ok(bytes)` when there's a registered codec for the
+    /// payload's type-id; `Ok(payload.bytes)` (identity pass-
+    /// through) when the type-id is registered but no codec slot is
+    /// installed yet (codegen path, Phase C); `Err` when the
+    /// type-id is unknown — that's a hard error because the bridge
+    /// can't construct the record from opaque bytes without the
+    /// binding metadata.
+    ///
+    /// Phase B: with no real bridges yet, this lookup runs but
+    /// nearly every caller takes the identity-passthrough branch.
+    /// The round-trip test (B7) exercises the path through a
+    /// synthetic Rust-closure codec to prove the wiring.
+    pub fn decode_wit_value(
+        &self,
+        payload: &sqlite_component_core::db::WitValuePayload,
+    ) -> Result<Vec<u8>> {
+        let binding = self.typed_values.lookup(&payload.type_id).ok_or_else(|| {
+            anyhow!(
+                "wit-value decode: no typed-value-binding for type-id {} (symbolic name: {:?}); \
+                 no loaded extension declares this record shape",
+                short_hex(&payload.type_id),
+                payload.symbolic_name,
+            )
+        })?;
+        match self.typed_value_codecs.lookup(&payload.type_id) {
+            Some(codec) => codec.decode_to_canon(&payload.bytes).map_err(|e| {
+                anyhow!(
+                    "wit-value decode: codec for {} (ext {}) rejected payload: {e}",
+                    binding.symbolic_name,
+                    binding.extension_name,
+                )
+            }),
+            // No codec installed yet — Phase C codegen wires the
+            // WasmCodec on extension load. Until then the payload
+            // bytes ARE canonical-CBOR (Phase B contract: bridges
+            // emit canonical-CBOR or nothing); pass through.
+            None => Ok(payload.bytes.clone()),
+        }
+    }
+
+    /// PLAN-wit-value-extension.md Phase B (B4 encode path).
+    ///
+    /// Construct a `WitValuePayload` from canonical-CBOR bytes the
+    /// bridge produced. Caller has already located the matching
+    /// type-id (the dispatcher knows the call's return shape from
+    /// the WIT signature). Returns the payload ready to wrap in
+    /// `SqlValue::WitValue`.
+    ///
+    /// Same semantics as `decode_wit_value`: unknown type-id is a
+    /// hard error; missing codec falls back to identity passthrough.
+    pub fn encode_wit_value(
+        &self,
+        type_id: [u8; 32],
+        canon_bytes: Vec<u8>,
+    ) -> Result<sqlite_component_core::db::WitValuePayload> {
+        let binding = self.typed_values.lookup(&type_id).ok_or_else(|| {
+            anyhow!(
+                "wit-value encode: no typed-value-binding for type-id {}; \
+                 no loaded extension declares this record shape",
+                short_hex(&type_id),
+            )
+        })?;
+        let bytes = match self.typed_value_codecs.lookup(&type_id) {
+            Some(codec) => codec.encode_from_canon(&canon_bytes).map_err(|e| {
+                anyhow!(
+                    "wit-value encode: codec for {} (ext {}) rejected canonical bytes: {e}",
+                    binding.symbolic_name,
+                    binding.extension_name,
+                )
+            })?,
+            None => canon_bytes,
+        };
+        Ok(sqlite_component_core::db::WitValuePayload {
+            type_id,
+            bytes,
+            symbolic_name: binding.symbolic_name,
+        })
     }
 
     pub fn unload(&self, name: &str) -> Result<()> {
