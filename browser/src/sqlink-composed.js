@@ -62,6 +62,13 @@ const ASYNC_IMPORTS = [
   'wasi:io/streams@0.2.6#[method]output-stream.blocking-write-and-flush',
   'wasi:io/streams@0.2.6#[method]output-stream.blocking-flush',
   'wasi:io/streams@0.2.6#[method]output-stream.blocking-splice',
+  // v1.2 (#481): cli auto-loads cli-family extensions via
+  // load-extension-from-bytes; the polyfill's handler now awaits
+  // registry.addFromBytes (runtime-bindgen instantiate is async).
+  // Same for load-extension since `.load`'s interactive path may
+  // also route through the runtime-bindgen factory.
+  'sqlink:wasm/extension-loader@0.1.0#load-extension-from-bytes',
+  'sqlink:wasm/extension-loader@0.1.0#load-extension',
 ]
 const ASYNC_EXPORTS = ['wasi:cli/run@0.2.6#run']
 
