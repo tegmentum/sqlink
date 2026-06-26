@@ -35,6 +35,61 @@
 
 import { hashBlake3Hex } from './hash.js'
 
+// ────────────── cli-state JSON encoding helpers ──────────────
+//
+// The host extension-loader's dispatch-dot-command surface
+// (extension-loader.wit) passes cli state as `list<tuple<string,
+// string>>` where each value is JSON-encoded so the interface
+// doesn't have to track sql-value variants across the boundary. The
+// dot-command interface ITSELF uses `sql-value` variants natively.
+// The JS dispatcher bridges between the two shapes here.
+
+function unwrapJsonString(s, fallback) {
+  if (typeof s !== 'string') return fallback
+  try {
+    const v = JSON.parse(s)
+    if (typeof v === 'string') return v
+  } catch {
+    // Not JSON — accept the raw string verbatim.
+    return s
+  }
+  return fallback
+}
+
+function unwrapJsonBool(s, fallback) {
+  if (typeof s !== 'string') return fallback
+  try {
+    const v = JSON.parse(s)
+    if (typeof v === 'boolean') return v
+    if (typeof v === 'number') return v !== 0
+  } catch {
+    if (/^(true|1)$/i.test(s)) return true
+    if (/^(false|0)$/i.test(s)) return false
+  }
+  return fallback
+}
+
+function encodeSqlValueToJson(v) {
+  // jco lowers `variant sql-value { null, integer(s64), real(f64),
+  // text(string), blob(list<u8>) }` to `{ tag, val }`. We round-trip
+  // through JSON so the cli's state-delta applier can decode by key.
+  if (!v) return 'null'
+  switch (v.tag) {
+    case 'null':
+      return 'null'
+    case 'integer':
+      return JSON.stringify(Number(v.val ?? 0n))
+    case 'real':
+      return JSON.stringify(Number(v.val ?? 0))
+    case 'text':
+      return JSON.stringify(String(v.val ?? ''))
+    case 'blob':
+      return JSON.stringify(Array.from(v.val ?? []))
+    default:
+      return 'null'
+  }
+}
+
 /**
  * Build the extension-loader plugin object jco will install under
  * `imports['sqlink:wasm/extension-loader']` (or the versioned key,
@@ -147,13 +202,87 @@ export function buildExtensionLoader(registry) {
       return undefined
     },
 
-    dispatchDotCommand(name, _args, _cliState) {
-      // v1: no dot-command extensions are wired through the JS
-      // registry. The cli's own .quit/.exit/etc. are handled
-      // inside the cli's switch, not through the loader.
-      const err = new Object()
-      err.payload = { code: 404, message: `no such dot-command: ${name}` }
-      throw err
+    dispatchDotCommand(name, args, cliState) {
+      // Walk loaded extensions for one whose manifest registers a
+      // dot-command with this name (cli already stripped the leading
+      // ".", so `name === "prefix"` for `.prefix add foaf ...`).
+      // First match wins per loadorder; same shape as the native
+      // dispatcher's session walk in cli/src/lib.rs.
+      let owner = null
+      let spec = null
+      for (const entry of registry.values()) {
+        const dcs = entry.manifest?.dotCommands ?? []
+        for (const dc of dcs) {
+          if ((dc.name ?? '') === name) {
+            owner = entry
+            spec = dc
+            break
+          }
+        }
+        if (owner) break
+      }
+      if (!owner) {
+        const err = new Object()
+        err.payload = { code: 404, message: `no such dot-command: ${name}` }
+        throw err
+      }
+      const dotCmd =
+        owner.instance?.dotCommand ??
+        owner.instance?.['sqlite:extension/dot-command'] ??
+        owner.instance?.['sqlite:extension/dot-command@0.1.0']
+      if (!dotCmd?.invoke) {
+        const err = new Object()
+        err.payload = {
+          code: 500,
+          message: `extension '${owner.manifest?.name}' registers .${name} but ` +
+            `has no dot-command.invoke export`,
+        }
+        throw err
+      }
+      // Decode displayMode + bailOnError from the cli-state snapshot
+      // the cli passes in. Each entry is [key, valueJson]. We accept
+      // a JSON string ("\"list\"") OR a raw string ("list").
+      let displayMode = 'list'
+      let bailOnError = false
+      for (const tup of cliState ?? []) {
+        const k = Array.isArray(tup) ? tup[0] : tup?.[0]
+        const v = Array.isArray(tup) ? tup[1] : tup?.[1]
+        if (k === 'display/mode') {
+          displayMode = unwrapJsonString(v, displayMode)
+        } else if (k === 'bail/on-error') {
+          bailOnError = unwrapJsonBool(v, bailOnError)
+        }
+      }
+      const ctx = {
+        args: String(args ?? ''),
+        interactive: false,
+        displayMode,
+        bailOnError,
+      }
+      let invokeResult
+      try {
+        invokeResult = dotCmd.invoke(BigInt(spec.id ?? 0n), ctx)
+      } catch (e) {
+        // jco maps the err variant of result<invoke-result, sqlite-error>
+        // to a thrown payload-bearing object. Translate to loader-error.
+        const payload = e?.payload ?? {}
+        const err = new Object()
+        err.payload = {
+          code: 500,
+          message: payload?.message ?? `extension '${owner.manifest?.name}' ` +
+            `invoke threw: ${e?.message ?? String(e)}`,
+        }
+        throw err
+      }
+      const stateDeltas = (invokeResult?.stateDeltas ?? []).map((d) => ({
+        key: String(d?.key ?? ''),
+        valueJson: encodeSqlValueToJson(d?.value),
+      }))
+      return {
+        text: String(invokeResult?.text ?? ''),
+        stateDeltas,
+        exitCode: Number(invokeResult?.exitCode ?? 0) | 0,
+      }
     },
 
     // --- cache surface: no-ops/empty for v1 ---
