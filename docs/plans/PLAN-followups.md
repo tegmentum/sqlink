@@ -1,3 +1,118 @@
+## v1.2: Browser composed-cli auto-load via JS registry
+
+### Background
+
+`composed-bundle.spec.js` + `composed-prefix.spec.js` were
+un-skipped in #479 with the assumption that `.bundle save` /
+`.prefix add` etc. would round-trip via `ComposedDatabase.
+execDotCommand`. Running them with `npm test` in `browser/`
+shows the assumption was wrong:
+
+```
+auto-load core-dotcmd failed: extension 'core-dotcmd' not in JS
+  registry. Call db.loadExtension(name, bytes) first. (404).
+auto-load bundle-cli failed: ...
+auto-load prefix-cli failed: ...
+[+9 cascading 404s for sqlink-meta-cli, sha3sum-cli, serialize-cli,
+ archive-cli, session-cli, sqlite-utils-{schema,fts,maint,data}]
+```
+
+### The architectural mismatch
+
+The cli's startup code in `cli/src/lib.rs` calls
+`extension_loader::load_extension_from_bytes("prefix-cli",
+PREFIX_CLI_BYTES, &options)` for each of its 12 cli-family
+extensions. The bytes are baked in at compile-time via
+`include_bytes!`. The **native** loader honors the bytes.
+
+The **browser polyfill** (`browser/src/extension-loader.js`)
+ignores the bytes and looks the extension up by NAME in a
+pre-registered JS registry (`opts.embed` map in
+`openDatabaseComposed`). The registry is populated only from
+`browser/scripts/transpile-extensions.mjs`'s `PICK` list,
+which currently has just 2 entries: `bundle_cli`, `prefix_cli`.
+
+### Why the prior #479 fix wasn't enough
+
+`#479` (commits `aca8d484` / `3afee868` / `7ae1644f`) added the
+`execDotCommand` method + Playwright assertions but didn't
+touch the polyfill registry or the transpile PICK list. Without
+those, the cli's `load_extension_from_bytes` calls 404 inside
+the polyfill and every cli-family extension stays unregistered;
+the dot-cmd dispatch table is empty; `.prefix list` / `.bundle
+list` report "Unknown command".
+
+The Playwright assertions that passed (e.g. `addOut` matched
+`/foaf/`) did so coincidentally — the URL contained "foaf" and
+the cli's "Unknown command: .prefix add foaf <URL>" response
+trivially matched the regex.
+
+### Scope
+
+Four pieces. Each can be its own commit; or bundled if small.
+
+1. **Expand the transpile PICK list** in
+   `browser/scripts/transpile-extensions.mjs` from 2 to 12:
+   `core-dotcmd`, `sqlink-meta-cli`, `sha3sum-cli`,
+   `serialize-cli`, `archive-cli`, `session-cli`,
+   `sqlite-utils-schema`, `sqlite-utils-data`,
+   `sqlite-utils-fts`, `sqlite-utils-maint`, plus the existing
+   `bundle-cli`, `prefix-cli`. Re-run `npm run pretest` to
+   regenerate `browser/src/generated/index.js` with all 12 in
+   `EXTENSION_LOADERS`.
+
+2. **Pass all 12 in `opts.embed`** in the two test HTMLs
+   (`composed-bundle.html`, `composed-prefix.html`): change
+   `openDatabaseComposed({})` to `openDatabaseComposed({embed:
+   ['core-dotcmd', 'sqlink-meta-cli', ..., 'prefix-cli']})`.
+   Without this, the registry stays empty even with PICK
+   expanded.
+
+3. **Verify the polyfill's `instantiateFromBytes` path works**.
+   `extension-loader.js:610` has `registry.instantiateFromBytes
+   = (bytes) => instantiateExtensionFromBytes(bytes)`. If this
+   path is functional, an alternative to the embed-by-name
+   approach is to make the polyfill honor the bytes the cli
+   passes. Cheaper than expanding the transpile pipeline if it
+   works.
+
+4. **Decide on the polyfill's contract**. Two viable shapes:
+   - (a) Cli passes bytes → polyfill instantiates from bytes
+     directly (matches native loader semantics).
+   - (b) Cli looks up by name → polyfill resolves against the
+     pre-transpiled module map (current behavior).
+   v1.2 should pick one + document it. If (a), retire the
+   transpile PICK list dance; if (b), generate the PICK list
+   from the cli's `include_bytes!` list automatically.
+
+### Effort
+
+1.5-2 days. Most of it is verifying option (a) works (probably
+half a day with debug iterations) + updating the two specs
+once the auto-load path stabilizes. Option (b)'s "expand PICK
+to 12" path is faster (a few hours) but leaves the
+architectural mismatch in place for v1.3 to address.
+
+### Dependencies
+
+- `c558327` in sqlite-wasm (WIT sync, landed) — without this,
+  `wac compose` itself fails before the runtime even loads.
+- `aca8d484` in sqlink (`execDotCommand` method, landed).
+
+### Out of scope (v1.3+)
+
+- General dispatch-bridge for externally-loaded (`.load PATH`)
+  dot-cmd-aware extensions in the browser. Today `.load` from
+  the cli's interactive prompt is a separate code path; this
+  v1.2 item only targets the auto-loaded built-in cli-family
+  extensions.
+
+### Status
+
+Open. Captured by task #481 after the `npm test` run.
+
+---
+
 # Plan: v1 follow-ups — roadmap for outstanding post-v1 work
 
 ## Status (2026-06-25)
