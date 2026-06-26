@@ -131,6 +131,31 @@ because its contract is already changing. sqlink can land the guard **additively
 and pay the rebuild cost only when (if) a genuine MAJOR contract change ever
 arrives.
 
+## Relationship to `compose:dynlink` shape verification (avoid two guards)
+
+sqlink's host already runs on the `sys:compose@1.0.0` orchestration framework
+(`~/git/webassembly-component-orchestration`, `compose:dynlink@0.1.0` —
+`host/src/compose_provider.rs`). That framework does **canonical WIT + CBOR →
+deterministic component identity and shape verification**. That overlaps directly
+with the load-time guard this plan proposes (verify a component's contract matches
+the host) — so **do not harden two parallel mechanisms**.
+
+Before building the bespoke pre-check (b.3), determine what `compose:dynlink`
+already gives us:
+- Its canonical-WIT hash is a **content-addressed contract identity** — stronger
+  than a hand-maintained `wit_contract` semver string (a shape change *is* a hash
+  change; nothing to remember to bump). The registry field could record that hash
+  instead of (or alongside) the semver.
+- The linker's resolve/instantiate step is the natural place to enforce
+  compatibility — the guard may already live there, or be a small policy on top,
+  rather than new loader code.
+
+**Action:** scope (b.3)/(b.4) as *configuring/consuming* `compose:dynlink`'s shape
+verification where it already covers us, and only hand-roll the parts it doesn't
+(e.g. the friendly message, the Manifest `contract-version` channel). The same
+question applies to ducklink, which is currently hand-rolling its `wit_contract`
+guard — keep the two projects' answer consistent.
+
 ## Rollout (phased, low-risk)
 
 - **Phase 1 — additive, no rebuild.** Add `wit_contract` to the registry +
