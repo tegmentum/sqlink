@@ -3,6 +3,17 @@
 //! `Cargo.toml` description for the executive summary.
 
 pub mod bundles;
+// v1.5 round 2 (PLAN-followups.md): connection-driven bundle CRUD
+// free functions + their SQL-string `pub const`s. The single
+// source of truth for bundles SQL across (a) the rusqlite-ish
+// SqliteCasStore wrapper in this crate (kept; other consumers
+// depend on it), (b) the browser JS polyfill's inline mirrors
+// (browser/src/extension-loader.js's buildBundlesPolyfill),
+// (c) the native sqlink-host's `impl bundles::Host` cutover
+// that uses this module's free functions directly against a
+// `~/.cache/sqlink/cas.db` Connection without going through
+// SqliteCasStore.
+pub mod bundles_exec;
 pub mod resolver;
 // v1.5 (PLAN-followups.md): expose the schema DDL strings publicly
 // so the browser bundles polyfill can run the same migration ladder
