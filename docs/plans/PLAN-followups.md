@@ -109,7 +109,96 @@ architectural mismatch in place for v1.3 to address.
 
 ### Status
 
-Open. Captured by task #481 after the `npm test` run.
+**Foundation merged, deeper substrate gap surfaced.**
+
+Two commits landed (`e9684ed6` polyfill bytes-path + `a7dd537e`
+jspi async-imports marking). These unblock the bytes-path (no
+more 404 "not in JS registry") and the async wiring (no more
+`_utf8AllocateAndEncode received [undefined]`). The cli's
+auto-load loop now reaches per-extension instantiation for all
+12 cli-family bytes.
+
+**But each per-extension instantiation now fails at a SECOND
+substrate gap**: the cli-family extensions import SPI interfaces
+the polyfill's `buildExtensionAdditionalImports` doesn't
+provide. Runtime-bindgen instantiates each extension in
+ISOLATION against the polyfill — which has no idea how to wire
+back into the composed cli's own SPI implementations.
+
+Missing SPI imports per extension:
+
+| Extension | Missing import surface |
+|---|---|
+| core-dotcmd | `sqlite:extension/cli-state` (getBool) |
+| sqlink-meta-cli | `sqlite:extension/loader-bridge` (loadExtensionFromBytes) |
+| serialize-cli, archive-cli | `sqlite:extension/cli-stdout` (write) |
+| sqlite-utils-maint | `sqlite:extension/cli-state` (getText) |
+| bundle-cli | `sqlite:extension/build` (spawnBuild) |
+| prefix-cli | `sqlite:extension/loader-bridge` (applyPrefixPin) |
+
+The native loader satisfies these via the composed cli's own
+exports. The browser needs per-interface host handlers in the
+polyfill that proxy back to the cli runtime — non-trivial
+because each handler needs to access cli state from inside an
+extension's instantiation closure.
+
+Tests still fail (`Unknown command: .prefix list`) because
+prefix-cli's instantiation errors out at the loader-bridge gap;
+same for bundle-cli. The foundation merge keeps the byte-path
+viable but the round-trip end-to-end test continues to fail.
+
+Captured by task #481. SPI bridging tracked separately as v1.3
+(see next section).
+
+## v1.3: Browser cli-family SPI bridging
+
+### Background
+
+v1.2 (#481) landed the byte-path + async wiring foundation but
+uncovered that cli-family extensions import 4 SPI interfaces
+the browser polyfill doesn't satisfy. Each handler needs to
+proxy back to the composed cli's own implementations:
+
+- `sqlite:extension/cli-state` — get/set cli session state (used
+  by core-dotcmd, sqlite-utils-maint).
+- `sqlite:extension/cli-stdout` — write to the cli's stdout pipe
+  (used by serialize-cli, archive-cli).
+- `sqlite:extension/loader-bridge` — load other extensions +
+  apply prefix-pins (used by sqlink-meta-cli, prefix-cli).
+- `sqlite:extension/build` — spawn-build for `.bundle build`
+  (used by bundle-cli).
+
+### Three viable shapes
+
+1. **Per-interface polyfill handlers** that proxy each call back
+   to the running composed cli via shared JS state. Cleanest +
+   matches native semantics but requires careful state plumbing
+   per interface. Estimated: 2 days per interface × 4 = ~1 week.
+
+2. **Pre-transpile + compose the cli-family as one component**
+   that the composed runtime instantiates as a unit — same
+   pattern sqlite-lib uses today. Sidesteps the runtime-bindgen
+   per-extension isolation entirely. Effort: ~3 days (mostly
+   composition + WIT plumbing).
+
+3. **Stub the SPI surfaces with no-ops** so the extensions
+   instantiate but their dot-cmds error gracefully on missing
+   functionality. Lets the test specs pass shallowly but loses
+   real round-trip coverage. Effort: ~1 day. Counterproductive
+   for the test specs' actual intent.
+
+### Recommendation
+
+Option 2 (pre-transpile + compose) seems cleanest. The composed
+sqlite-lib pattern proved out in sqlite-wasm's
+`build-composed-runtime.sh`; extending it to include the
+cli-family extensions in the same wac-compose step would
+eliminate the need to satisfy SPI imports in the browser
+polyfill entirely.
+
+### Status
+
+Not started. Surfaces after #481's foundation merge.
 
 ---
 
