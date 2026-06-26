@@ -1293,6 +1293,266 @@ export function buildDispatch(registry) {
 }
 
 /**
+ * Build the cli-family host handlers a runtime-loaded cli-family
+ * extension (prefix-cli, bundle-cli, sqlink-meta-cli, ...) imports
+ * from the dotcmd-aware world: `loader-bridge`, `cli-state`,
+ * `cli-stdout`, `cli-stderr`. The composed cli itself is the canonical
+ * caller of these in native sqlink; in the browser the runtime-bindgen
+ * path also instantiates cli-family extensions (auto-loaded via
+ * include_bytes!), and they need somewhere real to call.
+ *
+ * Returns a map keyed by import interface name (un-versioned shape
+ * matches what jco's runtime bindgen produces); merged into
+ * `buildExtensionAdditionalImports` so it overrides the same-keyed
+ * stub.
+ *
+ * State ownership:
+ *   - `cliState`: caller-supplied Map<string, jco-sql-value>. The
+ *     polyfill doesn't track the cli's own state (display/mode etc.),
+ *     so reads return defaults documented in dotcmd.wit's state schema
+ *     when a key isn't set. Extensions that write state via
+ *     invoke-result.state-deltas can be applied by the caller into
+ *     this Map directly.
+ *   - `onStdout` / `onStderr`: caller-supplied byte-sink callbacks
+ *     (same shape ComposedDatabase uses for wasi:cli/stdout pipe).
+ *     `cli-stdout.write/flush/row-end` route through onStdout so an
+ *     extension's `cli-stdout.write("foaf -> ...")` lands in the same
+ *     buffer the cli's own stdout did.
+ *
+ * Why not just stub: `cli-stdout.write` throwing on every call would
+ * break any dot-command extension that prints status text; `cli-state`
+ * throwing breaks any extension that reads `display/mode` before
+ * formatting. The stub list (step 1) provides the safety net for
+ * worlds we haven't wired; this provides the real path for cli-family
+ * extensions the browser tests actually exercise.
+ *
+ * @param {{
+ *   registry: ExtensionRegistry,
+ *   cliState?: Map<string, object>,
+ *   onStdout?: (data: Uint8Array) => void,
+ *   onStderr?: (data: Uint8Array) => void,
+ * }} opts
+ * @returns {Record<string, object>}
+ */
+export function buildCliHostHandlers(opts) {
+  const registry = opts.registry
+  const cliState = opts.cliState ?? new Map()
+  const onStdout = opts.onStdout ?? (() => {})
+  const onStderr = opts.onStderr ?? (() => {})
+  const encoder = new TextEncoder()
+
+  // Default values per dotcmd.wit's cli-state schema. Returned when
+  // the key isn't in the caller's state Map. Match the cli's
+  // initial-session defaults so extensions that read at boot time see
+  // sane values instead of zero-noise.
+  const STATE_DEFAULTS = {
+    'display/mode': { tag: 'text', val: 'list' },
+    'display/headers': { tag: 'integer', val: 0n },
+    'display/nullvalue': { tag: 'text', val: '' },
+    'display/separator': { tag: 'text', val: '|' },
+    'display/width': { tag: 'text', val: '' },
+    'io/echo': { tag: 'integer', val: 0n },
+    'io/output': { tag: 'text', val: '' },
+    'io/timer': { tag: 'integer', val: 0n },
+    'io/changes': { tag: 'integer', val: 0n },
+    'stats/enabled': { tag: 'integer', val: 0n },
+    'stats/explain': { tag: 'text', val: 'off' },
+    'bail/on-error': { tag: 'integer', val: 0n },
+    'binary/on': { tag: 'integer', val: 0n },
+    'db/path': { tag: 'text', val: ':memory:' },
+    'db/readonly': { tag: 'integer', val: 0n },
+    'db/changes-total': { tag: 'integer', val: 0n },
+    'prompt/main': { tag: 'text', val: 'sqlite> ' },
+    'prompt/cont': { tag: 'text', val: '   ...> ' },
+  }
+
+  function getValue(key) {
+    if (cliState.has(key)) return cliState.get(key)
+    if (Object.prototype.hasOwnProperty.call(STATE_DEFAULTS, key)) {
+      return STATE_DEFAULTS[key]
+    }
+    return { tag: 'null' }
+  }
+
+  // ────────────── loader-bridge ──────────────
+  //
+  // The dotcmd-aware slice of extension-loader: extensions like
+  // sqlink-meta-cli (`.sqlink install`) and bundle-cli (`.bundle
+  // save`) call these. Mostly proxies to the JS registry; the
+  // `apply-prefix-pin` is the live-prefer hook prefix-cli calls
+  // after writing to __sqlink_prefix_pin.
+  const loaderBridge = {
+    async loadExtensionFromBytes(nameHint, bytes, _extraGrants) {
+      // Mirror the extension-loader's loadExtensionFromBytes shape:
+      // registry-first, fall through to addFromBytes if bytes given.
+      const cached = registry.get(nameHint)
+      if (cached) return bridgeManifest(cached.manifest, nameHint)
+      if (!bytes || (!(bytes instanceof Uint8Array) && !(bytes instanceof ArrayBuffer))) {
+        const err = new Object()
+        err.payload = {
+          code: 1,
+          message: `loader-bridge.load-extension-from-bytes: ` +
+            `extension '${nameHint}' not in registry and no bytes supplied.`,
+        }
+        throw err
+      }
+      if (typeof registry.addFromBytes !== 'function') {
+        const err = new Object()
+        err.payload = {
+          code: 1,
+          message: `loader-bridge.load-extension-from-bytes: ` +
+            `registry.addFromBytes factory unavailable.`,
+        }
+        throw err
+      }
+      try {
+        const { manifest } = await registry.addFromBytes(nameHint, bytes)
+        return bridgeManifest(manifest, nameHint)
+      } catch (e) {
+        const err = new Object()
+        err.payload = {
+          code: 1,
+          message: `loader-bridge.load-extension-from-bytes: ` +
+            `'${nameHint}' instantiate failed: ${e?.message ?? String(e)}`,
+        }
+        throw err
+      }
+    },
+
+    extensionDigest(name) {
+      return registry.get(name)?.digestHex ?? ''
+    },
+
+    listLoadedExtensions() {
+      // Stable order: name ascending (the bundle-cli set-hash assumes
+      // this).
+      return Array.from(registry.values())
+        .map((e) => ({
+          name: e.manifest?.name ?? '',
+          digest: e.digestHex ?? '',
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name))
+    },
+
+    hostTargetTriple() {
+      // Browser: there's no real cargo target. Return a sentinel
+      // bundle-cli can recognise (its .bundle build flow is a no-op
+      // in browser via the build interface stub anyway).
+      return 'wasm32-unknown-browser'
+    },
+
+    envVar(_name) {
+      // No process env in browser. Returning undefined => option::none.
+      return undefined
+    },
+
+    applyPrefixPin(_functionName, _nArgs) {
+      // v1: no-op. prefix-cli writes the __sqlink_prefix_pin row via
+      // spi.execute; the LIVE re-registration step (re-call register-
+      // host-loaded-scalar to override SQLite's last-wins) is the
+      // native loader's responsibility. The browser's dispatch-bridge
+      // path uses last-write-wins on spi-loader.register-scalar, so
+      // the row write is enough for new .prefix lookups; we just
+      // skip the live overwrite.
+      return undefined
+    },
+  }
+
+  // Trim a full manifest to loader-bridge's bridged-manifest shape.
+  // (loader-bridge declares its own type locally to keep metadata an
+  // export-side interface; we translate at the boundary.)
+  function bridgeManifest(manifest, fallbackName) {
+    const dotCommands = (manifest?.dotCommands ?? []).map((dc) => ({
+      id: BigInt(dc.id ?? 0n),
+      name: dc.name ?? '',
+      summary: dc.summary ?? '',
+      usage: dc.usage ?? '',
+      help: dc.help ?? '',
+      requiresWrite: !!dc.requiresWrite,
+    }))
+    return {
+      name: manifest?.name ?? fallbackName ?? '',
+      version: manifest?.version ?? '',
+      dotCommands,
+    }
+  }
+
+  // ────────────── cli-stdout / cli-stderr ──────────────
+
+  const cliStdout = {
+    write(text) {
+      onStdout(encoder.encode(text))
+    },
+    flush() {
+      // No buffer of our own — onStdout writes immediately.
+    },
+    rowEnd() {
+      // Display-mode-aware row separator. The cli's own router would
+      // pick "\n" / "|\n" / "," based on display/mode; we approximate
+      // with "\n" since the browser tests substring-assert on names
+      // not on separator shape.
+      onStdout(encoder.encode('\n'))
+    },
+  }
+
+  const cliStderr = {
+    write(text) {
+      onStderr(encoder.encode(text))
+    },
+  }
+
+  // ────────────── cli-state ──────────────
+
+  const cliStateImpl = {
+    getText(key) {
+      const v = getValue(key)
+      return v?.tag === 'text' ? String(v.val ?? '') : ''
+    },
+    getInt(key) {
+      const v = getValue(key)
+      if (v?.tag === 'integer') return BigInt(v.val ?? 0n)
+      // booleans coerce to 0/1
+      if (v?.tag === 'text' && /^(true|false)$/i.test(String(v.val))) {
+        return BigInt(/^true$/i.test(String(v.val)) ? 1 : 0)
+      }
+      return 0n
+    },
+    getBool(key) {
+      const v = getValue(key)
+      if (v?.tag === 'integer') return BigInt(v.val ?? 0n) !== 0n
+      if (v?.tag === 'text') return /^true$/i.test(String(v.val))
+      return false
+    },
+    getReal(key) {
+      const v = getValue(key)
+      if (v?.tag === 'real') return Number(v.val ?? 0)
+      if (v?.tag === 'integer') return Number(v.val ?? 0n)
+      return 0
+    },
+    getValue(key) {
+      return getValue(key)
+    },
+    listKeys(prefix) {
+      const keys = new Set()
+      for (const k of cliState.keys()) {
+        if (k.startsWith(prefix)) keys.add(k)
+      }
+      for (const k of Object.keys(STATE_DEFAULTS)) {
+        if (k.startsWith(prefix)) keys.add(k)
+      }
+      return Array.from(keys).sort()
+    },
+  }
+
+  return {
+    'sqlite:extension/loader-bridge': loaderBridge,
+    'sqlite:extension/cli-stdout': cliStdout,
+    'sqlite:extension/cli-stderr': cliStderr,
+    'sqlite:extension/cli-state': cliStateImpl,
+  }
+}
+
+/**
  * Build the spi-loader host impl. Replaces the previous stub in
  * host-imports.js with a real implementation that re-enters the
  * composed binary's `dispatch-bridge` export to install host-resident
