@@ -69,6 +69,36 @@ function unwrapJsonBool(s, fallback) {
   return fallback
 }
 
+/**
+ * Convert a `list<u8>` from jco (Uint8Array | number[] | ArrayLike)
+ * to a lower-case hex string. Used by ExtensionRegistry's typed-
+ * value bindings to key the registry on `type-id` — Maps don't
+ * key well on raw byte arrays, but a hex string is canonical +
+ * comparable.
+ *
+ * Returns null for falsy / non-iterable input so the drain pass
+ * can skip malformed manifest entries without crashing.
+ */
+function bytesToHex(bytes) {
+  if (!bytes) return null
+  let arr
+  if (bytes instanceof Uint8Array) {
+    arr = bytes
+  } else if (Array.isArray(bytes)) {
+    arr = bytes
+  } else if (typeof bytes.length === 'number') {
+    arr = Array.from(bytes)
+  } else {
+    return null
+  }
+  let s = ''
+  for (let i = 0; i < arr.length; i++) {
+    const b = arr[i] & 0xff
+    s += (b < 16 ? '0' : '') + b.toString(16)
+  }
+  return s
+}
+
 function encodeSqlValueToJson(v) {
   // jco lowers `variant sql-value { null, integer(s64), real(f64),
   // text(string), blob(list<u8>) }` to `{ tag, val }`. We round-trip
@@ -382,6 +412,28 @@ export class ExtensionRegistry {
   constructor() {
     this._byName = new Map()
     /**
+     * PLAN-wit-value-extension.md Phase B (B6 browser mirror).
+     *
+     * Per-extension typed-value registry, keyed by lower-case-hex
+     * `type-id` -> { extensionName, symbolicName, decoderImport,
+     * encoderImport }. Mirrors `TypedValueRegistry` in
+     * `host/src/typed_value.rs`.
+     *
+     * Populated by `_drainTypedValues` (called from add /
+     * addFromBytes) from the manifest's `typed-values` field.
+     * Conflict semantics: same type-id with a different binding
+     * throws; identical re-insertion is idempotent.
+     *
+     * Phase B: the browser path doesn't directly invoke decoders
+     * (the wasm bridge handles wit-value internally inside its
+     * scalar-function.call implementation; the JS worker only
+     * sees rendered SQL output). The registry is populated for
+     * completeness + introspection; the lookup API is wired so
+     * Phase C-onward host-driven dispatch (if it lands) has a
+     * place to find decoders without a second traversal.
+     */
+    this._typedValuesByTypeId = new Map()
+    /**
      * Factory invoked lazily to instantiate an extension's
      * transpiled module. Set by the consumer (sqlink.js /
      * sqlink-composed.js) so the registry doesn't have to know
@@ -481,6 +533,7 @@ export class ExtensionRegistry {
       },
     }
     this._byName.set(name, entry)
+    this._drainTypedValues(name, manifest)
     return { manifest, digestHex }
   }
 
@@ -557,6 +610,7 @@ export class ExtensionRegistry {
       },
     }
     this._byName.set(name, entry)
+    this._drainTypedValues(name, manifest)
     return { manifest, digestHex }
   }
 
@@ -627,6 +681,97 @@ export class ExtensionRegistry {
     entry.hooks.commitHook = false
     entry.hooks.rollbackHook = false
     entry.hooks.walHook = false
+    // PLAN-wit-value-extension.md Phase B: clear typed-value
+    // bindings owned by this extension so a re-add with a
+    // re-hashed type set doesn't trip the conflict guard.
+    this._forgetTypedValuesFor(extName)
+  }
+
+  /**
+   * Drain manifest.typedValues into _typedValuesByTypeId, with
+   * the same conflict semantics as TypedValueRegistry::insert on
+   * the Rust side. jco lowers `list<u8>` as Uint8Array | number[]
+   * depending on version; normalise to hex string for the map key.
+   *
+   * @private
+   */
+  _drainTypedValues(extName, manifest) {
+    const list =
+      manifest?.typedValues ?? manifest?.['typed-values'] ?? manifest?.typed_values ?? []
+    if (!Array.isArray(list) || list.length === 0) return
+    for (const raw of list) {
+      const typeIdBytes = raw?.typeId ?? raw?.['type-id'] ?? raw?.type_id
+      const key = bytesToHex(typeIdBytes)
+      if (!key) continue
+      const binding = {
+        typeIdHex: key,
+        extensionName: extName,
+        symbolicName: raw?.symbolicName ?? raw?.['symbolic-name'] ?? raw?.symbolic_name ?? '',
+        decoderImport:
+          raw?.decoderImport ?? raw?.['decoder-import'] ?? raw?.decoder_import ?? '',
+        encoderImport:
+          raw?.encoderImport ?? raw?.['encoder-import'] ?? raw?.encoder_import ?? '',
+      }
+      const existing = this._typedValuesByTypeId.get(key)
+      if (existing) {
+        const same =
+          existing.extensionName === binding.extensionName &&
+          existing.decoderImport === binding.decoderImport &&
+          existing.encoderImport === binding.encoderImport &&
+          existing.symbolicName === binding.symbolicName
+        if (same) continue
+        throw new Error(
+          `typed-value registry conflict on type-id ${key.slice(0, 8)}…: ` +
+            `extension ${existing.extensionName} already declared decoder ` +
+            `${JSON.stringify(existing.decoderImport)} / encoder ` +
+            `${JSON.stringify(existing.encoderImport)} / symbolic ` +
+            `${JSON.stringify(existing.symbolicName)}; ` +
+            `extension ${binding.extensionName} declared decoder ` +
+            `${JSON.stringify(binding.decoderImport)} / encoder ` +
+            `${JSON.stringify(binding.encoderImport)} / symbolic ` +
+            `${JSON.stringify(binding.symbolicName)}`,
+        )
+      }
+      this._typedValuesByTypeId.set(key, binding)
+    }
+  }
+
+  /**
+   * Look up a typed-value binding by its type-id (as bytes OR
+   * hex string). Returns undefined when the type-id isn't
+   * declared by any loaded extension.
+   *
+   * @param {Uint8Array | number[] | string} typeId
+   */
+  lookupTypedValue(typeId) {
+    const key = typeof typeId === 'string' ? typeId.toLowerCase() : bytesToHex(typeId)
+    return this._typedValuesByTypeId.get(key)
+  }
+
+  /**
+   * Snapshot of every registered typed-value binding. Used by
+   * introspection callers + the unit tests; the live map is
+   * private so the caller can't mutate it out from under the
+   * registry's conflict checks.
+   */
+  typedValueBindings() {
+    return Array.from(this._typedValuesByTypeId.values())
+  }
+
+  /**
+   * Drop every typed-value binding owned by `extName`. Called
+   * from `delete()` and `forgetRegistrations()` so a re-add of
+   * the same extension with a re-hashed type set lands without
+   * tripping the conflict guard.
+   *
+   * @private
+   */
+  _forgetTypedValuesFor(extName) {
+    for (const [key, binding] of this._typedValuesByTypeId) {
+      if (binding.extensionName === extName) {
+        this._typedValuesByTypeId.delete(key)
+      }
+    }
   }
 
   get(name) {
@@ -646,6 +791,10 @@ export class ExtensionRegistry {
         // ignore — destroy is best-effort
       }
     }
+    // PLAN-wit-value-extension.md Phase B: drop any typed-value
+    // bindings the extension declared so a re-add doesn't trip
+    // the conflict guard.
+    this._forgetTypedValuesFor(name)
     return this._byName.delete(name)
   }
 
