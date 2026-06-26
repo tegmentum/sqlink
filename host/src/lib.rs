@@ -296,21 +296,20 @@ pub mod loaded_authorizing {
     });
 }
 
-/// Bindgen for compose:dynlink-shape extensions (runnable components).
-/// See PLAN-compose-integration.md for the integration plan.
-/// CP1's validation: this bindgen must build for the WIT to be
-/// consumable. CP2 fills in the Host trait for the `linker`
-/// interface; CP5 builds a runnable component against `dynlink-guest`.
+/// compose:dynlink linker bindings. Previously sqlink bindgen'd its own
+/// `compose-host-stub` world here and implemented the linker `Host`/`HostInstance`
+/// traits inline (HostWrap + RunHostWrap). The shared `datalink-dynlink` crate
+/// now owns that machinery, so this module is a thin re-export of the shared
+/// crate's ASYNC linker bindings — the same generated types the shared
+/// `add_to_linker` + `impl_datalink_dynlink_async_host!` macro drive.
+///
+/// The opaque `instance` resource is the shared `AsyncInstance` (backed by an
+/// `Arc<ProviderHandle>` in our per-Store resource table). sqlink's trust gate,
+/// CAS-digest resolution, multi-tenancy, and the SqliteRuntime/WasmComponent
+/// providers live in our `AsyncProviderBackend` impls (see `compose_provider`).
 pub mod compose {
-    wasmtime::component::bindgen!({
-        path: "../wit",
-        world: "compose-host-stub",
-        imports: { default: async },
-        exports: { default: async },
-        with: {
-            "compose:dynlink/linker@0.1.0.instance": super::ComposeInstance,
-        },
-    });
+    pub use datalink_dynlink::async_bindings::compose;
+    pub use datalink_dynlink::async_bindings::sys;
 }
 
 /// Bindgen for wasm-component providers — components that export
@@ -524,110 +523,57 @@ async fn verify_against_anchors(
     Ok(false)
 }
 
-/// Host-side resource backing the guest-visible `linker.instance`.
-/// Stored in the wasmtime ResourceTable; the guest sees an opaque
-/// handle and can only call `invoke` on it. CP2 wires this into the
-/// linker Host trait.
-pub struct ComposeInstance {
-    /// Which provider this handle dispatches to. Cloned (cheap) from
-    /// the Host's compose_providers map at resolve time.
-    pub provider: Arc<compose_provider::ProviderHandle>,
-}
-
-// CP2 wiring: the linker Host trait. Routes resolve_by_id through
-// the Host's compose_providers map, hands out ComposeInstance
-// resources, and dispatches invoke calls to the provider's handler.
+// The compose:dynlink/linker `instance` resource is now the shared crate's
+// `AsyncInstance`, backed in our per-Store resource table by an
+// `Arc<ProviderHandle>` (= `compose_provider::ProviderBackendHandle`). The
+// resolve/invoke/drop routing + the resource table push/get/delete live in the
+// shared `datalink_dynlink::AsyncDynLinkBridge`; sqlink's trust/CAS/tenancy +
+// the SqliteRuntime/WasmComponent providers live in its `AsyncProviderBackend`
+// impls (`compose_provider::{HostWrapBackend, RunBackend}`).
 use wasmtime::component::Resource;
 
-fn compose_err(message: impl Into<String>) -> compose::sys::compose::types::Error {
-    compose::sys::compose::types::Error {
-        code: compose::sys::compose::types::ErrorCode::InternalError,
-        message: message.into(),
-        context: None,
-    }
+use compose::sys::compose::types::Error as ComposeError;
+
+/// Alias kept for call sites that still refer to the linker instance resource
+/// by the old name. It IS the shared `AsyncInstance`.
+pub use datalink_dynlink::AsyncInstance as ComposeInstance;
+
+fn compose_err(message: impl Into<String>) -> ComposeError {
+    datalink_dynlink::async_err(
+        compose::sys::compose::types::ErrorCode::InternalError,
+        message,
+    )
 }
 
+// HostWrap's compose:dynlink linker path. The resolve LOGIC (default-tenant
+// lookup, CAS-digest + trust gate) now lives in `HostWrapBackend`; the bridge
+// owns the routing + resource table machinery. These thin impls only handle
+// HostWrap's Optional store-resource-table (command-mode runs carry None) —
+// the one wrinkle the generic macro (which needs a non-optional table) can't
+// absorb — and delegate everything else to the shared bridge held on `Host`.
 impl<'a> compose::compose::dynlink::linker::Host for HostWrap<'a> {
     async fn resolve_by_digest(
         &mut self,
         digest: Vec<u8>,
-    ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
-        // CP8: the digest is opaque bytes whose hex spelling indexes
-        // into the CAS by either blake3 or sha-256 (the store's
-        // sha256 mirror column makes the lookup symmetric). Cache
-        // hit → compile bytes through the TrustPolicy → instantiate
-        // a dynlink-provider component → hand out the Resource.
-        let hex = hex::encode(digest);
-        let cached_bytes = {
-            let g = self.host.cache.read();
-            g.as_ref().and_then(|c| c.lookup_by_hash(&hex))
-        };
-        let Some(bytes) = cached_bytes else {
-            return Err(compose_err(format!("digest {hex} not in cache")));
-        };
-        // Same trust gate as the explicit registration path
-        // (register_wasm_provider_in_async). Digest-resolution
-        // mustn't be a backdoor for unsigned bytes when a stricter
-        // policy is active.
-        let policy = self.host.trust_policy.read().clone();
-        match &policy {
-            TrustPolicy::Ed25519Signed { .. } => {
-                // Signature sidecars live next to filesystem
-                // artifacts (`<path>.sig`). The CAS doesn't carry a
-                // sig column today; refuse rather than silently
-                // weaken the policy.
-                return Err(compose_err(format!(
-                    "digest {hex} cached but TrustPolicy::Ed25519Signed \
-                     requires a signature sidecar; route this provider \
-                     through register_wasm_provider_in_async instead"
-                )));
-            }
-            other => {
-                // verify expects the blake3 hex. The hex we have is
-                // either blake3 or sha-256; the verifier rejects
-                // unknown digests under DigestAllowlist, which is
-                // the correct outcome for unauthorized sha-256
-                // lookups against a blake3-keyed allowlist.
-                if let Err(e) = other.verify("compose-resolve-by-digest", &hex) {
-                    return Err(compose_err(format!(
-                        "trust policy rejected digest {hex}: {e}"
-                    )));
-                }
-            }
-        }
-        let provider = compose_provider::ProviderHandle::new_wasm_component_from_bytes(
-            self.host.engine.clone(),
-            &bytes,
-            PathBuf::from(format!("blake3:{hex}")),
-        )
-        .map_err(|e| compose_err(format!("instantiate digest {hex}: {e}")))?;
-        let resources = self
+    ) -> std::result::Result<Resource<ComposeInstance>, ComposeError> {
+        let bridge = &self.host.dynlink_bridge;
+        let table = self
             .resources
             .as_deref_mut()
             .ok_or_else(|| compose_err("compose linker not wired into this Store"))?;
-        resources
-            .push(ComposeInstance {
-                provider: Arc::new(provider),
-            })
-            .map_err(|e| compose_err(format!("resource table push: {e}")))
+        bridge.resolve_by_digest(table, digest).await
     }
 
     async fn resolve_by_id(
         &mut self,
         id: String,
-    ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
-        let resources = self
+    ) -> std::result::Result<Resource<ComposeInstance>, ComposeError> {
+        let bridge = &self.host.dynlink_bridge;
+        let table = self
             .resources
             .as_deref_mut()
             .ok_or_else(|| compose_err("compose linker not wired into this Store"))?;
-        let Some(provider) = self.host.get_compose_provider(&id) else {
-            return Err(compose_err(format!(
-                "no compose provider registered for id {id:?}"
-            )));
-        };
-        resources
-            .push(ComposeInstance { provider })
-            .map_err(|e| compose_err(format!("resource table push: {e}")))
+        bridge.resolve_by_id(table, id).await
     }
 }
 
@@ -637,26 +583,19 @@ impl<'a> compose::compose::dynlink::linker::HostInstance for HostWrap<'a> {
         handle: Resource<ComposeInstance>,
         method: String,
         payload: Vec<u8>,
-    ) -> std::result::Result<Vec<u8>, compose::sys::compose::types::Error> {
-        let resources = self
+    ) -> std::result::Result<Vec<u8>, ComposeError> {
+        let bridge = &self.host.dynlink_bridge;
+        let table = self
             .resources
             .as_deref_mut()
             .ok_or_else(|| compose_err("compose linker not wired into this Store"))?;
-        let inst = resources
-            .get(&handle)
-            .map_err(|e| compose_err(format!("invalid handle: {e}")))?;
-        let provider = Arc::clone(&inst.provider);
-        provider
-            .invoke(&method, &payload)
-            .await
-            .map_err(compose_err)
+        bridge.invoke(table, handle, method, payload).await
     }
 
     async fn drop(&mut self, handle: Resource<ComposeInstance>) -> wasmtime::Result<()> {
-        if let Some(resources) = self.resources.as_deref_mut() {
-            if let Err(e) = resources.delete(handle) {
-                return Err(wasmtime::Error::msg(format!("{e}")));
-            }
+        let bridge = &self.host.dynlink_bridge;
+        if let Some(table) = self.resources.as_deref_mut() {
+            bridge.drop_handle(table, handle).await?;
         }
         Ok(())
     }
@@ -5402,15 +5341,12 @@ impl wasmtime::component::HasData for LoadedHostData {
 pub struct RunState {
     pub wasi: wasmtime_wasi::WasiCtx,
     pub resources: wasmtime_wasi::ResourceTable,
-    /// Cheap clone of the parent Host's full tenant-scoped
-    /// compose-providers table. Lookups during the component call go
-    /// through `active_tenant` first; that's how multi-tenant
-    /// dispatch is plumbed.
-    pub compose_providers: Arc<RwLock<TenantedProviders>>,
-    /// Which tenant's provider map this component invocation resolves
-    /// against. Defaults to `DEFAULT_TENANT` for callers that
-    /// haven't opted into multi-tenancy.
-    pub active_tenant: String,
+    /// The shared `datalink-dynlink` async bridge for this run, carrying a
+    /// `RunBackend` (a cheap clone of the parent Host's tenant-scoped
+    /// compose-providers table + the active tenant). Multi-tenant dispatch is
+    /// plumbed by which tenant the `RunBackend` was built for. The
+    /// `RunHostWrap` view borrows this + the resource table each host call.
+    pub dynlink_bridge: datalink_dynlink::AsyncDynLinkBridge<compose_provider::RunBackend>,
     /// TVM region directory. The cli (and any runnable composed
     /// against sqlite-lib) imports `tvm:memory/{manager,bytes}`
     /// because `sqlite-pcache-tvm` + `sqlite-vfs-tvm` always use
@@ -5435,92 +5371,35 @@ impl wasmtime_wasi::WasiView for RunState {
     }
 }
 
-/// Snapshot of just what compose dispatch needs from the Host —
-/// avoids threading &mut Host into RunState when the Host's other
-/// fields aren't relevant for runnable components. Holds a borrow of the full
-/// tenant-scoped map + the tenant id that scopes this call;
-/// `resolve_by_id` locks briefly to look up the provider.
+/// Snapshot of just what compose dispatch needs from the Host for a runnable
+/// component: a borrow of the shared `datalink-dynlink` async bridge (carrying
+/// the `RunBackend` = tenant-scoped provider map + the active tenant for this
+/// run) plus the Store's resource table. The `split` accessor hands both back
+/// in one call so the shared `impl_datalink_dynlink_async_host!` macro can
+/// generate the linker Host impls with no `unsafe` and no duplicated routing.
 pub struct RunHostWrap<'a> {
-    pub compose_providers: &'a RwLock<TenantedProviders>,
-    pub active_tenant: &'a str,
+    pub bridge: &'a datalink_dynlink::AsyncDynLinkBridge<compose_provider::RunBackend>,
     pub resources: &'a mut wasmtime_wasi::ResourceTable,
 }
 
-impl<'a> compose::compose::dynlink::linker::Host for RunHostWrap<'a> {
-    async fn resolve_by_digest(
+impl<'a> RunHostWrap<'a> {
+    /// The seam the async macro consumes: hand back the (immutable) bridge and
+    /// the (mutable) store resource table as two non-aliasing borrows.
+    fn split(
         &mut self,
-        _digest: Vec<u8>,
-    ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
-        // runnable components resolve by id (sqlite-runtime, std-text,
-        // ...); resolve-by-digest belongs on the extension-loader
-        // HostWrap that has access to the CAS cache. Surface a
-        // clear error so callers know to use resolve-by-id.
-        Err(compose_err(
-            "runnable components should use linker.resolve-by-id instead of \
-             resolve-by-digest (the digest path runs through the \
-             extension-loader's CAS cache, not the runnable component's \
-             provider table)"
-                .to_string(),
-        ))
-    }
-
-    async fn resolve_by_id(
-        &mut self,
-        id: String,
-    ) -> std::result::Result<Resource<ComposeInstance>, compose::sys::compose::types::Error> {
-        // Lock-scope is bounded; no await held. Look up the active
-        // tenant's inner map, then the id.
-        let provider_arc = {
-            let g = self.compose_providers.read();
-            let Some(inner) = g.get(self.active_tenant) else {
-                return Err(compose_err(format!(
-                    "no providers registered for tenant {:?} (looking up id {id:?})",
-                    self.active_tenant
-                )));
-            };
-            let Some(provider) = inner.get(&id) else {
-                return Err(compose_err(format!(
-                    "no compose provider {id:?} in tenant {:?}",
-                    self.active_tenant
-                )));
-            };
-            Arc::new(compose_provider::ProviderHandle {
-                kind: provider.kind.clone(),
-            })
-        };
-        self.resources
-            .push(ComposeInstance {
-                provider: provider_arc,
-            })
-            .map_err(|e| compose_err(format!("resource table push: {e}")))
+    ) -> (
+        &datalink_dynlink::AsyncDynLinkBridge<compose_provider::RunBackend>,
+        &mut wasmtime_wasi::ResourceTable,
+    ) {
+        (self.bridge, self.resources)
     }
 }
 
-impl<'a> compose::compose::dynlink::linker::HostInstance for RunHostWrap<'a> {
-    async fn invoke(
-        &mut self,
-        handle: Resource<ComposeInstance>,
-        method: String,
-        payload: Vec<u8>,
-    ) -> std::result::Result<Vec<u8>, compose::sys::compose::types::Error> {
-        let inst = self
-            .resources
-            .get(&handle)
-            .map_err(|e| compose_err(format!("invalid handle: {e}")))?;
-        let provider = Arc::clone(&inst.provider);
-        provider
-            .invoke(&method, &payload)
-            .await
-            .map_err(compose_err)
-    }
-
-    async fn drop(&mut self, handle: Resource<ComposeInstance>) -> wasmtime::Result<()> {
-        if let Err(e) = self.resources.delete(handle) {
-            return Err(wasmtime::Error::msg(format!("{e}")));
-        }
-        Ok(())
-    }
-}
+datalink_dynlink::impl_datalink_dynlink_async_host!(
+    <'a> RunHostWrap<'a>,
+    compose_provider::RunBackend,
+    split
+);
 
 /// HasData tag for the runnable linker setup.
 pub struct RunHostData;
@@ -5531,11 +5410,14 @@ impl wasmtime::component::HasData for RunHostData {
 fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
     let mut linker: Linker<RunState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker).map_err(|e| anyhow!("fiji WASI: {e}"))?;
+    // The shared async linker bindings, driven by a per-call `RunHostWrap` view
+    // (borrowing the Store's `dynlink_bridge` + resource table). The bridge +
+    // resolve/invoke/drop routing live in `datalink-dynlink`; the
+    // `RunHostWrap` Host impls are macro-generated (no duplicated machinery).
     compose::compose::dynlink::linker::add_to_linker::<_, RunHostData>(
         &mut linker,
         |state: &mut RunState| RunHostWrap {
-            compose_providers: &state.compose_providers,
-            active_tenant: &state.active_tenant,
+            bridge: &state.dynlink_bridge,
             resources: &mut state.resources,
         },
     )
@@ -6037,6 +5919,14 @@ pub struct Host {
     /// at startup. Other variants exist for fully-locked
     /// deployments (DenyAll) and explicit auditing pre-prod.
     trust_policy: Arc<RwLock<TrustPolicy>>,
+    /// The shared `datalink-dynlink` async bridge for the cli /
+    /// `HostWrap` compose:dynlink linker path. Holds the
+    /// `HostWrapBackend` (cheap, Arc-shared clones of the providers
+    /// map + trust policy + cache + engine); the bridge routes
+    /// resolve/invoke/drop through it against the Store's resource
+    /// table. Built once at `Host::new` (all inputs are stable
+    /// Arc-shared fields).
+    dynlink_bridge: datalink_dynlink::AsyncDynLinkBridge<compose_provider::HostWrapBackend>,
     /// Lazily-loaded signature verifier. Used when the active
     /// trust policy is `Ed25519Signed`. Built once (cheap — no
     /// component load) at Host::new; the component is read from
@@ -6425,6 +6315,19 @@ impl Host {
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(4);
+        // Build the compose-provider / trust / cache Arcs first so the shared
+        // dynlink bridge (HostWrap path) can hold cheap clones of them.
+        let compose_providers: Arc<RwLock<TenantedProviders>> =
+            Arc::new(RwLock::new(HashMap::new()));
+        let trust_policy: Arc<RwLock<TrustPolicy>> = Arc::new(RwLock::new(TrustPolicy::AllowAll));
+        let cache: Arc<RwLock<Option<cache::Cache>>> = Arc::new(RwLock::new(None));
+        let dynlink_bridge =
+            datalink_dynlink::AsyncDynLinkBridge::new(compose_provider::HostWrapBackend {
+                engine: engine.clone(),
+                compose_providers: compose_providers.clone(),
+                trust_policy: trust_policy.clone(),
+                cache: cache.clone(),
+            });
         Ok(Self {
             engine,
             engine_run,
@@ -6446,9 +6349,10 @@ impl Host {
             ext_vtab_registrations: Arc::new(Mutex::new(HashMap::new())),
             session_handles: Arc::new(Mutex::new(HashMap::new())),
             resolvers: Arc::new(RwLock::new(HashMap::new())),
-            cache: Arc::new(RwLock::new(None)),
-            compose_providers: Arc::new(RwLock::new(HashMap::new())),
-            trust_policy: Arc::new(RwLock::new(TrustPolicy::AllowAll)),
+            cache,
+            compose_providers,
+            trust_policy,
+            dynlink_bridge,
             signature_verifier,
             runtimes: Arc::new(RwLock::new(HashMap::new())),
             component_cache: Arc::new(Mutex::new(ComponentCache::new(cap))),
@@ -6757,6 +6661,19 @@ impl Host {
     /// Every tenant that has at least one provider registered.
     pub fn list_tenants(&self) -> Vec<String> {
         self.compose_providers.read().keys().cloned().collect()
+    }
+
+    /// Build the shared async dynlink bridge for a runnable component scoped to
+    /// `tenant`. Carries a `RunBackend` (cheap Arc-clone of the tenant-scoped
+    /// provider map + the tenant id). Stored on the run's `RunState`.
+    fn run_dynlink_bridge(
+        &self,
+        tenant: &str,
+    ) -> datalink_dynlink::AsyncDynLinkBridge<compose_provider::RunBackend> {
+        datalink_dynlink::AsyncDynLinkBridge::new(compose_provider::RunBackend {
+            compose_providers: self.compose_providers.clone(),
+            active_tenant: tenant.to_string(),
+        })
     }
 
     /// Provide the CAS cache for resolver-fetched bytes. Optional;
@@ -9681,8 +9598,7 @@ impl Host {
         let state = RunState {
             wasi: builder.build(),
             resources: wasmtime_wasi::ResourceTable::new(),
-            compose_providers: self.compose_providers.clone(),
-            active_tenant: tenant.to_string(),
+            dynlink_bridge: self.run_dynlink_bridge(tenant),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
         let mut store = wasmtime::Store::new(&self.engine_run, state);
@@ -9808,8 +9724,7 @@ impl Host {
         let state = RunState {
             wasi: builder.build(),
             resources: wasmtime_wasi::ResourceTable::new(),
-            compose_providers: self.compose_providers.clone(),
-            active_tenant: DEFAULT_TENANT.to_string(),
+            dynlink_bridge: self.run_dynlink_bridge(DEFAULT_TENANT),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
         let mut store = wasmtime::Store::new(&self.engine, state);
@@ -9872,8 +9787,7 @@ impl Host {
         let state = RunState {
             wasi: builder.build(),
             resources: wasmtime_wasi::ResourceTable::new(),
-            compose_providers: self.compose_providers.clone(),
-            active_tenant: DEFAULT_TENANT.to_string(),
+            dynlink_bridge: self.run_dynlink_bridge(DEFAULT_TENANT),
             tvm: tvm_wasmtime::TvmHost::new(),
         };
         let mut store = wasmtime::Store::new(&self.engine, state);

@@ -16,10 +16,13 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ciborium::value::Value as CborValue;
-use parking_lot::Mutex;
+use datalink_dynlink::{err as dl_err, AsyncProviderBackend, Error as DlError, ErrorCode as DlCode};
+use parking_lot::{Mutex, RwLock};
 use sqlite_component_core::db;
 use wasmtime::component::{Component, Linker};
 use wasmtime::Engine;
+
+use crate::{cache, TenantedProviders, TrustPolicy};
 
 /// What a resolved provider handle remembers.
 pub struct ProviderHandle {
@@ -112,6 +115,163 @@ impl ProviderHandle {
                 engine, component, ..
             } => wasm_component_invoke(method, payload, engine, component).await,
         }
+    }
+}
+
+// ===========================================================================
+// AsyncProviderBackend impls — the seam onto the shared datalink-dynlink
+// async bridge. Each handle the shared bridge mints is backed by an
+// Arc<ProviderHandle> (the SqliteRuntime shim OR a fresh-store WasmComponent),
+// so `invoke` is just `ProviderHandle::invoke`. What differs per backend is
+// resolution: the cli (HostWrap) path carries the trust gate + CAS-digest
+// lookup + the default-tenant provider map; the runnable (RunHostWrap) path
+// carries multi-tenant id lookup. Both are sqlink-specific and live HERE, not
+// in the shared bridge — the bridge just routes resolve/invoke/drop to us.
+// ===========================================================================
+
+/// The opaque handle the shared async bridge parks in the Store's resource
+/// table for each resolved `instance`. Cheap to clone; `invoke` dispatches to
+/// the provider (SqliteRuntime shim or fresh-store WasmComponent).
+pub type ProviderBackendHandle = Arc<ProviderHandle>;
+
+fn dl_internal(msg: impl Into<String>) -> DlError {
+    dl_err(DlCode::InternalError, msg)
+}
+
+/// Convert a `ProviderHandle::invoke` string error into the bridge `Error`.
+fn invoke_to_dl(e: String) -> DlError {
+    dl_err(DlCode::ExecTrap, e)
+}
+
+/// Backend for the cli / `HostWrap` path. Resolution carries sqlink's trust
+/// policy, CAS-digest lookup, and the default-tenant provider map; everything
+/// it needs is `Arc`-shared from the `Host`, so the backend is cheap to build
+/// and holds no borrow of `Host`.
+#[derive(Clone)]
+pub struct HostWrapBackend {
+    pub engine: Engine,
+    pub compose_providers: Arc<RwLock<TenantedProviders>>,
+    pub trust_policy: Arc<RwLock<TrustPolicy>>,
+    pub cache: Arc<RwLock<Option<cache::Cache>>>,
+}
+
+#[async_trait::async_trait]
+impl AsyncProviderBackend for HostWrapBackend {
+    type Handle = ProviderBackendHandle;
+
+    async fn resolve_by_id(&self, id: &str) -> Result<Self::Handle, DlError> {
+        let g = self.compose_providers.read();
+        let provider = g
+            .get(crate::DEFAULT_TENANT)
+            .and_then(|inner| inner.get(id))
+            .map(|p| {
+                Arc::new(ProviderHandle {
+                    kind: p.kind.clone(),
+                })
+            });
+        provider
+            .ok_or_else(|| dl_internal(format!("no compose provider registered for id {id:?}")))
+    }
+
+    async fn resolve_by_digest(&self, digest: &[u8]) -> Result<Self::Handle, DlError> {
+        // The digest's hex spelling indexes the CAS by blake3 or sha-256.
+        // Cache hit -> apply the SAME trust gate as explicit registration ->
+        // compile a fresh-store WasmComponent provider. Mirrors the prior
+        // inline HostWrap::resolve_by_digest exactly.
+        let hex = hex::encode(digest);
+        let cached_bytes = {
+            let g = self.cache.read();
+            g.as_ref().and_then(|c| c.lookup_by_hash(&hex))
+        };
+        let Some(bytes) = cached_bytes else {
+            return Err(dl_internal(format!("digest {hex} not in cache")));
+        };
+        let policy = self.trust_policy.read().clone();
+        match &policy {
+            TrustPolicy::Ed25519Signed { .. } => {
+                return Err(dl_internal(format!(
+                    "digest {hex} cached but TrustPolicy::Ed25519Signed \
+                     requires a signature sidecar; route this provider \
+                     through register_wasm_provider_in_async instead"
+                )));
+            }
+            other => {
+                if let Err(e) = other.verify("compose-resolve-by-digest", &hex) {
+                    return Err(dl_internal(format!(
+                        "trust policy rejected digest {hex}: {e}"
+                    )));
+                }
+            }
+        }
+        let provider = ProviderHandle::new_wasm_component_from_bytes(
+            self.engine.clone(),
+            &bytes,
+            PathBuf::from(format!("blake3:{hex}")),
+        )
+        .map_err(|e| dl_internal(format!("instantiate digest {hex}: {e}")))?;
+        Ok(Arc::new(provider))
+    }
+
+    async fn invoke(
+        &self,
+        handle: &Self::Handle,
+        method: &str,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, DlError> {
+        handle.invoke(method, payload).await.map_err(invoke_to_dl)
+    }
+}
+
+/// Backend for the runnable / `RunHostWrap` path. Resolution is multi-tenant
+/// by id; digest resolution belongs on the cli path (it needs the CAS cache),
+/// so this backend reports `NotImplemented` for it. Holds a clone of the
+/// tenant-scoped provider map + the active tenant for this run.
+#[derive(Clone)]
+pub struct RunBackend {
+    pub compose_providers: Arc<RwLock<TenantedProviders>>,
+    pub active_tenant: String,
+}
+
+#[async_trait::async_trait]
+impl AsyncProviderBackend for RunBackend {
+    type Handle = ProviderBackendHandle;
+
+    async fn resolve_by_id(&self, id: &str) -> Result<Self::Handle, DlError> {
+        let g = self.compose_providers.read();
+        let Some(inner) = g.get(&self.active_tenant) else {
+            return Err(dl_internal(format!(
+                "no providers registered for tenant {:?} (looking up id {id:?})",
+                self.active_tenant
+            )));
+        };
+        let Some(provider) = inner.get(id) else {
+            return Err(dl_internal(format!(
+                "no compose provider {id:?} in tenant {:?}",
+                self.active_tenant
+            )));
+        };
+        Ok(Arc::new(ProviderHandle {
+            kind: provider.kind.clone(),
+        }))
+    }
+
+    async fn resolve_by_digest(&self, _digest: &[u8]) -> Result<Self::Handle, DlError> {
+        Err(dl_err(
+            DlCode::NotImplemented,
+            "runnable components should use linker.resolve-by-id instead of \
+             resolve-by-digest (the digest path runs through the \
+             extension-loader's CAS cache, not the runnable component's \
+             provider table)",
+        ))
+    }
+
+    async fn invoke(
+        &self,
+        handle: &Self::Handle,
+        method: &str,
+        payload: &[u8],
+    ) -> Result<Vec<u8>, DlError> {
+        handle.invoke(method, payload).await.map_err(invoke_to_dl)
     }
 }
 

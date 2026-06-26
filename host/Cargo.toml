@@ -29,6 +29,15 @@ sqlink-parsers = { path = "../sqlink-parsers" }
 # before instantiation -- silent-corruption protection. datalink is PUBLIC.
 datalink-contract = { git = "https://github.com/tegmentum/datalink.git" }
 
+# Shared compose:dynlink linker host (also consumed by the ducklink host).
+# We use its ADDITIVE async flavor: AsyncProviderBackend + AsyncDynLinkBridge
+# + impl_datalink_dynlink_async_host! + add_to_linker_async, with the instance
+# resource table kept in our per-Store state. sqlink's trust gate, CAS-digest
+# resolution, multi-tenancy, the fresh-store WasmComponent path, and the
+# built-in SqliteRuntime shim live in our AsyncProviderBackend impls; the
+# bridge routes resolve/invoke/drop to them. datalink is PUBLIC.
+datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git" }
+
 anyhow = "1.0"
 wasmtime = { version = "46.0.1", features = [
     "component-model",
