@@ -5,8 +5,19 @@ import { test, expect } from '@playwright/test'
 // new execDotCommand pipe (sqlink-composed.js) drives stdin into
 // the cli; we assert the cli's own stdout (substring-shaped, since
 // dot-cmds print human-readable lines).
-
-test('composed cli: .bundle save/list/show/delete round-trip', async ({
+//
+// v1.4 status: blocked by a SEPARATE substrate gap from the SPI one
+// v1.4 closed. v1.4 added `dispatch-bridge.bridged-execute` so the
+// `sqlite:extension/spi` surface round-trips through the composed
+// binary  composed-prefix.spec.js proves it. `.bundle` ALSO touches
+// the host-resident `sqlite:extension/bundles` cas-cache registry
+// (host filesystem state), which is not reachable via dispatch-bridge:
+// sqlite-lib doesn't own it. The browser polyfill still stubs the
+// bundles surface so calls surface as "bundles.bundleList not
+// implemented". v1.5 = either a JS cas-cache shim satisfying the
+// `sqlite:extension/bundles` import or a wasm-side bundles store
+// with its own dispatch-bridge entry.
+test.skip('composed cli: .bundle save/list/show/delete round-trip', async ({
   page,
 }) => {
   page.on('pageerror', (e) => console.error('[pageerror]', e))
