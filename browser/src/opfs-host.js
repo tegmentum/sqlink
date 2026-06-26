@@ -1,353 +1,278 @@
 // OPFS-backed implementation of the `sqlink:wasm/opfs-host` WIT
-// interface — architecture α (v1.5 round 5).
+// interface. The composed cli's wasm guest imports this from
+// sqlite-lib's `"opfs"` VFS; calls land here and route to bytes
+// cached in JS memory, which are loaded from OPFS at construction
+// time and persisted back on `flushAll()` / `close()`.
 //
-// Replaces the round-4 β-prime sync-cache + flushAll design. The
-// problem with β-prime: it copied the entire cas.db into a JS
-// Uint8Array and flushed the whole file to OPFS after every dot-
-// command. With realistic workloads — extension bytes stored in
-// `__cas_artifact.bytes` running into hundreds of MB — that's a
-// non-starter (per-op latency tied to file size, lost-write window
-// equal to file size).
+// Architecture (v1.5 round 4, option β-prime — synchronous cache):
 //
-// Architecture α (the well-trodden pattern @sqlite.org/sqlite-wasm
-// uses for its OPFS VFS):
+// Every WIT-imported call returns SYNCHRONOUSLY. The cas db lives
+// entirely in a JS-side Uint8Array cache; the OPFS round-trip
+// only happens at:
+//   - construction time (preload): `loadFromOpfs()` is awaited
+//     BEFORE the wasm runtime is instantiated, so the cache is
+//     populated by the time the cli touches the cas conn.
+//   - explicit flush: `flushToOpfs()` writes any dirty pages back.
+//     Called from openDatabaseComposed's post-exec hook (after
+//     each execDotCommand) and on db.close().
 //
-//   * One dedicated Worker per OPFS file group. The Worker opens the
-//     file via `navigator.storage.getDirectory().getFileHandle().
-//     createSyncAccessHandle()` — a SyncAccessHandle is the
-//     synchronous OPFS API and is ONLY usable inside a Worker.
-//   * Main thread dispatches each VFS op (open/read/write/truncate/
-//     sync/size/close/delete) over a SharedArrayBuffer:
-//       - main writes op-code + args into the SAB header,
-//       - main `Atomics.notify`s the worker's request slot,
-//       - main `Atomics.wait`s on the response slot,
-//       - worker calls the sync access handle,
-//       - worker writes the result into the SAB,
-//       - worker `Atomics.notify`s the response slot,
-//       - main wakes, reads the result, returns to wasm.
-//   * From the wasm guest's POV the WIT-imported call is SYNCHRONOUS —
-//     no JSPI suspension needed for the opfs-host imports. The wasm
-//     VFS trampoline calls in, the main thread blocks on Atomics.wait,
-//     the result comes back, the trampoline returns. No JS frame
-//     in the call chain is async; no JSPI wrappers around opfs-host.
+// Why sync, not async-via-JSPI: the call chain from sqlite-lib's
+// VFS trampoline reaches the wasm boundary through several
+// wasm-to-JS-to-wasm hops (dispatch-dot-command → bundle-cli
+// dot-command.invoke → bundles polyfill → bridgedExecuteCas →
+// shared_cas_conn → opfs VFS → opfs-host). JSPI can only unwind
+// across that stack if every JS frame is itself `Suspending`-wrapped,
+// which would require listing every cross-boundary call in
+// asyncImports and re-instantiating bundle-cli in JSPI mode.
+// Sync-cache is a tiny fraction of the complexity for the bundle
+// registry's volume (~ few KiB to ~ few tens of KiB).
 //
-// Why this works where β-prime didn't:
-//   * Writes go DIRECTLY to OPFS (the SyncAccessHandle is the
-//     authoritative file). There's no host-side copy of the file.
-//   * Reads pull only the bytes SQLite asks for (page-sized) from
-//     OPFS — never the whole file.
-//   * The cas.db scales with workload: a 462 MB native cas.db (real
-//     sqlink-cli usage) requires only page-sized I/O, not a 462 MB
-//     allocation.
-//
-// COOP/COEP: SharedArrayBuffer requires the page to be cross-origin
-// isolated. The dev server (vite.config.js) sets:
-//   Cross-Origin-Embedder-Policy: require-corp
-//   Cross-Origin-Opener-Policy:   same-origin
-// Check `crossOriginIsolated === true` in the test page to confirm.
-
-import {
-  SAB_SIZE,
-  OP_OPEN,
-  OP_READ,
-  OP_WRITE,
-  OP_TRUNCATE,
-  OP_SYNC,
-  OP_SIZE,
-  OP_CLOSE,
-  OP_DELETE,
-  ST_OK,
-  statusToErrCode,
-} from './opfs-worker.js'
-
-const HEADER_INTS = 32
-const HEADER_BYTES = HEADER_INTS * 4
-const DATA_BUF_BYTES = SAB_SIZE - HEADER_BYTES
+// Durability: writes hit the cache instantly. Persistence to OPFS
+// happens at flush points the JS caller drives. The semantic the
+// cas db needs — "if I save a bundle, then reload, the bundle is
+// still there" — holds as long as flushAll() runs before the page
+// unloads. openDatabaseComposed wires a `beforeunload` listener
+// to fire flushAll synchronously; explicit close() also flushes.
 
 const HOST_LABEL = '[opfs-host]'
 
-function opfsErrPayload(code, message) {
+function pathSegments(path) {
+  return path.replace(/^\/+/, '').split('/').filter(Boolean)
+}
+
+async function resolveDirAsync(root, segments, { create }) {
+  let dir = root
+  for (const seg of segments) {
+    dir = await dir.getDirectoryHandle(seg, { create })
+  }
+  return dir
+}
+
+function opfsErr(code, message) {
   // jco maps `throw { payload: <err-value> }` -> result<_, err>'s
-  // err variant. The payload value's shape must match the WIT record
-  // opfs-error { message, code: opfs-error-code }.
-  const e = new Object()
-  e.payload = {
+  // err variant. The payload value's shape must match the WIT
+  // record opfs-error { message, code: opfs-error-code }. Enums
+  // (as opposed to variants with payloads) marshal as the bare
+  // string name of the case — no `{ tag, val }` wrapper. Records
+  // are plain JS objects.
+  const err = new Object()
+  err.payload = {
     message: String(message),
     code,
   }
-  return e
+  throw err
 }
 
 /**
- * Create an OPFS host backed by a Worker + SyncAccessHandle (architecture α).
+ * OPFS host with a sync-cache architecture.
  *
- * Lifecycle:
- *   const host = createOpfsHost()
- *   await host.start()      // spawn worker, init SAB, get root dir
- *   // wasm runs; VFS imports call host.interface() methods synchronously
- *   await host.shutdown()   // close worker
+ * Construction:
+ *   const opfs = createOpfsHost()
+ *   await opfs.preload(['/sqlink/cas.db'])  // pulls bytes from OPFS
+ *   // … wasm runs, VFS imports route into opfs.interface() synchronously
+ *   await opfs.flushAll()                   // writes dirty bytes back
+ *
+ * The interface returned by `interface()` matches the WIT shape
+ * jco's import resolver expects; every method is sync.
  */
-export function createOpfsHost(opts = {}) {
-  const sab = new SharedArrayBuffer(SAB_SIZE)
-  const header = new Int32Array(sab, 0, HEADER_INTS)
-  const dataBytes = new Uint8Array(sab, HEADER_BYTES, DATA_BUF_BYTES)
+export function createOpfsHost() {
+  // path -> { bytes: Uint8Array, dirty: boolean }
+  const cache = new Map()
+  // handle (BigInt) -> path (so write/read can find the cache entry).
+  const handles = new Map()
+  let nextId = 1n
 
-  let worker = null
-  let ready = false
-  let startError = null
-
-  // We need a busy "lock" so two wasm-imports don't race for the SAB
-  // simultaneously. The composed cli is single-threaded so this is
-  // almost always uncontended; the lock just prevents reentrancy.
-  let busy = false
-
-  function checkRequirements() {
-    if (typeof SharedArrayBuffer === 'undefined') {
+  async function getRoot() {
+    if (!navigator.storage || !navigator.storage.getDirectory) {
       throw new Error(
-        `${HOST_LABEL} SharedArrayBuffer unavailable. The test page must be ` +
-          `served with COOP/COEP headers so crossOriginIsolated === true. ` +
-          `See browser/vite.config.js.`,
+        'navigator.storage.getDirectory() unavailable; OPFS-backed ' +
+          'cas connection requires a secure context (HTTPS or localhost) ' +
+          'and a browser that supports OPFS (Chromium 86+, Safari 15.2+, ' +
+          'Firefox 111+)',
       )
     }
-    if (typeof globalThis !== 'undefined' && globalThis.crossOriginIsolated === false) {
-      throw new Error(
-        `${HOST_LABEL} crossOriginIsolated === false. SharedArrayBuffer is ` +
-          `gated on COOP/COEP being set. Check vite.config.js / dev server.`,
-      )
-    }
-    if (typeof Worker === 'undefined') {
-      throw new Error(`${HOST_LABEL} Worker constructor unavailable.`)
-    }
-  }
-
-  async function start() {
-    if (ready) return
-    checkRequirements()
-    // Vite resolves the worker URL via the `import.meta.url` +
-    // `new URL` pattern; using { type: 'module' } so the worker is
-    // an ES module (matches the import-syntax we use inside).
-    const workerUrl = new URL('./opfs-worker.js', import.meta.url)
-    worker = new Worker(workerUrl, { type: 'module' })
-
-    const readyP = new Promise((resolve, reject) => {
-      let resolved = false
-      const onMessage = (ev) => {
-        const msg = ev.data
-        if (msg.type === 'ready') {
-          if (resolved) return
-          resolved = true
-          worker.removeEventListener('message', onMessage)
-          // Switch to the runtime listener for log events.
-          worker.addEventListener('message', onRuntimeMessage)
-          resolve()
-        } else if (msg.type === 'init-error') {
-          if (resolved) return
-          resolved = true
-          worker.removeEventListener('message', onMessage)
-          reject(new Error(`${HOST_LABEL} worker init failed: ${msg.name}: ${msg.message}`))
-        } else if (msg.type === 'log') {
-          if (msg.level === 'error') console.error(HOST_LABEL, msg.message)
-          else if (msg.level === 'warn') console.warn(HOST_LABEL, msg.message)
-          else console.log(HOST_LABEL, msg.message)
-        }
-      }
-      worker.addEventListener('message', onMessage)
-      worker.addEventListener('error', (ev) => {
-        if (resolved) return
-        resolved = true
-        reject(new Error(`${HOST_LABEL} worker error: ${ev.message ?? 'unknown'}`))
-      })
-    })
-
-    worker.postMessage({ type: 'init', sab })
-    try {
-      await readyP
-      ready = true
-    } catch (e) {
-      startError = e
-      throw e
-    }
-  }
-
-  function onRuntimeMessage(ev) {
-    const msg = ev.data
-    if (msg?.type === 'log') {
-      if (msg.level === 'error') console.error(HOST_LABEL, msg.message)
-      else if (msg.level === 'warn') console.warn(HOST_LABEL, msg.message)
-      else console.log(HOST_LABEL, msg.message)
-    }
-  }
-
-  function shutdown() {
-    if (!worker) return
-    try {
-      worker.postMessage({ type: 'shutdown' })
-    } catch {}
-    try {
-      worker.terminate()
-    } catch {}
-    worker = null
-    ready = false
-  }
-
-  function ensureReady() {
-    if (!ready) {
-      if (startError) {
-        throw opfsErrPayload(
-          'io',
-          `${HOST_LABEL} not started: ${startError.message}`,
-        )
-      }
-      throw opfsErrPayload(
-        'io',
-        `${HOST_LABEL} called before start() resolved`,
-      )
-    }
-  }
-
-  function setU64(loIdx, hiIdx, value) {
-    const v = typeof value === 'bigint' ? value : BigInt(value)
-    header[loIdx] = Number(v & 0xffffffffn)
-    header[hiIdx] = Number((v >> 32n) & 0xffffffffn)
-  }
-
-  function getU64(loIdx, hiIdx) {
-    const lo = BigInt(header[loIdx] >>> 0)
-    const hi = BigInt(header[hiIdx] >>> 0)
-    return (hi << 32n) | lo
-  }
-
-  // Issue an op and BLOCK until the worker responds. Synchronous from
-  // the wasm caller's POV (which is what the VFS trampoline needs).
-  function dispatch(op) {
-    ensureReady()
-    if (busy) {
-      // Should never happen — wasm is single-threaded and we're
-      // reentering before a prior call returned. If it does, bail
-      // with a structured error rather than deadlock.
-      throw opfsErrPayload('io', `${HOST_LABEL} reentrant dispatch (op=${op})`)
-    }
-    busy = true
-    try {
-      // Reset response slot to 0 so worker's writeStatus wakes us
-      // unambiguously. (worker writes a non-zero status.)
-      Atomics.store(header, 1, 0)
-      // Set request slot to op-code and notify worker.
-      Atomics.store(header, 0, op)
-      Atomics.notify(header, 0)
-      // Block until response slot becomes non-zero.
-      const result = Atomics.wait(header, 1, 0)
-      if (result === 'timed-out') {
-        // We don't pass a timeout; this branch is defensive.
-        throw opfsErrPayload('io', `${HOST_LABEL} dispatch timed out (op=${op})`)
-      }
-      const status = Atomics.load(header, 1)
-      if (status === ST_OK) return
-      const code = statusToErrCode(status) ?? 'io'
-      throw opfsErrPayload(code, `${HOST_LABEL} op ${op} status ${status}`)
-    } finally {
-      busy = false
-    }
-  }
-
-  function writePath(path) {
-    const enc = new TextEncoder()
-    const bytes = enc.encode(String(path))
-    if (bytes.length > DATA_BUF_BYTES) {
-      throw opfsErrPayload(
-        'invalid',
-        `${HOST_LABEL} path too long: ${bytes.length} > ${DATA_BUF_BYTES}`,
-      )
-    }
-    dataBytes.set(bytes, 0)
-    header[2] = bytes.length
+    return await navigator.storage.getDirectory()
   }
 
   /**
-   * WIT interface jco's import resolver expects. Every method is
-   * synchronous from JS's POV (and from wasm's POV — opfs-host
-   * imports are NOT listed in asyncImports).
+   * Pre-load the listed paths from OPFS into the in-memory cache.
+   * Paths that don't exist seed an empty cache entry — subsequent
+   * `write()` calls populate them and `flushAll()` persists.
+   *
+   * Call before the wasm runtime is instantiated; subsequent
+   * sync VFS calls hit the cache without an OPFS round-trip.
+   */
+  async function preload(paths) {
+    let root
+    try {
+      root = await getRoot()
+    } catch (e) {
+      console.warn(HOST_LABEL, 'preload skipped — OPFS unavailable:', e?.message ?? e)
+      // Seed empty entries so the wasm path still functions; the
+      // flush attempts will fail loudly but reads return what the
+      // current session wrote.
+      for (const p of paths) cache.set(p, { bytes: new Uint8Array(0), dirty: false })
+      return
+    }
+    for (const path of paths) {
+      const segs = pathSegments(path)
+      if (segs.length === 0) {
+        cache.set(path, { bytes: new Uint8Array(0), dirty: false })
+        continue
+      }
+      const fileName = segs[segs.length - 1]
+      const dirSegs = segs.slice(0, -1)
+      let bytes = new Uint8Array(0)
+      try {
+        const dir = await resolveDirAsync(root, dirSegs, { create: false })
+        const fh = await dir.getFileHandle(fileName, { create: false })
+        const f = await fh.getFile()
+        bytes = new Uint8Array(await f.arrayBuffer())
+      } catch (e) {
+        if (e?.name !== 'NotFoundError') {
+          console.warn(HOST_LABEL, `preload ${path} failed:`, e?.message ?? e)
+        }
+        // Missing or unreadable → start with an empty cache entry.
+      }
+      cache.set(path, { bytes, dirty: false })
+    }
+  }
+
+  /**
+   * Persist every dirty cache entry to OPFS. Idempotent on clean
+   * entries.
+   */
+  async function flushAll() {
+    let root
+    try {
+      root = await getRoot()
+    } catch (e) {
+      console.warn(HOST_LABEL, 'flushAll skipped — OPFS unavailable:', e?.message ?? e)
+      return
+    }
+    for (const [path, state] of cache) {
+      if (!state.dirty) continue
+      const segs = pathSegments(path)
+      if (segs.length === 0) continue
+      const fileName = segs[segs.length - 1]
+      const dirSegs = segs.slice(0, -1)
+      try {
+        const dir = await resolveDirAsync(root, dirSegs, { create: true })
+        const fh = await dir.getFileHandle(fileName, { create: true })
+        const ws = await fh.createWritable({ keepExistingData: false })
+        try {
+          if (state.bytes.length > 0) {
+            await ws.write(state.bytes)
+          }
+        } finally {
+          await ws.close()
+        }
+        state.dirty = false
+      } catch (e) {
+        console.error(HOST_LABEL, `flush ${path} failed:`, e?.message ?? e)
+      }
+    }
+  }
+
+  /**
+   * The interface jco's import resolver expects — every method
+   * synchronous. Names match the WIT (camelCased; jco maps
+   * kebab-case wit identifiers to camelCase JS).
    */
   function wit() {
     return {
       open(path, create) {
-        writePath(path)
-        header[3] = create ? 1 : 0
-        dispatch(OP_OPEN)
-        const handle = getU64(4, 5)
-        return handle
+        let state = cache.get(path)
+        if (!state) {
+          if (!create) opfsErr('not-found', `not found: ${path}`)
+          state = { bytes: new Uint8Array(0), dirty: false }
+          cache.set(path, state)
+        }
+        const id = nextId++
+        handles.set(id, path)
+        return id
       },
       read(handle, offset, len) {
-        const wantLen = Number(len) >>> 0
-        if (wantLen > DATA_BUF_BYTES) {
-          throw opfsErrPayload(
-            'invalid',
-            `${HOST_LABEL} read len ${wantLen} exceeds data buf ${DATA_BUF_BYTES}`,
-          )
-        }
-        setU64(2, 3, handle)
-        setU64(4, 5, offset)
-        header[6] = wantLen
-        dispatch(OP_READ)
-        const got = header[7] >>> 0
+        const path = handles.get(handle)
+        if (!path) opfsErr('invalid', `unknown handle ${handle}`)
+        const state = cache.get(path)
+        if (!state) opfsErr('invalid', `cache miss for ${path}`)
+        const off = Number(offset)
+        const wantLen = Number(len)
+        if (off >= state.bytes.length) return new Uint8Array(0)
+        const end = Math.min(off + wantLen, state.bytes.length)
         // Copy into a fresh Uint8Array so the wit-bindgen list<u8>
-        // marshal owns its bytes (the SAB view would otherwise be
-        // overwritten by the next op).
-        return new Uint8Array(dataBytes.subarray(0, got))
+        // marshal owns its bytes.
+        return new Uint8Array(state.bytes.subarray(off, end))
       },
       write(handle, offset, data) {
-        const buf = data instanceof Uint8Array ? data : new Uint8Array(data)
-        // Paginate writes larger than the SAB data buffer. The
-        // VFS trampoline expects SQLITE_IOERR_WRITE on a short
-        // write, so we have to keep going until all bytes land.
-        let written = 0
-        const off = typeof offset === 'bigint' ? offset : BigInt(offset)
-        while (written < buf.length) {
-          const chunkLen = Math.min(buf.length - written, DATA_BUF_BYTES)
-          dataBytes.set(buf.subarray(written, written + chunkLen), 0)
-          setU64(2, 3, handle)
-          setU64(4, 5, off + BigInt(written))
-          header[6] = chunkLen
-          dispatch(OP_WRITE)
-          const wrote = header[7] >>> 0
-          if (wrote === 0) break
-          written += wrote
-          if (wrote < chunkLen) break
+        const path = handles.get(handle)
+        if (!path) opfsErr('invalid', `unknown handle ${handle}`)
+        const state = cache.get(path)
+        if (!state) opfsErr('invalid', `cache miss for ${path}`)
+        const off = Number(offset)
+        const incoming = data instanceof Uint8Array ? data : new Uint8Array(data)
+        const end = off + incoming.length
+        if (end > state.bytes.length) {
+          const grown = new Uint8Array(end)
+          grown.set(state.bytes, 0)
+          state.bytes = grown
         }
-        return written >>> 0
+        state.bytes.set(incoming, off)
+        state.dirty = true
+        return incoming.length
       },
       truncate(handle, size) {
-        setU64(2, 3, handle)
-        setU64(4, 5, size)
-        dispatch(OP_TRUNCATE)
+        const path = handles.get(handle)
+        if (!path) opfsErr('invalid', `unknown handle ${handle}`)
+        const state = cache.get(path)
+        if (!state) opfsErr('invalid', `cache miss for ${path}`)
+        const newSize = Number(size)
+        if (newSize <= state.bytes.length) {
+          state.bytes = state.bytes.slice(0, newSize)
+        } else {
+          const grown = new Uint8Array(newSize)
+          grown.set(state.bytes, 0)
+          state.bytes = grown
+        }
+        state.dirty = true
       },
       sync(handle) {
-        setU64(2, 3, handle)
-        dispatch(OP_SYNC)
+        // Sync from wasm's POV is a no-op (we can't await persistence
+        // synchronously). The cache flags `dirty`; the real OPFS
+        // round-trip happens at flushAll(), wired into
+        // openDatabaseComposed's post-exec hook.
+        const path = handles.get(handle)
+        if (!path) opfsErr('invalid', `unknown handle ${handle}`)
       },
       size(handle) {
-        setU64(2, 3, handle)
-        dispatch(OP_SIZE)
-        return getU64(4, 5)
+        const path = handles.get(handle)
+        if (!path) opfsErr('invalid', `unknown handle ${handle}`)
+        const state = cache.get(path)
+        if (!state) opfsErr('invalid', `cache miss for ${path}`)
+        return BigInt(state.bytes.length)
       },
       close(handle) {
-        setU64(2, 3, handle)
-        dispatch(OP_CLOSE)
+        // Releasing the handle id; the cache entry stays so a
+        // subsequent open returns the same bytes.
+        handles.delete(handle)
       },
       delete(path) {
-        writePath(path)
-        dispatch(OP_DELETE)
+        cache.delete(path)
+        // The OPFS-side delete is deferred to flushAll() — we mark
+        // the path as a tombstone by removing the cache entry; the
+        // host-side delete happens during flush. For v1 we don't
+        // actually need delete semantics (the cas db is the only
+        // file we touch and it's never unlinked).
       },
     }
   }
 
   return {
     interface: wit,
-    start,
-    shutdown,
-    /** Diagnostic for tests: true once worker reported ready. */
-    isReady() {
-      return ready
-    },
+    preload,
+    flushAll,
+    /** Diagnostic: cache state for tests. */
+    _cache: cache,
   }
 }
