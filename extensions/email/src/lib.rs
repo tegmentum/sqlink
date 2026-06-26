@@ -76,6 +76,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("email".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.email".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -100,6 +101,10 @@ mod wasm_export {
                     .map(|e| SqlValue::Text(e.to_string().to_lowercase()))
                     .unwrap_or(SqlValue::Null)),
                 other => Err(format!("email: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

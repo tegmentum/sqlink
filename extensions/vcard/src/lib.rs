@@ -295,6 +295,10 @@ mod wasm_export {
         match serde_json::to_string(&arr) {
             Ok(s) => SqlValue::Text(s),
             Err(_) => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -339,6 +343,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("vcard".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.vcard".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -364,6 +369,10 @@ mod wasm_export {
             let card = match super::parse_first(&t) {
                 Some(c) => c,
                 None => return Ok(SqlValue::Null),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             };
 
             match func_id {
@@ -386,6 +395,10 @@ mod wasm_export {
                 FID_NOTE => Ok(opt_text(super::note_value(&card))),
                 FID_ALL => Ok(SqlValue::Text(super::all_json(&card, &t))),
                 other => Err(format!("vcard: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

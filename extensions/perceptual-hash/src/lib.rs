@@ -481,6 +481,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("perceptual_hash".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.perceptual_hash".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -495,6 +496,10 @@ mod wasm_export {
                     match phash(&bytes) {
                         Some(h) => Ok(SqlValue::Blob(h.to_vec())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_DHASH => {
@@ -504,6 +509,10 @@ mod wasm_export {
                     match dhash(&bytes) {
                         Some(h) => Ok(SqlValue::Blob(h.to_vec())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_AHASH => {
@@ -513,6 +522,10 @@ mod wasm_export {
                     match ahash(&bytes) {
                         Some(h) => Ok(SqlValue::Blob(h.to_vec())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_HASH_DISTANCE => {
@@ -525,10 +538,18 @@ mod wasm_export {
                     match hash_distance(&a, &b) {
                         Some(d) => Ok(SqlValue::Integer(d)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("perceptual_hash: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

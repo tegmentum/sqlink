@@ -120,6 +120,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("faker".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.faker".into()),
+                typed_values: Vec::new(),
             }
         }
     }

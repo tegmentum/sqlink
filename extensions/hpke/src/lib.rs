@@ -357,6 +357,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("hpke".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.hpke".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -387,6 +388,10 @@ mod wasm_export {
                     Ok(match do_pub_from_priv(suite, &priv_b) {
                         Some(b) => SqlValue::Blob(b),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_SEAL => {
@@ -408,6 +413,10 @@ mod wasm_export {
                     Ok(match do_seal(suite, &pub_b, &info, &aad, &pt) {
                         Some(b) => SqlValue::Blob(b),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_OPEN => {
@@ -428,6 +437,10 @@ mod wasm_export {
                     Ok(match do_open(suite, &priv_b, &info, &aad, &sealed) {
                         Some(b) => SqlValue::Blob(b),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_VERSION => {
@@ -435,6 +448,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(v))
                 }
                 other => Err(format!("hpke: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

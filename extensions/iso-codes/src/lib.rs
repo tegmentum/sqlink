@@ -199,6 +199,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("iso_codes".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.iso_codes".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -210,6 +211,10 @@ mod wasm_export {
         match o {
             Some(v) => SqlValue::Text(f(v)),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -217,6 +222,10 @@ mod wasm_export {
         match o {
             Some(v) => SqlValue::Integer(f(v)),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -228,6 +237,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso3166_alpha2_name")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(country_from_alpha2(&t), |c| c.name.to_string()))
                 }
@@ -235,6 +248,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso3166_alpha3_name")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(country_from_alpha3(&t), |c| c.name.to_string()))
                 }
@@ -242,6 +259,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso3166_alpha2_to_alpha3")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(country_from_alpha2(&t), |c| c.alpha3.to_string()))
                 }
@@ -249,6 +270,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso3166_alpha3_to_alpha2")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(country_from_alpha3(&t), |c| c.alpha2.to_string()))
                 }
@@ -261,6 +286,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso3166_numeric")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_int(country_lookup(&t), |c| c.numeric as i64))
                 }
@@ -268,6 +297,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso3166_is_valid")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(SqlValue::Integer(if country_lookup(&t).is_some() {
                         1
@@ -280,6 +313,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso4217_name")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(currency_lookup(&t), |c| c.name().to_string()))
                 }
@@ -287,6 +324,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso4217_symbol")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(currency_lookup(&t), |c| format!("{}", c.symbol())))
                 }
@@ -294,6 +335,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso4217_minor_units")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     // `exponent` is Option<u16> in iso_currency  None
                     // for currencies like XAU/XAG/XDR that have no
@@ -302,12 +347,20 @@ mod wasm_export {
                     Ok(match currency_lookup(&t).and_then(|c| c.exponent()) {
                         Some(e) => SqlValue::Integer(e as i64),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_4217_IS_VALID => {
                     let t = match arg_text_opt(&args, 0, "iso4217_is_valid")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(SqlValue::Integer(if currency_lookup(&t).is_some() {
                         1
@@ -320,6 +373,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso639_alpha2_name")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(language_from_alpha2(&t), |l| l.to_name().to_string()))
                 }
@@ -327,6 +384,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso639_alpha3_name")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(language_from_alpha3(&t), |l| l.to_name().to_string()))
                 }
@@ -334,6 +395,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso639_alpha2_to_alpha3")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(language_from_alpha2(&t), |l| l.to_639_3().to_string()))
                 }
@@ -341,6 +406,10 @@ mod wasm_export {
                     let t = match arg_text_opt(&args, 0, "iso639_alpha3_to_alpha2")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     // `to_639_1` is Option<&str>  many ISO 639-3 codes
                     // have no 639-1 (alpha-2) counterpart. NULL is the
@@ -348,12 +417,20 @@ mod wasm_export {
                     Ok(match language_from_alpha3(&t).and_then(|l| l.to_639_1()) {
                         Some(s) => SqlValue::Text(s.to_string()),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_639_IS_VALID => {
                     let t = match arg_text_opt(&args, 0, "iso639_is_valid")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(SqlValue::Integer(if language_lookup(&t).is_some() {
                         1
@@ -366,6 +443,10 @@ mod wasm_export {
                     env!("CARGO_PKG_VERSION")
                 ))),
                 other => Err(format!("iso-codes: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

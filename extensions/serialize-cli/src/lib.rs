@@ -78,6 +78,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("serialize".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.cli.serialize".into()),
+                typed_values: Vec::new(),
             }
         }
     }

@@ -600,6 +600,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("epub".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.epub".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -627,6 +628,10 @@ mod wasm_export {
                 FID_TITLE => match &meta.title {
                     Some(t) => Ok(SqlValue::Text(t.clone())),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_AUTHORS => {
                     // Always return a JSON array (possibly empty) so
@@ -638,23 +643,43 @@ mod wasm_export {
                 FID_LANGUAGE => match &meta.language {
                     Some(t) => Ok(SqlValue::Text(t.clone())),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_PUBLISHER => match &meta.publisher {
                     Some(t) => Ok(SqlValue::Text(t.clone())),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_PUBLISHED_DATE => match &meta.date {
                     Some(t) => Ok(SqlValue::Text(normalize_date(t))),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_IDENTIFIER => match &meta.identifier {
                     Some(t) => Ok(SqlValue::Text(t.clone())),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_SUBJECTS => Ok(SqlValue::Text(json_array(&meta.subjects))),
                 FID_CHAPTER_COUNT => Ok(SqlValue::Integer(meta.chapter_count as i64)),
                 FID_METADATA => Ok(SqlValue::Text(metadata_json(&meta))),
                 other => Err(format!("epub: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

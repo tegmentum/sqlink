@@ -293,6 +293,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("time_series".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.time_series".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -314,6 +315,10 @@ mod wasm_export {
                     super::time_bucket(&ts, &iv).map(SqlValue::Text)
                 }
                 other => Err(format!("time-series: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }
@@ -478,6 +483,10 @@ mod wasm_export {
                         .unwrap_or(SqlValue::Null)),
                     COL_START | COL_END | COL_INTERVAL => Ok(SqlValue::Null),
                     other => Err(format!("gap_fill_series: bad column {other}")),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             })
         }

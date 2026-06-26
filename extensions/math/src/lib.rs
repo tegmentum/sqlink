@@ -155,6 +155,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("math".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.math".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -167,6 +168,10 @@ mod wasm_export {
             // Coerce TEXT / BLOB best-effort by parse; failure flows to NULL.
             SqlValue::Text(s) => s.parse::<f64>().map(Arg::Real).unwrap_or(Arg::Null),
             SqlValue::Blob(_) => Arg::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -413,6 +418,10 @@ mod wasm_export {
                     SqlValue::Text(alloc::format!("{:b}", n as u64))
                 }
                 other => return Err(alloc::format!("math: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             };
             Ok(r)
         }

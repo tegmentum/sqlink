@@ -146,6 +146,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("json1".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.json1".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -186,6 +187,10 @@ mod wasm_export {
             SqlValue::Real(r) => Arg::Real(*r),
             SqlValue::Text(s) => Arg::Text(s.clone()),
             SqlValue::Blob(b) => Arg::Blob(b.clone()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -195,6 +200,10 @@ mod wasm_export {
             Out::Integer(i) => SqlValue::Integer(i),
             Out::Real(r) => SqlValue::Real(r),
             Out::Text(s) => SqlValue::Text(s),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 

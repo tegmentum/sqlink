@@ -250,6 +250,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("core_dotcmd".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.core_dotcmd".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -274,6 +275,10 @@ mod wasm_export {
                     SqlValue::Real(r) => r.to_string(),
                     SqlValue::Text(s) => s.clone(),
                     SqlValue::Blob(b) => format!("<blob:{} bytes>", b.len()),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 });
             }
         }
@@ -569,6 +574,10 @@ mod wasm_export {
         match parse_onoff(arg.trim()) {
             Some(b) => delta(key, SqlValue::Integer(if b { 1 } else { 0 })),
             None => err(format!(".{}: expected `on` or `off`, got {:?}", label, arg)),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -832,6 +841,10 @@ mod wasm_export {
                 }
             }
             other => err(format!(".parameter: unknown subcommand {other:?}")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -879,6 +892,10 @@ mod wasm_export {
             SqlValue::Text(s)    => format!("'{}'", s.replace('\'', "''")),
             SqlValue::Blob(b)    => format!("X'{}'",
                 b.iter().map(|x| format!("{x:02x}")).collect::<String>()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -963,6 +980,10 @@ mod wasm_export {
             SqlValue::Real(r) => r.to_string(),
             SqlValue::Text(s) => s.clone(),
             SqlValue::Blob(b) => format!("<{}b>", b.len()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 

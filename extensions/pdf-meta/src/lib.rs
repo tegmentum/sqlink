@@ -451,6 +451,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("pdf_meta".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.pdf_meta".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -483,6 +484,10 @@ mod wasm_export {
                     return match header_version_scan(&bytes) {
                         Some(v) => Ok(SqlValue::Text(v)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                 }
                 FID_IS_ENCRYPTED => {
@@ -523,38 +528,74 @@ mod wasm_export {
                 FID_TITLE => match info_string(&doc, b"Title") {
                     Some(s) => Ok(SqlValue::Text(s)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_AUTHOR => match info_string(&doc, b"Author") {
                     Some(s) => Ok(SqlValue::Text(s)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_SUBJECT => match info_string(&doc, b"Subject") {
                     Some(s) => Ok(SqlValue::Text(s)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_CREATOR => match info_string(&doc, b"Creator") {
                     Some(s) => Ok(SqlValue::Text(s)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_PRODUCER => match info_string(&doc, b"Producer") {
                     Some(s) => Ok(SqlValue::Text(s)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_CREATION_DATE => match info_string(&doc, b"CreationDate") {
                     Some(s) => Ok(SqlValue::Text(pdf_date_to_iso(&s))),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_MOD_DATE => match info_string(&doc, b"ModDate") {
                     Some(s) => Ok(SqlValue::Text(pdf_date_to_iso(&s))),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_PAGE_COUNT => match page_count(&doc) {
                     Some(n) => Ok(SqlValue::Integer(n)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_KEYWORDS => match info_string(&doc, b"Keywords") {
                     Some(s) => Ok(SqlValue::Text(s)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 other => Err(format!("pdf-meta: unknown func id {other}")),
             }

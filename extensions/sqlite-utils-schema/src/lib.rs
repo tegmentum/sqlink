@@ -140,6 +140,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("sqlite_schema".into()),
                 prefix_expansion: Some("org.sqlite.utils.schema".into()),
+                typed_values: Vec::new(),
             }
         }
     }

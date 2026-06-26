@@ -135,6 +135,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("uint".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.uint".into()),
+                typed_values: Vec::new(),
             }
         }
     }

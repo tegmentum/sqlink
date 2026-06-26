@@ -210,6 +210,10 @@ mod wasm_export {
             Some(SqlValue::Text(s)) => Ok(Some(s.clone())),
             Some(_) => Err(format!("{fname}: arg {i} must be TEXT")),
             None => Err(format!("{fname}: missing arg {i}")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -247,6 +251,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("tld_list".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.tld_list".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -271,6 +276,10 @@ mod wasm_export {
             let input = match arg_text_or_null(&args, 0, fname)? {
                 None => return Ok(SqlValue::Null),
                 Some(s) => s,
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             };
 
             Ok(match func_id {

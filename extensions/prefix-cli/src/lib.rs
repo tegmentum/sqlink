@@ -128,6 +128,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("sqlink".into()),
                 prefix_expansion: Some("sqlink-internal://prefix-cli".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -247,6 +248,10 @@ need explicit dispatch in the face of a collision.";
             SqlValue::Integer(i) => i.to_string(),
             SqlValue::Real(r) => format!("{}", r),
             SqlValue::Blob(_) => "<blob>".into(),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 

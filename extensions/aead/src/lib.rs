@@ -83,6 +83,10 @@ mod wasm_export {
             // and rejecting INTEGER here would be surprising.
             Some(SqlValue::Integer(n)) => n.to_string().into_bytes(),
             Some(SqlValue::Real(r)) => r.to_string().into_bytes(),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -179,6 +183,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("aead".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.aead".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -208,14 +213,26 @@ mod wasm_export {
                     let k = match check_key(&key, "aes_gcm_decrypt") {
                         Ok(k) => k,
                         Err(_) => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let n = match check_nonce(&nonce, "aes_gcm_decrypt") {
                         Ok(n) => n,
                         Err(_) => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match aes_decrypt(&k, &n, &ct, &aad) {
                         Some(pt) => SqlValue::Blob(pt),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_CHA_ENCRYPT => {
@@ -235,20 +252,36 @@ mod wasm_export {
                     let k = match check_key(&key, "chacha20_poly1305_decrypt") {
                         Ok(k) => k,
                         Err(_) => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let n = match check_nonce(&nonce, "chacha20_poly1305_decrypt") {
                         Ok(n) => n,
                         Err(_) => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match cha_decrypt(&k, &n, &ct, &aad) {
                         Some(pt) => SqlValue::Blob(pt),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_RANDOM_KEY => random_blob(32, "aead_random_key_256").map(SqlValue::Blob),
                 FID_RANDOM_NONCE => random_blob(12, "aead_random_nonce_96").map(SqlValue::Blob),
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("aead: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

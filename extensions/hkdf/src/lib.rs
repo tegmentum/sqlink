@@ -205,6 +205,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("hkdf".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.hkdf".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -231,6 +232,10 @@ mod wasm_export {
                     let len = match parse_length(args.get(3), SHA256_MAX_OKM) {
                         Some(n) => n,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(SqlValue::Blob(hkdf_sha256_full(&ikm, &salt, &info, len)?))
                 }
@@ -253,6 +258,10 @@ mod wasm_export {
                     let len = match parse_length(args.get(3), SHA512_MAX_OKM) {
                         Some(n) => n,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(SqlValue::Blob(hkdf_sha512_full(&ikm, &salt, &info, len)?))
                 }
@@ -296,10 +305,18 @@ mod wasm_export {
                     let len = match parse_length(args.get(2), SHA256_MAX_OKM) {
                         Some(n) => n,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match hkdf_sha256_expand(&prk, &info, len) {
                         Some(okm) => SqlValue::Blob(okm),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_SHA512_EXPAND => {
@@ -316,10 +333,18 @@ mod wasm_export {
                     let len = match parse_length(args.get(2), SHA512_MAX_OKM) {
                         Some(n) => n,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match hkdf_sha512_expand(&prk, &info, len) {
                         Some(okm) => SqlValue::Blob(okm),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_VERSION => {
@@ -333,6 +358,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(v))
                 }
                 other => Err(format!("hkdf: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

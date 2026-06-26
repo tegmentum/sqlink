@@ -198,6 +198,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("setops".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.setops".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -217,6 +218,10 @@ mod wasm_export {
                     let arr = match parse(&arr) {
                         Some(a) => a,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let needle: Value =
                         serde_json::from_str(&needle_s).unwrap_or(Value::String(needle_s.clone()));
@@ -245,10 +250,18 @@ mod wasm_export {
                     let av = match parse(&a) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let bv = match parse(&b) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let result = match func_id {
                         FID_UNION => union(av, bv),

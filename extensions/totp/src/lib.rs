@@ -500,6 +500,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("totp".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.totp".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -603,6 +604,10 @@ mod wasm_export {
                         match arg_u32(&args, 5, fname) {
                             Ok(w) => w,
                             Err(_) => return Ok(SqlValue::Integer(0)),
+                            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                            // gained a wit-value arm; Phase B will replace this wildcard
+                            // with extension-specific decode/encode logic.
+                            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                         }
                     } else {
                         1
@@ -610,6 +615,10 @@ mod wasm_export {
                     let now = match now_secs() {
                         Ok(n) => n,
                         Err(_) => return Ok(SqlValue::Integer(0)),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let ok = super::totp_verify_at(
                         &code, &secret, now, period, digits, alg, window,
@@ -641,6 +650,10 @@ mod wasm_export {
                     let counter = match arg_u64(&args, 2, fname) {
                         Ok(c) => c,
                         Err(_) => return Ok(SqlValue::Integer(0)),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let (digits, alg) = match resolve_hotp_opts(&args, 3, n_opts, fname)
                     {
@@ -706,6 +719,10 @@ mod wasm_export {
                 // ─── version ───
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("totp: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

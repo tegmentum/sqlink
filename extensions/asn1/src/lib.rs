@@ -628,6 +628,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("asn1".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.asn1".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -639,6 +640,10 @@ mod wasm_export {
                     let b = match blob_arg(&args, 0, "asn1_decode")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     match decode_to_json(&b) {
                         Ok(v) => Ok(SqlValue::Text(v.to_string())),
@@ -646,12 +651,20 @@ mod wasm_export {
                         // `*_is_valid_der` contract; a malformed blob
                         // in a column shouldn't blow up a SELECT.
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_ENCODE => {
                     let s = match text_arg(&args, 0, "asn1_encode")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let tree: Value = serde_json::from_str(&s)
                         .map_err(|e| format!("asn1_encode: JSON parse: {e}"))?;
@@ -662,26 +675,46 @@ mod wasm_export {
                     let s = match text_arg(&args, 0, "asn1_oid_name")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match lookup_oid_name(&s) {
                         Some(n) => SqlValue::Text(n.to_string()),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_OID_FOR => {
                     let s = match text_arg(&args, 0, "asn1_oid_for")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match lookup_oid_for(&s) {
                         Some(n) => SqlValue::Text(n.to_string()),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_IS_VALID_DER => {
                     let b = match blob_arg(&args, 0, "asn1_is_valid_der")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Integer(0)),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     // Valid DER = parses AND re-encodes to the same
                     // bytes (DER's "canonical encoding" rule).
@@ -711,16 +744,28 @@ mod wasm_export {
                     let b = match blob_arg(&args, 0, "asn1_type_tag")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match b.first() {
                         Some(byte) => SqlValue::Integer(*byte as i64),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_PRETTY => {
                     let b = match blob_arg(&args, 0, "asn1_pretty")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     match decode_to_json(&b) {
                         Ok(v) => {
@@ -732,6 +777,10 @@ mod wasm_export {
                             Ok(SqlValue::Text(s))
                         }
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_VERSION => Ok(SqlValue::Text(format!(
@@ -739,6 +788,10 @@ mod wasm_export {
                     env!("CARGO_PKG_VERSION")
                 ))),
                 other => Err(format!("asn1: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

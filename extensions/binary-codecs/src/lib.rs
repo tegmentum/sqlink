@@ -306,6 +306,10 @@ mod wasm_export {
             // NULL is filtered upstream; this branch is unreachable
             // in practice but cheap to handle as JSON null.
             SqlValue::Null => super::CodecInput::Json(serde_json::Value::Null),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -352,6 +356,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("binary_codecs".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.binary_codecs".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -394,6 +399,10 @@ mod wasm_export {
                         .unwrap_or(SqlValue::Null))
                 }
                 other => Err(format!("binary-codecs: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

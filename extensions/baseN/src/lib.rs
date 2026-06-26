@@ -86,6 +86,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("baseN".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.baseN".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -116,6 +117,10 @@ mod wasm_export {
                     match bs58::decode(t.as_bytes()).into_vec() {
                         Ok(b) => Ok(SqlValue::Blob(b)),
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_TO_BASE64 => {
@@ -131,9 +136,17 @@ mod wasm_export {
                     match base64::engine::general_purpose::STANDARD.decode(t.as_bytes()) {
                         Ok(b) => Ok(SqlValue::Blob(b)),
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 other => Err(format!("baseN: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

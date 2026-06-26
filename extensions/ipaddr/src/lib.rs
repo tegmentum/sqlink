@@ -216,6 +216,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("ipaddr".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.ipaddr".into()),
+                typed_values: Vec::new(),
             }
         }
     }

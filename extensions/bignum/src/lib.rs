@@ -191,6 +191,10 @@ mod wasm_export {
                 "{fname}: REAL argument is lossy; cast to TEXT or INTEGER first"
             )),
             SqlValue::Null => Err(format!("{fname}: NULL argument")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -205,6 +209,10 @@ mod wasm_export {
             None => Err(format!("{fname}: missing argument")),
             Some(SqlValue::Null) => Ok(None),
             Some(x) => as_bigint(x, fname).map(Some),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -228,6 +236,10 @@ mod wasm_export {
             Some(SqlValue::Null) => Ok(SqlValue::Null),
             Some(_) => Err("bn_from_int: expected INTEGER".into()),
             None => Err("bn_from_int: missing argument".into()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -244,6 +256,10 @@ mod wasm_export {
             Some(SqlValue::Null) => Ok(SqlValue::Null),
             Some(_) => Err("bn_from_text: expected TEXT".into()),
             None => Err("bn_from_text: missing argument".into()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -254,6 +270,10 @@ mod wasm_export {
             Some(SqlValue::Null) => Ok(SqlValue::Null),
             Some(_) => Err("bn_to_text: expected BLOB".into()),
             None => Err("bn_to_text: missing argument".into()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -265,12 +285,20 @@ mod wasm_export {
                 match n.to_i64() {
                     Some(v) => Ok(SqlValue::Integer(v)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
             Some(SqlValue::Integer(n)) => Ok(SqlValue::Integer(*n)),
             Some(SqlValue::Null) => Ok(SqlValue::Null),
             Some(_) => Err("bn_to_int: expected BLOB".into()),
             None => Err("bn_to_int: missing argument".into()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -282,10 +310,18 @@ mod wasm_export {
         let a = match as_bigint_or_null(args.first(), fname)? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let b = match as_bigint_or_null(args.get(1), fname)? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         Ok(SqlValue::Blob(encode(&f(&a, &b))))
     }
@@ -306,10 +342,18 @@ mod wasm_export {
         let a = match as_bigint_or_null(args.first(), "bn_div")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let b = match as_bigint_or_null(args.get(1), "bn_div")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         if b.is_zero() {
             return Ok(SqlValue::Null);
@@ -323,10 +367,18 @@ mod wasm_export {
         let a = match as_bigint_or_null(args.first(), "bn_mod")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let b = match as_bigint_or_null(args.get(1), "bn_mod")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         if b.is_zero() {
             return Ok(SqlValue::Null);
@@ -340,11 +392,19 @@ mod wasm_export {
         let a = match as_bigint_or_null(args.first(), "bn_pow")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let exp = match args.get(1) {
             None => return Err("bn_pow: missing exponent".into()),
             Some(SqlValue::Null) => return Ok(SqlValue::Null),
             Some(v) => as_exp(v, "bn_pow")?,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         Ok(SqlValue::Blob(encode(&a.pow(exp))))
     }
@@ -353,14 +413,26 @@ mod wasm_export {
         let base = match as_bigint_or_null(args.first(), "bn_modpow")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let exp = match as_bigint_or_null(args.get(1), "bn_modpow")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let m = match as_bigint_or_null(args.get(2), "bn_modpow")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         if m.is_zero() {
             return Ok(SqlValue::Null);
@@ -378,10 +450,18 @@ mod wasm_export {
         let a = match as_bigint_or_null(args.first(), "bn_gcd")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let b = match as_bigint_or_null(args.get(1), "bn_gcd")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         // num-integer's gcd: always non-negative. gcd(0, 0) = 0.
         Ok(SqlValue::Blob(encode(&a.gcd(&b))))
@@ -391,10 +471,18 @@ mod wasm_export {
         let a = match as_bigint_or_null(args.first(), "bn_cmp")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let b = match as_bigint_or_null(args.get(1), "bn_cmp")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         Ok(SqlValue::Integer(match a.cmp(&b) {
             core::cmp::Ordering::Less => -1,
@@ -407,6 +495,10 @@ mod wasm_export {
         let a = match as_bigint_or_null(args.first(), "bn_sign")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         Ok(SqlValue::Integer(match a.sign() {
             Sign::Minus => -1,
@@ -419,6 +511,10 @@ mod wasm_export {
         let a = match as_bigint_or_null(args.first(), "bn_abs")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         Ok(SqlValue::Blob(encode(&a.abs())))
     }
@@ -427,6 +523,10 @@ mod wasm_export {
         let a = match as_bigint_or_null(args.first(), "bn_bits")? {
             None => return Ok(SqlValue::Null),
             Some(x) => x,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         // num-bigint's `bits()` returns the minimal bit length of
         // |n|. bits(0) = 0; bits(1) = 1; bits(-1) = 1; bits(2^100)
@@ -496,6 +596,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("bignum".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.bignum".into()),
+                typed_values: Vec::new(),
             }
         }
     }

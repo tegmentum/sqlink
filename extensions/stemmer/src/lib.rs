@@ -120,6 +120,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("stemmer".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.stemmer".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -153,6 +154,10 @@ mod wasm_export {
                 FID_LANGS => Ok(SqlValue::Text(super::SUPPORTED_LANGUAGES.to_string())),
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("stemmer: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

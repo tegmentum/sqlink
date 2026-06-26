@@ -817,6 +817,14 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
         optional_capabilities: vec![],
         preferred_prefix: ext.preferred_prefix.clone(),
         prefix_expansion: ext.prefix_expansion.clone(),
+        // PLAN-wit-value-extension.md Phase A: the contract gained
+        // `typed-values` for record-typed shim functions to declare
+        // their decoder/encoder imports. Phase C codegen will start
+        // populating this; for now the host re-emits an empty list
+        // (the manifest pass-through from describe() into the
+        // extension-loader's bridged manifest carries the bridge's
+        // own typed-values separately if/when it ever has any).
+        typed_values: vec![],
     }
 }
 
@@ -835,15 +843,13 @@ const EPOCH_TICK: Duration = Duration::from_millis(1);
 const CONTRACT_PACKAGE: &str = "sqlite:extension";
 
 /// The MAJOR of the `sqlite:extension` WIT contract this host speaks. The
-/// canonical WIT is `sqlite:extension@0.1.0`, so the major is 0; the load guard
-/// rejects any component whose imported `sqlite:extension` major differs (or is
-/// unversioned/legacy), catching ABI-skewed components before instantiation
-/// rather than letting them silently marshal corrupted values.
-///
-/// NOTE: promoting the contract to `@1.0.0` (and bumping this to 1) is a
-/// separate, deferred effort; this guard is correct for the current @0.1
-/// surface and becomes the enforcement point for that promotion.
-const CONTRACT_MAJOR: u64 = 0;
+/// canonical WIT is `sqlite:extension@1.0.0` (bumped from `@0.1.0` alongside
+/// the wit-value variant addition; see PLAN-wit-value-extension.md Phase A
+/// + #485 Phase 1). The load guard rejects any component whose imported
+/// `sqlite:extension` major differs (or is unversioned/legacy), catching
+/// ABI-skewed components before instantiation rather than letting them
+/// silently marshal corrupted values.
+const CONTRACT_MAJOR: u64 = 1;
 
 /// Per-extension key/value backing for the `state` + `cache`
 /// imports. Both are stored as `Arc<Mutex<HashMap<…>>>` on the
@@ -1512,6 +1518,17 @@ fn spi_value_to_db(
         V::Real(r) => db::Value::Real(r),
         V::Text(s) => db::Value::Text(s),
         V::Blob(b) => db::Value::Blob(b),
+        // PHASE A: the wit-value arm lands in the contract here; Phase B
+        // teaches this site to look up the type-id in the per-extension
+        // typed-value registry, invoke the wasm-side decoder import, and
+        // marshal the resulting record through the SQL layer. Until
+        // then no extension emits a WitValue, so the path is unreachable
+        // in practice; if a future bridge crosses it before Phase B
+        // lands, we want a loud panic so the gap is detected at the
+        // boundary rather than silently corrupting values.
+        V::WitValue(_) => {
+            unimplemented!("sql-value::wit-value crossing not yet implemented; see PLAN-wit-value-extension.md Phase B")
+        }
     }
 }
 
@@ -1567,6 +1584,14 @@ fn sql_value_to_json(v: loaded::sqlite::extension::types::SqlValue) -> String {
             out.push('"');
             out
         }
+        // PHASE A: wit-value flows are not yet routed through the JSON
+        // delta channel. Phase B will decide whether wit-value cells
+        // get serialized as `{"witcanon:1": "...hex..."}` envelopes or
+        // expanded to the host's JSON shape. For now no extension
+        // emits a WitValue, so the path is unreachable in practice.
+        V::WitValue(_) => {
+            unimplemented!("sql-value::wit-value JSON serialization not yet implemented; see PLAN-wit-value-extension.md Phase B")
+        }
     }
 }
 
@@ -1581,6 +1606,11 @@ fn db_value_to_spi(
         db::Value::Real(r) => V::Real(r),
         db::Value::Text(s) => V::Text(s),
         db::Value::Blob(b) => V::Blob(b),
+        // PHASE A: db::Value has no WitValue mirror; the SQL layer
+        // can't materialize one without traversing the typed-value
+        // registry to find the source bridge's encoder import. Phase
+        // B extends db::Value (or layers a typed parallel channel
+        // alongside it) and rewires this site to call the encoder.
     }
 }
 
@@ -1600,6 +1630,10 @@ fn bindings_value_to_db(
         V::Real(r) => db::Value::Real(r),
         V::Text(s) => db::Value::Text(s),
         V::Blob(b) => db::Value::Blob(b),
+        // PHASE A: see `spi_value_to_db` comment  same Phase B owe.
+        V::WitValue(_) => {
+            unimplemented!("sql-value::wit-value crossing not yet implemented; see PLAN-wit-value-extension.md Phase B")
+        }
     }
 }
 
@@ -1614,6 +1648,7 @@ fn db_value_to_bindings(
         db::Value::Real(r) => V::Real(r),
         db::Value::Text(s) => V::Text(s),
         db::Value::Blob(b) => V::Blob(b),
+        // PHASE A: db::Value has no WitValue mirror; see `db_value_to_spi`.
     }
 }
 
@@ -1881,6 +1916,20 @@ unsafe fn bindings_to_sqlite3_result(
                 libsqlite3_sys::SQLITE_TRANSIENT(),
             );
         }
+        // PHASE A: a wit-value flowing back to SQLite as a function
+        // result has no Phase A representation  Phase B will either
+        // pass the canonical-CBOR bytes through as a BLOB result or
+        // route through a typed-result channel. For now, surface a
+        // sqlite3_result_error so the SQL statement fails loud rather
+        // than silently dropping the value.
+        V::WitValue(_) => {
+            let msg = b"wit-value result not yet implemented (Phase B owe)\0";
+            libsqlite3_sys::sqlite3_result_error(
+                ctx,
+                msg.as_ptr() as *const c_char,
+                (msg.len() - 1) as c_int,
+            );
+        }
     }
 }
 
@@ -2146,6 +2195,7 @@ fn db_value_to_bindings_sql(
         db::Value::Real(r) => V::Real(r),
         db::Value::Text(s) => V::Text(s),
         db::Value::Blob(b) => V::Blob(b),
+        // PHASE A: db::Value has no WitValue mirror; see `db_value_to_spi`.
     }
 }
 
@@ -2160,6 +2210,10 @@ fn bindings_sql_to_db_value(
         V::Real(r) => db::Value::Real(r),
         V::Text(s) => db::Value::Text(s),
         V::Blob(b) => db::Value::Blob(b),
+        // PHASE A: see `spi_value_to_db`  same Phase B owe.
+        V::WitValue(_) => {
+            unimplemented!("sql-value::wit-value crossing not yet implemented; see PLAN-wit-value-extension.md Phase B")
+        }
     }
 }
 
@@ -10141,6 +10195,16 @@ fn convert_sql_value_to_loaded(
         From::Real(r) => To::Real(r),
         From::Text(s) => To::Text(s),
         From::Blob(b) => To::Blob(b),
+        // PHASE A: wit-value-payload is shape-identical across the two
+        // bindgen universes; passes through field-by-field. Phase B's
+        // host marshaling work doesn't change this site  it'll still
+        // pass through. The decode/encode invocation happens at the
+        // SQL-boundary sites (db_value_to_* / *_to_sqlite3_result).
+        From::WitValue(p) => To::WitValue(loaded::sqlite::extension::types::WitValuePayload {
+            type_id: p.type_id,
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
     }
 }
 
@@ -10155,6 +10219,13 @@ fn convert_sql_value_from_loaded(
         From::Real(r) => To::Real(r),
         From::Text(s) => To::Text(s),
         From::Blob(b) => To::Blob(b),
+        // PHASE A: shape-identical pass-through; see
+        // `convert_sql_value_to_loaded` for the rationale.
+        From::WitValue(p) => To::WitValue(bindings::sqlite::extension::types::WitValuePayload {
+            type_id: p.type_id,
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
     }
 }
 
@@ -13074,8 +13145,8 @@ mod contract_guard_tests {
     }
 
     /// A real, built `sqlite:extension@0.1` component, if present. Skips the
-    /// positive case when the wasm artifact hasn't been built (matches the
-    /// suite's build-optional convention).
+    /// case when the wasm artifact hasn't been built (matches the suite's
+    /// build-optional convention).
     fn real_v0_1_component_path() -> Option<PathBuf> {
         let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         for c in [
@@ -13092,7 +13163,13 @@ mod contract_guard_tests {
     }
 
     #[test]
-    fn current_v0_1_component_introspects_to_major_0_and_passes() {
+    fn legacy_v0_1_component_introspects_to_major_0_and_is_rejected_by_v1_host() {
+        // After the `sqlite:extension@0.1.0` → `@1.0.0` bump
+        // (PLAN-wit-value-extension.md Phase A), any pre-existing built
+        // component still targets major 0 and the new host's guard (major
+        // 1) must reject it. The mechanical recompile against the new
+        // contract is the migration; this test pins the rejection so a
+        // future loose patch can't silently accept ABI-skewed bytes.
         let Some(path) = real_v0_1_component_path() else {
             eprintln!("skipping: no built sqlite:extension component found");
             return;
@@ -13101,27 +13178,34 @@ mod contract_guard_tests {
         let bytes = std::fs::read(&path).expect("read component");
         let component = Component::from_binary(&engine, &bytes).expect("parse component");
 
-        // The real introspection: a current @0.1 component reports major 0.
         let major =
             datalink_contract::component_contract_major(&engine, &component, CONTRACT_PACKAGE);
-        assert_eq!(major, Some(0), "current component should target major 0");
+        assert_eq!(major, Some(0), "legacy component should target major 0");
 
-        // And the guard accepts it against this host's CONTRACT_MAJOR (0).
-        datalink_contract::check_component_contract(
+        // Host CONTRACT_MAJOR is now 1; the guard must REJECT a legacy
+        // @0.x component.
+        let err = datalink_contract::check_component_contract(
             major,
             CONTRACT_MAJOR,
             CONTRACT_PACKAGE,
-            "uuid",
+            "legacy_v0_1",
         )
-        .expect("current @0.1 component must load");
+        .expect_err("v0.1 component must be rejected by v1 host")
+        .to_string();
+        assert!(err.contains("legacy_v0_1"), "names the extension: {err}");
+        assert!(
+            err.contains("0.x"),
+            "states the component's targeted major: {err}"
+        );
     }
 
     #[test]
     fn mismatched_major_is_rejected_with_friendly_message() {
-        // A component that targets sqlite:extension@1.x must be REJECTED while
-        // this host speaks @0.x.
+        // A component that targets a non-1 sqlite:extension major must be
+        // REJECTED while this host speaks @1.x. Use major 2 as the
+        // "future" case (a not-yet-existing @2.x component).
         let err = datalink_contract::check_component_contract(
-            Some(1),
+            Some(2),
             CONTRACT_MAJOR,
             CONTRACT_PACKAGE,
             "future_ext",
@@ -13130,10 +13214,10 @@ mod contract_guard_tests {
         .to_string();
         assert!(err.contains("future_ext"), "names the extension: {err}");
         assert!(
-            err.contains("sqlite:extension contract 1.x"),
+            err.contains("sqlite:extension contract 2.x"),
             "states the targeted major: {err}"
         );
-        assert!(err.contains("0.x"), "states the host major: {err}");
+        assert!(err.contains("1.x"), "states the host major: {err}");
         assert!(err.contains("rebuild"), "actionable: {err}");
     }
 

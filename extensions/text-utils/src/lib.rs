@@ -236,6 +236,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("text_utils".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.text_utils".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -249,6 +250,10 @@ mod wasm_export {
                     SqlValue::Real(r) => Ok(r.to_string()),
                     SqlValue::Blob(b) => Ok(String::from_utf8_lossy(b).into_owned()),
                     SqlValue::Null => Err(format!("{name}: NULL TEXT arg at {i}")),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
             fn as_int(v: &SqlValue, name: &str, i: usize) -> Result<i64, String> {
@@ -385,6 +390,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(s.chars().rev().collect()))
                 }
                 other => Err(format!("text-utils: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }
@@ -508,6 +517,10 @@ mod wasm_export {
                     (COL_PREFIX, None) => Ok(SqlValue::Null),
                     (COL_INPUT, _) => Ok(SqlValue::Null),
                     (other, _) => Err(format!("prefixes: bad column {other}")),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             })
         }

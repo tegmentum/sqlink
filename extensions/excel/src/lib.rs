@@ -162,6 +162,10 @@ mod wasm_export {
             Data::DateTime(dt) => SqlValue::Real(dt.as_f64()),
             Data::DateTimeIso(s) | Data::DurationIso(s) => SqlValue::Text(s.clone()),
             Data::Error(_) => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -190,6 +194,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("excel".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.excel".into()),
+                typed_values: Vec::new(),
             }
         }
     }

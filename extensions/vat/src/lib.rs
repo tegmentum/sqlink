@@ -843,6 +843,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("vat".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.vat".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -861,6 +862,10 @@ mod wasm_export {
             let t = match arg_text_opt(&args, 0, "vat")? {
                 Some(s) => s,
                 None => return Ok(SqlValue::Null),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             };
             match func_id {
                 FID_IS_VALID => Ok(SqlValue::Integer(super::vat_is_valid(&t) as i64)),
@@ -874,6 +879,10 @@ mod wasm_export {
                     Ok(SqlValue::Integer(super::vat_country_supported(&t) as i64))
                 }
                 other => Err(format!("vat: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

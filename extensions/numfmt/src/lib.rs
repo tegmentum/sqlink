@@ -188,6 +188,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("numfmt".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.numfmt".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -243,6 +244,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(with_separators(&format!("{n}"), sep)))
                 }
                 other => Err(format!("numfmt: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

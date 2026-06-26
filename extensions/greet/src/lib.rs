@@ -74,6 +74,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("greet".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.greet".into()),
+                typed_values: Vec::new(),
             }
         }
     }

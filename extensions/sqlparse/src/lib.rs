@@ -135,6 +135,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("sqlparse".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.sqlparse".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -152,6 +153,10 @@ mod wasm_export {
                     match parse(&t) {
                         Ok(stmts) => Ok(SqlValue::Integer(stmts.len() as i64)),
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_STMT_TYPE => {
@@ -173,6 +178,10 @@ mod wasm_export {
                             ))
                         }
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_READONLY => {
@@ -185,6 +194,10 @@ mod wasm_export {
                     }
                 }
                 other => Err(format!("sqlparse: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

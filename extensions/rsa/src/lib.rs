@@ -330,6 +330,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("rsa".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.rsa".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -349,6 +350,10 @@ mod wasm_export {
                     Ok(match pub_from_priv(&pem) {
                         Some(s) => SqlValue::Text(s),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
 
@@ -362,6 +367,10 @@ mod wasm_export {
                     Ok(match sign_pkcs1v15(&pem, &msg) {
                         Some(b) => SqlValue::Blob(b),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
 
@@ -388,6 +397,10 @@ mod wasm_export {
                     Ok(match sign_pss(&pem, &msg) {
                         Some(b) => SqlValue::Blob(b),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
 
@@ -424,6 +437,10 @@ mod wasm_export {
                     Ok(match decrypt_oaep(&pem, &ct) {
                         Some(b) => SqlValue::Blob(b),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
 
@@ -433,6 +450,10 @@ mod wasm_export {
                 }
 
                 other => Err(format!("rsa: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

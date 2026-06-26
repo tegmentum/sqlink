@@ -97,6 +97,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("decimal".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.decimal".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -110,6 +111,10 @@ mod wasm_export {
             }
             SqlValue::Null => Err(format!("{fname}: null arg")),
             SqlValue::Blob(_) => Err(format!("{fname}: blob arg")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -199,6 +204,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(pow2_exact(n)?.to_string()))
                 }
                 other => Err(format!("decimal: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }
@@ -230,6 +239,10 @@ mod wasm_export {
                 Ok(match acc {
                     Some(v) => SqlValue::Text(v.to_string()),
                     None => SqlValue::Null,
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 })
             })
         }

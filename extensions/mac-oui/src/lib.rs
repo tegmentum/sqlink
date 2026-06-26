@@ -279,6 +279,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("mac_oui".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.mac_oui".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -328,6 +329,10 @@ mod wasm_export {
                             "mac_format: unknown style {style:?}; want one of \
                              'colon', 'dash', 'dot', 'bare'"
                         )),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_OUI => Ok(parsed
@@ -346,6 +351,10 @@ mod wasm_export {
                     match super::lookup_vendor(&prefix) {
                         Some(name) => Ok(SqlValue::Text(name.to_string())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_IS_UNICAST => Ok(parsed
@@ -355,6 +364,10 @@ mod wasm_export {
                     .map(|b| SqlValue::Integer((b[0] & 0x02 == 0) as i64))
                     .unwrap_or(SqlValue::Null)),
                 other => Err(format!("mac-oui: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

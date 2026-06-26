@@ -59,6 +59,10 @@ mod wasm_export {
             SqlValue::Integer(n) => n.to_string().into_bytes(),
             SqlValue::Real(r) => r.to_string().into_bytes(),
             SqlValue::Null => Vec::new(),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -70,6 +74,10 @@ mod wasm_export {
             None | Some(SqlValue::Null) => Ok(0),
             Some(SqlValue::Integer(n)) => Ok(*n as u64),
             Some(_) => Err(format!("{fname}: seed must be INTEGER")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -162,6 +170,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("hashes_fast".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.hashes_fast".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -192,6 +201,10 @@ mod wasm_export {
                     murmur3_128_blob(&data, seed).map(SqlValue::Blob)
                 }
                 other => Err(format!("hashes-fast: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

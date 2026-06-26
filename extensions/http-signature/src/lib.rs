@@ -451,6 +451,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("http_signature".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.http_signature".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -495,10 +496,18 @@ mod wasm_export {
                         // caller wrap in CASE/WHERE without
                         // try/catch.
                         None => return Ok(SqlValue::Integer(0)),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let sig = match super::b64_decode(&sig_b64) {
                         Ok(b) => b,
                         Err(_) => return Ok(SqlValue::Integer(0)),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(SqlValue::Integer(
                         super::hmac_verify(alg, &key, base.as_bytes(), &sig) as i64,
@@ -517,6 +526,10 @@ mod wasm_export {
                     let sig = match super::b64_decode(&sig_b64) {
                         Ok(b) => b,
                         Err(_) => return Ok(SqlValue::Integer(0)),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(SqlValue::Integer(
                         super::ed25519_verify(&key, base.as_bytes(), &sig) as i64,
@@ -524,6 +537,10 @@ mod wasm_export {
                 }
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("http-signature: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

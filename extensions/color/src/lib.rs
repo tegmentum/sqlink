@@ -249,6 +249,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("color".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.color".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -273,6 +274,10 @@ mod wasm_export {
                     let raw = match text_arg(&args, 0, "color_to_hex")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(parse_color(&raw)
                         .map(|rgb| SqlValue::Text(hex_of(rgb)))
@@ -282,6 +287,10 @@ mod wasm_export {
                     let raw = match text_arg(&args, 0, "color_to_rgb")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(parse_color(&raw)
                         .map(|(r, g, b)| SqlValue::Text(format!("rgb({r}, {g}, {b})")))
@@ -291,6 +300,10 @@ mod wasm_export {
                     let raw = match text_arg(&args, 0, "color_luminance")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(parse_color(&raw)
                         .map(|rgb| SqlValue::Real(luminance(rgb)))
@@ -305,6 +318,10 @@ mod wasm_export {
                     let raw = match text_arg(&args, 0, "color_parse")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(parse_color(&raw)
                         .map(|rgb| SqlValue::Text(hex_of(rgb)))
@@ -319,6 +336,10 @@ mod wasm_export {
                     let raw = match text_arg(&args, 0, "color_named")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let lower = raw.trim().to_ascii_lowercase();
                     if lower.is_empty()
@@ -339,6 +360,10 @@ mod wasm_export {
                     let c: Color = match lower.parse() {
                         Ok(c) => c,
                         Err(_) => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     if c.name().is_none() && lower != "transparent" {
                         // csscolorparser parses "rebeccapurple" /
@@ -362,6 +387,10 @@ mod wasm_export {
                     let raw = match text_arg(&args, 0, "color_hex_to_rgb")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(parse_color(&raw)
                         .map(|(r, g, b)| SqlValue::Text(format!("[{r}, {g}, {b}]")))
@@ -386,14 +415,26 @@ mod wasm_export {
                     let h = match real_arg(&args, 0, "color_hsl_to_rgb")? {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let s = match real_arg(&args, 1, "color_hsl_to_rgb")? {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let l = match real_arg(&args, 2, "color_hsl_to_rgb")? {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     // Inputs are h 0..360, s/l 0..100 (percent).
                     let c = Color::from_hsla(
@@ -421,14 +462,26 @@ mod wasm_export {
                     let h = match real_arg(&args, 0, "color_hsv_to_rgb")? {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let s = match real_arg(&args, 1, "color_hsv_to_rgb")? {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let v = match real_arg(&args, 2, "color_hsv_to_rgb")? {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let c = Color::from_hsva(
                         h as f32,
@@ -443,14 +496,26 @@ mod wasm_export {
                     let a_raw = match text_arg(&args, 0, "color_mix")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let b_raw = match text_arg(&args, 1, "color_mix")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let t = match real_arg(&args, 2, "color_mix")? {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match (parse_color(&a_raw), parse_color(&b_raw)) {
                         (Some(ca), Some(cb)) => SqlValue::Text(hex_of(mix_linear(ca, cb, t))),
@@ -461,6 +526,10 @@ mod wasm_export {
                     let raw = match text_arg(&args, 0, "color_invert")? {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(parse_color(&raw)
                         .map(|(r, g, b)| SqlValue::Text(hex_of((255 - r, 255 - g, 255 - b))))
@@ -471,6 +540,10 @@ mod wasm_export {
                     env!("CARGO_PKG_VERSION")
                 ))),
                 other => Err(format!("color: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }
@@ -481,6 +554,10 @@ mod wasm_export {
         let raw = match text_arg(args, 0, fname)? {
             Some(s) => s,
             None => return Ok(SqlValue::Null),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         Ok(parse_color(&raw)
             .map(|(r, g, b)| {

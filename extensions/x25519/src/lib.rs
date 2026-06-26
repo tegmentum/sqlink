@@ -140,6 +140,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("x25519".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.x25519".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -156,6 +157,10 @@ mod wasm_export {
                     Ok(match as_32(&b) {
                         Some(arr) => SqlValue::Blob(pub_from_priv(arr).to_vec()),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
 
@@ -184,6 +189,10 @@ mod wasm_export {
                 }
 
                 other => Err(format!("x25519: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

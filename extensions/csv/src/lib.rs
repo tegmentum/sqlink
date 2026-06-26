@@ -95,6 +95,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("csv".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.csv".into()),
+                typed_values: Vec::new(),
             }
         }
     }

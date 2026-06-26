@@ -112,6 +112,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("zipfile".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.zipfile".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -311,6 +312,10 @@ mod wasm_export {
                     4 => Ok(SqlValue::Blob(entry.data.clone())),
                     5 => Ok(SqlValue::Text(entry.method.clone())),
                     other => Err(format!("zipfile: bad column {other}")),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             })
         }

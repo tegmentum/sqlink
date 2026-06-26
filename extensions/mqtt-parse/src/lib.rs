@@ -474,6 +474,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("mqtt_parse".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.mqtt_parse".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -489,11 +490,19 @@ mod wasm_export {
         let blob = match arg_blob_opt(args, 0, fname)? {
             Some(b) => b,
             None => return Ok(SqlValue::Null),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let version = arg_version(args, 1);
         Ok(match parse_packet(&blob, version) {
             Some(p) => f(&p),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         })
     }
 
@@ -506,22 +515,42 @@ mod wasm_export {
                 FID_PACKET_ID => with_parsed(&args, "mqtt_packet_id", |p| match p.packet_id {
                     Some(pid) => SqlValue::Integer(pid as i64),
                     None => SqlValue::Null,
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }),
                 FID_TOPIC => with_parsed(&args, "mqtt_topic", |p| match &p.topic {
                     Some(t) => SqlValue::Text(t.clone()),
                     None => SqlValue::Null,
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }),
                 FID_PAYLOAD => with_parsed(&args, "mqtt_payload", |p| match &p.payload {
                     Some(b) => SqlValue::Blob(b.clone()),
                     None => SqlValue::Null,
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }),
                 FID_QOS => with_parsed(&args, "mqtt_qos", |p| match p.qos {
                     Some(q) => SqlValue::Integer(q as i64),
                     None => SqlValue::Null,
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }),
                 FID_RETAIN => with_parsed(&args, "mqtt_retain", |p| match p.retain {
                     Some(r) => SqlValue::Integer(if r { 1 } else { 0 }),
                     None => SqlValue::Null,
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }),
                 FID_PARSE => with_parsed(&args, "mqtt_parse", |p| {
                     SqlValue::Text(parsed_to_json(p).to_string())
@@ -532,6 +561,10 @@ mod wasm_export {
                     let blob = match arg_blob_opt(&args, 0, "mqtt_is_valid")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let version = arg_version(&args, 1);
                     Ok(SqlValue::Integer(
@@ -547,6 +580,10 @@ mod wasm_export {
                     env!("CARGO_PKG_VERSION")
                 ))),
                 other => Err(format!("mqtt-parse: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

@@ -34,10 +34,10 @@ world sqlite-cli-unified {
     export low-level;
     export high-level;
 
-    export sqlite:extension/types@0.1.0;
-    export sqlite:extension/spi@0.1.0;
-    export sqlite:extension/logging@0.1.0;
-    export sqlite:extension/config@0.1.0;
+    export sqlite:extension/types@1.0.0;
+    export sqlite:extension/spi@1.0.0;
+    export sqlite:extension/logging@1.0.0;
+    export sqlite:extension/config@1.0.0;
 
     import fts5-slot;
     import json1-slot;
@@ -80,10 +80,10 @@ world sqlite-cli-command {
     /// the host wires them in so subsequent stages can migrate
     /// eval_sql + dot.rs callers off the local connection one
     /// path at a time.
-    import sqlite:extension/spi@0.1.0;
-    import sqlite:extension/spi-loader@0.1.0;
-    import sqlite:extension/prepared@0.1.0;
-    import sqlite:extension/session@0.1.0;
+    import sqlite:extension/spi@1.0.0;
+    import sqlite:extension/spi-loader@1.0.0;
+    import sqlite:extension/prepared@1.0.0;
+    import sqlite:extension/session@1.0.0;
 }
 
 /// Programmatic SQLite library world.
@@ -106,10 +106,10 @@ world sqlite-cli-command {
 /// that don't need dynamic loading can satisfy `extension-loader`
 /// with a stub.
 world sqlite-library {
-    export sqlite:extension/types@0.1.0;
-    export sqlite:extension/spi@0.1.0;
-    export sqlite:extension/logging@0.1.0;
-    export sqlite:extension/config@0.1.0;
+    export sqlite:extension/types@1.0.0;
+    export sqlite:extension/spi@1.0.0;
+    export sqlite:extension/logging@1.0.0;
+    export sqlite:extension/config@1.0.0;
 
     export low-level;
     export high-level;
