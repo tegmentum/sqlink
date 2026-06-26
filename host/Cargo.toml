@@ -24,7 +24,7 @@ sqlite-extension-policy = { path = "../sqlite-loader-wit" }
 sqlink-parsers = { path = "../sqlink-parsers" }
 
 anyhow = "1.0"
-wasmtime = { version = "45.0.1", features = [
+wasmtime = { version = "46.0.1", features = [
     "component-model",
     "component-model-async",
     "cranelift",
@@ -38,7 +38,7 @@ wasmtime = { version = "45.0.1", features = [
     # `~/.cache/sqlink/compile-cache`).
     "cache",
 ] }
-wasmtime-wasi = "45.0.1"
+wasmtime-wasi = "46.0.1"
 parking_lot = "0.12"
 tracing = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util", "fs", "time"] }
