@@ -1583,7 +1583,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 [[package]]
 name = "datalink-contract"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git#c9955230a96a3db4e1a775bf15d70db5a841ef4c"
+source = "git+https://github.com/tegmentum/datalink.git#a40c470e9b6512cce43a5bd0cff9dbe0ac3ff372"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -1592,12 +1592,22 @@ dependencies = [
 [[package]]
 name = "datalink-dynlink"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git#c9955230a96a3db4e1a775bf15d70db5a841ef4c"
+source = "git+https://github.com/tegmentum/datalink.git#a40c470e9b6512cce43a5bd0cff9dbe0ac3ff372"
 dependencies = [
  "async-trait",
  "wasmtime",
  "wasmtime-wasi",
 ]
+
+[[package]]
+name = "datalink-policy"
+version = "0.1.0"
+source = "git+https://github.com/tegmentum/datalink.git#a40c470e9b6512cce43a5bd0cff9dbe0ac3ff372"
+
+[[package]]
+name = "datalink-prefix"
+version = "0.1.0"
+source = "git+https://github.com/tegmentum/datalink.git#a40c470e9b6512cce43a5bd0cff9dbe0ac3ff372"
 
 [[package]]
 name = "db-utils-extension"
@@ -5605,6 +5615,7 @@ dependencies = [
  "cusip-extension",
  "datalink-contract",
  "datalink-dynlink",
+ "datalink-prefix",
  "decimal-extension",
  "define-extension",
  "detect-extension",
@@ -5897,6 +5908,9 @@ dependencies = [
 [[package]]
 name = "sqlite-extension-policy"
 version = "0.1.0"
+dependencies = [
+ "datalink-policy",
+]
 
 [[package]]
 name = "sqlparse-extension"

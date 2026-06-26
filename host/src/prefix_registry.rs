@@ -29,17 +29,14 @@
 use anyhow::{anyhow, Result};
 use sqlite_component_core::db::{Connection, StepResult, Value};
 
-/// SQLite identifier separator between prefix and function name.
-/// Chosen `__` because it's legal in unquoted SQLite identifiers
-/// and visually distinct from natural single-underscore names like
-/// `uuid_v4`. Rejected alternatives: `:` (quoting overhead), `.`
-/// (parser ambiguity with schema.function), `_` (collides with
-/// natural names), `$`/`#` (non-portable).
-pub const PREFIX_SEPARATOR: &str = "__";
-
-/// Bound on auto-fallback `foafN` collision resolution. After
-/// 999 collisions on the same short prefix the loader gives up.
-pub const COLLISION_FALLBACK_LIMIT: u32 = 999;
+// The db-agnostic resolution primitives + the collision/pin MODEL live in the
+// shared `datalink-prefix` crate (ducklink consumes the same crate over an
+// in-memory store). This module keeps the SQLite-backed storage: it
+// implements `PrefixStore` over a `Connection` via the `__sqlink_prefix*`
+// tables, and re-exports the shared separator / qualify / fallback-limit so
+// existing call sites are unchanged.
+pub use datalink_prefix::{qualify, COLLISION_FALLBACK_LIMIT, PREFIX_SEPARATOR};
+use datalink_prefix::{Collision, PrefixStore};
 
 /// Idempotent schema DDL. Safe to run on every cli session start.
 pub const SCHEMA_DDL: &str = "\
@@ -95,49 +92,25 @@ pub fn resolve_prefix_expansion(
     preferred_prefix: Option<&str>,
     prefix_expansion: Option<&str>,
 ) -> (String, String, bool) {
-    match (preferred_prefix, prefix_expansion) {
-        (Some(p), Some(e)) if !p.is_empty() && !e.is_empty() => {
-            (p.to_string(), e.to_string(), false)
-        }
-        _ => {
-            let prefix = sanitize_prefix(crate_name);
-            let expansion = format!("sqlink-internal://{crate_name}");
-            tracing::warn!(
-                extension = crate_name,
-                synthetic_prefix = %prefix,
-                synthetic_expansion = %expansion,
-                "extension missing preferred-prefix/prefix-expansion in manifest; \
-                 using synthetic. This will be a hard error in v1.1."
-            );
-            (prefix, expansion, true)
-        }
+    // Shared resolution decision (registry/manifest entry vs the
+    // deprecation-window fallback). The fallback scheme stays sqlink's.
+    let (prefix, expansion, is_synthetic) = datalink_prefix::resolve_prefix(
+        crate_name,
+        preferred_prefix,
+        prefix_expansion,
+        "sqlink-internal",
+    )
+    .into_parts();
+    if is_synthetic {
+        tracing::warn!(
+            extension = crate_name,
+            synthetic_prefix = %prefix,
+            synthetic_expansion = %expansion,
+            "extension missing preferred-prefix/prefix-expansion in manifest; \
+             using synthetic. This will be a hard error in v1.1."
+        );
     }
-}
-
-/// Sanitize a crate name into a legal unquoted SQLite identifier.
-/// Replaces any char outside `[A-Za-z0-9_]` with `_`. If the
-/// result starts with a digit, prepends `_`.
-fn sanitize_prefix(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    for (i, c) in s.chars().enumerate() {
-        if c.is_ascii_alphanumeric() || c == '_' {
-            out.push(c);
-        } else {
-            out.push('_');
-        }
-        if i == 0 && c.is_ascii_digit() {
-            out.insert(0, '_');
-        }
-    }
-    if out.is_empty() {
-        out.push('_');
-    }
-    out
-}
-
-/// Build the qualified function name: `prefix__name`.
-pub fn qualify(prefix: &str, name: &str) -> String {
-    format!("{prefix}{PREFIX_SEPARATOR}{name}")
+    (prefix, expansion, is_synthetic)
 }
 
 /// Insert or update the `_prefix` row binding `prefix` to `expansion`.
@@ -336,9 +309,107 @@ pub fn should_register_bare(
     n_args: i32,
     my_expansion: &str,
 ) -> Result<bool> {
-    match lookup_pin(conn, function_name, n_args)? {
-        None => Ok(true),
-        Some(pinned) => Ok(pinned == my_expansion),
+    // The bare-name precedence rule is the shared `PrefixStore` default over
+    // `lookup_pin`; this host just supplies the SQLite-backed store.
+    SqliteStore(conn).should_register_bare(function_name, n_args, my_expansion)
+}
+
+/// SQLite-backed [`PrefixStore`]: the sqlink host's durable backing for the
+/// shared prefix collision/pin model, over the `__sqlink_prefix*` tables.
+/// Wraps the module's free functions so the loader's existing call sites are
+/// unchanged while the model is shared with ducklink (which backs the same
+/// trait in-memory).
+pub struct SqliteStore<'a>(pub &'a Connection);
+
+impl<'a> PrefixStore for SqliteStore<'a> {
+    type Error = anyhow::Error;
+
+    fn lookup_expansion(&self, prefix: &str) -> Result<Option<String>> {
+        lookup_expansion(self.0, prefix)
+    }
+
+    fn record_prefix(&mut self, prefix: &str, expansion: &str, now: i64) -> Result<String> {
+        record_prefix_with_collision_fallback(self.0, prefix, expansion, now)
+    }
+
+    fn record_function(
+        &mut self,
+        expansion: &str,
+        function_name: &str,
+        n_args: i32,
+        extension: &str,
+        now: i64,
+    ) -> Result<Vec<String>> {
+        record_function(self.0, expansion, function_name, n_args, extension, now)
+    }
+
+    fn lookup_pin(&self, function_name: &str, n_args: i32) -> Result<Option<String>> {
+        lookup_pin(self.0, function_name, n_args)
+    }
+
+    fn pin(&mut self, function_name: &str, n_args: i32, expansion: &str, now: i64) -> Result<()> {
+        let mut stmt = self
+            .0
+            .prepare(
+                "INSERT INTO __sqlink_prefix_pin \
+                 (function_name, n_args, expansion, set_at) VALUES (?1, ?2, ?3, ?4) \
+                 ON CONFLICT(function_name, n_args) DO UPDATE SET \
+                    expansion = excluded.expansion, set_at = excluded.set_at",
+            )
+            .map_err(|e| anyhow!("prepare pin: {}", e.message))?;
+        stmt.bind_all(&[
+            Value::Text(function_name.to_string()),
+            Value::Integer(n_args as i64),
+            Value::Text(expansion.to_string()),
+            Value::Integer(now),
+        ])
+        .map_err(|e| anyhow!("bind pin: {}", e.message))?;
+        stmt.step().map_err(|e| anyhow!("step pin: {}", e.message))?;
+        Ok(())
+    }
+
+    fn list_collisions(&self) -> Result<Vec<Collision>> {
+        // (function_name, n_args) groups with >1 distinct expansion, with the
+        // expansions in registration order (the last is the bare owner).
+        let mut stmt = self
+            .0
+            .prepare(
+                "SELECT function_name, n_args, expansion FROM __sqlink_prefix_function \
+                 WHERE (function_name, n_args) IN (\
+                    SELECT function_name, n_args FROM __sqlink_prefix_function \
+                    GROUP BY function_name, n_args HAVING COUNT(DISTINCT expansion) > 1) \
+                 ORDER BY function_name, n_args, registered_at",
+            )
+            .map_err(|e| anyhow!("prepare list_collisions: {}", e.message))?;
+        let mut out: Vec<Collision> = Vec::new();
+        while let StepResult::Row = stmt
+            .step()
+            .map_err(|e| anyhow!("step list_collisions: {}", e.message))?
+        {
+            let function_name = match stmt.column_value(0) {
+                Value::Text(s) => s,
+                _ => continue,
+            };
+            let n_args = match stmt.column_value(1) {
+                Value::Integer(i) => i as i32,
+                _ => continue,
+            };
+            let expansion = match stmt.column_value(2) {
+                Value::Text(s) => s,
+                _ => continue,
+            };
+            match out.last_mut() {
+                Some(c) if c.function_name == function_name && c.n_args == n_args => {
+                    c.expansions.push(expansion);
+                }
+                _ => out.push(Collision {
+                    function_name,
+                    n_args,
+                    expansions: vec![expansion],
+                }),
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -411,6 +482,9 @@ mod tests {
 
     #[test]
     fn sanitize_prefix_rejects_non_identifier_chars() {
+        // Sanitization now lives in datalink-prefix; the synthetic-prefix path
+        // routes through it. Spot-check behavior is unchanged.
+        use datalink_prefix::sanitize_to_identifier as sanitize_prefix;
         assert_eq!(sanitize_prefix("foaf"), "foaf");
         assert_eq!(sanitize_prefix("foo-bar"), "foo_bar");
         assert_eq!(sanitize_prefix("foo.bar"), "foo_bar");
