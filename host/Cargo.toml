@@ -23,6 +23,12 @@ sqlite-extension-policy = { path = "../sqlite-loader-wit" }
 # tokio/wasmtime dep graph.
 sqlink-parsers = { path = "../sqlink-parsers" }
 
+# Shared runtime WIT contract-version load guard (also consumed by the
+# ducklink host). Introspects a loaded component's imported sqlite:extension
+# @MAJOR and rejects a contract-major mismatch (or unversioned/legacy)
+# before instantiation -- silent-corruption protection. datalink is PUBLIC.
+datalink-contract = { git = "https://github.com/tegmentum/datalink.git" }
+
 anyhow = "1.0"
 wasmtime = { version = "46.0.1", features = [
     "component-model",

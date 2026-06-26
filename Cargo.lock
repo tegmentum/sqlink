@@ -1503,6 +1503,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 
 [[package]]
+name = "datalink-contract"
+version = "0.1.0"
+source = "git+https://github.com/tegmentum/datalink.git#bc22c57c079bb791d8be8a834c5e59098158a203"
+dependencies = [
+ "anyhow",
+ "wasmtime",
+]
+
+[[package]]
 name = "db-utils-extension"
 version = "0.1.0"
 dependencies = [
@@ -5406,6 +5415,7 @@ dependencies = [
  "csv-extension",
  "currency-extension",
  "cusip-extension",
+ "datalink-contract",
  "decimal-extension",
  "define-extension",
  "detect-extension",

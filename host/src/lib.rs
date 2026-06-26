@@ -885,6 +885,27 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
 /// `sqlink-loader` setting so policy values port directly.
 const EPOCH_TICK: Duration = Duration::from_millis(1);
 
+/// The WIT package a loadable extension component imports — the runtime
+/// contract the guard ([`datalink_contract`], shared with the ducklink host)
+/// introspects. This is `sqlite:extension` (the analog of ducklink's
+/// `duckdb:extension`): every loadable extension imports its capability surface
+/// (`sqlite:extension/{types,policy,metadata,vtab,http,...}`). The `sqlink:wasm`
+/// package is the host's own loader/dispatch world, which a guest does NOT
+/// import, so guarding on it would reject every real component; the contract a
+/// component actually targets is `sqlite:extension`.
+const CONTRACT_PACKAGE: &str = "sqlite:extension";
+
+/// The MAJOR of the `sqlite:extension` WIT contract this host speaks. The
+/// canonical WIT is `sqlite:extension@0.1.0`, so the major is 0; the load guard
+/// rejects any component whose imported `sqlite:extension` major differs (or is
+/// unversioned/legacy), catching ABI-skewed components before instantiation
+/// rather than letting them silently marshal corrupted values.
+///
+/// NOTE: promoting the contract to `@1.0.0` (and bumping this to 1) is a
+/// separate, deferred effort; this guard is correct for the current @0.1
+/// surface and becomes the enforcement point for that promotion.
+const CONTRACT_MAJOR: u64 = 0;
+
 /// Per-extension key/value backing for the `state` + `cache`
 /// imports. Both are stored as `Arc<Mutex<HashMap<…>>>` on the
 /// `LoadedExtension` so they survive across the per-call Stores
@@ -7505,6 +7526,22 @@ impl Host {
             preferred_prefix: None,
             prefix_expansion: None,
         };
+        // Runtime contract-version guard (shared datalink-contract, also used
+        // by the ducklink host). Reject a component whose imported
+        // sqlite:extension major differs from this host's CONTRACT_MAJOR (or
+        // that imports the package unversioned/legacy) BEFORE instantiating it,
+        // with a friendly, actionable message -- otherwise an ABI-skewed
+        // component could trap cryptically at instantiate, or silently marshal
+        // corrupted values.
+        let imported_major =
+            datalink_contract::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
+        datalink_contract::check_component_contract(
+            imported_major,
+            CONTRACT_MAJOR,
+            CONTRACT_PACKAGE,
+            name_hint,
+        )?;
+
         let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
         let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
             .await
@@ -13099,5 +13136,104 @@ mod spawn_build_validation_tests {
                 err.message
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod contract_guard_tests {
+    //! The runtime contract-version guard sqlink ADOPTS from the shared
+    //! datalink-contract crate (the ducklink host already used it). It rejects a
+    //! component whose imported `sqlite:extension` major differs from this
+    //! host's `CONTRACT_MAJOR` (0), or that imports it unversioned/legacy,
+    //! BEFORE instantiation -- silent-corruption protection. Wired into
+    //! `register_component` just before `instantiate_async`.
+
+    use super::{CONTRACT_MAJOR, CONTRACT_PACKAGE};
+    use std::path::PathBuf;
+    use wasmtime::component::Component;
+    use wasmtime::{Config, Engine};
+
+    fn engine() -> Engine {
+        let mut cfg = Config::new();
+        cfg.wasm_component_model(true);
+        Engine::new(&cfg).expect("engine")
+    }
+
+    /// A real, built `sqlite:extension@0.1` component, if present. Skips the
+    /// positive case when the wasm artifact hasn't been built (matches the
+    /// suite's build-optional convention).
+    fn real_v0_1_component_path() -> Option<PathBuf> {
+        let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        for c in [
+            "../browser/public/uuid_extension.component.wasm",
+            "../wasmmachine/sqlite_cli.component.wasm",
+            "../build/extensions/wasm-demo.wasm",
+        ] {
+            let p = manifest_dir.join(c);
+            if p.exists() {
+                return Some(p);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn current_v0_1_component_introspects_to_major_0_and_passes() {
+        let Some(path) = real_v0_1_component_path() else {
+            eprintln!("skipping: no built sqlite:extension component found");
+            return;
+        };
+        let engine = engine();
+        let bytes = std::fs::read(&path).expect("read component");
+        let component = Component::from_binary(&engine, &bytes).expect("parse component");
+
+        // The real introspection: a current @0.1 component reports major 0.
+        let major =
+            datalink_contract::component_contract_major(&engine, &component, CONTRACT_PACKAGE);
+        assert_eq!(major, Some(0), "current component should target major 0");
+
+        // And the guard accepts it against this host's CONTRACT_MAJOR (0).
+        datalink_contract::check_component_contract(
+            major,
+            CONTRACT_MAJOR,
+            CONTRACT_PACKAGE,
+            "uuid",
+        )
+        .expect("current @0.1 component must load");
+    }
+
+    #[test]
+    fn mismatched_major_is_rejected_with_friendly_message() {
+        // A component that targets sqlite:extension@1.x must be REJECTED while
+        // this host speaks @0.x.
+        let err = datalink_contract::check_component_contract(
+            Some(1),
+            CONTRACT_MAJOR,
+            CONTRACT_PACKAGE,
+            "future_ext",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("future_ext"), "names the extension: {err}");
+        assert!(
+            err.contains("sqlite:extension contract 1.x"),
+            "states the targeted major: {err}"
+        );
+        assert!(err.contains("0.x"), "states the host major: {err}");
+        assert!(err.contains("rebuild"), "actionable: {err}");
+    }
+
+    #[test]
+    fn unversioned_legacy_is_rejected() {
+        let err = datalink_contract::check_component_contract(
+            None,
+            CONTRACT_MAJOR,
+            CONTRACT_PACKAGE,
+            "legacy_ext",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("UNVERSIONED"), "flags legacy: {err}");
+        assert!(err.contains("sqlite:extension"), "names the package: {err}");
     }
 }
