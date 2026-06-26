@@ -28,7 +28,11 @@ const PUBLIC_DIR = resolve(__dirname, '..', 'public')
 // We mirror the resolveWasmFor() lookup pattern from transpile-
 // extensions.mjs but only for the names used by browser tests.
 const FALLBACK_EXTENSIONS_ROOT = '/Users/zacharywhitley/git/sqlink/extensions'
-const EXTENSION_BYTES_TO_LINK = ['uuid']
+// v1.5 round 6: composed-bundle.spec.js loads 3 lightweight scalar
+// extensions in phase 1 then `.bundle save myset` to produce a
+// non-empty bundle the reload-leg can assert against. aba/bic/crc
+// were chosen for size + lack of external deps.
+const EXTENSION_BYTES_TO_LINK = ['uuid', 'aba', 'bic', 'crc']
 
 function resolveSource() {
   const primary = resolve(PRIMARY_TARGET, WASM_NAME)

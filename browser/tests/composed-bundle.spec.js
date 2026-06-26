@@ -21,12 +21,38 @@ import { test, expect } from '@playwright/test'
 // entry + polyfill end-to-end.
 test('composed cli: .bundle save/list/show/delete round-trip', async ({
   page,
+  baseURL,
 }) => {
   page.on('pageerror', (e) => console.error('[pageerror]', e))
   page.on('console', (msg) => {
     if (msg.type() === 'error') console.error('[console.error]', msg.text())
     else if (msg.type() === 'warning')
       console.warn('[console.warn]', msg.text())
+  })
+
+  // Clear OPFS so this test starts from a clean slate (cas.db
+  // persists across runs by default — a leftover bundle from a
+  // prior playwright execution would break the
+  // `listAfterDelete` assertion).
+  await page.goto(`${baseURL}/tests/composed-bundle.html`)
+  await page.evaluate(async () => {
+    try {
+      const root = await navigator.storage.getDirectory()
+      try {
+        const dir = await root.getDirectoryHandle('sqlink', { create: false })
+        await dir.removeEntry('cas.db')
+      } catch {
+        // ignore
+      }
+      try {
+        const dir = await root.getDirectoryHandle('sqlink', { create: false })
+        await dir.removeEntry('cas.db-journal')
+      } catch {
+        // ignore
+      }
+    } catch {
+      // ignore
+    }
   })
 
   await page.goto('/tests/composed-bundle.html')
@@ -60,6 +86,8 @@ test('composed cli: .bundle save/list/show/delete round-trip', async ({
   // alias it recorded. Substring match keeps the assertion robust
   // against minor format tweaks (id=N, set_hash=..., etc.).
   expect(result.saveOut).toMatch(/myset/)
+  // Non-empty bundle: 3 user-loaded extensions (aba/bic/crc).
+  expect(result.saveOut).toMatch(/members=3/)
 
   // .bundle list should also surface the alias.
   expect(result.listOut).toMatch(/myset/)
@@ -78,12 +106,14 @@ test('composed cli: .bundle save/list/show/delete round-trip', async ({
   expect(result.listAfterDelete).not.toMatch(/myset/)
 })
 
-// Reload persistence assertion. v1.5 round 4: un-skipped because
-// the cas db now lives in OPFS (sqlite-lib opens `shared_cas_conn`
-// through the `"opfs"` VFS on wasm32, which calls into the JS
-// host's `sqlink:wasm/opfs-host` impl backed by
-// navigator.storage.getDirectory()). The cas db file is a real
-// SQLite db on disk in OPFS — survives navigation.
+// Reload persistence assertion. v1.5 round 6: the entire composed-
+// cli wasm runtime now lives inside a dedicated Worker. opfs-host
+// runs in that worker and calls FileSystemSyncAccessHandle methods
+// inline (legal in worker contexts only). The cas db file is a real
+// SQLite db on disk in OPFS — survives navigation. This test
+// exercises a NON-EMPTY bundle (3 user-loaded extensions) so the
+// reload-leg assertion proves the bundle members survived OPFS, not
+// just the bundle-summary metadata.
 test('composed cli: .bundle persists across page reload', async ({
   page,
   baseURL,
@@ -93,14 +123,42 @@ test('composed cli: .bundle persists across page reload', async ({
     if (msg.type() === 'error') console.error('[console.error]', msg.text())
   })
 
-  // Phase 1: save bundle.
+  // Clear OPFS at the start of the test so a prior session's
+  // bundle doesn't survive (the cas.db file is persistent across
+  // playwright runs by default).
+  await page.goto(`${baseURL}/tests/composed-bundle.html`)
+  await page.evaluate(async () => {
+    try {
+      const root = await navigator.storage.getDirectory()
+      try {
+        const dir = await root.getDirectoryHandle('sqlink', { create: false })
+        await dir.removeEntry('cas.db')
+      } catch {
+        // ignore — file or dir may not exist yet
+      }
+      try {
+        const dir = await root.getDirectoryHandle('sqlink', { create: false })
+        await dir.removeEntry('cas.db-journal')
+      } catch {
+        // ignore
+      }
+    } catch {
+      // ignore
+    }
+  })
+
+  // Phase 1: load 3 extensions, save them as a non-empty bundle.
   await page.goto(`${baseURL}/tests/composed-bundle.html?phase=1`)
   await page.waitForFunction(() => window.__bundleDone === true, {
     timeout: 120_000,
   })
   const phase1Result = await page.evaluate(() => window.__bundleResult)
+  console.log('[phase1]', JSON.stringify(phase1Result, null, 2))
   expect(phase1Result.error).toBeUndefined()
   expect(phase1Result.saveOut).toMatch(/myset/)
+  // Confirm the bundle is non-empty — at least 3 members. The
+  // bundle-cli output line is "members=N".
+  expect(phase1Result.saveOut).toMatch(/members=3/)
 
   // Phase 2: navigate to a fresh page (different query => guaranteed
   // re-instantiation of the wasm runtime + a brand-new
@@ -111,6 +169,7 @@ test('composed cli: .bundle persists across page reload', async ({
     timeout: 120_000,
   })
   const phase2Result = await page.evaluate(() => window.__bundleResult)
+  console.log('[phase2]', JSON.stringify(phase2Result, null, 2))
   expect(phase2Result.error).toBeUndefined()
   expect(phase2Result.listOut).toMatch(/myset/)
   expect(phase2Result.showOut).toMatch(/myset/)
@@ -119,4 +178,7 @@ test('composed cli: .bundle persists across page reload', async ({
   // from a snapshot architecture — the OPFS file would be openable
   // by `sqlite3` or `@sqlite.org/sqlite-wasm` directly.
   expect(phase2Result.opfsHeader).toMatch(/^SQLite format 3/)
+  // Bundle members survived OPFS — show output must reflect the 3
+  // members from phase 1. bundle-cli renders this as "members (N):".
+  expect(phase2Result.showOut).toMatch(/members \(3\)/)
 })

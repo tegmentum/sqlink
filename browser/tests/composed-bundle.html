@@ -15,10 +15,11 @@
       // in cli/src/lib.rs, so no `embed` arg is needed — opening
       // the db is enough to have the .bundle dot-cmd loaded.
       //
-      // v1.5 round 4: the cas db now lives in OPFS via the `"opfs"`
-      // VFS sqlite-lib opens on wasm32. Adds a phase=1/phase=2 split
-      // so the reload-persistence test can save in phase 1, navigate
-      // away + back, and assert phase 2 still sees the bundle.
+      // v1.5 round 6: phase 1 loads 3 lightweight scalar extensions
+      // (aba/bic/crc) then `.bundle save myset --no-build` to produce
+      // a NON-EMPTY bundle with members=3. Phase 2 (after page
+      // reload) reads back via `.bundle list / show` to verify the
+      // bundle members survived OPFS persistence.
 
       import { openDatabaseComposed } from '../src/sqlink-composed.js'
 
@@ -31,20 +32,73 @@
       const params = new URLSearchParams(window.location.search)
       const phase = params.get('phase')
 
+      // Lightweight scalar extensions for the non-empty bundle test.
+      // Symlinked into browser/public/ via scripts/link-composed-wasm.mjs.
+      // Each is loaded via db.loadExtension(name, bytes) (registers
+      // the bytes with the worker's ExtensionRegistry + issues `.load
+      // NAME` so the cli walks its manifest). The bundle save then
+      // calls loader-bridge.list-loaded-extensions which returns the
+      // 3 user-loaded names (the cli-family auto-loaded extensions
+      // — prefix-cli, bundle-cli — are excluded by name).
+      const BUNDLE_MEMBERS = ['aba', 'bic', 'crc']
+
+      async function fetchExtensionBytes(name) {
+        const url = `/${name}_extension.component.wasm`
+        const res = await fetch(url)
+        if (!res.ok) {
+          throw new Error(
+            `fetch ${url} failed: ${res.status} ${res.statusText}. ` +
+              `Symlink the .component.wasm via scripts/link-composed-wasm.mjs.`,
+          )
+        }
+        return new Uint8Array(await res.arrayBuffer())
+      }
+
+      async function loadBundleMembers(db) {
+        for (const name of BUNDLE_MEMBERS) {
+          const bytes = await fetchExtensionBytes(name)
+          await db.loadExtension(name, bytes)
+          log(`loaded extension: ${name} (${bytes.byteLength} bytes)`)
+        }
+      }
+
+      async function readOpfsHeader() {
+        try {
+          const root = await navigator.storage.getDirectory()
+          const dir = await root.getDirectoryHandle('sqlink', { create: false })
+          const fh = await dir.getFileHandle('cas.db', { create: false })
+          const f = await fh.getFile()
+          const buf = new Uint8Array(await f.slice(0, 16).arrayBuffer())
+          return {
+            header: new TextDecoder().decode(buf),
+            size: f.size,
+          }
+        } catch (e) {
+          return { header: `error reading OPFS file: ${e?.message ?? e}`, size: 0 }
+        }
+      }
+
       try {
         const db = await openDatabaseComposed({})
         log(`opened composed db (phase=${phase ?? 'default'})`)
 
         if (phase === '1') {
-          // Phase 1 of the reload-persistence flow: save only. Phase 2
-          // (after a real navigation) verifies the bundle survived.
+          // Phase 1: load 3 user extensions, save them as a non-empty
+          // bundle. Phase 2 (after page navigation) verifies the
+          // bundle survived OPFS.
+          await loadBundleMembers(db)
           const saveOut = await db.execDotCommand(
             '.bundle save myset --no-build',
           )
           log('save: ' + JSON.stringify(saveOut))
 
+          const opfs = await readOpfsHeader()
           status.textContent = 'done (phase=1)'
-          window.__bundleResult = { saveOut }
+          window.__bundleResult = {
+            saveOut,
+            opfsHeader: opfs.header,
+            opfsSize: opfs.size,
+          }
         } else if (phase === '2') {
           // Phase 2: list + show the bundle that was saved in phase 1.
           // Must NOT save again — if persistence works, the bundle
@@ -56,31 +110,22 @@
           const showOut = await db.execDotCommand('.bundle show myset')
           log('show: ' + JSON.stringify(showOut))
 
-          // Verification that the OPFS file is a REAL SQLite db (not
-          // a snapshot blob): read the first 16 bytes — SQLite format
-          // 3 expects the magic string "SQLite format 3\0".
-          let opfsHeader = ''
-          try {
-            const root = await navigator.storage.getDirectory()
-            const dir = await root.getDirectoryHandle('sqlink', { create: false })
-            const fh = await dir.getFileHandle('cas.db', { create: false })
-            const f = await fh.getFile()
-            const buf = new Uint8Array(await f.slice(0, 16).arrayBuffer())
-            opfsHeader = new TextDecoder().decode(buf)
-          } catch (e) {
-            opfsHeader = `error reading OPFS file: ${e?.message ?? e}`
-          }
-          log('opfs-header: ' + JSON.stringify(opfsHeader))
+          const opfs = await readOpfsHeader()
+          log('opfs-header: ' + JSON.stringify(opfs.header))
+          log('opfs-size: ' + opfs.size)
 
           status.textContent = 'done (phase=2)'
-          window.__bundleResult = { listOut, showOut, opfsHeader }
+          window.__bundleResult = {
+            listOut,
+            showOut,
+            opfsHeader: opfs.header,
+            opfsSize: opfs.size,
+          }
         } else {
-          // Default (no phase): the single-page round-trip the
-          // existing un-skipped test asserts.
+          // Default (no phase): single-page round-trip with 3 loaded
+          // extensions producing a non-empty bundle.
+          await loadBundleMembers(db)
 
-          // .bundle save NAME --no-build: records the empty bundle
-          // (no user-loaded extensions at startup) under alias `myset`.
-          // --no-build skips the cargo-build leg.
           const saveOut = await db.execDotCommand(
             '.bundle save myset --no-build',
           )
