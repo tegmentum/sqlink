@@ -21,8 +21,9 @@ export default defineConfig({
   // pattern.
   assetsInclude: ['**/*.wasm'],
   worker: {
-    // The OPFS worker (src/opfs-worker.js) is loaded with
-    // { type: 'module' }; vite needs to know to bundle it that way.
+    // v1.5 round 6: composed-cli-worker.js hosts the entire wasm
+    // runtime. It's loaded with `{ type: 'module' }` so vite needs
+    // to bundle it as an ES module worker.
     format: 'es',
   },
   server: {
@@ -32,11 +33,11 @@ export default defineConfig({
       // workspace via file:.
       strict: false,
     },
-    // COOP/COEP: required for SharedArrayBuffer + crossOriginIsolated.
-    // Architecture α (v1.5 round 5) uses a SAB between the main thread
-    // and the OPFS worker to dispatch VFS ops synchronously. Without
-    // these headers, `new SharedArrayBuffer()` throws (or returns a
-    // non-shareable buffer, depending on browser version).
+    // COOP/COEP headers: kept for forward-compat. Round 6 doesn't
+    // strictly need them (no SharedArrayBuffer; the worker uses
+    // structured-clone postMessage), but leaving them on keeps the
+    // door open for multi-worker designs and matches the
+    // @sqlite.org/sqlite-wasm setup convention.
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin',
       'Cross-Origin-Embedder-Policy': 'require-corp',
