@@ -20,12 +20,32 @@ export default defineConfig({
   // assets and not as JS. Use `assetsInclude` to widen the asset
   // pattern.
   assetsInclude: ['**/*.wasm'],
+  worker: {
+    // The OPFS worker (src/opfs-worker.js) is loaded with
+    // { type: 'module' }; vite needs to know to bundle it that way.
+    format: 'es',
+  },
   server: {
     host: '127.0.0.1',
     fs: {
       // Allow access to wasi-polyfill linked outside the
       // workspace via file:.
       strict: false,
+    },
+    // COOP/COEP: required for SharedArrayBuffer + crossOriginIsolated.
+    // Architecture α (v1.5 round 5) uses a SAB between the main thread
+    // and the OPFS worker to dispatch VFS ops synchronously. Without
+    // these headers, `new SharedArrayBuffer()` throws (or returns a
+    // non-shareable buffer, depending on browser version).
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
   optimizeDeps: {

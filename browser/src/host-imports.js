@@ -203,10 +203,11 @@ export function buildCliPolyfill(opts) {
   // before running the cli — see sqlink-composed.js.
   const spiLoader = buildSpiLoader(opts.registry)
 
-  // v1.5 round 4: dedicated opfs-host for the lifetime of this
-  // session. Caller (sqlink-composed.js) reaches into the returned
-  // handle to preload before instantiate + flushAll between
-  // execDotCommand calls.
+  // v1.5 round 5: dedicated opfs-host for the lifetime of this
+  // session, architecture α (worker + SAB + Atomics + SyncAccessHandle).
+  // Caller (sqlink-composed.js) awaits `start()` before instantiate so
+  // the worker is ready when the wasm VFS makes its first call. There
+  // is no preload / flush — writes go straight through to OPFS.
   const opfsHost = opts.opfsHost ?? createOpfsHost()
 
   const additionalImports = {
@@ -218,12 +219,13 @@ export function buildCliPolyfill(opts) {
     // looks up the registered (ext-name, func-id) in the registry
     // and invokes the transpiled extension's scalar-function.call.
     'sqlink:wasm/dispatch': buildDispatch(opts.registry),
-    // v1.5 round 4: OPFS-backed cas db. sqlite-lib's `shared_cas_conn`
-    // opens via the `"opfs"` VFS; the VFS's xRead/xWrite/xSync/...
-    // trampolines call out to this interface SYNCHRONOUSLY. Bytes
-    // live in a JS-side Uint8Array cache; OPFS round-trips happen
-    // at preload (before wasm runs) + flushAll (after exec / before
-    // unload). See opfs-host.js for the architecture rationale.
+    // v1.5 round 5: OPFS-backed cas db, architecture α. sqlite-lib's
+    // `shared_cas_conn` opens via the `"opfs"` VFS; xRead/xWrite/...
+    // trampolines call this interface SYNCHRONOUSLY. Each call dispatches
+    // to a dedicated Worker over a SharedArrayBuffer + Atomics, and the
+    // Worker holds a FileSystemSyncAccessHandle on the real OPFS file.
+    // No in-memory cache; reads/writes hit OPFS directly. See
+    // opfs-host.js + opfs-worker.js for the architecture rationale.
     'sqlink:wasm/opfs-host': opfsHost.interface(),
   }
   for (const k of [
