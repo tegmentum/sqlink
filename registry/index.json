@@ -38,7 +38,9 @@
         "wasm_update",
         "wasm_registry_version"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "aba",
@@ -72,7 +74,9 @@
         "aba_frb_district",
         "aba_validate"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "aead",
@@ -114,7 +118,9 @@
         "aes-gcm@0.10",
         "chacha20poly1305@0.10",
         "getrandom@0.2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "aes-modes",
@@ -157,7 +163,9 @@
         "aes-siv@0.7",
         "cbc@0.1",
         "ctr@0.9"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "archive-cli",
@@ -184,7 +192,9 @@
       "exports": [],
       "dependencies": [
         "miniz_oxide@0.8"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "arrow",
@@ -222,7 +232,9 @@
         "arrow-ipc@57",
         "arrow-schema@57",
         "oxigdal-pmtiles@0.1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "asn1",
@@ -262,7 +274,9 @@
         "serde_json@1",
         "simple_asn1@0.6",
         "time@0.3"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "avro",
@@ -299,7 +313,9 @@
         "apache-avro@0.17",
         "serde@1",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "baseN",
@@ -340,7 +356,9 @@
         "base32@0.5",
         "base64@0.22",
         "bs58@0.5"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "beaufort",
@@ -375,7 +393,9 @@
         "beaufort_min_ms",
         "beaufort_name"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "beaufort-scale",
@@ -411,7 +431,9 @@
         "beaufort_min_ms",
         "beaufort_name"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "bencode",
@@ -447,7 +469,9 @@
         "base64@0.22",
         "bt_bencode@0.8",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "bibcodes",
@@ -490,7 +514,9 @@
         "orcid_format",
         "orcid_is_valid"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "bic",
@@ -528,7 +554,9 @@
         "bic_location",
         "bic_validate"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "bignum",
@@ -580,7 +608,9 @@
         "num-bigint@0.4",
         "num-integer@0.1",
         "num-traits@0.2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "binary-codecs",
@@ -620,7 +650,9 @@
         "ciborium@0.2",
         "rmp-serde@1",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "blake3",
@@ -660,7 +692,9 @@
       "dependencies": [
         "blake3@1",
         "hex@0.4"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "bloom",
@@ -695,7 +729,9 @@
       ],
       "dependencies": [
         "twox-hash@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "bpe",
@@ -730,7 +766,9 @@
       "dependencies": [
         "serde_json@1",
         "tiktoken-rs@0.7"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "bson",
@@ -772,7 +810,9 @@
         "bson@2",
         "getrandom@0.2",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "case",
@@ -813,7 +853,9 @@
       ],
       "dependencies": [
         "heck@0.5"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "changeset",
@@ -843,7 +885,9 @@
       "size_bytes": 13204,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "chrono",
@@ -962,7 +1006,9 @@
       "dependencies": [
         "chrono@0.4",
         "chrono-tz@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "cipher",
@@ -999,7 +1045,9 @@
         "vigenere_decode",
         "vigenere_encode"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "classic-cipher",
@@ -1036,7 +1084,9 @@
         "vigenere_decode",
         "vigenere_encode"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "closure",
@@ -1066,7 +1116,9 @@
       "exports": [
         "closure"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "codecs",
@@ -1109,7 +1161,9 @@
         "serde@1",
         "serde_json@1",
         "serde_yaml@0.9"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "color",
@@ -1155,7 +1209,9 @@
       ],
       "dependencies": [
         "csscolorparser@0.8"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "color-palette",
@@ -1195,7 +1251,9 @@
         "image@0.25",
         "kmeans_colors@0.6",
         "palette@0.7"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "compass",
@@ -1230,7 +1288,9 @@
         "compass_distance",
         "compass_normalize"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "compass-bearing",
@@ -1265,7 +1325,9 @@
         "compass_distance",
         "compass_normalize"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "completion",
@@ -1293,7 +1355,9 @@
       "exports": [
         "completion"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "compress",
@@ -1328,7 +1392,9 @@
         "compress_version",
         "decompress"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "container",
@@ -1363,7 +1429,9 @@
         "container_serial",
         "container_validate"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "core-dotcmd",
@@ -1393,7 +1461,9 @@
       "size_bytes": 223889,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "cose",
@@ -1444,7 +1514,9 @@
         "p256@0.13",
         "serde_json@1",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "count_min",
@@ -1481,7 +1553,9 @@
       ],
       "dependencies": [
         "twox-hash@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "country",
@@ -1516,7 +1590,9 @@
         "country_numeric",
         "country_region"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "crc",
@@ -1552,7 +1628,9 @@
       ],
       "dependencies": [
         "crc@*"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "creditcard",
@@ -1589,7 +1667,9 @@
         "cc_type",
         "cc_validate"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "cron",
@@ -1627,7 +1707,9 @@
         "chrono@0.4",
         "cron@0.16",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "crypto",
@@ -1675,7 +1757,9 @@
         "md-5@0.10",
         "sha1@0.10",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "crypto-auth",
@@ -1727,7 +1811,9 @@
         "serde@1",
         "serde_json@1",
         "sha1@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "crypto-keys",
@@ -1779,7 +1865,9 @@
         "rand_core@0.6",
         "sha2@0.10",
         "x25519-dalek@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "csscolor",
@@ -1820,7 +1908,9 @@
       ],
       "dependencies": [
         "csscolorparser@0.8"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "csv",
@@ -1852,7 +1942,9 @@
       "exports": [
         "csv"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "currency",
@@ -1887,7 +1979,9 @@
         "currency_numeric",
         "currency_symbol"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "cusip",
@@ -1924,7 +2018,9 @@
         "cusip_to_isin",
         "cusip_validate"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "db-utils",
@@ -1963,7 +2059,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "decimal",
@@ -1999,7 +2097,9 @@
       ],
       "dependencies": [
         "bigdecimal@0.4"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "define",
@@ -2035,7 +2135,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "detect",
@@ -2075,7 +2177,9 @@
         "infer@0.19",
         "slug@0.1",
         "whatlang@0.18"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "dicom",
@@ -2117,7 +2221,9 @@
         "dicom_transfer_syntax",
         "dicom_version"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "dist",
@@ -2168,7 +2274,9 @@
       ],
       "dependencies": [
         "statrs@0.17"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "dns",
@@ -2199,7 +2307,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "docx-meta",
@@ -2242,7 +2352,9 @@
       "dependencies": [
         "quick-xml@0.36",
         "zip@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ean",
@@ -2277,7 +2389,9 @@
         "ean_validate",
         "upca_to_ean13"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "easter",
@@ -2309,7 +2423,9 @@
         "easter_orthodox",
         "easter_western"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "easter-date",
@@ -2342,7 +2458,9 @@
         "easter_orthodox",
         "easter_western"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ed25519",
@@ -2380,7 +2498,9 @@
       "dependencies": [
         "ed25519-dalek@2",
         "getrandom@0.2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "email",
@@ -2417,7 +2537,9 @@
       ],
       "dependencies": [
         "email_address@0.2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "emoji",
@@ -2459,7 +2581,9 @@
         "emojis@0.8",
         "serde_json@1",
         "unicode-segmentation@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "epub",
@@ -2503,7 +2627,9 @@
       "dependencies": [
         "quick-xml@0.36",
         "zip@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "escape",
@@ -2540,7 +2666,9 @@
         "url_decode",
         "url_encode"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "eval",
@@ -2568,7 +2696,9 @@
       "exports": [
         "eval"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "excel",
@@ -2602,7 +2732,9 @@
       ],
       "dependencies": [
         "calamine@0.35"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "exif",
@@ -2650,7 +2782,9 @@
       ],
       "dependencies": [
         "kamadak-exif@0.6"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "extfns",
@@ -2687,7 +2821,9 @@
         "rightstr",
         "strfilter"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "faker",
@@ -2734,7 +2870,9 @@
       ],
       "dependencies": [
         "fake@*"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "fft",
@@ -2776,7 +2914,9 @@
       "dependencies": [
         "rustfft@6",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "fileio",
@@ -2811,7 +2951,9 @@
         "readfile",
         "writefile"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "formats",
@@ -2854,7 +2996,9 @@
         "serde@1",
         "serde_json@1",
         "toml@0.8"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "fts5",
@@ -2884,7 +3028,9 @@
       "size_bytes": 0,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "fuzzy",
@@ -2928,7 +3074,9 @@
       "dependencies": [
         "rphonetic@3",
         "strsim@0.11"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "geo",
@@ -2973,7 +3121,9 @@
       "dependencies": [
         "h3o@0.7",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "geo-distance",
@@ -3008,7 +3158,9 @@
         "haversine",
         "within_radius"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "geohash",
@@ -3045,7 +3197,9 @@
       ],
       "dependencies": [
         "geohash@0.13"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "geopoly",
@@ -3073,7 +3227,9 @@
       "size_bytes": 0,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "google-polyline",
@@ -3108,7 +3264,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "graphql",
@@ -3145,7 +3303,9 @@
       "dependencies": [
         "graphql-parser@0.4",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "greet",
@@ -3172,7 +3332,9 @@
       "size_bytes": 84113,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "h3",
@@ -3216,7 +3378,9 @@
       "dependencies": [
         "h3o@0.7",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "hashes-fast",
@@ -3256,7 +3420,9 @@
       "dependencies": [
         "murmur3@0.5",
         "xxhash-rust@0.8"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "hexdump",
@@ -3288,7 +3454,9 @@
         "hexdump_compact",
         "hexdump_width"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "hkdf",
@@ -3329,7 +3497,9 @@
       "dependencies": [
         "hkdf@0.12",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "hookprobe",
@@ -3369,7 +3539,9 @@
         "hookprobe_veto_commit",
         "hookprobe_wal_header"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "hpke",
@@ -3410,7 +3582,9 @@
         "getrandom@0.2",
         "hpke@0.13",
         "rand_core@0.9"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "html",
@@ -3456,7 +3630,9 @@
         "html-escape@0.2",
         "scraper@0.21",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "http",
@@ -3488,7 +3664,9 @@
         "http_post",
         "http_status"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "http-signature",
@@ -3531,7 +3709,9 @@
         "hmac@0.12",
         "serde_json@1",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "humansize",
@@ -3567,7 +3747,9 @@
         "humansize_parse_bytes",
         "humansize_parse_duration"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "hyperloglog",
@@ -3602,7 +3784,9 @@
       ],
       "dependencies": [
         "twox-hash@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "hyphenation",
@@ -3637,7 +3821,9 @@
       "dependencies": [
         "hyphenation@0.8",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "hypothesis",
@@ -3678,7 +3864,9 @@
       "dependencies": [
         "serde_json@1",
         "statrs@0.17"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "iban",
@@ -3719,7 +3907,9 @@
         "iban_validate",
         "iban_version"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ical",
@@ -3758,7 +3948,9 @@
       "dependencies": [
         "icalendar@0.17",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "id3",
@@ -3802,7 +3994,9 @@
       ],
       "dependencies": [
         "id3@1.17"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "idna",
@@ -3838,7 +4032,9 @@
       ],
       "dependencies": [
         "idna@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ids",
@@ -3882,7 +4078,9 @@
         "getrandom@0.2",
         "nanoid@0.4",
         "ulid@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ieee754",
@@ -3916,7 +4114,9 @@
         "ieee754_mantissa",
         "ieee754_to_blob"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "image-meta",
@@ -3956,7 +4156,9 @@
       ],
       "dependencies": [
         "imagesize@0.13"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "inmem",
@@ -3988,7 +4190,9 @@
       "exports": [
         "inmem"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ipaddr",
@@ -4037,7 +4241,9 @@
       ],
       "dependencies": [
         "ipnet@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "isbn",
@@ -4075,7 +4281,9 @@
       ],
       "dependencies": [
         "isbn@0.8"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "isin",
@@ -4110,7 +4318,9 @@
         "isin_nsin",
         "isin_validate"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "iso",
@@ -4157,7 +4367,9 @@
         "iso_currency@0.5",
         "isolang@2",
         "rust_iso3166@0.1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "iso-639-5",
@@ -4192,7 +4404,9 @@
         "iso639_5_name",
         "iso639_5_version"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "iso-codes",
@@ -4243,7 +4457,9 @@
         "iso_currency@0.5",
         "isolang@2",
         "rust_iso3166@0.1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "json-table",
@@ -4277,7 +4493,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "json1",
@@ -4353,7 +4571,9 @@
       ],
       "dependencies": [
         "serde_json@1.0"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "json5",
@@ -4389,7 +4609,9 @@
       "dependencies": [
         "json5@0.4",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "jwt",
@@ -4431,7 +4653,9 @@
         "hmac@0.12",
         "serde_json@1",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "lang-detect",
@@ -4471,7 +4695,9 @@
       ],
       "dependencies": [
         "whatlang@0.18"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "latlon",
@@ -4507,7 +4733,9 @@
         "latlon_to_ddm",
         "latlon_to_dms"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "lei",
@@ -4542,7 +4770,9 @@
         "lei_normalize",
         "lei_version"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "lemmatize",
@@ -4576,7 +4806,9 @@
       ],
       "dependencies": [
         "rust-stemmers@1.2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "linalg",
@@ -4626,7 +4858,9 @@
       "dependencies": [
         "nalgebra@0.33",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "list",
@@ -4712,7 +4946,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "listargs",
@@ -4746,7 +4982,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "lorem",
@@ -4786,7 +5024,9 @@
         "lipsum@0.9",
         "rand@0.8",
         "rand_chacha@0.3"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "lru-cache",
@@ -4827,7 +5067,9 @@
       ],
       "dependencies": [
         "lru@0.12"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "lz4",
@@ -4861,7 +5103,9 @@
       ],
       "dependencies": [
         "lz4_flex@0.11"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "mac",
@@ -4899,7 +5143,9 @@
         "mac_oui",
         "mac_validate"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "mac-oui",
@@ -4941,7 +5187,9 @@
       ],
       "dependencies": [
         "getrandom@0.2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "mailto",
@@ -4983,7 +5231,9 @@
       "dependencies": [
         "serde_json@1",
         "url@2.5"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "math",
@@ -5059,7 +5309,9 @@
       ],
       "dependencies": [
         "libm@0.2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "mbox",
@@ -5100,7 +5352,9 @@
         "mailparse@0.15",
         "serde_json@1",
         "time@0.3"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "mgrs",
@@ -5139,7 +5393,9 @@
       ],
       "dependencies": [
         "geoconvert@1.0"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "morse",
@@ -5171,7 +5427,9 @@
         "morse_decode",
         "morse_encode"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "mqtt-parse",
@@ -5213,7 +5471,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "multi-comparison",
@@ -5251,7 +5511,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "nanoid",
@@ -5286,7 +5548,9 @@
       "dependencies": [
         "getrandom@0.2",
         "nanoid@0.4"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "nato",
@@ -5319,7 +5583,9 @@
         "nato_encode",
         "nato_word"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "nato-phonetic",
@@ -5353,7 +5619,9 @@
         "nato_encode",
         "nato_word"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "natsort",
@@ -5386,7 +5654,9 @@
         "natsort_key",
         "natsort_less"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ngrams",
@@ -5424,7 +5694,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "nmea",
@@ -5469,7 +5741,9 @@
         "chrono@0.4",
         "nmea@0.6",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "number-theory",
@@ -5515,7 +5789,9 @@
         "nt_totient",
         "number_theory_version"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "numeric",
@@ -5558,7 +5834,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "numfmt",
@@ -5596,7 +5874,9 @@
         "numfmt_percent",
         "numfmt_scientific"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "oauth-pkce",
@@ -5630,7 +5910,9 @@
       "dependencies": [
         "getrandom@0.2",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "onnx",
@@ -5669,7 +5951,9 @@
       "dependencies": [
         "serde_json@1",
         "tract-onnx@0.23"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "parquet",
@@ -5707,7 +5991,9 @@
         "arrow-schema@57",
         "bytes@1",
         "parquet@57"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "parsers",
@@ -5747,7 +6033,9 @@
         "rgb_to_hex",
         "rgb_to_hsl"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "pdf-meta",
@@ -5793,7 +6081,9 @@
       ],
       "dependencies": [
         "lopdf@0.34"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "perceptual-hash",
@@ -5832,7 +6122,9 @@
       "dependencies": [
         "jpeg-decoder@0.3",
         "png@0.17"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "pgp",
@@ -5877,7 +6169,9 @@
         "hex@0.4",
         "pgp@0.13",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "phone",
@@ -5916,7 +6210,9 @@
       ],
       "dependencies": [
         "phonenumber@0.3"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "phone-prefix",
@@ -5949,7 +6245,9 @@
         "phone_prefix_prefix",
         "phone_prefix_region"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "pinyin",
@@ -5987,7 +6285,9 @@
       ],
       "dependencies": [
         "pinyin@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "pmtiles",
@@ -6022,7 +6322,9 @@
       ],
       "dependencies": [
         "oxigdal-pmtiles@0.1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "polyline",
@@ -6056,7 +6358,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "polyline-simplify",
@@ -6094,7 +6398,9 @@
       "dependencies": [
         "geo@0.30",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "postcode",
@@ -6131,7 +6437,9 @@
       ],
       "dependencies": [
         "regex@*"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "postgis-bridge",
@@ -6589,7 +6897,9 @@
       ],
       "dependencies": [
         "serde_json@1.0"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "priority-queue",
@@ -6629,7 +6939,9 @@
       ],
       "dependencies": [
         "priority-queue@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "publicsuffix",
@@ -6667,7 +6979,9 @@
       ],
       "dependencies": [
         "psl@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "pwhash",
@@ -6718,7 +7032,9 @@
         "scrypt@0.11",
         "serde_json@1",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "qrcode",
@@ -6759,7 +7075,9 @@
       "dependencies": [
         "qrcode@*",
         "qrcode@0.14"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "radix",
@@ -6794,7 +7112,9 @@
         "radix_from",
         "radix_to"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "regexp",
@@ -6839,7 +7159,9 @@
       ],
       "dependencies": [
         "regex@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "roaring",
@@ -6889,7 +7211,9 @@
       "dependencies": [
         "roaring@0.10",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "robotstxt",
@@ -6922,7 +7246,9 @@
       ],
       "dependencies": [
         "robotstxt@0.3"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "roman",
@@ -6954,7 +7280,9 @@
         "roman_encode",
         "roman_validate"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "rsa",
@@ -7002,7 +7330,9 @@
         "rand_core@0.6",
         "rsa@0.9",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "rtree",
@@ -7032,7 +7362,9 @@
       "size_bytes": 0,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "s2",
@@ -7075,7 +7407,9 @@
       "dependencies": [
         "s2@0.0.13",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "secp256k1",
@@ -7125,7 +7459,9 @@
         "ripemd@0.1",
         "sha2@0.10",
         "sha3@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "semver",
@@ -7168,7 +7504,9 @@
       ],
       "dependencies": [
         "semver@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sentence-split",
@@ -7203,7 +7541,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sentiment",
@@ -7243,7 +7583,9 @@
       "dependencies": [
         "serde_json@1",
         "vader_sentiment@0.1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sequence",
@@ -7277,7 +7619,9 @@
         "nextval",
         "setval"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "serialize-cli",
@@ -7302,7 +7646,9 @@
       "size_bytes": 129280,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "series",
@@ -7334,7 +7680,9 @@
         "generate_series",
         "range"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "session-cli",
@@ -7359,7 +7707,9 @@
       "size_bytes": 143575,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "setops",
@@ -7399,7 +7749,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sha1",
@@ -7435,7 +7787,9 @@
       "dependencies": [
         "hex@0.4",
         "sha1@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sha3",
@@ -7475,7 +7829,9 @@
       "dependencies": [
         "hex@0.4",
         "sha3@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sha3sum-cli",
@@ -7502,7 +7858,9 @@
       "exports": [],
       "dependencies": [
         "sha3@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "signal-processing",
@@ -7541,7 +7899,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sitemap-xml",
@@ -7576,7 +7936,9 @@
       ],
       "dependencies": [
         "quick-xml@0.36"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sketches",
@@ -7617,7 +7979,9 @@
       "dependencies": [
         "serde_json@1",
         "twox-hash@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "skiplist",
@@ -7657,7 +8021,9 @@
         "sl_size",
         "sl_version"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "spellfix1",
@@ -7688,7 +8054,9 @@
       "exports": [
         "spellfix1"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sqlean-vsv",
@@ -7722,7 +8090,9 @@
         "vsv",
         "vsv_parse"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sqlink-meta-cli",
@@ -7749,7 +8119,9 @@
       "exports": [],
       "dependencies": [
         "blake3@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sqlite-utils-data",
@@ -7782,7 +8154,9 @@
       "dependencies": [
         "csv@1.3",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sqlite-utils-fts",
@@ -7812,7 +8186,9 @@
       "size_bytes": 146183,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sqlite-utils-maint",
@@ -7842,7 +8218,9 @@
       "size_bytes": 151996,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sqlite-utils-schema",
@@ -7872,7 +8250,9 @@
       "size_bytes": 208212,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sqlparse",
@@ -7912,7 +8292,9 @@
       "dependencies": [
         "serde_json@1",
         "sqlparser@0.62"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ssh-key",
@@ -7958,7 +8340,9 @@
         "md-5@0.10",
         "serde_json@1",
         "ssh-key@0.6"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ssn",
@@ -7996,7 +8380,9 @@
         "ssn_validate",
         "timing_check_placeholder"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "stats",
@@ -8060,7 +8446,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "stdsql",
@@ -8131,7 +8519,9 @@
         "translate",
         "upperUTF8"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "stemmer",
@@ -8163,7 +8553,9 @@
       ],
       "dependencies": [
         "rust-stemmers@1.2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "sys-compat",
@@ -8207,7 +8599,9 @@
         "user",
         "version"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "tar",
@@ -8248,7 +8642,9 @@
       "dependencies": [
         "tar@*",
         "tar@0.4"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "template",
@@ -8282,7 +8678,9 @@
       "dependencies": [
         "minijinja@2",
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "text-nlp",
@@ -8331,7 +8729,9 @@
         "rust-stemmers@1",
         "serde_json@1",
         "similar@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "text-utils",
@@ -8374,7 +8774,9 @@
         "string_split",
         "ucase"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "tile",
@@ -8412,7 +8814,9 @@
         "tile_x",
         "tile_y"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "time",
@@ -8455,7 +8859,9 @@
       ],
       "dependencies": [
         "chrono@0.4"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "time-series",
@@ -8490,7 +8896,9 @@
       ],
       "dependencies": [
         "chrono@0.4"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "tld-list",
@@ -8529,7 +8937,9 @@
         "tld_punycode",
         "tld_type"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "tls-cert",
@@ -8575,7 +8985,9 @@
         "serde_json@1",
         "sha2@0.10",
         "x509-parser@0.16"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "toml",
@@ -8613,7 +9025,9 @@
       "dependencies": [
         "serde_json@1",
         "toml@0.8"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "totp",
@@ -8656,7 +9070,9 @@
         "hmac@0.12",
         "sha1@0.10",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "totype",
@@ -8700,7 +9116,9 @@
         "try_to_number",
         "try_to_numeric"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "trie",
@@ -8732,7 +9150,9 @@
       "exports": [
         "trie"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "uint",
@@ -8759,7 +9179,9 @@
       "size_bytes": 78525,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "ulid",
@@ -8797,7 +9219,9 @@
       ],
       "dependencies": [
         "ulid@1.2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "unicode",
@@ -8845,7 +9269,9 @@
         "unicode-normalization@0.1",
         "unicode-properties@0.1",
         "unicode-segmentation@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "unitconv",
@@ -8881,7 +9307,9 @@
         "conv_temperature",
         "conv_time"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "unnest",
@@ -8915,7 +9343,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "url",
@@ -8957,7 +9387,9 @@
       ],
       "dependencies": [
         "url@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "useragent",
@@ -8997,7 +9429,9 @@
       "dependencies": [
         "serde_json@1",
         "woothee@0.13"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "utm",
@@ -9035,7 +9469,9 @@
       ],
       "dependencies": [
         "utm@0.1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "uuid",
@@ -9080,7 +9516,9 @@
       "dependencies": [
         "getrandom@0.2",
         "uuid@1.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "vat",
@@ -9117,7 +9555,9 @@
         "vat_supported_countries",
         "vat_version"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "vcard",
@@ -9164,7 +9604,9 @@
       "dependencies": [
         "serde_json@1",
         "vcard4@0.7"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "vec",
@@ -9211,7 +9653,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "vec0",
@@ -9248,7 +9692,9 @@
       "dependencies": [
         "postcard@1",
         "serde@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "vec_each",
@@ -9282,7 +9728,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "vin",
@@ -9320,7 +9768,9 @@
         "vin_vis",
         "vin_wmi"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "wal-archive",
@@ -9359,7 +9809,9 @@
       "dependencies": [
         "lz4_flex@0.11",
         "serde_json@1.0"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "wasm-demo",
@@ -9388,7 +9840,10 @@
       "size_bytes": 0,
       "min_sqlite_version": "3.39.0",
       "exports": [],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0",
+      "content_digest": "d90ad0196cd9a2777f469bd58c1eb11e8c0704c772916e44a003ad9748bb2f8f"
     },
     {
       "name": "wasm-introspect",
@@ -9429,7 +9884,9 @@
       "dependencies": [
         "serde_json@1",
         "wasmparser@0.215"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "web-mercator-tile",
@@ -9467,7 +9924,9 @@
         "tile_x",
         "tile_y"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "web-parsers",
@@ -9510,7 +9969,9 @@
         "scraper@0.21",
         "serde_json@1",
         "serde_json_path@0.7"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "webauthn",
@@ -9557,7 +10018,9 @@
         "rsa@0.9",
         "serde_json@1",
         "sha2@0.10"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "whois-parse",
@@ -9598,7 +10061,9 @@
       ],
       "dependencies": [
         "serde_json@1"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "x25519",
@@ -9636,7 +10101,9 @@
       "dependencies": [
         "getrandom@0.2",
         "x25519-dalek@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "xor",
@@ -9670,7 +10137,9 @@
         "xor_encode",
         "xor_raw"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "xor-cipher",
@@ -9704,7 +10173,9 @@
         "xor_encode",
         "xor_raw"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "yaml",
@@ -9744,7 +10215,9 @@
       "dependencies": [
         "serde_json@1",
         "serde_yaml@0.9"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "zipfile",
@@ -9774,7 +10247,9 @@
       ],
       "dependencies": [
         "zip@2"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "zorder",
@@ -9803,7 +10278,9 @@
         "unzorder",
         "zorder"
       ],
-      "dependencies": []
+      "dependencies": [],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     },
     {
       "name": "zstd",
@@ -9839,7 +10316,9 @@
       ],
       "dependencies": [
         "zstd@0.13"
-      ]
+      ],
+      "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
+      "wit_contract_version": "0.1.0"
     }
   ]
 }
