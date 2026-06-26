@@ -79,6 +79,16 @@ const EXTENSION_IMPORT_STUB_NAMES = [
   'sqlite:extension/s3-base',
   'sqlite:extension/wal-frames',
   'sqlite:extension/wal-hook',
+  // cli-family imports (dotcmd-aware / full worlds): real handlers
+  // for loader-bridge, cli-state, cli-stdout, cli-stderr override
+  // these stubs via `buildExtensionAdditionalImports(handlers)`;
+  // build + bundles stay stubbed (no browser-side spawn/cas-cache).
+  'sqlite:extension/loader-bridge',
+  'sqlite:extension/cli-stdout',
+  'sqlite:extension/cli-stderr',
+  'sqlite:extension/cli-state',
+  'sqlite:extension/build',
+  'sqlite:extension/bundles',
 ]
 
 /**
