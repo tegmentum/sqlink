@@ -168,6 +168,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("utm".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.utm".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -179,10 +180,18 @@ mod wasm_export {
                     let lat = match args.first().and_then(as_f64) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let lng = match args.get(1).and_then(as_f64) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     if !lat.is_finite() || !lng.is_finite() {
                         return Ok(SqlValue::Null);
@@ -218,6 +227,10 @@ mod wasm_export {
                     let zone = match args.first().and_then(as_i64) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     if zone < 1 || zone > 60 {
                         return Ok(SqlValue::Null);
@@ -225,6 +238,10 @@ mod wasm_export {
                     let hemisphere = match args.get(1).and_then(as_text) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     // The underlying utm crate takes a UTM latitude
                     // band letter (C..X). We accept the simpler
@@ -246,10 +263,18 @@ mod wasm_export {
                     let easting = match args.get(2).and_then(as_f64) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let northing = match args.get(3).and_then(as_f64) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     if !easting.is_finite() || !northing.is_finite() {
                         return Ok(SqlValue::Null);
@@ -273,6 +298,10 @@ mod wasm_export {
                     let lat = match args.first().and_then(as_f64) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     if !lat.is_finite() {
                         return Ok(SqlValue::Null);
@@ -280,12 +309,20 @@ mod wasm_export {
                     match lat_to_zone_letter(lat) {
                         Some(c) => Ok(SqlValue::Text(c.to_string())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_ZONE_NUMBER => {
                     let lng = match args.first().and_then(as_f64) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     if !lng.is_finite() || lng < -180.0 || lng >= 180.0 {
                         // lng == 180 is the antimeridian; UTM treats
@@ -307,6 +344,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(v))
                 }
                 other => Err(format!("utm: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

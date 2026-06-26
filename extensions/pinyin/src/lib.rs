@@ -205,6 +205,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("pinyin".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.pinyin".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -226,33 +227,61 @@ mod wasm_export {
                 FID_PINYIN => match arg_text_or_null(&args, "pinyin")? {
                     None => Ok(SqlValue::Null),
                     Some(s) => Ok(SqlValue::Text(super::pinyin_plain(&s))),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_WITH_TONE => match arg_text_or_null(&args, "pinyin_with_tone")? {
                     None => Ok(SqlValue::Null),
                     Some(s) => Ok(SqlValue::Text(super::pinyin_tone_num(&s))),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_WITH_DIACRITIC => {
                     match arg_text_or_null(&args, "pinyin_with_diacritic")? {
                         None => Ok(SqlValue::Null),
                         Some(s) => Ok(SqlValue::Text(super::pinyin_diacritic(&s))),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_FIRST_LETTER => {
                     match arg_text_or_null(&args, "pinyin_first_letter")? {
                         None => Ok(SqlValue::Null),
                         Some(s) => Ok(SqlValue::Text(super::pinyin_first_letter(&s))),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_SPLIT => match arg_text_or_null(&args, "pinyin_split")? {
                     None => Ok(SqlValue::Null),
                     Some(s) => Ok(SqlValue::Text(super::pinyin_split_json(&s))),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_IS_CHINESE => match arg_text_or_null(&args, "pinyin_is_chinese")? {
                     None => Ok(SqlValue::Null),
                     Some(s) => Ok(SqlValue::Integer(super::has_chinese(&s) as i64)),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("pinyin: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

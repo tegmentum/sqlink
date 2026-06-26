@@ -89,6 +89,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("emoji".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.emoji".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -125,6 +126,10 @@ mod wasm_export {
                     match emojis::get_by_shortcode(trimmed) {
                         Some(e) => Ok(SqlValue::Text(e.as_str().to_string())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_SHORTCODE => {
@@ -132,6 +137,10 @@ mod wasm_export {
                     match emojis::get(&t).and_then(|e| e.shortcode()) {
                         Some(sc) => Ok(SqlValue::Text(sc.to_string())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_NAME => {
@@ -139,6 +148,10 @@ mod wasm_export {
                     match emojis::get(&t) {
                         Some(e) => Ok(SqlValue::Text(e.name().to_string())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_GROUP => {
@@ -146,9 +159,17 @@ mod wasm_export {
                     match emojis::get(&t) {
                         Some(e) => Ok(SqlValue::Text(format!("{:?}", e.group()).to_lowercase())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 other => Err(format!("emoji: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

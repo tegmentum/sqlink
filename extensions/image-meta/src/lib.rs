@@ -169,6 +169,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("image_meta".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.image_meta".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -183,6 +184,10 @@ mod wasm_export {
                     match try_format(&bytes) {
                         Some(t) => Ok(SqlValue::Text(image_type_label(t).to_string())),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_WIDTH => {
@@ -192,6 +197,10 @@ mod wasm_export {
                     match try_dims(&bytes) {
                         Some(d) => Ok(SqlValue::Integer(d.width as i64)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_HEIGHT => {
@@ -201,6 +210,10 @@ mod wasm_export {
                     match try_dims(&bytes) {
                         Some(d) => Ok(SqlValue::Integer(d.height as i64)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_DIMENSIONS => {
@@ -236,6 +249,10 @@ mod wasm_export {
                 }
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("image_meta: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

@@ -454,6 +454,10 @@ mod wasm_export {
         match r {
             Some(s) => SqlValue::Text(s),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -461,6 +465,10 @@ mod wasm_export {
         match r {
             Some(v) => SqlValue::Real(v),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -468,6 +476,10 @@ mod wasm_export {
         match r {
             Some(v) => SqlValue::Integer(v),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -515,6 +527,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("linalg".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.linalg".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -526,10 +539,18 @@ mod wasm_export {
                     let r = match arg_i64(&args, 0) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let c = match arg_i64(&args, 1) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_zeros(r, c)))
                 }
@@ -537,6 +558,10 @@ mod wasm_export {
                     let n = match arg_i64(&args, 0) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_eye(n)))
                 }
@@ -544,6 +569,10 @@ mod wasm_export {
                     let s = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_transpose(s)))
                 }
@@ -551,10 +580,18 @@ mod wasm_export {
                     let a = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let b = match arg_text(&args, 1) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_add(a, b)))
                 }
@@ -562,10 +599,18 @@ mod wasm_export {
                     let a = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let b = match arg_text(&args, 1) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_sub(a, b)))
                 }
@@ -573,10 +618,18 @@ mod wasm_export {
                     let a = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let b = match arg_text(&args, 1) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_mul(a, b)))
                 }
@@ -584,10 +637,18 @@ mod wasm_export {
                     let s = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let k = match arg_f64(&args, 1) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_scale(s, k)))
                 }
@@ -595,6 +656,10 @@ mod wasm_export {
                     let s = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_real(super::la_det(s)))
                 }
@@ -602,6 +667,10 @@ mod wasm_export {
                     let s = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_inverse(s)))
                 }
@@ -609,10 +678,18 @@ mod wasm_export {
                     let a = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let b = match arg_text(&args, 1) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_solve(a, b)))
                 }
@@ -620,6 +697,10 @@ mod wasm_export {
                     let s = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_int(super::la_rank(s)))
                 }
@@ -627,6 +708,10 @@ mod wasm_export {
                     let s = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_eigvals(s)))
                 }
@@ -634,6 +719,10 @@ mod wasm_export {
                     let s = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_real(super::la_trace(s)))
                 }
@@ -641,10 +730,18 @@ mod wasm_export {
                     let s = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let kind = match arg_kind_default_fro(&args, 1) {
                         Some(k) => k,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_real(super::la_norm(s, kind)))
                 }
@@ -652,6 +749,10 @@ mod wasm_export {
                     let s = match arg_text(&args, 0) {
                         Some(s) => s,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(opt_text(super::la_shape(s)))
                 }
@@ -660,6 +761,10 @@ mod wasm_export {
                     env!("CARGO_PKG_VERSION")
                 ))),
                 other => Err(format!("linalg: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

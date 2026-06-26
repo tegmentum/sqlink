@@ -92,6 +92,10 @@ mod wasm_export {
             Some(SqlValue::Real(r)) => Ok(Some(r.to_string().into_bytes())),
             Some(SqlValue::Null) => Ok(None),
             None => Err(format!("{fname}: missing data arg")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -196,6 +200,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("qrcode".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.qrcode".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -207,6 +212,10 @@ mod wasm_export {
                     let data = match payload_bytes(&args, "qr_svg")? {
                         Some(d) => d,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let ec = parse_ecc(&args, 1, "qr_svg")?;
                     let code = build(&data, ec)?;
@@ -217,6 +226,10 @@ mod wasm_export {
                     let data = match payload_bytes(&args, "qr_unicode")? {
                         Some(d) => d,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let ec = parse_ecc(&args, 1, "qr_unicode")?;
                     let code = build(&data, ec)?;
@@ -231,6 +244,10 @@ mod wasm_export {
                     let data = match payload_bytes(&args, "qr_modules")? {
                         Some(d) => d,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let ec = parse_ecc(&args, 1, "qr_modules")?;
                     let code = build(&data, ec)?;
@@ -240,6 +257,10 @@ mod wasm_export {
                     let data = match payload_bytes(&args, "qr_size")? {
                         Some(d) => d,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let ec = parse_ecc(&args, 1, "qr_size")?;
                     let code = build(&data, ec)?;
@@ -249,6 +270,10 @@ mod wasm_export {
                     let data = match payload_bytes(&args, "qr_version_for")? {
                         Some(d) => d,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let ec = parse_ecc(&args, 1, "qr_version_for")?;
                     let code = build(&data, ec)?;
@@ -262,6 +287,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(v))
                 }
                 other => Err(format!("qrcode: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

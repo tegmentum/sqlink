@@ -95,6 +95,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("define".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.define".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -149,6 +150,10 @@ mod wasm_export {
             }
             serde_json::Value::String(s) => SqlValue::Text(s),
             other => SqlValue::Text(other.to_string()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -176,6 +181,10 @@ mod wasm_export {
                         Some(SqlValue::Text(s)) => parse_args_json(s)?,
                         Some(other) => alloc::vec![other.clone()],
                         None => Vec::new(),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     ensure_schema()?;
                     let lookup = spi::execute(
@@ -241,6 +250,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(out))
                 }
                 other => Err(format!("define: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

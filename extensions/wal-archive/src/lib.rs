@@ -304,6 +304,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("wal_archive".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.wal_archive".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -331,6 +332,10 @@ mod wasm_export {
                 "wal_archive: arg `{field}` must be TEXT, got {other:?}"
             )),
             None => Err(format!("wal_archive: missing arg `{field}`")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 

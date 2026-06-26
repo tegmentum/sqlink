@@ -175,6 +175,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("stats".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.stats".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -201,6 +202,10 @@ mod wasm_export {
             SqlValue::Real(r) => Some(format!("{r}")),
             SqlValue::Text(s) => Some(s.clone()),
             SqlValue::Blob(b) => Some(format!("BLOB({} bytes)", b.len())),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -342,6 +347,10 @@ mod wasm_export {
                                     av.kind = ValueKind::Blob;
                                     av.b = b.clone();
                                 }
+                                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                                // gained a wit-value arm; Phase B will replace this wildcard
+                                // with extension-specific decode/encode logic.
+                                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                             }
                         }
                     }
@@ -351,6 +360,10 @@ mod wasm_export {
                         SqlValue::Real(r) => aa.add_real(*r),
                         SqlValue::Text(s) => aa.add_text(s),
                         SqlValue::Blob(b) => aa.add_text(&String::from_utf8_lossy(b)),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     },
                     (FID_STRING_AGG, AggState::StringAgg(sa)) => {
                         let s = match &args[0] {
@@ -359,6 +372,10 @@ mod wasm_export {
                             SqlValue::Real(r) => r.to_string(),
                             SqlValue::Blob(b) => String::from_utf8_lossy(b).into_owned(),
                             SqlValue::Null => return Ok(()),
+                            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                            // gained a wit-value arm; Phase B will replace this wildcard
+                            // with extension-specific decode/encode logic.
+                            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                         };
                         let sep = match args.get(1) {
                             Some(SqlValue::Text(t)) => t.clone(),
@@ -378,6 +395,10 @@ mod wasm_export {
                 let state = match tbl.remove(&context_id) {
                     Some(s) => s,
                     None => return Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 };
                 let r = match (func_id, state) {
                     (FID_STDDEV_POP, AggState::Stddev(w)) => {
@@ -485,6 +506,10 @@ mod wasm_export {
                                 ValueKind::Real => SqlValue::Real(av.r),
                                 ValueKind::Text => SqlValue::Text(av.s),
                                 ValueKind::Blob => SqlValue::Blob(av.b),
+                                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                                // gained a wit-value arm; Phase B will replace this wildcard
+                                // with extension-specific decode/encode logic.
+                                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                             }
                         }
                     }

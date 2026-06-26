@@ -655,6 +655,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("lemmatize".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.lemmatize".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -691,6 +692,10 @@ mod wasm_export {
                     let lang = match lang_arg(&args, 1, "lemmatize")? {
                         None => return Ok(SqlValue::Null),
                         Some(s) => s,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let parsed = parse_lang(&lang).ok_or_else(|| {
                         format!(
@@ -720,6 +725,10 @@ mod wasm_export {
                     let lang = match lang_arg(&args, 2, "lemmatize_pos")? {
                         None => return Ok(SqlValue::Null),
                         Some(s) => s,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let parsed = parse_lang(&lang).ok_or_else(|| {
                         format!(
@@ -735,6 +744,10 @@ mod wasm_export {
                 FID_LANGS => Ok(SqlValue::Text(SUPPORTED_LANGUAGES_JSON.to_string())),
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("lemmatize: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

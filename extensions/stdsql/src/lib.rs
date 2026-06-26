@@ -269,6 +269,10 @@ mod wasm_export {
             SqlValue::Real(r) => Ok(r.to_string()),
             SqlValue::Blob(b) => Ok(String::from_utf8_lossy(b).into_owned()),
             SqlValue::Null => Err(format!("{fname}: NULL TEXT arg at {i}")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -396,6 +400,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("stdsql".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.stdsql".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -483,6 +488,10 @@ mod wasm_export {
                         SqlValue::Real(r) => *r != 0.0,
                         SqlValue::Text(s) => !s.is_empty(),
                         SqlValue::Blob(b) => !b.is_empty(),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(if truthy {
                         args[1].clone()
@@ -495,6 +504,10 @@ mod wasm_export {
                     match algo::chr(n) {
                         Some(s) => Ok(SqlValue::Text(s)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_ASCII => {
@@ -502,6 +515,10 @@ mod wasm_export {
                     match algo::ascii(&s) {
                         Some(n) => Ok(SqlValue::Integer(n)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_CHAR_LENGTH | FID_CHARACTER_LENGTH => {
@@ -513,6 +530,10 @@ mod wasm_export {
                     match algo::from_hex(&s) {
                         Ok(b) => Ok(SqlValue::Blob(b)),
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 // ClickHouse camelCase  collapse to the existing
@@ -625,6 +646,10 @@ mod wasm_export {
                     Ok(SqlValue::Integer(idx))
                 }
                 other => Err(format!("stdsql: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

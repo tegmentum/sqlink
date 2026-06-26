@@ -138,6 +138,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("graphql".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.graphql".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -151,16 +152,32 @@ mod wasm_export {
                 FID_OPERATIONS => match parse(&q) {
                     Ok(doc) => Ok(SqlValue::Text(operations_json(&doc))),
                     Err(_) => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_FIELDS => match parse(&q) {
                     Ok(doc) => Ok(SqlValue::Text(fields_json(&doc))),
                     Err(_) => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_NORMALIZE => match parse(&q) {
                     Ok(doc) => Ok(SqlValue::Text(format!("{doc}"))),
                     Err(_) => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 other => Err(format!("graphql: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

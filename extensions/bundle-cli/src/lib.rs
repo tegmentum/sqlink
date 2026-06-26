@@ -166,6 +166,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![Capability::SpawnBuild],
                 preferred_prefix: Some("bundle".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.cli.bundle".into()),
+                typed_values: Vec::new(),
             }
         }
     }

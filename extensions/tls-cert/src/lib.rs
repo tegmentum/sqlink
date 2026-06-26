@@ -340,6 +340,10 @@ mod wasm_export {
         match pk_bits(&c) {
             Some(b) => SqlValue::Integer(b),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
     fn impl_sans(args: &[SqlValue]) -> SqlValue {
@@ -348,6 +352,10 @@ mod wasm_export {
         match sans_json(&c) {
             Some(j) => SqlValue::Text(j),
             None => SqlValue::Text("[]".to_string()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
     fn impl_fp_sha256(args: &[SqlValue]) -> SqlValue {
@@ -460,6 +468,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("tls_cert".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.tls_cert".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -482,6 +491,10 @@ mod wasm_export {
                 FID_ALL => impl_all(&args),
                 FID_VERSION => SqlValue::Text(env!("CARGO_PKG_VERSION").to_string()),
                 other => return Err(format!("tls-cert: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             })
         }
     }

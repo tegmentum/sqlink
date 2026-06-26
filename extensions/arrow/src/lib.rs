@@ -192,6 +192,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("arrow".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.arrow".into()),
+                typed_values: Vec::new(),
             }
         }
     }

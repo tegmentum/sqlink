@@ -89,6 +89,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("regexp".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.regexp".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -98,6 +99,10 @@ mod wasm_export {
             Some(SqlValue::Text(s)) => Ok(s.as_str()),
             Some(_) => Err(alloc::format!("{name}: arg {idx} must be TEXT")),
             None => Err(alloc::format!("{name}: missing arg {idx}")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -135,6 +140,10 @@ mod wasm_export {
                     Ok(match re.find(text) {
                         Some(m) => SqlValue::Text(m.as_str().to_string()),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_REGEXP_REPLACE => {
@@ -162,6 +171,10 @@ mod wasm_export {
                             SqlValue::Integer((prefix.chars().count() + 1) as i64)
                         }
                         None => SqlValue::Integer(0),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_REGEXP_COUNT => {
@@ -191,6 +204,10 @@ mod wasm_export {
                     Ok(match re.find(text) {
                         Some(m) => SqlValue::Text(m.as_str().to_string()),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_REGEXP_EXTRACT_ALL | FID_REGEXP_MATCHES => {
@@ -235,6 +252,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(json))
                 }
                 other => Err(alloc::format!("regexp: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

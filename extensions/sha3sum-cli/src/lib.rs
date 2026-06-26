@@ -75,6 +75,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("sha3sum".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.cli.sha3sum".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -155,6 +156,10 @@ mod wasm_export {
                     SqlValue::Real(r)    => { hasher.update(b"R"); hasher.update(&r.to_le_bytes()); }
                     SqlValue::Text(t)    => { hasher.update(b"T"); hasher.update(t.as_bytes()); }
                     SqlValue::Blob(b)    => { hasher.update(b"B"); hasher.update(b); }
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
                 hasher.update(b"\0");
             }

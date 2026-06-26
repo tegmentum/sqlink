@@ -303,6 +303,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("sentence_split".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.sentence_split".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -337,6 +338,10 @@ mod wasm_export {
                         &t,
                         super::normalize_lang(&l),
                     ))),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_COUNT => match text_and_lang(&args, "sentence_count")? {
                     None => Ok(SqlValue::Null),
@@ -344,6 +349,10 @@ mod wasm_export {
                         &t,
                         super::normalize_lang(&l),
                     ))),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_SPLIT_IDX => {
                     match text_and_lang(&args, "split_sentences_with_indices")? {
@@ -354,10 +363,18 @@ mod wasm_export {
                                 super::normalize_lang(&l),
                             ),
                         )),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("sentence-split: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

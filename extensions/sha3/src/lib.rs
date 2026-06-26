@@ -86,6 +86,10 @@ mod wasm_export {
             SqlValue::Integer(n) => n.to_string().into_bytes(),
             SqlValue::Real(r) => r.to_string().into_bytes(),
             SqlValue::Null => Vec::new(),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -160,6 +164,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("sha3".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.sha3".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -190,6 +195,10 @@ mod wasm_export {
                 Some(bytes) if raw_out => Ok(SqlValue::Blob(bytes)),
                 Some(bytes) => Ok(SqlValue::Text(hex::encode(&bytes))),
                 None => Ok(SqlValue::Null),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

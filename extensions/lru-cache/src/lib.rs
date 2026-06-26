@@ -92,6 +92,10 @@ mod wasm_export {
                 StoredValue::Real(r) => SqlValue::Real(r),
                 StoredValue::Text(s) => SqlValue::Text(s),
                 StoredValue::Blob(b) => SqlValue::Blob(b),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }
@@ -130,6 +134,10 @@ mod wasm_export {
                 "{fname}: arg {i} (value) cannot be NULL; use lru_remove() to evict a key"
             )),
             None => Err(format!("{fname}: missing arg {i}")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -174,6 +182,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("lru_cache".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.lru_cache".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -205,6 +214,10 @@ mod wasm_export {
                     match found {
                         Some(v) => Ok(v.into_sql()),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_REMOVE => {
@@ -248,6 +261,10 @@ mod wasm_export {
                 }
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("lru-cache: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

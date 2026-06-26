@@ -73,6 +73,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("listargs".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.listargs".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -113,6 +114,10 @@ mod wasm_export {
                 // saves the caller from getting an outright
                 // error and lets them re-parse if needed.
                 other => SqlValue::Text(other.to_string()),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             });
         }
         Ok(out)
@@ -250,6 +255,10 @@ mod wasm_export {
                     (COL_VALUE, None) => Ok(SqlValue::Null),
                     (COL_INPUT, _) => Ok(SqlValue::Null),
                     (other, _) => Err(format!("listargs: bad column {other}")),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             })
         }

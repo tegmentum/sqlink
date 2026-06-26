@@ -266,6 +266,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("yaml".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.yaml".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -307,11 +308,19 @@ mod wasm_export {
                     match super::yaml_get_json(first_text, path)? {
                         Some(j) => Ok(SqlValue::Text(j)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_KEYS_1 => match super::yaml_keys_json(first_text, None)? {
                     Some(j) => Ok(SqlValue::Text(j)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_KEYS_2 => {
                     let path = args.get(1).and_then(|v| match v {
@@ -321,9 +330,17 @@ mod wasm_export {
                     match super::yaml_keys_json(first_text, path)? {
                         Some(j) => Ok(SqlValue::Text(j)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 other => Err(format!("yaml: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

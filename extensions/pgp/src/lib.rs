@@ -323,6 +323,10 @@ mod wasm_export {
         match key_bits(&k) {
             Some(b) => SqlValue::Integer(b),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
     fn impl_created(args: &[SqlValue]) -> SqlValue {
@@ -339,6 +343,10 @@ mod wasm_export {
         match dearmor(&input) {
             Some(b) => SqlValue::Blob(b),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -377,6 +385,10 @@ mod wasm_export {
         match String::from_utf8(out) {
             Ok(s) => SqlValue::Text(s),
             Err(_) => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -397,6 +409,10 @@ mod wasm_export {
         let sig = match StandaloneSignature::from_bytes(std::io::Cursor::new(sig_bin)) {
             Ok(s) => s,
             Err(_) => return SqlValue::Integer(0),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         // Try the primary key first; if that fails, try each
         // public subkey (signing subkeys are common).
@@ -450,6 +466,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("pgp".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.pgp".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -468,6 +485,10 @@ mod wasm_export {
                 FID_VERIFY => impl_verify(&args),
                 FID_VERSION => SqlValue::Text(env!("CARGO_PKG_VERSION").to_string()),
                 other => return Err(format!("pgp: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             })
         }
     }

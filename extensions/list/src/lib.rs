@@ -297,6 +297,10 @@ mod wasm_export {
             SqlValue::Real(r) => Ok(r.to_string()),
             SqlValue::Blob(b) => Ok(String::from_utf8_lossy(b).into_owned()),
             SqlValue::Null => Err(format!("{fname}: NULL TEXT arg at {i}")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -320,6 +324,10 @@ mod wasm_export {
                 .unwrap_or(serde_json::Value::Null),
             SqlValue::Text(s) => algo::parse_value(s),
             SqlValue::Blob(b) => serde_json::Value::String(String::from_utf8_lossy(b).into_owned()),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -409,6 +417,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("list".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.list".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -587,6 +596,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(algo::to_json(&inter)))
                 }
                 other => Err(format!("list: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

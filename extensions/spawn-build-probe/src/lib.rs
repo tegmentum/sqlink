@@ -73,6 +73,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("spawn_build_probe".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.spawn_build_probe".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -92,6 +93,10 @@ mod wasm_export {
                     match build::spawn_build(&crate_root, None, &[], None, &[]) {
                         Ok(out) => Ok(SqlValue::Text(out.binary_path)),
                         Err(e) => Ok(SqlValue::Text(format!("ERR: {}", e.message))),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 _ => Err(format!("spawn-build-probe: unknown func_id {func_id}")),

@@ -543,6 +543,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("sitemap_xml".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.sitemap_xml".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -592,6 +593,10 @@ mod wasm_export {
                 FID_COUNT => super::sitemap_count(&body).map(SqlValue::Integer),
                 FID_IS_VALID => Ok(SqlValue::Integer(super::sitemap_is_valid(&body) as i64)),
                 other => Err(format!("sitemap-xml: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

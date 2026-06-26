@@ -384,6 +384,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("exif".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.exif".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -418,11 +419,19 @@ mod wasm_export {
                     match field_by_name(&exif, &name) {
                         Some(v) => Ok(SqlValue::Text(v)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_DATETIME => match ascii_tag(&exif, Tag::DateTimeOriginal) {
                     Some(s) => Ok(SqlValue::Text(to_iso8601(&s))),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_CAMERA => {
                     let make = ascii_tag(&exif, Tag::Make);
@@ -432,26 +441,46 @@ mod wasm_export {
                         (Some(m), None) => Ok(SqlValue::Text(m)),
                         (None, Some(d)) => Ok(SqlValue::Text(d)),
                         (None, None) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_MAKE => match ascii_tag(&exif, Tag::Make) {
                     Some(s) => Ok(SqlValue::Text(s)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_MODEL => match ascii_tag(&exif, Tag::Model) {
                     Some(s) => Ok(SqlValue::Text(s)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_GPS_LAT => {
                     match gps_to_decimal(&exif, Tag::GPSLatitude, Tag::GPSLatitudeRef) {
                         Some(d) => Ok(SqlValue::Real(d)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_GPS_LNG => {
                     match gps_to_decimal(&exif, Tag::GPSLongitude, Tag::GPSLongitudeRef) {
                         Some(d) => Ok(SqlValue::Real(d)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_ORIENTATION => match uint_tag(&exif, Tag::Orientation) {
@@ -483,18 +512,38 @@ mod wasm_export {
                             (av * 0.5_f64 * core::f64::consts::LN_2).exp(),
                         )),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     },
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_SHUTTER_SPEED => match shutter_speed_string(&exif) {
                     Some(s) => Ok(SqlValue::Text(s)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_FOCAL_LENGTH => match rational_tag(&exif, Tag::FocalLength) {
                     Some(v) => Ok(SqlValue::Real(v)),
                     None => Ok(SqlValue::Null),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_ALL => Ok(SqlValue::Text(all_json(&exif))),
                 other => Err(format!("exif: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

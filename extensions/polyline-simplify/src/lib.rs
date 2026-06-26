@@ -237,6 +237,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("polyline_simplify".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.polyline_simplify".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -248,32 +249,60 @@ mod wasm_export {
                     let json = match opt_text(&args, 0, "polyline_simplify_dp")? {
                         None => return Ok(SqlValue::Null),
                         Some(s) => s,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let tol = match opt_real(&args, 1, "polyline_simplify_dp")? {
                         None => return Ok(SqlValue::Null),
                         Some(r) => r,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match super::simplify_dp(&json, tol) {
                         Some(out) => SqlValue::Text(out),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_VW => {
                     let json = match opt_text(&args, 0, "polyline_simplify_vw")? {
                         None => return Ok(SqlValue::Null),
                         Some(s) => s,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let tol = match opt_real(&args, 1, "polyline_simplify_vw")? {
                         None => return Ok(SqlValue::Null),
                         Some(r) => r,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match super::simplify_vw(&json, tol) {
                         Some(out) => SqlValue::Text(out),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_VERSION => Ok(SqlValue::Text(super::version())),
                 other => Err(format!("polyline_simplify: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

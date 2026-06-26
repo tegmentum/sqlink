@@ -68,6 +68,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("db_utils".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.db_utils".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -88,6 +89,10 @@ mod wasm_export {
                 .unwrap_or(serde_json::Value::Null),
             SqlValue::Text(s) => serde_json::Value::String(s.clone()),
             SqlValue::Blob(b) => serde_json::Value::String(format!("BLOB({} bytes)", b.len())),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -262,6 +267,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(serde_json::Value::Array(tree).to_string()))
                 }
                 other => Err(format!("db-utils: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

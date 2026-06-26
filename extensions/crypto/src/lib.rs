@@ -83,6 +83,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("crypto".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.crypto".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -96,6 +97,10 @@ mod wasm_export {
             SqlValue::Real(r) => r.to_string().into_bytes(),
             SqlValue::Text(s) => s.as_bytes().to_vec(),
             SqlValue::Blob(b) => b.clone(),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -139,6 +144,10 @@ mod wasm_export {
                     SqlValue::Text(funcs::sha2(&arg_bytes(arg0), bits)?)
                 }
                 other => return Err(alloc::format!("crypto: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             };
             Ok(r)
         }

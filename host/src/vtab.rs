@@ -652,6 +652,18 @@ unsafe fn wit_to_sqlite3_result(ctx: *mut ffi::sqlite3_context, v: WitSqlValue) 
                 ffi::SQLITE_TRANSIENT(),
             );
         }
+        // PHASE A: vtab columns carrying a wit-value will route through
+        // the typed-result channel Phase B builds. For now surface an
+        // sqlite3_result_error so a vtab that smuggles a WitValue
+        // fails loud rather than silently dropping the column value.
+        WitSqlValue::WitValue(_) => {
+            let msg = b"wit-value vtab column not yet implemented (Phase B owe)\0";
+            ffi::sqlite3_result_error(
+                ctx,
+                msg.as_ptr() as *const c_char,
+                (msg.len() - 1) as c_int,
+            );
+        }
     }
 }
 

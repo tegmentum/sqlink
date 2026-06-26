@@ -73,6 +73,10 @@ mod wasm_export {
             Some(SqlValue::Null) | None => Ok(UaArg::Null),
             Some(SqlValue::Text(s)) => Ok(UaArg::Text(s.clone())),
             Some(_) => Err(format!("{fname}: TEXT or NULL arg required")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -105,6 +109,10 @@ mod wasm_export {
         match parser.parse(ua) {
             Some(r) => norm(f(&r)),
             None => SqlValue::Null,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -187,6 +195,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("useragent".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.useragent".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -197,18 +206,34 @@ mod wasm_export {
                 FID_BROWSER => match arg_ua(&args, "ua_browser")? {
                     UaArg::Null => Ok(SqlValue::Null),
                     UaArg::Text(ua) => Ok(parse_field(&ua, |r| r.name)),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_BROWSER_VERSION => match arg_ua(&args, "ua_browser_version")? {
                     UaArg::Null => Ok(SqlValue::Null),
                     UaArg::Text(ua) => Ok(parse_field(&ua, |r| r.version)),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_OS => match arg_ua(&args, "ua_os")? {
                     UaArg::Null => Ok(SqlValue::Null),
                     UaArg::Text(ua) => Ok(parse_field(&ua, |r| r.os)),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_OS_VERSION => match arg_ua(&args, "ua_os_version")? {
                     UaArg::Null => Ok(SqlValue::Null),
                     UaArg::Text(ua) => Ok(parse_field(&ua, |r| r.os_version.as_ref())),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_DEVICE => match arg_ua(&args, "ua_device")? {
                     UaArg::Null => Ok(SqlValue::Null),
@@ -217,17 +242,33 @@ mod wasm_export {
                     // field is the closest analogue to UA-parser-style
                     // device names that the plan asks for.
                     UaArg::Text(ua) => Ok(parse_field(&ua, |r| r.os)),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_IS_BOT => match arg_ua(&args, "ua_is_bot")? {
                     UaArg::Null => Ok(SqlValue::Null),
                     UaArg::Text(ua) => Ok(SqlValue::Integer(ua_is_bot_impl(&ua))),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_PARSE => match arg_ua(&args, "ua_parse")? {
                     UaArg::Null => Ok(SqlValue::Null),
                     UaArg::Text(ua) => Ok(SqlValue::Text(ua_parse_json(&ua))),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 },
                 FID_VERSION => Ok(SqlValue::Text(env!("CARGO_PKG_VERSION").to_string())),
                 other => Err(format!("useragent: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

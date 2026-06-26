@@ -240,6 +240,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("lang_detect".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.lang_detect".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -318,6 +319,10 @@ mod wasm_export {
                     Ok(match whatlang::detect(&t) {
                         Some(info) => SqlValue::Text(info.lang().code().to_string()),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_ALPHA2 => {
@@ -331,6 +336,10 @@ mod wasm_export {
                     Ok(match super::iso6393_to_alpha2(info.lang().code()) {
                         Some(c) => SqlValue::Text(c.to_string()),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_CONF => {
@@ -341,6 +350,10 @@ mod wasm_export {
                     Ok(match whatlang::detect(&t) {
                         Some(info) => SqlValue::Real(info.confidence()),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_SCRIPT => {
@@ -350,6 +363,10 @@ mod wasm_export {
                             super::normalize_script_name(sc.name()).to_string(),
                         ),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_ALL => {
@@ -370,6 +387,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(v))
                 }
                 other => Err(format!("lang-detect: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

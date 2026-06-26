@@ -91,6 +91,10 @@ mod wasm_export {
             None => Err(format!("missing arg at {i}")),
             Some(SqlValue::Null) => Ok(None),
             Some(v) => Ok(opt_str(v)),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -317,6 +321,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("robotstxt".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.robotstxt".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -354,6 +359,10 @@ mod wasm_export {
                     Ok(match pick_crawl_delay(&walker.groups, &ua) {
                         Some(d) => SqlValue::Real(d),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
 
@@ -378,6 +387,10 @@ mod wasm_export {
                 }
 
                 other => Err(format!("robotstxt: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

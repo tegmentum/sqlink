@@ -246,6 +246,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("hookprobe".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.hookprobe".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -311,6 +312,10 @@ mod wasm_export {
                             "hookprobe_wal_header: get-wal-header: {}",
                             e.message
                         )),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_READ_FRAMES => {
@@ -343,6 +348,10 @@ mod wasm_export {
                             "hookprobe_read_frames: read-frames: {}",
                             e.message
                         )),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_SERIALIZE_MAIN => {
@@ -356,6 +365,10 @@ mod wasm_export {
                             "hookprobe_serialize_main: serialize-db: {}",
                             e.message
                         )),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_S3_PUT => {
@@ -390,6 +403,10 @@ mod wasm_export {
                             "hookprobe_s3_put: {}",
                             format_s3_err(&e)
                         )),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_S3_GET => {
@@ -416,6 +433,10 @@ mod wasm_export {
                             "hookprobe_s3_get: {}",
                             format_s3_err(&e)
                         )),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_S3_LIST => {
@@ -468,6 +489,10 @@ mod wasm_export {
                             "hookprobe_s3_list: {}",
                             format_s3_err(&e)
                         )),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_S3_DELETE => {
@@ -494,6 +519,10 @@ mod wasm_export {
                             "hookprobe_s3_delete: {}",
                             format_s3_err(&e)
                         )),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 _ => Err(format!("hookprobe: unknown func_id={func_id}")),
@@ -512,6 +541,10 @@ mod wasm_export {
                 "hookprobe: arg {field} must be TEXT, got {other:?}"
             )),
             None => Err(format!("hookprobe: missing arg {field}")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 

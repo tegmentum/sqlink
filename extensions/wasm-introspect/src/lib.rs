@@ -285,6 +285,7 @@ mod wasm_export {
                 optional_capabilities: vec![],
                 preferred_prefix: Some("wasm_introspect".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.wasm_introspect".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -296,6 +297,10 @@ mod wasm_export {
                     let b = match blob_arg(&args, 0, "wasm_is_valid")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Integer(0)),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     // Full structural + type validation. Validator
                     // handles core modules and components; the
@@ -311,30 +316,50 @@ mod wasm_export {
                     let b = match blob_arg(&args, 0, "wasm_imports")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     match collect(&b) {
                         Ok(s) => Ok(SqlValue::Text(
                             Value::Array(s.imports).to_string(),
                         )),
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_EXPORTS => {
                     let b = match blob_arg(&args, 0, "wasm_exports")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     match collect(&b) {
                         Ok(s) => Ok(SqlValue::Text(
                             Value::Array(s.exports).to_string(),
                         )),
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_CUSTOM_SECTIONS => {
                     let b = match blob_arg(&args, 0, "wasm_custom_sections")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     match collect(&b) {
                         Ok(s) => {
@@ -343,24 +368,40 @@ mod wasm_export {
                             Ok(SqlValue::Text(Value::Array(arr).to_string()))
                         }
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_FUNCTION_COUNT => {
                     let b = match blob_arg(&args, 0, "wasm_function_count")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     match collect(&b) {
                         Ok(s) => Ok(SqlValue::Integer(
                             (s.imported_functions + s.declared_functions) as i64,
                         )),
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_MEMORY_PAGES => {
                     let b = match blob_arg(&args, 0, "wasm_memory_pages")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     match collect(&b) {
                         Ok(s) => match s.first_memory_pages {
@@ -370,18 +411,34 @@ mod wasm_export {
                             // parse failure  return 0 rather than
                             // NULL.
                             None => Ok(SqlValue::Integer(0)),
+                            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                            // gained a wit-value arm; Phase B will replace this wildcard
+                            // with extension-specific decode/encode logic.
+                            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                         },
                         Err(_) => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_VERSION_BYTE => {
                     let b = match blob_arg(&args, 0, "wasm_version_byte")? {
                         Some(b) => b,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(match version_byte(&b) {
                         Some(v) => SqlValue::Integer(v as i64),
                         None => SqlValue::Null,
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     })
                 }
                 FID_VERSION => Ok(SqlValue::Text(format!(
@@ -389,6 +446,10 @@ mod wasm_export {
                     env!("CARGO_PKG_VERSION")
                 ))),
                 other => Err(format!("wasm_introspect: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

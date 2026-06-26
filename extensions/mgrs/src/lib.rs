@@ -141,6 +141,10 @@ mod wasm_export {
                 }
             }
             Some(_) => None,
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -257,6 +261,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("mgrs".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.mgrs".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -268,10 +273,18 @@ mod wasm_export {
                     let lat = match args.first().and_then(as_f64) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let lng = match args.get(1).and_then(as_f64) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     if !lat.is_finite() || !lng.is_finite() {
                         return Ok(SqlValue::Null);
@@ -279,10 +292,18 @@ mod wasm_export {
                     let precision = match opt_precision(&args, 2) {
                         Some(p) => p,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let latlon = match LatLon::create(lat, lng) {
                         Ok(v) => v,
                         Err(_) => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     // geoconvert::Mgrs requires precision in [1, 11].
                     // For our SQL precision == 0 (100km square only)
@@ -315,11 +336,19 @@ mod wasm_export {
                     let s = match args.first().and_then(as_text) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let normalized = normalize_input(s);
                     let mgrs = match Mgrs::parse_str(&normalized) {
                         Ok(v) => v,
                         Err(_) => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let latlon = mgrs.to_latlon();
                     // Format as `lat,lng`; 8 decimals is sub-cm for
@@ -334,11 +363,19 @@ mod wasm_export {
                     let s = match args.first().and_then(as_text) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let normalized = normalize_input(s);
                     let mgrs = match Mgrs::parse_str(&normalized) {
                         Ok(v) => v,
                         Err(_) => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     Ok(SqlValue::Text(grid_zone_prefix(&mgrs)))
                 }
@@ -346,6 +383,10 @@ mod wasm_export {
                     let s = match args.first().and_then(as_text) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Integer(0)),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let normalized = normalize_input(s);
                     let ok = Mgrs::parse_str(&normalized).is_ok();
@@ -355,11 +396,19 @@ mod wasm_export {
                     let s = match args.first().and_then(as_text) {
                         Some(v) => v,
                         None => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     let normalized = normalize_input(s);
                     let mgrs = match Mgrs::parse_str(&normalized) {
                         Ok(v) => v,
                         Err(_) => return Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     };
                     // geoconvert::Mgrs::parse_str returns precision
                     // == -1 for "grid-square only" inputs (no
@@ -377,6 +426,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(v))
                 }
                 other => Err(format!("mgrs: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

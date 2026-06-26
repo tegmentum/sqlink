@@ -141,6 +141,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("pmtiles".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.pmtiles".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -166,6 +167,10 @@ mod wasm_export {
                     Ok(SqlValue::Text(json))
                 }
                 other => Err(format!("pmtiles: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }
@@ -299,6 +304,10 @@ mod wasm_export {
                     3 => SqlValue::Integer(t.y as i64),
                     4 => SqlValue::Blob(tile_bytes(&c.data, c.tile_data_offset, t)),
                     other => return Err(format!("pmtiles: bad column index {other}")),
+                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                    // gained a wit-value arm; Phase B will replace this wildcard
+                    // with extension-specific decode/encode logic.
+                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 })
             })
         }

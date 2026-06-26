@@ -85,6 +85,10 @@ mod wasm_export {
             Some(SqlValue::Integer(n)) => Ok(*n),
             Some(SqlValue::Null) | None => Err(format!("{fname}: arg {idx} is NULL")),
             Some(_) => Err(format!("{fname}: arg {idx} must be INTEGER")),
+            // PLAN-wit-value-extension.md Phase A: the sql-value variant
+            // gained a wit-value arm; Phase B will replace this wildcard
+            // with extension-specific decode/encode logic.
+            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -545,6 +549,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("number_theory".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.number_theory".into()),
+                typed_values: Vec::new(),
             }
         }
     }
@@ -563,6 +568,10 @@ mod wasm_export {
                     match next_prime_after(n) {
                         Some(p) => Ok(SqlValue::Integer(p)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_PREV_PRIME => {
@@ -570,6 +579,10 @@ mod wasm_export {
                     match prev_prime_before(n) {
                         Some(p) => Ok(SqlValue::Integer(p)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_FACTORIZE => {
@@ -639,6 +652,10 @@ mod wasm_export {
                     match modinv_i64(a, m) {
                         Some(v) => Ok(SqlValue::Integer(v)),
                         None => Ok(SqlValue::Null),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_JACOBI => {
@@ -647,6 +664,10 @@ mod wasm_export {
                     match jacobi(a, n) {
                         Some(j) => Ok(SqlValue::Integer(j as i64)),
                         None => Err("nt_jacobi: n must be a positive odd integer".into()),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_LEGENDRE => {
@@ -660,6 +681,10 @@ mod wasm_export {
                     match jacobi(a, p) {
                         Some(j) => Ok(SqlValue::Integer(j as i64)),
                         None => Err("nt_legendre: p must be an odd prime".into()),
+                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                        // gained a wit-value arm; Phase B will replace this wildcard
+                        // with extension-specific decode/encode logic.
+                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                     }
                 }
                 FID_GCD => {
@@ -697,6 +722,10 @@ mod wasm_export {
                     env!("CARGO_PKG_VERSION")
                 ))),
                 other => Err(format!("number-theory: unknown func id {other}")),
+                // PLAN-wit-value-extension.md Phase A: the sql-value variant
+                // gained a wit-value arm; Phase B will replace this wildcard
+                // with extension-specific decode/encode logic.
+                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
             }
         }
     }

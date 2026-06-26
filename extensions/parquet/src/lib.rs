@@ -199,6 +199,7 @@ mod wasm_export {
                 optional_capabilities: alloc::vec![],
                 preferred_prefix: Some("parquet".into()),
                 prefix_expansion: Some("com.tegmentum.sqlink.ext.parquet".into()),
+                typed_values: Vec::new(),
             }
         }
     }
