@@ -3818,14 +3818,28 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
     }
 }
 
-/// `sqlite:extension/bundles` host dispatcher. Routes every call to
-/// the cas-cache's `SqliteCasStore::bundle_*` surface via the
-/// host_ref's Cache handle. Capability-gated on
-/// `LoadedState::bundles_granted`; without the grant every method
-/// fails closed with SQLITE_PERM.
+/// `sqlite:extension/bundles` host dispatcher. v1.5 round 2 unify
+/// cutover: every call routes through
+/// `sqlite_cas_cache::bundles_exec::{bundle_*}` free functions
+/// against the cas-cache's Connection. The browser polyfill mirrors
+/// the same `bundles_exec::{*_SQL}` constants, so native + browser
+/// share one SQL surface; the only difference is which Connection
+/// the SQL runs against (`~/.cache/sqlink/cas.db` here vs the in-
+/// memory cas conn the dispatch-bridge maintains in the browser).
 ///
-/// The cas-cache db is host-managed (one connection per Cache, behind
-/// a parking_lot::Mutex). The dispatch holds the mutex for the
+/// Pre-cutover (round 1) this delegated to `SqliteCasStore::bundle_*`,
+/// the high-level wrapper. The wrapper's bundle methods inlined the
+/// same SQL but in a code path browser tests couldn't reach; round
+/// 2's free functions are the single source of truth.
+///
+/// Other consumers (`.cache *` dot commands, artifact CRUD) keep
+/// using `SqliteCasStore` directly via `Cache::store()` since
+/// non-bundle surfaces have different shapes per consumer.
+///
+/// Capability-gated on `LoadedState::bundles_granted`; without the
+/// grant every method fails closed with SQLITE_PERM. The cas-cache
+/// db is host-managed (one connection per Cache, behind a
+/// parking_lot::Mutex). The dispatch holds the mutex for the
 /// duration of each call  every method is a single SQLite statement
 /// or a small transaction, so contention with `.cache *` dot commands
 /// or other bundle calls is bounded.
@@ -3851,8 +3865,7 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
             validate_bundle_str(&m.content_hash, "content_hash", BUNDLE_SET_HASH_MAX)
                 .map_err(bundle_arg_err)?;
         }
-        let store = bundles_open_store(self)?;
-        let mut guard = store.lock();
+        let cache = bundles_open_cache(self)?;
         let members: Vec<sqlite_cas_cache::BundleMember> = members
             .into_iter()
             .map(|m| sqlite_cas_cache::BundleMember {
@@ -3860,7 +3873,15 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
                 content_hash: m.content_hash,
             })
             .collect();
-        match guard.bundle_save(name.as_deref(), &set_hash, &members) {
+        let result = cache.with_bundles_conn(|conn| {
+            sqlite_cas_cache::bundles_exec::bundle_save(
+                conn,
+                name.as_deref(),
+                &set_hash,
+                &members,
+            )
+        });
+        match result {
             Ok(id) => Ok(id),
             Err(e) => {
                 if let Some(conflict) = e.downcast_ref::<sqlite_cas_cache::BundleAliasConflict>() {
@@ -3882,10 +3903,11 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         Option<loaded::sqlite::extension::bundles::BundleSummary>,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        let store = bundles_open_store(self)?;
-        let guard = store.lock();
-        guard
-            .bundle_find_by_name(&name)
+        let cache = bundles_open_cache(self)?;
+        cache
+            .with_bundles_conn(|conn| {
+                sqlite_cas_cache::bundles_exec::bundle_find_by_name(conn, &name)
+            })
             .map(|opt| opt.map(bundles_summary_to_wit))
             .map_err(|e| bundles_err("bundles.find-by-name", e))
     }
@@ -3897,10 +3919,11 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         Vec<loaded::sqlite::extension::bundles::BundleSummary>,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        let store = bundles_open_store(self)?;
-        let guard = store.lock();
-        guard
-            .bundle_find_by_hash_prefix(&prefix)
+        let cache = bundles_open_cache(self)?;
+        cache
+            .with_bundles_conn(|conn| {
+                sqlite_cas_cache::bundles_exec::bundle_find_by_hash_prefix(conn, &prefix)
+            })
             .map(|v| v.into_iter().map(bundles_summary_to_wit).collect())
             .map_err(|e| bundles_err("bundles.find-by-hash-prefix", e))
     }
@@ -3911,10 +3934,9 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         Vec<loaded::sqlite::extension::bundles::BundleSummary>,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        let store = bundles_open_store(self)?;
-        let guard = store.lock();
-        guard
-            .bundle_list()
+        let cache = bundles_open_cache(self)?;
+        cache
+            .with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_list(conn))
             .map(|v| v.into_iter().map(bundles_summary_to_wit).collect())
             .map_err(|e| bundles_err("bundles.list", e))
     }
@@ -3926,9 +3948,9 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         loaded::sqlite::extension::bundles::BundleDetail,
         loaded::sqlite::extension::types::SqliteError,
     > {
-        let store = bundles_open_store(self)?;
-        let guard = store.lock();
-        match guard.bundle_show(id) {
+        let cache = bundles_open_cache(self)?;
+        match cache.with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_show(conn, id))
+        {
             Ok(Some(d)) => Ok(loaded::sqlite::extension::bundles::BundleDetail {
                 summary: bundles_summary_to_wit(d.summary),
                 members: d
@@ -3962,9 +3984,9 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         &mut self,
         id: u64,
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        let store = bundles_open_store(self)?;
-        let mut guard = store.lock();
-        match guard.bundle_delete(id) {
+        let cache = bundles_open_cache(self)?;
+        match cache.with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_delete(conn, id))
+        {
             Ok(true) => Ok(()),
             Ok(false) => Err(loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_NOTFOUND,
@@ -3979,14 +4001,15 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         &mut self,
         policy: loaded::sqlite::extension::bundles::GcPolicy,
     ) -> std::result::Result<Vec<u64>, loaded::sqlite::extension::types::SqliteError> {
-        let store = bundles_open_store(self)?;
-        let mut guard = store.lock();
+        let cache = bundles_open_cache(self)?;
         let rust_policy = sqlite_cas_cache::BundleGcPolicy {
             keep_last: policy.keep_last,
             older_than_secs: policy.older_than_secs,
         };
-        guard
-            .bundle_gc(rust_policy)
+        cache
+            .with_bundles_conn(|conn| {
+                sqlite_cas_cache::bundles_exec::bundle_gc(conn, rust_policy)
+            })
             .map_err(|e| bundles_err("bundles.gc", e))
     }
 
@@ -4001,10 +4024,9 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         // before recording so different bundles for the same target
         // don't trample each other (cargo writes every wasm32-wasip2
         // build to the same target/<triple>/release/<bin> path).
-        let store = bundles_open_store(self)?;
-        let mut guard = store.lock();
-        let detail = guard
-            .bundle_show(id)
+        let cache = bundles_open_cache(self)?;
+        let detail = cache
+            .with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_show(conn, id))
             .map_err(|e| bundles_err("bundles.record-binary (lookup set_hash)", e))?
             .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_NOTFOUND,
@@ -4044,15 +4066,22 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
             ),
         })?;
         let dest_str = dest.to_string_lossy().into_owned();
-        guard
-            .bundle_record_binary(id, &target_triple, &dest_str)
+        cache
+            .with_bundles_conn(|conn| {
+                sqlite_cas_cache::bundles_exec::bundle_record_binary(
+                    conn,
+                    id,
+                    &target_triple,
+                    &dest_str,
+                )
+            })
             .map_err(|e| bundles_err("bundles.record-binary", e))
     }
 
     async fn bundle_touch(&mut self, id: u64) {
-        if let Ok(store) = bundles_open_store(self) {
-            let guard = store.lock();
-            let _ = guard.bundle_touch(id);
+        if let Ok(cache) = bundles_open_cache(self) {
+            let _ = cache
+                .with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_touch(conn, id));
         }
     }
 
@@ -4061,10 +4090,11 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         bundle_id: u64,
         alias: String,
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
-        let store = bundles_open_store(self)?;
-        let mut guard = store.lock();
-        guard
-            .bundle_add_alias(bundle_id, &alias)
+        let cache = bundles_open_cache(self)?;
+        cache
+            .with_bundles_conn(|conn| {
+                sqlite_cas_cache::bundles_exec::bundle_add_alias(conn, bundle_id, &alias)
+            })
             .map_err(|e| bundles_err("bundles.add-alias", e))
     }
 
@@ -4072,10 +4102,11 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         &mut self,
         alias: String,
     ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
-        let store = bundles_open_store(self)?;
-        let mut guard = store.lock();
-        guard
-            .bundle_remove_alias(&alias)
+        let cache = bundles_open_cache(self)?;
+        cache
+            .with_bundles_conn(|conn| {
+                sqlite_cas_cache::bundles_exec::bundle_remove_alias(conn, &alias)
+            })
             .map_err(|e| bundles_err("bundles.remove-alias", e))
     }
 
@@ -4083,23 +4114,31 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         &mut self,
         bundle_id: u64,
     ) -> std::result::Result<Vec<String>, loaded::sqlite::extension::types::SqliteError> {
-        let store = bundles_open_store(self)?;
-        let guard = store.lock();
-        guard
-            .bundle_aliases(bundle_id)
+        let cache = bundles_open_cache(self)?;
+        cache
+            .with_bundles_conn(|conn| {
+                sqlite_cas_cache::bundles_exec::bundle_aliases(conn, bundle_id)
+            })
             .map_err(|e| bundles_err("bundles.aliases", e))
     }
 }
 
-/// Resolve the cas-cache `SqliteCasStore` handle from the LoadedState,
-/// applying the bundles capability gate first. Centralized so every
-/// bundle dispatch has the same gate + same error shape.
-fn bundles_open_store(
+/// Resolve the cas-cache `Cache` handle from the LoadedState,
+/// applying the bundles capability gate first. Centralized so
+/// every bundle dispatch has the same gate + same error shape.
+///
+/// Returns the `Cache` itself (not the raw `SqliteCasStore`
+/// handle) so callers reach the cas-cache Connection via
+/// `Cache::with_bundles_conn` and run `bundles_exec`'s free-
+/// function CRUD directly. v1.5 round 2 unify cutover: pre-round-
+/// 2 this returned `Arc<Mutex<SqliteCasStore>>` and callers
+/// invoked `SqliteCasStore::bundle_*` methods; the round 2 cutover
+/// dropped that high-level wrapper in favor of the SQL-strings-
+/// + free-functions surface the browser polyfill mirrors.
+fn bundles_open_cache(
     state: &LoadedState,
-) -> std::result::Result<
-    std::sync::Arc<parking_lot::Mutex<sqlite_cas_cache::SqliteCasStore>>,
-    loaded::sqlite::extension::types::SqliteError,
-> {
+) -> std::result::Result<crate::cache::Cache, loaded::sqlite::extension::types::SqliteError>
+{
     if !state.bundles_granted {
         return Err(loaded::sqlite::extension::types::SqliteError {
             code: libsqlite3_sys::SQLITE_PERM,
@@ -4131,7 +4170,7 @@ fn bundles_open_store(
                       (run a `.cache use-*` first or pass --cache-dir)"
                     .into(),
             })?;
-    Ok(cache.store())
+    Ok(cache.clone())
 }
 
 /// Wrap an anyhow error into the WIT sqlite-error shape.

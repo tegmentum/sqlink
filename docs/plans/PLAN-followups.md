@@ -364,6 +364,244 @@ as export (at offset 0x4c5c76)". Resolved by also exporting
 here because future dispatch-bridge entries that import additional
 types may hit the same trap.
 
+## v1.5 round 6: composed-cli wasm runtime in a dedicated Worker — DONE
+
+### Status (2026-06-26): DONE — non-empty bundle reload-leg passes
+
+`composed-bundle.spec.js`'s reload-leg now passes with a NON-EMPTY
+bundle (3 user-loaded scalar extensions: aba/bic/crc → members=3 in
+the cas db, surface in `.bundle show myset` after page navigation).
+The OPFS cas db file is 61 KB and starts with `SQLite format 3`
+magic header — a real SQLite db, openable by any external client.
+
+### Architecture change
+
+Round 4's β-prime sync-cache held the entire cas db bytes in a
+JS-side `Uint8Array` on the main thread; `flushAll` ran after each
+execDotCommand. This worked for tiny data but had a synchronous
+write hazard: a `beforeunload` flush had to use the async OPFS API
+under a synchronous unload event, which Chromium sometimes dropped
+silently. The fix attempt in round 5 (Worker + SAB + Atomics) hit a
+hard Web-spec blocker: `Atomics.wait` is forbidden on the browser
+main thread (Window context).
+
+Round 6 sidesteps both problems by hosting the entire composed-cli
+wasm runtime in a dedicated module Worker. From the Worker:
+
+  * `FileSystemSyncAccessHandle.read/write/sync/truncate/...` are
+    legal (sync from JS, sync from wasm — perfect for the VFS).
+  * The opfs-host wit-imports call SAH methods directly inline.
+    No SAB, no Atomics, no separate OPFS worker.
+  * Same architecture @sqlite.org/sqlite-wasm uses for OPFS.
+
+Main thread (`sqlink-composed.js`) becomes a `ComposedDatabase`
+postMessage proxy. The user-facing API (open/exec/execScalar/
+execDotCommand/loadExtension/close) is unchanged — every call
+postMessages to the worker via a sequence-id pairing protocol.
+
+### What landed
+
+1. `browser/src/composed-cli-worker.js`: new file (~480 LoC). Hosts
+   the entire wasm runtime, builds the extension registry +
+   cli-host handlers + spi-loader + opfs-host inside the worker,
+   instantiates the composed cli wasm with JSPI, owns
+   QueueInputStream + globalStdioState + sentinel framing.
+   `init/exec/execDotCommand/loadExtension/close` handlers.
+2. `browser/src/composed-cli-worker.js#createWorkerOpfsHost`:
+   pre-opens SAHs for `/sqlink/cas.db` AND `/sqlink/cas.db-journal`
+   at init time (because the wit-imported `open()` is SYNC from
+   wasm's POV but `createSyncAccessHandle()` is ASYNC — we cannot
+   open on demand). `open(path, false)` reports size=0 as
+   `not-found` so SQLite's hot-journal probe interprets an unwritten
+   journal as absent. `delete()` truncates to 0 (instead of
+   unlinking) so the SAH stays alive across the next transaction.
+3. `browser/src/sqlink-composed.js`: rewritten as a thin
+   postMessage proxy (~240 LoC, down from 760). `loadExtension`
+   takes raw bytes (Uint8Array); the bare-name path fetches bytes
+   from the `<name>_extension.component.wasm` symlink in
+   `browser/public/`.
+4. `browser/src/host-imports.js`: `opts.opfsHost` is now required
+   (constructed by the worker, passed in). No longer constructs
+   `createOpfsHost()` internally.
+5. `browser/src/opfs-host.js`: deleted — the β-prime sync-cache
+   impl is superseded by the worker's direct-SAH host.
+6. `browser/src/opfs-worker.js`: deleted — round 5's SAB+Atomics
+   scaffolding is no longer needed (the cli IS the worker now).
+7. `browser/scripts/link-composed-wasm.mjs`: extended to symlink
+   aba/bic/crc `*_extension.component.wasm` into
+   `browser/public/` so the bundle test can fetch real bytes.
+8. `browser/tests/composed-bundle.html`: phase 1 loads aba+bic+crc
+   via `db.loadExtension(name, bytes)` before `.bundle save myset
+   --no-build`, producing a 3-member non-empty bundle.
+9. `browser/tests/composed-bundle.spec.js`: asserts `members=3` in
+   saveOut and `members (3)` in showOut on the reload leg —
+   decisively proves bundle bytes survived the OPFS round-trip.
+
+### Departures from prior rounds
+
+- Round 4's β-prime (sync-cache + flushAll) is retired entirely.
+  Direct-SAH in the worker is simpler and more durable: every
+  SQLite write hits OPFS synchronously through the same SAH
+  the page reload re-opens.
+- Round 5's SAB+Atomics α architecture is also retired entirely.
+  `Atomics.wait` is illegal on the main thread; round 6 sidesteps
+  by moving wasm into the worker so the main thread doesn't need
+  to block at all.
+- `loadExtension(name, transpiledModule)` shape is no longer
+  supported (the transpiled module would have to be cloneable
+  across the worker boundary, which it isn't — it carries
+  closures). Use `loadExtension(name, bytes)` instead; the
+  worker handles runtime-bindgen on its side.
+
+### Substrate verification matrix (run before commit)
+
+- `browser/playwright composed-bundle.spec.js` (2 tests): both
+  pass. Reload-leg: saveOut="members=3", showOut="members (3): aba
+  bic crc", opfsHeader="SQLite format 3\\0", opfsSize=61440 bytes.
+- `browser/playwright composed-prefix.spec.js`: passes (no
+  regression on the v1.4 round-trip — full proxy shape works).
+- `sqlite-cas-cache cargo test -- --test-threads=1`: 91/91.
+- `sqlink-host cargo test --lib`: 49/49.
+- `bundle-cli cargo test`: 5/5.
+- `sqlite-vfs-tvm cargo test --tests`: 17/17.
+
+## v1.5 round 4: OPFS-backed VFS for the cas connection — DONE
+
+### Status (2026-06-26): DONE — reload persistence verified end-to-end
+
+`composed-bundle.spec.js`'s reload-leg now passes. Phase 1 runs
+`.bundle save myset`, the host writes the cas db to
+`/sqlink/cas.db` in navigator.storage's origin private root, the
+page navigates to phase 2 (fresh wasm runtime, brand-new
+`shared_cas_conn`), and `.bundle list` / `.bundle show` surface
+the bundle from phase 1.
+
+Substrate verification (the spec's "v1.6 substrate verification"
+item): the OPFS file's first 16 bytes are `"SQLite format 3\\0"`
+— it IS a SQLite db, openable by any external SQLite client
+(sqlite3 cli, @sqlite.org/sqlite-wasm). Not a snapshot blob.
+
+### What landed
+
+1. `sqlite-wasm/wit/opfs-host.wit`: new interface declaring
+   `open / read / write / truncate / sync / size / close / delete`
+   on u64 file handles with primitive payloads. Imported by the
+   `sqlite-library` world.
+2. `sqlite-wasm/sqlite-vfs-tvm/src/opfs.rs`: new `"opfs"` VFS table
+   that trampolines each IO method through a dyn `OpfsBackend`
+   trait. Keeps sqlite-vfs-tvm free of wit-bindgen; sqlite-lib
+   supplies the WIT-backed impl. Tests prove real SQLite drives
+   the VFS for CREATE/INSERT/SELECT round-trips against a
+   MemBackend fixture.
+3. `sqlite-wasm/sqlite-lib/src/lib.rs`: wasm32 `shared_cas_conn`
+   opens through `vfs="opfs"` at path `/sqlink/cas.db`.
+   `tvm_cold_tier_init` registers the `WitOpfsBackend`
+   (wit-bindgen shim in `opfs_backend.rs`) and installs the VFS
+   alongside the existing `tvm-mem`.
+4. `browser/src/opfs-host.js`: JS impl of
+   `sqlink:wasm/opfs-host`. Sync from the wasm guest's POV —
+   bytes live in a JS-side Uint8Array cache; OPFS round-trips
+   happen at `preload` (before instantiate) and `flushAll`
+   (after each `execDotCommand`). Architecture note: option β
+   (suspend via JSPI) couldn't tunnel through the
+   `cli → dispatch-dot-command JS → bundle-cli wasm → bundles
+   polyfill JS → bridgedExecuteCas → opfs VFS` call chain (the
+   JS frames break JSPI's suspension surface), and option α
+   (Worker + SAB + Atomics) would have required >500 LoC of
+   cross-thread plumbing plus COOP/COEP setup. The sync-cache
+   architecture matches the call shape AND the bundle registry's
+   data volume (~ few KiB per save) without complexity.
+5. `browser/tests/composed-bundle.html`: phase=1 saves a bundle;
+   phase=2 lists + shows + reads the OPFS file's first 16 bytes
+   for SQLite-magic verification.
+6. `browser/tests/composed-bundle.spec.js`: reload-leg un-skipped
+   (was `test.skip` in round 3). Asserts on phase 2's list/show
+   outputs AND on the `"SQLite format 3"` magic header.
+
+### Departures from the round-3 spec
+
+- Used JSPI-aware sync-cache (option β-prime) instead of
+  Worker+SAB+Atomics (option α). The round-3 spec mandated α;
+  this round chose β-prime after the polyfill's call shape
+  ruled out plain β AND α's complexity proved disproportionate
+  to the data volume. Trade-off documented in `opfs-host.js`'s
+  header comment.
+- Persistence cadence: `flushAll()` runs after every
+  `execDotCommand` (so even a single `.bundle save` survives an
+  unclean unload), not just at db.close(). Slightly more OPFS
+  writes than minimal, but bounded by the dot-cmd rate (≤ tens
+  per second under normal usage).
+
+### Substrate verification matrix (run before commit)
+
+- `sqlite-vfs-tvm/tests/opfs_serves_real_sqlite.rs`: real
+  SQLite drives the opfs VFS via the OpfsBackend trait. Passes.
+- `sqlite-wasm/sqlite-vfs-tvm cargo test`: all 11 tests pass.
+- `cargo test -p sqlite-cas-cache -p sqlink-host`: native tests
+  green (cas-cache opens against the host filesystem, not the
+  opfs VFS — the wasm32-gated wiring doesn't affect them).
+- `browser/playwright composed-bundle.spec.js` (2 tests):
+  both pass.
+- `browser/playwright composed-prefix.spec.js`: passes (no
+  regression on the v1.4 round-trip).
+
+## v1.5 round 3: Browser bundles bridging via bridged-execute-cas
+
+### Status (2026-06-26): DONE — reload persistence delivered in round 4
+
+`composed-bundle.spec.js`'s main round-trip leg passes end-to-end
+with real cas-cache output:
+
+  - `.bundle save myset --no-build`
+    -> `bundle 'myset' saved (id=1, set_hash=af1349b9..., members=0)`
+  - `.bundle list` -> the `myset` row, members + binaries counts.
+  - `.bundle show myset` -> set_hash + created_at + last_used.
+  - `.bundle delete myset` -> deletion message.
+  - subsequent `.bundle list` -> `(no bundles)`.
+
+### What landed
+
+1. `sqlite-wasm`: added `bridged-execute-cas(sql, params) -> result<
+   query-result, sqlite-error>` to `sqlink:wasm/dispatch-bridge` +
+   the matching `DispatchBridgeGuest::bridged_execute_cas` impl
+   on `SqliteLib`. Routes to a NEW thread-local `SHARED_CAS_CONN`
+   that's distinct from the user-data `SHARED_CONN`. On native
+   it opens `~/.cache/sqlink/cas.db` with the default VFS; on
+   wasm32 it transitionally opens `:memory:` (see deferral below).
+2. `browser/src/extension-loader.js`: `buildCliHostHandlers` now
+   returns an `sqlite:extension/bundles` handler that drives
+   `bundleSave / bundleFindByName / bundleFindByHashPrefix /
+   bundleList / bundleShow / bundleDelete / bundleRecordBinary /
+   bundleTouch / bundleAddAlias / bundleRemoveAlias / bundleAliases`
+   inline against `dispatch-bridge.bridged-execute-cas`. SQL
+   transcribed from `sqlite-cas-cache::bundles_exec`'s `pub const`
+   constants. `bundleGc` throws a structured "not implemented"
+   error (not on the test path).
+3. `browser/src/extension-loader.js`: schema bootstrap (BOOTSTRAP +
+   INSTALL) runs lazily on first call. Split per-statement because
+   sqlite-lib's `bridged-execute*` uses sqlite3_prepare semantics
+   (single statement per call), so the Rust crate's monolithic
+   BEGIN/COMMIT INSTALL_SCHEMA cant be a single blob in JS.
+4. Tests: `composed-bundle.spec.js` un-skipped for the main round-
+   trip leg with tightened substrate greps that fail decisively
+   on "not bridged / not implemented / no such table / no such vfs".
+   Reload-leg added but stays `test.skip` (see deferral).
+
+### OPFS-backed VFS for the cas connection — delivered in round 4
+
+See the "v1.5 round 4: OPFS-backed VFS for the cas connection —
+DONE" section above. The round-3 deferral is closed; the cas
+connection now opens through the `"opfs"` VFS on wasm32 and
+`composed-bundle.spec.js`'s reload-leg passes end-to-end.
+
+The round-3 spec called for option α (Worker + SyncAccessHandle
++ SharedArrayBuffer + Atomics); round 4 chose option β-prime
+(sync-cache + explicit flushAll at execDotCommand boundaries)
+because the polyfill's call shape ruled out the simpler β and
+α's complexity was disproportionate to the bundle registry's
+data volume. Architecture rationale lives in the
+`browser/src/opfs-host.js` header comment.
+
 ---
 
 # Plan: v1 follow-ups — roadmap for outstanding post-v1 work

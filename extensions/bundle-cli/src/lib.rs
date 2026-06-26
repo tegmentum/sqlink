@@ -258,12 +258,18 @@ underlying set-hash row.";
             .into_iter()
             .filter(|m| !is_auto_loaded_cli_family(&m.name))
             .collect();
-        if members.is_empty() {
+        // v1.5: allow an empty member set when `--no-build` is set
+        // (the browser-composed cli test exercises bundle metadata
+        // round-trip without any user-loaded extensions). A build-
+        // bearing save still requires at least one member  cargo
+        // can't bake nothing.
+        if members.is_empty() && !no_build {
             return err(
                 ".bundle save: no user-loaded extensions to bundle. \
                  Run `.load <path/to/extension.component.wasm>` first \
                  (the auto-loaded cli-family extensions are excluded \
-                 since they're baked into every sqlink-cli build)."
+                 since they're baked into every sqlink-cli build), \
+                 or pass `--no-build` to record an empty bundle."
                     .into(),
             );
         }

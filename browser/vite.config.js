@@ -20,12 +20,33 @@ export default defineConfig({
   // assets and not as JS. Use `assetsInclude` to widen the asset
   // pattern.
   assetsInclude: ['**/*.wasm'],
+  worker: {
+    // v1.5 round 6: composed-cli-worker.js hosts the entire wasm
+    // runtime. It's loaded with `{ type: 'module' }` so vite needs
+    // to bundle it as an ES module worker.
+    format: 'es',
+  },
   server: {
     host: '127.0.0.1',
     fs: {
       // Allow access to wasi-polyfill linked outside the
       // workspace via file:.
       strict: false,
+    },
+    // COOP/COEP headers: kept for forward-compat. Round 6 doesn't
+    // strictly need them (no SharedArrayBuffer; the worker uses
+    // structured-clone postMessage), but leaving them on keeps the
+    // door open for multi-worker designs and matches the
+    // @sqlite.org/sqlite-wasm setup convention.
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
+    },
+  },
+  preview: {
+    headers: {
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Cross-Origin-Embedder-Policy': 'require-corp',
     },
   },
   optimizeDeps: {

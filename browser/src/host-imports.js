@@ -202,6 +202,18 @@ export function buildCliPolyfill(opts) {
   // before running the cli — see sqlink-composed.js.
   const spiLoader = buildSpiLoader(opts.registry)
 
+  // v1.5 round 6: opfs-host is constructed by the worker (which
+  // hosts the wasm runtime) and passed in via opts.opfsHost. Its
+  // wit interface() returns sync handlers that call SyncAccessHandle
+  // methods inline — legal because we're running in a Worker.
+  if (!opts.opfsHost) {
+    throw new Error(
+      'buildCliPolyfill: opts.opfsHost is required (created by ' +
+        'the worker via createWorkerOpfsHost()).',
+    )
+  }
+  const opfsHost = opts.opfsHost
+
   const additionalImports = {
     'sqlink:wasm/extension-loader': buildExtensionLoader(opts.registry),
     'sqlite:extension/spi-loader': spiLoader.impl,
@@ -211,6 +223,12 @@ export function buildCliPolyfill(opts) {
     // looks up the registered (ext-name, func-id) in the registry
     // and invokes the transpiled extension's scalar-function.call.
     'sqlink:wasm/dispatch': buildDispatch(opts.registry),
+    // v1.5 round 6: OPFS-backed cas db. sqlite-lib's `shared_cas_conn`
+    // opens via the `"opfs"` VFS; the VFS's xRead/xWrite/xSync/...
+    // trampolines call out to this interface SYNCHRONOUSLY. The
+    // worker's opfs-host calls SyncAccessHandle methods directly
+    // inline — legal because we're in a Worker context.
+    'sqlink:wasm/opfs-host': opfsHost.interface(),
   }
   for (const k of [
     'sqlite:extension/http',
@@ -221,7 +239,7 @@ export function buildCliPolyfill(opts) {
     additionalImports[k] = stubInterface(k)
   }
 
-  return { polyfill, additionalImports, spiLoader, persistentQueue }
+  return { polyfill, additionalImports, spiLoader, persistentQueue, opfsHost }
 }
 
 /**

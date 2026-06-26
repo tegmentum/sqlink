@@ -152,6 +152,13 @@ function resolveWasmFor(name, workspaceTargetDir) {
       `${name}_extension.component.wasm`),
   ])
   const workspacePath = join(workspaceTargetDir, `${name}_extension.component.wasm`)
+  // Also probe the fallback workspace target — matters when this
+  // code runs in a worktree without the extensions built locally
+  // but the canonical sqlink checkout has them.
+  const fallbackWorkspacePath = join(
+    FALLBACK_TARGET_DIR,
+    `${name}_extension.component.wasm`,
+  )
   // Prefer the freshest per-ext build, falling back to the workspace
   // target, then any per-ext fallback path.
   let bestPerExt = null
@@ -168,6 +175,7 @@ function resolveWasmFor(name, workspaceTargetDir) {
   }
   if (existsSync(workspacePath)) return workspacePath
   if (bestPerExt) return bestPerExt
+  if (existsSync(fallbackWorkspacePath)) return fallbackWorkspacePath
   return null
 }
 

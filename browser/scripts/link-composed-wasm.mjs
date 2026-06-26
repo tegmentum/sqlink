@@ -23,12 +23,33 @@ const FALLBACK_TARGET = '/Users/zacharywhitley/git/sqlink/target/wasm32-wasip2/r
 const WASM_NAME = 'cli_with_sqlite.single_memory.component.wasm'
 const PUBLIC_DIR = resolve(__dirname, '..', 'public')
 
-// Per-extension component bytes the runtime-bindgen path serves
-// statically (so the composed-runtime-ext test can fetch them).
+// Per-extension component bytes the worker host fetches as raw
+// .component.wasm bytes and sends to the worker via postMessage.
 // We mirror the resolveWasmFor() lookup pattern from transpile-
-// extensions.mjs but only for the names used by browser tests.
+// extensions.mjs.
 const FALLBACK_EXTENSIONS_ROOT = '/Users/zacharywhitley/git/sqlink/extensions'
-const EXTENSION_BYTES_TO_LINK = ['uuid']
+// v1.5 round 6: ComposedDatabase (now a worker proxy) ships extension
+// bytes to the worker via fetch+postMessage. ALL transpiled
+// extensions need a public/ symlink so:
+//   * The smoke-fixture matrix (tests/smoke.spec.js) can load each
+//     fixture extension by name.
+//   * The composed-* tests that pass { name, module } embeds can
+//     auto-fetch bytes when the worker can't accept the module.
+//   * The composed-bundle.spec.js test can load aba/bic/crc to
+//     produce a non-empty bundle.
+//
+// We derive the list from src/generated/<name>/ — every directory
+// that was transpiled has at least a .core.wasm there. If the
+// source .component.wasm is missing for some name (extension not
+// built locally), we skip with a warning.
+import { readdirSync as _readdirSync } from 'node:fs'
+function discoverExtensions() {
+  const generatedDir = resolve(__dirname, '..', 'src', 'generated')
+  if (!existsSync(generatedDir)) return []
+  return _readdirSync(generatedDir, { withFileTypes: true })
+    .filter((e) => e.isDirectory())
+    .map((e) => e.name)
+}
 
 function resolveSource() {
   const primary = resolve(PRIMARY_TARGET, WASM_NAME)
@@ -95,6 +116,7 @@ function main() {
   const dst = resolve(PUBLIC_DIR, WASM_NAME)
   linkOne(src, dst)
 
+  const EXTENSION_BYTES_TO_LINK = discoverExtensions()
   for (const name of EXTENSION_BYTES_TO_LINK) {
     const extSrc = resolveExtensionSource(name)
     if (!extSrc) {

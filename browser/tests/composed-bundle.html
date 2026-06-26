@@ -14,6 +14,12 @@
       // bundle-cli is baked into the composed cli via include_bytes!
       // in cli/src/lib.rs, so no `embed` arg is needed — opening
       // the db is enough to have the .bundle dot-cmd loaded.
+      //
+      // v1.5 round 6: phase 1 loads 3 lightweight scalar extensions
+      // (aba/bic/crc) then `.bundle save myset --no-build` to produce
+      // a NON-EMPTY bundle with members=3. Phase 2 (after page
+      // reload) reads back via `.bundle list / show` to verify the
+      // bundle members survived OPFS persistence.
 
       import { openDatabaseComposed } from '../src/sqlink-composed.js'
 
@@ -23,37 +29,128 @@
         out.textContent += line + '\n'
       }
 
+      const params = new URLSearchParams(window.location.search)
+      const phase = params.get('phase')
+
+      // Lightweight scalar extensions for the non-empty bundle test.
+      // Symlinked into browser/public/ via scripts/link-composed-wasm.mjs.
+      // Each is loaded via db.loadExtension(name, bytes) (registers
+      // the bytes with the worker's ExtensionRegistry + issues `.load
+      // NAME` so the cli walks its manifest). The bundle save then
+      // calls loader-bridge.list-loaded-extensions which returns the
+      // 3 user-loaded names (the cli-family auto-loaded extensions
+      // — prefix-cli, bundle-cli — are excluded by name).
+      const BUNDLE_MEMBERS = ['aba', 'bic', 'crc']
+
+      async function fetchExtensionBytes(name) {
+        const url = `/${name}_extension.component.wasm`
+        const res = await fetch(url)
+        if (!res.ok) {
+          throw new Error(
+            `fetch ${url} failed: ${res.status} ${res.statusText}. ` +
+              `Symlink the .component.wasm via scripts/link-composed-wasm.mjs.`,
+          )
+        }
+        return new Uint8Array(await res.arrayBuffer())
+      }
+
+      async function loadBundleMembers(db) {
+        for (const name of BUNDLE_MEMBERS) {
+          const bytes = await fetchExtensionBytes(name)
+          await db.loadExtension(name, bytes)
+          log(`loaded extension: ${name} (${bytes.byteLength} bytes)`)
+        }
+      }
+
+      async function readOpfsHeader() {
+        try {
+          const root = await navigator.storage.getDirectory()
+          const dir = await root.getDirectoryHandle('sqlink', { create: false })
+          const fh = await dir.getFileHandle('cas.db', { create: false })
+          const f = await fh.getFile()
+          const buf = new Uint8Array(await f.slice(0, 16).arrayBuffer())
+          return {
+            header: new TextDecoder().decode(buf),
+            size: f.size,
+          }
+        } catch (e) {
+          return { header: `error reading OPFS file: ${e?.message ?? e}`, size: 0 }
+        }
+      }
+
       try {
         const db = await openDatabaseComposed({})
-        log('opened composed db; bundle-cli auto-loaded')
+        log(`opened composed db (phase=${phase ?? 'default'})`)
 
-        // .bundle save NAME --no-build: records the empty bundle
-        // (no user-loaded extensions at startup) under alias `myset`.
-        // --no-build skips the cargo-build leg.
-        const saveOut = await db.execDotCommand(
-          '.bundle save myset --no-build',
-        )
-        log('save: ' + JSON.stringify(saveOut))
+        if (phase === '1') {
+          // Phase 1: load 3 user extensions, save them as a non-empty
+          // bundle. Phase 2 (after page navigation) verifies the
+          // bundle survived OPFS.
+          await loadBundleMembers(db)
+          const saveOut = await db.execDotCommand(
+            '.bundle save myset --no-build',
+          )
+          log('save: ' + JSON.stringify(saveOut))
 
-        const listOut = await db.execDotCommand('.bundle list')
-        log('list: ' + JSON.stringify(listOut))
+          const opfs = await readOpfsHeader()
+          status.textContent = 'done (phase=1)'
+          window.__bundleResult = {
+            saveOut,
+            opfsHeader: opfs.header,
+            opfsSize: opfs.size,
+          }
+        } else if (phase === '2') {
+          // Phase 2: list + show the bundle that was saved in phase 1.
+          // Must NOT save again — if persistence works, the bundle
+          // appears in list/show output. If it doesn't, list returns
+          // empty (the test fails decisively).
+          const listOut = await db.execDotCommand('.bundle list')
+          log('list: ' + JSON.stringify(listOut))
 
-        const showOut = await db.execDotCommand('.bundle show myset')
-        log('show: ' + JSON.stringify(showOut))
+          const showOut = await db.execDotCommand('.bundle show myset')
+          log('show: ' + JSON.stringify(showOut))
 
-        const deleteOut = await db.execDotCommand('.bundle delete myset')
-        log('delete: ' + JSON.stringify(deleteOut))
+          const opfs = await readOpfsHeader()
+          log('opfs-header: ' + JSON.stringify(opfs.header))
+          log('opfs-size: ' + opfs.size)
 
-        const listAfterDelete = await db.execDotCommand('.bundle list')
-        log('list-after-delete: ' + JSON.stringify(listAfterDelete))
+          status.textContent = 'done (phase=2)'
+          window.__bundleResult = {
+            listOut,
+            showOut,
+            opfsHeader: opfs.header,
+            opfsSize: opfs.size,
+          }
+        } else {
+          // Default (no phase): single-page round-trip with 3 loaded
+          // extensions producing a non-empty bundle.
+          await loadBundleMembers(db)
 
-        status.textContent = 'done'
-        window.__bundleResult = {
-          saveOut,
-          listOut,
-          showOut,
-          deleteOut,
-          listAfterDelete,
+          const saveOut = await db.execDotCommand(
+            '.bundle save myset --no-build',
+          )
+          log('save: ' + JSON.stringify(saveOut))
+
+          const listOut = await db.execDotCommand('.bundle list')
+          log('list: ' + JSON.stringify(listOut))
+
+          const showOut = await db.execDotCommand('.bundle show myset')
+          log('show: ' + JSON.stringify(showOut))
+
+          const deleteOut = await db.execDotCommand('.bundle delete myset')
+          log('delete: ' + JSON.stringify(deleteOut))
+
+          const listAfterDelete = await db.execDotCommand('.bundle list')
+          log('list-after-delete: ' + JSON.stringify(listAfterDelete))
+
+          status.textContent = 'done'
+          window.__bundleResult = {
+            saveOut,
+            listOut,
+            showOut,
+            deleteOut,
+            listAfterDelete,
+          }
         }
       } catch (e) {
         status.textContent = 'error: ' + (e?.stack ?? String(e))
