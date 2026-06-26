@@ -103,8 +103,16 @@ sqlite-component-core = { path = "../sqlite-wasm/core" }
 # cross-compile.
 libsqlite3-sys = { version = "0.38", default-features = false }
 # SQLite-backed content-addressed cache for resolved extension
-# components. The host's `cache` module is a thin wrapper.
-sqlite-cas-cache = { path = "../sqlite-cas-cache" }
+# components. The host's `cache` module is a thin wrapper. The
+# `compose` feature lights up `SqliteCasStore: compose_core::blobs::
+# BlobBackend` (sha-256 addressing) so the store plugs into the shared
+# `CompileCache` exactly like the framework's `FsBlobStore`.
+sqlite-cas-cache = { path = "../sqlite-cas-cache", features = ["compose"] }
+# Single shared CAS trait + trust-gated `CompileCache` (HMAC seal/open
+# bound to the engine identity). The precompiled-component cache
+# authenticates its artifacts through this — the same trust model
+# ducklink uses for its `.cwasm` files. Wasmtime-free + sqlite-free.
+compose-core = { git = "https://github.com/tegmentum/webassembly-component-orchestration.git", branch = "main" }
 # Hash primitive  shared with sqlite-cas-cache so hex decoders
 # in this crate don't need to round-trip through the store.
 blake3 = "1.5"

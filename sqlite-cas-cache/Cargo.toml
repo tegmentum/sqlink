@@ -29,8 +29,19 @@ default = ["https"]
 # `s3`/`oci`/`ipfs` feature, or supply a custom resolver
 # through the registry.
 https = ["dep:reqwest"]
+# Single-CAS consolidation (Stage C): impl the shared
+# `compose_core::blobs::BlobBackend` trait for `SqliteCasStore`,
+# addressing blobs by their sha-256 mirror column. Off by default
+# so the browser/wasm32 build (which embeds this crate against
+# OPFS-backed SQLite) doesn't pull compose-core's dependency tree;
+# the native sqlink-host enables it.
+compose = ["dep:compose-core"]
 
 [dependencies]
+# Single shared CAS trait (`BlobBackend`) + trust-gated
+# `CompileCache`. Wasmtime-free + sqlite-free: just the trait and
+# the HMAC seal/open logic. Optional (see the `compose` feature).
+compose-core = { git = "https://github.com/tegmentum/webassembly-component-orchestration.git", branch = "main", optional = true }
 # In-tree SQLite wrapper  works for both native and wasm32
 # builds (the latter for the eventual browser-side CAS in
 # PLAN-browser-runtime.md, where the same SqliteCasStore code

@@ -6067,6 +6067,23 @@ fn component_cache_max_bytes() -> u64 {
         .unwrap_or(DEFAULT_CAP)
 }
 
+/// Recognize a pinned content-address `.load` URI. Stage-C single-CAS
+/// addressing is `sha256:` / `digest:`; `blake3:` is kept as a
+/// back-compat ALIAS. Returns `(scheme, hex)` for any of the three, so
+/// callers route them identically through `Cache::lookup_by_hash`
+/// (which probes the blake3 PK and then the sha-256 mirror column).
+fn pinned_hash_scheme(uri: &str) -> Option<(&'static str, &str)> {
+    for scheme in ["sha256", "digest", "blake3"] {
+        if let Some(hex) = uri
+            .strip_prefix(scheme)
+            .and_then(|rest| rest.strip_prefix(':'))
+        {
+            return Some((scheme, hex));
+        }
+    }
+    None
+}
+
 /// Default tenant id. Single-tenant deployments (the common case)
 /// never mention a tenant explicitly; all registration + resolution
 /// goes through this constant. Multi-tenant deployments call the
@@ -6737,14 +6754,20 @@ impl Host {
                 let p = rest.trim_start_matches("//");
                 std::fs::read(p).map_err(|e| anyhow!("read {p}: {e}"))
             }
-            "blake3" => {
+            // Pinned content-address load. `sha256:` / `digest:` are
+            // the Stage-C single-CAS addressing scheme; `blake3:` is
+            // kept as a back-compat ALIAS. All three resolve through the
+            // same `lookup_by_hash`, which probes the blake3 PK then the
+            // sha-256 mirror, so either 64-hex digest hits regardless of
+            // which prefix named it.
+            "blake3" | "sha256" | "digest" => {
                 let g = self.cache.read();
-                let cache = g
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("blake3: scheme requires --cache-dir or default"))?;
+                let cache = g.as_ref().ok_or_else(|| {
+                    anyhow!("{scheme}: scheme requires --cache-dir or default")
+                })?;
                 cache
                     .lookup_by_hash(rest)
-                    .ok_or_else(|| anyhow!("blake3:{rest} not in cache"))
+                    .ok_or_else(|| anyhow!("{scheme}:{rest} not in cache"))
             }
             other => {
                 let resolver = {
@@ -6789,8 +6812,8 @@ impl Host {
         // place. PLAN-latent-cleanup.md L3b: this used to be inlined
         // here; extracted so describe_extension_from_uri can share it.
         let bytes = self.resolve_uri_to_bytes(uri).await?;
-        let hint = if let Some(hex) = uri.strip_prefix("blake3:") {
-            format!("blake3:{}", &hex[..hex.len().min(8)])
+        let hint = if let Some((scheme, hex)) = pinned_hash_scheme(uri) {
+            format!("{scheme}:{}", &hex[..hex.len().min(8)])
         } else {
             uri.to_string()
         };
@@ -6814,15 +6837,18 @@ impl Host {
     /// it doesn't need the cache machinery (a `std::fs::read` is
     /// already the fastest thing we can do).
     pub async fn resolve_uri_to_bytes(&self, uri: &str) -> Result<Vec<u8>> {
-        if let Some(hex) = uri.strip_prefix("blake3:") {
+        // Pinned content-address load: `sha256:` / `digest:` (Stage-C
+        // single-CAS addressing) and the `blake3:` back-compat alias all
+        // route through `lookup_by_hash` (blake3 PK then sha-256 mirror).
+        if let Some((scheme, hex)) = pinned_hash_scheme(uri) {
             let bytes = {
                 let g = self.cache.read();
-                let cache = g
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("blake3: scheme requires --cache-dir or default"))?;
+                let cache = g.as_ref().ok_or_else(|| {
+                    anyhow!("{scheme}: scheme requires --cache-dir or default")
+                })?;
                 cache
                     .lookup_by_hash(hex)
-                    .ok_or_else(|| anyhow!("blake3:{hex} not in cache"))?
+                    .ok_or_else(|| anyhow!("{scheme}:{hex} not in cache"))?
             };
             return Ok(bytes);
         }
@@ -12285,8 +12311,8 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
                 })
             }
         };
-        let hint = if let Some(hex) = uri.strip_prefix("blake3:") {
-            format!("blake3:{}", &hex[..hex.len().min(8)])
+        let hint = if let Some((scheme, hex)) = pinned_hash_scheme(&uri) {
+            format!("{scheme}:{}", &hex[..hex.len().min(8)])
         } else {
             uri.clone()
         };

@@ -316,6 +316,15 @@ impl SqliteCasStore {
     /// Store `bytes` and return its blake3 hash. Idempotent on
     /// hash collision (existing row's `last_used_at` updates).
     pub fn put(&mut self, bytes: &[u8]) -> Result<Hash> {
+        self.put_ref(bytes)
+    }
+
+    /// `&self` core of [`put`]. All work runs through `with_stmt`
+    /// (interior mutability), so storing a blob needs only a shared
+    /// borrow — the `compose_core::blobs::BlobBackend` impl (which
+    /// takes `&self`) delegates here, and `put` keeps its historical
+    /// `&mut self` signature for source compatibility.
+    pub fn put_ref(&self, bytes: &[u8]) -> Result<Hash> {
         const SQL: &str = "INSERT INTO __cas_artifact \
                 (hash, sha256, bytes, bytes_len, created_at, last_used_at, use_count) \
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, 0) \
@@ -359,6 +368,13 @@ impl SqliteCasStore {
     /// sha-256 still hit. Updates last_used_at + use_count
     /// when found, like `get`.
     pub fn get_by_sha256(&mut self, sha256: &[u8; 32]) -> Result<Option<Vec<u8>>> {
+        self.get_by_sha256_ref(sha256)
+    }
+
+    /// `&self` core of [`get_by_sha256`]. Used by the
+    /// `BlobBackend::get` impl, which addresses blobs by their
+    /// sha-256 digest.
+    pub fn get_by_sha256_ref(&self, sha256: &[u8; 32]) -> Result<Option<Vec<u8>>> {
         const SEL_SQL: &str = "SELECT bytes, hash FROM __cas_artifact WHERE sha256 = ?1";
         const UPD_SQL: &str =
             "UPDATE __cas_artifact SET last_used_at = ?2, use_count = use_count + 1 \
@@ -982,4 +998,166 @@ fn sha256_of(bytes: &[u8]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
     hasher.finalize().into()
+}
+
+// === Single-CAS consolidation (Stage C) ============================
+//
+// `SqliteCasStore` implements the framework's one storage trait,
+// `compose_core::blobs::BlobBackend`, so the same `CompileCache<B>`
+// (and any other CAS consumer) works over the SQLite store exactly as
+// it does over the file-system `FsBlobStore`.
+//
+// Addressing is **sha-256**: the trait's `Digest` is the sha-256 the
+// rest of the framework speaks (`compose_core::blobs::compute_digest`).
+// The store already mirrors every blob under its sha-256 (the `sha256`
+// column, uniquely indexed since schema v2), so this is a pure
+// addressing switch — no data migration. The blake3 column stays the
+// physical primary key (it is the FK target of `__cas_uri`); it remains
+// reachable through the `blake3:` `.load` alias and the existing
+// blake3 API. New `sha256:` / `digest:` `.load` schemes address the
+// same rows by their sha-256 mirror.
+#[cfg(feature = "compose")]
+mod blob_backend {
+    use super::{sha256_of, SqliteCasStore};
+    use compose_core::blobs::BlobBackend;
+    use compose_core::types::{Digest, Error, ErrorCode};
+    use sqlite_component_core::db::{StepResult, Value};
+
+    fn io_err(msg: impl Into<String>) -> Error {
+        Error::new(ErrorCode::BlobIoError, msg)
+    }
+
+    /// A trait `Digest` (sha-256) must be exactly 32 bytes.
+    fn as_sha256(digest: &Digest) -> Result<[u8; 32], Error> {
+        digest.as_slice().try_into().map_err(|_| {
+            Error::new(
+                ErrorCode::InvalidInput,
+                format!("sha-256 digest must be 32 bytes, got {}", digest.len()),
+            )
+        })
+    }
+
+    impl BlobBackend for SqliteCasStore {
+        /// Store `bytes`, returning their **sha-256** digest. The row
+        /// carries both digests (blake3 PK + sha-256 mirror); we hand
+        /// back the sha-256 so the blob is addressable by the framework
+        /// digest. Idempotent.
+        fn put(&self, bytes: &[u8]) -> Result<Digest, Error> {
+            self.put_ref(bytes)
+                .map_err(|e| io_err(format!("cas put: {e}")))?;
+            Ok(sha256_of(bytes).to_vec())
+        }
+
+        /// Retrieve a blob by its sha-256 digest, verifying the stored
+        /// bytes re-hash to `digest` (corruption -> `BlobDigestMismatch`,
+        /// absent -> `BlobNotFound`).
+        fn get(&self, digest: &Digest) -> Result<Vec<u8>, Error> {
+            let sha = as_sha256(digest)?;
+            let bytes = self
+                .get_by_sha256_ref(&sha)
+                .map_err(|e| io_err(format!("cas get: {e}")))?
+                .ok_or_else(|| {
+                    Error::new(
+                        ErrorCode::BlobNotFound,
+                        format!("blob {} not found", hex_lower(&sha)),
+                    )
+                })?;
+            if sha256_of(&bytes) != sha {
+                return Err(Error::new(
+                    ErrorCode::BlobDigestMismatch,
+                    format!("digest mismatch for {}", hex_lower(&sha)),
+                ));
+            }
+            Ok(bytes)
+        }
+
+        fn has(&self, digest: &Digest) -> bool {
+            let Ok(sha) = as_sha256(digest) else {
+                return false;
+            };
+            self.with_stmt(
+                "SELECT 1 FROM __cas_artifact WHERE sha256 = ?1",
+                |stmt| {
+                    stmt.bind_blob_ref(1, &sha)
+                        .map_err(|e| io_err(e.message))?;
+                    Ok(matches!(
+                        stmt.step().map_err(|e| io_err(e.message))?,
+                        StepResult::Row
+                    ))
+                },
+            )
+            .unwrap_or(false)
+        }
+
+        fn size(&self, digest: &Digest) -> Option<u64> {
+            let sha = as_sha256(digest).ok()?;
+            self.with_stmt(
+                "SELECT bytes_len FROM __cas_artifact WHERE sha256 = ?1",
+                |stmt| {
+                    stmt.bind_blob_ref(1, &sha)
+                        .map_err(|e| io_err(e.message))?;
+                    match stmt.step().map_err(|e| io_err(e.message))? {
+                        StepResult::Row => match stmt.column_value(0) {
+                            Value::Integer(n) => Ok(Some(n as u64)),
+                            _ => Ok(None),
+                        },
+                        StepResult::Done => Ok(None),
+                    }
+                },
+            )
+            .ok()
+            .flatten()
+        }
+
+        /// Delete the artifact addressed by `digest`. Fails with
+        /// `BlobIoError` if a `__cas_uri` binding still references the
+        /// row (FK `ON DELETE RESTRICT`), `BlobNotFound` if absent.
+        fn delete(&self, digest: &Digest) -> Result<(), Error> {
+            let sha = as_sha256(digest)?;
+            self.with_stmt(
+                "DELETE FROM __cas_artifact WHERE sha256 = ?1",
+                |stmt| {
+                    stmt.bind_blob_ref(1, &sha)
+                        .map_err(|e| io_err(e.message))?;
+                    stmt.step().map_err(|e| io_err(e.message))?;
+                    Ok(())
+                },
+            )
+            .map_err(|e| io_err(format!("cas delete: {e}")))?;
+            if self.conn.changes() == 0 {
+                return Err(Error::new(
+                    ErrorCode::BlobNotFound,
+                    format!("blob {} not found", hex_lower(&sha)),
+                ));
+            }
+            Ok(())
+        }
+
+        /// Every stored blob's sha-256 digest (rows whose mirror is
+        /// populated — all rows written since schema v2).
+        fn list_all(&self) -> Vec<Digest> {
+            let mut out = Vec::new();
+            let mut stmt = match self
+                .conn
+                .prepare("SELECT sha256 FROM __cas_artifact WHERE sha256 IS NOT NULL")
+            {
+                Ok(s) => s,
+                Err(_) => return out,
+            };
+            while let Ok(StepResult::Row) = stmt.step() {
+                if let Value::Blob(b) = stmt.column_value(0) {
+                    out.push(b);
+                }
+            }
+            out
+        }
+    }
+
+    fn hex_lower(bytes: &[u8]) -> String {
+        let mut s = String::with_capacity(bytes.len() * 2);
+        for b in bytes {
+            s.push_str(&format!("{b:02x}"));
+        }
+        s
+    }
 }

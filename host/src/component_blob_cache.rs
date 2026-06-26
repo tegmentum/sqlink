@@ -14,13 +14,28 @@
 //!
 //! Trust model: precompiled wasm is RUNNABLE machine code. An
 //! attacker with db write access could swap blobs and own the
-//! host on the next `.load`. To prevent that we HMAC every
+//! host on the next `.load`. To prevent that we authenticate every
 //! cached blob with a host-local secret held at
 //! `~/.sqlink/cache-hmac.key` (mode 0600 on unix). Cache
-//! hits verify the HMAC before deserializing; mismatches are
+//! hits verify the MAC before deserializing; mismatches are
 //! treated as a hard miss.
+//!
+//! Single-CAS consolidation (Stage C): the bespoke keyed-blake3 MAC
+//! that used to live here was the REFERENCE for `compose_core`'s
+//! [`CompileCache`]; this module now delegates the framing to it.
+//! Every stored blob is the `CompileCache` frame
+//! (`hmac_tag(32) || precompiled`), HMAC-SHA256 over the host secret
+//! and bound to the `(component_digest, engine_version, target)`
+//! triple — the same trust model ducklink uses for its `.cwasm`
+//! files, and the same one sqlink's CAS now speaks. We keep the
+//! indexed `_component_cache` table as the storage (lookup stays O(1)
+//! on the triple) and use `CompileCache::seal`/`open` purely for the
+//! trust frame, so the precompiled-blob cache never pays the CAS's
+//! content-scan cost on the load hot path.
 
 use anyhow::{anyhow, Result};
+use compose_core::CompileCache;
+use sqlite_cas_cache::SqliteCasStore;
 use sqlite_component_core::db::{Connection, OpenFlags, StepResult, Value};
 use std::path::PathBuf;
 
@@ -73,13 +88,21 @@ fn wasmtime_version() -> &'static str {
     include_str!(concat!(env!("OUT_DIR"), "/wasmtime_version.txt"))
 }
 
-/// Look up + HMAC-verify a row. Returns None on miss, garbage
-/// row, or HMAC failure. Updates `last_used_at` on hit.
+/// Look up + authenticate a row. Returns None on miss, garbage
+/// row, or HMAC failure (a tampered or foreign-engine frame fails
+/// `CompileCache::open` and is treated as a hard miss rather than
+/// deserialized). Updates `last_used_at` on hit.
+///
+/// The stored `precompiled` column holds the `CompileCache` frame
+/// (`hmac_tag(32) || artifact`); rows written by the pre-Stage-C
+/// keyed-blake3 MAC fail `open` and are silently re-cached on the
+/// next store. The legacy `hmac` column is no longer consulted (the
+/// frame is self-authenticating).
 pub fn lookup(conn: &Connection, digest_hex: &str, hmac_key: &[u8]) -> Result<Option<Vec<u8>>> {
     let (engine_version, target_triple) = engine_identity();
     let mut stmt = conn
         .prepare(
-            "SELECT precompiled, hmac FROM _component_cache \
+            "SELECT precompiled FROM _component_cache \
              WHERE digest_hex = ?1 AND engine_version = ?2 AND target_triple = ?3",
         )
         .map_err(|e| anyhow!("prep lookup: {}", e.message))?;
@@ -87,32 +110,33 @@ pub fn lookup(conn: &Connection, digest_hex: &str, hmac_key: &[u8]) -> Result<Op
         .and_then(|_| stmt.bind(2, &Value::Text(engine_version.clone())))
         .and_then(|_| stmt.bind(3, &Value::Text(target_triple.clone())))
         .map_err(|e| anyhow!("bind lookup: {}", e.message))?;
-    let (blob, mac) = match stmt
+    let framed = match stmt
         .step()
         .map_err(|e| anyhow!("step lookup: {}", e.message))?
     {
-        StepResult::Row => {
-            let b = match stmt.column_value(0) {
-                Value::Blob(b) => b,
-                _ => return Ok(None),
-            };
-            let h = match stmt.column_value(1) {
-                Value::Blob(b) => b,
-                _ => return Ok(None),
-            };
-            (b, h)
-        }
+        StepResult::Row => match stmt.column_value(0) {
+            Value::Blob(b) => b,
+            _ => return Ok(None),
+        },
         StepResult::Done => return Ok(None),
     };
     drop(stmt);
-    let expected = hmac_blob(hmac_key, digest_hex, &blob);
-    if expected != mac {
-        tracing::warn!(
-            digest = %&digest_hex[..16],
-            "component_cache: HMAC mismatch; ignoring row"
-        );
-        return Ok(None);
-    }
+    let blob = match open_artifact(
+        digest_hex,
+        &engine_version,
+        &target_triple,
+        &framed,
+        hmac_key,
+    ) {
+        Some(bytes) => bytes,
+        None => {
+            tracing::warn!(
+                digest = %&digest_hex[..digest_hex.len().min(16)],
+                "component_cache: HMAC mismatch; ignoring row"
+            );
+            return Ok(None);
+        }
+    };
     // Touch last_used_at. Failure is non-fatal.
     let mut upd = conn
         .prepare(
@@ -235,7 +259,11 @@ pub fn evict_to(conn: &Connection, target_bytes: u64) -> Result<u64> {
 }
 
 /// Insert (or refresh) a row. Idempotent on
-/// `(digest, engine_version, target)`.
+/// `(digest, engine_version, target)`. The `precompiled` column
+/// stores the `CompileCache` frame (`hmac_tag(32) || artifact`); the
+/// legacy `hmac` column is left empty (the frame is
+/// self-authenticating). A non-decodable digest is a no-op — the
+/// cache is a perf optimization, never a correctness layer.
 pub fn store(
     conn: &Connection,
     digest_hex: &str,
@@ -243,7 +271,15 @@ pub fn store(
     hmac_key: &[u8],
 ) -> Result<()> {
     let (engine_version, target_triple) = engine_identity();
-    let hmac = hmac_blob(hmac_key, digest_hex, precompiled);
+    let Some(framed) = seal_artifact(
+        digest_hex,
+        &engine_version,
+        &target_triple,
+        precompiled,
+        hmac_key,
+    ) else {
+        return Ok(());
+    };
     let now = unix_now();
     let mut stmt = conn
         .prepare(
@@ -256,8 +292,8 @@ pub fn store(
     stmt.bind(1, &Value::Text(digest_hex.into()))
         .and_then(|_| stmt.bind(2, &Value::Text(engine_version)))
         .and_then(|_| stmt.bind(3, &Value::Text(target_triple)))
-        .and_then(|_| stmt.bind(4, &Value::Blob(precompiled.to_vec())))
-        .and_then(|_| stmt.bind(5, &Value::Blob(hmac)))
+        .and_then(|_| stmt.bind(4, &Value::Blob(framed)))
+        .and_then(|_| stmt.bind(5, &Value::Blob(Vec::new())))
         .and_then(|_| stmt.bind(6, &Value::Integer(now)))
         .and_then(|_| stmt.bind(7, &Value::Integer(now)))
         .map_err(|e| anyhow!("bind store: {}", e.message))?;
@@ -268,18 +304,49 @@ pub fn store(
     Ok(())
 }
 
-/// Keyed blake3 over digest||0||blob. Acts as the MAC; an
-/// attacker who can write the db can't forge a valid one
-/// without the host-local secret.
-fn hmac_blob(key: &[u8], digest_hex: &str, blob: &[u8]) -> Vec<u8> {
-    let mut k = [0u8; 32];
-    let take = key.len().min(32);
-    k[..take].copy_from_slice(&key[..take]);
-    let mut h = blake3::Hasher::new_keyed(&k);
-    h.update(digest_hex.as_bytes());
-    h.update(b"\0");
-    h.update(blob);
-    h.finalize().as_bytes().to_vec()
+/// Build a `CompileCache` over the shared `BlobBackend`. The backend
+/// is vestigial here: `seal`/`open` only exercise the HMAC primitives
+/// and the `(digest, engine, target)` key derivation, never the blob
+/// store. We satisfy the type with an in-memory `SqliteCasStore` (the
+/// SQLite-backed `BlobBackend`) so the framing is genuinely
+/// `CompileCache<SqliteCasStore>`; the durable storage is the indexed
+/// `_component_cache` table. Built per call — cheap relative to the
+/// (multi-second) component compile it gates, and called once per
+/// extension load, not per row.
+fn compile_cache(hmac_key: &[u8]) -> Option<CompileCache<SqliteCasStore>> {
+    let backend = SqliteCasStore::open_external(":memory:").ok()?;
+    Some(CompileCache::new(backend, hmac_key.to_vec()))
+}
+
+/// Seal `precompiled` into a `CompileCache` frame bound to the
+/// `(digest, engine, target)` triple. `None` when `digest_hex` isn't
+/// valid hex or the backend can't be built (degrade to no-cache).
+fn seal_artifact(
+    digest_hex: &str,
+    engine_version: &str,
+    target: &str,
+    precompiled: &[u8],
+    hmac_key: &[u8],
+) -> Option<Vec<u8>> {
+    let digest = hex::decode(digest_hex).ok()?;
+    let cc = compile_cache(hmac_key)?;
+    Some(cc.seal(&digest, engine_version, target, precompiled))
+}
+
+/// Verify a `CompileCache` frame and return the authenticated
+/// precompiled bytes. `None` on a failed HMAC check (tamper /
+/// foreign engine / legacy pre-Stage-C frame) — never returns
+/// unauthenticated bytes.
+fn open_artifact(
+    digest_hex: &str,
+    engine_version: &str,
+    target: &str,
+    framed: &[u8],
+    hmac_key: &[u8],
+) -> Option<Vec<u8>> {
+    let digest = hex::decode(digest_hex).ok()?;
+    let cc = compile_cache(hmac_key)?;
+    cc.open(&digest, engine_version, target, framed)
 }
 
 fn unix_now() -> i64 {
@@ -369,4 +436,59 @@ fn write_mode_0600(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> 
 #[cfg(not(unix))]
 fn write_mode_0600(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::write(path, bytes)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn digest_for(b: &[u8]) -> String {
+        blake3::hash(b).to_hex().to_string()
+    }
+
+    /// store -> lookup round-trips through the shared
+    /// `CompileCache` seal/open framing (now the C2 trust gate).
+    #[test]
+    fn store_then_lookup_roundtrips() {
+        let conn = open_user_conn(":memory:").unwrap();
+        let key = b"a-host-local-secret-key-32-bytes".to_vec();
+        let digest = digest_for(b"my-component");
+        let precompiled = b"precompiled machine code bytes";
+
+        assert!(lookup(&conn, &digest, &key).unwrap().is_none());
+        store(&conn, &digest, precompiled, &key).unwrap();
+        assert_eq!(
+            lookup(&conn, &digest, &key).unwrap().as_deref(),
+            Some(&precompiled[..])
+        );
+    }
+
+    /// A different host secret turns the lookup into a miss — the
+    /// HMAC gate never hands back unauthenticated machine code.
+    #[test]
+    fn wrong_key_is_a_miss_not_a_leak() {
+        let conn = open_user_conn(":memory:").unwrap();
+        let writer = b"secret-A-secret-A-secret-A-32byt".to_vec();
+        let reader = b"secret-B-secret-B-secret-B-32byt".to_vec();
+        let digest = digest_for(b"comp");
+        store(&conn, &digest, b"trusted-code", &writer).unwrap();
+        assert!(lookup(&conn, &digest, &reader).unwrap().is_none());
+    }
+
+    /// A tampered stored frame fails to open and is treated as a
+    /// miss rather than deserialized.
+    #[test]
+    fn tampered_frame_is_a_miss() {
+        let conn = open_user_conn(":memory:").unwrap();
+        let key = b"tamper-test-secret-key-is-32-byt".to_vec();
+        let digest = digest_for(b"comp");
+        store(&conn, &digest, b"precompiled", &key).unwrap();
+        // Flip a byte in the stored frame.
+        conn.execute_batch(
+            "UPDATE _component_cache \
+             SET precompiled = X'00' || substr(precompiled, 2)",
+        )
+        .unwrap();
+        assert!(lookup(&conn, &digest, &key).unwrap().is_none());
+    }
 }
