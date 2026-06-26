@@ -16,7 +16,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ciborium::value::Value as CborValue;
-use datalink_dynlink::{err as dl_err, AsyncProviderBackend, Error as DlError, ErrorCode as DlCode};
+use datalink_dynlink::{
+    async_err as dl_err, AsyncError as DlError, AsyncErrorCode as DlCode, AsyncProviderBackend,
+};
 use parking_lot::{Mutex, RwLock};
 use sqlite_component_core::db;
 use wasmtime::component::{Component, Linker};

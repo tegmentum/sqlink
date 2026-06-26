@@ -5396,7 +5396,7 @@ impl<'a> RunHostWrap<'a> {
 }
 
 datalink_dynlink::impl_datalink_dynlink_async_host!(
-    <'a> RunHostWrap<'a>,
+    'a; RunHostWrap<'a>,
     compose_provider::RunBackend,
     split
 );
