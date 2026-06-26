@@ -14,54 +14,13 @@ concurrency:
 
 jobs:
   fuzz:
-    name: ${{ matrix.target }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        target:
-          - policy_check_manifest
-          - cas_put_bytes_roundtrip
-          - bundle_save_set_hash
-          - parse_duration
-          - parse_load_args
-          # Round-2 targets (PLAN-followups P3):
-          - spawn_build_path_validation
-          - bundle_cli_argv
-          - sqlink_cli_argv
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: install nightly toolchain (for cargo-fuzz)
-        uses: dtolnay/rust-toolchain@nightly
-
-      - name: install cargo-fuzz
-        run: cargo install --locked cargo-fuzz
-
-      - name: cache fuzz target dir
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: fuzz
-          shared-key: fuzz-smoke-v1
-
-      - name: restore corpus
-        uses: actions/cache@v4
-        with:
-          path: fuzz/corpus/${{ matrix.target }}
-          key: corpus-${{ matrix.target }}-${{ github.run_id }}
-          restore-keys: |
-            corpus-${{ matrix.target }}-
-
-      - name: run ${{ matrix.target }} for 5 minutes
-        working-directory: fuzz
-        run: cargo +nightly fuzz run ${{ matrix.target }} -- -max_total_time=300
-
-      - name: upload artifacts on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: fuzz-artifacts-${{ matrix.target }}
-          path: fuzz/artifacts/${{ matrix.target }}/
-          if-no-files-found: ignore
+    # Shared time-bounded cargo-fuzz smoke matrix (Tier 4 reusable workflow).
+    uses: tegmentum/datalink/.github/workflows/fuzz.yml@main
+    with:
+      targets: >-
+        ["policy_check_manifest", "cas_put_bytes_roundtrip", "bundle_save_set_hash",
+         "parse_duration", "parse_load_args", "spawn_build_path_validation",
+         "bundle_cli_argv", "sqlink_cli_argv"]
+      fuzz_dir: fuzz
+      max_total_time: '300'
+      cache_key: fuzz-smoke-v1
