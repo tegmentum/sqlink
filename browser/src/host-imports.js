@@ -88,6 +88,7 @@ class DiscardOutputStream {
 }
 
 import { buildExtensionLoader, buildSpiLoader, buildDispatch } from './extension-loader.js'
+import { createOpfsHost } from './opfs-host.js'
 
 /**
  * Build a wired-up Polyfill (no pre-resolved imports map) plus the
@@ -202,6 +203,12 @@ export function buildCliPolyfill(opts) {
   // before running the cli — see sqlink-composed.js.
   const spiLoader = buildSpiLoader(opts.registry)
 
+  // v1.5 round 4: dedicated opfs-host for the lifetime of this
+  // session. Caller (sqlink-composed.js) reaches into the returned
+  // handle to preload before instantiate + flushAll between
+  // execDotCommand calls.
+  const opfsHost = opts.opfsHost ?? createOpfsHost()
+
   const additionalImports = {
     'sqlink:wasm/extension-loader': buildExtensionLoader(opts.registry),
     'sqlite:extension/spi-loader': spiLoader.impl,
@@ -211,6 +218,13 @@ export function buildCliPolyfill(opts) {
     // looks up the registered (ext-name, func-id) in the registry
     // and invokes the transpiled extension's scalar-function.call.
     'sqlink:wasm/dispatch': buildDispatch(opts.registry),
+    // v1.5 round 4: OPFS-backed cas db. sqlite-lib's `shared_cas_conn`
+    // opens via the `"opfs"` VFS; the VFS's xRead/xWrite/xSync/...
+    // trampolines call out to this interface SYNCHRONOUSLY. Bytes
+    // live in a JS-side Uint8Array cache; OPFS round-trips happen
+    // at preload (before wasm runs) + flushAll (after exec / before
+    // unload). See opfs-host.js for the architecture rationale.
+    'sqlink:wasm/opfs-host': opfsHost.interface(),
   }
   for (const k of [
     'sqlite:extension/http',
@@ -221,7 +235,7 @@ export function buildCliPolyfill(opts) {
     additionalImports[k] = stubInterface(k)
   }
 
-  return { polyfill, additionalImports, spiLoader, persistentQueue }
+  return { polyfill, additionalImports, spiLoader, persistentQueue, opfsHost }
 }
 
 /**

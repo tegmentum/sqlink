@@ -69,6 +69,15 @@ const ASYNC_IMPORTS = [
   // also route through the runtime-bindgen factory.
   'sqlink:wasm/extension-loader@0.1.0#load-extension-from-bytes',
   'sqlink:wasm/extension-loader@0.1.0#load-extension',
+  // v1.5 round 4: opfs-host imports stay SYNC. The host caches the
+  // cas db bytes in a JS-side Uint8Array (see opfs-host.js); reads
+  // / writes hit the cache without touching OPFS. OPFS round-trips
+  // happen at preload (before instantiate) and flushAll (after each
+  // execDotCommand) — both outside the wasm call. Listing the
+  // opfs-host methods here would wrap them with Suspending, which
+  // is unnecessary and would crash on the polyfill's sync call
+  // chain (cli -> dispatch-dot-command JS -> bundle-cli wasm ->
+  // bundles polyfill JS -> bridgedExecuteCas -> opfs VFS).
 ]
 const ASYNC_EXPORTS = ['wasi:cli/run@0.2.6#run']
 
@@ -230,7 +239,7 @@ class ComposedDatabase {
     this._registry.instantiateFromBytes = (bytes) =>
       instantiateExtensionFromBytes(bytes, { handlers: cliHostHandlers })
 
-    const { polyfill, additionalImports, spiLoader, persistentQueue } =
+    const { polyfill, additionalImports, spiLoader, persistentQueue, opfsHost } =
       buildCliPolyfill({
         registry: this._registry,
         persistentStdin: true,
@@ -240,6 +249,16 @@ class ComposedDatabase {
     this._polyfill = polyfill
     this._spiLoader = spiLoader
     this._stdinQueue = persistentQueue
+    this._opfsHost = opfsHost
+
+    // v1.5 round 4: pre-load the cas db bytes from OPFS BEFORE the
+    // wasm runtime instantiates. The opfs-host's VFS impl is sync
+    // (see opfs-host.js for the architecture rationale); first
+    // `shared_cas_conn()` inside wasm hits the cache without an
+    // OPFS round-trip. Subsequent flushAll() runs persist any
+    // writes back. Path matches what sqlite-lib opens with
+    // `vfs=opfs`: "/sqlink/cas.db".
+    await opfsHost.preload(['/sqlink/cas.db'])
 
     const bindgen = createRuntimeBindgen({
       polyfill,
@@ -496,6 +515,18 @@ class ComposedDatabase {
       const sentinelLineStart = window.indexOf(`SELECT '${sentinelValue}'`)
       const trimmedWindow =
         sentinelLineStart >= 0 ? window.slice(0, sentinelLineStart) : window
+      // v1.5 round 4: persist any cas db writes the dot-command
+      // produced (e.g. `.bundle save`) BEFORE returning. The opfs
+      // VFS is sync-cache-backed so writes only hit OPFS when the
+      // host explicitly flushes. Doing it inside the lock means
+      // concurrent execDotCommand calls don't race the flush.
+      try {
+        await this._opfsHost.flushAll()
+      } catch (e) {
+        // Flushing is best-effort; the failure path is logged inside
+        // opfs-host.js. Don't bubble — the dot-cmd succeeded.
+        console.warn('[sqlink-composed] flushAll failed:', e?.message ?? e)
+      }
       return trimmedWindow
     } finally {
       release()
@@ -591,6 +622,16 @@ class ComposedDatabase {
   async close() {
     if (this._closed) return
     this._closed = true
+    // v1.5 round 4: flush the OPFS cas db cache so any uncommitted
+    // writes survive page unload. Best-effort — log on failure but
+    // proceed with close.
+    if (this._opfsHost) {
+      try {
+        await this._opfsHost.flushAll()
+      } catch (e) {
+        console.warn('[sqlink-composed] close-time flushAll failed:', e?.message ?? e)
+      }
+    }
     // Tell the cli to exit cleanly. `.quit` is the dot-cmd it
     // recognises; closing the queue separately is the EOF fallback
     // for any cli that doesn't see `.quit` for whatever reason.

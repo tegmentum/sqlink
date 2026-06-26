@@ -1762,18 +1762,19 @@ export function buildCliHostHandlers(opts) {
   // constants. They are intentionally byte-aligned with the Rust
   // source so a generator can sync them in a later round.
   //
-  // Schema bootstrap runs lazily on first call: the cas connection
-  // is process-lifetime `:memory:` in this round (the OPFS-backed
-  // VFS is deferred to v1.6) so bootstrap re-runs on every page
-  // load, which is fine because BOOTSTRAP/INSTALL are idempotent
-  // (CREATE TABLE IF NOT EXISTS throughout).
+  // Schema bootstrap runs lazily on first call. The cas connection
+  // is OPFS-backed as of v1.5 round 4 — file lives at
+  // /sqlink/cas.db in navigator.storage's origin private root and
+  // survives page reloads. The BOOTSTRAP/INSTALL statements stay
+  // idempotent (CREATE TABLE IF NOT EXISTS throughout) so re-running
+  // on an existing file is a no-op apart from the schema-version
+  // stamp.
   //
   // Schema version tracking: every bootstrap stamps SCHEMA_VERSION
   // = '4' into __cas_meta. Migrations from older schema versions
-  // are NOT mirrored in this polyfill — fresh in-memory cas dbs
-  // start at v4 and the OPFS-backed VFS round will need to
-  // re-evaluate when (if) an older schema gets persisted across
-  // reload.
+  // are NOT mirrored in this polyfill — a fresh OPFS cas db starts
+  // at v4, and an upgrade-from-v3 path would be a polyfill-side
+  // migration the next schema bump introduces.
   const CAS_SCHEMA_VERSION = '4'
   const CAS_BOOTSTRAP_SQL =
     'CREATE TABLE IF NOT EXISTS __cas_meta (' +

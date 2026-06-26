@@ -78,28 +78,45 @@ test('composed cli: .bundle save/list/show/delete round-trip', async ({
   expect(result.listAfterDelete).not.toMatch(/myset/)
 })
 
-// Reload persistence assertion. Stays SKIPPED until the
-// OPFS-backed cas VFS lands  in-memory cas-cache cannot survive
-// a navigation. Shape is the prompt's reference; the round that
-// delivers the VFS un-skips this.
-test.skip('composed cli: .bundle persists across page reload', async ({
+// Reload persistence assertion. v1.5 round 4: un-skipped because
+// the cas db now lives in OPFS (sqlite-lib opens `shared_cas_conn`
+// through the `"opfs"` VFS on wasm32, which calls into the JS
+// host's `sqlink:wasm/opfs-host` impl backed by
+// navigator.storage.getDirectory()). The cas db file is a real
+// SQLite db on disk in OPFS — survives navigation.
+test('composed cli: .bundle persists across page reload', async ({
   page,
   baseURL,
 }) => {
-  // Phase 1: save bundle
+  page.on('pageerror', (e) => console.error('[pageerror]', e))
+  page.on('console', (msg) => {
+    if (msg.type() === 'error') console.error('[console.error]', msg.text())
+  })
+
+  // Phase 1: save bundle.
   await page.goto(`${baseURL}/tests/composed-bundle.html?phase=1`)
   await page.waitForFunction(() => window.__bundleDone === true, {
-    timeout: 30000,
+    timeout: 120_000,
   })
   const phase1Result = await page.evaluate(() => window.__bundleResult)
+  expect(phase1Result.error).toBeUndefined()
   expect(phase1Result.saveOut).toMatch(/myset/)
 
-  // Phase 2: reload (fresh navigation), verify persistence
+  // Phase 2: navigate to a fresh page (different query => guaranteed
+  // re-instantiation of the wasm runtime + a brand-new
+  // shared_cas_conn that has to find the OPFS file). The bundle from
+  // phase 1 must surface in list/show.
   await page.goto(`${baseURL}/tests/composed-bundle.html?phase=2`)
   await page.waitForFunction(() => window.__bundleDone === true, {
-    timeout: 30000,
+    timeout: 120_000,
   })
   const phase2Result = await page.evaluate(() => window.__bundleResult)
-  expect(phase2Result.listOut).toContain('myset')
-  expect(phase2Result.showOut).toContain('myset')
+  expect(phase2Result.error).toBeUndefined()
+  expect(phase2Result.listOut).toMatch(/myset/)
+  expect(phase2Result.showOut).toMatch(/myset/)
+  // The OPFS file IS a SQLite db (not a serialized blob): its first
+  // 16 bytes are SQLite's magic header. This is the differentiator
+  // from a snapshot architecture — the OPFS file would be openable
+  // by `sqlite3` or `@sqlite.org/sqlite-wasm` directly.
+  expect(phase2Result.opfsHeader).toMatch(/^SQLite format 3/)
 })
