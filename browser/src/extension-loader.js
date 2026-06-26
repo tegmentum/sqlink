@@ -1780,77 +1780,78 @@ export function buildCliHostHandlers(opts) {
     '  key   TEXT PRIMARY KEY,' +
     '  value TEXT NOT NULL' +
     ');'
-  // Full INSTALL_SCHEMA payload from sqlite-cas-cache/src/schema.rs.
-  // Wrapped in BEGIN/COMMIT to match the Rust crate's transactional
-  // shape, executed via execute (sqlite-lib's `spi.execute` and by
-  // extension `bridged-execute*` handles compound statements through
-  // sqlite3_exec semantics).
+  // INSTALL_SCHEMA payload transcribed from sqlite-cas-cache/src/
+  // schema.rs. Driven through bridged-execute-cas which uses
+  // sqlite3_prepare semantics (single statement per call), so we
+  // store these as an array of statements and loop. Wrapped in an
+  // outer transaction at the Rust-side level via BEGIN/COMMIT
+  // execute calls (not embedded in one of the statements).
   //
   // Keep this transcription in sync with INSTALL_SCHEMA in Rust;
-  // bytes need not be identical (whitespace doesn't matter to
-  // SQLite) but the table/index shape MUST be.
-  const CAS_INSTALL_SCHEMA_SQL = `
-BEGIN;
-CREATE TABLE IF NOT EXISTS __cas_artifact (
-    hash         BLOB PRIMARY KEY,
-    sha256       BLOB,
-    bytes        BLOB NOT NULL,
-    bytes_len    INTEGER NOT NULL,
-    created_at   INTEGER NOT NULL,
-    last_used_at INTEGER NOT NULL,
-    use_count    INTEGER NOT NULL DEFAULT 0
-) WITHOUT ROWID;
-CREATE UNIQUE INDEX IF NOT EXISTS __cas_artifact_sha256
-    ON __cas_artifact(sha256) WHERE sha256 IS NOT NULL;
-CREATE TABLE IF NOT EXISTS __cas_uri (
-    uri          TEXT PRIMARY KEY,
-    hash         BLOB NOT NULL REFERENCES __cas_artifact(hash) ON DELETE RESTRICT,
-    fetched_at   INTEGER NOT NULL,
-    last_used_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS __cas_uri_hash ON __cas_uri(hash);
-CREATE TABLE IF NOT EXISTS __cas_meta (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS __cas_bundle (
-    id           INTEGER PRIMARY KEY,
-    name         TEXT,
-    set_hash     TEXT NOT NULL,
-    created_at   INTEGER NOT NULL,
-    last_used_at INTEGER NOT NULL
-);
-CREATE INDEX IF NOT EXISTS __cas_bundle_set_hash
-    ON __cas_bundle(set_hash);
-CREATE TABLE IF NOT EXISTS __cas_bundle_member (
-    bundle_id      INTEGER NOT NULL REFERENCES __cas_bundle(id) ON DELETE CASCADE,
-    extension_name TEXT NOT NULL,
-    content_hash   TEXT NOT NULL,
-    PRIMARY KEY (bundle_id, extension_name)
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS __cas_bundle_binary (
-    bundle_id     INTEGER NOT NULL REFERENCES __cas_bundle(id) ON DELETE CASCADE,
-    target_triple TEXT NOT NULL,
-    binary_path   TEXT NOT NULL,
-    built_at      INTEGER NOT NULL,
-    PRIMARY KEY (bundle_id, target_triple)
-) WITHOUT ROWID;
-CREATE TABLE IF NOT EXISTS __cas_bundle_alias (
-    name      TEXT PRIMARY KEY,
-    bundle_id INTEGER NOT NULL REFERENCES __cas_bundle(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS __cas_bundle_alias_bundle_id
-    ON __cas_bundle_alias(bundle_id);
-INSERT OR REPLACE INTO __cas_meta(key, value) VALUES ('schema_version', '${CAS_SCHEMA_VERSION}');
-COMMIT;
-`
+  // table/index/PRIMARY KEY shape MUST match.
+  const CAS_INSTALL_SCHEMA_STATEMENTS = [
+    `CREATE TABLE IF NOT EXISTS __cas_artifact (
+       hash         BLOB PRIMARY KEY,
+       sha256       BLOB,
+       bytes        BLOB NOT NULL,
+       bytes_len    INTEGER NOT NULL,
+       created_at   INTEGER NOT NULL,
+       last_used_at INTEGER NOT NULL,
+       use_count    INTEGER NOT NULL DEFAULT 0
+     ) WITHOUT ROWID`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS __cas_artifact_sha256
+       ON __cas_artifact(sha256) WHERE sha256 IS NOT NULL`,
+    `CREATE TABLE IF NOT EXISTS __cas_uri (
+       uri          TEXT PRIMARY KEY,
+       hash         BLOB NOT NULL REFERENCES __cas_artifact(hash) ON DELETE RESTRICT,
+       fetched_at   INTEGER NOT NULL,
+       last_used_at INTEGER NOT NULL
+     )`,
+    `CREATE INDEX IF NOT EXISTS __cas_uri_hash ON __cas_uri(hash)`,
+    `CREATE TABLE IF NOT EXISTS __cas_meta (
+       key   TEXT PRIMARY KEY,
+       value TEXT NOT NULL
+     )`,
+    `CREATE TABLE IF NOT EXISTS __cas_bundle (
+       id           INTEGER PRIMARY KEY,
+       name         TEXT,
+       set_hash     TEXT NOT NULL,
+       created_at   INTEGER NOT NULL,
+       last_used_at INTEGER NOT NULL
+     )`,
+    `CREATE INDEX IF NOT EXISTS __cas_bundle_set_hash
+       ON __cas_bundle(set_hash)`,
+    `CREATE TABLE IF NOT EXISTS __cas_bundle_member (
+       bundle_id      INTEGER NOT NULL REFERENCES __cas_bundle(id) ON DELETE CASCADE,
+       extension_name TEXT NOT NULL,
+       content_hash   TEXT NOT NULL,
+       PRIMARY KEY (bundle_id, extension_name)
+     ) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS __cas_bundle_binary (
+       bundle_id     INTEGER NOT NULL REFERENCES __cas_bundle(id) ON DELETE CASCADE,
+       target_triple TEXT NOT NULL,
+       binary_path   TEXT NOT NULL,
+       built_at      INTEGER NOT NULL,
+       PRIMARY KEY (bundle_id, target_triple)
+     ) WITHOUT ROWID`,
+    `CREATE TABLE IF NOT EXISTS __cas_bundle_alias (
+       name      TEXT PRIMARY KEY,
+       bundle_id INTEGER NOT NULL REFERENCES __cas_bundle(id) ON DELETE CASCADE
+     )`,
+    `CREATE INDEX IF NOT EXISTS __cas_bundle_alias_bundle_id
+       ON __cas_bundle_alias(bundle_id)`,
+    `INSERT OR REPLACE INTO __cas_meta(key, value)
+       VALUES ('schema_version', '${CAS_SCHEMA_VERSION}')`,
+  ]
 
   let casSchemaInstalled = false
   function ensureCasSchema() {
     if (casSchemaInstalled) return
     const b = getBridge()
     b.bridgedExecuteCas(CAS_BOOTSTRAP_SQL, [])
-    b.bridgedExecuteCas(CAS_INSTALL_SCHEMA_SQL, [])
+    for (const stmt of CAS_INSTALL_SCHEMA_STATEMENTS) {
+      b.bridgedExecuteCas(stmt, [])
+    }
     casSchemaInstalled = true
   }
 
@@ -2153,6 +2154,49 @@ COMMIT;
       } catch (_e) {
         // ignore
       }
+    },
+
+    bundleAddAlias(bundleId, alias) {
+      ensureCasSchema()
+      const b = getBridge()
+      const conflict = b.bridgedExecuteCas(
+        'SELECT bundle_id FROM __cas_bundle_alias WHERE name = ?1',
+        [sqlText(alias)],
+      )
+      if (conflict.rows.length > 0) {
+        const existing = colInt(conflict.rows[0], 0)
+        if (existing === BigInt(bundleId)) return undefined
+        throw bundlesErr(
+          `bundle-add-alias: alias '${alias}' already bound to bundle id ${existing}`,
+        )
+      }
+      b.bridgedExecuteCas(
+        'INSERT INTO __cas_bundle_alias(name, bundle_id) VALUES (?1, ?2)',
+        [sqlText(alias), sqlInt(bundleId)],
+      )
+      return undefined
+    },
+
+    bundleRemoveAlias(alias) {
+      ensureCasSchema()
+      const b = getBridge()
+      const res = b.bridgedExecuteCas(
+        'DELETE FROM __cas_bundle_alias WHERE name = ?1',
+        [sqlText(alias)],
+      )
+      // changes counter > 0 means a row was deleted.
+      return Number(res.changes ?? 0) > 0
+    },
+
+    bundleAliases(bundleId) {
+      ensureCasSchema()
+      const b = getBridge()
+      const res = b.bridgedExecuteCas(
+        'SELECT name FROM __cas_bundle_alias ' +
+          'WHERE bundle_id = ?1 ORDER BY name ASC',
+        [sqlInt(bundleId)],
+      )
+      return res.rows.map((r) => colText(r, 0))
     },
   }
   // Reference unused helpers to keep linters from flagging them; they
