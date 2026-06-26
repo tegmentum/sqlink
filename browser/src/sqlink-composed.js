@@ -33,7 +33,7 @@
 // `WebAssembly.promising`. Requires Chrome 137+ / Node 22+.
 
 import { createRuntimeBindgen } from '@tegmentum/wasi-polyfill/wasip2'
-import { ExtensionRegistry } from './extension-loader.js'
+import { ExtensionRegistry, buildCliHostHandlers } from './extension-loader.js'
 import {
   buildCliPolyfill,
   resetGlobalStdioState,
@@ -184,6 +184,11 @@ class ComposedDatabase {
     // run is already done.
     this._runFinished = false
     this._runError = null
+    // Per-database cli-state Map<key, sql-value>. Read by cli-family
+    // extensions' cli-state.get-* through the cli-host handlers; the
+    // documented dotcmd.wit schema (display/mode etc.) supplies
+    // defaults when the key isn't set here.
+    this._cliState = new Map()
   }
 
   async open() {
@@ -205,6 +210,25 @@ class ComposedDatabase {
     const onStderr = (data) => {
       this._stderrBuffer += decoder.decode(data, { stream: true })
     }
+
+    // Wire cli-family extension SPI handlers so cli-family extensions
+    // auto-loaded by the composed cli (prefix-cli, bundle-cli, ...)
+    // get REAL loader-bridge / cli-state / cli-stdout / cli-stderr
+    // implementations instead of the structured-error stub. The
+    // factory must run AFTER onStdout/onStderr are wired so cli-stdout.
+    // write routes into the same buffer the cli's wasi:cli/stdout pipe
+    // feeds. Replace registry.instantiateFromBytes (which
+    // openDatabaseComposed set to the no-handlers default) so the
+    // bytes-instantiation that loader-bridge.load-extension-from-bytes
+    // ultimately calls picks up the cli-host handlers.
+    const cliHostHandlers = buildCliHostHandlers({
+      registry: this._registry,
+      cliState: this._cliState,
+      onStdout,
+      onStderr,
+    })
+    this._registry.instantiateFromBytes = (bytes) =>
+      instantiateExtensionFromBytes(bytes, { handlers: cliHostHandlers })
 
     const { polyfill, additionalImports, spiLoader, persistentQueue } =
       buildCliPolyfill({

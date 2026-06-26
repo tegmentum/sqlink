@@ -79,6 +79,16 @@ const EXTENSION_IMPORT_STUB_NAMES = [
   'sqlite:extension/s3-base',
   'sqlite:extension/wal-frames',
   'sqlite:extension/wal-hook',
+  // cli-family imports (dotcmd-aware / full worlds): real handlers
+  // for loader-bridge, cli-state, cli-stdout, cli-stderr override
+  // these stubs via `buildExtensionAdditionalImports(handlers)`;
+  // build + bundles stay stubbed (no browser-side spawn/cas-cache).
+  'sqlite:extension/loader-bridge',
+  'sqlite:extension/cli-stdout',
+  'sqlite:extension/cli-stderr',
+  'sqlite:extension/cli-state',
+  'sqlite:extension/build',
+  'sqlite:extension/bundles',
 ]
 
 /**
@@ -221,8 +231,18 @@ export function destroyExtensionImports() {
  * Used by the runtime-bindgen path: `createRuntimeBindgen` lets the
  * polyfill resolve WASI imports on demand and merges this map for
  * the non-WASI ones.
+ *
+ * `handlers` is an optional map keyed by import interface name (e.g.
+ * `'sqlite:extension/cli-stdout'`) whose values are concrete impls.
+ * Same-keyed stubs are overridden so cli-family extensions get real
+ * loader-bridge / cli-state / cli-stdout / cli-stderr handlers; absent
+ * keys fall back to the structured-error stub. Both versioned (@0.1.0)
+ * and un-versioned key forms are registered, matching what jco's
+ * runtime transpile emits.
+ *
+ * @param {Record<string, object>} [handlers]  per-interface overrides
  */
-export function buildExtensionAdditionalImports() {
+export function buildExtensionAdditionalImports(handlers) {
   function noop(name) {
     return new Proxy(
       {},
@@ -265,6 +285,15 @@ export function buildExtensionAdditionalImports() {
     // for components that declared the versioned import. Both keys point at
     // the same proxy.
     out[`${k}@0.1.0`] = stub
+  }
+  // Caller-supplied real handlers override the stubs for matching keys.
+  // Register both un-versioned + versioned shapes so either jco bindgen
+  // path consumes the override.
+  if (handlers) {
+    for (const [k, impl] of Object.entries(handlers)) {
+      out[k] = impl
+      out[`${k}@0.1.0`] = impl
+    }
   }
   return out
 }
@@ -321,11 +350,12 @@ function createExtensionPolyfill() {
  * @param {Uint8Array | ArrayBuffer} bytes
  * @returns {Promise<{ instance: object, bindgenResult: object }>}
  */
-export async function instantiateExtensionFromBytes(bytes) {
+export async function instantiateExtensionFromBytes(bytes, opts) {
   const polyfill = createExtensionPolyfill()
+  const handlers = opts?.handlers
   const bindgen = createRuntimeBindgen({
     polyfill,
-    additionalImports: buildExtensionAdditionalImports(),
+    additionalImports: buildExtensionAdditionalImports(handlers),
     jcoOptions: {
       name: 'extension',
       // Scalars are pure compute — no suspending imports today, so
