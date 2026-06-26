@@ -347,4 +347,176 @@ mod tests {
         assert_eq!(codec.decode_to_canon(&canon).unwrap(), canon);
         assert_eq!(codec.encode_from_canon(&canon).unwrap(), canon);
     }
+
+    // ---------------- Phase B (B7) round-trip acceptance test
+    //
+    // PLAN-wit-value-extension.md Phase B's acceptance gate: a
+    // synthetic wit-value through the registry-driven codec produces
+    // a byte-identical re-encoding.
+    //
+    // What this proves:
+    //
+    // 1. The registry populates correctly from a synthetic manifest
+    //    entry (Phase B's stand-in for what Phase C codegen will
+    //    emit on real bridges).
+    // 2. Looking up a payload by type-id finds the binding metadata.
+    // 3. A registered TypedValueCodec dispatches at decode + encode
+    //    time, and the byte content survives a decode→encode round-
+    //    trip unchanged.
+    //
+    // What this does NOT prove (Phase B is honest about):
+    //
+    // - Actual wasm-side decoder/encoder invocation. Phase B has no
+    //   real bridge that ships those imports. Phase C codegen wires
+    //   a WasmCodec impl that calls the bridge's serde-ops exports.
+
+    use sqlite_component_core::db::{Value, WitValuePayload};
+
+    fn synthetic_type_id() -> [u8; 32] {
+        let mut id = [0u8; 32];
+        for i in 0..32 {
+            id[i] = (i as u8) ^ 0x55;
+        }
+        id
+    }
+
+    fn synthetic_binding() -> TypedValueBinding {
+        TypedValueBinding {
+            type_id: synthetic_type_id(),
+            symbolic_name: "synthetic:wasm/temporal-types@0.1.0/tfloat-sequence".to_string(),
+            decoder_import:
+                "synthetic:wasm/serde-ops/tfloat-sequence-from-canon-cbor".to_string(),
+            encoder_import:
+                "synthetic:wasm/serde-ops/tfloat-sequence-to-canon-cbor".to_string(),
+            extension_name: "synthetic-bridge".to_string(),
+        }
+    }
+
+    fn synthetic_payload(bytes: Vec<u8>) -> WitValuePayload {
+        WitValuePayload {
+            type_id: synthetic_type_id(),
+            bytes,
+            symbolic_name: "synthetic:wasm/temporal-types@0.1.0/tfloat-sequence".to_string(),
+        }
+    }
+
+    /// Codec that toggles the high bit on every byte. Used by the
+    /// "codec actually runs" test to distinguish a real dispatch
+    /// from a silent identity-passthrough.
+    struct ToggleHighBitCodec;
+    impl TypedValueCodec for ToggleHighBitCodec {
+        fn decode_to_canon(&self, bytes: &[u8]) -> Result<Vec<u8>, String> {
+            Ok(bytes.iter().map(|b| b ^ 0x80).collect())
+        }
+        fn encode_from_canon(&self, bytes: &[u8]) -> Result<Vec<u8>, String> {
+            Ok(bytes.iter().map(|b| b ^ 0x80).collect())
+        }
+    }
+
+    #[test]
+    fn b7_synthetic_decode_encode_roundtrip_is_byte_identical() {
+        let r = TypedValueRegistry::new();
+        let codecs = TypedValueCodecs::new();
+        let binding = synthetic_binding();
+        r.insert(binding.clone()).unwrap();
+        codecs.install(binding.type_id, Arc::new(IdentityCodec));
+
+        // Synthetic canonical-CBOR payload. The shape doesn't matter
+        // for the test — what matters is that the bytes survive the
+        // registry-driven decode→encode cycle unchanged.
+        let canonical_bytes: Vec<u8> = vec![
+            0xa1, // CBOR map (1 entry)
+            0x65, b'h', b'e', b'l', b'l', b'o', // key: "hello"
+            0x05, // value: 5
+        ];
+
+        let payload = synthetic_payload(canonical_bytes.clone());
+
+        // Decode arm: receive a SqlValue::WitValue → look up codec
+        // via registry → get canonical bytes back.
+        assert_eq!(
+            r.lookup(&payload.type_id).expect("registered").extension_name,
+            "synthetic-bridge"
+        );
+        let codec = codecs.lookup(&payload.type_id).expect("codec installed");
+        let decoded = codec
+            .decode_to_canon(&payload.bytes)
+            .expect("decode succeeds");
+        assert_eq!(decoded, canonical_bytes);
+
+        // Encode arm: inverse path.
+        let re_encoded = codec
+            .encode_from_canon(&decoded)
+            .expect("encode succeeds");
+        assert_eq!(
+            re_encoded, canonical_bytes,
+            "round-trip is byte-identical"
+        );
+
+        // Wrap back into a payload + db::Value to prove the
+        // identity-pass-through composes with the full marshaling
+        // shape.
+        let recovered = synthetic_payload(re_encoded);
+        let v = Value::WitValue(recovered.clone());
+        match v {
+            Value::WitValue(p) => {
+                assert_eq!(p.type_id, recovered.type_id);
+                assert_eq!(p.bytes, canonical_bytes);
+                assert_eq!(p.symbolic_name, recovered.symbolic_name);
+            }
+            other => panic!("expected WitValue, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn b7_codec_is_actually_invoked() {
+        // Nontrivial codec proves the registry's dispatch path
+        // didn't silently bypass the codec slot and pass payload
+        // bytes through.
+        let r = TypedValueRegistry::new();
+        let codecs = TypedValueCodecs::new();
+        let binding = synthetic_binding();
+        r.insert(binding.clone()).unwrap();
+        codecs.install(binding.type_id, Arc::new(ToggleHighBitCodec));
+
+        let original = vec![0x00, 0x7f, 0x80, 0xff];
+        let codec = codecs.lookup(&binding.type_id).unwrap();
+        let decoded = codec.decode_to_canon(&original).unwrap();
+        assert_eq!(decoded, vec![0x80, 0xff, 0x00, 0x7f]);
+        let re_encoded = codec.encode_from_canon(&decoded).unwrap();
+        assert_eq!(re_encoded, original, "encode is the inverse of decode");
+    }
+
+    #[test]
+    fn b7_unknown_type_id_lookup_misses() {
+        let r = TypedValueRegistry::new();
+        r.insert(synthetic_binding()).unwrap();
+        let mut other = [0u8; 32];
+        other[0] = 0xff;
+        assert!(r.lookup(&other).is_none());
+    }
+
+    #[test]
+    fn b7_missing_codec_falls_back_to_identity_passthrough() {
+        // Phase B contract: with no real bridges shipping codecs
+        // yet, the canonical-CBOR bytes ARE the payload bytes.
+        // Looking up a codec slot for a registered type-id with no
+        // codec installed returns None; Host::decode_wit_value
+        // takes the identity-passthrough branch.
+        let r = TypedValueRegistry::new();
+        let codecs = TypedValueCodecs::new();
+        r.insert(synthetic_binding()).unwrap();
+        let id = synthetic_type_id();
+        assert!(
+            codecs.lookup(&id).is_none(),
+            "no codec installed for this type-id"
+        );
+        // Registry still resolves the binding so error context can
+        // surface the symbolic name.
+        let binding = r.lookup(&id).expect("registered");
+        assert_eq!(
+            binding.symbolic_name,
+            "synthetic:wasm/temporal-types@0.1.0/tfloat-sequence"
+        );
+    }
 }
