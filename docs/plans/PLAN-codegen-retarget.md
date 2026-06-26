@@ -900,3 +900,184 @@ is parametric over the WIT package; running it against
 var at mobilitydb's vendored WIT produces a sibling
 mobilitydb-sqlink-bridge crate with the same shape. The
 schema-extension work D5 ruled out stays ruled out.
+
+## Phase 3 round 2 — done (2026-06-26)
+
+Round 2 closed the three honest codegen extensions that round 1
+left as deferrals, raising the canonical-scalar count from 258
+to 280 and the aggregate count from 9 to 11. Topology + raster
+(75 scalars) remain architectural and carry forward to v1.6+;
+the `sqlink-loader.dylib` vtab-install gap also carries forward
+unchanged.
+
+### Where the work lives
+
+- `~/git/sqlink-shim-codegen` branch `feat/wasm-component-target`,
+  commit `c6fc51f`. Extends the dispatch alphabet with
+  `WitType::ListGeomBorrow / ListGeomOwned / ListOptionU32` on
+  the parser side; adds `ParamShape::ListGeom` and
+  `RetShape::OptionText / OptionReal / OptionInt / OptionBlob /
+  OptionGeomBlob / FirstGeomBlob / FirstOptionU32Int` on the
+  dispatcher side; rewrites the aggregate step/finalize bodies
+  to latch and re-decode constant args.
+- `~/git/postgis-sqlink-bridge` on `main`, commit `64babae`.
+  Regenerated bridge crate; extended `verify/` harness with three
+  new cases (Case 11: list<borrow<geom>>; Case 12: option<T>;
+  Case 13: cluster-with-extras aggregate).
+- `~/git/sqlink/extensions/postgis-bridge/` — untouched.
+
+### Coverage delta
+
+| category    | round 1 wired | round 2 wired | new in round 2 |
+|-------------|---------------|---------------|----------------|
+| scalars     | 258           | 280           | +22 canonical  |
+| aggregates  | 9             | 11            | +2 (cluster)   |
+| UDTFs       | 5             | 5             | no change      |
+| operators   | 5             | 5             | no change      |
+| casts       | 4             | 4             | no change      |
+
+Unwired symbols dropped from 144 to 122 (net -22). Breakdown of
+the remaining 122:
+- 75 "no WIT function matches" — topology / raster / geocoder
+  scalars whose upstream postgis-wasm shim doesn't export them
+  (architectural; needs additional upstream shims composed).
+- 43 "borrow<raster> param" — raster surface (architectural).
+- 4 misc: `st_isvaliddetail` (tuple return), `st_makebox2d` /
+  `st_boxfromgeohash` (bbox record return), `st_tileenvelope`
+  (option<tuple<f64, f64, f64, f64>> param).
+
+### A: `list<borrow<geometry>>` param marshaling
+
+The WIT parser now recognises `list<borrow<geometry>>` as a
+first-class `WitType::ListGeomBorrow` (not via the unsupported
+fallback). The dispatcher emits two flavors based on parameter
+position:
+
+- **Variadic** (last param): consume `args[idx..]` and build the
+  `Vec<&Geometry>` from each decoded WKB blob. Covers
+  `st_collect(g1, g2, ...)`, `st_makeline(...)`,
+  `st_makepolygon(shell, holes...)`.
+- **Single-element wrap** (non-last param): take ONE blob at
+  `args[idx]` and wrap it as a single-element list. Covers
+  `st_asmvt(geom, layer_name, extent)`,
+  `st_asgeobuf(geom, precision)`,
+  `st_asflatgeobuf(geom, layer_name)`.
+
+The WIT parser also now handles multi-line function declarations
+(needed because `st-cluster-within-aggregate` and
+`st-cluster-intersecting-aggregate` span three lines in
+`aggregates.wit`).
+
+### B: `option<T>` return unwrapping
+
+The dispatcher's return-shape matcher now recognises
+`option<T>` and emits a `match` that wraps `Some(v)` as the
+inner SqlValue variant and `None` as `SqlValue::Null`. Five
+inner shapes covered: `string`, `f64/f32`, `s32/s64/u32/u64`,
+`list<u8>`, `geometry/geography`. Wires `st_m`, `st_mmax`,
+`st_mmin`, `st_z`, `st_zmax`, `st_zmin`, `st_isvalidreason`,
+`st_geogazimuth`.
+
+Verify Case 12 confirms both paths:
+`st_m(POINT(1 2)) = NULL` (None) and
+`st_m(POINT M(1 2 5)) = 5.0` (Some).
+
+### C: Aggregate dispatcher extra args
+
+The aggregate dispatcher now handles `aggregates.config_arg_indices_json`
+through a per-context "extras" state map. The `emit_aggregate_step_body`
+takes the `AggregateShape` so it can:
+
+- Always push the geometry (arg 0) into `AGG_STATE` (unchanged).
+- For aggregates with extras (`extra_args.is_empty() == false`),
+  also call `set_or_validate_extras(context_id, args[1..])`. The
+  first step inserts the extras vec; subsequent steps validate
+  they haven't drifted (PostgreSQL convention: constant args
+  must be uniform across rows of a single aggregate invocation).
+
+`emit_aggregate_finalize_body` re-decodes the latched extras via
+the standard `ParamShape` path and threads them into the WIT
+call after the `&refs` slice. Wires `st_clusterwithin (geom, distance)`
+and `st_clusterdbscan (geom, eps, min_points)`.
+
+Verify Case 13 confirms end-to-end:
+`st_clusterwithin(POINT(1 2), 100.0)` then
+`st_clusterwithin(POINT(4 6), 100.0)` followed by finalize
+returns a 51-byte WKB blob (the first cluster geometry; the
+WIT signature returns `list<geometry>` so we project to first
+element).
+
+### Aggregate registry: cross-interface fallback
+
+A new fallback index in `build_aggregate_registry` lets the
+codegen find aggregate functions in interfaces other than
+`postgis-aggregates` whenever the first param is
+`list<borrow<geometry>>`. This brings `st_collect` (lives in
+`postgis-accessors`), `st_clusterwithin` /
+`st_clusterintersecting` / `st_clusterdbscan` (live in
+`postgis-clustering` / `postgis-aggregates`) online.
+
+### Verification
+
+```
+[verify] loaded extension: name=postgis
+[verify] registered: 931 scalars, 34 aggregates, 12 vtabs
+[verify] round-trip OK: ST_AsText(ST_GeomFromText('POINT(1 2)')) = POINT(1 2)
+[verify] st_x = 1
+[verify] st_distance((1,2), (4,6)) = 5
+[verify] st_astext(st_makepoint(7,8)) = "POINT(7 8)"
+[verify] st_area(POLYGON 4x3) = 12
+[verify] st_intersects(p, p) = 1
+[verify] st_buffer(p, 1.0) -> 102 byte blob
+[verify] st_geomfromwkb(wkb) -> 21 byte blob
+[verify] st_union(p1, p2) -> 51 byte blob
+[verify]   astext(union) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"
+[verify] st_astext(st_collect(p1, p2)) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"
+[verify] st_m(POINT(1 2)) = NULL (option<f64> None path)
+[verify] st_m(POINT M(1 2 5)) = Real(5.0) (option<f64> Some path)
+[verify] st_clusterwithin(g, 100.0) -> 51 byte blob (first cluster)
+[verify] st_dump vtab registered: id=2000000 eponymous=true
+[verify] all checks passed
+```
+
+### Smoke parity re-check
+
+```
+cases/postgis:
+  PASS 01-wkt-roundtrip
+  PASS 02-measurements
+  PASS 03-predicates
+  PASS 04-null-prop
+  PASS 05-cast-rewrite
+  pass=5 fail=0
+```
+
+`cases/postgis-sqlite-only/05-udtfs` continues to fail because
+of the sqlink-loader vtab-install gap — unchanged from round 1.
+The bridge wasm declares all 12 vtabs in its manifest; the
+verify harness's `dispatch_vtab_*` path could exercise them
+through the host directly once needed.
+
+### Round 2 deferrals (carried forward)
+
+- **Topology + raster surfaces (~75 scalars).** Architectural;
+  needs additional upstream shims composed (postgis-topology-tk,
+  postgis-raster-tk) before the codegen can route to them.
+- **`sqlink-loader.dylib` vtab installation.** Unchanged from
+  round 1: `sqlink-loader/src/load.rs` returns the vtab count
+  as `skipped` rather than calling `sqlite3_create_module_v2`.
+- **`bbox` record return / `tuple<bool, option<string>,
+  option<geometry>>` return / `option<tuple<f64, f64, f64,
+  f64>>` param.** 4 scalars: `st_makebox2d`, `st_boxfromgeohash`,
+  `st_isvaliddetail`, `st_tileenvelope`. Records and tuples
+  aren't in the dispatcher alphabet; adding them is a per-shape
+  task with the same cost-benefit as round 2's option / list
+  work, but with a smaller payoff (only 4 scalars).
+- **Aggregates `st_extent`, `st_coverageunion`, `st_3dextent`,
+  `st_rast_union`.** Either no matching WIT function
+  (extent / coverage_union) or raster (rast_union). The 3D
+  extent has a WIT entry (`st-extent-threed`) but returns a
+  `bbox3d` record — record returns are in the same alphabet
+  gap as the four scalars above.
+
+The mobilitydb composition (Phase 4) remains unblocked.
