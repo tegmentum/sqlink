@@ -200,6 +200,26 @@ impl Cache {
     pub fn store(&self) -> Arc<Mutex<SqliteCasStore>> {
         self.inner.clone()
     }
+
+    /// Lock the cache and run `f` against the underlying
+    /// `&Connection`. The closure can drive `bundles_exec`'s
+    /// free-function CRUD against the same `~/.cache/sqlink/cas.db`
+    /// file the cache opened — without going through
+    /// `SqliteCasStore::bundle_*`.
+    ///
+    /// Used by the native sqlink-host's `impl bundles::Host`
+    /// after the v1.5 round 2 unify cutover so bundles SQL
+    /// flows through the same `bundles_exec::{*_SQL}` constants
+    /// the browser JS polyfill mirrors. Other consumers
+    /// (`.cache *` dot-cmds, artifact CRUD) still use
+    /// `SqliteCasStore` directly.
+    pub fn with_bundles_conn<R>(
+        &self,
+        f: impl FnOnce(&Connection) -> R,
+    ) -> R {
+        let store = self.inner.lock();
+        f(store.conn())
+    }
 }
 
 /// Decode a 64-character hex string to a 32-byte array. Returns
