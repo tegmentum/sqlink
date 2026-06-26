@@ -230,6 +230,74 @@ Pick option 1 to actually close the test specs, or accept that
 the foundation merge (#481) is enough and the specs stay
 in their broken-since-#479 state.
 
+### Attempt 2 finding (2026-06-25) — option 1 list was incomplete
+
+Branch `feat/browser-spi-handlers` (5 commits, in /tmp/sqlink-
+spi-handlers worktree, unpushed) implemented option 1 end-to-end:
+
+1. Extended `EXTENSION_IMPORT_STUB_NAMES` with `loader-bridge`,
+   `cli-stdout`, `cli-stderr`, `cli-state`, `build`, `bundles`.
+2. Added `buildCliHostHandlers({registry, cliState, onStdout,
+   onStderr})` in `browser/src/extension-loader.js` with real
+   impls for `loader-bridge` (proxies through registry), `cli-state`
+   (state Map + dotcmd.wit schema defaults), `cli-stdout` /
+   `cli-stderr` (route to onStdout/onStderr).
+3. Plumbed optional handlers through
+   `buildExtensionAdditionalImports(handlers)` +
+   `instantiateExtensionFromBytes(bytes, {handlers})`.
+4. Wired ComposedDatabase.open() to build the handlers AFTER
+   onStdout is defined, then patch
+   `registry.instantiateFromBytes` so cli-family bytes-instantiation
+   gets real handlers.
+5. **Bonus**: discovered the v1 polyfill's
+   `extension-loader.dispatch_dot_command` was a 404 stub; wired
+   it to walk the registry, find the owning extension's
+   `dot-command.invoke` export, route the call, and translate the
+   invoke-result (sql-value deltas) back to the host
+   dispatch-dot-command-result shape (json-encoded deltas).
+
+After all that, the tests now show **real extension invocation**
+and **real text output** — but BOTH still fail because:
+
+- `.prefix add foaf …` → `Error: sqlite: sqlink-browser
+  scenario-3: sqlite:extension/spi.execute not implemented`
+- `.bundle list` → `sqlite:extension/bundles.bundleList not
+  implemented`
+
+**Root cause**: `composition-cli-sqlite-lib.wac:45` wires
+`sqlite:extension/spi@0.1.0` INTERNALLY between cli and lib but
+does NOT re-export it (line 49 only re-exports `wasi:cli/run` +
+`dispatch-bridge`). Cli-family extensions loaded via JS-side
+runtime-bindgen therefore see the JS stub for spi.execute, not
+the composed binary's real impl. dispatch-bridge has only
+register-trampoline entries (register-host-scalar/aggregate/etc.)
+— no host-execute / spi-passthrough.
+
+**So option 1's 4-handler list was incomplete.** spi.execute is
+the actual show-stopper for both round-trip specs, and it
+requires either:
+- Adding a `bridged-execute` entry to dispatch-bridge in
+  sqlite-lib (host-side Rust + WIT change + rebuild), OR
+- Re-exporting `sqlite:extension/spi` from the composed binary
+  (wac recipe change + rebuild composed wasm), OR
+- A JS-side parallel SQLite (sql.js) — defeats the round-trip
+  purpose since the state wouldn't be visible to the user's SQL.
+
+All three touch host-side substrate the option-1 framing
+explicitly excluded. **Per substrate-gap escape hatch, stopping
+work here.** The 5 commits sit on `feat/browser-spi-handlers`
+unmerged — keep around for the cli-state / cli-stdout /
+dispatch-dot-command wiring (those land cleanly whenever spi gets
+exposed), but the branch shouldn't merge alone since neither test
+passes.
+
+Real path forward is option 2's substrate change: add a
+host-execute capability to dispatch-bridge so the JS host can
+route extension spi.execute calls back through the composed
+binary's internal connection. Estimate ~3-5 days (1 day WIT +
+sqlite-lib impl, 1 day JS routing, 1-2 days tests + polish).
+Tracked under task #482 (now in_progress, paused).
+
 ---
 
 # Plan: v1 follow-ups — roadmap for outstanding post-v1 work
