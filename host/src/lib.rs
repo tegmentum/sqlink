@@ -1507,6 +1507,26 @@ fn db_err_to_spi(
     }
 }
 
+/// Convert a WIT `list<u8>` type-id (variable-length, by the
+/// schema's letter of the law) into the fixed 32-byte `[u8; 32]`
+/// the `db::Value::WitValue` arm uses internally. Phase B's
+/// contract intent is that `type-id` is always sha256(canon:wit) —
+/// 32 bytes. Stragglers (e.g. a misconfigured shim) get padded
+/// with zeros or truncated; we log so a downstream collision is
+/// debuggable. PLAN-wit-value-extension.md DD2.
+fn type_id_from_wit(v: &[u8]) -> [u8; 32] {
+    let mut out = [0u8; 32];
+    let n = v.len().min(32);
+    out[..n].copy_from_slice(&v[..n]);
+    if v.len() != 32 {
+        tracing::warn!(
+            len = v.len(),
+            "wit-value-payload type-id is not 32 bytes; padding/truncating to canonical width",
+        );
+    }
+    out
+}
+
 fn spi_value_to_db(
     v: loaded::sqlite::extension::types::SqlValue,
 ) -> sqlite_component_core::db::Value {
@@ -1518,17 +1538,18 @@ fn spi_value_to_db(
         V::Real(r) => db::Value::Real(r),
         V::Text(s) => db::Value::Text(s),
         V::Blob(b) => db::Value::Blob(b),
-        // PHASE A: the wit-value arm lands in the contract here; Phase B
-        // teaches this site to look up the type-id in the per-extension
-        // typed-value registry, invoke the wasm-side decoder import, and
-        // marshal the resulting record through the SQL layer. Until
-        // then no extension emits a WitValue, so the path is unreachable
-        // in practice; if a future bridge crosses it before Phase B
-        // lands, we want a loud panic so the gap is detected at the
-        // boundary rather than silently corrupting values.
-        V::WitValue(_) => {
-            unimplemented!("sql-value::wit-value crossing not yet implemented; see PLAN-wit-value-extension.md Phase B")
-        }
+        // Phase B: the wit-value arm now mirrors into db::Value::WitValue
+        // so the SPI layer can ferry the typed identity through to the
+        // SQL boundary without flattening it to BLOB at this hop.
+        // Decode/encode (the actual canonical-CBOR -> WIT record
+        // marshaling) happens at the dispatcher boundary via the
+        // per-extension TypedValueRegistry; this site is the structural
+        // pass-through.
+        V::WitValue(p) => db::Value::WitValue(db::WitValuePayload {
+            type_id: type_id_from_wit(&p.type_id),
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
     }
 }
 
@@ -1606,11 +1627,16 @@ fn db_value_to_spi(
         db::Value::Real(r) => V::Real(r),
         db::Value::Text(s) => V::Text(s),
         db::Value::Blob(b) => V::Blob(b),
-        // PHASE A: db::Value has no WitValue mirror; the SQL layer
-        // can't materialize one without traversing the typed-value
-        // registry to find the source bridge's encoder import. Phase
-        // B extends db::Value (or layers a typed parallel channel
-        // alongside it) and rewires this site to call the encoder.
+        // Phase B: db::Value::WitValue now passes the typed identity
+        // through to the SPI surface. The Phase C codegen path produces
+        // these via the bridge's encoder import; Phase B's host-side
+        // marshaling treats them as opaque carriers between the SQL
+        // layer and the bridge dispatcher.
+        db::Value::WitValue(p) => V::WitValue(loaded::sqlite::extension::types::WitValuePayload {
+            type_id: p.type_id.to_vec(),
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
     }
 }
 
@@ -1630,10 +1656,12 @@ fn bindings_value_to_db(
         V::Real(r) => db::Value::Real(r),
         V::Text(s) => db::Value::Text(s),
         V::Blob(b) => db::Value::Blob(b),
-        // PHASE A: see `spi_value_to_db` comment  same Phase B owe.
-        V::WitValue(_) => {
-            unimplemented!("sql-value::wit-value crossing not yet implemented; see PLAN-wit-value-extension.md Phase B")
-        }
+        // Phase B: structural pass-through. See `spi_value_to_db`.
+        V::WitValue(p) => db::Value::WitValue(db::WitValuePayload {
+            type_id: type_id_from_wit(&p.type_id),
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
     }
 }
 
@@ -1648,7 +1676,12 @@ fn db_value_to_bindings(
         db::Value::Real(r) => V::Real(r),
         db::Value::Text(s) => V::Text(s),
         db::Value::Blob(b) => V::Blob(b),
-        // PHASE A: db::Value has no WitValue mirror; see `db_value_to_spi`.
+        // Phase B: structural pass-through. See `db_value_to_spi`.
+        db::Value::WitValue(p) => V::WitValue(bindings::sqlite::extension::types::WitValuePayload {
+            type_id: p.type_id.to_vec(),
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
     }
 }
 
@@ -2195,7 +2228,12 @@ fn db_value_to_bindings_sql(
         db::Value::Real(r) => V::Real(r),
         db::Value::Text(s) => V::Text(s),
         db::Value::Blob(b) => V::Blob(b),
-        // PHASE A: db::Value has no WitValue mirror; see `db_value_to_spi`.
+        // Phase B: structural pass-through. See `db_value_to_spi`.
+        db::Value::WitValue(p) => V::WitValue(bindings::sqlite::extension::types::WitValuePayload {
+            type_id: p.type_id.to_vec(),
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
     }
 }
 
@@ -2210,10 +2248,12 @@ fn bindings_sql_to_db_value(
         V::Real(r) => db::Value::Real(r),
         V::Text(s) => db::Value::Text(s),
         V::Blob(b) => db::Value::Blob(b),
-        // PHASE A: see `spi_value_to_db`  same Phase B owe.
-        V::WitValue(_) => {
-            unimplemented!("sql-value::wit-value crossing not yet implemented; see PLAN-wit-value-extension.md Phase B")
-        }
+        // Phase B: structural pass-through. See `spi_value_to_db`.
+        V::WitValue(p) => db::Value::WitValue(db::WitValuePayload {
+            type_id: type_id_from_wit(&p.type_id),
+            bytes: p.bytes,
+            symbolic_name: p.symbolic_name,
+        }),
     }
 }
 

@@ -350,6 +350,30 @@ fn db_to_cbor(v: &db::Value) -> CborValue {
         db::Value::Real(f) => CborValue::Float(*f),
         db::Value::Text(s) => CborValue::Text(s.clone()),
         db::Value::Blob(b) => CborValue::Bytes(b.clone()),
+        // PLAN-wit-value-extension.md Phase B: encode the wit-value
+        // payload as a CBOR map so round-trips through the
+        // compose-provider's CBOR channel preserve the typed identity.
+        // The map shape mirrors the WIT record fields one-for-one;
+        // `cbor_to_db` is intentionally left as Phase C debt (the
+        // compose-provider channel feeds host-managed SQL params, not
+        // bridge dispatch, so the inverse path lights up only when a
+        // future shim ferries WitValue THROUGH compose-provider).
+        db::Value::WitValue(p) => {
+            let mut entries: Vec<(CborValue, CborValue)> = Vec::with_capacity(3);
+            entries.push((
+                CborValue::Text("type_id".to_string()),
+                CborValue::Bytes(p.type_id.to_vec()),
+            ));
+            entries.push((
+                CborValue::Text("bytes".to_string()),
+                CborValue::Bytes(p.bytes.clone()),
+            ));
+            entries.push((
+                CborValue::Text("symbolic_name".to_string()),
+                CborValue::Text(p.symbolic_name.clone()),
+            ));
+            CborValue::Map(entries)
+        }
     }
 }
 

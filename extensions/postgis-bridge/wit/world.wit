@@ -46,21 +46,21 @@ world bridge {
     // plug against sfcgal-wasm's sfcgal.component.wasm.
     import sfcgal:component/geometry@1.0.0;
     import sfcgal:component/io@1.0.0;
-    import sqlite:extension/types@0.1.0;
-    import sqlite:extension/spi@0.1.0;
-    import sqlite:extension/logging@0.1.0;
-    import sqlite:extension/config@0.1.0;
-    import sqlite:extension/state@0.1.0;
-    import sqlite:extension/cache@0.1.0;
+    import sqlite:extension/types@1.0.0;
+    import sqlite:extension/spi@1.0.0;
+    import sqlite:extension/logging@1.0.0;
+    import sqlite:extension/config@1.0.0;
+    import sqlite:extension/state@1.0.0;
+    import sqlite:extension/cache@1.0.0;
 
-    export sqlite:extension/metadata@0.1.0;
-    export sqlite:extension/scalar-function@0.1.0;
-    export sqlite:extension/aggregate-function@0.1.0;
+    export sqlite:extension/metadata@1.0.0;
+    export sqlite:extension/scalar-function@1.0.0;
+    export sqlite:extension/aggregate-function@1.0.0;
     // `raster_polygon_dump` vtab module (PLAN-raster.md R5) needs
     // host instantiation as the `tabular` world. The bridge wasm
     // exporting both `aggregate-function` and `vtab` lets the
     // host pick the right world per dispatch — Stateful for
     // scalar/aggregate calls, Tabular for vtab callbacks — from
     // the same component instance.
-    export sqlite:extension/vtab@0.1.0;
+    export sqlite:extension/vtab@1.0.0;
 }

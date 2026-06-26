@@ -102,6 +102,17 @@ fn render_value(v: &db::Value) -> String {
         db::Value::Real(r) => format_real(*r),
         db::Value::Text(t) => t.clone(),
         db::Value::Blob(b) => format!("<blob:{} bytes>", b.len()),
+        // PLAN-wit-value-extension.md Phase B: surface a wit-value
+        // payload diagnostically by its symbolic name + canonical
+        // CBOR byte length. The SQLite-native cli has no wasm
+        // bridge plumbing; if a column ever returns a wit-value
+        // (which only happens once a Phase C bridge ferries one),
+        // the user wants to see the type identity, not raw bytes.
+        db::Value::WitValue(p) => format!(
+            "<wit-value:{} {} bytes>",
+            p.symbolic_name,
+            p.bytes.len()
+        ),
     }
 }
 

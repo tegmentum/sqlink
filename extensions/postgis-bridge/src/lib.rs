@@ -1779,10 +1779,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(match g.srid() {
                     Some(s) => SqlValue::Integer(s as i64),
                     None => SqlValue::Null,
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 })
             }
             FID_ST_GEOMETRY_TYPE => {
@@ -2610,10 +2606,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(match pg_geog::st_geog_azimuth(&a, &b) {
                     Some(v) => SqlValue::Real(v),
                     None => SqlValue::Null,
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 })
             }
             FID_ST_GEOG_PROJECT => {
@@ -2959,10 +2951,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                         sf_geom::destroy(h);
                         Err(e)
                     }
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
             FID_SFC_OPTIMAL_ALPHA_SHAPE => {
@@ -2979,10 +2967,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                         sf_geom::destroy(h);
                         Err(e)
                     }
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
             FID_SFC_EXTRUDE_STRAIGHT => {
@@ -3036,10 +3020,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                         sf_geom::destroy(h);
                         Err(e)
                     }
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
             FID_SFC_IS_VALID => {
@@ -3105,10 +3085,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                         sf_geom::destroy(h);
                         Err(e)
                     }
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
             FID_SFC_CONVEX_HULL => {
@@ -3125,10 +3101,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                         sf_geom::destroy(h);
                         Err(e)
                     }
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
             FID_SFC_DIFFERENCE => {
@@ -3151,10 +3123,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                         sf_geom::destroy(b);
                         Err(e)
                     }
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
             FID_SFC_INTERSECTION => {
@@ -3177,10 +3145,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                         sf_geom::destroy(b);
                         Err(e)
                     }
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
             FID_SFC_UNION => {
@@ -3197,10 +3161,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                         sf_geom::destroy(b);
                         Err(e)
                     }
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 }
             }
 
@@ -3497,10 +3457,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                 let nodata = match args.get(3) {
                     Some(SqlValue::Null) | None => None,
                     Some(_) => Some(arg_f64(&args, 3, "st_rast_addband")?),
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 };
                 let out = pg_rast_ctor::st_add_band(&r, ptype, init, nodata)
                     .map_err(|e| format!("st_rast_addband: {}", raster_err_string(e)))?;
@@ -3628,10 +3584,6 @@ impl ScalarFunctionGuest for PostgisBridge {
                 Ok(match v {
                     Some(x) => SqlValue::Real(x),
                     None => SqlValue::Null,
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
                 })
             }
 
@@ -4276,10 +4228,6 @@ impl ScalarFunctionGuest for PostgisBridge {
             }
 
             other => Err(format!("postgis bridge: unknown func id {other}")),
-            // PLAN-wit-value-extension.md Phase A: the sql-value variant
-            // gained a wit-value arm; Phase B will replace this wildcard
-            // with extension-specific decode/encode logic.
-            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 }
@@ -4292,10 +4240,6 @@ impl AggregateGuest for PostgisBridge {
         let arg0 = match args.first() {
             Some(SqlValue::Null) | None => return Ok(()),
             Some(v) => v,
-            // PLAN-wit-value-extension.md Phase A: the sql-value variant
-            // gained a wit-value arm; Phase B will replace this wildcard
-            // with extension-specific decode/encode logic.
-            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         let bytes = match arg0 {
             SqlValue::Blob(b) => b.clone(),
@@ -4344,10 +4288,6 @@ impl AggregateGuest for PostgisBridge {
         let state = match state {
             Some(s) => s,
             None => return Ok(SqlValue::Null),
-            // PLAN-wit-value-extension.md Phase A: the sql-value variant
-            // gained a wit-value arm; Phase B will replace this wildcard
-            // with extension-specific decode/encode logic.
-            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         if state.wkbs.is_empty() {
             return Ok(SqlValue::Null);
@@ -4453,10 +4393,6 @@ impl AggregateGuest for PostgisBridge {
                 Ok(SqlValue::Text(format!("[{}]", json.join(","))))
             }
             other => Err(format!("postgis agg: unknown id {other}")),
-            // PLAN-wit-value-extension.md Phase A: the sql-value variant
-            // gained a wit-value arm; Phase B will replace this wildcard
-            // with extension-specific decode/encode logic.
-            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 

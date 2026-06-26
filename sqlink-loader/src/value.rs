@@ -94,6 +94,24 @@ pub unsafe fn write_result(api: &ApiRoutines, ctx: *mut sqlite3_context, v: SqlV
                 ),
             );
         }
+        // PLAN-wit-value-extension.md Phase B: SQLite has no first-
+        // class typed-record cell; the canonical-CBOR `bytes` are
+        // surfaced as BLOB so a SELECT returning a wit-value lands
+        // the wire form in the result column. The wasm bridge
+        // recovers the typed identity on subsequent dispatch via
+        // the per-extension TypedValueRegistry — this layer is the
+        // SQL-boundary flatten.
+        SqlValue::WitValue(p) => {
+            let n = p.bytes.len() as c_int;
+            api.result_blob.expect("result_blob")(
+                ctx,
+                p.bytes.as_ptr() as *const c_void,
+                n,
+                std::mem::transmute::<isize, Option<unsafe extern "C" fn(*mut c_void)>>(
+                    SQLITE_TRANSIENT,
+                ),
+            );
+        }
     }
     // Suppress "unused" on imports until the helper grows.
     let _ = ptr::null::<()>();
