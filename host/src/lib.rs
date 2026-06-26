@@ -32,6 +32,7 @@ pub mod policy;
 pub mod prefix_registry;
 pub mod s3;
 pub mod session_ffi;
+pub mod typed_value;
 pub mod vtab;
 
 use std::collections::HashMap;
@@ -6050,6 +6051,21 @@ pub struct Host {
     /// `.cache stats components` can show hit ratios + where the
     /// time went.
     component_cache_stats: Arc<ComponentCacheStats>,
+    /// PLAN-wit-value-extension.md Phase B (DD3): per-extension
+    /// typed-value registry. Populated at extension-init time from
+    /// `manifest.typed-values`; mapped by `type-id` so a dispatcher
+    /// holding a `SqlValue::WitValue(payload)` can find the
+    /// declaring extension + the decoder/encoder import names
+    /// without scanning every loaded component. Empty when no
+    /// loaded extension declares typed bindings.
+    pub typed_values: typed_value::TypedValueRegistry,
+    /// Companion codec table for `typed_values`. Phase B's
+    /// round-trip test installs Rust closures here; Phase C codegen
+    /// installs a `WasmCodec` that calls the bridge's serde-ops
+    /// exports. Decoupled from the registry so a binding can land
+    /// at extension-init time and the codec slot can fill in lazily
+    /// (or be swapped under test).
+    pub typed_value_codecs: typed_value::TypedValueCodecs,
 }
 
 /// Atomic counters for the cache tiers + cumulative wall-clock
@@ -6469,6 +6485,8 @@ impl Host {
             component_cache: Arc::new(Mutex::new(ComponentCache::new(cap))),
             blob_cache_key: Arc::new(std::sync::OnceLock::new()),
             component_cache_stats: Arc::new(ComponentCacheStats::default()),
+            typed_values: typed_value::TypedValueRegistry::new(),
+            typed_value_codecs: typed_value::TypedValueCodecs::new(),
         })
     }
 
@@ -7626,6 +7644,27 @@ impl Host {
         } else {
             name_hint.to_string()
         };
+
+        // PLAN-wit-value-extension.md Phase B (DD3): drain the
+        // manifest's typed-value-binding entries into the host's
+        // global registry. A conflict (same type-id, different
+        // decoder/encoder/symbolic — i.e. canon:wit drift) is a
+        // fatal load error: a partial registry would silently
+        // misroute wit-value crossings later.
+        for binding in &manifest.typed_values {
+            let entry = typed_value::TypedValueBinding {
+                type_id: type_id_from_wit(&binding.type_id),
+                symbolic_name: binding.symbolic_name.clone(),
+                decoder_import: binding.decoder_import.clone(),
+                encoder_import: binding.encoder_import.clone(),
+                extension_name: name.clone(),
+            };
+            if let Err(conflict) = self.typed_values.insert(entry) {
+                return Err(anyhow!(
+                    "wit-value typed-value-binding conflict at load of {name_hint}: {conflict}"
+                ));
+            }
+        }
         let version = if !manifest.version.is_empty() {
             manifest.version.clone()
         } else {
@@ -9736,6 +9775,23 @@ impl Host {
 
     pub fn unload(&self, name: &str) -> Result<()> {
         if self.components.write().remove(name).is_some() {
+            // PLAN-wit-value-extension.md Phase B: clear typed-value
+            // bindings owned by this extension so a re-load with a
+            // re-hashed type set doesn't deadlock on the conflict
+            // check. Codecs are removed alongside since they hold
+            // wasmtime instance handles into the (now dropped)
+            // LoadedExtension.
+            let to_remove: Vec<[u8; 32]> = self
+                .typed_values
+                .snapshot()
+                .into_iter()
+                .filter(|b| b.extension_name == name)
+                .map(|b| b.type_id)
+                .collect();
+            self.typed_values.remove_extension(name);
+            for id in to_remove {
+                self.typed_value_codecs.remove(&id);
+            }
             Ok(())
         } else {
             Err(anyhow!("extension {name} not loaded"))
