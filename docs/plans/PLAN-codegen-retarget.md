@@ -824,23 +824,54 @@ This covers Phase 3's per-stream verification gates:
   routed via override table (`st_intersects` exercises a
   predicate path).
 
+### Smoke parity gate
+
+`~/git/shim-bridge-smoke-tests/scripts/run.sh` extended on
+branch `feat/wasm-bridge-target` to recognise a `.wasm`
+bridge path: when given one, it loads `sqlink-loader.dylib`
+and calls `sqlink_load_ext('postgis', <wasm>)` rather than
+`.load <wasm>` directly. The smoke runner's existing
+`shim-sql-preprocess` env-var path stays intact, so the
+cast-rewrite case (which depends on preprocessor rewriting)
+exercises end-to-end.
+
+Result against the regenerated wasm bridge composed with
+`postgis-composed.wasm`:
+
+```
+cases/postgis:
+  PASS 01-wkt-roundtrip
+  PASS 02-measurements
+  PASS 03-predicates
+  PASS 04-null-prop
+  PASS 05-cast-rewrite
+  pass=5 fail=0
+```
+
+cases/postgis-sqlite-only/05-udtfs fails because
+`sqlink-loader.dylib` doesn't yet wire `VtabSpec` entries
+through to `sqlite3_create_module_v2` (sqlink-loader's
+`load.rs` explicitly defers vtab installation: "Collations
+/ vtabs / hooks: not in this iteration"). That's a
+sqlink-loader gap, not a bridge gap — the bridge correctly
+declares all 12 vtabs in its manifest, and the verify
+harness's direct `dispatch_vtab_*` path could exercise them
+once needed. Documented as a follow-up below.
+
 ### Phase 3 deferrals (carried forward)
 
-- **End-state smoke parity** (`shim-bridge-smoke-tests`
-  against the wasm bridge): the smoke runner today invokes
-  `sqlite3 :memory: < case.sql` where the SQL prepends
-  `.load $bridge.dylib`. The wasm route needs `.load
-  $sqlink_loader.dylib` followed by `SELECT
-  sqlink_load_ext('postgis', '$bridge.wasm')`. Local trial
-  surfaced a "failed to convert function to given type"
-  load error against the current `libsqlink_loader.dylib`
-  build — the dylib's bindgen is pinned to a WIT shape
-  that differs from the host-WIT the codegen emits against.
-  Rebuilding the loader picks up the divergence and is in
-  progress; the smoke harness wrapper script
-  (extending `scripts/run.sh` with a `sqlink-wasm` target)
-  is the followup. Until that lands, the verify harness in
-  postgis-sqlink-bridge is the load-time gate.
+- **sqlink-loader vtab installation.** The wasm UDTFs Phase
+  3 wires (st_dump, st_dumppoints, ...) are visible in the
+  manifest but not surfaced as `CREATE TABLE` schemas to
+  SQLite. `sqlink-loader/src/load.rs` returns the vtab
+  count as `skipped` rather than calling
+  `sqlite3_create_module_v2`. Wiring it is straightforward
+  (the C trampoline shape mirrors the scalar / aggregate
+  paths already present) but lives outside this plan.
+  `shim-bridge-smoke-tests/cases/postgis-sqlite-only/
+  05-udtfs.sql` is the canonical reproducer; the wasm
+  bridge passes its end of the wire (verify harness
+  confirms 12 vtabs registered).
 - **The two `extra_args` aggregates** (`st_clusterwithin`,
   `st_clusterdbscan`) currently call the WIT function with
   the geometry list only. The extra arg path needs the
