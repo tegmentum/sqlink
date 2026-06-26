@@ -79,6 +79,35 @@ CREATE TABLE IF NOT EXISTS sqlink_cas_resolver (
     uri         TEXT NOT NULL,
     auth_json   TEXT
 );
+-- PLAN-prefixes.md / v1.4: prefix-registry tables. Native sqlink-host
+-- installs these via prefix_registry::install_schema(&conn) at session
+-- boot, but that path doesn't run in the composed-cli browser scenario
+-- (no native host). Boot from the cli so .prefix has tables to read
+-- and write either way. Mirror host/src/prefix_registry.rs::SCHEMA_DDL.
+CREATE TABLE IF NOT EXISTS __sqlink_prefix (
+    name         TEXT PRIMARY KEY,
+    expansion    TEXT NOT NULL,
+    description  TEXT,
+    created_at   INTEGER NOT NULL,
+    last_used_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS __sqlink_prefix_expansion
+    ON __sqlink_prefix(expansion);
+CREATE TABLE IF NOT EXISTS __sqlink_prefix_function (
+    expansion      TEXT NOT NULL,
+    function_name  TEXT NOT NULL,
+    extension_name TEXT,
+    n_args         INTEGER NOT NULL,
+    registered_at  INTEGER NOT NULL,
+    PRIMARY KEY (expansion, function_name, n_args)
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS __sqlink_prefix_pin (
+    function_name TEXT NOT NULL,
+    n_args        INTEGER NOT NULL,
+    expansion     TEXT NOT NULL,
+    set_at        INTEGER NOT NULL,
+    PRIMARY KEY (function_name, n_args)
+) WITHOUT ROWID;
 ";
 
 pub fn lookup(name: &str) -> Option<ResolvedRow> {

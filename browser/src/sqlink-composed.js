@@ -262,6 +262,23 @@ class ComposedDatabase {
     // binary; that path requires the bridge handle to be live.
     spiLoader._setBindgenResult(result)
 
+    // v1.4: also wire the dispatch-bridge handle into the
+    // cli-host handlers so cli-family extensions' `spi.execute`
+    // imports proxy to the composed binary's bridged-execute
+    // entry. The cli's auto-load fires after `wasi:cli/run.run()`
+    // starts; this set must precede that. Extensions instantiated
+    // via the bytes-instantiation that loader-bridge.load-extension-
+    // from-bytes triggers will pick up the spi handler with the
+    // live bridge.
+    const exportsForBridge = result.exports ?? result
+    const dispatchBridgeForSpi =
+      exportsForBridge?.dispatchBridge ??
+      exportsForBridge?.['sqlink:wasm/dispatch-bridge'] ??
+      exportsForBridge?.['sqlink:wasm/dispatch-bridge@0.1.0']
+    if (typeof cliHostHandlers._setBridge === 'function') {
+      cliHostHandlers._setBridge(dispatchBridgeForSpi)
+    }
+
     const exports = result.exports
     const runFn =
       exports.run?.run ??

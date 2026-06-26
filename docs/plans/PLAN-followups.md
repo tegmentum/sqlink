@@ -298,6 +298,72 @@ binary's internal connection. Estimate ~3-5 days (1 day WIT +
 sqlite-lib impl, 1 day JS routing, 1-2 days tests + polish).
 Tracked under task #482 (now in_progress, paused).
 
+## v1.4: Browser SPI bridging via dispatch-bridge.bridged-execute
+
+### Status (2026-06-25): DONE
+
+`composed-prefix.spec.js` passes end-to-end with real round-trip
+output:
+
+  - `.prefix add foaf http://xmlns.com/foaf/0.1/`
+    → `prefix "foaf" -> "http://xmlns.com/foaf/0.1/" registered`
+  - `.prefix list` → `NAME EXPANSION LAST_USED DESCRIPTION` table
+    with the foaf row.
+  - `.prefix expansion foaf` → `http://xmlns.com/foaf/0.1/`.
+  - `.prefix delete foaf` → `deleted prefix "foaf"`.
+  - subsequent `.prefix list` → `(no prefixes registered)`.
+
+### What landed
+
+1. `sqlite-wasm`: added `bridged-execute(sql, params) -> result<query-
+   result, sqlite-error>` to `sqlink:wasm/dispatch-bridge` + the
+   matching `DispatchBridgeGuest::bridged_execute` impl on `SqliteLib`
+   that proxies to the same `SpiGuest::execute` path against the
+   shared connection.
+2. `composition-cli-sqlite-lib.wac`: also re-export
+   `sqlite:extension/types@0.1.0` from sqlite-lib  the dispatch-bridge
+   alias-export uses sql-value + query-result, so the types interface
+   has to be reachable through the composed binary's export graph or
+   wac compose validation rejects with "instance not valid to be used
+   as export".
+3. `browser/src/extension-loader.js`: `buildCliHostHandlers` now
+   returns an `sqlite:extension/spi` handler. Execute proxies through
+   `dispatch-bridge.bridged-execute`; other spi methods (execute-batch,
+   list-vfs, ...) fall back to a structured "not bridged in v1.4"
+   error so jco's runtime-bindgen probe doesn't trap. Added
+   `_setBridge(dispatchBridge)` setter the consumer calls after
+   `bindgen.instantiate(...)`.
+4. `browser/src/sqlink-composed.js`: wires the dispatch-bridge handle
+   into `cliHostHandlers` right after `spiLoader._setBindgenResult`,
+   before `wasi:cli/run.run()` starts.
+5. `cli/src/sqlink_registry.rs`: `ensure_schemas` now bootstraps the
+   `__sqlink_prefix*` tables alongside the `sqlink_*` ones. Native
+   sqlink-host installs the prefix schema via
+   `prefix_registry::install_schema(&conn)` at session boot but the
+   browser composed-cli scenario has no native host. Without this,
+   `.prefix add` surfaced `Error: no such table: __sqlink_prefix`.
+
+### Side effect: composed-bundle.spec.js skipped
+
+`.bundle save/list/show/delete` touches the host-resident
+`sqlite:extension/bundles` cas-cache registry, not sqlite-lib's
+SQLite connection. dispatch-bridge can't reach it; the polyfill
+still returns the structured stub. Captured as v1.5 (bundles
+registry bridging): either a JS cas-cache shim that satisfies the
+import surface or a wasm-side bundles store with its own dispatch-
+bridge entry. Bundle spec marked `test.skip` with a comment
+pointing at the v1.5 gap.
+
+### Side effect: WAC compose recipe change is load-bearing
+
+Adding `bridged-execute` (which uses sql-value + query-result from
+`sqlite:extension/types`) made wac compose 0.10 reject the
+dispatch-bridge alias-export with "instance not valid to be used
+as export (at offset 0x4c5c76)". Resolved by also exporting
+`sqlite:extension/types@0.1.0` from the composed binary. Mentioned
+here because future dispatch-bridge entries that import additional
+types may hit the same trap.
+
 ---
 
 # Plan: v1 follow-ups — roadmap for outstanding post-v1 work

@@ -53,4 +53,14 @@ export cli["wasi:cli/run@0.2.6"];
 // trampoline on sqlite-lib's connection. Without this, the
 // composed binary's outer world wouldn't expose the bridge
 // (the cli's own world doesn't declare it).
+//
+// dispatch-bridge.bridged-execute (v1.4) uses `sql-value` and
+// `query-result` from `sqlite:extension/types`. Also re-export
+// the types interface from sqlite-lib so the composed binary's
+// outer-world type graph reaches them via an exported instance —
+// without this, wac compose validation rejects the dispatch-bridge
+// alias-export with "instance not valid to be used as export"
+// because the referenced types aren't reachable through the
+// exported component's type space.
+export lib["sqlite:extension/types@0.1.0"];
 export lib["sqlink:wasm/dispatch-bridge@0.1.0"];

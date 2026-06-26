@@ -1673,12 +1673,93 @@ export function buildCliHostHandlers(opts) {
     },
   }
 
-  return {
+  // ────────────── spi (bridged) ──────────────
+  //
+  // The composed cli's WAC recipe wires `sqlite:extension/spi@0.1.0`
+  // INTERNALLY between cli and lib without re-exporting it, so the
+  // JS-side runtime-bindgen sees no spi instance to satisfy a
+  // browser-side extension's `import spi`. We bridge by calling
+  // sqlite-lib's NEW `dispatch-bridge.bridged-execute` (v1.4) which
+  // proxies to the same internal spi.execute against the shared
+  // connection. The dispatch-bridge handle isn't live at
+  // handler-build time (the composed binary hasn't been instantiated
+  // yet) — `setBridge` is called by the consumer
+  // (sqlink-composed.js) right after spi-loader._setBindgenResult.
+  //
+  // Only `execute` is bridged in v1.4: prefix-cli + bundle-cli only
+  // need top-level statement execution. `execute-scalar` /
+  // `execute-batch` / `serialize-db` etc. are still stubbed (they
+  // throw a structured "not implemented" error) — when an extension
+  // hits one, we'll add the matching dispatch-bridge entry.
+  let bridge = null
+  function getBridge() {
+    if (!bridge) {
+      const err = new Object()
+      err.payload = {
+        code: 1,
+        extendedCode: 1,
+        message:
+          'cli-host: spi bridge not wired. ' +
+          'Call cliHostHandlers._setBridge(dispatchBridge) after ' +
+          'bindgen.instantiate(...) and before the cli runs.',
+      }
+      throw err
+    }
+    return bridge
+  }
+
+  // Proxy that routes `execute` through the dispatch-bridge but lets
+  // every other spi method (execute-scalar / execute-batch / list-vfs
+  // / serialize-db / changes / total-changes / ...) fall through to
+  // the structured "not implemented" stub. jco's runtime bindgen
+  // probes the imports object for every method declared on the spi
+  // interface at instantiate time; an absent key surfaces as
+  // "unexpectedly undefined instance import 'foo'" which traps the
+  // extension before any code runs. We let the bridged method
+  // intercept and stub the rest until they're added downstream.
+  function spiStub(methodName) {
+    const err = new Object()
+    err.payload = {
+      code: 1,
+      extendedCode: 1,
+      message: `sqlink-browser scenario-3: sqlite:extension/spi.${methodName} not bridged in v1.4. ` +
+        `Add a dispatch-bridge entry + handler if your extension needs it.`,
+    }
+    throw err
+  }
+  const spiHandler = new Proxy(
+    {},
+    {
+      get(_t, key) {
+        if (typeof key === 'symbol') return undefined
+        if (key === 'execute') {
+          return (sql, params) => {
+            const b = getBridge()
+            return b.bridgedExecute(sql, params ?? [])
+          }
+        }
+        if (/^[A-Z]/.test(String(key))) {
+          return class StubResource {}
+        }
+        return (..._args) => spiStub(String(key))
+      },
+    },
+  )
+
+  const handlers = {
     'sqlite:extension/loader-bridge': loaderBridge,
     'sqlite:extension/cli-stdout': cliStdout,
     'sqlite:extension/cli-stderr': cliStderr,
     'sqlite:extension/cli-state': cliStateImpl,
+    'sqlite:extension/spi': spiHandler,
   }
+  Object.defineProperty(handlers, '_setBridge', {
+    value: (dispatchBridge) => {
+      bridge = dispatchBridge
+    },
+    enumerable: false,
+  })
+  return handlers
 }
 
 /**
