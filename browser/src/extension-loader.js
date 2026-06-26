@@ -72,17 +72,42 @@ export function buildExtensionLoader(registry) {
     // by the time the cli calls in. We look up by `nameHint` —
     // sqlink.js registers extensions keyed by name before
     // forwarding the `.load` to the cli.
-    loadExtensionFromBytes(nameHint, _bytes, _options) {
-      const entry = registry.get(nameHint)
-      if (!entry) {
+    async loadExtensionFromBytes(nameHint, bytes, _options) {
+      const cached = registry.get(nameHint)
+      if (cached) return cached.manifest
+      // v1.2 (#481): the composed cli auto-loads cli-family
+      // extensions via load_extension_from_bytes(name, BYTES).
+      // Native honors the bytes; the polyfill used to 404 here
+      // + require pre-registration. Honor the bytes by routing
+      // through registry.addFromBytes — same runtime-bindgen
+      // path db.loadExtension uses.
+      if (!bytes || (!(bytes instanceof Uint8Array) && !(bytes instanceof ArrayBuffer))) {
         const err = new Object()
         err.payload = {
           code: 404,
-          message: `extension '${nameHint}' not in JS registry. Call db.loadExtension(name, bytes) first.`,
+          message: `extension '${nameHint}' not in JS registry and no bytes supplied.`,
         }
         throw err
       }
-      return entry.manifest
+      if (typeof registry.addFromBytes !== 'function') {
+        const err = new Object()
+        err.payload = {
+          code: 500,
+          message: `extension '${nameHint}': registry.addFromBytes factory unavailable.`,
+        }
+        throw err
+      }
+      try {
+        const { manifest } = await registry.addFromBytes(nameHint, bytes)
+        return manifest
+      } catch (e) {
+        const err = new Object()
+        err.payload = {
+          code: 500,
+          message: `extension '${nameHint}' bytes-instantiate failed: ${e?.message ?? String(e)}`,
+        }
+        throw err
+      }
     },
 
     // Same handling — sqlink.js maps name to a pre-instantiated
