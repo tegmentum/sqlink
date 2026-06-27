@@ -54,6 +54,19 @@ import {
   buildExtensionImports,
   instantiateExtensionFromBytes,
 } from './wasi-imports.js'
+// PLAN-wit-value-extension.md Phase F (F4): browser-side mirror of the
+// native host's sqlite:extension contract pre-check. Every component
+// flowing through the worker -- the composed cli wasm itself, init-time
+// embeds, and runtime `loadExtension` bytes -- is screened against
+// CONTRACT_MAJOR before instantiation. Same friendly error string as
+// host/src/lib.rs + sqlink-loader/src/load.rs so operators can grep one
+// message across all three loaders.
+import {
+  CONTRACT_MAJOR,
+  CONTRACT_PACKAGE,
+  contractVersionString,
+  checkComponentContract,
+} from './contract-guard.js'
 
 const COMPOSED_WASM_URL = '/cli_with_sqlite.single_memory.component.wasm'
 
@@ -424,8 +437,28 @@ function createWorkerOpfsHost() {
 
 // ────────────────────────── init handler ──────────────────────────
 
+/**
+ * F4: report the worker's contract version up to the main thread.
+ * Lets test pages and diagnostic UIs introspect which contract the
+ * composed-cli worker speaks (and pair it against the bundles they
+ * intend to load). Same observable surface as `sqlink --contract-version`
+ * on the native host.
+ */
+async function handleContractVersion() {
+  return {
+    major: CONTRACT_MAJOR,
+    package: CONTRACT_PACKAGE,
+    version: contractVersionString(),
+  }
+}
+
 async function handleInit(msg) {
   const wasmBytes = await loadComposedWasm()
+  // F4: the composed cli wasm is itself a sqlite:extension consumer
+  // (its embedded sqlite-lib imports the contract). Pre-check it first
+  // so a contract-skewed composed-cli build fails LOAD instead of
+  // silently misrunning every subsequent extension dispatch.
+  checkComponentContract(wasmBytes, 'composed-cli')
   try {
     resetGlobalStdioState()
   } catch {
@@ -560,6 +593,11 @@ async function handleInit(msg) {
         })})`,
       )
     }
+    // F4: pre-check each embed's contract major BEFORE handing to
+    // the registry. Errors here surface through the init response;
+    // the page sees the same friendly message the native host would
+    // emit for a contract-skewed bundle.
+    checkComponentContract(bytes, name)
     await state.registry.addFromBytes(name, bytes)
     embedNames.push(name)
     const m = state.registry.get(name)?.manifest
@@ -688,6 +726,10 @@ async function handleLoadExtension(msg) {
     return { manifest: state.registry.get(name).manifest }
   }
   if (bytes) {
+    // F4: pre-check the runtime-loaded extension's contract major.
+    // A friendly Error here propagates through the worker's response
+    // protocol back to the main thread; no instantiation happens.
+    checkComponentContract(bytes, name)
     await state.registry.addFromBytes(name, bytes)
   } else {
     throw new Error(
@@ -768,6 +810,7 @@ const HANDLERS = {
   loadExtension: handleLoadExtension,
   listExtensions: handleListExtensions,
   registerWalHook: handleRegisterWalHook,
+  contractVersion: handleContractVersion,
   close: handleClose,
 }
 

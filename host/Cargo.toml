@@ -436,3 +436,11 @@ all-embed = [
 # verifier uses openssl-wasm, this is just for fixture generation.
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
+# PLAN-wit-value-extension.md Phase F (F5): synthesize tiny
+# component-model components in-test so the contract-version guard
+# can be exercised against deliberately-skewed contracts (@0.1.0,
+# @2.0.0) without needing pre-built .wasm artifacts on disk. Pinned
+# to the same wasm-tools branch wasmtime/wasm-tools elsewhere in
+# the workspace consume.
+wat = { git = "https://github.com/tegmentum/wasm-tools.git", branch = "bytes-api" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

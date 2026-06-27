@@ -434,6 +434,89 @@ mod tests {
         assert_eq!(r, target);
     }
 
+    // ─── F3: contract-version guard inheritance ──────────────────
+    //
+    // sqlink-loader does NOT maintain its own loader pre-check. It
+    // calls `host.load_extension(path, policy)` which delegates to
+    // `host.load_extension_from_bytes`; the contract-version pre-
+    // check lives there (see PLAN-wit-value-extension.md Phase F and
+    // datalink-contract's `check_component_contract`). These tests
+    // synthesize tiny component-model components with contract-skewed
+    // imports via `wat`, feed them to the same host entry point
+    // `load_and_install` does, and verify the friendly model-level
+    // error fires — not a cryptic wasmtime trap. The structural
+    // verification is: `load_and_install` -> `host.load_extension`
+    // -> `host.load_extension_from_bytes` -> contract guard.
+
+    /// Tokio runtime helper. The host's `load_extension_from_bytes`
+    /// is `async fn`; we drive it with a single-thread runtime to
+    /// keep the test footprint tiny.
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("rt")
+            .block_on(f)
+    }
+
+    /// Build a tiny component-model artifact whose only import names
+    /// an instance from `sqlite:extension/types@<ver>`. The contract
+    /// guard walks imports looking for that package prefix and parses
+    /// the `@MAJOR.minor.patch`; an empty-instance type is enough to
+    /// satisfy the component model's import-shape rules.
+    fn synth_component_targeting(ver: &str) -> Vec<u8> {
+        let wat = format!(
+            r#"(component
+              (import "sqlite:extension/types@{ver}" (instance))
+            )"#
+        );
+        wat::parse_str(&wat).expect("parse synth component WAT")
+    }
+
+    #[test]
+    fn loader_path_rejects_legacy_v0_1_component_with_friendly_message() {
+        // Phase A bumped the canonical contract to `sqlite:extension@1.0.0`.
+        // Any pre-bump component still targets @0.x. Going through the
+        // same host entry point `load_and_install` calls must reject it
+        // with the actionable PLAN-wit-contract-versioning Phase 2
+        // message (not a cryptic wasmtime trap, not a silent succeed).
+        let bytes = synth_component_targeting("0.1.0");
+        let host = sqlink_host::Host::new().expect("host new");
+        let err = block_on(host.load_extension_from_bytes(bytes, "synth_legacy", default_policy()))
+            .expect_err("legacy @0.1 must be rejected by @1.x host via the loader path");
+        let msg = err.to_string();
+        assert!(msg.contains("synth_legacy"), "names the extension: {msg}");
+        assert!(
+            msg.contains("sqlite:extension contract 0.x"),
+            "states the targeted major: {msg}"
+        );
+        assert!(
+            msg.contains("contract 1.x"),
+            "states the host major: {msg}"
+        );
+        assert!(msg.contains("rebuild"), "actionable: {msg}");
+    }
+
+    #[test]
+    fn loader_path_rejects_future_v2_component_with_friendly_message() {
+        // Forward-compat case: a future @2.x component shouldn't load
+        // into a @1.x host. Same path, same message shape.
+        let bytes = synth_component_targeting("2.0.0");
+        let host = sqlink_host::Host::new().expect("host new");
+        let err = block_on(host.load_extension_from_bytes(bytes, "synth_future", default_policy()))
+            .expect_err("future @2.x must be rejected by @1.x host via the loader path");
+        let msg = err.to_string();
+        assert!(msg.contains("synth_future"), "names the extension: {msg}");
+        assert!(
+            msg.contains("sqlite:extension contract 2.x"),
+            "states the targeted major: {msg}"
+        );
+        assert!(
+            msg.contains("contract 1.x"),
+            "states the host major: {msg}"
+        );
+    }
+
     #[test]
     fn resolve_missing_returns_err_with_hint_in_message() {
         let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_DIR", "SQLINK_LOADER_REPO_ROOT"]);

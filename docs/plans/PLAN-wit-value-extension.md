@@ -1199,3 +1199,106 @@ postgis assumptions catalogued in this PLAN's Phase D section.
   clean state on a `@feat/wit-value-phase-e`-compatible
   commit, update verify/Cargo.toml's path-dep to `../../`
   -relative and remove `/tmp/sqlink-e7`.
+
+## Phase F — done (2026-06-26)
+
+The loader pre-check (`PLAN-wit-contract-versioning.md` #485 Phase 2 /
+`PLAN-wit-value-extension.md` Phase F) is live across every load path
+in the matrix. Components whose imported `sqlite:extension` MAJOR
+diverges from the host's `CONTRACT_MAJOR = 1` (or that import the
+contract unversioned/legacy) are rejected BEFORE `Component::new` /
+`instantiate_async` with the friendly model-level message
+`PLAN-wit-contract-versioning` Phase 2 specified — not a cryptic
+wasmtime trap.
+
+### What landed
+
+- **F1 — sqlink-host pre-check.** Gated at
+  `host/src/lib.rs::register_component` (around line 7710), just
+  before the linker/instantiate call. Delegates to
+  `datalink_contract::component_contract_major` +
+  `check_component_contract` (shared with the ducklink host) so the
+  introspection and the friendly error wording are the same across
+  both contracts. The legacy `@0.x` case AND the truly-unversioned
+  case AND a hypothetical future `@2.x` are all rejected; the message
+  names the extension, states the targeted major and the host major,
+  and ends with "rebuild it against the current WIT (or use the
+  matching sqlink host version)".
+- **F2 — Observable host contract version.**
+  `pub const CONTRACT_MAJOR: u64 = 1` re-exported from `sqlink_host`
+  + a `tracing::info!` log line at `Host::new()` reading
+  `"sqlink host speaks sqlite:extension contract @1.x"` + a
+  `sqlink --contract-version` CLI flag that prints the major (`1`)
+  to stdout before any engine init. Lets operators / CI pair a host
+  binary with a catalog targeting the same major.
+- **F3 — sqlink-loader.dylib mirror.** The vanilla-SQLite loader
+  inherits the guard transitively: its `load_and_install` calls
+  `host.load_extension(path, policy)` → `host.load_extension_from_bytes`
+  → `register_component` (the F1 gate). Verified with two end-to-end
+  tests (`sqlink-loader::load::tests::loader_path_rejects_*`) that
+  synthesize tiny component-model components via `wat::parse_str`
+  with deliberately-skewed contract imports (`@0.1.0`, `@2.0.0`) and
+  confirm the friendly message fires.
+- **F4 — composed-cli-worker (browser) mirror.** jco's runtime-
+  bindgen has no equivalent reject-on-instantiate, so the worker
+  pre-screens each component's bytes in JS. New module
+  `browser/src/contract-guard.js` regexes the component-model binary
+  for `sqlite:extension/<iface>@<MAJOR>.<minor>.<patch>` import names
+  (length-prefixed UTF-8 stays addressable as ASCII) and throws the
+  same friendly error as the native side on mismatch. Wired into
+  `composed-cli-worker.js` at `handleInit` (the composed cli wasm +
+  every embed) and `handleLoadExtension` (runtime bytes). New
+  `contractVersion` postMessage handler reports
+  `{major, package, version}` up to test pages — analogous to
+  `sqlink --contract-version`. Node-level coverage:
+  `browser/tests/contract-guard.test.mjs` (10 cases via `node --test`).
+- **F5 — Conformance.** Two new tests in
+  `host/src/lib.rs::contract_guard_tests` close the loop by feeding
+  synthesized skewed components through `Host::load_extension_from_bytes`
+  directly (not just the helper fn). Proves no dispatch path slips
+  past the guard.
+- **F6 — Migration notes.** `sqlite-loader-wit/MIGRATION-1.0.md`'s
+  Backwards-compatibility section now records the per-loader
+  behavior + test coverage + observability surfaces. Lives on
+  `sqlite-loader-wit@feat/wit-value-phase-f-migration-notes` pending
+  the loader-wit PR merge; sqlink submodule pointer tracks it.
+
+### What's verified
+
+- `cargo test -p sqlink-host --lib contract_guard` — 5 / 5 pass
+  (3 helper-fn cases inherited from Phase A + 2 new F5
+  load_extension_from_bytes cases).
+- `cargo test -p sqlink-loader --lib loader_path` — 2 / 2 pass.
+- `cargo test -p sqlink-loader --lib` — 47 / 47 pass.
+- `cd browser && npm run test:unit` — 10 / 10 pass via `node --test`.
+- `sqlink --contract-version` prints `1`.
+
+### Exact friendly message string
+
+```
+extension '<name>' targets sqlite:extension contract <X>.x but this host
+speaks contract 1.x; rebuild it against the current WIT (or use the
+matching host version)
+```
+
+(unversioned variant: "targets an UNVERSIONED sqlite:extension contract
+(legacy, pre-versioning)" with the same suffix.)
+
+### #485 status
+
+Both Phase 1 (additive: registry field, Manifest channel, @1.0.0
+baseline) and Phase 2 (the guard) of `PLAN-wit-contract-versioning.md`
+are complete. The pre-check is load-bearing in all three loader
+substrates and shares the `datalink-contract` runtime helper with the
+sibling ducklink host so the next contract MAJOR bump (if ever) is a
+constant change + a catalog rebuild + a CI flag. The wider workstream
+(catalog `wit_contract` field, `verify-catalog`, OCI metadata) is the
+build-time complement that lives in the registry tooling and is
+tracked under #485 follow-ups.
+
+Cross-link: [`PLAN-wit-contract-versioning.md`][issue485] for the
+broader #485 lineage; this plan's Phase A landed #485 Phase 1 and
+Phase F landed Phase 2.
+
+[issue485]: ./PLAN-wit-contract-versioning.md
+
