@@ -1379,3 +1379,182 @@ verification path is independently sound:
   spot-checked codes.
 - All 52 existing loader tests (api / load / register / state /
   value) still pass.
+## #531 — Per-vtab CREATE TABLE schema (done 2026-06-27)
+
+### Context
+
+#489 (sqlink-loader vtab wiring) registered every UDTF as an
+eponymous module via `sqlite3_create_module_v2` and routed
+`xConnect → bridge::connect()` through `sqlite3_declare_vtab`,
+but the bridge's `connect()` was a single placeholder arm
+`CREATE TABLE x(geom BLOB)` for every vtab — no HIDDEN columns
+for the function args, no per-vtab visible-column names. The
+shim-bridge-smoke-tests gate `cases/postgis-sqlite-only/05-udtfs`
+failed at SQL parse time:
+
+```
+Parse error: too many arguments on st_dumppoints() - max 0
+Parse error: no such column: point
+```
+
+because `st_dumppoints(geom) WHERE ST_X(point) > 1` needs (a) one
+HIDDEN column to receive `geom` via xFilter argv and (b) a visible
+column literally named `point` for the `WHERE` clause to bind to.
+
+### Where the work lives
+
+- `sqlink-shim-codegen` on `feat/vtab-schema` (df8b8ef, 5aa1d15).
+- `postgis-sqlink-bridge` on `feat/vtab-schema` (33bf651, fb43942)
+  — regenerated bridge crate.
+- `mobilitydb-sqlink-bridge` on `feat/vtab-schema` (8d98363,
+  cc13fad) — regenerated bridge crate.
+
+### Mechanism
+
+1. **`UdtfShape` extended** with two new fields:
+   - `param_names: Vec<String>` (one per WIT-declared parameter,
+     in source order; defaults to `arg<i>` if the WIT didn't
+     name it),
+   - `output_row: UdtfOutputRow` — a discriminated row-shape
+     descriptor (`SingleGeom` / `SinglePrimitive { affinity }` /
+     `Record { fields }` / `Unwired { reason }`).
+
+2. **`classify_udtf_shape` walks `f.ret.inner`** to derive
+   `output_row`:
+   - `list<geometry>` (and the collapsed form
+     `Unsupported("list<geometry>")` the parser emits for some
+     scalars) → `SingleGeom`.
+   - `list<record-name>` where `record-name` matches the
+     per-shim record registry → `Record { fields: ... }`. Each
+     field's raw WIT type-text is re-parsed and aliases (e.g.
+     mobilitydb's `type timestamp-tz = s64;`) are resolved before
+     mapping to a SQLite affinity. Lets
+     `temporal-join-float → list<joined-float-pair>` declare
+     `timestamp INTEGER, left REAL, right REAL` instead of the
+     placeholder `geom BLOB`.
+   - `list<primitive>` → `SinglePrimitive`.
+   - else → `Unwired { reason }`; emitter falls back to a single
+     `value BLOB` column so the vtab still loads.
+
+3. **`emit_vtab_impl` composes the `CREATE TABLE`** per UDTF:
+   visible columns first (one per output row field), then HIDDEN
+   columns (one per WIT param), with collision resolution:
+   if a HIDDEN name matches a visible name (e.g. `st_dump(geom)`
+   would otherwise repeat `geom`), the HIDDEN col falls back to
+   `_arg<i>`. The single-`list<geometry>` visible column is named
+   `point` for SQL names ending in `point` / `points` (so the
+   smoke test's `WHERE ST_X(point) > 1` literal binds), `geom`
+   for everything else.
+
+4. **`best_index` argv slotting** — the prior `argv_index: 0`
+   default left SQLite unable to thread `f(g1, g2)` args through
+   to xFilter once HIDDEN columns existed; the table-valued-
+   function call form errored as SQL logic error before the
+   cursor ran. Now each usable constraint gets a unique 1-based
+   slot and `omit: true` so SQLite skips the redundant re-check.
+
+### Affinity-mapping table
+
+The `affinity_for(&WitType)` function maps WIT field types to
+SQLite's type-affinity strings (which drive the declared column
+type alongside HIDDEN-flag emission):
+
+| WIT type | Affinity |
+|---|---|
+| `s32` / `s64` / `u32` / `u64` / `u8` / `bool` | INTEGER |
+| `f32` / `f64` | REAL |
+| `string` | TEXT |
+| `list<u8>` (alias `binary`) | BLOB |
+| `geometry` / `geography` / `bbox` | BLOB |
+| `list<geometry>` / `list<borrow<geometry>>` | BLOB |
+| `list<option<u32>>` / generic `list<T>` | TEXT (JSON-encoded fallback) |
+| `tuple<...>` | BLOB |
+| `option<T>` | recursive on `T` |
+| `result<T, E>` | recursive on `T` |
+| `Unsupported(name)` (record kebab) | BLOB (wit-value bytes) |
+
+Aliases (`type X = Y;`) are resolved before mapping so the
+mobilitydb-side `type timestamp-tz = s64;` lets a field declared
+`timestamp: timestamp-tz` land as `timestamp INTEGER`.
+
+### Sample emitted schemas
+
+postgis (`/tmp/postgis-interface.sqlite`):
+
+```sql
+-- st_dump(geom) — single-geom row + HIDDEN input (renamed _arg0
+-- because the WIT param name 'geom' collides with the visible col)
+CREATE TABLE x("geom" BLOB, "_arg0" HIDDEN)
+
+-- st_dumppoints(geom) — visible col 'point' so SQL queries can
+-- reference it directly; HIDDEN input keeps the WIT name
+CREATE TABLE x("point" BLOB, "geom" HIDDEN)
+
+-- st_squaregrid(size, bounds) — two-arg form, both HIDDEN
+CREATE TABLE x("geom" BLOB, "size" HIDDEN, "bounds" HIDDEN)
+
+-- st_subdivide(geom, max-vertices) — hyphen in HIDDEN name
+-- (double-quoted so the SQL parser accepts it)
+CREATE TABLE x("geom" BLOB, "_arg0" HIDDEN, "max-vertices" HIDDEN)
+```
+
+mobilitydb (`/tmp/mobilitydb-interface.sqlite`):
+
+```sql
+-- temporal-join-float(left, right) → list<joined-float-pair>
+-- record return mapped to per-field visible columns; affinities
+-- after timestamp-tz alias resolution (s64 → INTEGER)
+CREATE TABLE x("timestamp" INTEGER, "left" REAL, "right" REAL,
+               "_arg0" HIDDEN, "_arg1" HIDDEN)
+```
+
+### Smoke gate
+
+```
+cases/postgis-sqlite-only:
+  PASS 05-udtfs       (was: FAIL with parse errors)
+  pass=1 fail=0
+
+cases/postgis (unchanged):
+  PASS 01-wkt-roundtrip / 02-measurements / 03-predicates /
+       04-null-prop / 05-cast-rewrite
+  pass=5 fail=0
+```
+
+### Manual verify
+
+```
+SELECT ST_AsText(geom) FROM st_dump(ST_GeomFromText('MULTIPOINT(1 1, 2 2, 3 3)'));
+  POINT(1 1)
+  POINT(2 2)
+  POINT(3 3)
+
+SELECT ST_AsText(point) FROM st_dumppoints(ST_GeomFromText('LINESTRING(0 0, 1 1, 2 2)'));
+  POINT(0 0)
+  POINT(1 1)
+  POINT(2 2)
+
+SELECT count(*) FROM st_dumpsegments(ST_GeomFromText('LINESTRING(0 0, 1 1, 2 2, 3 3)'));  -- 3
+SELECT count(*) FROM st_squaregrid(1.0, ST_GeomFromText('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'));  -- 9
+```
+
+### #531 deferrals
+
+- **Multi-column row materialisation in xColumn.** The cursor's
+  row state stays `Vec<Vec<u8>>` (one WKB per row). For
+  postgis (every UDTF returns `list<geometry>`, one BLOB column)
+  this is sufficient — col 0 returns the row blob, all other
+  cols (HIDDEN inputs + would-be record fields) return NULL.
+  For mobilitydb's record-row UDTFs (`temporal-join-float` etc.)
+  the SCHEMA is correct so SQL parses, but xFilter still returns
+  the "UDTF param shape not yet wired" stub (record-typed args
+  fall through `emit_udtf_filter_body`'s match) and even if it
+  populated rows, xColumn would only surface the first column.
+  Tracked separately when mobilitydb-side UDTF param marshaling
+  lands.
+- **Mutable vtabs (xUpdate).** Zero callers today per #489's
+  report.
+- **Topology + raster table_functions.** Upstream WIT still not
+  present (#490).
+- **Cursor batching.** Deferred from #489.
+
