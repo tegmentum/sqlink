@@ -1,3 +1,232 @@
+## v1.6 polish: post-v1.5 follow-ups (#487)
+
+### Status (2026-06-27)
+
+Three sub-items captured by v1.5 round 2 + round 3 deferrals; one
+(Sub-item C) landed, two (A, B) deferred with a substrate-blocker
+report.
+
+  - **Sub-item C — wasm-tools component new per-artifact rationale:
+    DONE.**
+  - **Sub-item A — bundle-cli SPI rewrite to dispatch-bridge:
+    DEFERRED (substrate blocker; see analysis below).**
+  - **Sub-item B — JS polyfill SQL strings auto-sync from Rust
+    constants: DEFERRED, downstream of A. If A retires the polyfill
+    SQL strings entirely, B is moot.**
+
+### Sub-item C: per-artifact wasm-tools rationale — DONE
+
+Survey output:
+
+  | Artifact                  | Source                                        | crate-type            | wit-bindgen | Output kind           | `wasm-tools component new`? |
+  |---------------------------|-----------------------------------------------|-----------------------|-------------|-----------------------|-----------------------------|
+  | `sqlite_cli.wasm`         | `cli/`                                        | `cdylib`              | macro       | CORE module + custom  | YES — kept                  |
+  | `sqlite_lib.wasm`         | submodule `sqlite-wasm/sqlite-lib/`           | `cdylib`              | macro       | CORE module + custom  | YES — kept                  |
+  | `extensions/*/*.wasm`     | each extension cdylib                         | `cdylib` (+ `rlib`)   | macro       | mostly CORE; some auto-component | auto-detected per-artifact |
+
+  None of the three categories build via `cargo component build`,
+  so `wasm-tools component new` is always required for cargo-built
+  cdylibs. Some toolchain configurations produce a component
+  directly (auto-detect on wasm32-wasip2); the script branches.
+
+  v1.5 round 1 incorrectly assumed `wasm32-wasip2` always emits
+  components and considered the step dead; round 2 corrected by
+  un-removing it for `sqlite_cli.wasm` and `sqlite_lib.wasm`
+  specifically. This sub-item documents the per-artifact decision
+  inline in each script so a future reader does not re-make round
+  1's mistake.
+
+  Scripts annotated with per-artifact rationale:
+
+  1. `scripts/build-composed-runtime.sh` — `sqlite_cli.wasm` →
+     core module → kept.
+  2. `scripts/build-composed-runtime-single-memory.sh` —
+     same.
+  3. `scripts/encode-extension-components.sh` — auto-detect via
+     `wasm-tools print` head, copy-through if already a component
+     else `wasm-tools component new`. Comment captures the per-
+     artifact branch rationale.
+  4. `sqlite-wasm/scripts/build-sqlite-lib-component.sh` — lives in
+     the sqlite-wasm submodule; left in place (already correct).
+     If the comment-add lands separately, it is purely cosmetic.
+
+### Sub-item A: bundle-cli SPI rewrite — DEFERRED (substrate blocker)
+
+Goal: rewire `extensions/bundle-cli/src/lib.rs` to call
+`sqlink:wasm/dispatch-bridge.bridged-execute-cas` directly instead
+of `sqlite:extension/bundles`, so the browser polyfill
+(`browser/src/extension-loader.js` lines ~1898-2351, ~450 lines)
+can retire its `sqlite:extension/bundles` typed shim.
+
+**The blocker**: bundle-cli's WIT world (`dotcmd-aware` in
+`sqlite-loader-wit/wit/world.wit`) belongs to the
+`sqlite:extension@1.0.0` package, while `dispatch-bridge` lives in
+`sqlink:wasm@0.1.0` (defined in `sqlite-wasm/wit/dispatch-bridge.wit`).
+The two packages are not currently mutually-importable in a way
+that lets bundle-cli's `wit_bindgen::generate!` macro reach
+`sqlink:wasm/dispatch-bridge` without cross-package wit-deps
+restructuring.
+
+Specifically:
+
+  1. **WIT package boundary.** sqlite-loader-wit's worlds today
+     only import interfaces in their own package
+     (`sqlite:extension/{spi, session, bundles, ...}`). Adding a
+     cross-package import would require either:
+       * extending sqlite-loader-wit's `wit/deps/` to vendor the
+         `sqlink:wasm` package (mirrors what sqlite-wasm already
+         does the other way at `sqlite-wasm/wit/deps/sqlite-extension/`),
+         OR
+       * giving bundle-cli a bespoke world definition outside
+         sqlite-loader-wit so its bindgen path can be a UNION of
+         both wit dirs.
+     Either path crosses a submodule + package-versioning boundary
+     not previously crossed by any in-tree extension.
+
+  2. **Native host's bundle-cli load path.** `host/src/lib.rs`'s
+     `loaded_dotcmd_aware` module satisfies bundle-cli's imports
+     via `wasmtime::component::bindgen` against the dotcmd-aware
+     world. It implements `sqlite:extension/bundles::Host`
+     (`host/src/lib.rs` line 4009) directly against
+     `sqlite_cas_cache::bundles_exec`. Switching bundle-cli to
+     dispatch-bridge would require:
+       * adding a `dispatch_bridge::Host` impl on `LoadedState`
+         (open the cas connection, run `bridged_execute_cas(sql,
+         params)` through `sqlite_cas_cache::bundles_exec`'s
+         shared SQL constants);
+       * extending the `bindgen!` macro's `with:` map to include
+         the new package's interfaces;
+       * possibly adding the sqlink:wasm WITs to the host's wit
+         path search.
+     Net new native code: ~150-200 lines. Manageable, but
+     downstream of (1).
+
+  3. **bundle-cli runtime rewrite.** Once the WIT can import
+     `bridged-execute-cas`, the bundle-cli body itself needs every
+     typed call (`bundles::bundle_save(name, set_hash, members)`)
+     rewritten to:
+       * compose the right SQL string from `bundles_exec::*_SQL`
+         constants;
+       * bind parameters as `sql-value` list;
+       * call `bridged_execute_cas(sql, params)`;
+       * parse the returned `query-result` rows back into typed
+         struct shapes.
+     Net new wasm-side code: ~400-500 lines (replacing ~300 lines
+     of typed-call sites). Doable but couples to (1)'s WIT shape.
+
+  4. **WAC composition wiring (browser path).** The composed
+     browser binary's current recipe
+     (`composition-cli-sqlite-lib.wac`) doesn't wire bundle-cli's
+     imports through sqlite-lib's dispatch-bridge export — it just
+     re-exports dispatch-bridge to the JS host. If bundle-cli (a
+     SEPARATE in-cli component, loaded at runtime via
+     `extension_loader.load-extension-from-bytes`) imports
+     dispatch-bridge, sqlite-lib's export needs to flow through to
+     it. Today's loader runtime doesn't compose dynamically; it
+     calls `Component::new(bytes)` then satisfies imports through
+     the host wit-bindgen path. The browser-side polyfill would
+     need to expose dispatch-bridge as a runtime-bindgen-satisfiable
+     import to bundle-cli — which means re-implementing the same
+     bridge surface in JS that sqlite-lib already exports. That
+     loops back to a polyfill, just under a different interface
+     name; the polyfill removal Sub-item A targets does NOT cleanly
+     follow.
+
+  **Conclusion (the substrate blocker)**: of points (1)-(4), point
+  (4) is the deal-breaker for the polyfill-removal goal. Even with
+  the WIT cross-package work done, the runtime-bindgen path that
+  the JS host uses to satisfy bundle-cli's imports means dispatch-
+  bridge still has to be polyfilled JS-side; it just moves from
+  `sqlite:extension/bundles` (twelve typed methods) to
+  `sqlink:wasm/dispatch-bridge.bridged-execute-cas` (one method).
+
+  The MOVE itself reduces the polyfill from ~450 lines to ~30-50
+  lines (one execute-cas method plus the schema bootstrap), which
+  is the genuine win Sub-item A aimed at. But this requires:
+    * sqlite-loader-wit deps restructuring (or a bundle-cli
+      bespoke world);
+    * native host's dotcmd-aware bindgen extended to satisfy
+      sqlink:wasm/dispatch-bridge for bundle-cli;
+    * bundle-cli rewrite (~500 lines);
+    * polyfill restructuring (the bundles handler set goes from
+      twelve typed methods to one execute-cas method);
+    * acceptance test pass on composed-bundle.spec.js (including
+      reload leg).
+
+  **Estimated effort**: 3-5 days of focused work, spanning two
+  submodules + workspace + browser. NOT feasible in a single
+  session that also covers Sub-items B and C cleanly.
+
+  **Recommendation**: split Sub-item A into its own follow-up
+  task (#487a or a new task ID) with explicit phases:
+    a. WIT cross-package import substrate (deps/ wiring, decide
+       between vendoring vs bespoke world).
+    b. Native host's dotcmd-aware bindgen extension.
+    c. bundle-cli SPI call-site rewrite.
+    d. Browser polyfill restructuring.
+    e. Composed-bundle browser test pass; bundle-cli native test
+       pass.
+
+  Until then the v1.5 round 2 architecture (bundle-cli imports the
+  typed `bundles` SPI; native host implements it directly; browser
+  polyfill emulates it through bridged-execute-cas) remains the
+  shipping shape. Both sides are tested and work end-to-end; the
+  v1.6 polish goal was code-shape cleanup, not functional fix.
+
+### Sub-item B: JS polyfill SQL strings auto-sync from Rust — DEFERRED
+
+  Downstream of Sub-item A. Two cases:
+
+  - **If A's polyfill restructuring lands**: the remaining JS-side
+    SQL surface is just the schema bootstrap statements; the
+    typed-method SQL drops out entirely. B becomes a small win
+    (auto-sync the schema bootstrap statements from
+    `sqlite_cas_cache::schema::INSTALL_SCHEMA` instead of inline
+    JS). Effort: 0.5 day, choose path β (shared text file
+    `sqlite-cas-cache/sql/install_schema.sql` imported by both
+    Rust `include_str!` and the JS polyfill `import.meta.url`-
+    fetched at build time).
+
+  - **If A stays unlanded**: B's value is preserved (the ~12
+    typed-method SQL strings in the polyfill still need to be
+    byte-aligned with `bundles_exec::*_SQL`). Path α (build-time
+    codegen) would parse the Rust consts into JSON via a
+    `build.rs` step and emit a `bundle-cli-sql.js` the browser
+    imports. Effort: 1-1.5 days. Path β stays an option too but
+    requires extracting the consts to a shared `.sql` file first,
+    which mechanically changes ~150 lines of Rust.
+
+  Either way, B does not block any shipping path today (the
+  hand-sync is currently honest — both sides drive the same
+  end-to-end test surface — and v1.5 round 3's transcription is
+  byte-aligned with the Rust constants as documented in the
+  polyfill's leading comment). Recommend doing B together with
+  A, after A's substrate clears.
+
+### Verification (this fork)
+
+  - `bash -n scripts/build-composed-runtime.sh
+    scripts/build-composed-runtime-single-memory.sh
+    scripts/encode-extension-components.sh` — all three pass.
+    (Doc-only changes; no behavior delta. End-to-end build
+    requires the wasm32-wasip2 toolchain + wasi-sdk + composed-
+    runtime prerequisites; not re-run in this fork because
+    Sub-item C is documentation-only.)
+  - Sub-item A + B verification deferred along with the work.
+
+### Honest deferrals
+
+  - Sub-item A: full rewrite deferred. Substrate-blocker report
+    above. Recommend splitting into its own task.
+  - Sub-item B: deferred together with A.
+  - The doc comment in `sqlite-wasm/scripts/build-sqlite-lib-
+    component.sh` (submodule-side) is intentionally NOT modified
+    in this fork to avoid an extra submodule bump for a purely
+    cosmetic change; the script is already correct and is
+    referenced from the v1.6 plan-doc summary above.
+
+---
+
 ## v1.2: Browser composed-cli auto-load via JS registry
 
 ### Background
