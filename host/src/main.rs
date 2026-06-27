@@ -46,6 +46,7 @@ impl wasmtime_wasi::WasiView for State {
 
 fn usage() -> ! {
     eprintln!("usage: sqlink [--db PATH] [--cache-dir DIR] [--no-component-cache] [--grant CAP[,CAP...]] <component.wasm|.cwasm> [-- guest-args...]");
+    eprintln!("       sqlink run-tool <component.wasm|.cwasm> [--db PATH] [-- guest-args...]");
     eprintln!("       sqlink changeset {{invert|concat}} <in1> [in2] <out>");
     eprintln!("       sqlink changeset capture --db PATH --sql FILE --output FILE [--table NAME]");
     eprintln!("       sqlink changeset apply --db PATH --input FILE");
@@ -831,6 +832,34 @@ async fn main() -> Result<()> {
     if args[1] == "compose" {
         return run_compose_subcommand(&args[2..]);
     }
+
+    // `run-tool <component.wasm|.cwasm> [--db PATH] [-- guest-args...]`:
+    // the Route A driver. Runs a `wasi:cli/run` tool component (the REAL
+    // sqlite3 shell built by scripts/build-shell-wasm.sh) through the
+    // sqlink runtime with INHERITED stdio (a real TTY), wiring the same
+    // host imports — extension-loader / dispatch / spi / spi-loader — the
+    // cli path wires. Inside the shell, `.load <name>` then resolves a
+    // `sqlite:extension` WASM COMPONENT through the host shared-conn
+    // loader rather than dlopen.
+    //
+    // This is intentionally a thin alias over the normal positional run
+    // path below: that path ALREADY instantiates wasi:cli/run with
+    // inherited stdio and the full host-import surface. Stripping the
+    // `run-tool` verb and letting the rest flow through keeps a single
+    // run code path (no second, drifting copy of the linker wiring).
+    let args: Vec<String> = if args[1] == "run-tool" {
+        if args.len() < 3 {
+            eprintln!(
+                "usage: sqlink run-tool <component.wasm|.cwasm> [--db PATH] [-- guest-args...]"
+            );
+            std::process::exit(2);
+        }
+        std::iter::once(args[0].clone())
+            .chain(args[2..].iter().cloned())
+            .collect()
+    } else {
+        args
+    };
 
     let parsed = match parse_main_args(&args) {
         Ok(p) => p,

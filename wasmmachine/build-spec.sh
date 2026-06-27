@@ -1,13 +1,21 @@
 #!/usr/bin/env bash
-# Build the wasmMachine spec for sqlite-cli.
+# Build the wasmMachine spec for the REAL sqlite3 shell.
 #
-# PLAN-wasmmachine.md E3. Compiles the cli to a wasm32-wasip2
-# component, hashes it with blake3, substitutes the digest + path
-# into wasmmachine/sqlite-cli.json.template, and writes the result
-# to wasmmachine/sqlite-cli.json.
+# PLAN-wasmmachine.md E3, updated for Route A: this now points at the
+# GENUINE upstream sqlite3 shell (deps/sqlite/shell.c) compiled to a
+# wasm32-wasip2 `wasi:cli/run` component by scripts/build-shell-wasm.sh,
+# not the hand-rolled Rust CLI port (the "lookalike"). The real shell
+# statically links sqlite3, so its component imports ONLY the standard
+# WASI surface (no sqlite:extension/* host imports) — the spec template
+# is sqlite-cli.json.template (kept in sync).
+#
+# Tool runtime: the sqlink host. End users drive it with
+#   sqlink run-tool <component>
+# (a real TTY via inherited stdio); the v86 / wasmMachine spec produced
+# here describes the same component for the sealed-identity + run phases.
 #
 # Requires:
-#   - cargo, rustc with wasm32-wasip2 target
+#   - the wasi-sdk (scripts/build-shell-wasm.sh resolves it)
 #   - wasm-tools (`cargo install wasm-tools`)
 #   - blake3sum, OR python3 + the `blake3` package, OR jq + an
 #     external `b3sum` tool. We use whichever's on PATH.
@@ -21,16 +29,19 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="$ROOT/wasmmachine"
-CLI_RELEASE="$ROOT/target/wasm32-wasip2/release/sqlite_cli.wasm"
+# The real-shell component built by scripts/build-shell-wasm.sh.
+SHELL_COMPONENT="$ROOT/target/wasm32-wasip2/release/sqlite3-shell.component.wasm"
 CLI_COMPONENT="$OUT_DIR/sqlite_cli.component.wasm"
 SPEC_TEMPLATE="$OUT_DIR/sqlite-cli.json.template"
 SPEC_OUT="$OUT_DIR/sqlite-cli.json"
 
-echo "==> Building sqlite-cli for wasm32-wasip2..."
-(cd "$ROOT" && cargo build -p sqlite-cli --target wasm32-wasip2 --release)
+echo "==> Building the real sqlite3 shell for wasm32-wasip2..."
+bash "$ROOT/scripts/build-shell-wasm.sh"
 
-echo "==> Wrapping core module as wasi-p2 component..."
-wasm-tools component new "$CLI_RELEASE" -o "$CLI_COMPONENT"
+echo "==> Staging real-shell component into wasmmachine/..."
+# wasi-sdk 33 emits a component directly; just copy it next to the spec
+# so the spec's file:// uri is self-contained.
+cp "$SHELL_COMPONENT" "$CLI_COMPONENT"
 
 echo "==> Hashing component with blake3..."
 DIGEST_HEX=""
