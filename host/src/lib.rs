@@ -198,6 +198,42 @@ pub mod loaded_dotcmd_aware {
     });
 }
 
+/// Used when a loaded extension targets the purpose-built
+/// `bundle-cli` world. Same import set as `dotcmd-aware` minus
+/// `wal-frames` / `s3-base` (bundle-cli has no use for either)
+/// plus `dispatch-bridge-cas` — the single-method slice that
+/// gives bundle-cli direct SQL access to the CAS-cache
+/// connection without going through the typed `bundles::Host`
+/// surface.
+///
+/// `with:` shares the rest with `loaded` so we don't re-emit
+/// trait/type modules for interfaces every bindgen module already
+/// generates. The `dispatch-bridge-cas` interface is the new
+/// addition; its trait gets a fresh per-world impl below.
+pub mod loaded_bundle_cli {
+    wasmtime::component::bindgen!({
+        path: "../sqlite-loader-wit/wit",
+        world: "bundle-cli",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "sqlite:extension/types":         super::loaded::sqlite::extension::types,
+            "sqlite:extension/spi":           super::loaded::sqlite::extension::spi,
+            "sqlite:extension/session":       super::loaded::sqlite::extension::session,
+            "sqlite:extension/logging":       super::loaded::sqlite::extension::logging,
+            "sqlite:extension/config":        super::loaded::sqlite::extension::config,
+            "sqlite:extension/policy":        super::loaded::sqlite::extension::policy,
+            "sqlite:extension/http":          super::loaded::sqlite::extension::http,
+            "sqlite:extension/build":         super::loaded::sqlite::extension::build,
+            "sqlite:extension/bundles":       super::loaded::sqlite::extension::bundles,
+            "sqlite:extension/cli-stdout":    super::loaded_dotcmd_aware::sqlite::extension::cli_stdout,
+            "sqlite:extension/cli-stderr":    super::loaded_dotcmd_aware::sqlite::extension::cli_stderr,
+            "sqlite:extension/cli-state":     super::loaded_dotcmd_aware::sqlite::extension::cli_state,
+            "sqlite:extension/loader-bridge": super::loaded_dotcmd_aware::sqlite::extension::loader_bridge,
+        },
+    });
+}
+
 /// Used when a loaded extension declares custom collations. The
 /// `collating` world is minimal + `collation` export — same import
 /// surface as `loaded`, plus the `compare` callback. Shares types
@@ -4357,6 +4393,60 @@ fn bundles_summary_to_wit(
         last_used_at: s.last_used_at,
         member_count: s.member_count,
         binary_count: s.binary_count,
+    }
+}
+
+/// `sqlite:extension/dispatch-bridge-cas` host dispatcher. v1.5
+/// round 6 (path δ) cutover. Routes every call to
+/// `Cache::with_bundles_conn` so extensions that target the
+/// `bundle-cli` world can drive arbitrary CRUD against
+/// `~/.cache/sqlink/cas.db` without going through the typed
+/// `bundles::Host` surface.
+///
+/// Body mirrors `impl spi::Host::execute` against the user-data
+/// connection — same `prepare` + `bind_all` + `collect_rows` +
+/// `changes` + `last_insert_rowid` shape — but the target is the
+/// cas connection. The browser composed binary's
+/// `sqlink:wasm/dispatch-bridge-cas` (in
+/// `sqlite-wasm/sqlite-lib/src/lib.rs`) does the same against
+/// sqlite-lib's in-WASM `cas_with`, so native + browser callers
+/// see identical SQL semantics.
+///
+/// Capability-gated on `bundles_granted`. Schema bootstrap is
+/// owned by `Cache::with_bundles_conn` itself (the cas store
+/// initializes the schema during `SqliteCasStore::open*`); the
+/// caller can assume the cas tables exist.
+///
+/// Only the `loaded_bundle_cli` bindgen module emits this trait
+/// (the `bundle-cli` world is the only world that imports
+/// `dispatch-bridge-cas`), so this is the only impl block needed.
+impl loaded_bundle_cli::sqlite::extension::dispatch_bridge_cas::Host for LoadedState {
+    async fn bridged_execute_cas(
+        &mut self,
+        sql: String,
+        params: Vec<loaded::sqlite::extension::types::SqlValue>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::types::QueryResult,
+        loaded::sqlite::extension::types::SqliteError,
+    > {
+        let cache = bundles_open_cache(self)?;
+        cache.with_bundles_conn(|conn| {
+            let mut stmt = conn.prepare(&sql).map_err(db_err_to_spi)?;
+            let columns: Vec<String> = stmt.column_names();
+            let bound: Vec<_> = params.into_iter().map(spi_value_to_db).collect();
+            stmt.bind_all(&bound).map_err(db_err_to_spi)?;
+            let rows = stmt.collect_rows().map_err(db_err_to_spi)?;
+            let out_rows: Vec<Vec<loaded::sqlite::extension::types::SqlValue>> = rows
+                .into_iter()
+                .map(|r| r.into_iter().map(db_value_to_spi).collect())
+                .collect();
+            Ok(loaded::sqlite::extension::types::QueryResult {
+                columns,
+                rows: out_rows,
+                changes: conn.changes(),
+                last_insert_rowid: conn.last_insert_rowid(),
+            })
+        })
     }
 }
 
