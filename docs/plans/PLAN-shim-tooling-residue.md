@@ -1054,6 +1054,75 @@ clean; `wac plug` + `wasm-tools validate` pass.
   from the W1 name-match heuristic and are independent of W3.2;
   the aggregate paths (id 1000025/1000026/1000027) are correct
   and SQLite registration picks the right binding by arity.
+## W4b — done
+
+Landed `feat/w4b-udtf-list-record` on sqlink-shim-codegen,
+mobilitydb-sqlink-bridge, and sqlink (this plan doc).
+
+### Change in one sentence
+
+Extended `emit_udtf_filter_body` with a `ParamShape::ListRecord`
+arm that calls the existing per-record
+`parse_json_list_record_<snake>` prelude helper — the same path W2
+Phase 2 (#553) wired for scalars, lifted into UDTFs.
+
+### Mechanical surface
+
+- `sqlink-shim-codegen/src/wasm_target/emit_lib.rs`:
+  - New `ParamShape::ListRecord` arm in `emit_udtf_filter_body`
+    that emits `let arg{idx} = parse_json_list_record_{snake}(...)`
+    and passes `&arg{idx}` to the WIT call.
+  - Side fix in `emit_row_materialiser` `SinglePrimitive` arm:
+    `v as i64` / `v as f64` over `.iter()`'s `&T` was invalid;
+    deref with `*v` first. Pre-existing typo dormant until W4b
+    landed the first UDTFs returning `list<s64>`.
+- `dispatch.rs::classify_udtf_shape` did not need a change —
+  `classify_param` already routed `list<record>` to
+  `ParamShape::ListRecord` since W2 Phase 2.
+- `mobilitydb-sqlink-bridge` regenerated; `cargo build --target
+  wasm32-wasip2 --release` clean; `wac plug` against
+  `~/git/mobilitydb-wasm/target/wasm32-wasip2/release/mdb_temporal_wasm.wasm`
+  produces a valid 6.4 MB composed loadable.
+
+### Numbers
+
+- Mobilitydb unwired UDTFs: 41 → 29 (12 wired).
+- The 29 remaining are all `no WIT function matches` — W4a (#557)
+  upstream-WIT-coverage gaps, not codegen gaps.
+- Newly wired UDTFs (all four `list<record>` element shapes the
+  prior survey identified):
+
+  | Element record | UDTFs |
+  | --- | --- |
+  | `indexed-interval` | `interval_tree_query_overlapping`, `interval_tree_query_point` |
+  | `indexed-point-xy` | `kdtree_xy_nearest_k`, `kdtree_xy_within`, `quadtree_query_box` |
+  | `indexed-point-xyz` | `kdtree_xyz_nearest_k`, `kdtree_xyz_within`, `octree_query_box`, `octree_query_sphere` |
+  | `stindex-entry` | `stindex_find_in_period`, `stindex_find_in_spatial`, `stindex_find_in_stbox` |
+
+(12, not 15 — the prior session's survey over-counted; the
+mobilitydb-interface.sqlite snapshot used here has 12 such UDTFs.
+The other UDTFs the survey lumped in turned out to be W4a name-
+matching gaps, not list<record> param shapes.)
+
+### Verify acceptance
+
+`mobilitydb-sqlink-bridge/verify` grew a `W4b` arm that drives
+`kdtree_xy_within(points: list<indexed-point-xy>, cx, cy, radius)`
+end-to-end through the host's `dispatch_vtab_connect` /
+`dispatch_vtab_open` / `dispatch_vtab_filter` / `(dispatch_vtab_column
+/ dispatch_vtab_next)*` loop. Three points at (0,0)/id=10,
+(1,1)/id=20, (5,5)/id=30 with radius 2 round-trip as expected:
+cursor yields `[10, 20]`. Existing Phase E + #522 + W2 Phase 1+2
+acceptance arms still pass.
+
+### Out of scope (filed downstream)
+
+- `UdtfFieldShape::WitValueRecord` (W4c) — deferred; the
+  mobilitydb UDTFs wired here all return `list<s64>` or row records
+  whose fields are primitives, so no nested-record fields hit the
+  row materialiser.
+- The remaining 29 unwired mobilitydb UDTFs are W4a (#557)
+  upstream WIT coverage gaps.
 
 ## References
 
