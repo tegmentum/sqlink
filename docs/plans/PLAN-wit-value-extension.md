@@ -1472,3 +1472,161 @@ The remaining 1110 mobilitydb unwired split into:
   / direct decode would skip the round-trip.
 
 [issue522]: #522
+
+## #523 — done (2026-06-27)
+
+Short-circuited the LOCAL→UPSTREAM ciborium round-trip in the
+wit-value dispatch path. Pre-#523 every `arg_witvalue_<R>` did
+three CBOR ops per call:
+
+```
+payload.bytes
+  → LOCAL  via bridge serde-ops `_from_canon_cbor`  (decode)
+  → bytes  via ciborium::ser::into_writer            (encode)
+  → UPSTREAM via ciborium::de::from_reader            (decode)
+```
+
+For records whose LOCAL serde-ops clone is byte-compatible with the
+UPSTREAM Rust type, decoding straight from `payload.bytes` into
+UPSTREAM skips one decode + one encode + one allocation per call.
+
+### Structural-identity heuristic
+
+A new `RecordType.direct: bool` flag is computed in
+`sqlink-shim-codegen/src/wasm_target/record_registry.rs` via
+fix-point analysis. The criterion (per field, recursively):
+
+- The field's type-text must resolve to one of:
+  - A WIT primitive (transparent at the Rust serde layer).
+  - A same-package type alias chain ending at a primitive
+    (`type timestamp-tz = s64;` → wit-bindgen emits
+    `pub type TimestampTz = i64;` → CBOR-identical to bare `i64`).
+  - A same-package enum (LOCAL clone preserves variant names + order
+    → default-serde tags by name → CBOR-identical).
+  - A same-package record that is itself `direct`.
+- Cross-package identifiers, `tuple<…>`, `result<…>`, and unknown
+  identifiers force `direct = false`.
+
+The flag is computed against the registry's full record set; a
+fix-point loop runs until no record flips. Same iteration shape as
+the existing `is_copy` analysis.
+
+### Codegen emit
+
+`emit_lib::emit_wit_value_helpers` now branches on `r.direct`:
+
+- **`direct == true`** — emits:
+  ```rust
+  ciborium::de::from_reader::<UPSTREAM, _>(payload.bytes.as_slice())
+      .map_err(|e| format!("{name}: decode arg {idx}: {}", e))
+  ```
+  Skip LOCAL alloc, skip re-encode, skip second decode.
+- **`direct == false`** — emits the pre-#523 LOCAL→UPSTREAM
+  round-trip, unchanged.
+
+The return-side `ret_to_witvalue_<R>` already encoded UPSTREAM
+directly (no LOCAL hop), so it stays as-is; #523 just adds a
+clarifying doc-comment so future readers don't reintroduce a LOCAL
+allocation there.
+
+### Knock-on: WIT parser fix for multi-field-per-line records
+
+While verifying which mobilitydb records short-circuited, the
+maintainer report showed 57/59. The two outliers (`stbox3d`, `tbox`)
+turned out to be a parser bug, not a real structural divergence:
+the WIT parser was treating each `record`-body line as a SINGLE
+`field: type` pair, and the upstream WIT squashed multiple
+primitives onto one line:
+
+```wit
+record stbox3d {
+    xmin: f64, ymin: f64, xmax: f64, ymax: f64,
+    zmin: f64, zmax: f64,
+    tmin: s64, tmax: s64,
+}
+```
+
+The first colon's RHS became `"f64, ymin: f64, xmax: f64, ymax:
+f64"` and the trailing fields were lost. Extending the parser to
+split on top-level commas (preserving angle/paren-nested commas so
+`tuple<f64, f64>` survives) fixed the parse + lifted the short-
+circuit count to 59/59.
+
+The `world.wit` regen normalised these multi-field-per-line records
+to one-field-per-line emit too. The type_ids for `stbox3d` + `tbox`
+shifted (the canonical hash now sees the correct field shape).
+
+### Numbers
+
+| Shim       | Records | Short-circuited (direct=true) |
+|------------|--------:|------------------------------:|
+| mobilitydb |      59 |                            59 |
+| postgis    |      18 |                            18 |
+
+Postgis has no scalar that takes a record on the SQL boundary, so
+no `arg_witvalue_<R>` helpers are emitted — the `direct` flag is
+computed but never read at runtime in postgis's case. The 18/18
+all-direct result is still useful as a regression signal: any
+future postgis record that introduces a cross-package reference
+will drop the count and surface in the stderr line.
+
+### Manifest annotation (523.3) — deferred
+
+The original task description suggested adding `direct: bool` to
+the `typed-value-binding` manifest entry as a diagnostic hint. That
+requires extending the WIT contract in
+`sqlite-loader-wit/wit/metadata.wit` (with a contract version bump
+per #485) and mirroring the parse on the host + browser sides. Out
+of scope for #523; tracked in `PLAN-followups.md` as a low-priority
+nice-to-have. The stderr line at codegen time already gives the
+maintainer the same information.
+
+### Verified
+
+- `cargo build -p sqlink-shim-codegen` clean.
+- `cargo test -p sqlink-shim-codegen --lib` 13/13 pass (the 6 pre-
+  existing tests + 7 new ones covering: all-primitive, primitive-
+  alias resolution, same-package enum, nested record propagation,
+  cross-package blocks, tuple/result blocks, non-primary records
+  never direct).
+- `cargo build -p mobilitydb-sqlink-bridge --target wasm32-wasip2
+  --release` clean (2 unused-variable warnings on generated vtab
+  stubs, pre-existing).
+- `cargo build -p postgis-sqlink-bridge --target wasm32-wasip2
+  --release` clean.
+- `wac plug` composition of both bridges; outputs validate via
+  `wasm-tools validate`.
+- `cargo run -p mobilitydb-sqlink-bridge-verify --release` —
+  all three acceptance gates pass:
+    1. Phase E: `tfloat_min_value([1.5, 3.0, 0.5]) = 0.5`.
+    2. #522: `tfloat_time_span` returns wit-value decoded to
+       `HostTimePeriod { start: 1_000_000_000, end: 3_000_000_000,
+       start_inclusive: true, end_inclusive: true }`.
+    3. #522: `tfloat_at_period` None side returns `SqlValue::Null`
+       cleanly.
+- `cargo run -p postgis-sqlink-bridge-verify --release` — 16/16
+  scalar / aggregate / vtab cases pass (no records-on-the-SQL-
+  boundary path exists, so behaviour is unchanged by #523).
+
+### Microbenchmark (523.5) — not run
+
+The verify subcrate doesn't ship a benchmark harness, and standing
+up one in `verify/` would be net-new infrastructure (a bench
+target, a steady-state loop, a calibration pass for cycles/call,
+plus the baseline build against the pre-#523 commit to compare
+against). Estimated savings per call: one LOCAL struct alloc + one
+ciborium serialise + one ciborium deserialise — roughly
+proportional to the record size (the LOCAL hop scans every field
+twice). For 100k calls of `tfloat_min_value` against a 3-instant
+sequence the saved work is real but small in absolute terms. Wiring
+the bench is a follow-up if anyone needs the headline number.
+
+### Deferred (continued from #522)
+
+- **Param-side `list<X>` wiring**: still 89 mobilitydb scalars.
+- **Param-side `list<record>`**: variadic wit-value args, or
+  single wit-value carrying the list-shape.
+- **`list<tuple<...>>` returns**: one niche function
+  (`floatspan_bucket_list`).
+- **#523.3 manifest `direct` annotation**: see above.
+- **#523.5 microbenchmark**: see above.
