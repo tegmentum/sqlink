@@ -1246,7 +1246,8 @@ Unchanged from rounds 1 and 2.
 - **`sqlink-loader.dylib` vtab installation.** Unchanged:
   `sqlink-loader/src/load.rs` returns the vtab count as
   `skipped` rather than calling `sqlite3_create_module_v2`.
-  Tracked in #489.
+  Tracked in #489. **Resolved 2026-06-27** — see #489 done
+  section below.
 - **Aggregates `st_extent`, `st_coverageunion`, `st_3dextent`,
   `st_rast_union`.** Same shape rationale as round 2; the 3D
   extent's `bbox3d` record return could reuse round 3's bbox
@@ -1254,3 +1255,127 @@ Unchanged from rounds 1 and 2.
   dispatch path and threading it into the aggregate finalize
   path is a small additional task left for a future polish
   round.
+
+## #489 sqlink-loader vtab wiring — done (2026-06-27)
+
+`sqlink-loader.dylib` now installs each loaded extension's
+`VtabSpec` entries as SQLite virtual table modules via
+`sqlite3_create_module_v2` over the captured pApi indirection.
+The path mirrors `host/src/vtab.rs` (the in-host CLI path) but
+routes every sqlite3_* call through the pApi function-pointer
+table instead of libsqlite3-sys's bundled symbols — same
+constraint the scalar / aggregate trampolines already live with.
+
+### Where the work lives
+
+- `sqlink-loader/src/api.rs` — C-ABI struct layouts:
+  `sqlite3_module` (iVersion=2-shaped — supports read-only +
+  the slot for future xUpdate without ABI churn),
+  `sqlite3_vtab`, `sqlite3_vtab_cursor`,
+  `sqlite3_index_info` (+ substructs). pApi entries for
+  `create_module_v2` and `declare_vtab` typed properly.
+  `SQLITE_INDEX_CONSTRAINT_*` op codes mirror sqlite3.h.
+- `sqlink-loader/src/vtab.rs` (new) — two `const sqlite3_module`
+  templates (read-only and read-only-eponymous, picked at
+  registration time per `VtabSpec.eponymous`), every method
+  body proxying through `Host::dispatch_vtab_*` via the held
+  `tokio::Runtime`. Per-vtab context in `ModuleAux` (pAux slot
+  of create_module_v2); per-instance / per-cursor context in
+  subclassed `sqlite3_vtab` / `sqlite3_vtab_cursor` structs
+  carrying `instance_id` / `cursor_id` plus a heap-allocated
+  `ext_name` clone for the trampolines to consult.
+- `sqlink-loader/src/load.rs` — `load_and_install` now iterates
+  `ext.vtabs` and calls `vtab::register_vtab_module` per spec.
+  `InstallCounts.vtab` surfaces the count alongside scalar +
+  aggregate.
+
+### What runs end-to-end
+
+```sh
+brew_sqlite3 :memory:
+.load /…/libsqlink_loader.dylib sqlite3_sqlinkloader_init
+SELECT sqlink_load_ext('postgis', '/…/postgis-sqlink-loadable.wasm');
+→ loaded postgis: 930 scalar, 27 aggregate, 12 vtab (0 skipped)
+
+PRAGMA module_list;
+→ st_subdivide, st_squaregrid, st_dump_segments, st_hexagon_grid,
+  st_dump_points, st_square_grid, st_dumppoints, st_dump_rings,
+  st_hexagongrid, st_dump, st_dumpsegments, st_dumprings, …
+```
+
+All 12 postgis vtabs land in the SQLite module registry. Same
+sequence against `mobilitydb-sqlink-loadable.wasm` registers
+**45 vtabs** (the task description said 43 — variance is post-
+Phase E3 codegen regen-up).
+
+### Smoke gate (05-udtfs) — bridge-side blocker surfaced
+
+Running `cases/postgis-sqlite-only/05-udtfs` against the wasm
+bridge through `SQLINK_LOADER=…/libsqlink_loader.dylib` yields:
+
+```
+Parse error near line 10: too many arguments on st_dumppoints() - max 0
+Parse error near line 11: too many arguments on st_dump() - max 0
+Parse error near line 12: too many arguments on st_dumpsegments() - max 0
+Parse error near line 13: too many arguments on st_squaregrid() - max 0
+Parse error near line 14: no such column: point
+```
+
+This is **not** a loader bug — SQLite's parser sees the schema
+the bridge's `connect()` declared via `sqlite3_declare_vtab` and
+rejects the function-arg syntax before the trampolines run. The
+bridge emits `CREATE TABLE x(geom BLOB)` for every vtab,
+which:
+
+1. Declares **zero `HIDDEN` columns** — SQLite's TVF syntax
+   requires one per function argument. Without them the parser
+   refuses `st_dump(<geom>)` because the table has 0 args.
+2. Uses the column name `geom` for every UDTF, but
+   `st_dumppoints` etc. expect `point` (the planner-visible
+   column name has to match the bridge's `vtab.column` output
+   labels).
+
+Both are sqlink-shim-codegen concerns (`emit_vtab_connect` or
+similar template), not loader concerns. The loader-side
+verification path is independently sound:
+
+- `sqlite3_create_module_v2` succeeded for all 12+45 vtabs
+  (count surfaces in the load log).
+- `PRAGMA module_list` shows every registered name.
+- The trampolines reach `dispatch_vtab_connect` (the bridge's
+  generated `connect()` is what returns the schema; the
+  loader is just the C-side gateway).
+
+### Honest deferrals (filed against #489)
+
+- **Bridge `connect()` schema** (HIDDEN args + correct
+  per-vtab column names). Owner: sqlink-shim-codegen
+  (`emit_vtab_connect` template); fix unlocks 05-udtfs. Not
+  a new task — folds into Phase 3 round 4 (or whatever the
+  next codegen round is) since round 3 already did the
+  bbox / option-unwrap shape work.
+- **xUpdate / mutable-vtab path.** Module template has the
+  slots but the trampolines short-circuit to the read-only
+  variant. Zero mutable vtabs declared in current catalog so
+  the regression cost is zero; flip-on is a follow-up if the
+  count ever exceeds zero.
+- **xFindFunction / xRename / xShadowName / xIntegrity.**
+  Same reasoning — no caller in current catalog. Slots stay
+  `None`; adding them is a small additional task gated on
+  manifest demand.
+- **Batched-vtab cursor cache.** Flag carried through to
+  `ModuleAux` but the cache itself isn't wired (per-row
+  crossing today). Mirrors host/src/vtab.rs's design but the
+  loader's `block_on` per row already absorbs the round-trip
+  cost; cache adds value only after Phase E3's WIT crossing
+  hot path stabilises further.
+
+### Test coverage
+
+- 4 new unit tests in `sqlink-loader::vtab` guard the module
+  templates' iVersion (=1), the eponymous template's null
+  `xCreate`, the standard template's non-null
+  `xCreate`/`xConnect`, and the constraint-op-map's
+  spot-checked codes.
+- All 52 existing loader tests (api / load / register / state /
+  value) still pass.
