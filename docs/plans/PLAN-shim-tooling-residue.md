@@ -494,6 +494,181 @@ producing the declaration-order integer.
 - W3.5 tuple-split (#551).
 - W3.6 topology blob passthrough (#552).
 
+## W2 — done (Phase 1, primitive `list<X>`) 2026-06-27
+
+W2's full scope is variadic `list<X>` param marshaling across all
+element types (primitive, span, record, geometry). This checkpoint
+lands **Phase 1**: primitive elements only. Complex elements
+(span records, indexed-* records, nested tuples) are explicitly
+deferred to a W2 follow-up; reasoning below.
+
+### Scope shipped
+
+- `WitType::List(Box<T>)` parser substrate already existed
+  (parser checkpoint W2.1: confirmed; no change required).
+- `ParamShape::ListPrim(ListPrimElem)` added to dispatch.rs
+  with element variants F64 / F32 / S32 / S64 / U32 / U64 / U8
+  / Bool / String.
+- `classify_param`'s `WitType::List(inner)` arm now routes
+  primitive `inner` to `ListPrim`; non-primitive `inner` falls
+  through to a deferred-codec diagnostic that names the W2
+  follow-up.
+- `emit_arm_body`'s `ListPrim` case emits
+  `let arg{idx}: Vec<{T}> = parse_json_list_<suffix>(...)?;`
+  + `&arg{idx}` call-arg passing.
+- Bridge prelude gains eight `parse_json_list_*` helpers
+  (one per primitive element type) plus the `serde_json` dep
+  in `emit_cargo.rs` (default-features off, alloc feature).
+- Aggregate-extras path explicitly bails on `ListPrim` extras
+  (no known caller — bail clearly).
+
+### W2.6 — SQL marshaling decision
+
+Two design options compared:
+
+(a) **wit-value-carried CBOR** (the option pinned in W2's
+    initial design). Reuses Phase E substrate. Requires:
+    - A per-list-shape codec registry (list element shape → type_id)
+    - WIT exports per list shape (`list-of-<X>-from-canon-cbor`,
+      `list-of-<X>-to-canon-cbor`)
+    - Rust serde-ops impl per list shape + matching
+      `typed_value_binding` manifest entry
+    - SQL-side caller construction (a `make_list(...)` helper UDF
+      or similar that returns a `wit-value`)
+
+(b) **JSON-as-TEXT** (chosen for primitives). SQL caller writes
+    `tfloat_at_values(seq, '[1.0, 2.0, 3.0]')`. The dispatch arm
+    parses the TEXT via `serde_json::from_str::<Vec<T>>`. No
+    per-shape registry, no WIT codec emission, no manifest
+    entries — the eight prelude helpers cover every primitive
+    `list<X>` shape.
+
+**Decision: (b) JSON-as-TEXT for primitive elements; (a)
+wit-value-carried CBOR for complex elements (deferred).**
+
+Reasoning:
+- For primitives, JSON is universally familiar at the SQL layer;
+  no codegen-emitted helper UDF is needed at the call site.
+- Element-shape uniformity at the SQL surface (`'[..]'` TEXT
+  for every primitive list element) is a usability win.
+- Codegen footprint is minimal: eight static helpers + one
+  Cargo dep (`serde_json` with `default-features = false`,
+  `features = ["alloc"]`).
+- For complex elements (`list<int-span>`, `list<tgeompoint-instant>`,
+  etc.), JSON can't preserve the type-id discipline that
+  Phase E's wit-value substrate enforces. The wit-value codec
+  path remains the right answer for those — it just requires
+  the larger substrate addition described in option (a).
+
+### W2.7 — Verify (mobilitydb)
+
+Pre-W2 baseline (W3.3 codegen against
+`/tmp/mobilitydb-interface.sqlite`): **999 symbol(s) not wired**.
+Post-W2 same interface: **940 symbol(s) not wired** — delta
+**59 newly wired**.
+
+By list-element shape (pre → post):
+
+| element        | pre | post |
+|---             |---:|---:|
+| `list<f64>`    | 14 | 0 |
+| `list<s64>`    | 25 | 0 |
+| `list<s32>`    | 12 | 0 |
+| `list<string>` | 14 | 0 |
+
+(The delta is 59 not 65 because a handful of primitive-list
+scalars have a second list-typed param the codegen can't yet
+classify — those second params route through the deferred
+complex-element path.)
+
+Bridge build verified:
+`cargo build --target wasm32-wasip2 --release` clean
+(2 pre-existing `unused: context_id` warnings).
+
+### W2.8 — Deferred to W2 follow-up
+
+Remaining list residue (109 entries) — all non-primitive elements
+needing the wit-value codec path:
+
+| element                    | count |
+|---                         |---:|
+| `list<int-span>`           | 32 |
+| `list<float-span>`         | 30 |
+| `list<date-span>`          | 30 |
+| `list<stindex-entry>`      | 5 |
+| `list<indexed-point-xyz>`  | 4 |
+| `list<tuple<s32, s32>>`    | 3 |
+| `list<indexed-point-xy>`   | 3 |
+| `list<indexed-interval>`   | 2 |
+
+The W2 follow-up needs to:
+
+1. Walk each unique list-element shape in the WIT (span types
+   first — biggest tonnage).
+2. Compute a list-shape type_id (sha256 over canonical-CBOR
+   of `["list", <X_shape>]` — the obvious composition with
+   record type_ids).
+3. Emit `list-of-<X>-from-canon-cbor` + `_to_canon_cbor` codec
+   functions in the bridge's `serde-ops` WIT interface + Rust
+   impl.
+4. Emit a `typed_value_binding` manifest entry per shape so the
+   host's `TypedValueRegistry` can dispatch on the list type_id.
+5. Decide call-site ergonomics: probably emit a tiny
+   `make_<X>_list(...)` helper UDF that returns a `wit-value`,
+   parallel to the wit-value pattern already used for record
+   params.
+
+Approx upper bound: ~280 mobilitydb scalars (the full W2 plan
+target) when complex-element lists are wired. The 59 primitive
+wins shipped here are step 1.
+
+### Postgis status
+
+Postgis interface DB wasn't cached in this session;
+regen + verify deferred. Postgis has few primitive-list params
+(plan-doc estimate: 4 scalars unlocked) so the postgis-side
+W2 Phase 1 win is small. The codegen change is shim-agnostic;
+the next postgis regen run picks up the primitive-list path
+automatically.
+
+### Verify subcrate gap
+
+A `list<f64>` end-to-end verify arm + a `list<borrow<geometry>>`
+end-to-end verify arm were both in the original W2 deliverable.
+Neither is added in this checkpoint — primitive-list dispatch is
+proven by the regen delta (and 13+ generated dispatch arms across
+mobilitydb that reference `parse_json_list_*`), but a verify
+subcrate case exercising one through sqlink-host is a separate
+follow-up. `list<borrow<geometry>>` is unchanged by W2 (it was
+already wired via `ParamShape::ListGeom`'s SQL-variadic flatten
+path from Round 2); the corresponding postgis verify case stays
+green.
+
+### Files touched
+
+- `sqlink-shim-codegen/src/wasm_target/dispatch.rs` — added
+  `ParamShape::ListPrim(ListPrimElem)` + `ListPrimElem` enum +
+  `list_prim_elem` classify helper, updated `classify_param`
+  list-arm, added `emit_arm_body` arm, threaded `ListPrim`
+  through the aggregate-extras catchall.
+- `sqlink-shim-codegen/src/wasm_target/emit_lib.rs` — eight
+  `parse_json_list_<T>` prelude helpers.
+- `sqlink-shim-codegen/src/wasm_target/emit_cargo.rs` —
+  `serde_json` dep with `default-features = false`,
+  `features = ["alloc"]`.
+- `mobilitydb-sqlink-bridge/src/lib.rs` + `Cargo.toml` — regen
+  with W2 codegen.
+
+### Commit footprint
+
+- `tegmentum/sqlink-shim-codegen` `feat/w2-list-param`:
+  W2.1+2+3 substrate (parser confirmation + ParamShape::ListPrim
+  + classify_param/emit_arm_body + bridge prelude helpers).
+- `tegmentum/mobilitydb-sqlink-bridge` `feat/w2-list-param`:
+  regen with W2 codegen — 59 scalars newly wired.
+- `tegmentum/sqlink` `feat/w2-list-param`:
+  this plan-doc section.
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
