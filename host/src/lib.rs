@@ -4031,6 +4031,23 @@ impl loaded::sqlite::extension::build::Host for LoadedState {
 /// same SQL but in a code path browser tests couldn't reach; round
 /// 2's free functions are the single source of truth.
 ///
+/// **#533 (round 6, path δ)**: each typed method now also flows
+/// through the shared `cas_execute_inner` helper for the SQL
+/// statements it issues, the same helper
+/// `dispatch_bridge_cas::Host::bridged_execute_cas` reaches
+/// through. Single-statement methods (`bundle_delete`,
+/// `bundle_touch`, `bundle_remove_alias`, `bundle_aliases`) are
+/// thin delegates that build SQL+params and parse rows directly
+/// here. Multi-statement methods with non-trivial idempotency
+/// logic (`bundle_save`, `bundle_add_alias`, `bundle_show`,
+/// `bundle_gc`, `bundle_record_binary`, `bundle_find_by_name`,
+/// `bundle_find_by_hash_prefix`, `bundle_list`) still call
+/// `bundles_exec::*` for now — those free functions internally
+/// use `Cache::with_bundles_conn` against the same Connection
+/// so path-δ unification holds at the cas-conn level. Further
+/// lift to `cas_execute_inner` is mechanical and tracked as a
+/// followup.
+///
 /// Other consumers (`.cache *` dot commands, artifact CRUD) keep
 /// using `SqliteCasStore` directly via `Cache::store()` since
 /// non-bundle surfaces have different shapes per consumer.
@@ -4183,16 +4200,23 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         &mut self,
         id: u64,
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        // Path δ delegate: build SQL + params from the
+        // single source of truth (`bundles_exec::DELETE_SQL`),
+        // route through the shared cas-execute helper.
         let cache = bundles_open_cache(self)?;
-        match cache.with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_delete(conn, id))
-        {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(loaded::sqlite::extension::types::SqliteError {
+        let result = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::DELETE_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
+        )?;
+        if result.changes > 0 {
+            Ok(())
+        } else {
+            Err(loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_NOTFOUND,
                 extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
                 message: format!("bundles.delete: id {id} not found"),
-            }),
-            Err(e) => Err(bundles_err("bundles.delete", e)),
+            })
         }
     }
 
@@ -4278,10 +4302,26 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
     }
 
     async fn bundle_touch(&mut self, id: u64) {
-        if let Ok(cache) = bundles_open_cache(self) {
-            let _ = cache
-                .with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_touch(conn, id));
-        }
+        // Path δ delegate: build SQL + params from
+        // `bundles_exec::TOUCH_SQL` (?1 = id, ?2 = now), route
+        // through the shared cas-execute helper. Errors are
+        // swallowed (bundle_touch is best-effort housekeeping
+        // and cannot return an error per the WIT signature).
+        let Ok(cache) = bundles_open_cache(self) else {
+            return;
+        };
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let _ = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::TOUCH_SQL,
+            vec![
+                loaded::sqlite::extension::types::SqlValue::Integer(id as i64),
+                loaded::sqlite::extension::types::SqlValue::Integer(now),
+            ],
+        );
     }
 
     async fn bundle_add_alias(
@@ -4301,24 +4341,52 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         &mut self,
         alias: String,
     ) -> std::result::Result<bool, loaded::sqlite::extension::types::SqliteError> {
+        // Path δ delegate: build SQL + params from
+        // `bundles_exec::ALIAS_DELETE_SQL` (?1 = alias). Returns
+        // true iff the statement removed at least one row.
         let cache = bundles_open_cache(self)?;
-        cache
-            .with_bundles_conn(|conn| {
-                sqlite_cas_cache::bundles_exec::bundle_remove_alias(conn, &alias)
-            })
-            .map_err(|e| bundles_err("bundles.remove-alias", e))
+        let result = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::ALIAS_DELETE_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Text(alias)],
+        )?;
+        Ok(result.changes > 0)
     }
 
     async fn bundle_aliases(
         &mut self,
         bundle_id: u64,
     ) -> std::result::Result<Vec<String>, loaded::sqlite::extension::types::SqliteError> {
+        // Path δ delegate: run `bundles_exec::ALIASES_LIST_SQL`
+        // (?1 = bundle_id) through the shared cas-execute helper
+        // and parse the single-column text rows into Vec<String>.
         let cache = bundles_open_cache(self)?;
-        cache
-            .with_bundles_conn(|conn| {
-                sqlite_cas_cache::bundles_exec::bundle_aliases(conn, bundle_id)
-            })
-            .map_err(|e| bundles_err("bundles.aliases", e))
+        let result = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::ALIASES_LIST_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Integer(bundle_id as i64)],
+        )?;
+        let mut out = Vec::with_capacity(result.rows.len());
+        for row in result.rows {
+            match row.into_iter().next() {
+                Some(loaded::sqlite::extension::types::SqlValue::Text(s)) => out.push(s),
+                Some(other) => {
+                    return Err(loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_ERROR,
+                        extended_code: libsqlite3_sys::SQLITE_ERROR,
+                        message: format!("bundles.aliases: name not text: {other:?}"),
+                    });
+                }
+                None => {
+                    return Err(loaded::sqlite::extension::types::SqliteError {
+                        code: libsqlite3_sys::SQLITE_ERROR,
+                        extended_code: libsqlite3_sys::SQLITE_ERROR,
+                        message: "bundles.aliases: empty row".into(),
+                    });
+                }
+            }
+        }
+        Ok(out)
     }
 }
 
@@ -4396,6 +4464,51 @@ fn bundles_summary_to_wit(
     }
 }
 
+/// Single shared CAS-execute path. Both
+/// `dispatch_bridge_cas::Host::bridged_execute_cas` (the new
+/// SPI surface bundle-cli reaches through) and the typed
+/// `bundles::Host` delegates below route every cas SQL statement
+/// through this helper, so native + composed-binary surfaces
+/// drive the same Connection through one code path.
+///
+/// Path δ unification: pre-#533 the typed `bundles::Host`
+/// dispatched to `sqlite_cas_cache::bundles_exec::bundle_*` free
+/// functions and `dispatch-bridge-cas` did not exist on the
+/// native host. Post-#533 both flow through this helper, which
+/// in turn is the same body the composed binary's
+/// `sqlink:wasm/dispatch-bridge-cas` impl in
+/// `sqlite-wasm/sqlite-lib/src/lib.rs:2114-2138` uses against
+/// `cas_with`. SQL string surface stays sourced from
+/// `sqlite_cas_cache::bundles_exec::*_SQL` constants — single
+/// source of truth across native, composed binary, and (until
+/// 533.6) the browser polyfill.
+fn cas_execute_inner(
+    cache: &crate::cache::Cache,
+    sql: &str,
+    params: Vec<loaded::sqlite::extension::types::SqlValue>,
+) -> std::result::Result<
+    loaded::sqlite::extension::types::QueryResult,
+    loaded::sqlite::extension::types::SqliteError,
+> {
+    cache.with_bundles_conn(|conn| {
+        let mut stmt = conn.prepare(sql).map_err(db_err_to_spi)?;
+        let columns: Vec<String> = stmt.column_names();
+        let bound: Vec<_> = params.into_iter().map(spi_value_to_db).collect();
+        stmt.bind_all(&bound).map_err(db_err_to_spi)?;
+        let rows = stmt.collect_rows().map_err(db_err_to_spi)?;
+        let out_rows: Vec<Vec<loaded::sqlite::extension::types::SqlValue>> = rows
+            .into_iter()
+            .map(|r| r.into_iter().map(db_value_to_spi).collect())
+            .collect();
+        Ok(loaded::sqlite::extension::types::QueryResult {
+            columns,
+            rows: out_rows,
+            changes: conn.changes(),
+            last_insert_rowid: conn.last_insert_rowid(),
+        })
+    })
+}
+
 /// `sqlite:extension/dispatch-bridge-cas` host dispatcher. v1.5
 /// round 6 (path δ) cutover. Routes every call to
 /// `Cache::with_bundles_conn` so extensions that target the
@@ -4403,14 +4516,12 @@ fn bundles_summary_to_wit(
 /// `~/.cache/sqlink/cas.db` without going through the typed
 /// `bundles::Host` surface.
 ///
-/// Body mirrors `impl spi::Host::execute` against the user-data
-/// connection — same `prepare` + `bind_all` + `collect_rows` +
-/// `changes` + `last_insert_rowid` shape — but the target is the
-/// cas connection. The browser composed binary's
-/// `sqlink:wasm/dispatch-bridge-cas` (in
-/// `sqlite-wasm/sqlite-lib/src/lib.rs`) does the same against
-/// sqlite-lib's in-WASM `cas_with`, so native + browser callers
-/// see identical SQL semantics.
+/// Body delegates to `cas_execute_inner`, the same helper the
+/// typed `bundles::Host` impl reaches through. The browser
+/// composed binary's `sqlink:wasm/dispatch-bridge-cas` (in
+/// `sqlite-wasm/sqlite-lib/src/lib.rs`) does the equivalent
+/// against sqlite-lib's in-WASM `cas_with`, so native + browser
+/// callers see identical SQL semantics.
 ///
 /// Capability-gated on `bundles_granted`. Schema bootstrap is
 /// owned by `Cache::with_bundles_conn` itself (the cas store
@@ -4430,23 +4541,7 @@ impl loaded_bundle_cli::sqlite::extension::dispatch_bridge_cas::Host for LoadedS
         loaded::sqlite::extension::types::SqliteError,
     > {
         let cache = bundles_open_cache(self)?;
-        cache.with_bundles_conn(|conn| {
-            let mut stmt = conn.prepare(&sql).map_err(db_err_to_spi)?;
-            let columns: Vec<String> = stmt.column_names();
-            let bound: Vec<_> = params.into_iter().map(spi_value_to_db).collect();
-            stmt.bind_all(&bound).map_err(db_err_to_spi)?;
-            let rows = stmt.collect_rows().map_err(db_err_to_spi)?;
-            let out_rows: Vec<Vec<loaded::sqlite::extension::types::SqlValue>> = rows
-                .into_iter()
-                .map(|r| r.into_iter().map(db_value_to_spi).collect())
-                .collect();
-            Ok(loaded::sqlite::extension::types::QueryResult {
-                columns,
-                rows: out_rows,
-                changes: conn.changes(),
-                last_insert_rowid: conn.last_insert_rowid(),
-            })
-        })
+        cas_execute_inner(&cache, &sql, params)
     }
 }
 
