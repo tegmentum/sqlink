@@ -54,3 +54,9 @@ tracing = "0.1"
 
 [dev-dependencies]
 tempfile = "3"
+# F3 (PLAN-wit-value-extension Phase F): synthesize tiny contract-
+# version-skewed components in-test so the loader-side mirror of the
+# host's pre-check can be exercised without needing pre-built .wasm
+# artifacts on disk. Pin against the same wasm-tools branch
+# wasmtime/wasm-tools elsewhere in the workspace consume.
+wat = { git = "https://github.com/tegmentum/wasm-tools.git", branch = "bytes-api" }

@@ -5741,6 +5741,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+ "wat 1.240.0",
 ]
 
 [[package]]
