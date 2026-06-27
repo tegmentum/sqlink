@@ -56,3 +56,8 @@ extensions/extensions.db
 # Plan triage scratchpad (Phase 5)
 triage-log.md
 .secrets
+
+# composectl runtime artifacts (blob store / cache / trust / audit).
+# Created by `composectl plan validate / blob put / emit build` in any
+# directory it's invoked from.
+.compose/

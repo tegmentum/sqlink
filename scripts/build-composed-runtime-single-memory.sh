@@ -67,3 +67,29 @@ echo
 echo "Note: still expects sqlink:wasm/extension-loader imports from"
 echo "the host (sqlink native or browser polyfill); a direct wasmtime"
 echo "run will error on those imports."
+
+# [4/3] composectl emit parallel cross-check (Tier 1.1.b)
+#
+# Same cross-check shape as build-composed-runtime.sh. The single-memory
+# variant uses the same composition recipe (composition-cli-sqlite-lib.wac)
+# and therefore the same composition-plans/sqlink-runtime.plan.json — gated
+# on the same upstream substrate gaps. See
+# docs/notes/orchestration-substrate-gaps.md.
+ORCHESTRATION_CROSS_CHECK="${ORCHESTRATION_CROSS_CHECK:-0}"
+ORCH_ROOT="${SQLINK_ORCH_ROOT:-$REPO_ROOT/../webassembly-component-orchestration}"
+COMPOSECTL="${COMPOSECTL_BIN:-$ORCH_ROOT/target/release/composectl}"
+RUNTIME_PLAN="$REPO_ROOT/composition-plans/sqlink-runtime.plan.json"
+
+if [[ -x "$COMPOSECTL" && -f "$RUNTIME_PLAN" ]]; then
+    echo
+    echo "[orchestration] validating composition-plans/sqlink-runtime.plan.json"
+    "$COMPOSECTL" plan validate "$RUNTIME_PLAN" || {
+        echo "[orchestration] WARNING: plan validation failed (non-fatal)"
+    }
+    if [[ "$ORCHESTRATION_CROSS_CHECK" == "1" ]]; then
+        echo "[orchestration] cross-check is gated on upstream gaps;"
+        echo "[orchestration] see docs/notes/orchestration-substrate-gaps.md"
+    else
+        echo "[orchestration] cross-check disabled (set ORCHESTRATION_CROSS_CHECK=1 once upstream gaps close)"
+    fi
+fi
