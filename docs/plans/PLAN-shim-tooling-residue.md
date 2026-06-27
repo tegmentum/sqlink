@@ -1759,6 +1759,168 @@ Two takeaways for future plan increments:
 - Future codegen task: "preserve full upstream instance shape"
   flag for vendored deps (W4c-like).
 
+## W4a composition fix — survey (#557fix.1) 2026-06-27
+
+Survey of the substrate gap that #557's W4a regen surfaced.
+The 29 vendored UDTF declarations build green and `wac plug`
+exits 0, but the resulting composed loadable still declares 15
+unsatisfied `mobilitydb:temporal/*` imports — the composition
+fails to instantiate inside sqlink-host.
+
+### Reproducing the failure
+
+```
+cd ~/git/mobilitydb-sqlink-bridge
+wac plug \
+  --plug ~/git/postgis-wasm/postgis-composed.wasm \
+  --plug ~/git/datafission/extensions/mobilitydb/deps/mdb-temporal-wasm.wasm \
+  -o mobilitydb-sqlink-loadable.wasm \
+  target/wasm32-wasip2/release/mobilitydb_sqlink_bridge.wasm
+# exit 0
+wasm-tools component targets \
+  --world 'sqlite:extension/tabular@1.0.0' \
+  ../sqlink/sqlite-loader-wit/wit \
+  mobilitydb-sqlink-loadable.wasm
+# error: missing import named `mobilitydb:temporal/types@0.1.0`
+```
+
+`wasm-tools component wit` on the composed loadable shows 15
+remaining mobilitydb imports:
+
+```
+import mobilitydb:temporal/types@0.1.0;
+import mobilitydb:temporal/tbool-ops@0.1.0;
+import mobilitydb:temporal/ttext-ops@0.1.0;
+import mobilitydb:temporal/typed-join-ops@0.1.0;        # W4a (no upstream)
+import mobilitydb:temporal/nearest-join-ops@0.1.0;      # W4a (no upstream)
+import mobilitydb:temporal/time-split-ops@0.1.0;        # W4a (no upstream)
+import mobilitydb:temporal/value-split-ops@0.1.0;       # W4a (no upstream)
+import mobilitydb:temporal/tcbuffer-ops@0.1.0;
+import mobilitydb:temporal/tgeogpoint-ops@0.1.0;
+import mobilitydb:temporal/tgeompoint3d-ops@0.1.0;
+import mobilitydb:temporal/tpose-ops@0.1.0;
+import mobilitydb:temporal/to-rows-ops@0.1.0;           # W4a (no upstream)
+import mobilitydb:temporal/temporal-index-ops@0.1.0;    # W4a (no upstream)
+import mobilitydb:temporal/spatial-index-ops@0.1.0;     # W4a (no upstream)
+import mobilitydb:temporal/sequence-json-ops@0.1.0;     # W4a (no upstream)
+```
+
+Split:
+
+- 8 W4a additions — `typed-join-ops`, `nearest-join-ops`,
+  `time-split-ops`, `value-split-ops`, `to-rows-ops`,
+  `temporal-index-ops`, `spatial-index-ops`, `sequence-json-ops`.
+  Upstream `mdb-temporal-wasm` doesn't export these.
+- 7 transitive trimmed-shape edges — `types`, `tbool-ops`,
+  `ttext-ops`, `tcbuffer-ops`, `tgeogpoint-ops`, `tgeompoint3d-ops`,
+  `tpose-ops`. Upstream DOES export these, but wac plug fails to
+  satisfy them.
+
+### Trimmed-shape diagnosis
+
+`wasm-tools component wit` on the bridge wasm shows the bridge's
+imported `ttext-ops` interface contains 11 functions:
+
+```
+interface ttext-ops {
+    use types.{timestamp-tz, time-period};
+    record ttext-instant { ... }
+    record ttext-sequence { ... }
+    ttext-num-instants:  func(seq: ttext-sequence) -> u32;
+    ttext-value-at:      func(seq: ttext-sequence, t: timestamp-tz) -> option<string>;
+    ttext-start-value:   func(seq: ttext-sequence) -> option<string>;
+    ttext-end-value:     func(seq: ttext-sequence) -> option<string>;
+    ttext-start-timestamp: func(seq: ttext-sequence) -> option<timestamp-tz>;
+    ttext-end-timestamp:   func(seq: ttext-sequence) -> option<timestamp-tz>;
+    ttext-time-span:     func(seq: ttext-sequence) -> option<time-period>;
+    ttext-duration:      func(seq: ttext-sequence) -> s64;
+    ttext-to-json:       func(seq: ttext-sequence) -> string;
+    ttext-to-csv:        func(seq: ttext-sequence) -> string;
+    ttext-from-csv:      func(csv: string) -> option<ttext-sequence>;
+}
+```
+
+Upstream's exported `ttext-ops` has the same record shape PLUS 17
+more functions (`ttext-instant-new`, `ttext-sequence-new`,
+`ttext-at-period`, `ttext-at-value`, `ttext-minus-value`,
+`ttext-ever-eq`, `ttext-always-eq`, `ttext-upper`, `ttext-lower`,
+`ttext-ltrim`, `ttext-rtrim`, `ttext-btrim`, `ttext-concat-str`,
+`ttext-prepend-str`, `ttext-left`, `ttext-right`, `ttext-concat`).
+
+Same pattern for `types`, `tbool-ops`, `tcbuffer-ops`,
+`tgeogpoint-ops`, `tgeompoint3d-ops`, `tpose-ops` — bridge has a
+subset, upstream has the superset.
+
+### Why wit-bindgen produces the trimmed shape
+
+The bridge's vendored WIT (`mobilitydb-sqlink-bridge/wit/deps/
+mobilitydb-temporal/temporal.wit`) declares the FULL upstream
+interface — every function. `wit-bindgen::generate!` runs with
+`generate_all`, so Rust bindings exist for every function. The
+`#[link_section = "component-type:..."]` custom section embeds
+the full WIT.
+
+But `wit-component` (run as part of the wasm32-wasip2 lower
+process) builds the COMPONENT'S import type from the actually-
+lowered functions: `wit-component-0.220.1/src/encoding.rs:484`:
+
+```rust
+for (_, func) in interface.functions.iter() {
+    if !info.lowerings.contains_key(&func.name) {
+        continue;
+    }
+    let idx = encoder.encode_func_type(resolve, func)?;
+    encoder.ty.export(&func.name, ComponentTypeRef::Func(idx));
+}
+```
+
+`info.lowerings` is populated from the actual core wasm imports —
+only the canonical-ABI `extern "C"` blocks that survived LLVM's
+DCE. Functions wit-bindgen generated bindings for but that the
+bridge never called get dropped. So the import shape ends up
+trimmed to "functions the bridge actually calls."
+
+### Why wac plug doesn't bridge the gap
+
+`wac plug`'s subtype check (`wac-graph-0.10.1/src/plug.rs:54-58`,
+`graph.rs:1136-1145`) treats plug ⊇ socket as a valid subtype
+relation, so the `set_instantiation_argument` call succeeds at
+the graph level. But the resulting component's wasm-validate-
+clean encoding STILL declares the socket's trimmed imports as
+imports of the composition root — wac plug doesn't synthesize an
+adapter that bridges "trimmed import" ← "full export". The
+upstream's full instance gets aliased into the graph, but the
+encoded output keeps the socket's import slot open.
+
+This is observable end-to-end: `wac plug` exits 0 but
+`wasm-tools component targets --world tabular@1.0.0` reports
+`missing import named mobilitydb:temporal/types@0.1.0`. The
+sqlink-host loader hits the same error one layer up
+("instance not found in linker").
+
+### Fix plan (#557fix.2-5)
+
+Make the bridge's IMPORT shape match the upstream's EXPORT shape
+exactly. Codegen-side mechanism: emit a `__force_link_*` block
+in the bridge's `src/lib.rs` that takes a function pointer of
+every upstream function in every imported primary-shim
+interface, wrapped in a `#[used]` static. The function-pointer
+references prevent LLVM DCE; the wit-bindgen wrappers and their
+`extern "C"` declarations survive; `wit-component` lowers them
+all; the bridge's import shape becomes the upstream's full shape.
+
+`wac plug` then has matching shapes on both sides of the socket
+edge — the trimmed-import-vs-full-export structural mismatch
+disappears.
+
+For the 8 W4a-added interfaces (`typed-join-ops`, etc.) the
+existing `stub-plug/` crate still has to provide bodies until
+the cross-project coordination round lands real implementations
+upstream. The stub-plug benefits from the same force-link emit:
+its IMPORTS of the 7 transitive interfaces will then match
+upstream's full export shape too, so wac plug can compose
+[upstream + stub-plug + bridge] cleanly.
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
