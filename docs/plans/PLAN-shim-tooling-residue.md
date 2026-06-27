@@ -2196,6 +2196,128 @@ scope here; the postgis bridge as currently committed in
 - Upstream mdb-temporal-wasm landing the 8 W4a interfaces:
   once landed, the stub-plug + auto-emitted compose.wac collapse
   to a plain `wac plug` recipe (no plug → plug wiring needed).
+## #564 — done 2026-06-27
+
+Wire `st_worldtorastercoordcol` and `st_worldtorastercoordrow`
+through a new codegen `tuple_pick_overrides()` table — sibling to
+`operator_function_overrides()`, same hand-curated route mechanism.
+Both SQL accessors ride the upstream
+`postgis-raster-pixels::st-world-to-raster-coord -> tuple<s32, s32>`
+(already wired by W3.5 #551 as JSON text) but pick element 0
+(col) / 1 (row) and surface them as `SqlValue::Integer`.
+
+### Change in one sentence
+
+A new `RetShape::TuplePick { index, elem }` variant + a hand-curated
+SQL→(interface, kebab, index) table let the codegen route per-element
+accessors to a tuple-returning WIT function without inventing
+distinct WIT functions or going through wit-value.
+
+### Mechanical surface
+
+`sqlink-shim-codegen` ← `feat/tuple-pick-override`,
+commit `f375fa3`.
+
+- `src/wasm_target/dispatch.rs`:
+  - `RetShape::TuplePick { index: usize, elem: ListPrimElem }` —
+    carries the projection metadata; `ListPrimElem` selects the
+    SqlValue variant + cast (Integer for ints/bool, Real for
+    floats, Text for strings).
+  - `tuple_pick_overrides()` — `&'static [(sql, iface, kebab, idx)]`
+    table. Today: two postgis raster pixel-coord accessors only.
+  - `tuple_pick_override_for(sql, wit_fns) -> Option<(&WitFunction,
+    usize)>` — resolves the underlying function + index.
+  - `rewrite_ret_for_tuple_pick(ret, idx)` — validates that the
+    classified return is `JsonText { TuplePrim(elems) }` (the W3.5
+    output for primitive tuples), then rewrites to
+    `RetShape::TuplePick`. Bails clearly on `option<tuple<…>>`
+    (no caller today) or any non-tuple return.
+  - `build_full` consults `tuple_pick_override_for` BEFORE the
+    operator / name / resource-method chain so explicit entries
+    always win.
+  - `emit_arm_body`'s `TuplePick` case emits
+    `let __r = <call>; Ok(SqlValue::Integer(__r.<idx> as i64))`
+    (variant + cast derived from `ListPrimElem`).
+
+`postgis-sqlink-bridge` ← `feat/tuple-pick-override`,
+commit `eaf3867`.
+
+- `src/lib.rs` — manual splice of the four new dispatch arms
+  (canonical names + snake aliases, 4 entries total: ids 912-915).
+  Pattern matches what the codegen-side `tuple_pick_overrides()`
+  table emit produces. Manual splice (rather than full regen) is
+  required because regen against the current codegen tip hits a
+  #557fix follow-up gap (see "Substrate gap" below).
+- `verify/src/main.rs` — Case 22 exercises both new arms with an
+  empty raster blob and checks Ok(SqlValue::Integer(0)) (the
+  fallthrough on the upstream raster decode failure path), which
+  proves the new arms reached the upstream call.
+
+### Verify subcrate output
+
+```
+[verify] dispatching st_worldtorastercoordcol (func_id=912) ...
+[verify] st_worldtorastercoordcol returned Integer(0) (tuple element col)
+[verify] dispatching st_worldtorastercoordrow (func_id=914) ...
+[verify] st_worldtorastercoordrow returned Integer(0) (tuple element row)
+[verify] #564 ACCEPTANCE: st_worldtorastercoordcol/row TuplePick arms
+         reached emit-site (verified via non-stub dispatch path)
+[verify] all checks passed
+```
+
+### Numbers
+
+- Codegen regen on `feat/tuple-pick-override` reports both
+  `st_worldtorastercoordcol` and `st_worldtorastercoordrow`
+  WIRED. Postgis unwired count drops from 35 to 33 (the W3.5 #551
+  baseline of 35 included them as "no WIT function matches").
+- +2 SQL scalars wired without any new wit-value codec emission.
+
+### Substrate gap surfaced (deferral)
+
+Regenerating the postgis bridge from scratch against the codegen
+tip (`feat/tuple-pick-override`, which inherits #557fix) currently
+fails to compile because the `__force_link_types` block emitted
+by `render_force_link_upstream_imports` (emit_lib.rs ~line 2025)
+references upstream record types under
+`bindings::postgis::wasm::postgis_types::*` (Box3d, BufferParams,
+CoordZ, CoordZm, CoordinateStats, Extremes, InscribedCircle,
+ValidDetail). wit-bindgen DOESN'T generate those types on the
+postgis IMPORT side because no imported postgis function
+references them in its signature — `additional_derives` puts the
+serde-derived copies under
+`crate::bindings::exports::sqlink_bridge::postgis::serde_ops::*`
+(the LOCAL serde-ops EXPORT) instead.
+
+mobilitydb regen survives because every mobilitydb record IS
+referenced by at least one imported function, so wit-bindgen
+emits them under `bindings::mobilitydb::temporal::*`. Postgis has
+8 records that are declared in postgis-types but used only as
+return-record-by-bridge (so they appear only under the EXPORT
+serde-ops interface, not under the IMPORT postgis-types one).
+
+Fix sketch (call it #557fix.2, not in #564 scope):
+1. Skip type refs in `render_force_link_upstream_imports` when
+   the type's IMPORT path wouldn't be generated by wit-bindgen
+   (i.e. when no imported function in the same primary references
+   the record).
+2. Alternative: add `with: { "postgis:wasm/postgis-types/box3d":
+   "crate::bindings::exports::..." }` mappings to the bindgen!
+   invocation so the upstream type path resolves to the LOCAL
+   serde-ops copy.
+
+#564 landed as a chore-style manual splice on the bridge so the
+two SQL scalars start working immediately; the codegen side is
+already #557fix.2-ready.
+
+### Honest deferrals (#564)
+
+- Full regen of postgis bridge from #564 codegen tip — blocked on
+  #557fix.2 substrate fix.
+- `option<tuple<…>>` tuple-pick (e.g. picking an element of a
+  W3.5 `OptionTuplePrim` return) — no postgis caller today;
+  `rewrite_ret_for_tuple_pick` bails clearly with a named
+  diagnostic so a future caller is named.
 
 ## References
 
