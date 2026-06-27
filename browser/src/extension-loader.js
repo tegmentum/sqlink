@@ -2354,15 +2354,67 @@ export function buildCliHostHandlers(opts) {
   // when a later round wires them.
   void sqlVal
 
+  // #533 v1.5 round 6: dispatch-bridge-cas is split out of
+  // dispatch-bridge into its own WIT interface (so the native host
+  // can implement only the CAS slice). bundle-cli reaches it via
+  // a direct `dispatch_bridge_cas::bridged_execute_cas(sql, params)`
+  // import; the polyfill below also routes through it.
+  //
+  // Shim: jco's runtime bindgen names the bridge-cas method
+  // `bridgedExecuteCas` on a dispatchBridgeCas object. Proxy that
+  // onto `b.bridgedExecuteCas` for the polyfill code that
+  // pre-dates the split (the existing bundlesHandler call sites).
+  const dispatchBridgeCasHandler = {
+    bridgedExecuteCas(sql, params) {
+      const b = getBridge()
+      // After the WIT split, the cas method might live on a
+      // separate bridge object (dispatchBridgeCas) — composed-cli-
+      // worker passes the merged shape so b.bridgedExecuteCas is
+      // always reachable here. If the merged shape isn't wired,
+      // fall through with a structured "bridge not wired" error
+      // that matches the rest of the polyfill's failure mode.
+      if (typeof b.bridgedExecuteCas !== 'function') {
+        const err = new Object()
+        err.payload = {
+          code: 1,
+          extendedCode: 1,
+          message:
+            'cli-host: dispatch-bridge-cas not wired into the bridge ' +
+            'shape passed to _setBridge. After the #533 WIT split ' +
+            'composed-cli-worker must merge dispatchBridge + ' +
+            'dispatchBridgeCas before calling _setBridge.',
+        }
+        throw err
+      }
+      return b.bridgedExecuteCas(sql, params)
+    },
+  }
+
   const handlers = {
     'sqlite:extension/loader-bridge': loaderBridge,
     'sqlite:extension/cli-stdout': cliStdout,
     'sqlite:extension/cli-stderr': cliStderr,
     'sqlite:extension/cli-state': cliStateImpl,
     'sqlite:extension/spi': spiHandler,
+    // bundlesHandler stays during the path-δ transition: only
+    // sub_delete migrated to dispatch-bridge-cas in 533.5; the
+    // other 10 typed call sites still import sqlite:extension/
+    // bundles. Polyfill body still works because it delegates to
+    // bridgedExecuteCas, which we now reach via the
+    // dispatchBridgeCasHandler shim above. Full deletion blocked
+    // on full bundle-cli call-site migration (tracked as #533
+    // followup).
     'sqlite:extension/bundles': bundlesHandler,
+    'sqlite:extension/dispatch-bridge-cas': dispatchBridgeCasHandler,
   }
   Object.defineProperty(handlers, '_setBridge', {
+    // After the #533 WIT split a "bridge" must expose both
+    // `bridgedExecute` (sqlink:wasm/dispatch-bridge) and
+    // `bridgedExecuteCas` (sqlink:wasm/dispatch-bridge-cas) as
+    // callable methods. The composed-cli-worker merges the two
+    // jco-generated export objects before calling _setBridge so
+    // the polyfill's existing call sites (which read
+    // `b.bridgedExecuteCas`) keep resolving.
     value: (dispatchBridge) => {
       bridge = dispatchBridge
     },
