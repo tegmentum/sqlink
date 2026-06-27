@@ -44,13 +44,13 @@ use tokio::runtime::Runtime;
 
 use crate::api::{
     sqlite3, sqlite3_context, sqlite3_index_info, sqlite3_int64, sqlite3_module, sqlite3_value,
-    sqlite3_vtab, sqlite3_vtab_cursor, ApiRoutines, SQLITE_BLOB, SQLITE_ERROR, SQLITE_FLOAT,
-    SQLITE_INDEX_CONSTRAINT_EQ, SQLITE_INDEX_CONSTRAINT_FUNCTION, SQLITE_INDEX_CONSTRAINT_GE,
-    SQLITE_INDEX_CONSTRAINT_GLOB, SQLITE_INDEX_CONSTRAINT_GT, SQLITE_INDEX_CONSTRAINT_ISNOTNULL,
-    SQLITE_INDEX_CONSTRAINT_ISNULL, SQLITE_INDEX_CONSTRAINT_LE, SQLITE_INDEX_CONSTRAINT_LIKE,
-    SQLITE_INDEX_CONSTRAINT_LIMIT, SQLITE_INDEX_CONSTRAINT_LT, SQLITE_INDEX_CONSTRAINT_MATCH,
-    SQLITE_INDEX_CONSTRAINT_NE, SQLITE_INDEX_CONSTRAINT_OFFSET, SQLITE_INDEX_CONSTRAINT_REGEXP,
-    SQLITE_INTEGER, SQLITE_INTERNAL, SQLITE_NULL, SQLITE_OK, SQLITE_TEXT, SQLITE_TRANSIENT,
+    sqlite3_vtab, sqlite3_vtab_cursor, ApiRoutines, SQLITE_ERROR, SQLITE_INDEX_CONSTRAINT_EQ,
+    SQLITE_INDEX_CONSTRAINT_FUNCTION, SQLITE_INDEX_CONSTRAINT_GE, SQLITE_INDEX_CONSTRAINT_GLOB,
+    SQLITE_INDEX_CONSTRAINT_GT, SQLITE_INDEX_CONSTRAINT_ISNOTNULL, SQLITE_INDEX_CONSTRAINT_ISNULL,
+    SQLITE_INDEX_CONSTRAINT_LE, SQLITE_INDEX_CONSTRAINT_LIKE, SQLITE_INDEX_CONSTRAINT_LIMIT,
+    SQLITE_INDEX_CONSTRAINT_LT, SQLITE_INDEX_CONSTRAINT_MATCH, SQLITE_INDEX_CONSTRAINT_NE,
+    SQLITE_INDEX_CONSTRAINT_OFFSET, SQLITE_INDEX_CONSTRAINT_REGEXP, SQLITE_INTERNAL, SQLITE_OK,
+    SQLITE_TRANSIENT,
 };
 
 // ─── Process-wide handles ─────────────────────────────────────────
@@ -206,34 +206,13 @@ fn map_constraint_op(op: u8) -> wv::ConstraintOp {
 }
 
 unsafe fn sqlite3_value_to_wit(api: &ApiRoutines, v: *mut sqlite3_value) -> WitSqlValue {
-    let api = api.as_ref();
-    let kind = api.value_type.expect("value_type")(v);
-    match kind {
-        x if x == SQLITE_NULL => WitSqlValue::Null,
-        x if x == SQLITE_INTEGER => WitSqlValue::Integer(api.value_int64.expect("value_int64")(v)),
-        x if x == SQLITE_FLOAT => WitSqlValue::Real(api.value_double.expect("value_double")(v)),
-        x if x == SQLITE_TEXT => {
-            let p = api.value_text.expect("value_text")(v);
-            if p.is_null() {
-                WitSqlValue::Text(String::new())
-            } else {
-                let n = api.value_bytes.expect("value_bytes")(v) as usize;
-                let bytes = std::slice::from_raw_parts(p, n);
-                WitSqlValue::Text(String::from_utf8_lossy(bytes).into_owned())
-            }
-        }
-        x if x == SQLITE_BLOB => {
-            let p = api.value_blob.expect("value_blob")(v);
-            if p.is_null() {
-                WitSqlValue::Blob(Vec::new())
-            } else {
-                let n = api.value_bytes.expect("value_bytes")(v) as usize;
-                let bytes = std::slice::from_raw_parts(p as *const u8, n);
-                WitSqlValue::Blob(bytes.to_vec())
-            }
-        }
-        _ => WitSqlValue::Null,
-    }
+    // #559: delegate to the shared read path so the same magic-prefix
+    // BLOB→WitValue lift the scalar trampolines do also applies to
+    // vtab xFilter arg binding. Without this, a chained wit-value
+    // SQL pattern that crosses a vtab boundary (e.g. a UDTF
+    // `WHERE col = wit_constructor(...)`) would lose the typed
+    // identity at the constraint-arg unmarshal step.
+    crate::value::read_value_lifted(api, v, &globals().host)
 }
 
 unsafe fn wit_to_sqlite3_result(api: &ApiRoutines, ctx: *mut sqlite3_context, v: WitSqlValue) {
