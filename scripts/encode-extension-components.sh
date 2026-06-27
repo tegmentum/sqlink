@@ -188,12 +188,28 @@ for wasm in $(find target/wasm32-wasip2/release extensions/*/target/wasm32-wasip
         encode=$((encode + 1))
     fi
 
+    # Per-artifact decision (v1.6 polish, #487 Sub-item C):
+    #
     # Some rust + cargo combinations (notably newer toolchains with
     # cargo-component-style auto-detect on wasm32-wasip2) produce a
     # `.wasm` that is ALREADY a component (binary version 0x1000d).
     # `wasm-tools component new` rejects those with "decoding a
     # component is not supported". In that case the source IS the
     # component; copy in place.
+    #
+    # Otherwise the input is a CORE module emitted by `cargo build`
+    # against a cdylib + wit-bindgen `generate!` macro: a core module
+    # with a `component-type:*` custom section but no component
+    # wrapper. `wasm-tools component new` wraps the core module +
+    # custom section into a wasi-preview2 component.
+    #
+    # The detect-and-branch shape lets each extension's build pipeline
+    # evolve independently: cdylib + wit-bindgen → core (needs
+    # component new); cargo-component or component-builder pipelines
+    # → component (copy through). v1.5 round 1 incorrectly assumed
+    # `wasm32-wasip2` always emits components and treated this step
+    # as dead; v1.5 round 2 corrected by adding the auto-detect path
+    # used here. Keep the auto-detect + branch.
     if wasm-tools print "$wasm" 2>/dev/null | head -1 | grep -q "^(component"; then
         cp "$wasm" "$out"
         printf '%s' "$wit_hash" > "$sidecar"

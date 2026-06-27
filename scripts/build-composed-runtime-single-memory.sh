@@ -30,6 +30,18 @@ bash "$SQLITE_WASM_ROOT/scripts/build-sqlite-lib-component-single-memory.sh"
 
 echo "[2/3] build sqlite-cli (core wasm + component new)"
 ( cd "$REPO_ROOT" && cargo build -p sqlite-cli --target wasm32-wasip2 --release )
+# Per-artifact decision (v1.6 polish, #487 Sub-item C):
+#   sqlite_cli.wasm is built from cli/ with `crate-type = ["cdylib"]`
+#   via `cargo build --target wasm32-wasip2` (NOT `cargo component build`).
+#   wit-bindgen's `generate!` macro embeds a `component-type:*` custom
+#   section into the cdylib but does NOT wrap the result as a wasi-p2
+#   component. The output is a CORE module + custom section; the
+#   subsequent `wasm-tools component new` step wraps it into the
+#   wasi-preview2 component that `wac compose` consumes.
+#
+#   v1.5 round 1 incorrectly believed this step was a no-op for
+#   wasm32-wasip2; v1.5 round 2 corrected: it is required for every
+#   cargo-built cdylib. KEEP this step.
 wasm-tools component new \
     "$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.wasm" \
     -o "$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.component.wasm"
