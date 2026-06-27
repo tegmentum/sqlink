@@ -669,6 +669,168 @@ green.
 - `tegmentum/sqlink` `feat/w2-list-param`:
   this plan-doc section.
 
+## W2 Phase 2 — done (complex-element `list<X>`) 2026-06-27
+
+Closes the 109-scalar complex-list residue from W2 Phase 1.
+Follow-up task #553. The wit-value codec design pinned in the
+original W2 brief turned out to be over-engineered for the
+param-side case; this Phase 2 ships a simpler JSON-direct path.
+
+### Scope shipped
+
+- Parser fix in `wit_parse::parse_type`: `list<unsupported(name)>`
+  no longer collapses to bare `Unsupported("list<name>")`. The
+  `List(Box<T>)` wrapper is preserved so the dispatcher can route
+  the inner kebab through the record registry. (Pre-Phase-2, the
+  collapse hid record-element lists from the registry lookup.)
+- `ParamShape::ListRecord { kebab_name, wit_interface,
+  wit_package, wit_package_version }` variant added to dispatch.rs
+  (mirrors WitValueRecord's field layout so the upstream-path
+  machinery reuses the existing emit helpers).
+- `classify_param`'s `WitType::List(inner)` arm now tries
+  `list_prim_elem` first (Phase 1 primitive path); failing that,
+  if the inner is `Unsupported(name)` matching a registry record,
+  routes to `ListRecord`.
+- `emit_arm_body`'s `ListRecord` arm emits
+  `let arg{idx} = parse_json_list_record_<snake>(...)?;` and
+  passes `&arg{idx}` to the WIT call.
+- `emit_wit_value_helpers` emits a per-record
+  `parse_json_list_record_<snake>(args, idx, name) ->
+   Result<Vec<UPSTREAM>, String>` helper that calls
+  `serde_json::from_str::<Vec<UPSTREAM>>(text)`. Wit-bindgen's
+  `additional_derives: [serde::Deserialize]` makes UPSTREAM
+  directly deserialisable.
+- `collect_referenced_records` extended to sweep ListRecord
+  params alongside WitValueRecord params so the helper is
+  emitted whenever it's referenced.
+- `emit_udtf_filter_body` catch-all's `format!()` template now
+  escapes the Debug printout's `"`, `{`, `}` chars (ListRecord's
+  Debug otherwise breaks the codegen-output Rust compile).
+
+### W2 Phase 2 SQL marshaling decision
+
+Two options were on the table per the coordinator's brief:
+
+(i) Helper UDFs `make_<X>_list(arg1, arg2, ...)` returning a
+    `wit-value`.
+(ii) JSON-as-TEXT decoded by the bridge.
+
+Chose **option (ii)**, but with a refinement: NO intermediate
+canonical-CBOR round-trip. The bridge IS the wasm component;
+"the wasm-side codec" is the bridge's own serde-ops impl, so
+parsing JSON straight into `Vec<UPSTREAM>` reaches the same
+endpoint as parse-then-CBOR-then-decode without the extra
+encoder + decoder per shape.
+
+Reasoning:
+- The bridge's codecs run in the same wasm component as the
+  dispatch arm. There is no transport between them that requires
+  an intermediate canonical-CBOR payload. The CBOR round-trip
+  would be an internal data-shape conversion with no observable
+  effect on the external surface.
+- Phase 1's "complex lists need wit-value because JSON can't
+  preserve type-id discipline" framing was over-conservative.
+  Type-id discipline matters when the host TypedValueRegistry
+  dispatches dynamically on a `SqlValue::WitValue` payload (e.g.
+  wrapping a return). For param-side scalars, the bridge knows
+  the param's type from the `func_id`; no type_id is needed at
+  the SQL surface.
+- For records whose UPSTREAM Rust struct derives `Deserialize`
+  (every record in the mobilitydb temporal corpus, per
+  `additional_derives`), JSON-direct works without a per-shape
+  codec emission. No `serde-ops` interface change required.
+
+The wit-value codec path remains the right answer when the
+HOST needs to roundtrip a payload OUT of the bridge (e.g. for
+list<record> returns wrapped as `SqlValue::WitValue` for SQL
+consumers). For param-side scalars it's not necessary.
+
+### W2 Phase 2 verification (mobilitydb)
+
+| Metric         | Pre  | Post | Delta |
+|---             |---:  |---:  |---:   |
+| total unwired  | 940  | 881  | -59   |
+
+By list-element shape (pre → post):
+
+| element                   | pre | post |
+|---                        |---:|---:|
+| `list<int-span>`          | 32 | 0  |
+| `list<float-span>`        | 30 | 0  |
+| `list<date-span>`         | 30 | 0  |
+| `list<stindex-entry>`     | 5  | 0  |
+| `list<indexed-point-xyz>` | 4  | 0  |
+| `list<indexed-point-xy>`  | 3  | 0  |
+| `list<indexed-interval>`  | 2  | 0  |
+| `list<tuple<s32, s32>>`   | 3  | 3  |
+
+`list<tuple<s32, s32>>` (3 scalars: `datespanset_lower`,
+`datespanset_make`, `datespanset_upper`) remains unwired —
+nested tuples need their own ParamShape variant (separate
+follow-up; small surface).
+
+Bridge build verified:
+`cargo build --target wasm32-wasip2 --release` clean
+(2 pre-existing `unused: context_id` warnings).
+
+Codegen `cargo test` — 14/14 pass (no regression in the
+wit_parse + record_registry test sets).
+
+### Cumulative W2 (Phase 1 + Phase 2) ship
+
+| Metric        | Pre-W2 | Phase 1 | Phase 2 |
+|---            |---:    |---:     |---:     |
+| total unwired | 999    | 940     | 881     |
+
+Total W2 delta: **118 newly wired** (59 primitive + 59 record).
+
+### Postgis status
+
+Postgis interface DB still not cached in this session; regen +
+verify deferred. The Phase 2 changes are shim-agnostic;
+postgis's pre-W2 residue (10 return types, 6 param types, 5
+`list<X>` returns, plus the niche tuple/list-of-`<X>` shapes)
+will benefit from the parser fix (list wrapper preserved) and
+the new ListRecord path when the next regen runs.
+
+### Deferred from W2
+
+- `list<tuple<s32, s32>>` (3 mobilitydb scalars) — needs a
+  `ParamShape::ListTuple { elem_types: Vec<ListPrimElem> }`
+  variant + a `parse_json_list_tuple_<sig>` helper. Small
+  follow-up.
+- list<X> RETURNS via wit-value — out of scope for W2's
+  param-focused mandate. The host TypedValueRegistry path
+  remains the right way to surface list-of-record returns to
+  SQL consumers; today they project to the first element
+  (`FirstWitValueRecord`).
+- Verify subcrate arms exercising a `list<int-span>` end-to-end
+  through sqlink-host — separate gate task.
+
+### Files touched
+
+- `sqlink-shim-codegen/src/wasm_target/wit_parse.rs` — drop
+  `list<unsupported>` collapse so List(Unsupported(name))
+  surfaces to the dispatcher.
+- `sqlink-shim-codegen/src/wasm_target/dispatch.rs` — new
+  `ParamShape::ListRecord` variant, classify_param routing
+  through the record registry, emit_arm_body arm, aggregate-
+  extras bail-out group.
+- `sqlink-shim-codegen/src/wasm_target/emit_lib.rs` — per-
+  record `parse_json_list_record_<snake>` emission in
+  `emit_wit_value_helpers`, ListRecord sweep in
+  `collect_referenced_records`, UDTF catch-all's Debug-escape
+  fix.
+- `mobilitydb-sqlink-bridge/src/lib.rs` — regen.
+
+### Commit footprint
+
+- `tegmentum/sqlink-shim-codegen` `feat/w2-phase2-witvalue`:
+  parser + ParamShape::ListRecord + classify + emit + helpers.
+- `tegmentum/mobilitydb-sqlink-bridge` `feat/w2-phase2-witvalue`:
+  regen — 59 scalars newly wired.
+- `tegmentum/sqlink` `feat/w2-phase2-witvalue`: this section.
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
