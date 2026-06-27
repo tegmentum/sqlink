@@ -1124,6 +1124,135 @@ acceptance arms still pass.
 - The remaining 29 unwired mobilitydb UDTFs are W4a (#557)
   upstream WIT coverage gaps.
 
+## W2 Phase 2 mop-up — done (#555) 2026-06-27
+
+Landed `feat/w2-w3-small-shapes` on sqlink-shim-codegen,
+mobilitydb-sqlink-bridge, and sqlink (this plan doc) jointly with
+W3.4 (below). One small ParamShape addition closed the residual
+`list<tuple<s32, s32>>` shape that W2 Phase 2 deliberately deferred.
+
+### Change in one sentence
+
+Added `ParamShape::ListTuple { elements: Vec<ListPrimElem> }` (mirror
+of `ParamShape::ListPrim` but for tuple-elements) + a per-signature
+`parse_json_list_tuple_<sig>` prelude helper (`i32_i32` is the only
+signature on today's surface).
+
+### Mechanical surface
+
+- `sqlink-shim-codegen/src/wasm_target/dispatch.rs`:
+  - New `ParamShape::ListTuple` variant + `list_tuple_sig()`
+    accessor + `list_tuple_sig_suffix()` helper.
+  - `classify_param`'s `WitType::List(Tuple(...))` arm checks every
+    tuple element via the existing `list_prim_elem` and, when all
+    primitive, returns `ParamShape::ListTuple`.
+  - `emit_arm_body` `ParamShape::ListTuple` arm emits
+    `Vec<(T1, T2, ...)>` decoding via the per-signature helper.
+  - `ListPrimElem` gains `PartialOrd, Ord, Hash` so a
+    `BTreeSet<Vec<ListPrimElem>>` can de-duplicate signatures across
+    the wired set.
+  - Aggregate extras-arg match adds the `ListTuple { .. }` bail arm.
+- `sqlink-shim-codegen/src/wasm_target/emit_lib.rs`:
+  - `collect_tuple_list_sigs(...)` walks scalars + aggregates +
+    UDTFs gathering every unique tuple-element signature.
+  - `render_tuple_list_helpers(...)` emits one
+    `parse_json_list_tuple_<sig>` per signature into the bridge
+    prelude (after the existing `parse_json_list_<T>` helpers).
+
+### Numbers
+
+- Mobilitydb unwired scalars: 876 → 873 (-3).
+- Newly wired:
+  - `datespanset_lower(spans: list<tuple<s32, s32>>) -> option<s32>`
+  - `datespanset_upper(spans: list<tuple<s32, s32>>) -> option<s32>`
+  - `datespanset_make(spans: list<tuple<s32, s32>>) -> list<tuple<s32, s32>>`
+    (the return shape lands via the new `RetShape::JsonText` arm —
+    see W3.4 below).
+
+### Verify acceptance
+
+`mobilitydb-sqlink-bridge/verify` grew a `#555` arm that calls
+`datespanset_make` with `'[[1, 10], [20, 30]]'` and asserts the
+returned SQL TEXT decodes as a JSON array of `[i32, i32]` pairs.
+All prior arms (Phase E, #522, #553, #558) still pass.
+
+## W3.4 — done (#550) 2026-06-27
+
+Landed jointly with the W2 mop-up above. One small RetShape
+addition closes nested compound returns that previously fell
+through to "inner not yet supported".
+
+### Change in one sentence
+
+Added `RetShape::JsonText { kind: JsonRetKind }` for nested compound
+returns, with three sub-kinds covering today's surface:
+`ListListPrim(T)`, `ListTuplePrim(Vec<T>)`, and `ListTupleGeomF64`.
+
+### Mechanical surface
+
+- `sqlink-shim-codegen/src/wasm_target/dispatch.rs`:
+  - New `RetShape::JsonText` variant + `JsonRetKind` enum.
+  - `classify_return`'s `WitType::List(...)` arm gains a
+    `WitType::List(...)` sub-arm (list-of-list) and a
+    `WitType::Tuple(...)` sub-arm. The tuple arm dispatches:
+      - `(geometry, f64)` → `JsonRetKind::ListTupleGeomF64`.
+      - All-primitive tuple → `JsonRetKind::ListTuplePrim(...)`.
+  - `emit_arm_body` `RetShape::JsonText` arm:
+      - `ListListPrim` / `ListTuplePrim` — `serde_json::to_string`
+        directly on the upstream `Vec<...>` (wit-bindgen's
+        `additional_derives` provides `Serialize`).
+      - `ListTupleGeomF64` — hand-built JSON `[[<wkb-hex>, <f64>],
+        ...]` because `Geometry` is a resource (no
+        `serde::Serialize` derive).
+
+### Encoding choice rationale
+
+Picked JSON-TEXT over wit-value-CBOR (option (b) in the mandate):
+
+- SQL callers already speak JSON via SQLite's `json_each(...)` /
+  JSON1 ops — no host-side codec needed.
+- No per-shape type-id required; the dispatch is by `func_id`.
+- Consistent with W2 Phase 2's `ParamShape::ListRecord` and W4b's
+  `parse_json_list_record_<snake>` design.
+- For `list<tuple<geometry, f64>>` the WKB-hex projection matches
+  the existing `RetShape::GeomBlob` bytes — same WKB shape, hex-
+  encoded for embedding in a JSON string. SQL callers extract via
+  `json_extract(..., '$[i][0]')` + `unhex(...)` if they need the
+  binary form.
+
+CBOR-via-wit-value was rejected because it would require a per-
+shape encoder helper in the bridge AND a host-side decoder for
+SQL surfaces — defeating the "small mechanical addition" framing.
+If a future shim grows binary blobs in the tuple that need lossless
+round-tripping past JSON's string-escape rules, those scalars can
+opt into a CBOR variant of `JsonRetKind` without re-architecting.
+
+### Numbers
+
+- Postgis unwired scalars: 41 → 38 (-3).
+- Newly wired:
+  - `st_dumpvalues(rast, band) -> list<list<f64>>`
+  - `st_dumpaspolygons(rast, band) -> list<tuple<geometry, f64>>`
+  - `st_pixelaspolygons(rast, band) -> list<tuple<geometry, f64>>`
+
+### Verify acceptance
+
+`postgis-sqlink-bridge/verify` grew a `#550` arm that dispatches
+`st_dumpvalues` with an empty blob; the assertion accepts either a
+Text result (success path) or a non-stub upstream raster-error,
+and explicitly rejects the "is stubbed" string. Either path proves
+the `RetShape::JsonText` arm reached the emit site. Full SQL-side
+round-trip (with a synthetic raster) lands in the W5 smoke corpus.
+
+### Out of scope
+
+- `list<list<X>>` for non-primitive X (no caller today).
+- `list<tuple<...>>` with non-primitive non-`(geometry, f64)`
+  elements — would need its own `JsonRetKind` variant. None on
+  today's surface.
+- Per-shape wit-value/CBOR opt-out (see "Encoding choice
+  rationale" above).
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
