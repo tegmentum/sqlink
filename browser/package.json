@@ -12,6 +12,7 @@
     "build": "vite build",
     "dev": "vite",
     "test": "playwright test",
+    "test:unit": "node --test tests/*.test.mjs",
     "test:install": "playwright install chromium"
   },
   "dependencies": {
