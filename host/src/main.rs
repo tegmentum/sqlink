@@ -52,7 +52,17 @@ fn usage() -> ! {
     eprintln!("       sqlink precompile <in.wasm> <out.cwasm>");
     eprintln!("       sqlink compose --list");
     eprintln!("       sqlink compose --embed NAME[,NAME...] [--output PATH] [--precompile] [--repo-root DIR]");
+    eprintln!("       sqlink --contract-version");
     std::process::exit(2);
+}
+
+/// PLAN-wit-value-extension.md Phase F (F2): observable host contract
+/// version. Prints `<MAJOR>` to stdout (no trailing prose so scripts can
+/// shell out and compare numerically). Operators / CI use this to pair a
+/// host binary with an extension catalog that targets the same major.
+/// Shared backing constant is `sqlink_host::CONTRACT_MAJOR`.
+fn print_contract_version() {
+    println!("{}", sqlink_host::CONTRACT_MAJOR);
 }
 
 /// `compose`  build a custom cli wasm with selected extensions
@@ -798,6 +808,14 @@ async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 || args[1] == "-h" || args[1] == "--help" {
         usage();
+    }
+
+    // F2: --contract-version prints the host's WIT contract MAJOR
+    // before any other work (no engine init, no .cwasm load). Lets
+    // operators / CI pair a host binary with a matching catalog.
+    if args[1] == "--contract-version" {
+        print_contract_version();
+        return Ok(());
     }
 
     // changeset subcommand short-circuits before the wasm loader path.

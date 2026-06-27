@@ -863,7 +863,21 @@ const CONTRACT_PACKAGE: &str = "sqlite:extension";
 /// `sqlite:extension` major differs (or is unversioned/legacy), catching
 /// ABI-skewed components before instantiation rather than letting them
 /// silently marshal corrupted values.
-const CONTRACT_MAJOR: u64 = 1;
+pub const CONTRACT_MAJOR: u64 = 1;
+
+/// The WIT contract package this host speaks (exposed for diagnostics and
+/// for sibling loaders — sqlink-loader, composed-cli-worker — that mirror
+/// the same guard semantics). See [`CONTRACT_MAJOR`] for the major version
+/// and [`contract_version_string`] for the human-readable form.
+pub const CONTRACT_PACKAGE_NAME: &str = CONTRACT_PACKAGE;
+
+/// Returns the host's WIT contract version in the canonical `"<package>@<MAJOR>.x"`
+/// form (e.g. `"sqlite:extension@1.x"`). Used by the cli `--contract-version`
+/// surface (F2) and by the composed-cli-worker browser path to report the
+/// host's contract version to test pages for diagnostics.
+pub fn contract_version_string() -> String {
+    format!("{CONTRACT_PACKAGE}@{CONTRACT_MAJOR}.x")
+}
 
 /// Per-extension key/value backing for the `state` + `cache`
 /// imports. Both are stored as `Arc<Mutex<HashMap<…>>>` on the
@@ -6525,6 +6539,18 @@ impl Host {
 
         spawn_epoch_bumper(engine.clone());
         spawn_epoch_bumper(engine_run.clone());
+
+        // F2: observable host contract version. Logged once per Host
+        // instantiation so operators can see which contract this host
+        // speaks (and bundles can pin to a matching one). Components
+        // whose imported `sqlite:extension` MAJOR differs from this are
+        // rejected before instantiate by the loader pre-check
+        // (see `load_extension_from_bytes` and `datalink_contract`).
+        tracing::info!(
+            "sqlink host speaks {} contract @{}.x",
+            CONTRACT_PACKAGE,
+            CONTRACT_MAJOR
+        );
 
         let signature_verifier = Arc::new(OpenSslVerifier::new(engine.clone()));
         // Component-cache cap is intentionally tiny: parsed
