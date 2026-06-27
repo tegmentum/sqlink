@@ -669,6 +669,108 @@ green.
 - `tegmentum/sqlink` `feat/w2-list-param`:
   this plan-doc section.
 
+## W3.1 — done (2026-06-27)
+
+#543's first item: topology resource-method accessors. WIT
+`resource NAME { method: func(...) -> ...; }` declarations now
+parse + classify + dispatch instead of being silently dropped.
+
+### Approach
+
+The parser previously dropped the body of every `resource NAME`
+block (the round-490 comment cited silent collisions like
+`topology.srid()` clobbering free function `st-srid` after the
+prefix-strip name-match heuristic). This fork keeps the body and
+tags each method's WitFunction with `resource: Some(<kebab>)`.
+Free-function indexes filter `resource.is_some()` so method names
+can never collide with free-function name lookups; a separate
+`<resource_snake>_<method_snake>` index serves method dispatch.
+
+`classify_shape` detects the resource marker and:
+1. Prepends a `ParamShape::Topology` (or `Raster`) receiver
+   decode (`from_topology_bytes` / `from_raster_binary`).
+2. Sets `method_call: Some(MethodCall { resource_kebab })` on the
+   shape.
+
+`emit_arm_body` switches the call expression from
+`{module}::{func}({args})` to `{arg0}.{method_snake}({args[1..]})`
+when `method_call.is_some()`, stripping the leading `&` that
+ParamShape::Topology would otherwise emit (methods are invoked on
+the owned receiver, not a borrow).
+
+`build_full` consults the method index AFTER the regular
+override + free-function lookup misses, so the precedence is:
+hand-curated override → free function → resource method.
+
+### Targets — 7 topology resource methods
+
+| WIT method | return | SQL canonical |
+|---|---|---|
+| `topology.name()` | `string` | `st_topologyname` |
+| `topology.srid()` | `s32` | `st_topologysrid` |
+| `topology.precision()` | `f64` | `st_topologyprecision` |
+| `topology.node-count()` | `u32` | `st_topologynodecount` |
+| `topology.edge-count()` | `u32` | `st_topologyedgecount` |
+| `topology.face-count()` | `u32` | `st_topologyfacecount` |
+| `topology.to-bytes()` | `list<u8>` | `st_topologytobytes` |
+
+7 WIT methods covering ~21+ SQL arms (canonical + the
+`_<form>` aliases the interface DB carries — bare-snake,
+underscored, no-prefix, `_batch`).
+
+The raster resource's accessor methods (`width`, `height`,
+`num-bands`, `srid`, `value`, `as-binary`) all have free-function
+twins in `postgis-raster-accessors` (`st-width`, `st-height`,
+etc.) that were already wired by #490, so the W3.1 raster surface
+is empty in practice.
+
+### Verification
+
+- Codegen builds clean (10 pre-existing warnings, no new).
+- Postgis-sqlink-bridge `cargo build --target wasm32-wasip2
+  --release` clean.
+- `wac plug` against postgis-composed.wasm produces a 113 MB
+  postgis-sqlink-loadable.wasm; `wasm-tools validate` passes.
+- Verify subcrate gains Case 18 — manifest-registration assertions
+  for all 7 W3.1 scalars. `cargo check` clean.
+- Existing 17 cases preserved (W3.3's Case 17 untouched).
+- Full runtime test (construct topology blob -> invoke method ->
+  assert) is gated on `st_createtopology` constructor dispatch
+  (deferred — separate shape, not a method) plus the verify
+  harness's pre-existing system-libsqlite3 link issue
+  (`sqlite3session_*` symbols).
+
+### Files touched
+
+- `sqlink-shim-codegen/src/wasm_target/wit_parse.rs` —
+  `WitFunction.resource: Option<String>`; `parse_text` captures
+  resource methods instead of dropping; tracks
+  `current_resource` alongside `depth_inside_resource`.
+- `sqlink-shim-codegen/src/wasm_target/dispatch.rs` —
+  `DispatchShape.method_call: Option<MethodCall>`;
+  `index_wit_fns` / `_nohyphen` filter methods; new
+  `index_resource_methods` + `find_resource_method`;
+  `classify_shape` prepends receiver decode; `emit_arm_body`
+  emits method-call form; `build_full` consults method index.
+- `postgis-sqlink-bridge/src/lib.rs` — regen.
+- `postgis-sqlink-bridge/Cargo.toml` — picks up the W2 #542
+  `serde_json` dep that any regen now writes (orthogonal).
+- `postgis-sqlink-bridge/verify/src/main.rs` — Case 18.
+
+### Deferred (out of scope, tracked separately)
+
+- W3.2 ListRasterBorrow (#548).
+- W3.4 list-of-record returns (#550).
+- W3.5 tuple-split (#551).
+- W3.6 topology blob passthrough (#552).
+- `st_createtopology` — resource CONSTRUCTOR (not a method);
+  separate dispatch shape, not in W3.1 scope.
+- `st_topologyfrombytes` — interface-level free function
+  (`postgis-topology-types::from-bytes`) that needs
+  same-interface name-matching (`<resource>_<func>` heuristic
+  for free funcs in the resource's interface); deferred as
+  separate name-matching follow-up.
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
