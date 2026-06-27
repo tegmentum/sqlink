@@ -1302,3 +1302,173 @@ Phase F landed Phase 2.
 
 [issue485]: ./PLAN-wit-contract-versioning.md
 
+
+
+## #522 — done (2026-06-26)
+
+`feat/return-compounds` branches across four repos:
+
+- `sqlink-shim-codegen@feat/return-compounds` (6ab94fe + 637f2bc): widened the parser + dispatcher.
+- `postgis-sqlink-bridge@feat/return-compounds` (012c54d): regen + verify-host switch.
+- `mobilitydb-sqlink-bridge@feat/return-compounds` (2dcc512): regen + Phase F verify arms.
+- `sqlink@feat/return-compounds`: this section.
+
+### What landed
+
+Phase E proved the wit-value mechanism end-to-end with
+`tfloat_min_value([1.5, 3.0, 0.5]) → 0.5` (option<f64> return). Phase E
+left ~1296 of 1577 mobilitydb scalars unwired because their returns
+were compound shapes wrapping records that the dispatcher`s
+`classify_return` did not recognise. #522 widens the return-shape
+alphabet.
+
+**Parser (`wit_parse.rs`):**
+
+- `WitType::List(Box<WitType>)` — generic list catch-all. Specialised
+  variants (`ListGeomBorrow`, `ListGeomOwned`, `ListU8`,
+  `ListOptionU32`) still take precedence; everything else surfaces as
+  the generic `List`.
+- `WitType::Result(Box<WitType>, Box<WitType>)` — for nested `result<T,
+  E>` inside another compound. Top-level `result<...>` stays handled
+  through `WitRet.fallible` exactly as before.
+- `Option(Unsupported(name))` is preserved with its structure rather
+  than being flattened to `Unsupported("option<name>")`. Pre-#522 the
+  flatten lost the inner name so option<record> never reached the
+  record-matching path.
+- `resolve_aliases(ty, aliases)` walks compound types and substitutes
+  alias-bodies for `type X = Y;` declarations (depth-limited at 16 to
+  guard against pathological cycles). Mobilitydb`s `type timestamp-tz
+  = s64;` was the primary motivator.
+
+**Dispatcher (`dispatch.rs`):**
+
+- New `RetShape::OptionWitValueRecord` — `Some(rec)` →
+  `SqlValue::WitValue` via the per-record `ret_to_witvalue_<snake>`
+  helper; `None` → `SqlValue::Null`.
+- New `RetShape::OptionBoolInt` — `Some(b)` → `Integer(b as i64)`,
+  `None` → `Null`.
+- New `RetShape::FirstWitValueRecord` — for `list<record>` scalars,
+  projects to the first element wrapped as wit-value (Null if empty).
+  See **Semantic decision** below.
+- New `RetShape::FirstInt` / `FirstReal` / `FirstText` — same
+  projection for `list<s64|u32|s32>` / `list<f64|f32>` / `list<string>`.
+- `classify_return` matches `Option(Unsupported(name))` and
+  `List(Unsupported(name))` against the per-shim record registry; if
+  found, routes to the appropriate new shape.
+- `classify_param` bails explicitly on bare `List(...)` and bare
+  `Result(...)` (param-side list wiring is out of scope for #522 —
+  return-side only; a follow-up bucket).
+- `collect_package_aliases` + `resolve_function_aliases` apply alias
+  resolution to every parsed `WitFunction`s params + ret before
+  `classify_*` runs. Threaded into `build_full`,
+  `build_aggregate_registry`, and `build_udtf_registry`.
+
+**Emit (`emit_lib.rs`):**
+
+- `collect_referenced_records` walks the new `RetShape` variants so
+  `OptionWitValueRecord` / `FirstWitValueRecord` returns trigger
+  helper emission for the record they reference.
+
+**Codegen bugfix (`emit_wit.rs`):**
+
+- `copy_tree(src, dst)` now skips files when both paths canonicalise
+  to the same on-disk file. The mobilitydb regen `--out ~/git/
+  mobilitydb-sqlink-bridge` hits the same path that `source_shim_deps_dir`
+  returns for primary `mobilitydb`; `fs::copy(src, src)` was silently
+  truncating `temporal.wit` on every regen.
+
+### Semantic decision on `list<record>` scalar returns
+
+`sql-value` has no native list variant (`text | real | integer | blob
+| null | wit-value`). For SCALAR-shape functions the only valid
+projection is one row → one value, so `list<record>` collapses to the
+FIRST element wrapped as wit-value (Null if empty). This mirrors the
+existing `FirstGeomBlob` and `FirstOptionU32Int` precedents
+(`st_clusterwithin`, `st_clusterdbscan`).
+
+Multi-row exposure of `list<record>` returns is the table-function /
+vtab path, which is wired separately (#489 sqlink-loader vtab wiring +
+the per-shim UDTF registry). This decision is documented in the new
+`RetShape::FirstWitValueRecord` doc-comment in
+`sqlink-shim-codegen/src/wasm_target/dispatch.rs`.
+
+### Numbers
+
+| Source              | Pre-#522 | Post-#522 |
+|---------------------|---------:|----------:|
+| mobilitydb wired    |      281 |       467 |
+| mobilitydb unwired  |     1296 |      1110 |
+| postgis wired       |      284 |       286 |
+| postgis unwired     |      117 |       117 |
+
+Mobilitydb +186 newly wired. Postgis +2 (`st_clusterkmeans` +
+alias via `RetShape::FirstInt` for the `list<s32>` cluster-id
+return).
+
+The remaining 1110 mobilitydb unwired split into:
+
+- **1020 no-match**: the WIT corpus has no function matching that
+  SQL name. Mostly the `bitemporal_*` and `wkbtemporal_*`
+  interfaces that the upstream WIT doesn`t cover yet — out of
+  scope of #522 (waits on `mobilitydb-wasm` extending the WIT).
+- **89 param-side `list<...>`**: `list<s64>` (21), `list<string>`
+  (14), `list<f64>` (11), `list<int-span>` (7),
+  `list<float-span>` (7), `list<date-span>` (7), `list<s32>`
+  (6), `list<stindex-entry>` (4), `list<indexed-point-xyz>` (4),
+  `list<indexed-point-xy>` (3), `list<tuple<s32,...>>` (3),
+  `list<indexed-interval>` (2). Param-side list<...> wiring is
+  the next bucket — variadic marshalling at the SQL boundary
+  (each `SqlValue::Blob` / `Integer` becomes one list element)
+  plus list<record> via variadic wit-value args. Tracked
+  alongside #523.
+- **1 list<tuple<f64, f64>>** return (`floatspan_bucket_list`).
+  Niche. Could be wrapped as wit-value with a tuple-record
+  type-id if needed.
+
+### What`s verified
+
+- `cargo build -p sqlink-shim-codegen` — clean (10 warnings, all
+  dead-code on variant fields the codegen carries but doesn`t
+  read; pre-existing).
+- `cargo test -p sqlink-shim-codegen --lib` — 6 / 6 pass.
+- `cargo build -p postgis-sqlink-bridge --target wasm32-wasip2
+  --release` — clean.
+- `cargo build -p mobilitydb-sqlink-bridge --target wasm32-wasip2
+  --release` — clean (4 unused-variable warnings on the generated
+  vtab stubs, pre-existing).
+- `wac plug` composition of both bridges — succeeds; output binaries
+  validate via `wasm-tools validate`.
+- `cargo run -p mobilitydb-sqlink-bridge-verify --release`:
+    1. `tfloat_min_value(synthetic seq) = 0.5` — Phase E baseline.
+    2. `tfloat_time_span(synthetic seq)` — Some side of
+       `option<time-period>`. Returns wit-value with the time-period
+       type-id from the manifest; the verifier decodes via ciborium
+       against a `HostTimePeriod { start, end, start_inclusive,
+       end_inclusive }` mirror and asserts `start == 1_000_000_000`,
+       `end == 3_000_000_000`.
+    3. `tfloat_at_period(synthetic seq, 10, 20)` — None side of
+       `option<tfloat-sequence>` (period in the far past doesn`t
+       intersect the seq). Returns `SqlValue::Null` cleanly.
+- `cargo run -p postgis-sqlink-bridge-verify --release` — 16 / 16
+  scalar / aggregate / vtab cases pass (Phase D baseline preserved).
+
+### Deferred (next buckets)
+
+- **Param-side `list<X>` wiring**: 89 mobilitydb scalars. Likely
+  shape: each list-element SqlValue passed at indexes `[i..i+len]`
+  for fixed-arity lists, or wrap as `SqlValue::Blob`(serialised
+  list) for variable-arity. Decision pending whether
+  variadic-flatten-at-SQL or pre-encoded-blob better matches each
+  shape category.
+- **Param-side `list<record>`**: variadic wit-value args, or
+  single wit-value carrying the list-shape. Same per-shape
+  decision as above.
+- **`list<tuple<...>>` returns**: one niche function. Cheap to
+  bolt on when needed.
+- **#523 LOCAL→UPSTREAM short-circuit**: the current Phase E /
+  Phase F path does a ciborium round-trip LOCAL→UPSTREAM in
+  `arg_witvalue_<snake>`. The bytes are byte-identical by
+  construction (LOCAL + UPSTREAM share field shape); a transmute
+  / direct decode would skip the round-trip.
+
+[issue522]: #522
