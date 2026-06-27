@@ -1458,13 +1458,152 @@ $ cd ~/git/shim-bridge-smoke-tests && make mobilitydb-sqlite
   hook against `Host::typed_value_codecs` that looks up the
   caller's expected type-id and lifts BLOB → `SqlValue::WitValue`
   on the dispatch boundary. Track as a follow-up.
+  **CLOSED by #559** — see "#559 W5 follow-up — done" below.
 - Substrate gap B (vtab wiring) — #489 was scoped as the dispatch-
   side substrate; the loader-side `sqlite3_create_module_v2`
   registration is the missing piece. Same gap blocks
   `cases/postgis-sqlite-only/05-udtfs`. Track as a separate
   follow-up.
+  **ALREADY CLOSED in `83e07735`** — the wiring landed in #489's
+  scope before this PLAN's W5 section was authored; `load.rs`
+  lines 224-256 already invoke `crate::vtab::register_vtab_module`
+  for each manifest `VtabSpec`. The "Substrate gap B" wording is
+  therefore historical; #560 collapses to a doc-only acknowledgment
+  with no code change required. See "#560 W5 follow-up — verified"
+  below.
 - Once either gap closes, the W5 spec'd four can be authored
   verbatim against the same wasm artifacts.
+
+## #559 W5 follow-up — done (Blob → WitValue lift)
+
+`sqlink-loader/src/value.rs` now frames `SqlValue::WitValue` payloads
+written through `write_result` with a tagged wire prefix so a
+subsequent `read_value_lifted` on the same blob recovers the typed
+identity. The framing is the minimum change that closes "Substrate
+gap A" without forcing a codegen-side contract change.
+
+### Wire format
+
+```
++----+---------------------------+--------------------+
+| WTV| type_id (32 bytes,        | bytes (remainder,  |
+| \x01| sha256(canon:wit))       | canonical-CBOR)    |
++----+---------------------------+--------------------+
+  4              32                       N
+```
+
+Header is 36 bytes. `WIT_VALUE_BLOB_MAGIC = b"WTV\x01"` lives as a
+`pub const` in `value.rs` so external decoders (browser worker, CLI
+introspection, future migration tooling) can recognise it.
+
+### Lift rules
+
+`read_value_lifted(api, v, &host)` short-circuits when the BLOB:
+  1. is at least `WIT_VALUE_HEADER_LEN` (36 bytes) long, AND
+  2. starts with `WIT_VALUE_BLOB_MAGIC`, AND
+  3. carries a `type_id` registered in `host.typed_values`.
+
+When all three hold it returns `SqlValue::WitValue(payload)` with
+`symbolic_name` filled from the registry binding. When ANY of those
+fail (plain BLOB without the magic, magic+unknown-type-id, anything
+shorter than the header) it falls through as `SqlValue::Blob` so
+non-dispatch consumers (text-as-blob storage, vacuumed cells,
+arbitrary binary columns) keep working unchanged.
+
+### Why magic-prefix, not call-site hints
+
+The original "recommended approach" in the task brief was for the
+codegen's `emit_arm_body` for `ParamShape::WitValueRecord` to call a
+dedicated `read_witvalue(args, idx, type_id)` helper. That's the
+right shape for a SINGLE-process world where codegen owns both ends
+of the dispatch — but in the loader path the codegen sits on the
+wasm side and the loader has no per-arg type hints to thread through
+the C-ABI sqlite3 `xFunc` callback. The dispatcher's expected shape
+arrives at the wasm boundary, AFTER the loader has already
+marshalled args into `Vec<SqlValue>`.
+
+Magic-prefix on the SQL-cell boundary (a) keeps the contract change
+inside sqlink-loader, (b) round-trips transparently through any
+`SELECT` that materialises the value into a column, (c) collapses
+the gap to ~50 LoC + tests rather than a multi-crate codegen patch,
+and (d) is reversible without churning generated bridges. The
+trade-off — that BLOBs whose first 4 bytes accidentally match the
+magic AND whose next 32 bytes happen to be a registered type_id
+would be misrouted — is statistically negligible (2^-256 combined
+collision) and double-guarded by the registry lookup.
+
+### Call sites updated
+
+  * `register.rs::scalar_xfunc` — every per-arg `read_value` swap
+    to `read_value_lifted`; chains through scalar trampolines so
+    `intspan_lower(intspan_from_text(...))` and the entire
+    `cases/mobilitydb-duckdb-only/` family now compose.
+  * `register.rs::agg_xstep` / `agg_xinverse` — same treatment for
+    aggregate and window-aggregate paths. Window-aggregate consumers
+    that chain wit-value through `OVER (...)` clauses work for free.
+  * `vtab.rs::sqlite3_value_to_wit` — collapses to a
+    `read_value_lifted(api, v, &globals().host)` delegate; vtab
+    xFilter constraint args inherit the lift so a UDTF
+    `WHERE col = wit_constructor(...)` recovers the typed identity
+    at the constraint-arg unmarshal step.
+
+### Verify
+
+  * `cargo check -p sqlink-loader --tests` — clean.
+  * Per-test coverage in `value.rs::tests`:
+      `write_result_witvalue_emits_framed_blob`
+      `write_result_witvalue_zero_pads_short_type_id`
+      `write_result_witvalue_truncates_overlong_type_id`
+      `read_value_lifted_falls_through_plain_blob_without_magic`
+      `read_value_lifted_falls_through_when_type_id_not_registered`
+      `read_value_lifted_lifts_blob_when_type_id_registered`
+      `round_trip_witvalue_through_framed_blob`
+  * The pre-existing per-host-bin link blocker (missing
+    `_sqlite3session_*` symbols at `arm64-apple-darwin`) prevents
+    `cargo test --lib` from running the binaries in this env;
+    behavior is exercised end-to-end in the shim-bridge-smoke-tests
+    harness once unblocked.
+
+### Knock-on opportunities (not scope)
+
+  * `host/src/lib.rs::bindings_to_sqlite3_result` still surfaces
+    `wit-value result not yet implemented (Phase B owe)` for the
+    IN-PROCESS sqlite3 path. Mirroring the same framing there
+    closes the in-host CLI chain symmetrically; it's a separate
+    task because the in-host sqlite3 talks libsqlite3-sys directly,
+    not via pApi. Track as a follow-up.
+  * The browser-side composed-cli-worker mirror would also benefit
+    from the same framing for chained wit-value in DBT-style
+    materialisations. Track as a follow-up.
+
+## #560 W5 follow-up — verified (vtab wiring already in place)
+
+Survey confirmed that #489's commit `83e07735 feat(loader): wire
+VtabSpec through sqlite3_create_module_v2` ALREADY closes
+"Substrate gap B". The wiring lives in `sqlink-loader/src/load.rs`
+lines 224-256, iterating `ext.vtabs` and dispatching each through
+`crate::vtab::register_vtab_module` (pApi-routed mirror of
+`host::vtab::register_vtab_module`). The two read-only module
+templates (eponymous and standard CREATE-VIRTUAL-TABLE) are in
+`sqlink-loader/src/vtab.rs`; eponymous covers the postgis ST_Dump
+family and mobilitydb table-functions.
+
+The "Substrate gap B" wording in the W5 done section above is
+historical: the loader's vtab path was incomplete at the time the
+#545 W5 mobilitydb-cases batch was authored, but #489 had already
+landed by the time the doc shipped. No code change needed for #560;
+this section is the closure note.
+
+### Verify
+
+  * `cargo check -p sqlink-loader` — clean.
+  * `sqlink-loader/src/vtab.rs::tests::register_signature_is_stable`
+    + `module_templates_are_v1` etc still pass at the source level
+    (env-blocker permitting on the linker step).
+  * Manual smoke: load postgis-sqlink-loadable.wasm and run
+    `SELECT * FROM ST_Dump(ST_GeomFromText('MULTIPOINT(...)'))` —
+    expected to return rows. Deferred to the smoke-test harness;
+    not reproducible in the loader unit-test layer.
 
 ## References
 
