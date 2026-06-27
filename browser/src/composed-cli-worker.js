@@ -541,13 +541,32 @@ async function handleInit(msg) {
 
   spiLoader._setBindgenResult(result)
 
+  // #533 v1.5 round 6: bridged-execute-cas was split out of
+  // dispatch-bridge into its own dispatch-bridge-cas interface.
+  // Pick both export shapes off the composed binary; merge into
+  // a single bridge-like object so the polyfill's existing
+  // `b.bridgedExecute` + `b.bridgedExecuteCas` call sites keep
+  // resolving.
   const exportsForBridge = result.exports ?? result
-  const dispatchBridgeForSpi =
+  const dispatchBridge =
     exportsForBridge?.dispatchBridge ??
     exportsForBridge?.['sqlink:wasm/dispatch-bridge'] ??
     exportsForBridge?.['sqlink:wasm/dispatch-bridge@0.1.0']
+  const dispatchBridgeCas =
+    exportsForBridge?.dispatchBridgeCas ??
+    exportsForBridge?.['sqlink:wasm/dispatch-bridge-cas'] ??
+    exportsForBridge?.['sqlink:wasm/dispatch-bridge-cas@0.1.0']
+  // Merge: dispatch-bridge methods first, dispatch-bridge-cas
+  // methods second. bridged-execute-cas now lives on the cas
+  // interface so the spread overrides any stale reference (the
+  // old dispatch-bridge no longer carries bridged-execute-cas
+  // post-split).
+  const mergedBridge = {
+    ...(dispatchBridge ?? {}),
+    ...(dispatchBridgeCas ?? {}),
+  }
   if (typeof cliHostHandlers._setBridge === 'function') {
-    cliHostHandlers._setBridge(dispatchBridgeForSpi)
+    cliHostHandlers._setBridge(mergedBridge)
   }
 
   const exports = result.exports
