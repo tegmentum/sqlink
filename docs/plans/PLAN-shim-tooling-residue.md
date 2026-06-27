@@ -2219,6 +2219,106 @@ already #557fix.2-ready.
   `rewrite_ret_for_tuple_pick` bails clearly with a named
   diagnostic so a future caller is named.
 
+## #565 — done 2026-06-27
+
+#557fix.2 substrate fix landed. The deferral from #564 ("Full
+regen of postgis bridge from codegen tip — blocked on #557fix.2
+substrate fix") is now resolved.
+
+### What changed
+
+Codegen `sqlink-shim-codegen` ← `feat/557fix-2-reachable-types`,
+commits `b1cc6ea`, `6f6af5e`, `1fb2a16`.
+
+- `src/wasm_target/wit_parse.rs` — new `reachable_primary_types`
+  walker. Computes the closure of primary-shim record / variant /
+  enum / flags types reachable through any imported function's
+  params, return, or transitively through reachable-record
+  fields. Mirrors wit-bindgen's own DCE rule: a type is emitted
+  iff some imported function signature references it
+  (transitively).
+- Extended `WitRet` with `error_ty: Option<WitType>`. The pre-fix
+  parser stripped `result<T, E>` and threw the error half away;
+  the reachability walker needs the E so error variants
+  (`postgis-error`, `temporal-error`, etc.) count as live.
+- Walker indexes records / leaves by `(interface, kebab_name)`
+  (not just kebab) so two same-named records in different
+  interfaces stay distinct. mobilitydb's `stbox-ops::stbox3d` vs
+  `stbox3d-ops::stbox3d` motivates this — both are emitted by
+  wit-bindgen at separate module paths and both need force-link
+  entries.
+- Resolution prefers a same-interface declaration; falls back to
+  cross-interface in the primary's packages when not found
+  (approximating `use` clauses the parser doesn't track).
+- `src/wasm_target/emit_lib.rs::render_force_link_upstream_imports`
+  consults the reachable set as a membership filter. Records /
+  variants / enums / flags not in the set are skipped. Function
+  refs are untouched (function items always survive wit-bindgen).
+
+8 new tests cover: error-type preservation,
+direct/transitive/resource-method reach, non-primary isolation,
+two-records-same-kebab disambiguation, cross-interface fallback.
+
+### Before / after counts
+
+- Postgis force-link types: 22 entries (#557fix) → 14 entries
+  (#565). Dropped: `Box3d`, `BufferParams`, `CoordZ`, `CoordZm`,
+  `CoordinateStats`, `Extremes`, `InscribedCircle`, `ValidDetail`
+  — all declared in postgis-types but never referenced by any
+  imported postgis function. Kept: `Bbox` (st-make-box2d return),
+  `Bbox3d` (st-extent-threed return), `PostgisError` /
+  `RasterError` / `TopologyError` (every `result<,…-error>`),
+  `GeometryType` / `PixelType` (enum returns), geocoder /
+  raster-stats / topology records that are explicit returns.
+- Mobilitydb force-link types: 85 entries (#557fix and current).
+  Same count, byte-identical output. Confirms the walker handles
+  the same-kebab-two-interfaces case correctly (without the
+  per-interface keying both stbox3d records would collapse to one
+  and the count would have dropped to 84).
+
+### Verify subcrate results
+
+`postgis-sqlink-bridge` ← `feat/557fix-2-reachable-types`,
+commit `a122932` (clean regen, no manual splice).
+
+- `cargo build --target wasm32-wasip2 --release` clean in 12.62s.
+- `wac plug` produces 113 MiB `postgis-sqlink-loadable.wasm`.
+- `wasm-tools validate` reports VALID.
+- Verify subcrate: all 16+ cases pass, including the #564
+  `st_worldtorastercoordcol` / `st_worldtorastercoordrow`
+  tuple-pick acceptance, the W3.5 `st_worldtorastercoord` tuple-
+  return, the W3.4 `st_dumpvalues` JsonText arm, every
+  geom / geog / topology / raster scalar exercised by the prior
+  rounds.
+
+`mobilitydb-sqlink-bridge` ← `feat/557fix-2-reachable-types`,
+no commit (regen is byte-identical to the prior tip — confirms
+no regression).
+
+- `cargo build --target wasm32-wasip2 --release` clean in 24.77s.
+
+### Honest deferrals (#565)
+
+- Mobilitydb `wac compose` (and the verify subcrate that depends
+  on it) is broken on main with `the instance has no export named
+  'mobilitydb:temporal/tbool-ops@0.1.0'` — the upstream
+  `mobilitydb-composed.wasm` available locally has a different
+  surface than `compose.wac` expects. Pre-existing and unrelated
+  to #565 (reproduces on the parent branch). Build + emit of the
+  bridge crate are clean; the compose-side surface drift wants
+  its own task.
+- README emit-template drift: regenerating the mobilitydb bridge
+  reverts the compose-section README to the simpler `wac plug`
+  shape (it doesn't know about the wac-compose + stub-plug setup).
+  Discarded the README diff in the #565 regen so the substantive
+  output stays focused. The emit_readme.rs template wants
+  per-shim awareness in a separate cleanup.
+- Variant case-payload reachability: the parser doesn't capture
+  variant case payloads, so a future shim that puts records
+  inside variant cases would need the walker extended. Today's
+  shim variants only wrap primitives / strings so this is a
+  no-op.
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
