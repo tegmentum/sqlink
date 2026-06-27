@@ -1558,3 +1558,61 @@ SELECT count(*) FROM st_squaregrid(1.0, ST_GeomFromText('POLYGON((0 0, 3 0, 3 3,
   present (#490).
 - **Cursor batching.** Deferred from #489.
 
+
+## #532 — Multi-column xColumn row materialisation (codegen done 2026-06-27)
+
+Lands the codegen half of the deferral noted under #531. The
+emitted bridge's UDTF cursor now stores `Vec<Vec<SqlValue>>` —
+one inner vector per row, one `SqlValue` per visible column.
+`emit_udtf_filter_body` materialises the upstream
+`list<record>` return into per-column SqlValues driven by a new
+`UdtfFieldShape` discriminator on `UdtfColumn`. The xColumn arm
+indexes `row_cols[col]` directly, so
+
+```sql
+SELECT * FROM temporal_join_float(seq_a, seq_b);
+```
+
+now yields rows with proper `timestamp INTEGER, left REAL,
+right REAL` affinities once the bridge is regenerated.
+
+xFilter also wires `ParamShape::WitValueRecord` through the
+existing `arg_witvalue_<snake>` helper — the same path scalar
+dispatch uses since Phase E. Record-typed UDTF args
+(e.g. `tfloat-sequence` for the temporal joins) now decode via
+the bridge's serde-ops codec rather than the
+"param shape not yet wired" stub.
+
+The SingleGeom path (postgis dump-style UDTFs) continues to
+work — each row's WKB is wrapped in a 1-element
+`Vec<SqlValue>` so the row-materialiser shape is uniform.
+
+### #532 field shapes covered
+
+- `Int` — s32/s64/u32/u64/u8/bool + type-aliases (timestamp-tz).
+- `Real` — f32/f64.
+- `Text` — string.
+- `Blob` — list<u8>.
+- `GeomBlob` — geometry/geography → `.as_wkb()`.
+- `OptionInt|Real|Text|Blob|GeomBlob` — Some(v) → typed cell;
+  None → SqlValue::Null.
+
+### #532 carried forward
+
+- **Bridge regen + verify (Checkpoints 532.6 + 532.7).**
+  Regenerating mobilitydb-sqlink-bridge against the new codegen
+  requires `mobilitydb-interface.sqlite` (not vendored), the
+  composed mobilitydb wasm (long build), `wasm-tools` + `wac`,
+  and the wasm32-wasip2 toolchain. Manual `SELECT * FROM
+  temporal_join_float(...)` validation through vanilla sqlite3
+  + `.load sqlink_loader.dylib` is the smoke gate. Postgis
+  regen + the `~/git/shim-bridge-smoke-tests` postgis cases
+  cover the regression check.
+- **Record-typed UDTF row fields.** Nested-record fields
+  (a row whose i-th field is itself a record) currently surface
+  as `SqlValue::Null` (the field_shape classifier folds into
+  `Unsupported`). A follow-up re-encodes them as wit-value bytes
+  through `ret_to_witvalue_<snake>` so per-row record cells
+  become addressable from SQL.
+- **Tuple / list-of-X row fields.** Same treatment as nested
+  records; folded into the same follow-up.
