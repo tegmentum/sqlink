@@ -920,7 +920,6 @@ is empty in practice.
 
 ### Deferred (out of scope, tracked separately)
 
-- W3.2 ListRasterBorrow (#548).
 - W3.4 list-of-record returns (#550).
 - W3.5 tuple-split (#551).
 - W3.6 topology blob passthrough (#552).
@@ -931,6 +930,130 @@ is empty in practice.
   same-interface name-matching (`<resource>_<func>` heuristic
   for free funcs in the resource's interface); deferred as
   separate name-matching follow-up.
+
+## W3.2 — done (2026-06-27)
+
+#548's payload: generalise the codegen's aggregate accumulator
+from Geometry-only to multi-resource so raster mosaic aggregates
+(canonical `st_rast_union_aggregate`) wire end-to-end. Adds
+`WitType::ListRasterBorrow` to the parser alphabet and threads
+`AccKind { Geom, Raster }` through the aggregate dispatch shape.
+
+### Approach
+
+Three layered changes in tegmentum/sqlink-shim-codegen:
+
+1. **Type plumbing** (`wit_parse.rs` + `dispatch.rs`):
+   `WitType::ListRasterBorrow` parses for `list<borrow<raster>>`
+   the same way `ListGeomBorrow` parses for `list<borrow<geometry>>`.
+   The new variant gets `ColumnAffinity::Blob`, a stub
+   `classify_param` error (aggregate-only on the current surface),
+   a stub `classify_return` error (impossible as return), and is
+   rejected by `classify_udtf_output_row` symmetrically with the
+   geom variant.
+
+2. **AccKind enum** (`dispatch.rs`):
+   New `AccKind { Geom, Raster }` carried on
+   `AggregateShape::accumulator_kind`. `classify_aggregate_shape`
+   recognises both `ListGeomBorrow` (-> `AccKind::Geom`) and
+   `ListRasterBorrow` (-> `AccKind::Raster`) as the first-arg
+   streaming type. The aggregate registry indexes both
+   `postgis-aggregates` (the existing canonical interface) and
+   the new `postgis-raster-aggregates` interface; the fallback
+   index over non-aggregate interfaces accepts either resource
+   borrow-list. Default is `AccKind::Geom`, so callers that don't
+   construct the new variant keep their current behaviour.
+
+3. **Emit** (`emit_lib.rs` + `dispatch.rs`):
+   Prelude gains a parallel `AGG_RASTER_STATE` thread-local map
+   with matching `push_raster_state` / `take_raster_state`
+   helpers, independent of the geom state map (so concurrent
+   geom + raster aggregates on the same connection don't share
+   state). `emit_aggregate_step_body` switches on
+   `accumulator_kind` to pick the push helper.
+   `emit_aggregate_finalize_body` switches on `accumulator_kind`
+   for the take + decode (`Geometry::from_wkb` /
+   `postgis_err_string` vs the existing `from_raster_binary`
+   helper / `shim_err_string`) and adds a `RetShape::RasterBlob`
+   arm that encodes the return via the resource's `as-binary`
+   method (parallel to the scalar dispatcher's raster return).
+
+### AccKind enum design rationale
+
+The accumulator kind lives on the `AggregateShape` rather than on
+each `ParamShape` because:
+- The choice of streaming-state map is a property of the
+  aggregate's shape (not of the individual list parameter).
+- The downstream extras (`set_or_validate_extras`,
+  `take_extras_state`) are shared across both kinds — only the
+  blob-state map differs.
+- Adding a third kind in future (e.g. `AccKind::Topology` if any
+  future shim ships a `list<borrow<topology>>`-taking aggregate)
+  is mechanical: one new thread-local + one new
+  `push_*_state` + `take_*_state` pair + one new switch arm.
+
+### Targets
+
+Three raster aggregates wired on the postgis surface from a single
+WIT signature (`postgis-raster-aggregates::st-rast-union-aggregate`):
+
+- `st_rast_union_aggregate` (id 1000026 — canonical name)
+- `st_rast_union` (id 1000025 — ST_Union alias)
+- `st_raster_union` (id 1000027 — ST_RasterUnion alias)
+
+All three resolve to `pg_rast_agg::st_rast_union_aggregate` via the
+W1+W3 name-matching heuristic.
+
+### Verification
+
+End-to-end raster aggregate exercised in the verify subcrate
+(Case 19): two aligned 2x2 empty rasters with float64 bands fed
+through `dispatch_aggregate_step` x2 + `dispatch_aggregate_finalize`
+returns a 330-byte raster blob. All 19 verify cases pass.
+
+Codegen: 14 unit tests pass (no regressions on existing geom
+aggregate emission — `AccKind::Geom` is the default and the geom
+arms emit bit-for-bit the same bodies as before).
+
+postgis-sqlink-bridge: `cargo build --release --target wasm32-wasip2`
+clean; `wac plug` + `wasm-tools validate` pass.
+
+### Files touched
+
+- `sqlink-shim-codegen/src/wasm_target/wit_parse.rs` —
+  `WitType::ListRasterBorrow` variant + parser + type_label.
+- `sqlink-shim-codegen/src/wasm_target/dispatch.rs` —
+  `AccKind` enum, `AggregateShape::accumulator_kind`,
+  `classify_aggregate_shape` recognition, registry index
+  updates, `emit_aggregate_step_body` /
+  `emit_aggregate_finalize_body` switches, ListRasterBorrow
+  rejections in classify_param + classify_return.
+- `sqlink-shim-codegen/src/wasm_target/emit_lib.rs` —
+  `AGG_RASTER_STATE` thread-local + `push_raster_state` /
+  `take_raster_state` prelude helpers.
+- `postgis-sqlink-bridge/src/lib.rs` — regen output: 3 raster
+  aggregate step + finalize arms + prelude additions (+65 LoC).
+- `postgis-sqlink-bridge/verify/src/main.rs` — Case 19
+  end-to-end raster aggregate arm.
+
+### Commit footprint
+
+- `tegmentum/sqlink-shim-codegen` `feat/w3-2-raster-agg`:
+  - `e6a6ee8` feat(wasm-target): generalize aggregate accumulator
+    to AccKind + ListRasterBorrow.
+- `tegmentum/postgis-sqlink-bridge` `feat/w3-2-raster-agg`:
+  - `7f5159e` chore: regen with W3.2 codegen — wire raster
+    aggregates.
+  - `c65a461` test(verify): exercise st_rast_union_aggregate
+    end-to-end.
+
+### Deferred (out of scope, tracked separately)
+
+- The two scalar misclassifications for `st_rast_union_aggregate`
+  (scalar id 882, num_args=2) and `st_raster_union` are leftover
+  from the W1 name-match heuristic and are independent of W3.2;
+  the aggregate paths (id 1000025/1000026/1000027) are correct
+  and SQLite registration picks the right binding by arity.
 
 ## References
 
