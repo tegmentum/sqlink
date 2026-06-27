@@ -1604,6 +1604,160 @@ this section is the closure note.
     `SELECT * FROM ST_Dump(ST_GeomFromText('MULTIPOINT(...)'))` —
     expected to return rows. Deferred to the smoke-test harness;
     not reproducible in the loader unit-test layer.
+## W4a — done (#557) 2026-06-27
+
+Landed `feat/w4a-vendored-udtf-declarations` on mobilitydb-sqlink-
+bridge and sqlink (this plan doc). Vendored 29 UDTF declarations
+into the bridge's `wit/deps/mobilitydb-temporal/temporal.wit` —
+the upstream-WIT-coverage gap that #558 (W4b) explicitly named
+as "the remaining 29 unwired mobilitydb UDTFs are W4a".
+
+### Change in one sentence
+
+Added 29 UDTF function declarations + matching row records into
+the bridge's vendored copy of `mobilitydb:temporal`, split across
+a new `typed-join-ops` interface (bool/int/text variants of
+temporal-join + as-of-join) plus 7 fresh interfaces (`nearest-
+join-ops`, `time-split-ops`, `value-split-ops`, `to-rows-ops`,
+`temporal-index-ops`, `spatial-index-ops`, `sequence-json-ops`).
+
+### Mechanical surface
+
+- `mobilitydb-sqlink-bridge/wit/deps/mobilitydb-temporal/temporal.wit`:
+  - +312 lines split across 8 new interface blocks.
+  - `interface join-ops` stays float-only (preserves upstream
+    instance-shape compatibility so wac plug still consumes it).
+  - `interface typed-join-ops` (new): `joined-{bool,int,text}-pair`
+    + `temporal-join-{bool,int,text}` + `as-of-join-{bool,int,text}`.
+  - `interface nearest-join-ops` (new): `nearest-{bool,float,int,
+    text}-pair` + `nearest-join-{bool,float,int,text}` — row carries
+    `(timestamp, distance, left, right)`.
+  - `interface time-split-ops` / `value-split-ops` (new): row carries
+    `(bucket-{start,end}|{lower,upper}, sub-sequence-json)`. The
+    `sub-sequence-json` field projects as TEXT — same JSON-as-TEXT
+    design choice as W3.4's `RetShape::JsonText`.
+  - `interface to-rows-ops` (new): per-instant projection records
+    for tgeompoint/tgeompoint3d/tgeogpoint/tpose/tcbuffer (5 UDTFs).
+    Row fields are all primitive so the W4b row materialiser
+    projects them directly.
+  - `interface temporal-index-ops` (new): 5 lookup variants over
+    `tfloat-sequence`, row `(instant-index, timestamp)`.
+  - `interface spatial-index-ops` (new): 4 lookups over
+    `tgeompoint-sequence`, row `(instant-index, timestamp, x, y,
+    distance)`.
+  - `interface sequence-json-ops` (new): degenerate single-row
+    `(seq-id, json)` UDTF.
+- `mobilitydb-sqlink-bridge/stub-plug/` (new crate):
+  - Tiny wasm-component crate that exports stub `Vec::new()` impls
+    for the 8 W4a interfaces. World imports the upstream
+    interfaces whose types the W4a additions reference (types,
+    tbool-ops, ttext-ops, tgeompoint3d-ops, tgeogpoint-ops, tpose-
+    ops, tcbuffer-ops) so the stub shares instance shape with
+    `mdb_temporal_wasm`'s exports.
+- `mobilitydb-sqlink-bridge/src/lib.rs` (regen):
+  - +1759 lines: 29 dispatch arms + per-record canon-CBOR encoder/
+    decoder pairs for every new row record.
+
+### Numbers
+
+- Mobilitydb unwired UDTFs: 29 → 0 (29 wired).
+- Newly wired UDTFs (by interface):
+
+  | New interface | UDTFs |
+  | --- | --- |
+  | `typed-join-ops` | `temporal_join_bool`, `temporal_join_int`, `temporal_join_text`, `as_of_join_bool`, `as_of_join_int`, `as_of_join_text` |
+  | `nearest-join-ops` | `nearest_join_bool`, `nearest_join_float`, `nearest_join_int`, `nearest_join_text` |
+  | `time-split-ops` | `tfloat_time_split`, `tint_time_split` |
+  | `value-split-ops` | `tfloat_value_split`, `tint_value_split` |
+  | `to-rows-ops` | `tgeompoint_to_rows`, `tgeompoint3d_to_rows`, `tgeogpoint_to_rows`, `tpose_to_rows`, `tcbuffer_to_rows` |
+  | `temporal-index-ops` | `temporal_index_find_at`, `temporal_index_find_after`, `temporal_index_find_before`, `temporal_index_find_in_range`, `temporal_index_find_overlapping` |
+  | `spatial-index-ops` | `spatial_index_find_in_envelope`, `spatial_index_find_within_distance`, `spatial_index_nearest`, `spatial_index_nearest_k` |
+  | `sequence-json-ops` | `sequence_json` |
+
+  (29 = 6 + 4 + 2 + 2 + 5 + 5 + 4 + 1.)
+
+- Codegen regen stderr UDTF-deferral count: 29 → 0. Every UDTF in
+  `mobilitydb-interface.sqlite` now resolves to a WIT signature
+  through the dispatcher's alphabet.
+
+### Verify acceptance (HONEST DEFERRAL)
+
+The regen + bridge wasm build are green. `wac plug` exits 0 but
+leaves 7 unsatisfied mobilitydb:temporal imports (`types`,
+`tbool-ops`, `ttext-ops`, `tgeompoint3d-ops`, `tgeogpoint-ops`,
+`tpose-ops`, `tcbuffer-ops`) in the composed loadable. As a
+consequence the `mobilitydb-sqlink-bridge/verify` subcrate cannot
+instantiate the composed wasm — it surfaces an
+"instance not found in linker" error at host load time.
+
+Root cause of the wac-plug leakage: the bridge's W4a interfaces
+reference upstream records via `use foo.{...}` clauses (e.g.
+`use tbool-ops.{tbool-sequence}` in `typed-join-ops`). wit-
+bindgen synthesises a TRIMMED instance shape (only the records
+the bridge transitively touches) for each imported interface.
+That trimmed shape is structurally non-equivalent to the
+upstream's FULL exported shape, and `wac plug` (≥0.10) treats
+"my socket expects fewer items than your plug exports" as an
+unsatisfied edge rather than as a subset match.
+
+The `stub-plug/` crate tried to plug the gap by re-exporting
+the 8 W4a interfaces with `Vec::new()` bodies AND importing the
+same trimmed shapes from the upstream. The W4a interface side
+DOES get satisfied; the cross-interface type-share for the
+seven trimmed instances does NOT (same wac-plug structural-
+match limitation).
+
+Two natural unblockers (both out of scope for W4a, both filed
+as cross-project coordination follow-ups):
+
+- (a) Upstream PR to `mobilitydb-wasm` that lands the 8 W4a
+  interfaces with real implementations. Once upstream exports
+  them, the stub-plug isn't needed, and the bridge's
+  trimmed-instance shapes match upstream's natively-exported
+  superset shapes (the same setup #518's vendoring relied on).
+
+- (b) Codegen change that emits the bridge's WIT imports with
+  the FULL upstream instance shape (untrimmed), even for
+  records the bridge doesn't directly reference. wit-bindgen
+  supports this via the `generate_all` knob; the bridge already
+  uses it for its own emitted bindings, but the bridge's WIT
+  imports list still names only the per-package interfaces, so
+  wit-bindgen prunes the shapes to what the world declares.
+
+Without either, the verify gate stays blocked but the W4a
+codegen win (29 newly wired UDTFs) is locked in.
+
+### Substrate finding — `wac plug` strict structural match
+
+This is the first task where the bridge's vendored WIT contains
+interface declarations that don't exist in upstream's WIT, and
+it's surfaced a `wac plug` rule that the prior W1–W4b round
+never hit: package-level `use` clauses across new interfaces
+trim the importing instance's shape, and the trim is enough to
+fail a structural-equivalence check against the upstream's full
+export.
+
+Two takeaways for future plan increments:
+
+1. New W4a-style vendoring inherently requires cross-project
+   coordination — the vendored declarations need a matching
+   implementation somewhere in the compose graph. Plan the
+   upstream PR ALONGSIDE the bridge-side vendoring rather than
+   as a follow-up, so the verify gate doesn't drift.
+
+2. The codegen could grow a "preserve full upstream instance
+   shape" flag for vendored interfaces, defaulting on. That
+   would isolate W4a-style additions from the unrelated import-
+   trim hazard. Filed as a future codegen task (no number yet —
+   open W4c?).
+
+### Out of scope (filed downstream)
+
+- Long-term: upstream PR to `mobilitydb-wasm` adding the 8 W4a
+  interfaces with real implementations. The cross-project
+  coordination round.
+- Future codegen task: "preserve full upstream instance shape"
+  flag for vendored deps (W4c-like).
 
 ## References
 
