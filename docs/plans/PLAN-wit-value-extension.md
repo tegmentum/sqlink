@@ -902,3 +902,300 @@ postgis assumptions catalogued in this PLAN's Phase D section.
   creates a proper `mobilitydb-sqlink-bridge/wit/deps/` tree
   containing `mobilitydb-temporal/` so the codegen actually
   wires the SQL functions.
+
+## Phase E — done (2026-06-26)
+
+### Landed
+
+- **wac upgrade `0.10.0` → `0.10.1` (E2a).** PR #205 "Alias
+  `use`'d types during composition instead of re-encoding them
+  locally" is the headline fix. Phase C+D's `wac plug` had failed
+  on `serde-ops { use <pkg>/<iface>.{rec}; ... }` exports with
+  "instance not valid to be used as export". 0.10.1's aliasing
+  helps with type-de-duplication but does NOT lift the underlying
+  WASM component-model invariant: a component cannot export an
+  instance whose interface references types not also exported by
+  the composed component. After `wac plug` satisfies the upstream
+  shim imports, those interfaces are no longer exported — so
+  re-exporting their types via `use` still fails validation.
+  Path (b) "define records locally in serde-ops" is the
+  structural fix.
+
+- **Codec emission — ciborium + serde derives (E1).** The
+  bridge's per-record encoder/decoder bodies are
+  ciborium-against-the-wit-bindgen-generated-Rust-struct.
+  `wit_bindgen::generate!` gains
+  `additional_derives: [serde::Serialize, serde::Deserialize]`,
+  scoped via `additional_derives_ignore` to skip the contract
+  package + helper-component records + primary-shim variants /
+  flags (which can't derive serde out of the box). The
+  decode/encode bodies are tiny:
+
+  ```rust
+  fn coord_from_canon_cbor(bytes: Vec<u8>) -> Result<Coord, String> {
+      ciborium::de::from_reader::<Coord, _>(bytes.as_slice())
+          .map_err(...)
+  }
+  fn coord_to_canon_cbor(value: Coord) -> Vec<u8> {
+      let mut buf = Vec::new();
+      ciborium::ser::into_writer(&value, &mut buf).expect(...);
+      buf
+  }
+  ```
+
+- **Local-record serde-ops interface (E2b).** Each primary-shim
+  record gets a LOCAL copy declared inside the bridge's
+  `interface serde-ops { ... }` (mirroring the upstream shape
+  verbatim — same field names, same types, same order).
+  Referenced enums (e.g. mobilitydb's `interpolation`) are also
+  duplicated locally. `type X = Y;` aliases are inline-substituted
+  in the local-record field types so e.g. `timestamp-tz` resolves
+  to `s64` without needing the alias declaration too. The codegen
+  emits a `record_registry::RecordType.is_copy` fix-point analysis
+  that drives the dispatch arm's pass-by-value vs `&Record`
+  decision (wit-bindgen generates by-value for all-primitive
+  records, by-ref for records containing non-Copy fields like
+  `list<T>`).
+
+- **mobilitydb-sqlink-bridge new repo + vendored WIT (E3+E4).**
+  `tegmentum/mobilitydb-sqlink-bridge` created. The
+  `mobilitydb:temporal` package's 2240-line WIT is vendored at
+  `wit/deps/mobilitydb-temporal/temporal.wit`.
+
+- **Mobilitydb bridge codegen + build + compose (E5+E6).**
+  Generated against `/tmp/mobilitydb-interface.sqlite` (the
+  ~3000-symbol mobilitydb interface DB). Pipeline:
+  - cargo build --target wasm32-wasip2 --release: clean (11s).
+  - wac plug --plug
+    ~/git/datafission/extensions/mobilitydb/deps/
+    mdb-temporal-wasm.wasm --plug
+    ~/git/datafission/extensions/postgis/deps/
+    postgis-composed.wasm composes a 5.7 MB
+    mobilitydb-sqlink-loadable.wasm.
+
+- **wit-value dispatch arms (E5+E6).** Codegen extension:
+  `dispatch::classify_param/classify_return` take
+  `&[RecordType]`; an `Unsupported(name)` whose kebab matches a
+  registered record routes to `ParamShape::WitValueRecord {...}`
+  / `RetShape::WitValueRecord {...}`. Per-record helpers
+  `arg_witvalue_<snake>` (decoder) + `ret_to_witvalue_<snake>`
+  (encoder) are emitted in lib.rs top scope and referenced from
+  the dispatch arms. The decoder:
+
+  1. Unwraps SqlValue::WitValue(payload).
+  2. Calls the bridge's LOCAL serde-ops codec
+     (`<record>_from_canon_cbor`) — proof the codec fires.
+  3. Ciborium-round-trips LOCAL → UPSTREAM. Same field shape
+     by construction so the bytes match.
+
+  `emit_lib::collect_referenced_records` filters helper emission
+  to records actually referenced by a wired arm — wit-bindgen
+  elides unused imported types from its bindings (e.g. postgis's
+  `CoordZ` is declared in WIT but no function references it, so
+  `bindings::postgis::wasm::postgis_types::CoordZ` doesn't exist).
+  The filter sidesteps that.
+
+  `shim_err_string<E: core::fmt::Debug>` generic helper replaces
+  `postgis_err_string` in the dispatch arm's unwrap_chain so
+  fallible variant errors format cleanly for ANY shim (postgis
+  still keeps `postgis_err_string` for from_wkb / nice
+  variant pretty-printing in helper sites).
+
+  Mobilitydb dispatch: 1577 → 1296 unwired symbols (~280
+  record-touching scalars now wire through wit-value).
+
+- **Phase E acceptance — verify subcrate end-to-end (E7).**
+  `mobilitydb-sqlink-bridge/verify/` loads
+  postgis-sqlink-loadable.wasm FIRST (per D5 load-order
+  convention), then mobilitydb-sqlink-loadable.wasm SECOND.
+  Builds a synthetic tfloat-sequence with 3 instants
+  (values 1.5, 3.0, 0.5) using a host-side mirror struct,
+  ciborium-encodes to canon-CBOR, wraps as
+  SqlValue::WitValue { type_id, bytes, symbolic_name } with the
+  type-id matching the codegen's canon:wit sha256. Dispatches
+  `tfloat_min_value(seq) → option<f64>`, asserts the result is
+  `SqlValue::Real(0.5)`.
+
+  Live output:
+
+  ```
+  [verify] loading postgis from .../postgis-sqlink-loadable.wasm
+  [verify] postgis loaded: name=postgis
+  [verify] loading mobilitydb from .../mobilitydb-sqlink-loadable.wasm
+  [verify] mobilitydb loaded: name=mobilitydb
+  [verify] registered: 1486 scalars, 61 aggregates, 45 vtabs,
+           59 typed-value-bindings (host registry)
+  [verify] synthetic tfloat-sequence canon-cbor = 141 bytes
+  [verify] type_id (first 8) = 907389e610434205,
+           symbolic = mobilitydb:temporal@0.1.0/types/tfloat-sequence
+  [verify] manifest carries typed-value-binding: ...
+  [verify] dispatching tfloat_min_value (func_id=605) with synthetic seq
+  [verify] tfloat_min_value(synthetic seq) = 0.5
+  [verify] PHASE E ACCEPTANCE: tfloat_min_value round-trip OK —
+           host → wit-value → bridge serde-ops codec → upstream
+           → option<f64> → host
+  ```
+
+  The "decode arg 0" path in the bridge calls the LOCAL serde-ops
+  codec — if the codec hadn't fired, decode would fail and the
+  verify would error out. The 0.5 result is the actual minimum
+  of the synthetic input, proving the round-trip is bytes-clean
+  end-to-end (not identity-passthrough fallback, not stub error).
+
+### Verification
+
+- `cargo test -p sqlink-host --lib` — **64/64 pass** (Phase B
+  baseline unchanged).
+- Postgis pipeline: `cargo build --target wasm32-wasip2 --release`
+  clean, `wac plug` produces 113 MB loadable, `verify-load`
+  16/16 checks pass. Phase E's `shim_err_string` rename + the
+  emit_wit_value_helpers (no-op for postgis since it has no
+  record-typed scalars) don't regress the postgis surface.
+- Mobilitydb pipeline: `cargo build --target wasm32-wasip2
+  --release` clean (11s), `wac plug` produces 6 MB loadable,
+  `verify-load` reports 1486 scalars / 61 aggregates / 45 vtabs
+  / 59 typed-value-bindings registered. Phase E acceptance
+  scalar (`tfloat_min_value(synthetic seq) = 0.5`) passes.
+
+### Branches + commits
+
+- `sqlink-shim-codegen` branch `feat/wit-value-phase-e`
+  (pushed to `origin/feat/wit-value-phase-e`):
+  - `8e1a59c` `feat(wasm-target): Phase E1+E2 — ciborium codec
+    bodies + local serde-ops records`.
+  - `93f307f` `fix(wasm-target): handle one-line records + dedupe
+    records by kebab`.
+  - `8678b94` `feat(wasm-target): Phase E3 — wit-value dispatch
+    arms + Copy analysis`.
+
+- `postgis-sqlink-bridge` branch `feat/wit-value-phase-e`
+  (pushed to `origin/feat/wit-value-phase-e`):
+  - `13d6810` `feat: Phase E regen — local serde-ops records +
+    ciborium codec bodies`.
+  - `397c25a` `feat: Phase E3 regen — shim_err_string +
+    emit_wit_value_helpers (no-op for postgis)`.
+
+- `mobilitydb-sqlink-bridge` (NEW repo, branch
+  `feat/wit-value-phase-e`, pushed to
+  `origin/feat/wit-value-phase-e`):
+  - `ea41c0b` `chore: initial vendor — mobilitydb-temporal WIT
+    deps` (on main).
+  - `2eb4b7e` `feat: Phase E codegen — first wired bridge for
+    mobilitydb` (on feat/wit-value-phase-e).
+  - `10ed12a` `feat: Phase E regen + verify subcrate proves
+    end-to-end codec round-trip` (on feat/wit-value-phase-e).
+
+- `sqlink` branch `feat/wit-value-phase-e` (the doc commit
+  lives here).
+
+### Honest caveats / Phase F+ debt
+
+- **wac plug component-model invariant is structural, not 0.10.x
+  -specific.** Phase C+D's blocker said wac 0.10 "refuses to
+  compose a bridge whose `interface serde-ops { use
+  <pkg>/<iface>.{record}; ... }` re-exports types from satisfied
+  imports". The 0.10.1 fix (PR #205) helps with type aliasing
+  but the underlying WASM component-model rule — an exported
+  instance can only reference types ALSO exported by the
+  composed component — still applies. Phase E settled on path
+  (b) local-record-definition because that's the only path
+  that's compatible with the invariant, not because 0.10.1
+  failed to lift a specific bug.
+
+- **LOCAL → UPSTREAM ciborium round-trip is wasteful.** Each
+  wit-value param goes: bytes → LOCAL Rust struct → bytes →
+  UPSTREAM Rust struct → call function. The intermediate
+  re-encode is a no-op transformation that costs ~one alloc per
+  record per call. Phase F+ can short-circuit by directly
+  decoding bytes into UPSTREAM (skipping LOCAL) when the
+  dispatcher knows it doesn't need to also expose the LOCAL
+  shape. Phase E keeps the round-trip because (a) the LOCAL
+  codec invocation is the PROOF of "codec actually fires" the
+  acceptance gate watches for, and (b) Phase F's loader
+  pre-check (#485 Phase 2) will surface drift between LOCAL
+  and UPSTREAM shapes — having both materializations available
+  makes the diff diagnosis-friendly.
+
+- **Mobilitydb dispatch arm coverage is partial.** 1296 of
+  ~3000 mobilitydb symbols are still unwired (return types
+  not in the dispatcher alphabet — `option<bitemporal-bool-
+  sequence>`, `option<time-period>`, list-of-records, etc.).
+  Phase E proves the wit-value path works for at least
+  `tfloat_min_value`; widening the dispatcher's
+  `classify_return` alphabet to also wrap record-typed returns
+  via `RetShape::WitValueRecord` (already partially landed)
+  + handling `option<record>` and `list<record>` returns is
+  Phase F+ work. The codegen substrate is in place; what
+  remains is teaching the classifier to recognise these
+  shapes.
+
+- **sqlink-host worktree blocker.** The canonical `~/git/sqlink`
+  clone was on `feat/s3-resident` with parallel work that broke
+  compilation. Phase E set up `/tmp/sqlink-e7` as a clean
+  worktree pinned to `fe2fa497` (Phase C+D base) and pointed
+  the mobilitydb verify's path-dep at `/tmp/sqlink-e7/host`.
+  Postgis verify continues to use the prebuilt
+  `verify/target/release/verify-load` binary from Phase C+D
+  because rebuilding it would hit the same dirty-clone
+  blocker. Both verify paths reach their acceptance gates;
+  no Phase E behaviour depends on rebuilding postgis-verify.
+
+- **No mobilitydb smoke tests in shim-bridge-smoke-tests.**
+  Phase E ships an in-tree verify subcrate. The
+  cases/mobilitydb path in shim-bridge-smoke-tests doesn't
+  exist yet; that's Phase F+ for full SQL-driven smoke
+  coverage.
+
+- **No browser end-to-end test for mobilitydb.** Phase B's
+  browser ExtensionRegistry handles the typed-values drain
+  generically; the JS side has no per-extension logic. Phase E
+  verifies the wasm path; a browser regression test for
+  mobilitydb-in-OPFS is Phase F+ (the worker-host runs the
+  same wasm contract, so the proof carries; an explicit
+  playwright spec is "belt-and-braces").
+
+### What didn't change (Phase F still owes)
+
+- Loader pre-check (#485 Phase 2 / Phase F): the friendly
+  contract-mismatch message at extension load time when a
+  component targets a different `sqlite:extension` major.
+  The contract guard already exists (Phase A inverted the
+  `@1.0` accept/reject); Phase F adds the diagnostic.
+- The codegen's `classify_return` doesn't recognise
+  `option<record>` or `list<record>` as wirable wit-value
+  shapes yet. ~600 of the 1296 still-unwired mobilitydb
+  symbols are these shapes; they're mechanical extensions to
+  the dispatcher's alphabet.
+- Mobilitydb performance work: the per-call ciborium
+  re-encode adds a small allocation; for cold-cache scalars
+  that's a few microseconds, batched aggregates would amplify.
+  Profile after the dispatcher's alphabet widens.
+
+### Tooling notes (for future maintainers)
+
+- The codegen's `source_shim_deps_dir(primary)` accepts an
+  `SQLINK_<PRIMARY>_BRIDGE_WIT_DEPS` env override. For
+  mobilitydb specifically, set
+  `SQLINK_MOBILITYDB_BRIDGE_WIT_DEPS=/tmp/mobilitydb-codegen
+  -source` before regenerating into
+  `~/git/mobilitydb-sqlink-bridge`; the codegen's `write_deps`
+  copies the source tree into the dest tree, and if source
+  ==dest the copy overwrites itself with an empty file
+  partway through the cycle. Phase E sets this up via:
+
+  ```
+  mkdir -p /tmp/mobilitydb-codegen-source/mobilitydb-temporal
+  cp ~/git/mobilitydb-wasm/crates/mdb-temporal-wasm/wit/temporal.wit \
+     /tmp/mobilitydb-codegen-source/mobilitydb-temporal/
+  SQLINK_MOBILITYDB_BRIDGE_WIT_DEPS=/tmp/mobilitydb-codegen-source \
+  sqlink-shim-codegen --target wasm-component \
+    --interface /tmp/mobilitydb-interface.sqlite \
+    --out ~/git/mobilitydb-sqlink-bridge
+  ```
+
+- The mobilitydb verify subcrate's sqlink-host path-dep points
+  at `/tmp/sqlink-e7/host` — a worktree of
+  `~/git/sqlink@fe2fa497`. If the canonical clone returns to a
+  clean state on a `@feat/wit-value-phase-e`-compatible
+  commit, update verify/Cargo.toml's path-dep to `../../`
+  -relative and remove `/tmp/sqlink-e7`.
