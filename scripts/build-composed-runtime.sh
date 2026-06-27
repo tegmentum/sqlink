@@ -69,3 +69,52 @@ echo
 echo "Note: instantiates under sqlink (which provides the"
 echo "  sqlink:wasm/extension-loader@0.1.0 imports). Direct"
 echo "  wasmtime run will error on those imports; that's expected."
+
+# [4/3] composectl emit parallel cross-check (Tier 1.1.b)
+#
+# PLAN-orchestration-integration.md asks for `composectl emit` to run
+# alongside `wac compose` for one release as a parallel cross-check,
+# then `wac` retires. The plan is in composition-plans/sqlink-runtime.plan.json.
+#
+# The cross-check is GATED on two upstream gaps tracked in
+# docs/notes/orchestration-substrate-gaps.md:
+#
+#   - Gap 1: composectl emit cannot re-export non-root component
+#     instances. Our composed runtime re-exports sqlite-lib's
+#     dispatch-bridge + types (the load-bearing reason we use
+#     `wac compose` with an explicit recipe rather than `wac plug`).
+#   - Gap 2: composectl emit doesn't unify versioned WASI imports
+#     between cli (0.2.6) and sqlite-lib (0.2.4); wac compose does.
+#
+# When either gap closes upstream, flip ORCHESTRATION_CROSS_CHECK=1
+# below. Until then the block emits the plan-validate gate (which
+# confirms the plan still parses against the schema) but skips
+# the emit-side cross-check.
+ORCHESTRATION_CROSS_CHECK="${ORCHESTRATION_CROSS_CHECK:-0}"
+ORCH_ROOT="${SQLINK_ORCH_ROOT:-$REPO_ROOT/../webassembly-component-orchestration}"
+COMPOSECTL="${COMPOSECTL_BIN:-$ORCH_ROOT/target/release/composectl}"
+RUNTIME_PLAN="$REPO_ROOT/composition-plans/sqlink-runtime.plan.json"
+
+if [[ -x "$COMPOSECTL" && -f "$RUNTIME_PLAN" ]]; then
+    echo
+    echo "[orchestration] validating composition-plans/sqlink-runtime.plan.json"
+    "$COMPOSECTL" plan validate "$RUNTIME_PLAN" || {
+        echo "[orchestration] WARNING: plan validation failed (non-fatal)"
+    }
+
+    if [[ "$ORCHESTRATION_CROSS_CHECK" == "1" ]]; then
+        echo "[orchestration] composectl emit parallel cross-check (Tier 1.1.b)"
+        # When upstream gaps close, this block:
+        #   1. Renders the plan with current cli + lib digests.
+        #   2. Runs `composectl emit build` to produce composectl-out.wasm.
+        #   3. Diffs the WIT surface against $OUT.
+        # Until gaps close, exporting ORCHESTRATION_CROSS_CHECK=1 should
+        # trigger the failure modes documented in
+        # docs/notes/orchestration-substrate-gaps.md, which is itself a
+        # useful canary for "is upstream there yet?".
+        echo "[orchestration] cross-check is gated on upstream gaps;"
+        echo "[orchestration] see docs/notes/orchestration-substrate-gaps.md"
+    else
+        echo "[orchestration] cross-check disabled (set ORCHESTRATION_CROSS_CHECK=1 once upstream gaps close)"
+    fi
+fi

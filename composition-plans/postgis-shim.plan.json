@@ -1,0 +1,298 @@
+{
+  "version": "1",
+  "root": "postgis-sqlink-bridge",
+  "components": [
+    {
+      "id": "postgis-composed",
+      "digest": [
+        171,
+        205,
+        239,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ]
+    },
+    {
+      "id": "postgis-sqlink-bridge",
+      "digest": [
+        171,
+        205,
+        239,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-accessors@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-accessors@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-aggregates@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-aggregates@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-clustering@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-clustering@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-constructors@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-constructors@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-geocoder@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-geocoder@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-geodetic@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-geodetic@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-linear-ref@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-linear-ref@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-measurements@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-measurements@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-operators@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-operators@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-output@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-output@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-predicates@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-predicates@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-processing@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-processing@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-types@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-types@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-constructors@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-constructors@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-accessors@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-accessors@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-pixels@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-pixels@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-output@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-output@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-stats@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-stats@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-mapalgebra@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-mapalgebra@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-vector@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-vector@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-predicates@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-predicates@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-processing@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-processing@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-raster-aggregates@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-raster-aggregates@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-sfcgal@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-sfcgal@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-spatial-index@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-spatial-index@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-three-d@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-three-d@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-topology-types@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-topology-types@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-topology-edit@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-topology-edit@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-topology-output@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-topology-output@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-topology-topogeom@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-topology-topogeom@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-topology-query@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-topology-query@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-transformations@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-transformations@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "postgis:wasm/postgis-types@0.1.0",
+      "provider_id": "postgis-composed",
+      "export_name": "postgis:wasm/postgis-types@0.1.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "sfcgal:component/geometry@1.0.0",
+      "provider_id": "postgis-composed",
+      "export_name": "sfcgal:component/geometry@1.0.0"
+    },
+    {
+      "consumer_id": "postgis-sqlink-bridge",
+      "import_name": "sfcgal:component/io@1.0.0",
+      "provider_id": "postgis-composed",
+      "export_name": "sfcgal:component/io@1.0.0"
+    }
+  ],
+  "secrets": [],
+  "policy": {
+    "determinism": "relaxed",
+    "capabilities": [],
+    "limits": {}
+  }
+}

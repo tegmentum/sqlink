@@ -1,0 +1,412 @@
+{
+  "version": "1",
+  "root": "mobilitydb-sqlink-bridge",
+  "components": [
+    {
+      "id": "mdb-temporal-wasm",
+      "digest": [
+        171,
+        205,
+        239,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ]
+    },
+    {
+      "id": "mobilitydb-sqlink-bridge",
+      "digest": [
+        171,
+        205,
+        239,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/types@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/types@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tint-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tint-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tfloat-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tfloat-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tgeompoint-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tgeompoint-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/similarity-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/similarity-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/pattern-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/pattern-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/serde-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/serde-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/join-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/join-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/arrow-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/arrow-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/stbox-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/stbox-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/stindex-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/stindex-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/ttext-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/ttext-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tbool-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tbool-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/spans-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/spans-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/sets-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/sets-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/spansets-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/spansets-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tgeompoint3d-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tgeompoint3d-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tpose-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tpose-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tcbuffer-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tcbuffer-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/near-done-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/near-done-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/temporal-relations-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/temporal-relations-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/textset-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/textset-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/span-extras-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/span-extras-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/set-extras-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/set-extras-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tstzset-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tstzset-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tstzspan-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tstzspan-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tgeompoint-detection-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tgeompoint-detection-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tgeompoint-extended-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tgeompoint-extended-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tint-math-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tint-math-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tfloat-math-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tfloat-math-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/bitemporal-residue-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/bitemporal-residue-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/stbox3d-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/stbox3d-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tnpoint-extended-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tnpoint-extended-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tcbuffer-extended-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tcbuffer-extended-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tpose-extended-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tpose-extended-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/trajectory-restrictions-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/trajectory-restrictions-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/sets-extended-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/sets-extended-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/ttext-strings-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/ttext-strings-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/statistics-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/statistics-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/arithmetic-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/arithmetic-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/comparisons-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/comparisons-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/restrictions-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/restrictions-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/temporal-aggregate-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/temporal-aggregate-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/clustering-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/clustering-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/similarity-extended-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/similarity-extended-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/analytics-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/analytics-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/other-indexes-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/other-indexes-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tnpoint-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tnpoint-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/bitemporal-bool-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/bitemporal-bool-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/bitemporal-text-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/bitemporal-text-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/bitemporal-float-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/bitemporal-float-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/bitemporal-int-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/bitemporal-int-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tgeogpoint-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tgeogpoint-ops@0.1.0"
+    },
+    {
+      "consumer_id": "mobilitydb-sqlink-bridge",
+      "import_name": "mobilitydb:temporal/tgeometry-ops@0.1.0",
+      "provider_id": "mdb-temporal-wasm",
+      "export_name": "mobilitydb:temporal/tgeometry-ops@0.1.0"
+    }
+  ],
+  "secrets": [],
+  "policy": {
+    "determinism": "relaxed",
+    "capabilities": [],
+    "limits": {}
+  }
+}
