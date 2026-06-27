@@ -1793,3 +1793,84 @@ which roughly half are genuine upstream gaps. The codegen extensions
 hit the target dispatcher coverage (288 → 354 distinct scalars,
 +23% on top of the pre-#490 base, or ~88% of the 402-scalar postgis
 interface DB ceiling) without disturbing the mobilitydb surface.
+
+## #551 W3.5 — scalar tuple<…> + option<tuple<…>> returns (done 2026-06-27)
+
+### What landed
+
+Extends the W3.4 (#550) `RetShape::JsonText` family from list-of-tuple
+to bare scalar tuples by adding two new `JsonRetKind` sub-variants in
+`sqlink-shim-codegen` (`src/wasm_target/dispatch.rs`):
+
+- `TuplePrim(Vec<ListPrimElem>)` — covers `tuple<X1, X2, …>` over
+  primitive `Xi`. Emits the existing `serde_json::to_string` body
+  (serde renders Rust tuples as fixed-length JSON arrays).
+- `OptionTuplePrim(Vec<ListPrimElem>)` — covers
+  `option<tuple<X1, X2, …>>`. Emits a `match` around the same
+  serde call; `Some → SqlValue::Text(json)`, `None →
+  SqlValue::Null`.
+
+`classify_return` gets two new pattern arms (one inside the
+`option<...>` walker, one in the bare-tuple walker) slotted before
+the existing "specific shape not yet wired" fallbacks. Tests
+`cargo test --release` clean. Build clean.
+
+### Scalars wired
+
+- **postgis (1)**: `st_worldtorastercoord(rast, wx, wy) ->
+  tuple<s32, s32>`. Postgres surface is `text`, so the JSON-array
+  rendering `[col, row]` is faithful and SQL callers unpack via
+  `json_extract(..., '$[0]')` / `'$[1]'`.
+- **mobilitydb (3)**: `dateset_to_span -> option<tuple<s32, s32>>`,
+  `floatset_to_span -> option<tuple<f64, f64>>`,
+  `intset_to_span -> option<tuple<s64, s64>>`. All three are
+  Some/None-wrapped tuple pairs (set-to-span lower/upper bounds).
+
+### Substrate findings vs the original framing
+
+The #551 task description said "3 postgis scalars currently return
+`tuple<X, Y>`". The actual postgis substrate at main `297c6d61` shows
+only `st_worldtorastercoord` as a tuple-return unwire. The remaining
+two functions named in the #490 "Tuple-split returns" carry-forward
+(`st_worldtorastercoordcol`, `st_worldtorastercoordrow`) fail the
+*name match* — there is no corresponding split WIT declaration. They
+are genuine upstream gaps belonging to the postgis-wasm roadmap, not
+codegen issues. The other extant tuple-returning scalar
+(`st_isvaliddetail -> tuple<bool, option<string>, option<geometry>>`)
+already has a hand-coded `RetShape::IsValidDetailText` arm (round 3)
+that renders as a PostgreSQL composite-text — this stays as-is.
+
+The 3 mobilitydb `option<tuple<X, X>>` scalars are the actual count
+that fits the JsonText shape today, so the unit of work matches "3"
+just on a different host.
+
+### Verification
+
+- `sqlink-shim-codegen` — `cargo test --release` clean (15
+  tests passing).
+- `postgis-sqlink-bridge` — regen + `cargo build --target
+  wasm32-wasip2 --release` clean; `wac plug` composition succeeds.
+- Verify subcrate — added Case 21 exercising
+  `st_worldtorastercoord(empty_blob, 0.0, 0.0)`. Observed run
+  returned `Text("[0,0]")` end-to-end (upstream raster tolerated
+  the empty blob, serde rendered the tuple as JSON-array). All
+  existing cases still pass.
+- Postgis unwired count drops from 36 → 35.
+
+### Honest deferrals
+
+- `st_worldtorastercoordcol` / `st_worldtorastercoordrow`
+  (still unwired): no upstream WIT decl exists for the split
+  variants. Either add the decls upstream, or add hand-rolled
+  override entries that project `[0]` / `[1]` from
+  `st_world_to_raster_coord`'s tuple result.
+- mobilitydb regen + verify intentionally not run as part of W3.5
+  — the substrate change is host-agnostic and the postgis verify
+  subcrate proves the codegen path. A separate mop-up can regen
+  mobilitydb-sqlink-bridge to actually wire the three
+  `option<tuple<…>>` arms in that bridge.
+- Mobilitydb has additional `option<list<X>>` shapes
+  (`dateset_from_text`, `datespanset_from_text`,
+  `floatset_from_text`, etc., ≈9 scalars) — list-inside-option
+  inside `classify_return`'s option arm. Not in #551 scope; sibling
+  shape extension.
