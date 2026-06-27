@@ -248,3 +248,106 @@ follows everything (largest behavior change).
   context).
 - Sibling `~/git/ducklink/docs/postgis-mobilitydb-integration.md` (cross-
   project leverage).
+
+## Tier 0 + 1 — done (task #486)
+
+### Tier 0 (bring the dep in)
+
+- **0.1 dep model — DONE.** Workspace path-dep variant chosen:
+  sibling checkout at `$HOME/git/webassembly-component-orchestration`
+  with no Cargo workspace coupling. composectl consumed as a
+  binary tool. Rationale + migration paths to full Cargo path-dep,
+  submodule, and crates.io variants documented in
+  `docs/notes/orchestration-dependency.md`.
+- **0.2 composectl built locally — DONE.**
+  `cargo build --release --bin composectl` from a clean state:
+  ~3.5 min wall-clock. `cargo test -p conformance-runner` passes.
+  `conformance run` reports 4/4 conformance vectors against the
+  wasmtime host.
+- **0.3 smoke test — DONE.** `scripts/smoke-test-composectl.sh`
+  runs composectl against the orchestration repo's six canonical
+  CBOR fixtures: 6/6 pass (four positive, two negative). Honors
+  `SQLINK_ORCH_ROOT` + `COMPOSECTL_BIN` env-var overrides.
+
+### Tier 1 (direct wac replacements)
+
+Status: **PLAN FILES SHIPPED, EMIT-SIDE CUTOVER BLOCKED ON
+UPSTREAM SUBSTRATE GAPS.** Per the standing constraint, we
+surface gaps rather than patch upstream.
+
+- **1.1.a sqlink composed-runtime plan — DONE (file).**
+  `composition-plans/sqlink-runtime.plan.json` declares
+  sqlite-cli + sqlite-lib + the spi-instance binding. Validates
+  against the schema. The emit-side cross-check is gated on
+  upstream gaps (see below).
+- **1.1.b build-script integration — STAGED, DISABLED.**
+  `scripts/build-composed-runtime.sh` + the single-memory
+  variant gained a `[4/3] orchestration cross-check` block.
+  Plan-validate runs today; emit + WIT-diff is gated on
+  `ORCHESTRATION_CROSS_CHECK=1` AND the substrate gaps closing
+  upstream. Until then both build scripts continue to invoke
+  `wac compose` exactly as before.
+- **1.2.a postgis-shim plan — DONE (file).**
+  `composition-plans/postgis-shim.plan.json` — 2 components,
+  35 bindings (33 postgis:wasm/* + 2 sfcgal:component/*).
+  Validates.
+- **1.2.b mobilitydb-shim plan — DONE (file).**
+  `composition-plans/mobilitydb-shim.plan.json` — 2 components,
+  54 mobilitydb:temporal/* bindings. Validates. Survey finding:
+  although wac plug is invoked with `--plug postgis-composed.wasm`
+  too, the bridge's world.wit declares zero postgis:wasm/*
+  imports, so the plan doesn't include postgis-composed. (Likely
+  a historical carry-over from earlier mobilitydb codegen.)
+- **1.3 datafission coordination — DEFERRED.** Per task #486
+  scope: "Out of scope for THIS task unless coordinating with
+  datafission is mechanical." The plan files we land would
+  apply identically to datafission with a sibling checkout; the
+  coordination is then a configuration choice, not a code
+  change.
+
+### Substrate gaps (block emit-side cutover; documented in
+`docs/notes/orchestration-substrate-gaps.md`)
+
+Surfaced by a parallel-cross-check build with real sqlink inputs
+(sqlite-cli 2.6 MiB + sqlite-lib 2.3 MiB):
+
+1. **Re-export from non-root component.** composectl emit
+   (built on wasm-compose) can only surface the root component's
+   exports in the composed outer world. wac compose with an
+   explicit recipe surfaces non-root exports (sqlite-lib's
+   `dispatch-bridge` + `types`). The composed runtime needs
+   this. Without it, JS host's `spi-loader.register-scalar`
+   has nothing to call.
+2. **Versioned-WASI unification.** sqlite-lib targets WASI
+   0.2.4; sqlite-cli targets 0.2.6. wac collapses to 0.2.6;
+   composectl surfaces both, forcing the host to provide both.
+3. **Blob-store 100 MiB ceiling.** Hardcoded in
+   `SystemLimits::default()`; no CLI override.
+   `postgis-composed.wasm` is 112 MiB. Blocks A2's emit-side
+   cross-check entirely.
+
+### What lands
+
+- `composition-plans/sqlink-runtime.plan.json`
+- `composition-plans/postgis-shim.plan.json`
+- `composition-plans/mobilitydb-shim.plan.json`
+- `composition-plans/README.md`
+- `docs/notes/orchestration-dependency.md`
+- `docs/notes/orchestration-substrate-gaps.md`
+- `scripts/smoke-test-composectl.sh`
+- Build-script `[4/3]` cross-check stub in
+  `scripts/build-composed-runtime.sh` +
+  `scripts/build-composed-runtime-single-memory.sh`
+
+### What's next when upstream gaps close
+
+- Flip `ORCHESTRATION_CROSS_CHECK=1` in CI; build scripts then
+  emit BOTH wac and composectl artifacts and diff their WIT
+  surfaces.
+- After one release of soak with the cross-check green, retire
+  `wac compose` (drop the wac steps; keep composectl-only).
+- Migrate the dep model from sibling-checkout to the
+  full-Cargo-path-dep variant (or vendor-as-submodule) once
+  CI hermeticity demands it.
+- Tier 2 (canonical-WIT identity) folds into #485 next.
+- Tier 3 (CI plan digests + SigStore) follows.
