@@ -1252,6 +1252,96 @@ round-trip (with a synthetic raster) lands in the W5 smoke corpus.
   today's surface.
 - Per-shape wit-value/CBOR opt-out (see "Encoding choice
   rationale" above).
+## #556 — done
+
+Landed `feat/w3-1-mopup` on sqlink-shim-codegen, postgis-sqlink-bridge,
+and sqlink (this plan doc). Closes both #556 sub-items in a single
+codegen fork.
+
+### Change in one sentence
+
+`wit_parse` recognises `constructor(args)` lines inside a resource
+block (synthesising a `create-<resource>` WitFunction tagged
+`is_constructor = true`), and `dispatch.rs` gains a
+`find_same_interface_free_fn` fallback that maps SQL
+`<resource>_<func>` candidates to the free function `<func>` in the
+interface that declares `<resource>`.
+
+### Mechanical surface
+
+- `sqlink-shim-codegen/src/wasm_target/wit_parse.rs`:
+  - `WitFunction` gains `pub is_constructor: bool`.
+  - `parse_text` inside a resource body now dispatches to a new
+    `parse_constructor_line(line, resource_kebab)` helper that
+    consumes the `constructor(args)` shape. The synthetic
+    WitFunction's kebab is `create-<resource>`, params are taken
+    verbatim from the constructor's arg list, and the return is
+    synthesised as `parse_type(resource_kebab)` (wit-bindgen lowers
+    the implicit `Self` return to the resource itself).
+- `sqlink-shim-codegen/src/wasm_target/dispatch.rs`:
+  - `MethodCall` gains `pub is_constructor: bool`.
+  - `index_wit_fns` / `index_wit_fns_nohyphen` keep constructors
+    in the free-function index (the SQL surface calls them by
+    free-function-shaped names like `st_createtopology`);
+    `index_resource_methods` skips them (they are not
+    `<resource>_<method>`-shape callable).
+  - `classify_shape` skips the receiver-blob prepend for
+    constructors (no `from_*_bytes` decode at idx 0); `emit_arm_body`
+    emits `<Pascal>::new({args})` when `method_call.is_constructor`,
+    where `<Pascal>` is `kebab_to_pascal(resource_kebab)`. The
+    upstream type ident is already in scope at lib.rs top via the
+    bridge's `use bindings::...::{Topology}` import.
+  - New `index_resource_interfaces` builds `resource_kebab → owning
+    interface` from any function carrying `resource = Some(...)`.
+  - New `find_same_interface_free_fn` runs after the existing
+    snake / no-hyphen / resource-method lookups miss. For each
+    SQL-name candidate it splits on each underscore (after stripping
+    any `st_` prefix); if the prefix matches a known resource kebab,
+    it looks for a free function whose snake-name matches the suffix
+    in that resource's declaring interface.
+- `postgis-sqlink-bridge`: regenerated against the updated codegen.
+  Two new arms in the scalar dispatcher: `st_createtopology`
+  emits `Topology::new(arg0, arg1, arg2).to_bytes()`;
+  `st_topologyfrombytes` (and its `st_topology_from_bytes` /
+  `topology_from_bytes` aliases) emit `pg_topo_types::from_bytes`
+  with the topology-error fallible wrap and `.to_bytes()` encode.
+
+### Numbers
+
+Postgis unwired count: 36 → 34 (2 wired). Both prior W3.1 mop-up
+targets land:
+
+- `st_createtopology` (+ aliases `st_create_topology`,
+  `topology_create`) — resource constructor dispatch.
+- `st_topologyfrombytes` (+ aliases `st_topology_from_bytes`,
+  `topology_from_bytes`) — same-interface name matching.
+
+### Verify acceptance
+
+`postgis-sqlink-bridge/verify` grew two new cases that exercise
+both arms end-to-end on the live bridge:
+
+- Case 18b: `st_createtopology("verify_topo", 4326, 0.0001)` →
+  64-byte topology blob; chained through `st_topologyname` (the W3.1
+  resource-method accessor) which decodes the blob via
+  `from_topology_bytes` and returns `"verify_topo"`.
+- Case 18c: feeds the same blob into `st_topologyfrombytes`
+  (the same-interface fallback's match) and asserts
+  `from-bytes(to-bytes(t)) == to-bytes(t)` byte-for-byte.
+
+Both pass; all prior cases (Phase E + #522 + W2 Phase 1+2 + W3.1
+methods + W3.2 raster aggregate + W3.3 pixel enum) continue to pass.
+
+### Out of scope (filed downstream)
+
+- The remaining 34 postgis unwired symbols are split across W3.4
+  (#550, list-of-record returns), W3.5 (#551, tuple-split via
+  wit-value), W3.6 (#552, topology blob passthrough overrides), and
+  upstream WIT-coverage gaps tracked separately.
+- Other resource constructors (e.g. `topo-geometry`) await both an
+  upstream `to-bytes` / `from-bytes` pairing on those resources and
+  the matching prelude helper in `render_topology_helpers`-style
+  emission. Today only `topology` has both.
 
 ## References
 
