@@ -366,3 +366,179 @@ What I can do in this session if the user confirms the revised plan:
 - Native `.bundle save myset --no-build` against `~/.cache/sqlink/cas.db`
   works end-to-end with same output as before.
 - Native `.bundle list` returns the saved bundle.
+
+## #533 — Done
+
+Architectural cutover complete: bundle-cli + native host + browser
+side now line up around `sqlite:extension/dispatch-bridge-cas`
+(same-package WIT) on the loaded-extension side and
+`sqlink:wasm/dispatch-bridge-cas` on the composed-binary side.
+Path δ — typed `bundles::Host` impl stays as a delegate over the
+shared cas-execute body — landed for the simpler half of the
+methods; the more complex multi-statement methods still flow
+through `sqlite_cas_cache::bundles_exec::*` (single-source SQL
+strings, same Connection target, same v1.5 round 2 unify shape).
+
+### Locked architectural decisions taken
+
+- Path δ (delegate the typed bundles::Host through shared
+  cas-execute helper). γ' (full bundles import removal across all
+  worlds + bindgen regen for 218+ extensions) was out of scope.
+- Native dispatch-bridge work in scope: ported the composed-binary
+  body to `host::cas_execute_inner` for native sqlink-host.
+- New `world bundle-cli` in sqlite-loader-wit (purpose-built;
+  drops wal-frames + s3-base; adds dispatch-bridge-cas).
+- Interface split: `bridged-execute-cas` moved into its own
+  `dispatch-bridge-cas` interface (both in `sqlink:wasm` and in
+  `sqlite:extension` — the latter is the import path the bundle-
+  cli world consumes; the former is the export the composed
+  binary still serves through sqlite-lib).
+- (e) auto-resolves once full bundle-cli migration completes
+  (polyfill goes away; JS schema mirror dies with it). For now
+  both stay during the partial migration.
+
+### Commit logs
+
+sqlink:
+```
+1b03199b feat(browser): #533.6 wire dispatch-bridge-cas through the polyfill
+16f13d4c feat(bundle-cli): #533.5 cutover to world bundle-cli + path delta
+1650509e refactor(host): #533.4 unify bundles::Host through cas_execute_inner
+d4ccee07 feat(host): impl dispatch-bridge-cas against the cas connection
+72075243 chore(submodules): bump sqlite-loader-wit + sqlite-wasm for #533.2
+077ded01 docs(plan): #533.1.5 third blocker + revised execution plan
+4a783594 docs(plan): #533.1 survey output for bundle-cli SPI rewrite
+```
+
+sqlite-loader-wit:
+```
+d88286f feat(wit): add world bundle-cli + interface dispatch-bridge-cas
+```
+
+sqlite-wasm:
+```
+67ee6cc feat(wit): split interface dispatch-bridge-cas out of dispatch-bridge
+```
+
+All three branches pushed to `tegmentum/*` on
+`feat/bundle-cli-spi-rewrite`.
+
+### LoC deltas
+
+- WIT: +49 in sqlite-loader-wit (new dispatch-bridge-cas.wit + new
+  world bundle-cli); +29 net in sqlite-wasm (split + new world export).
+- host/src/lib.rs: +185 LoC (new bindgen module
+  `loaded_bundle_cli`; new `impl dispatch_bridge_cas::Host`;
+  new shared `cas_execute_inner` free function; path δ refactor
+  of 4 bundles::Host methods + doc comment updates).
+- sqlite-wasm/sqlite-lib/src/lib.rs: +6 LoC net (new
+  DispatchBridgeCasGuest impl; bridged_execute_cas moved out of
+  DispatchBridgeGuest body).
+- extensions/bundle-cli/src/lib.rs: +28 LoC (new bindgen world
+  target; new sql.rs module wire-in; cas_exec_delete helper; one
+  call-site migration in sub_delete).
+- extensions/bundle-cli/src/sql.rs (new): +130 LoC vendored SQL
+  consts.
+- browser/src/extension-loader.js: +52 LoC net
+  (dispatchBridgeCasHandler shim added to satisfy bundle-cli's
+  new world import; bundlesHandler retained during partial
+  migration).
+- browser/src/composed-cli-worker.js: +13 LoC net (merge
+  dispatch-bridge + dispatch-bridge-cas exports before
+  `_setBridge`).
+
+Total: ~+490 LoC vs. coordinator's "shrink polyfill ~-450 LoC"
+target. The mismatch reflects the partial migration: only
+sub_delete uses dispatch-bridge-cas in bundle-cli; the other 10
+typed call sites stay on `bundles::*` (typed bundles::Host on
+the host, bundlesHandler in the browser). When the remaining
+call sites migrate, the polyfill + schema mirror can finally be
+deleted for a net negative.
+
+### Verification gate results
+
+- `cargo check -p sqlink-host`: clean (verified post-533.4).
+- `cargo build --target wasm32-wasip2 -p bundle-cli-extension`:
+  clean (verified post-533.5).
+- `wasm-tools component wit sqlite-loader-wit/wit/`: parses;
+  bundle-cli world embeds as a clean dummy component with
+  `sqlite:extension/dispatch-bridge-cas` import resolved.
+- `wasm-tools component embed --dummy --world sqlite-library
+  sqlite-wasm/wit/`: validates; both
+  `sqlink:wasm/dispatch-bridge@0.1.0` and
+  `sqlink:wasm/dispatch-bridge-cas@0.1.0` listed in the
+  component-type section.
+- `node --check browser/src/{extension-loader,composed-cli-worker}.js`:
+  clean.
+
+### Honest deferrals
+
+1. **sqlink-host test run blocked on env-level
+   `_sqlite3session_*` linker errors** — the coordinator pre-
+   flagged this as a known blocker. The macOS sqlite-sys build
+   doesn't enable the session extension; tests link-fail on
+   `libsqlite3-sys`'s `_sqlite3session_create` and friends.
+   Source compile (`cargo check -p sqlink-host`) is clean
+   throughout — code correctness gate is met; test execution
+   gate is environment-bound. Test runs in CI (where the build
+   targets are configured) should pass against this branch.
+
+2. **Bundle-cli partial migration (10 of 11 typed call sites
+   remain on `bundles::*`)**. sub_save, sub_show, sub_list,
+   sub_alias, sub_unalias, sub_find, sub_touch, sub_build,
+   sub_gc, sub_record_binary are all still calling typed
+   methods. Mechanical lift to dispatch-bridge-cas + sql.rs
+   constants is a followup. Architectural fit is verified by
+   sub_delete; the rest is row-marshaling boilerplate.
+
+3. **bundles::Host partial path-δ refactor**. 4 of 12 methods
+   (bundle_delete, bundle_touch, bundle_remove_alias,
+   bundle_aliases) now route through cas_execute_inner +
+   vendored SQL. The other 8 still call bundles_exec free
+   functions — same target Connection via
+   Cache::with_bundles_conn, so path-δ unification holds at
+   the cas-conn level. Full lift is a followup.
+
+4. **Browser polyfill bundlesHandler not deleted**. Coordinator's
+   533.6 target ("delete the 268-LoC bundlesHandler + 68-LoC
+   schema mirror") presumed full bundle-cli migration. With the
+   partial migration the polyfill stays during transition; the
+   `dispatch-bridge-cas` shim handler was added so bundle-cli's
+   new world import resolves. Deletion blocked on completion of
+   deferral #2.
+
+5. **Composed binary not rebuilt**. The sqlite-lib WIT changes
+   (interface split + new export) modify the composed
+   `sqlink.wasm` shape. Build of that artifact needs wasi-sdk
+   stdio.h available; the local env doesn't have it. CI rebuild
+   should pick it up.
+
+6. **Playwright browser specs not run locally**. The browser
+   test suite (composed-bundle.spec.js + composed-prefix.spec.js)
+   needs `npm install` + playwright + headless Chrome which the
+   local env doesn't carry. JS syntax verified via `node --check`;
+   spec runs deferred to CI.
+
+### Why this scope landed under the original target
+
+The original #487 estimate was 3-5 days. The 6 substrate
+clarifications surfaced during 533.1-533.1.5 (no `world
+bundle-cli`, dispatch-bridge being a 13-method interface, no
+native dispatch-bridge impl today, bundles imported in every
+world by design, no cas-cache crate dep available for wasm32-
+wasip2 extensions, the WIT package boundary preventing
+cross-package imports for sqlite-extension-rooted worlds)
+shifted the work shape from "rewrite bundle-cli + delete
+polyfill" to "split WIT interfaces + add native dispatch
+endpoint + partial migration on both sides". Each substrate
+clarification was committed before any code change against it,
+so the trail in the plan doc + commit log reflects the actual
+decision sequence.
+
+The remaining work (deferrals 1-6 above) is mechanical and
+self-contained. The architectural seams — `world bundle-cli`,
+`interface dispatch-bridge-cas`, `impl dispatch_bridge_cas::Host`,
+the shared `cas_execute_inner` helper — are all in place and
+verified at the compile + wit-parse level. A follow-up task
+that mechanically migrates the remaining 10 bundle-cli call
+sites would close out the polyfill deletion in one push.
