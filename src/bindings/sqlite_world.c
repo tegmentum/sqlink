@@ -5,12 +5,12 @@
 
 union int64_double { int64_t a; double b; };
 
-// Exported Functions from `sqlite:wasm/low-level@0.1.0`
+// Exported Functions from `sqlink:wasm/low-level@0.1.0`
 
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#exec")))
-void __wasm_export_exports_sqlite_wasm_low_level_exec_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#exec")))
+void __wasm_export_exports_sqlink_wasm_low_level_exec_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       if ((*((size_t*) (arg0 + (2*sizeof(void*))))) > 0) {
@@ -38,8 +38,8 @@ void __wasm_export_exports_sqlite_wasm_low_level_exec_post_return(uint8_t * arg0
 
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#column-name")))
-void __wasm_export_exports_sqlite_wasm_low_level_column_name_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#column-name")))
+void __wasm_export_exports_sqlink_wasm_low_level_column_name_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
@@ -49,15 +49,15 @@ void __wasm_export_exports_sqlite_wasm_low_level_column_name_post_return(uint8_t
 
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#column-text")))
-void __wasm_export_exports_sqlite_wasm_low_level_column_text_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#column-text")))
+void __wasm_export_exports_sqlink_wasm_low_level_column_text_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#column-blob")))
-void __wasm_export_exports_sqlite_wasm_low_level_column_blob_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#column-blob")))
+void __wasm_export_exports_sqlink_wasm_low_level_column_blob_post_return(uint8_t * arg0) {
   size_t len = *((size_t*) (arg0 + sizeof(void*)));
   if (len > 0) {
     uint8_t *ptr = *((uint8_t **) (arg0 + 0));
@@ -70,8 +70,8 @@ void __wasm_export_exports_sqlite_wasm_low_level_column_blob_post_return(uint8_t
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#errmsg")))
-void __wasm_export_exports_sqlite_wasm_low_level_errmsg_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#errmsg")))
+void __wasm_export_exports_sqlink_wasm_low_level_errmsg_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
@@ -83,26 +83,26 @@ void __wasm_export_exports_sqlite_wasm_low_level_errmsg_post_return(uint8_t * ar
 
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#libversion")))
-void __wasm_export_exports_sqlite_wasm_low_level_libversion_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#libversion")))
+void __wasm_export_exports_sqlink_wasm_low_level_libversion_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#sourceid")))
-void __wasm_export_exports_sqlite_wasm_low_level_sourceid_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#sourceid")))
+void __wasm_export_exports_sqlink_wasm_low_level_sourceid_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
 }
 
-// Exported Functions from `sqlite:wasm/high-level@0.1.0`
+// Exported Functions from `sqlink:wasm/high-level@0.1.0`
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.execute")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.execute")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_execute_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -116,8 +116,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_post
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.execute-with-params")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_with_params_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.execute-with-params")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_execute_with_params_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -131,8 +131,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_with
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.query")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.query")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_query_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       size_t len = *((size_t*) (arg0 + (2*sizeof(void*))));
@@ -205,8 +205,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_post_r
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.query-with-params")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_with_params_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.query-with-params")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_query_with_params_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       size_t len = *((size_t*) (arg0 + (2*sizeof(void*))));
@@ -279,8 +279,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_with_p
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.prepare")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_prepare_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.prepare")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_prepare_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -294,8 +294,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_prepare_post
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.begin-transaction")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_begin_transaction_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.begin-transaction")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_begin_transaction_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -309,8 +309,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_begin_transa
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.commit")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_commit_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.commit")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_commit_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -324,8 +324,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_commit_post_
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.rollback")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_rollback_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.rollback")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_rollback_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -340,8 +340,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_rollback_pos
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.last-error")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_last_error_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.last-error")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_last_error_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -355,8 +355,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_last_error_p
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.bind")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.bind")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_bind_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -370,8 +370,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_post_ret
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.bind-all")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_all_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.bind-all")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_bind_all_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -385,8 +385,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_all_post
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.execute")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_execute_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.execute")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_execute_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -400,8 +400,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_execute_post_
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.query")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_query_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.query")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_query_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       size_t len = *((size_t*) (arg0 + (2*sizeof(void*))));
@@ -474,8 +474,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_query_post_re
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.step")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_step_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.step")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_step_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + sizeof(void*)))) {
@@ -535,8 +535,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_step_post_ret
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.reset")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_reset_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.reset")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_reset_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -550,8 +550,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_reset_post_re
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.clear-bindings")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_clear_bindings_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.clear-bindings")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_clear_bindings_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -566,8 +566,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_clear_binding
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.column-names")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_column_names_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.column-names")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_column_names_post_return(uint8_t * arg0) {
   size_t len = *((size_t*) (arg0 + sizeof(void*)));
   if (len > 0) {
     uint8_t *ptr = *((uint8_t **) (arg0 + 0));
@@ -583,16 +583,16 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_column_names_
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#version")))
-void __wasm_export_exports_sqlite_wasm_high_level_version_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#version")))
+void __wasm_export_exports_sqlink_wasm_high_level_version_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#open-memory")))
-void __wasm_export_exports_sqlite_wasm_high_level_open_memory_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#open-memory")))
+void __wasm_export_exports_sqlink_wasm_high_level_open_memory_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -606,8 +606,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_open_memory_post_return(uint8_
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#open-file")))
-void __wasm_export_exports_sqlite_wasm_high_level_open_file_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#open-file")))
+void __wasm_export_exports_sqlink_wasm_high_level_open_file_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -621,8 +621,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_open_file_post_return(uint8_t 
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#default-connection")))
-void __wasm_export_exports_sqlite_wasm_high_level_default_connection_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#default-connection")))
+void __wasm_export_exports_sqlink_wasm_high_level_default_connection_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -652,20 +652,20 @@ static uint8_t RET_AREA[(8+4*sizeof(void*))];
 
 // Helper Functions
 
-void exports_sqlite_wasm_low_level_result_db_handle_result_code_free(exports_sqlite_wasm_low_level_result_db_handle_result_code_t *ptr) {
+void exports_sqlink_wasm_low_level_result_db_handle_result_code_free(exports_sqlink_wasm_low_level_result_db_handle_result_code_t *ptr) {
   if (!ptr->is_err) {
   } else {
   }
 }
 
-void exports_sqlite_wasm_low_level_result_string_result_code_free(exports_sqlite_wasm_low_level_result_string_result_code_t *ptr) {
+void exports_sqlink_wasm_low_level_result_string_result_code_free(exports_sqlink_wasm_low_level_result_string_result_code_t *ptr) {
   if (!ptr->is_err) {
     sqlite_world_string_free(&ptr->val.ok);
   } else {
   }
 }
 
-void exports_sqlite_wasm_low_level_result_stmt_handle_result_code_free(exports_sqlite_wasm_low_level_result_stmt_handle_result_code_t *ptr) {
+void exports_sqlink_wasm_low_level_result_stmt_handle_result_code_free(exports_sqlink_wasm_low_level_result_stmt_handle_result_code_t *ptr) {
   if (!ptr->is_err) {
   } else {
   }
@@ -681,7 +681,7 @@ void sqlite_world_list_u8_free(sqlite_world_list_u8_t *ptr) {
   }
 }
 
-void exports_sqlite_wasm_high_level_value_free(exports_sqlite_wasm_high_level_value_t *ptr) {
+void exports_sqlink_wasm_high_level_value_free(exports_sqlink_wasm_high_level_value_t *ptr) {
   switch ((int32_t) ptr->tag) {
     case 1: {
       break;
@@ -700,23 +700,23 @@ void exports_sqlite_wasm_high_level_value_free(exports_sqlite_wasm_high_level_va
   }
 }
 
-void exports_sqlite_wasm_high_level_database_error_free(exports_sqlite_wasm_high_level_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_database_error_free(exports_sqlink_wasm_high_level_database_error_t *ptr) {
   sqlite_world_string_free(&ptr->message);
 }
 
-void exports_sqlite_wasm_high_level_list_value_free(exports_sqlite_wasm_high_level_list_value_t *ptr) {
+void exports_sqlink_wasm_high_level_list_value_free(exports_sqlink_wasm_high_level_list_value_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    exports_sqlite_wasm_high_level_value_t *list_ptr = ptr->ptr;
+    exports_sqlink_wasm_high_level_value_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      exports_sqlite_wasm_high_level_value_free(&list_ptr[i]);
+      exports_sqlink_wasm_high_level_value_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void exports_sqlite_wasm_high_level_row_free(exports_sqlite_wasm_high_level_row_t *ptr) {
-  exports_sqlite_wasm_high_level_list_value_free(&ptr->columns);
+void exports_sqlink_wasm_high_level_row_free(exports_sqlink_wasm_high_level_row_t *ptr) {
+  exports_sqlink_wasm_high_level_list_value_free(&ptr->columns);
 }
 
 void sqlite_world_list_string_free(sqlite_world_list_string_t *ptr) {
@@ -730,127 +730,127 @@ void sqlite_world_list_string_free(sqlite_world_list_string_t *ptr) {
   }
 }
 
-void exports_sqlite_wasm_high_level_list_row_free(exports_sqlite_wasm_high_level_list_row_t *ptr) {
+void exports_sqlink_wasm_high_level_list_row_free(exports_sqlink_wasm_high_level_list_row_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    exports_sqlite_wasm_high_level_row_t *list_ptr = ptr->ptr;
+    exports_sqlink_wasm_high_level_row_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      exports_sqlite_wasm_high_level_row_free(&list_ptr[i]);
+      exports_sqlink_wasm_high_level_row_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void exports_sqlite_wasm_high_level_query_result_free(exports_sqlite_wasm_high_level_query_result_t *ptr) {
+void exports_sqlink_wasm_high_level_query_result_free(exports_sqlink_wasm_high_level_query_result_t *ptr) {
   sqlite_world_list_string_free(&ptr->column_names);
-  exports_sqlite_wasm_high_level_list_row_free(&ptr->rows);
+  exports_sqlink_wasm_high_level_list_row_free(&ptr->rows);
 }
 
-__attribute__((__import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-drop]connection")))
-extern void __wasm_import_exports_sqlite_wasm_high_level_connection_drop(int32_t handle);
+__attribute__((__import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-drop]connection")))
+extern void __wasm_import_exports_sqlink_wasm_high_level_connection_drop(int32_t handle);
 
-void exports_sqlite_wasm_high_level_connection_drop_own(exports_sqlite_wasm_high_level_own_connection_t handle) {
-  __wasm_import_exports_sqlite_wasm_high_level_connection_drop(handle.__handle);
+void exports_sqlink_wasm_high_level_connection_drop_own(exports_sqlink_wasm_high_level_own_connection_t handle) {
+  __wasm_import_exports_sqlink_wasm_high_level_connection_drop(handle.__handle);
 }
 
-__attribute__(( __import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-new]connection")))
-extern int32_t __wasm_import_exports_sqlite_wasm_high_level_connection_new(int32_t);
+__attribute__(( __import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-new]connection")))
+extern int32_t __wasm_import_exports_sqlink_wasm_high_level_connection_new(int32_t);
 
-__attribute__((__import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-rep]connection")))
-extern int32_t __wasm_import_exports_sqlite_wasm_high_level_connection_rep(int32_t);
+__attribute__((__import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-rep]connection")))
+extern int32_t __wasm_import_exports_sqlink_wasm_high_level_connection_rep(int32_t);
 
-exports_sqlite_wasm_high_level_own_connection_t exports_sqlite_wasm_high_level_connection_new(exports_sqlite_wasm_high_level_connection_t *rep) {
-  return (exports_sqlite_wasm_high_level_own_connection_t) { __wasm_import_exports_sqlite_wasm_high_level_connection_new((int32_t) rep) };
+exports_sqlink_wasm_high_level_own_connection_t exports_sqlink_wasm_high_level_connection_new(exports_sqlink_wasm_high_level_connection_t *rep) {
+  return (exports_sqlink_wasm_high_level_own_connection_t) { __wasm_import_exports_sqlink_wasm_high_level_connection_new((int32_t) rep) };
 }
 
-exports_sqlite_wasm_high_level_connection_t* exports_sqlite_wasm_high_level_connection_rep(exports_sqlite_wasm_high_level_own_connection_t handle) {
-  return (exports_sqlite_wasm_high_level_connection_t*) __wasm_import_exports_sqlite_wasm_high_level_connection_rep(handle.__handle);
+exports_sqlink_wasm_high_level_connection_t* exports_sqlink_wasm_high_level_connection_rep(exports_sqlink_wasm_high_level_own_connection_t handle) {
+  return (exports_sqlink_wasm_high_level_connection_t*) __wasm_import_exports_sqlink_wasm_high_level_connection_rep(handle.__handle);
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[dtor]connection")))
-void __wasm_export_exports_sqlite_wasm_high_level_connection_dtor(exports_sqlite_wasm_high_level_connection_t* arg) {
-  exports_sqlite_wasm_high_level_connection_destructor(arg);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[dtor]connection")))
+void __wasm_export_exports_sqlink_wasm_high_level_connection_dtor(exports_sqlink_wasm_high_level_connection_t* arg) {
+  exports_sqlink_wasm_high_level_connection_destructor(arg);
 }
 
-__attribute__((__import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-drop]statement")))
-extern void __wasm_import_exports_sqlite_wasm_high_level_statement_drop(int32_t handle);
+__attribute__((__import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-drop]statement")))
+extern void __wasm_import_exports_sqlink_wasm_high_level_statement_drop(int32_t handle);
 
-void exports_sqlite_wasm_high_level_statement_drop_own(exports_sqlite_wasm_high_level_own_statement_t handle) {
-  __wasm_import_exports_sqlite_wasm_high_level_statement_drop(handle.__handle);
+void exports_sqlink_wasm_high_level_statement_drop_own(exports_sqlink_wasm_high_level_own_statement_t handle) {
+  __wasm_import_exports_sqlink_wasm_high_level_statement_drop(handle.__handle);
 }
 
-__attribute__(( __import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-new]statement")))
-extern int32_t __wasm_import_exports_sqlite_wasm_high_level_statement_new(int32_t);
+__attribute__(( __import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-new]statement")))
+extern int32_t __wasm_import_exports_sqlink_wasm_high_level_statement_new(int32_t);
 
-__attribute__((__import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-rep]statement")))
-extern int32_t __wasm_import_exports_sqlite_wasm_high_level_statement_rep(int32_t);
+__attribute__((__import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-rep]statement")))
+extern int32_t __wasm_import_exports_sqlink_wasm_high_level_statement_rep(int32_t);
 
-exports_sqlite_wasm_high_level_own_statement_t exports_sqlite_wasm_high_level_statement_new(exports_sqlite_wasm_high_level_statement_t *rep) {
-  return (exports_sqlite_wasm_high_level_own_statement_t) { __wasm_import_exports_sqlite_wasm_high_level_statement_new((int32_t) rep) };
+exports_sqlink_wasm_high_level_own_statement_t exports_sqlink_wasm_high_level_statement_new(exports_sqlink_wasm_high_level_statement_t *rep) {
+  return (exports_sqlink_wasm_high_level_own_statement_t) { __wasm_import_exports_sqlink_wasm_high_level_statement_new((int32_t) rep) };
 }
 
-exports_sqlite_wasm_high_level_statement_t* exports_sqlite_wasm_high_level_statement_rep(exports_sqlite_wasm_high_level_own_statement_t handle) {
-  return (exports_sqlite_wasm_high_level_statement_t*) __wasm_import_exports_sqlite_wasm_high_level_statement_rep(handle.__handle);
+exports_sqlink_wasm_high_level_statement_t* exports_sqlink_wasm_high_level_statement_rep(exports_sqlink_wasm_high_level_own_statement_t handle) {
+  return (exports_sqlink_wasm_high_level_statement_t*) __wasm_import_exports_sqlink_wasm_high_level_statement_rep(handle.__handle);
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[dtor]statement")))
-void __wasm_export_exports_sqlite_wasm_high_level_statement_dtor(exports_sqlite_wasm_high_level_statement_t* arg) {
-  exports_sqlite_wasm_high_level_statement_destructor(arg);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[dtor]statement")))
+void __wasm_export_exports_sqlink_wasm_high_level_statement_dtor(exports_sqlink_wasm_high_level_statement_t* arg) {
+  exports_sqlink_wasm_high_level_statement_destructor(arg);
 }
 
-void exports_sqlite_wasm_high_level_result_exec_result_database_error_free(exports_sqlite_wasm_high_level_result_exec_result_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_exec_result_database_error_free(exports_sqlink_wasm_high_level_result_exec_result_database_error_t *ptr) {
   if (!ptr->is_err) {
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_query_result_database_error_free(exports_sqlite_wasm_high_level_result_query_result_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_query_result_database_error_free(exports_sqlink_wasm_high_level_result_query_result_database_error_t *ptr) {
   if (!ptr->is_err) {
-    exports_sqlite_wasm_high_level_query_result_free(&ptr->val.ok);
+    exports_sqlink_wasm_high_level_query_result_free(&ptr->val.ok);
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_own_statement_database_error_free(exports_sqlite_wasm_high_level_result_own_statement_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_own_statement_database_error_free(exports_sqlink_wasm_high_level_result_own_statement_database_error_t *ptr) {
   if (!ptr->is_err) {
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_void_database_error_free(exports_sqlite_wasm_high_level_result_void_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_void_database_error_free(exports_sqlink_wasm_high_level_result_void_database_error_t *ptr) {
   if (!ptr->is_err) {
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_option_database_error_free(exports_sqlite_wasm_high_level_option_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_option_database_error_free(exports_sqlink_wasm_high_level_option_database_error_t *ptr) {
   if (ptr->is_some) {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val);
   }
 }
 
-void exports_sqlite_wasm_high_level_option_row_free(exports_sqlite_wasm_high_level_option_row_t *ptr) {
+void exports_sqlink_wasm_high_level_option_row_free(exports_sqlink_wasm_high_level_option_row_t *ptr) {
   if (ptr->is_some) {
-    exports_sqlite_wasm_high_level_row_free(&ptr->val);
+    exports_sqlink_wasm_high_level_row_free(&ptr->val);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_option_row_database_error_free(exports_sqlite_wasm_high_level_result_option_row_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_option_row_database_error_free(exports_sqlink_wasm_high_level_result_option_row_database_error_t *ptr) {
   if (!ptr->is_err) {
-    exports_sqlite_wasm_high_level_option_row_free(&ptr->val.ok);
+    exports_sqlink_wasm_high_level_option_row_free(&ptr->val.ok);
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_own_connection_database_error_free(exports_sqlite_wasm_high_level_result_own_connection_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_own_connection_database_error_free(exports_sqlink_wasm_high_level_result_own_connection_database_error_t *ptr) {
   if (!ptr->is_err) {
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
@@ -875,13 +875,13 @@ void sqlite_world_string_free(sqlite_world_string_t *ret) {
 
 // Component Adapters
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#open")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_open(uint8_t * arg, size_t arg0, int32_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#open")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_open(uint8_t * arg, size_t arg0, int32_t arg1) {
   sqlite_world_string_t arg2 = (sqlite_world_string_t) { (uint8_t*)(arg), (arg0) };
-  exports_sqlite_wasm_low_level_result_db_handle_result_code_t ret;
-  exports_sqlite_wasm_low_level_db_handle_t ok;
-  exports_sqlite_wasm_low_level_result_code_t err;
-  ret.is_err = !exports_sqlite_wasm_low_level_open(&arg2, arg1, &ok, &err);
+  exports_sqlink_wasm_low_level_result_db_handle_result_code_t ret;
+  exports_sqlink_wasm_low_level_db_handle_t ok;
+  exports_sqlink_wasm_low_level_result_code_t err;
+  ret.is_err = !exports_sqlink_wasm_low_level_open(&arg2, arg1, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -890,28 +890,28 @@ uint8_t * __wasm_export_exports_sqlite_wasm_low_level_open(uint8_t * arg, size_t
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int8_t*)(ptr + 8)) = (int32_t) *payload3;
   } else {
-    const exports_sqlite_wasm_low_level_db_handle_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_low_level_db_handle_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int64_t*)(ptr + 8)) = (int64_t) (*payload);
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#close")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_close(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_close((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#close")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_close(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_close((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#exec")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_exec(int64_t arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#exec")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_exec(int64_t arg, uint8_t * arg0, size_t arg1) {
   sqlite_world_string_t arg2 = (sqlite_world_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_low_level_result_string_result_code_t ret;
+  exports_sqlink_wasm_low_level_result_string_result_code_t ret;
   sqlite_world_string_t ok;
-  exports_sqlite_wasm_low_level_result_code_t err;
-  ret.is_err = !exports_sqlite_wasm_low_level_exec((uint64_t) (arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_low_level_result_code_t err;
+  ret.is_err = !exports_sqlink_wasm_low_level_exec((uint64_t) (arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -920,7 +920,7 @@ uint8_t * __wasm_export_exports_sqlite_wasm_low_level_exec(int64_t arg, uint8_t 
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int8_t*)(ptr + sizeof(void*))) = (int32_t) *payload3;
   } else {
     const sqlite_world_string_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
@@ -930,13 +930,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_low_level_exec(int64_t arg, uint8_t 
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#prepare")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_prepare(int64_t arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#prepare")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_prepare(int64_t arg, uint8_t * arg0, size_t arg1) {
   sqlite_world_string_t arg2 = (sqlite_world_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_low_level_result_stmt_handle_result_code_t ret;
-  exports_sqlite_wasm_low_level_stmt_handle_t ok;
-  exports_sqlite_wasm_low_level_result_code_t err;
-  ret.is_err = !exports_sqlite_wasm_low_level_prepare((uint64_t) (arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_low_level_result_stmt_handle_result_code_t ret;
+  exports_sqlink_wasm_low_level_stmt_handle_t ok;
+  exports_sqlink_wasm_low_level_result_code_t err;
+  ret.is_err = !exports_sqlink_wasm_low_level_prepare((uint64_t) (arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -945,242 +945,242 @@ uint8_t * __wasm_export_exports_sqlite_wasm_low_level_prepare(int64_t arg, uint8
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int8_t*)(ptr + 8)) = (int32_t) *payload3;
   } else {
-    const exports_sqlite_wasm_low_level_stmt_handle_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_low_level_stmt_handle_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int64_t*)(ptr + 8)) = (int64_t) (*payload);
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#step")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_step(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_step((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#step")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_step(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_step((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#reset")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_reset(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_reset((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#reset")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_reset(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_reset((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#finalize")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_finalize(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_finalize((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#finalize")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_finalize(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_finalize((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-null")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_null(int64_t arg, int32_t arg0) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_null((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-null")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_null(int64_t arg, int32_t arg0) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_null((uint64_t) (arg), arg0);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-int")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_int(int64_t arg, int32_t arg0, int32_t arg1) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_int((uint64_t) (arg), arg0, arg1);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-int")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_int(int64_t arg, int32_t arg0, int32_t arg1) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_int((uint64_t) (arg), arg0, arg1);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-int64")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_int64(int64_t arg, int32_t arg0, int64_t arg1) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_int64((uint64_t) (arg), arg0, arg1);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-int64")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_int64(int64_t arg, int32_t arg0, int64_t arg1) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_int64((uint64_t) (arg), arg0, arg1);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-double")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_double(int64_t arg, int32_t arg0, double arg1) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_double((uint64_t) (arg), arg0, arg1);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-double")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_double(int64_t arg, int32_t arg0, double arg1) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_double((uint64_t) (arg), arg0, arg1);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-text")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_text(int64_t arg, int32_t arg0, uint8_t * arg1, size_t arg2) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-text")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_text(int64_t arg, int32_t arg0, uint8_t * arg1, size_t arg2) {
   sqlite_world_string_t arg3 = (sqlite_world_string_t) { (uint8_t*)(arg1), (arg2) };
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_text((uint64_t) (arg), arg0, &arg3);
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_text((uint64_t) (arg), arg0, &arg3);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-blob")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_blob(int64_t arg, int32_t arg0, uint8_t * arg1, size_t arg2) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-blob")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_blob(int64_t arg, int32_t arg0, uint8_t * arg1, size_t arg2) {
   sqlite_world_list_u8_t arg3 = (sqlite_world_list_u8_t) { (uint8_t*)(arg1), (arg2) };
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_blob((uint64_t) (arg), arg0, &arg3);
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_blob((uint64_t) (arg), arg0, &arg3);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-parameter-count")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_parameter_count(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_bind_parameter_count((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-parameter-count")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_parameter_count(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_bind_parameter_count((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-parameter-index")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_parameter_index(int64_t arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-parameter-index")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_parameter_index(int64_t arg, uint8_t * arg0, size_t arg1) {
   sqlite_world_string_t arg2 = (sqlite_world_string_t) { (uint8_t*)(arg0), (arg1) };
-  int32_t ret = exports_sqlite_wasm_low_level_bind_parameter_index((uint64_t) (arg), &arg2);
+  int32_t ret = exports_sqlink_wasm_low_level_bind_parameter_index((uint64_t) (arg), &arg2);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#clear-bindings")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_clear_bindings(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_clear_bindings((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#clear-bindings")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_clear_bindings(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_clear_bindings((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-count")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_column_count(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_column_count((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-count")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_column_count(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_column_count((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-name")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_column_name(int64_t arg, int32_t arg0) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-name")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_column_name(int64_t arg, int32_t arg0) {
   sqlite_world_string_t ret;
-  exports_sqlite_wasm_low_level_column_name((uint64_t) (arg), arg0, &ret);
+  exports_sqlink_wasm_low_level_column_name((uint64_t) (arg), arg0, &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#get-column-type")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_get_column_type(int64_t arg, int32_t arg0) {
-  exports_sqlite_wasm_low_level_column_type_t ret = exports_sqlite_wasm_low_level_get_column_type((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#get-column-type")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_get_column_type(int64_t arg, int32_t arg0) {
+  exports_sqlink_wasm_low_level_column_type_t ret = exports_sqlink_wasm_low_level_get_column_type((uint64_t) (arg), arg0);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-int")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_column_int(int64_t arg, int32_t arg0) {
-  int32_t ret = exports_sqlite_wasm_low_level_column_int((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-int")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_column_int(int64_t arg, int32_t arg0) {
+  int32_t ret = exports_sqlink_wasm_low_level_column_int((uint64_t) (arg), arg0);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-int64")))
-int64_t __wasm_export_exports_sqlite_wasm_low_level_column_int64(int64_t arg, int32_t arg0) {
-  int64_t ret = exports_sqlite_wasm_low_level_column_int64((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-int64")))
+int64_t __wasm_export_exports_sqlink_wasm_low_level_column_int64(int64_t arg, int32_t arg0) {
+  int64_t ret = exports_sqlink_wasm_low_level_column_int64((uint64_t) (arg), arg0);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-double")))
-double __wasm_export_exports_sqlite_wasm_low_level_column_double(int64_t arg, int32_t arg0) {
-  double ret = exports_sqlite_wasm_low_level_column_double((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-double")))
+double __wasm_export_exports_sqlink_wasm_low_level_column_double(int64_t arg, int32_t arg0) {
+  double ret = exports_sqlink_wasm_low_level_column_double((uint64_t) (arg), arg0);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-text")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_column_text(int64_t arg, int32_t arg0) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-text")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_column_text(int64_t arg, int32_t arg0) {
   sqlite_world_string_t ret;
-  exports_sqlite_wasm_low_level_column_text((uint64_t) (arg), arg0, &ret);
+  exports_sqlink_wasm_low_level_column_text((uint64_t) (arg), arg0, &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-blob")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_column_blob(int64_t arg, int32_t arg0) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-blob")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_column_blob(int64_t arg, int32_t arg0) {
   sqlite_world_list_u8_t ret;
-  exports_sqlite_wasm_low_level_column_blob((uint64_t) (arg), arg0, &ret);
+  exports_sqlink_wasm_low_level_column_blob((uint64_t) (arg), arg0, &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-bytes")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_column_bytes(int64_t arg, int32_t arg0) {
-  int32_t ret = exports_sqlite_wasm_low_level_column_bytes((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-bytes")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_column_bytes(int64_t arg, int32_t arg0) {
+  int32_t ret = exports_sqlink_wasm_low_level_column_bytes((uint64_t) (arg), arg0);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#errmsg")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_errmsg(int64_t arg) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#errmsg")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_errmsg(int64_t arg) {
   sqlite_world_string_t ret;
-  exports_sqlite_wasm_low_level_errmsg((uint64_t) (arg), &ret);
+  exports_sqlink_wasm_low_level_errmsg((uint64_t) (arg), &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#errcode")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_errcode(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_errcode((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#errcode")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_errcode(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_errcode((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#extended-errcode")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_extended_errcode(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_extended_errcode((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#extended-errcode")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_extended_errcode(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_extended_errcode((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#get-autocommit")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_get_autocommit(int64_t arg) {
-  bool ret = exports_sqlite_wasm_low_level_get_autocommit((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#get-autocommit")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_get_autocommit(int64_t arg) {
+  bool ret = exports_sqlink_wasm_low_level_get_autocommit((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#changes")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_changes(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_changes((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#changes")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_changes(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_changes((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#total-changes")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_total_changes(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_total_changes((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#total-changes")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_total_changes(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_total_changes((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#last-insert-rowid")))
-int64_t __wasm_export_exports_sqlite_wasm_low_level_last_insert_rowid(int64_t arg) {
-  int64_t ret = exports_sqlite_wasm_low_level_last_insert_rowid((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#last-insert-rowid")))
+int64_t __wasm_export_exports_sqlink_wasm_low_level_last_insert_rowid(int64_t arg) {
+  int64_t ret = exports_sqlink_wasm_low_level_last_insert_rowid((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#libversion")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_libversion(void) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#libversion")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_libversion(void) {
   sqlite_world_string_t ret;
-  exports_sqlite_wasm_low_level_libversion(&ret);
+  exports_sqlink_wasm_low_level_libversion(&ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#libversion-number")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_libversion_number(void) {
-  int32_t ret = exports_sqlite_wasm_low_level_libversion_number();
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#libversion-number")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_libversion_number(void) {
+  int32_t ret = exports_sqlink_wasm_low_level_libversion_number();
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#sourceid")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_sourceid(void) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#sourceid")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_sourceid(void) {
   sqlite_world_string_t ret;
-  exports_sqlite_wasm_low_level_sourceid(&ret);
+  exports_sqlink_wasm_low_level_sourceid(&ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[constructor]connection")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_constructor_connection(uint8_t * arg, size_t arg0, int32_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[constructor]connection")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_constructor_connection(uint8_t * arg, size_t arg0, int32_t arg1) {
   sqlite_world_string_t arg2 = (sqlite_world_string_t) { (uint8_t*)(arg), (arg0) };
-  exports_sqlite_wasm_high_level_own_connection_t ret = exports_sqlite_wasm_high_level_constructor_connection(&arg2, arg1);
+  exports_sqlink_wasm_high_level_own_connection_t ret = exports_sqlink_wasm_high_level_constructor_connection(&arg2, arg1);
   return (ret).__handle;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.execute")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute(uint8_t * arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.execute")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_execute(uint8_t * arg, uint8_t * arg0, size_t arg1) {
   sqlite_world_string_t arg2 = (sqlite_world_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_result_exec_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_exec_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_execute(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_high_level_result_exec_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_exec_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_execute(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1189,27 +1189,27 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + 8)) = (*payload3).code;
     *((int32_t*)(ptr + 12)) = (*payload3).extended_code;
     *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload3).message).len;
     *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload3).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + 8)) = (*payload).changes;
     *((int64_t*)(ptr + 16)) = (*payload).last_insert_rowid;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.execute-with-params")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_with_params(uint8_t * arg, uint8_t * arg0, size_t arg1, uint8_t * arg2, size_t arg3) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.execute-with-params")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_execute_with_params(uint8_t * arg, uint8_t * arg0, size_t arg1, uint8_t * arg2, size_t arg3) {
   sqlite_world_string_t arg4 = (sqlite_world_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_list_value_t arg5 = (exports_sqlite_wasm_high_level_list_value_t) { (exports_sqlite_wasm_high_level_value_t*)(arg2), (arg3) };
-  exports_sqlite_wasm_high_level_result_exec_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_exec_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_execute_with_params(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg4, &arg5, &ok, &err);
+  exports_sqlink_wasm_high_level_list_value_t arg5 = (exports_sqlink_wasm_high_level_list_value_t) { (exports_sqlink_wasm_high_level_value_t*)(arg2), (arg3) };
+  exports_sqlink_wasm_high_level_result_exec_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_exec_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_execute_with_params(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg4, &arg5, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1218,26 +1218,26 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload6 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload6 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + 8)) = (*payload6).code;
     *((int32_t*)(ptr + 12)) = (*payload6).extended_code;
     *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload6).message).len;
     *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload6).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + 8)) = (*payload).changes;
     *((int64_t*)(ptr + 16)) = (*payload).last_insert_rowid;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.query")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query(uint8_t * arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.query")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_query(uint8_t * arg, uint8_t * arg0, size_t arg1) {
   sqlite_world_string_t arg2 = (sqlite_world_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_result_query_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_query_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_query(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_high_level_result_query_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_query_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_query(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1246,13 +1246,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query(u
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload8 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload8 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload8).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload8).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload8).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload8).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((size_t*)(ptr + (2*sizeof(void*)))) = ((*payload).column_names).len;
     *((uint8_t **)(ptr + sizeof(void*))) = (uint8_t *) ((*payload).column_names).ptr;
     *((size_t*)(ptr + (4*sizeof(void*)))) = ((*payload).rows).len;
@@ -1261,14 +1261,14 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query(u
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.query-with-params")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_with_params(uint8_t * arg, uint8_t * arg0, size_t arg1, uint8_t * arg2, size_t arg3) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.query-with-params")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_query_with_params(uint8_t * arg, uint8_t * arg0, size_t arg1, uint8_t * arg2, size_t arg3) {
   sqlite_world_string_t arg4 = (sqlite_world_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_list_value_t arg5 = (exports_sqlite_wasm_high_level_list_value_t) { (exports_sqlite_wasm_high_level_value_t*)(arg2), (arg3) };
-  exports_sqlite_wasm_high_level_result_query_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_query_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_query_with_params(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg4, &arg5, &ok, &err);
+  exports_sqlink_wasm_high_level_list_value_t arg5 = (exports_sqlink_wasm_high_level_list_value_t) { (exports_sqlink_wasm_high_level_value_t*)(arg2), (arg3) };
+  exports_sqlink_wasm_high_level_result_query_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_query_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_query_with_params(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg4, &arg5, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1277,13 +1277,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_w
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload11 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload11 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload11).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload11).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload11).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload11).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((size_t*)(ptr + (2*sizeof(void*)))) = ((*payload).column_names).len;
     *((uint8_t **)(ptr + sizeof(void*))) = (uint8_t *) ((*payload).column_names).ptr;
     *((size_t*)(ptr + (4*sizeof(void*)))) = ((*payload).rows).len;
@@ -1292,13 +1292,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_w
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.prepare")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_prepare(uint8_t * arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.prepare")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_prepare(uint8_t * arg, uint8_t * arg0, size_t arg1) {
   sqlite_world_string_t arg2 = (sqlite_world_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_result_own_statement_database_error_t ret;
-  exports_sqlite_wasm_high_level_own_statement_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_prepare(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_high_level_result_own_statement_database_error_t ret;
+  exports_sqlink_wasm_high_level_own_statement_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_prepare(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1307,29 +1307,29 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_prepare
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload3).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload3).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload3).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload3).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_own_statement_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_own_statement_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.begin-transaction")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_begin_transaction(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_begin_transaction(((exports_sqlite_wasm_high_level_connection_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.begin-transaction")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_begin_transaction(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_begin_transaction(((exports_sqlink_wasm_high_level_connection_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -1340,17 +1340,17 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_begin_t
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.commit")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_commit(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_commit(((exports_sqlite_wasm_high_level_connection_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.commit")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_commit(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_commit(((exports_sqlink_wasm_high_level_connection_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -1361,17 +1361,17 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_commit(
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.rollback")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_rollback(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_rollback(((exports_sqlite_wasm_high_level_connection_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.rollback")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_rollback(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_rollback(((exports_sqlink_wasm_high_level_connection_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -1382,23 +1382,23 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_rollbac
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.in-autocommit")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_method_connection_in_autocommit(uint8_t * arg) {
-  bool ret = exports_sqlite_wasm_high_level_method_connection_in_autocommit(((exports_sqlite_wasm_high_level_connection_t*) arg));
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.in-autocommit")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_method_connection_in_autocommit(uint8_t * arg) {
+  bool ret = exports_sqlink_wasm_high_level_method_connection_in_autocommit(((exports_sqlink_wasm_high_level_connection_t*) arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.last-error")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_last_error(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_database_error_t val;
-  bool ret = exports_sqlite_wasm_high_level_method_connection_last_error(((exports_sqlite_wasm_high_level_connection_t*) arg), &val);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.last-error")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_last_error(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_database_error_t val;
+  bool ret = exports_sqlink_wasm_high_level_method_connection_last_error(((exports_sqlink_wasm_high_level_connection_t*) arg), &val);
 
-  exports_sqlite_wasm_high_level_option_database_error_t ret0;
+  exports_sqlink_wasm_high_level_option_database_error_t ret0;
   ret0.is_some = ret;
   ret0.val = val;
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret0).is_some) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload1 = &(ret0).val;
+    const exports_sqlink_wasm_high_level_database_error_t *payload1 = &(ret0).val;
     *((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload1).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload1).extended_code;
@@ -1410,9 +1410,9 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_last_er
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.bind")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind(uint8_t * arg, int32_t arg0, int32_t arg1, int64_t arg2, size_t arg3) {
-  exports_sqlite_wasm_high_level_value_t variant;
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.bind")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_bind(uint8_t * arg, int32_t arg0, int32_t arg1, int64_t arg2, size_t arg3) {
+  exports_sqlink_wasm_high_level_value_t variant;
   variant.tag = arg1;
   switch ((int32_t) variant.tag) {
     case 0: {
@@ -1435,16 +1435,16 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind(uin
       break;
     }
   }
-  exports_sqlite_wasm_high_level_value_t arg4 = variant;
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_bind(((exports_sqlite_wasm_high_level_statement_t*) arg), arg0, &arg4, &err);
+  exports_sqlink_wasm_high_level_value_t arg4 = variant;
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_bind(((exports_sqlink_wasm_high_level_statement_t*) arg), arg0, &arg4, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload5 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload5 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload5).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload5).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload5).message).len;
@@ -1455,18 +1455,18 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind(uin
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.bind-all")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_all(uint8_t * arg, uint8_t * arg0, size_t arg1) {
-  exports_sqlite_wasm_high_level_list_value_t arg2 = (exports_sqlite_wasm_high_level_list_value_t) { (exports_sqlite_wasm_high_level_value_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_bind_all(((exports_sqlite_wasm_high_level_statement_t*) arg), &arg2, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.bind-all")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_bind_all(uint8_t * arg, uint8_t * arg0, size_t arg1) {
+  exports_sqlink_wasm_high_level_list_value_t arg2 = (exports_sqlink_wasm_high_level_list_value_t) { (exports_sqlink_wasm_high_level_value_t*)(arg0), (arg1) };
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_bind_all(((exports_sqlink_wasm_high_level_statement_t*) arg), &arg2, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload3).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload3).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload3).message).len;
@@ -1477,12 +1477,12 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_all
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.execute")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_execute(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_exec_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_exec_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_execute(((exports_sqlite_wasm_high_level_statement_t*) arg), &ok, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.execute")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_execute(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_exec_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_exec_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_execute(((exports_sqlink_wasm_high_level_statement_t*) arg), &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1491,25 +1491,25 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_execute(
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + 8)) = (*payload0).code;
     *((int32_t*)(ptr + 12)) = (*payload0).extended_code;
     *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload0).message).len;
     *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload0).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + 8)) = (*payload).changes;
     *((int64_t*)(ptr + 16)) = (*payload).last_insert_rowid;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.query")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_query(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_query_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_query_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_query(((exports_sqlite_wasm_high_level_statement_t*) arg), &ok, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.query")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_query(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_query_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_query_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_query(((exports_sqlink_wasm_high_level_statement_t*) arg), &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1518,13 +1518,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_query(ui
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload5 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload5 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload5).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload5).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload5).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload5).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((size_t*)(ptr + (2*sizeof(void*)))) = ((*payload).column_names).len;
     *((uint8_t **)(ptr + sizeof(void*))) = (uint8_t *) ((*payload).column_names).ptr;
     *((size_t*)(ptr + (4*sizeof(void*)))) = ((*payload).rows).len;
@@ -1533,12 +1533,12 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_query(ui
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.step")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_step(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_option_row_database_error_t ret;
-  exports_sqlite_wasm_high_level_option_row_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_step(((exports_sqlite_wasm_high_level_statement_t*) arg), &ok, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.step")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_step(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_option_row_database_error_t ret;
+  exports_sqlink_wasm_high_level_option_row_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_step(((exports_sqlink_wasm_high_level_statement_t*) arg), &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1547,15 +1547,15 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_step(uin
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload7 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload7 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload7).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload7).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload7).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload7).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_option_row_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_option_row_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     if ((*payload).is_some) {
-      const exports_sqlite_wasm_high_level_row_t *payload1 = &(*payload).val;
+      const exports_sqlink_wasm_high_level_row_t *payload1 = &(*payload).val;
       *((int8_t*)(ptr + sizeof(void*))) = 1;
       *((size_t*)(ptr + (3*sizeof(void*)))) = ((*payload1).columns).len;
       *((uint8_t **)(ptr + (2*sizeof(void*)))) = (uint8_t *) ((*payload1).columns).ptr;
@@ -1566,17 +1566,17 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_step(uin
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.reset")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_reset(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_reset(((exports_sqlite_wasm_high_level_statement_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.reset")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_reset(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_reset(((exports_sqlink_wasm_high_level_statement_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -1587,17 +1587,17 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_reset(ui
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.clear-bindings")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_clear_bindings(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_clear_bindings(((exports_sqlite_wasm_high_level_statement_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.clear-bindings")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_clear_bindings(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_clear_bindings(((exports_sqlink_wasm_high_level_statement_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -1608,50 +1608,50 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_clear_bi
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.column-count")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_method_statement_column_count(uint8_t * arg) {
-  int32_t ret = exports_sqlite_wasm_high_level_method_statement_column_count(((exports_sqlite_wasm_high_level_statement_t*) arg));
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.column-count")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_method_statement_column_count(uint8_t * arg) {
+  int32_t ret = exports_sqlink_wasm_high_level_method_statement_column_count(((exports_sqlink_wasm_high_level_statement_t*) arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.column-names")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_column_names(uint8_t * arg) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.column-names")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_column_names(uint8_t * arg) {
   sqlite_world_list_string_t ret;
-  exports_sqlite_wasm_high_level_method_statement_column_names(((exports_sqlite_wasm_high_level_statement_t*) arg), &ret);
+  exports_sqlink_wasm_high_level_method_statement_column_names(((exports_sqlink_wasm_high_level_statement_t*) arg), &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.parameter-count")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_method_statement_parameter_count(uint8_t * arg) {
-  int32_t ret = exports_sqlite_wasm_high_level_method_statement_parameter_count(((exports_sqlite_wasm_high_level_statement_t*) arg));
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.parameter-count")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_method_statement_parameter_count(uint8_t * arg) {
+  int32_t ret = exports_sqlink_wasm_high_level_method_statement_parameter_count(((exports_sqlink_wasm_high_level_statement_t*) arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#version")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_version(void) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#version")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_version(void) {
   sqlite_world_string_t ret;
-  exports_sqlite_wasm_high_level_version(&ret);
+  exports_sqlink_wasm_high_level_version(&ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#version-number")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_version_number(void) {
-  int32_t ret = exports_sqlite_wasm_high_level_version_number();
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#version-number")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_version_number(void) {
+  int32_t ret = exports_sqlink_wasm_high_level_version_number();
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#open-memory")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_open_memory(void) {
-  exports_sqlite_wasm_high_level_result_own_connection_database_error_t ret;
-  exports_sqlite_wasm_high_level_own_connection_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_open_memory(&ok, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#open-memory")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_open_memory(void) {
+  exports_sqlink_wasm_high_level_result_own_connection_database_error_t ret;
+  exports_sqlink_wasm_high_level_own_connection_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_open_memory(&ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1660,25 +1660,25 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_open_memory(void) {
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload0).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#open-file")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_open_file(uint8_t * arg, size_t arg0) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#open-file")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_open_file(uint8_t * arg, size_t arg0) {
   sqlite_world_string_t arg1 = (sqlite_world_string_t) { (uint8_t*)(arg), (arg0) };
-  exports_sqlite_wasm_high_level_result_own_connection_database_error_t ret;
-  exports_sqlite_wasm_high_level_own_connection_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_open_file(&arg1, &ok, &err);
+  exports_sqlink_wasm_high_level_result_own_connection_database_error_t ret;
+  exports_sqlink_wasm_high_level_own_connection_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_open_file(&arg1, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1687,24 +1687,24 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_open_file(uint8_t * arg, 
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload2 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload2 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload2).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload2).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload2).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload2).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#default-connection")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_default_connection(void) {
-  exports_sqlite_wasm_high_level_result_own_connection_database_error_t ret;
-  exports_sqlite_wasm_high_level_own_connection_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_default_connection(&ok, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#default-connection")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_default_connection(void) {
+  exports_sqlink_wasm_high_level_result_own_connection_database_error_t ret;
+  exports_sqlink_wasm_high_level_own_connection_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_default_connection(&ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -1713,13 +1713,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_default_connection(void) 
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload0).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
   }
   return ptr;

@@ -20,68 +20,68 @@
 /*
  * Result code conversion from SQLite to WIT enum
  */
-static exports_sqlite_wasm_low_level_result_code_t sqlite_to_wit_result(int rc) {
+static exports_sqlink_wasm_low_level_result_code_t sqlite_to_wit_result(int rc) {
     switch (rc) {
-        case SQLITE_OK:         return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_OK;
-        case SQLITE_ERROR:      return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_ERROR;
-        case SQLITE_INTERNAL:   return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_INTERNAL;
-        case SQLITE_PERM:       return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_PERM;
-        case SQLITE_ABORT:      return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_ABORT;
-        case SQLITE_BUSY:       return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_BUSY;
-        case SQLITE_LOCKED:     return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_LOCKED;
-        case SQLITE_NOMEM:      return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOMEM;
-        case SQLITE_READONLY:   return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_READONLY;
-        case SQLITE_INTERRUPT:  return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_INTERRUPT;
-        case SQLITE_IOERR:      return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_IOERR;
-        case SQLITE_CORRUPT:    return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_CORRUPT;
-        case SQLITE_NOTFOUND:   return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOTFOUND;
-        case SQLITE_FULL:       return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_FULL;
-        case SQLITE_CANTOPEN:   return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_CANTOPEN;
-        case SQLITE_PROTOCOL:   return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_PROTOCOL;
-        case SQLITE_EMPTY:      return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_EMPTY;
-        case SQLITE_SCHEMA:     return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_SCHEMA;
-        case SQLITE_TOOBIG:     return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_TOOBIG;
-        case SQLITE_CONSTRAINT: return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_CONSTRAINT;
-        case SQLITE_MISMATCH:   return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_MISMATCH;
-        case SQLITE_MISUSE:     return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_MISUSE;
-        case SQLITE_NOLFS:      return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOLFS;
-        case SQLITE_AUTH:       return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_AUTH;
-        case SQLITE_FORMAT:     return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_FORMAT;
-        case SQLITE_RANGE:      return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_RANGE;
-        case SQLITE_NOTADB:     return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOTADB;
-        case SQLITE_NOTICE:     return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOTICE;
-        case SQLITE_WARNING:    return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_WARNING;
-        case SQLITE_ROW:        return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_ROW;
-        case SQLITE_DONE:       return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_DONE;
-        default:                return EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_ERROR;
+        case SQLITE_OK:         return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_OK;
+        case SQLITE_ERROR:      return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_ERROR;
+        case SQLITE_INTERNAL:   return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_INTERNAL;
+        case SQLITE_PERM:       return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_PERM;
+        case SQLITE_ABORT:      return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_ABORT;
+        case SQLITE_BUSY:       return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_BUSY;
+        case SQLITE_LOCKED:     return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_LOCKED;
+        case SQLITE_NOMEM:      return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOMEM;
+        case SQLITE_READONLY:   return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_READONLY;
+        case SQLITE_INTERRUPT:  return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_INTERRUPT;
+        case SQLITE_IOERR:      return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_IOERR;
+        case SQLITE_CORRUPT:    return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_CORRUPT;
+        case SQLITE_NOTFOUND:   return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOTFOUND;
+        case SQLITE_FULL:       return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_FULL;
+        case SQLITE_CANTOPEN:   return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_CANTOPEN;
+        case SQLITE_PROTOCOL:   return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_PROTOCOL;
+        case SQLITE_EMPTY:      return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_EMPTY;
+        case SQLITE_SCHEMA:     return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_SCHEMA;
+        case SQLITE_TOOBIG:     return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_TOOBIG;
+        case SQLITE_CONSTRAINT: return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_CONSTRAINT;
+        case SQLITE_MISMATCH:   return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_MISMATCH;
+        case SQLITE_MISUSE:     return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_MISUSE;
+        case SQLITE_NOLFS:      return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOLFS;
+        case SQLITE_AUTH:       return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_AUTH;
+        case SQLITE_FORMAT:     return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_FORMAT;
+        case SQLITE_RANGE:      return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_RANGE;
+        case SQLITE_NOTADB:     return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOTADB;
+        case SQLITE_NOTICE:     return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOTICE;
+        case SQLITE_WARNING:    return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_WARNING;
+        case SQLITE_ROW:        return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_ROW;
+        case SQLITE_DONE:       return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_DONE;
+        default:                return EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_ERROR;
     }
 }
 
 /*
  * Column type conversion
  */
-static exports_sqlite_wasm_low_level_column_type_t sqlite_to_wit_column_type(int type) {
+static exports_sqlink_wasm_low_level_column_type_t sqlite_to_wit_column_type(int type) {
     switch (type) {
-        case SQLITE_INTEGER:    return EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_INTEGER;
-        case SQLITE_FLOAT:      return EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_FLOAT;
-        case SQLITE_TEXT:       return EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_TEXT;
-        case SQLITE_BLOB:       return EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_BLOB;
+        case SQLITE_INTEGER:    return EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_INTEGER;
+        case SQLITE_FLOAT:      return EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_FLOAT;
+        case SQLITE_TEXT:       return EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_TEXT;
+        case SQLITE_BLOB:       return EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_BLOB;
         case SQLITE_NULL:
-        default:                return EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_NULL;
+        default:                return EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_NULL;
     }
 }
 
 /*
  * Open flags conversion
  */
-static int wit_to_sqlite_open_flags(exports_sqlite_wasm_low_level_open_flags_t wit_flags) {
+static int wit_to_sqlite_open_flags(exports_sqlink_wasm_low_level_open_flags_t wit_flags) {
     int flags = 0;
 
-    if (wit_flags & EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_READONLY)  flags |= SQLITE_OPEN_READONLY;
-    if (wit_flags & EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_READWRITE) flags |= SQLITE_OPEN_READWRITE;
-    if (wit_flags & EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_CREATE)    flags |= SQLITE_OPEN_CREATE;
-    if (wit_flags & EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_MEMORY)    flags |= SQLITE_OPEN_MEMORY;
-    if (wit_flags & EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_URI)       flags |= SQLITE_OPEN_URI;
+    if (wit_flags & EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_READONLY)  flags |= SQLITE_OPEN_READONLY;
+    if (wit_flags & EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_READWRITE) flags |= SQLITE_OPEN_READWRITE;
+    if (wit_flags & EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_CREATE)    flags |= SQLITE_OPEN_CREATE;
+    if (wit_flags & EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_MEMORY)    flags |= SQLITE_OPEN_MEMORY;
+    if (wit_flags & EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_URI)       flags |= SQLITE_OPEN_URI;
 
     /* Default to readwrite if no mode specified */
     if (!(flags & (SQLITE_OPEN_READONLY | SQLITE_OPEN_READWRITE))) {
@@ -108,11 +108,11 @@ static char *string_to_cstr(sqlite_world_string_t *str) {
  * Low-level API exports
  */
 
-bool exports_sqlite_wasm_low_level_open(
+bool exports_sqlink_wasm_low_level_open(
     sqlite_world_string_t *filename,
-    exports_sqlite_wasm_low_level_open_flags_t open_flags,
-    exports_sqlite_wasm_low_level_db_handle_t *ret,
-    exports_sqlite_wasm_low_level_result_code_t *err
+    exports_sqlink_wasm_low_level_open_flags_t open_flags,
+    exports_sqlink_wasm_low_level_db_handle_t *ret,
+    exports_sqlink_wasm_low_level_result_code_t *err
 ) {
     sqlite3 *db = NULL;
     char *fname = string_to_cstr(filename);
@@ -132,18 +132,18 @@ bool exports_sqlite_wasm_low_level_open(
     }
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_close(
-    exports_sqlite_wasm_low_level_db_handle_t db
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_close(
+    exports_sqlink_wasm_low_level_db_handle_t db
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
     return sqlite_to_wit_result(sqlite3_close(pdb));
 }
 
-bool exports_sqlite_wasm_low_level_exec(
-    exports_sqlite_wasm_low_level_db_handle_t db,
+bool exports_sqlink_wasm_low_level_exec(
+    exports_sqlink_wasm_low_level_db_handle_t db,
     sqlite_world_string_t *sql,
     sqlite_world_string_t *ret,
-    exports_sqlite_wasm_low_level_result_code_t *err
+    exports_sqlink_wasm_low_level_result_code_t *err
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
     char *sql_cstr = string_to_cstr(sql);
@@ -166,11 +166,11 @@ bool exports_sqlite_wasm_low_level_exec(
     }
 }
 
-bool exports_sqlite_wasm_low_level_prepare(
-    exports_sqlite_wasm_low_level_db_handle_t db,
+bool exports_sqlink_wasm_low_level_prepare(
+    exports_sqlink_wasm_low_level_db_handle_t db,
     sqlite_world_string_t *sql,
-    exports_sqlite_wasm_low_level_stmt_handle_t *ret,
-    exports_sqlite_wasm_low_level_result_code_t *err
+    exports_sqlink_wasm_low_level_stmt_handle_t *ret,
+    exports_sqlink_wasm_low_level_result_code_t *err
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
     sqlite3_stmt *stmt = NULL;
@@ -189,37 +189,37 @@ bool exports_sqlite_wasm_low_level_prepare(
     }
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_step(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_step(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite_to_wit_result(sqlite3_step(pstmt));
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_reset(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_reset(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite_to_wit_result(sqlite3_reset(pstmt));
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_finalize(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_finalize(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite_to_wit_result(sqlite3_finalize(pstmt));
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_null(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_null(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite_to_wit_result(sqlite3_bind_null(pstmt, index));
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_int(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_int(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index,
     int32_t value
 ) {
@@ -227,8 +227,8 @@ exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_i
     return sqlite_to_wit_result(sqlite3_bind_int(pstmt, index, value));
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_int64(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_int64(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index,
     int64_t value
 ) {
@@ -236,8 +236,8 @@ exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_i
     return sqlite_to_wit_result(sqlite3_bind_int64(pstmt, index, value));
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_double(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_double(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index,
     double value
 ) {
@@ -245,8 +245,8 @@ exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_d
     return sqlite_to_wit_result(sqlite3_bind_double(pstmt, index, value));
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_text(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_text(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index,
     sqlite_world_string_t *value
 ) {
@@ -256,8 +256,8 @@ exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_t
     );
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_blob(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_blob(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index,
     sqlite_world_list_u8_t *value
 ) {
@@ -267,15 +267,15 @@ exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_b
     );
 }
 
-int32_t exports_sqlite_wasm_low_level_bind_parameter_count(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt
+int32_t exports_sqlink_wasm_low_level_bind_parameter_count(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite3_bind_parameter_count(pstmt);
 }
 
-int32_t exports_sqlite_wasm_low_level_bind_parameter_index(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+int32_t exports_sqlink_wasm_low_level_bind_parameter_index(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     sqlite_world_string_t *name
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
@@ -285,22 +285,22 @@ int32_t exports_sqlite_wasm_low_level_bind_parameter_index(
     return idx;
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_clear_bindings(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_clear_bindings(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite_to_wit_result(sqlite3_clear_bindings(pstmt));
 }
 
-int32_t exports_sqlite_wasm_low_level_column_count(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt
+int32_t exports_sqlink_wasm_low_level_column_count(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite3_column_count(pstmt);
 }
 
-void exports_sqlite_wasm_low_level_column_name(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+void exports_sqlink_wasm_low_level_column_name(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index,
     sqlite_world_string_t *ret
 ) {
@@ -314,40 +314,40 @@ void exports_sqlite_wasm_low_level_column_name(
     }
 }
 
-exports_sqlite_wasm_low_level_column_type_t exports_sqlite_wasm_low_level_get_column_type(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+exports_sqlink_wasm_low_level_column_type_t exports_sqlink_wasm_low_level_get_column_type(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite_to_wit_column_type(sqlite3_column_type(pstmt, index));
 }
 
-int32_t exports_sqlite_wasm_low_level_column_int(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+int32_t exports_sqlink_wasm_low_level_column_int(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite3_column_int(pstmt, index);
 }
 
-int64_t exports_sqlite_wasm_low_level_column_int64(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+int64_t exports_sqlink_wasm_low_level_column_int64(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite3_column_int64(pstmt, index);
 }
 
-double exports_sqlite_wasm_low_level_column_double(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+double exports_sqlink_wasm_low_level_column_double(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite3_column_double(pstmt, index);
 }
 
-void exports_sqlite_wasm_low_level_column_text(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+void exports_sqlink_wasm_low_level_column_text(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index,
     sqlite_world_string_t *ret
 ) {
@@ -369,8 +369,8 @@ void exports_sqlite_wasm_low_level_column_text(
     }
 }
 
-void exports_sqlite_wasm_low_level_column_blob(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+void exports_sqlink_wasm_low_level_column_blob(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index,
     sqlite_world_list_u8_t *ret
 ) {
@@ -392,16 +392,16 @@ void exports_sqlite_wasm_low_level_column_blob(
     }
 }
 
-int32_t exports_sqlite_wasm_low_level_column_bytes(
-    exports_sqlite_wasm_low_level_stmt_handle_t stmt,
+int32_t exports_sqlink_wasm_low_level_column_bytes(
+    exports_sqlink_wasm_low_level_stmt_handle_t stmt,
     int32_t index
 ) {
     sqlite3_stmt *pstmt = HANDLE_TO_STMT(stmt);
     return sqlite3_column_bytes(pstmt, index);
 }
 
-void exports_sqlite_wasm_low_level_errmsg(
-    exports_sqlite_wasm_low_level_db_handle_t db,
+void exports_sqlink_wasm_low_level_errmsg(
+    exports_sqlink_wasm_low_level_db_handle_t db,
     sqlite_world_string_t *ret
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
@@ -414,56 +414,56 @@ void exports_sqlite_wasm_low_level_errmsg(
     }
 }
 
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_errcode(
-    exports_sqlite_wasm_low_level_db_handle_t db
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_errcode(
+    exports_sqlink_wasm_low_level_db_handle_t db
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
     return sqlite_to_wit_result(sqlite3_errcode(pdb));
 }
 
-int32_t exports_sqlite_wasm_low_level_extended_errcode(
-    exports_sqlite_wasm_low_level_db_handle_t db
+int32_t exports_sqlink_wasm_low_level_extended_errcode(
+    exports_sqlink_wasm_low_level_db_handle_t db
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
     return sqlite3_extended_errcode(pdb);
 }
 
-bool exports_sqlite_wasm_low_level_get_autocommit(
-    exports_sqlite_wasm_low_level_db_handle_t db
+bool exports_sqlink_wasm_low_level_get_autocommit(
+    exports_sqlink_wasm_low_level_db_handle_t db
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
     return sqlite3_get_autocommit(pdb) != 0;
 }
 
-int32_t exports_sqlite_wasm_low_level_changes(
-    exports_sqlite_wasm_low_level_db_handle_t db
+int32_t exports_sqlink_wasm_low_level_changes(
+    exports_sqlink_wasm_low_level_db_handle_t db
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
     return sqlite3_changes(pdb);
 }
 
-int32_t exports_sqlite_wasm_low_level_total_changes(
-    exports_sqlite_wasm_low_level_db_handle_t db
+int32_t exports_sqlink_wasm_low_level_total_changes(
+    exports_sqlink_wasm_low_level_db_handle_t db
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
     return sqlite3_total_changes(pdb);
 }
 
-int64_t exports_sqlite_wasm_low_level_last_insert_rowid(
-    exports_sqlite_wasm_low_level_db_handle_t db
+int64_t exports_sqlink_wasm_low_level_last_insert_rowid(
+    exports_sqlink_wasm_low_level_db_handle_t db
 ) {
     sqlite3 *pdb = HANDLE_TO_DB(db);
     return sqlite3_last_insert_rowid(pdb);
 }
 
-void exports_sqlite_wasm_low_level_libversion(sqlite_world_string_t *ret) {
+void exports_sqlink_wasm_low_level_libversion(sqlite_world_string_t *ret) {
     sqlite_world_string_dup(ret, sqlite3_libversion());
 }
 
-int32_t exports_sqlite_wasm_low_level_libversion_number(void) {
+int32_t exports_sqlink_wasm_low_level_libversion_number(void) {
     return sqlite3_libversion_number();
 }
 
-void exports_sqlite_wasm_low_level_sourceid(sqlite_world_string_t *ret) {
+void exports_sqlink_wasm_low_level_sourceid(sqlite_world_string_t *ret) {
     sqlite_world_string_dup(ret, sqlite3_sourceid());
 }

@@ -13,7 +13,7 @@
 /*
  * Connection resource - holds SQLite database connection
  */
-struct exports_sqlite_wasm_high_level_connection_t {
+struct exports_sqlink_wasm_high_level_connection_t {
     sqlite3 *db;
     int last_error_code;
     int last_extended_error_code;
@@ -23,9 +23,9 @@ struct exports_sqlite_wasm_high_level_connection_t {
 /*
  * Statement resource - holds prepared statement
  */
-struct exports_sqlite_wasm_high_level_statement_t {
+struct exports_sqlink_wasm_high_level_statement_t {
     sqlite3_stmt *stmt;
-    exports_sqlite_wasm_high_level_connection_t *conn;
+    exports_sqlink_wasm_high_level_connection_t *conn;
     int column_count;
 };
 
@@ -45,7 +45,7 @@ static char *string_to_cstr(sqlite_world_string_t *str) {
     return cstr;
 }
 
-static void set_connection_error(exports_sqlite_wasm_high_level_connection_t *conn) {
+static void set_connection_error(exports_sqlink_wasm_high_level_connection_t *conn) {
     if (!conn || !conn->db) return;
 
     if (conn->last_error_message) {
@@ -64,7 +64,7 @@ static void set_connection_error(exports_sqlite_wasm_high_level_connection_t *co
 }
 
 static void fill_error(
-    exports_sqlite_wasm_high_level_database_error_t *err,
+    exports_sqlink_wasm_high_level_database_error_t *err,
     int code,
     int extended_code,
     const char *message
@@ -80,25 +80,25 @@ static void fill_error(
 }
 
 static void fill_error_from_conn(
-    exports_sqlite_wasm_high_level_database_error_t *err,
-    exports_sqlite_wasm_high_level_connection_t *conn
+    exports_sqlink_wasm_high_level_database_error_t *err,
+    exports_sqlink_wasm_high_level_connection_t *conn
 ) {
     fill_error(err, conn->last_error_code, conn->last_extended_error_code,
                conn->last_error_message);
 }
 
-static int bind_value(sqlite3_stmt *stmt, int index, exports_sqlite_wasm_high_level_value_t *val) {
+static int bind_value(sqlite3_stmt *stmt, int index, exports_sqlink_wasm_high_level_value_t *val) {
     switch (val->tag) {
-        case EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_NULL:
+        case EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_NULL:
             return sqlite3_bind_null(stmt, index);
-        case EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_INTEGER:
+        case EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_INTEGER:
             return sqlite3_bind_int64(stmt, index, val->val.integer);
-        case EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_REAL:
+        case EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_REAL:
             return sqlite3_bind_double(stmt, index, val->val.real);
-        case EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_TEXT:
+        case EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_TEXT:
             return sqlite3_bind_text(stmt, index, (const char *)val->val.text.ptr,
                                      (int)val->val.text.len, SQLITE_TRANSIENT);
-        case EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_BLOB:
+        case EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_BLOB:
             return sqlite3_bind_blob(stmt, index, val->val.blob.ptr,
                                      (int)val->val.blob.len, SQLITE_TRANSIENT);
         default:
@@ -109,25 +109,25 @@ static int bind_value(sqlite3_stmt *stmt, int index, exports_sqlite_wasm_high_le
 static void read_column(
     sqlite3_stmt *stmt,
     int index,
-    exports_sqlite_wasm_high_level_value_t *val
+    exports_sqlink_wasm_high_level_value_t *val
 ) {
     int type = sqlite3_column_type(stmt, index);
 
     switch (type) {
         case SQLITE_INTEGER:
-            val->tag = EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_INTEGER;
+            val->tag = EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_INTEGER;
             val->val.integer = sqlite3_column_int64(stmt, index);
             break;
 
         case SQLITE_FLOAT:
-            val->tag = EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_REAL;
+            val->tag = EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_REAL;
             val->val.real = sqlite3_column_double(stmt, index);
             break;
 
         case SQLITE_TEXT: {
             const unsigned char *text = sqlite3_column_text(stmt, index);
             int len = sqlite3_column_bytes(stmt, index);
-            val->tag = EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_TEXT;
+            val->tag = EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_TEXT;
             if (text && len > 0) {
                 val->val.text.ptr = (uint8_t *)malloc(len);
                 if (val->val.text.ptr) {
@@ -146,7 +146,7 @@ static void read_column(
         case SQLITE_BLOB: {
             const void *blob = sqlite3_column_blob(stmt, index);
             int len = sqlite3_column_bytes(stmt, index);
-            val->tag = EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_BLOB;
+            val->tag = EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_BLOB;
             if (blob && len > 0) {
                 val->val.blob.ptr = (uint8_t *)malloc(len);
                 if (val->val.blob.ptr) {
@@ -164,7 +164,7 @@ static void read_column(
 
         case SQLITE_NULL:
         default:
-            val->tag = EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_NULL;
+            val->tag = EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_NULL;
             break;
     }
 }
@@ -172,32 +172,32 @@ static void read_column(
 /*
  * Connection constructor
  */
-exports_sqlite_wasm_high_level_own_connection_t
-exports_sqlite_wasm_high_level_constructor_connection(
+exports_sqlink_wasm_high_level_own_connection_t
+exports_sqlink_wasm_high_level_constructor_connection(
     sqlite_world_string_t *path,
-    exports_sqlite_wasm_high_level_open_mode_t mode
+    exports_sqlink_wasm_high_level_open_mode_t mode
 ) {
-    exports_sqlite_wasm_high_level_connection_t *conn =
-        (exports_sqlite_wasm_high_level_connection_t *)malloc(sizeof(*conn));
+    exports_sqlink_wasm_high_level_connection_t *conn =
+        (exports_sqlink_wasm_high_level_connection_t *)malloc(sizeof(*conn));
 
     if (!conn) {
-        return exports_sqlite_wasm_high_level_connection_new(NULL);
+        return exports_sqlink_wasm_high_level_connection_new(NULL);
     }
 
     memset(conn, 0, sizeof(*conn));
 
     int flags = 0;
     switch (mode) {
-        case EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_READ_ONLY:
+        case EXPORTS_SQLINK_WASM_HIGH_LEVEL_OPEN_MODE_READ_ONLY:
             flags = SQLITE_OPEN_READONLY;
             break;
-        case EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_READ_WRITE:
+        case EXPORTS_SQLINK_WASM_HIGH_LEVEL_OPEN_MODE_READ_WRITE:
             flags = SQLITE_OPEN_READWRITE;
             break;
-        case EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_READ_WRITE_CREATE:
+        case EXPORTS_SQLINK_WASM_HIGH_LEVEL_OPEN_MODE_READ_WRITE_CREATE:
             flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
             break;
-        case EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_MEMORY:
+        case EXPORTS_SQLINK_WASM_HIGH_LEVEL_OPEN_MODE_MEMORY:
             flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_MEMORY;
             break;
         default:
@@ -210,7 +210,7 @@ exports_sqlite_wasm_high_level_constructor_connection(
      * actually hits the filesystem; the default VFS is the in-memory
      * memvfs. Memory mode (and a missing path) stay on the default. */
     const char *vfs =
-        (mode == EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_MEMORY || !path_cstr)
+        (mode == EXPORTS_SQLINK_WASM_HIGH_LEVEL_OPEN_MODE_MEMORY || !path_cstr)
             ? NULL
             : "wasivfs";
     int rc = sqlite3_open_v2(path_cstr ? path_cstr : ":memory:", &conn->db, flags, vfs);
@@ -220,14 +220,14 @@ exports_sqlite_wasm_high_level_constructor_connection(
         set_connection_error(conn);
     }
 
-    return exports_sqlite_wasm_high_level_connection_new(conn);
+    return exports_sqlink_wasm_high_level_connection_new(conn);
 }
 
 /*
  * Connection destructor
  */
-void exports_sqlite_wasm_high_level_connection_destructor(
-    exports_sqlite_wasm_high_level_connection_t *rep
+void exports_sqlink_wasm_high_level_connection_destructor(
+    exports_sqlink_wasm_high_level_connection_t *rep
 ) {
     if (rep) {
         if (rep->db) {
@@ -244,11 +244,11 @@ void exports_sqlite_wasm_high_level_connection_destructor(
  * Connection methods
  */
 
-bool exports_sqlite_wasm_high_level_method_connection_execute(
-    exports_sqlite_wasm_high_level_borrow_connection_t self,
+bool exports_sqlink_wasm_high_level_method_connection_execute(
+    exports_sqlink_wasm_high_level_borrow_connection_t self,
     sqlite_world_string_t *sql,
-    exports_sqlite_wasm_high_level_exec_result_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+    exports_sqlink_wasm_high_level_exec_result_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->db) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Connection is closed");
@@ -275,12 +275,12 @@ bool exports_sqlite_wasm_high_level_method_connection_execute(
     }
 }
 
-bool exports_sqlite_wasm_high_level_method_connection_execute_with_params(
-    exports_sqlite_wasm_high_level_borrow_connection_t self,
+bool exports_sqlink_wasm_high_level_method_connection_execute_with_params(
+    exports_sqlink_wasm_high_level_borrow_connection_t self,
     sqlite_world_string_t *sql,
-    exports_sqlite_wasm_high_level_list_value_t *params,
-    exports_sqlite_wasm_high_level_exec_result_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+    exports_sqlink_wasm_high_level_list_value_t *params,
+    exports_sqlink_wasm_high_level_exec_result_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->db) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Connection is closed");
@@ -326,11 +326,11 @@ bool exports_sqlite_wasm_high_level_method_connection_execute_with_params(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_connection_query(
-    exports_sqlite_wasm_high_level_borrow_connection_t self,
+bool exports_sqlink_wasm_high_level_method_connection_query(
+    exports_sqlink_wasm_high_level_borrow_connection_t self,
     sqlite_world_string_t *sql,
-    exports_sqlite_wasm_high_level_query_result_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+    exports_sqlink_wasm_high_level_query_result_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->db) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Connection is closed");
@@ -366,23 +366,23 @@ bool exports_sqlite_wasm_high_level_method_connection_query(
 
     /* Collect rows */
     size_t row_capacity = 16;
-    ret->rows.ptr = (exports_sqlite_wasm_high_level_row_t *)malloc(
-        sizeof(exports_sqlite_wasm_high_level_row_t) * row_capacity);
+    ret->rows.ptr = (exports_sqlink_wasm_high_level_row_t *)malloc(
+        sizeof(exports_sqlink_wasm_high_level_row_t) * row_capacity);
     ret->rows.len = 0;
 
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         /* Grow rows array if needed */
         if (ret->rows.len >= row_capacity) {
             row_capacity *= 2;
-            ret->rows.ptr = (exports_sqlite_wasm_high_level_row_t *)realloc(
+            ret->rows.ptr = (exports_sqlink_wasm_high_level_row_t *)realloc(
                 ret->rows.ptr,
-                sizeof(exports_sqlite_wasm_high_level_row_t) * row_capacity);
+                sizeof(exports_sqlink_wasm_high_level_row_t) * row_capacity);
         }
 
         /* Read row */
-        exports_sqlite_wasm_high_level_row_t *row = &ret->rows.ptr[ret->rows.len];
-        row->columns.ptr = (exports_sqlite_wasm_high_level_value_t *)malloc(
-            sizeof(exports_sqlite_wasm_high_level_value_t) * col_count);
+        exports_sqlink_wasm_high_level_row_t *row = &ret->rows.ptr[ret->rows.len];
+        row->columns.ptr = (exports_sqlink_wasm_high_level_value_t *)malloc(
+            sizeof(exports_sqlink_wasm_high_level_value_t) * col_count);
         row->columns.len = col_count;
 
         for (int i = 0; i < col_count; i++) {
@@ -396,7 +396,7 @@ bool exports_sqlite_wasm_high_level_method_connection_query(
         set_connection_error(self);
         fill_error_from_conn(err, self);
         sqlite3_finalize(stmt);
-        exports_sqlite_wasm_high_level_query_result_free(ret);
+        exports_sqlink_wasm_high_level_query_result_free(ret);
         return false;
     }
 
@@ -404,12 +404,12 @@ bool exports_sqlite_wasm_high_level_method_connection_query(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_connection_query_with_params(
-    exports_sqlite_wasm_high_level_borrow_connection_t self,
+bool exports_sqlink_wasm_high_level_method_connection_query_with_params(
+    exports_sqlink_wasm_high_level_borrow_connection_t self,
     sqlite_world_string_t *sql,
-    exports_sqlite_wasm_high_level_list_value_t *params,
-    exports_sqlite_wasm_high_level_query_result_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+    exports_sqlink_wasm_high_level_list_value_t *params,
+    exports_sqlink_wasm_high_level_query_result_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->db) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Connection is closed");
@@ -456,21 +456,21 @@ bool exports_sqlite_wasm_high_level_method_connection_query_with_params(
 
     /* Collect rows */
     size_t row_capacity = 16;
-    ret->rows.ptr = (exports_sqlite_wasm_high_level_row_t *)malloc(
-        sizeof(exports_sqlite_wasm_high_level_row_t) * row_capacity);
+    ret->rows.ptr = (exports_sqlink_wasm_high_level_row_t *)malloc(
+        sizeof(exports_sqlink_wasm_high_level_row_t) * row_capacity);
     ret->rows.len = 0;
 
     while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
         if (ret->rows.len >= row_capacity) {
             row_capacity *= 2;
-            ret->rows.ptr = (exports_sqlite_wasm_high_level_row_t *)realloc(
+            ret->rows.ptr = (exports_sqlink_wasm_high_level_row_t *)realloc(
                 ret->rows.ptr,
-                sizeof(exports_sqlite_wasm_high_level_row_t) * row_capacity);
+                sizeof(exports_sqlink_wasm_high_level_row_t) * row_capacity);
         }
 
-        exports_sqlite_wasm_high_level_row_t *row = &ret->rows.ptr[ret->rows.len];
-        row->columns.ptr = (exports_sqlite_wasm_high_level_value_t *)malloc(
-            sizeof(exports_sqlite_wasm_high_level_value_t) * col_count);
+        exports_sqlink_wasm_high_level_row_t *row = &ret->rows.ptr[ret->rows.len];
+        row->columns.ptr = (exports_sqlink_wasm_high_level_value_t *)malloc(
+            sizeof(exports_sqlink_wasm_high_level_value_t) * col_count);
         row->columns.len = col_count;
 
         for (int i = 0; i < col_count; i++) {
@@ -484,7 +484,7 @@ bool exports_sqlite_wasm_high_level_method_connection_query_with_params(
         set_connection_error(self);
         fill_error_from_conn(err, self);
         sqlite3_finalize(stmt);
-        exports_sqlite_wasm_high_level_query_result_free(ret);
+        exports_sqlink_wasm_high_level_query_result_free(ret);
         return false;
     }
 
@@ -492,19 +492,19 @@ bool exports_sqlite_wasm_high_level_method_connection_query_with_params(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_connection_prepare(
-    exports_sqlite_wasm_high_level_borrow_connection_t self,
+bool exports_sqlink_wasm_high_level_method_connection_prepare(
+    exports_sqlink_wasm_high_level_borrow_connection_t self,
     sqlite_world_string_t *sql,
-    exports_sqlite_wasm_high_level_own_statement_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+    exports_sqlink_wasm_high_level_own_statement_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->db) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Connection is closed");
         return false;
     }
 
-    exports_sqlite_wasm_high_level_statement_t *stmt_obj =
-        (exports_sqlite_wasm_high_level_statement_t *)malloc(sizeof(*stmt_obj));
+    exports_sqlink_wasm_high_level_statement_t *stmt_obj =
+        (exports_sqlink_wasm_high_level_statement_t *)malloc(sizeof(*stmt_obj));
 
     if (!stmt_obj) {
         fill_error(err, SQLITE_NOMEM, SQLITE_NOMEM, "Out of memory");
@@ -525,13 +525,13 @@ bool exports_sqlite_wasm_high_level_method_connection_prepare(
     stmt_obj->conn = self;
     stmt_obj->column_count = sqlite3_column_count(stmt_obj->stmt);
 
-    *ret = exports_sqlite_wasm_high_level_statement_new(stmt_obj);
+    *ret = exports_sqlink_wasm_high_level_statement_new(stmt_obj);
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_connection_begin_transaction(
-    exports_sqlite_wasm_high_level_borrow_connection_t self,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_method_connection_begin_transaction(
+    exports_sqlink_wasm_high_level_borrow_connection_t self,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->db) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Connection is closed");
@@ -552,9 +552,9 @@ bool exports_sqlite_wasm_high_level_method_connection_begin_transaction(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_connection_commit(
-    exports_sqlite_wasm_high_level_borrow_connection_t self,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_method_connection_commit(
+    exports_sqlink_wasm_high_level_borrow_connection_t self,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->db) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Connection is closed");
@@ -575,9 +575,9 @@ bool exports_sqlite_wasm_high_level_method_connection_commit(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_connection_rollback(
-    exports_sqlite_wasm_high_level_borrow_connection_t self,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_method_connection_rollback(
+    exports_sqlink_wasm_high_level_borrow_connection_t self,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->db) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Connection is closed");
@@ -598,16 +598,16 @@ bool exports_sqlite_wasm_high_level_method_connection_rollback(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_connection_in_autocommit(
-    exports_sqlite_wasm_high_level_borrow_connection_t self
+bool exports_sqlink_wasm_high_level_method_connection_in_autocommit(
+    exports_sqlink_wasm_high_level_borrow_connection_t self
 ) {
     if (!self || !self->db) return true;
     return sqlite3_get_autocommit(self->db) != 0;
 }
 
-bool exports_sqlite_wasm_high_level_method_connection_last_error(
-    exports_sqlite_wasm_high_level_borrow_connection_t self,
-    exports_sqlite_wasm_high_level_database_error_t *ret
+bool exports_sqlink_wasm_high_level_method_connection_last_error(
+    exports_sqlink_wasm_high_level_borrow_connection_t self,
+    exports_sqlink_wasm_high_level_database_error_t *ret
 ) {
     if (!self || !self->last_error_message) {
         return false; /* Option::None */
@@ -620,8 +620,8 @@ bool exports_sqlite_wasm_high_level_method_connection_last_error(
 /*
  * Statement destructor
  */
-void exports_sqlite_wasm_high_level_statement_destructor(
-    exports_sqlite_wasm_high_level_statement_t *rep
+void exports_sqlink_wasm_high_level_statement_destructor(
+    exports_sqlink_wasm_high_level_statement_t *rep
 ) {
     if (rep) {
         if (rep->stmt) {
@@ -635,11 +635,11 @@ void exports_sqlite_wasm_high_level_statement_destructor(
  * Statement methods
  */
 
-bool exports_sqlite_wasm_high_level_method_statement_bind(
-    exports_sqlite_wasm_high_level_borrow_statement_t self,
+bool exports_sqlink_wasm_high_level_method_statement_bind(
+    exports_sqlink_wasm_high_level_borrow_statement_t self,
     int32_t index,
-    exports_sqlite_wasm_high_level_value_t *value,
-    exports_sqlite_wasm_high_level_database_error_t *err
+    exports_sqlink_wasm_high_level_value_t *value,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->stmt) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Statement is closed");
@@ -656,10 +656,10 @@ bool exports_sqlite_wasm_high_level_method_statement_bind(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_statement_bind_all(
-    exports_sqlite_wasm_high_level_borrow_statement_t self,
-    exports_sqlite_wasm_high_level_list_value_t *params,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_method_statement_bind_all(
+    exports_sqlink_wasm_high_level_borrow_statement_t self,
+    exports_sqlink_wasm_high_level_list_value_t *params,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->stmt) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Statement is closed");
@@ -678,10 +678,10 @@ bool exports_sqlite_wasm_high_level_method_statement_bind_all(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_statement_execute(
-    exports_sqlite_wasm_high_level_borrow_statement_t self,
-    exports_sqlite_wasm_high_level_exec_result_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_method_statement_execute(
+    exports_sqlink_wasm_high_level_borrow_statement_t self,
+    exports_sqlink_wasm_high_level_exec_result_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->stmt) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Statement is closed");
@@ -701,10 +701,10 @@ bool exports_sqlite_wasm_high_level_method_statement_execute(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_statement_query(
-    exports_sqlite_wasm_high_level_borrow_statement_t self,
-    exports_sqlite_wasm_high_level_query_result_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_method_statement_query(
+    exports_sqlink_wasm_high_level_borrow_statement_t self,
+    exports_sqlink_wasm_high_level_query_result_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->stmt) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Statement is closed");
@@ -729,22 +729,22 @@ bool exports_sqlite_wasm_high_level_method_statement_query(
 
     /* Collect rows */
     size_t row_capacity = 16;
-    ret->rows.ptr = (exports_sqlite_wasm_high_level_row_t *)malloc(
-        sizeof(exports_sqlite_wasm_high_level_row_t) * row_capacity);
+    ret->rows.ptr = (exports_sqlink_wasm_high_level_row_t *)malloc(
+        sizeof(exports_sqlink_wasm_high_level_row_t) * row_capacity);
     ret->rows.len = 0;
 
     int rc;
     while ((rc = sqlite3_step(self->stmt)) == SQLITE_ROW) {
         if (ret->rows.len >= row_capacity) {
             row_capacity *= 2;
-            ret->rows.ptr = (exports_sqlite_wasm_high_level_row_t *)realloc(
+            ret->rows.ptr = (exports_sqlink_wasm_high_level_row_t *)realloc(
                 ret->rows.ptr,
-                sizeof(exports_sqlite_wasm_high_level_row_t) * row_capacity);
+                sizeof(exports_sqlink_wasm_high_level_row_t) * row_capacity);
         }
 
-        exports_sqlite_wasm_high_level_row_t *row = &ret->rows.ptr[ret->rows.len];
-        row->columns.ptr = (exports_sqlite_wasm_high_level_value_t *)malloc(
-            sizeof(exports_sqlite_wasm_high_level_value_t) * col_count);
+        exports_sqlink_wasm_high_level_row_t *row = &ret->rows.ptr[ret->rows.len];
+        row->columns.ptr = (exports_sqlink_wasm_high_level_value_t *)malloc(
+            sizeof(exports_sqlink_wasm_high_level_value_t) * col_count);
         row->columns.len = col_count;
 
         for (int i = 0; i < col_count; i++) {
@@ -757,17 +757,17 @@ bool exports_sqlite_wasm_high_level_method_statement_query(
     if (rc != SQLITE_DONE) {
         set_connection_error(self->conn);
         fill_error_from_conn(err, self->conn);
-        exports_sqlite_wasm_high_level_query_result_free(ret);
+        exports_sqlink_wasm_high_level_query_result_free(ret);
         return false;
     }
 
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_statement_step(
-    exports_sqlite_wasm_high_level_borrow_statement_t self,
-    exports_sqlite_wasm_high_level_option_row_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_method_statement_step(
+    exports_sqlink_wasm_high_level_borrow_statement_t self,
+    exports_sqlink_wasm_high_level_option_row_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->stmt) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Statement is closed");
@@ -778,8 +778,8 @@ bool exports_sqlite_wasm_high_level_method_statement_step(
 
     if (rc == SQLITE_ROW) {
         ret->is_some = true;
-        ret->val.columns.ptr = (exports_sqlite_wasm_high_level_value_t *)malloc(
-            sizeof(exports_sqlite_wasm_high_level_value_t) * self->column_count);
+        ret->val.columns.ptr = (exports_sqlink_wasm_high_level_value_t *)malloc(
+            sizeof(exports_sqlink_wasm_high_level_value_t) * self->column_count);
         ret->val.columns.len = self->column_count;
 
         for (int i = 0; i < self->column_count; i++) {
@@ -796,9 +796,9 @@ bool exports_sqlite_wasm_high_level_method_statement_step(
     }
 }
 
-bool exports_sqlite_wasm_high_level_method_statement_reset(
-    exports_sqlite_wasm_high_level_borrow_statement_t self,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_method_statement_reset(
+    exports_sqlink_wasm_high_level_borrow_statement_t self,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->stmt) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Statement is closed");
@@ -815,9 +815,9 @@ bool exports_sqlite_wasm_high_level_method_statement_reset(
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_method_statement_clear_bindings(
-    exports_sqlite_wasm_high_level_borrow_statement_t self,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_method_statement_clear_bindings(
+    exports_sqlink_wasm_high_level_borrow_statement_t self,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (!self || !self->stmt) {
         fill_error(err, SQLITE_MISUSE, SQLITE_MISUSE, "Statement is closed");
@@ -834,15 +834,15 @@ bool exports_sqlite_wasm_high_level_method_statement_clear_bindings(
     return true;
 }
 
-int32_t exports_sqlite_wasm_high_level_method_statement_column_count(
-    exports_sqlite_wasm_high_level_borrow_statement_t self
+int32_t exports_sqlink_wasm_high_level_method_statement_column_count(
+    exports_sqlink_wasm_high_level_borrow_statement_t self
 ) {
     if (!self || !self->stmt) return 0;
     return self->column_count;
 }
 
-void exports_sqlite_wasm_high_level_method_statement_column_names(
-    exports_sqlite_wasm_high_level_borrow_statement_t self,
+void exports_sqlink_wasm_high_level_method_statement_column_names(
+    exports_sqlink_wasm_high_level_borrow_statement_t self,
     sqlite_world_list_string_t *ret
 ) {
     if (!self || !self->stmt) {
@@ -865,8 +865,8 @@ void exports_sqlite_wasm_high_level_method_statement_column_names(
     }
 }
 
-int32_t exports_sqlite_wasm_high_level_method_statement_parameter_count(
-    exports_sqlite_wasm_high_level_borrow_statement_t self
+int32_t exports_sqlink_wasm_high_level_method_statement_parameter_count(
+    exports_sqlink_wasm_high_level_borrow_statement_t self
 ) {
     if (!self || !self->stmt) return 0;
     return sqlite3_bind_parameter_count(self->stmt);
@@ -876,11 +876,11 @@ int32_t exports_sqlite_wasm_high_level_method_statement_parameter_count(
  * Utility functions
  */
 
-void exports_sqlite_wasm_high_level_version(sqlite_world_string_t *ret) {
+void exports_sqlink_wasm_high_level_version(sqlite_world_string_t *ret) {
     sqlite_world_string_dup(ret, sqlite3_libversion());
 }
 
-int32_t exports_sqlite_wasm_high_level_version_number(void) {
+int32_t exports_sqlink_wasm_high_level_version_number(void) {
     return sqlite3_libversion_number();
 }
 
@@ -889,14 +889,14 @@ int32_t exports_sqlite_wasm_high_level_version_number(void) {
 // is created on first call and lives for the lifetime of the component
 // instance." This is the SPI-side shared connection that backs both
 // SPI and the high-level handle.
-static exports_sqlite_wasm_high_level_connection_t *g_default_connection = NULL;
+static exports_sqlink_wasm_high_level_connection_t *g_default_connection = NULL;
 
-bool exports_sqlite_wasm_high_level_default_connection(
-    exports_sqlite_wasm_high_level_own_connection_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_default_connection(
+    exports_sqlink_wasm_high_level_own_connection_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
     if (g_default_connection == NULL) {
-        g_default_connection = (exports_sqlite_wasm_high_level_connection_t *)
+        g_default_connection = (exports_sqlink_wasm_high_level_connection_t *)
             malloc(sizeof(*g_default_connection));
         if (!g_default_connection) {
             fill_error(err, SQLITE_NOMEM, SQLITE_NOMEM, "Out of memory");
@@ -917,16 +917,16 @@ bool exports_sqlite_wasm_high_level_default_connection(
             return false;
         }
     }
-    *ret = exports_sqlite_wasm_high_level_connection_new(g_default_connection);
+    *ret = exports_sqlink_wasm_high_level_connection_new(g_default_connection);
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_open_memory(
-    exports_sqlite_wasm_high_level_own_connection_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+bool exports_sqlink_wasm_high_level_open_memory(
+    exports_sqlink_wasm_high_level_own_connection_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
-    exports_sqlite_wasm_high_level_connection_t *conn =
-        (exports_sqlite_wasm_high_level_connection_t *)malloc(sizeof(*conn));
+    exports_sqlink_wasm_high_level_connection_t *conn =
+        (exports_sqlink_wasm_high_level_connection_t *)malloc(sizeof(*conn));
 
     if (!conn) {
         fill_error(err, SQLITE_NOMEM, SQLITE_NOMEM, "Out of memory");
@@ -942,21 +942,21 @@ bool exports_sqlite_wasm_high_level_open_memory(
     if (rc != SQLITE_OK) {
         set_connection_error(conn);
         fill_error_from_conn(err, conn);
-        exports_sqlite_wasm_high_level_connection_destructor(conn);
+        exports_sqlink_wasm_high_level_connection_destructor(conn);
         return false;
     }
 
-    *ret = exports_sqlite_wasm_high_level_connection_new(conn);
+    *ret = exports_sqlink_wasm_high_level_connection_new(conn);
     return true;
 }
 
-bool exports_sqlite_wasm_high_level_open_file(
+bool exports_sqlink_wasm_high_level_open_file(
     sqlite_world_string_t *path,
-    exports_sqlite_wasm_high_level_own_connection_t *ret,
-    exports_sqlite_wasm_high_level_database_error_t *err
+    exports_sqlink_wasm_high_level_own_connection_t *ret,
+    exports_sqlink_wasm_high_level_database_error_t *err
 ) {
-    exports_sqlite_wasm_high_level_connection_t *conn =
-        (exports_sqlite_wasm_high_level_connection_t *)malloc(sizeof(*conn));
+    exports_sqlink_wasm_high_level_connection_t *conn =
+        (exports_sqlink_wasm_high_level_connection_t *)malloc(sizeof(*conn));
 
     if (!conn) {
         fill_error(err, SQLITE_NOMEM, SQLITE_NOMEM, "Out of memory");
@@ -978,10 +978,10 @@ bool exports_sqlite_wasm_high_level_open_file(
     if (rc != SQLITE_OK) {
         set_connection_error(conn);
         fill_error_from_conn(err, conn);
-        exports_sqlite_wasm_high_level_connection_destructor(conn);
+        exports_sqlink_wasm_high_level_connection_destructor(conn);
         return false;
     }
 
-    *ret = exports_sqlite_wasm_high_level_connection_new(conn);
+    *ret = exports_sqlink_wasm_high_level_connection_new(conn);
     return true;
 }

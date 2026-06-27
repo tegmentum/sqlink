@@ -19,8 +19,42 @@ typedef struct {
   size_t len;
 } sqlite_cli_unified_list_u8_t;
 
+// Payload for the `sql-value::wit-value` arm. Carries a
+// structurally-identified, canonical-CBOR-encoded WIT record
+// across the host/extension boundary.
+// 
+// Wire format is canonical CBOR per the `canon:cbor` profile
+// (#486 substrate). Cross-language interoperable; the encoder
+// must produce a payload the decoder accepts regardless of
+// host language.
+typedef struct sqlite_extension_types_wit_value_payload_t {
+  // 32-byte sha256("witcanon:1" || canonical-CBOR(WIT record
+  // shape)) computed via `canon:wit` normalization. The
+  // authoritative match key  hosts look this up against
+  // the per-extension `typed-value-binding` registry to find
+  // the decoder/encoder imports.
+  sqlite_cli_unified_list_u8_t   type_id;
+  // Canonical-CBOR encoding of the record per the `canon:cbor`
+  // profile. Length matches the record shape identified by
+  // `type-id`.
+  sqlite_cli_unified_list_u8_t   bytes;
+  // Human-readable symbolic name + version, for diagnostics.
+  // Example:
+  //   "mobilitydb:wasm/temporal-types@0.1.0/tfloat-sequence"
+  // Hosts use this in error messages but NOT for matching;
+  // `type-id` is the authoritative key.
+  sqlite_cli_unified_string_t   symbolic_name;
+} sqlite_extension_types_wit_value_payload_t;
+
 // Unified SQL value representation. Used for function arguments,
 // function results, parameter binding, and row data.
+// 
+// New in @1.0.0: the `wit-value` arm carries a canonical-CBOR-
+// encoded WIT record alongside an identifying hash + symbolic
+// name. Record-typed shim functions (PLAN-wit-value-extension.md)
+// ferry their args/returns through this arm; hosts decode via
+// the wasm-side decoder/encoder imports listed in
+// `metadata.manifest.typed-values`.
 typedef struct sqlite_extension_types_sql_value_t {
   uint8_t tag;
   union {
@@ -28,6 +62,7 @@ typedef struct sqlite_extension_types_sql_value_t {
     double     real;
     sqlite_cli_unified_string_t     text;
     sqlite_cli_unified_list_u8_t     blob;
+    sqlite_extension_types_wit_value_payload_t     wit_value;
   } val;
 } sqlite_extension_types_sql_value_t;
 
@@ -41,6 +76,8 @@ typedef struct sqlite_extension_types_sql_value_t {
 #define SQLITE_EXTENSION_TYPES_SQL_VALUE_TEXT 3
 // Binary blob.
 #define SQLITE_EXTENSION_TYPES_SQL_VALUE_BLOB 4
+// Canonical-CBOR-encoded WIT record (new in @1.0.0).
+#define SQLITE_EXTENSION_TYPES_SQL_VALUE_WIT_VALUE 5
 
 // SQLite error carrying both primary and extended result codes.
 typedef struct sqlite_extension_types_sqlite_error_t {
@@ -313,6 +350,39 @@ typedef struct sqlite_extension_policy_capability_t {
 #define SQLITE_EXTENSION_POLICY_CAPABILITY_ENCODING 9
 // Outbound HTTP (sqlite:extension/http).
 #define SQLITE_EXTENSION_POLICY_CAPABILITY_HTTP 10
+// Outbound DNS resolution (sqlite:extension/dns).
+#define SQLITE_EXTENSION_POLICY_CAPABILITY_DNS 11
+// Raw WAL frame access (sqlite:extension/wal-frames).
+// Substrate for the wal-archive extension; gated separately
+// from `spi` so an extension can read WAL bytes without also
+// holding the full SQL surface (and vice versa).
+#define SQLITE_EXTENSION_POLICY_CAPABILITY_WAL_FRAMES 12
+// S3-compatible object storage (sqlite:extension/s3-base).
+// Substrate for the wal-archive extension's off-box sink.
+// Granting this lets the extension call get/put/delete/head/
+// list/copy against any S3-compatible endpoint (AWS S3,
+// MinIO, Cloudflare R2, etc.); the endpoint URL + credentials
+// are arguments to each call, not part of the policy  the
+// extension itself decides which bucket / region to hit. The
+// operator's grant is purely an allow-the-surface bit.
+#define SQLITE_EXTENSION_POLICY_CAPABILITY_S3 13
+// Host-resident cargo build (sqlite:extension/build).
+// Substrate for the `bundle-cli` extension's baked-binary
+// path (PLAN-bundles.md). Granting this lets the extension
+// spawn `cargo build` against a generated crate root;
+// no rich policy fields  the operator's grant is purely
+// an allow-the-surface bit. Browser deployments fail-closed
+// at the WIT contract (the sqlite-lib stub returns a clear
+// SQLITE_PERM-shaped error).
+#define SQLITE_EXTENSION_POLICY_CAPABILITY_SPAWN_BUILD 14
+// Bundle storage (sqlite:extension/bundles). Read/write
+// the host's cas-cache bundle registry: insert / find /
+// list / show / delete / gc / record-binary / touch.
+// Granting this lets the extension manage the bundle
+// metadata layer above cas-cache; pairs with `spawn-build`
+// for the `.bundle save NAME` (with-build) path.
+// PLAN-bundles.md (#446).
+#define SQLITE_EXTENSION_POLICY_CAPABILITY_BUNDLES 15
 
 typedef struct {
   sqlite_extension_policy_method_t *ptr;
@@ -346,6 +416,19 @@ typedef struct sqlite_extension_policy_http_policy_t {
   sqlite_cli_unified_option_u32_t   timeout_ms;
 } sqlite_extension_policy_http_policy_t;
 
+// Outbound DNS policy. Applied by the host's `dns::resolve`
+// implementation to every lookup the extension makes.
+typedef struct sqlite_extension_policy_dns_policy_t {
+  // Allowlist of domain suffixes the extension may resolve.
+  // Entries may use a leading `*.` for a wildcard suffix
+  // (same semantics as http-policy.allowed-hosts). Empty list
+  // means no domains permitted.
+  sqlite_cli_unified_list_string_t   allowed_domains;
+  // Per-request wall-clock timeout. Overrides any timeout the
+  // extension passes.
+  sqlite_cli_unified_option_u32_t   timeout_ms;
+} sqlite_extension_policy_dns_policy_t;
+
 // Filesystem policy. Reserved for future use; no host interfaces
 // currently grant fs access. The shape is sketched so consumers
 // can prepare for it.
@@ -362,6 +445,11 @@ typedef struct {
   bool is_some;
   sqlite_extension_policy_http_policy_t val;
 } sqlite_extension_policy_option_http_policy_t;
+
+typedef struct {
+  bool is_some;
+  sqlite_extension_policy_dns_policy_t val;
+} sqlite_extension_policy_option_dns_policy_t;
 
 typedef struct {
   bool is_some;
@@ -386,6 +474,8 @@ typedef struct sqlite_extension_policy_load_options_t {
   sqlite_cli_unified_option_u64_t   epoch_deadline_ms;
   // HTTP policy. Required if `grant` contains `capability::http`.
   sqlite_extension_policy_option_http_policy_t   http_policy;
+  // DNS policy. Required if `grant` contains `capability::dns`.
+  sqlite_extension_policy_option_dns_policy_t   dns_policy;
   // Filesystem policy. Reserved.
   sqlite_extension_policy_option_fs_policy_t   fs_policy;
   // Allow-list of capabilities granted to this extension.
@@ -401,6 +491,7 @@ typedef struct sqlite_extension_policy_policy_error_t {
     sqlite_extension_policy_capability_t     capability_not_declared;
     sqlite_cli_unified_string_t     host_not_allowed;
     sqlite_extension_policy_method_t     method_not_allowed;
+    sqlite_cli_unified_string_t     dns_domain_not_allowed;
   } val;
 } sqlite_extension_policy_policy_error_t;
 
@@ -415,14 +506,46 @@ typedef struct sqlite_extension_policy_policy_error_t {
 #define SQLITE_EXTENSION_POLICY_POLICY_ERROR_METHOD_NOT_ALLOWED 3
 // `grant` includes `http` but `http-policy` was None.
 #define SQLITE_EXTENSION_POLICY_POLICY_ERROR_MISSING_HTTP_POLICY 4
+// A DNS query targeted a domain outside `dns-policy.allowed-domains`.
+#define SQLITE_EXTENSION_POLICY_POLICY_ERROR_DNS_DOMAIN_NOT_ALLOWED 5
+// `grant` includes `dns` but `dns-policy` was None.
+#define SQLITE_EXTENSION_POLICY_POLICY_ERROR_MISSING_DNS_POLICY 6
 // Resource limit reached.
-#define SQLITE_EXTENSION_POLICY_POLICY_ERROR_FUEL_EXHAUSTED 5
-#define SQLITE_EXTENSION_POLICY_POLICY_ERROR_MEMORY_LIMIT_EXCEEDED 6
-#define SQLITE_EXTENSION_POLICY_POLICY_ERROR_EPOCH_DEADLINE_EXCEEDED 7
+#define SQLITE_EXTENSION_POLICY_POLICY_ERROR_FUEL_EXHAUSTED 7
+#define SQLITE_EXTENSION_POLICY_POLICY_ERROR_MEMORY_LIMIT_EXCEEDED 8
+#define SQLITE_EXTENSION_POLICY_POLICY_ERROR_EPOCH_DEADLINE_EXCEEDED 9
 
 typedef sqlite_extension_types_function_flags_t sqlite_extension_metadata_function_flags_t;
 
 typedef sqlite_extension_policy_capability_t sqlite_extension_metadata_capability_t;
+
+// Per-record decoder/encoder binding (new in @1.0.0). Each entry
+// tells the host how to (de)serialize one WIT record type
+// ferried through the `sql-value::wit-value` arm. Codegen emits
+// one entry per record-typed shape the extension marshals; the
+// host registers them into its per-extension typed-value
+// registry at extension-init time.
+// 
+// PLAN-wit-value-extension.md (#491) Phase A.
+typedef struct sqlite_extension_metadata_typed_value_binding_t {
+  // 32-byte sha256 `canon:wit` shape hash. Matches
+  // `wit-value-payload.type-id`; the authoritative lookup key
+  // the host uses when ferrying record values.
+  sqlite_cli_unified_list_u8_t   type_id;
+  // Human-readable name. Matches
+  // `wit-value-payload.symbolic-name`. Diagnostic-only.
+  // Example:
+  //   "mobilitydb:wasm/temporal-types@0.1.0/tfloat-sequence"
+  sqlite_cli_unified_string_t   symbolic_name;
+  // Wasm-side import the host invokes to deserialize the
+  // payload's `bytes` into the WIT record. Convention:
+  //   "<package>:wasm/serde-ops/<type-name>-from-canon-cbor"
+  sqlite_cli_unified_string_t   decoder_import;
+  // Wasm-side import the host invokes to encode the WIT
+  // record back into canonical-CBOR bytes. Convention:
+  //   "<package>:wasm/serde-ops/<type-name>-to-canon-cbor"
+  sqlite_cli_unified_string_t   encoder_import;
+} sqlite_extension_metadata_typed_value_binding_t;
 
 // One scalar SQL function declared by the extension.
 typedef struct sqlite_extension_metadata_scalar_function_spec_t {
@@ -452,6 +575,82 @@ typedef struct sqlite_extension_metadata_collation_spec_t {
   sqlite_cli_unified_string_t   name;
 } sqlite_extension_metadata_collation_spec_t;
 
+// One virtual table module declared by the extension. The
+// `vtab` interface dispatches every callback by this id +
+// a host-assigned per-instance / per-cursor handle.
+typedef struct sqlite_extension_metadata_vtab_spec_t {
+  uint64_t   id;
+  sqlite_cli_unified_string_t   name;
+  // "Eponymous" vtabs (SQLite docs term) are usable as a
+  // SELECT source directly  no CREATE VIRTUAL TABLE
+  // needed. For these the host treats xCreate as xConnect
+  // and there is no schema persisted.
+  bool   eponymous;
+  // True iff the extension also exports the `vtab-update`
+  // interface for this vtab. When true, the host registers
+  // a mutable `sqlite3_module` whose xUpdate / transactional
+  // hooks route through `vtab-update`; INSERT/UPDATE/DELETE
+  // against the vtab fire the extension's `update` callback.
+  bool   mutable_;
+  // True iff the extension implements `vtab.fetch-batch` for
+  // this vtab. The cli's trampoline calls fetch-batch once
+  // per ~64-row block and serves xNext/xEof/xColumn/xRowid
+  // from a local cache  for a 5-col, 100k-row scan that's
+  // 1.5k WIT crossings instead of 600k.
+  bool   batched;
+} sqlite_extension_metadata_vtab_spec_t;
+
+typedef struct sqlite_extension_metadata_dot_command_example_t {
+  sqlite_cli_unified_string_t   description;
+  sqlite_cli_unified_string_t   command;
+} sqlite_extension_metadata_dot_command_example_t;
+
+typedef struct {
+  sqlite_extension_metadata_dot_command_example_t *ptr;
+  size_t len;
+} sqlite_extension_metadata_list_dot_command_example_t;
+
+// One CLI dot-command declared by the extension.
+// See `dot-command` interface in dotcmd.wit.
+// 
+// All three entry points (interactive shell, argv subcommand,
+// SQL `dot_command(...)`) read these same fields  the cli
+// surface, the cli argv parser, and the `dot_command` SQL
+// function form one user-facing surface over one declaration.
+typedef struct sqlite_extension_metadata_dot_command_spec_t {
+  // Guest-assigned id; echoed back to `dot-command.invoke`.
+  uint64_t   id;
+  // The command name *without* the leading dot. Lowercase.
+  // Reused as the argv subcommand name AND the first arg of
+  // `dot_command()`. Single source of truth.
+  sqlite_cli_unified_string_t   name;
+  // Per-command version. Independent of the host extension's
+  // `manifest.version`  one extension may ship many commands
+  // that version independently. Surfaced by `--list-commands`
+  // and `.sqlink list`.
+  sqlite_cli_unified_string_t   version;
+  // One-line summary for `.help` and `--list-commands`.
+  sqlite_cli_unified_string_t   summary;
+  // Synopsis line: `import-json <table> <file>`. Shown by
+  // `--help-command` and `.help <name>` ahead of the
+  // detailed description.
+  sqlite_cli_unified_string_t   usage;
+  // Extended help (multi-line, plain text or simple
+  // markdown). May include examples; the cli renders it
+  // verbatim. Empty = use `summary` + `usage` only.
+  sqlite_cli_unified_string_t   help;
+  // Worked examples. `description` is one line; `command` is
+  // the form a user would type. Shown by `--help-command`.
+  sqlite_extension_metadata_list_dot_command_example_t   examples;
+  // True if the command must run against a writable db
+  // connection. CLI rejects the call in read-only mode.
+  bool   requires_write;
+  // True if the command needs argv at all  some are pure
+  // queries (`.tables`, `.version`). Affects what
+  // `--list-commands` shows in the usage column.
+  bool   no_args;
+} sqlite_extension_metadata_dot_command_spec_t;
+
 typedef struct {
   sqlite_extension_metadata_scalar_function_spec_t *ptr;
   size_t len;
@@ -468,9 +667,24 @@ typedef struct {
 } sqlite_extension_metadata_list_collation_spec_t;
 
 typedef struct {
+  sqlite_extension_metadata_vtab_spec_t *ptr;
+  size_t len;
+} sqlite_extension_metadata_list_vtab_spec_t;
+
+typedef struct {
+  sqlite_extension_metadata_dot_command_spec_t *ptr;
+  size_t len;
+} sqlite_extension_metadata_list_dot_command_spec_t;
+
+typedef struct {
   sqlite_extension_metadata_capability_t *ptr;
   size_t len;
 } sqlite_extension_metadata_list_capability_t;
+
+typedef struct {
+  sqlite_extension_metadata_typed_value_binding_t *ptr;
+  size_t len;
+} sqlite_extension_metadata_list_typed_value_binding_t;
 
 // Full extension manifest, returned from `describe()`.
 typedef struct sqlite_extension_metadata_manifest_t {
@@ -479,12 +693,31 @@ typedef struct sqlite_extension_metadata_manifest_t {
   sqlite_extension_metadata_list_scalar_function_spec_t   scalar_functions;
   sqlite_extension_metadata_list_aggregate_function_spec_t   aggregate_functions;
   sqlite_extension_metadata_list_collation_spec_t   collations;
+  sqlite_extension_metadata_list_vtab_spec_t   vtabs;
+  // Dot commands the extension registers with the CLI.
+  // Empty list = no CLI surface; the extension is data-side only.
+  sqlite_extension_metadata_list_dot_command_spec_t   dot_commands;
   // True if the extension also exports an `authorizer` interface.
   bool   has_authorizer;
   // True if the extension also exports an `update-hook` interface.
   bool   has_update_hook;
   // True if the extension also exports a `commit-hook` interface.
   bool   has_commit_hook;
+  // True if the extension also exports a `wal-hook` interface.
+  // When set, the host's spi-loader registers
+  // `wal-hook.on-wal-hook` against the shared connection and
+  // routes WAL-commit callbacks back through it. The
+  // substrate installs at most one wal-hook callback on the
+  // connection (SQLite's per-connection slot); v1 semantics
+  // are last-write-wins across loaded extensions.
+  bool   has_wal_hook;
+  // Identifier the host echoes back to `wal-hook.on-wal-hook`
+  // when `has-wal-hook` is true. The host has no opinion on
+  // the value; the extension chooses whatever it wants to
+  // receive (lets one extension multiplex multiple wal-hook
+  // implementations behind a single export). Ignored when
+  // `has-wal-hook` is false.
+  uint64_t   wal_hook_id;
   // REQUIRED: every host capability the extension imports MUST be
   // listed here. The loader compares this against
   // `load-options.grant` and refuses to load if any item is
@@ -492,266 +725,672 @@ typedef struct sqlite_extension_metadata_manifest_t {
   // capabilities used (extension is pure / only uses its own
   // allocator).
   sqlite_extension_metadata_list_capability_t   declared_capabilities;
+  // OPTIONAL: capabilities the extension *may* use if granted,
+  // but does not require to load. The loader does NOT enforce
+  // `optional  granted`. If a runtime call into an
+  // optional-capability SPI is made without the grant in place,
+  // the host returns SQLITE_PERM at the call site; extensions
+  // are responsible for translating that into a useful
+  // user-facing message.
+  // 
+  // Use for "extension is mostly useful without X, but unlocks
+  // extra functionality when X is granted" cases (e.g.
+  // bundle-cli: Bundles is required to load, SpawnBuild is
+  // optional and only `.bundle build` needs it).
+  // 
+  // Default empty list. Items appearing in BOTH `declared-
+  // capabilities` and `optional-capabilities` are treated as
+  // declared (the strict gate wins).
+  sqlite_extension_metadata_list_capability_t   optional_capabilities;
+  // OPTIONAL in v1, REQUIRED in v1.1: the short prefix this
+  // extension wants for SPARQL-style function namespacing
+  // (PLAN-prefixes.md). Example: 'foaf'. Combined with
+  // `prefix-expansion` to give each registered function both
+  // a bare form (`name`, last-wins SQLite default semantics)
+  // and a qualified form (`prefix__name`, always-available
+  // for explicit dispatch).
+  // 
+  // When missing in v1, the host synthesizes
+  //   prefix    = sanitize(<crate-name>)
+  //   expansion = "sqlink-internal://<crate-name>"
+  // and emits a deprecation warning. v1.1 makes both fields
+  // required at load time.
+  sqlite_cli_unified_option_string_t   preferred_prefix;
+  // OPTIONAL in v1, REQUIRED in v1.1: opaque expansion string
+  // that gives the prefix its global identity. Format is NOT
+  // validated: can be a URI ('http://xmlns.com/foaf/0.1/'),
+  // a Java-style namespace ('com.tegmentum.sqlink'), a UUID,
+  // or any opaque token the extension author picks. Function
+  // identity in `__sqlink_prefix_function` keys on this
+  // expansion, not on the short prefix  the prefix is a
+  // per-database alias for the expansion.
+  sqlite_cli_unified_option_string_t   prefix_expansion;
+  // NEW IN @1.0.0: per-record decoder/encoder bindings for
+  // the `sql-value::wit-value` arm. Empty list = this
+  // extension does NOT ferry typed records (only the legacy
+  // scalar arms of sql-value are exchanged). Codegen for
+  // record-aware shims (PLAN-wit-value-extension.md Phase C)
+  // emits one entry per record type the bridge marshals.
+  // 
+  // The host registers these into its per-extension typed-
+  // value registry at extension-init time; per-call lookup is
+  // a hash-table hit keyed by `wit-value-payload.type-id`.
+  sqlite_extension_metadata_list_typed_value_binding_t   typed_values;
 } sqlite_extension_metadata_manifest_t;
 
-typedef sqlite_extension_types_sql_value_t sqlite_wasm_fts5_slot_sql_value_t;
+typedef sqlite_extension_types_sql_value_t sqlink_wasm_fts5_slot_sql_value_t;
 
-typedef sqlite_extension_metadata_manifest_t sqlite_wasm_fts5_slot_manifest_t;
+typedef sqlite_extension_metadata_manifest_t sqlink_wasm_fts5_slot_manifest_t;
 
 typedef struct {
-  sqlite_wasm_fts5_slot_sql_value_t *ptr;
+  sqlink_wasm_fts5_slot_sql_value_t *ptr;
   size_t len;
-} sqlite_wasm_fts5_slot_list_sql_value_t;
+} sqlink_wasm_fts5_slot_list_sql_value_t;
 
 typedef struct {
   bool is_err;
   union {
-    sqlite_wasm_fts5_slot_sql_value_t ok;
+    sqlink_wasm_fts5_slot_sql_value_t ok;
     sqlite_cli_unified_string_t err;
   } val;
-} sqlite_wasm_fts5_slot_result_sql_value_string_t;
+} sqlink_wasm_fts5_slot_result_sql_value_string_t;
 
-typedef sqlite_extension_types_sql_value_t sqlite_wasm_json1_slot_sql_value_t;
+typedef sqlite_extension_types_sql_value_t sqlink_wasm_json1_slot_sql_value_t;
 
-typedef sqlite_extension_metadata_manifest_t sqlite_wasm_json1_slot_manifest_t;
+typedef sqlite_extension_metadata_manifest_t sqlink_wasm_json1_slot_manifest_t;
 
 typedef struct {
-  sqlite_wasm_json1_slot_sql_value_t *ptr;
+  sqlink_wasm_json1_slot_sql_value_t *ptr;
   size_t len;
-} sqlite_wasm_json1_slot_list_sql_value_t;
+} sqlink_wasm_json1_slot_list_sql_value_t;
 
 typedef struct {
   bool is_err;
   union {
-    sqlite_wasm_json1_slot_sql_value_t ok;
+    sqlink_wasm_json1_slot_sql_value_t ok;
     sqlite_cli_unified_string_t err;
   } val;
-} sqlite_wasm_json1_slot_result_sql_value_string_t;
+} sqlink_wasm_json1_slot_result_sql_value_string_t;
 
-typedef sqlite_extension_types_sql_value_t sqlite_wasm_rtree_slot_sql_value_t;
+typedef sqlite_extension_types_sql_value_t sqlink_wasm_rtree_slot_sql_value_t;
 
-typedef sqlite_extension_metadata_manifest_t sqlite_wasm_rtree_slot_manifest_t;
+typedef sqlite_extension_metadata_manifest_t sqlink_wasm_rtree_slot_manifest_t;
 
 typedef struct {
-  sqlite_wasm_rtree_slot_sql_value_t *ptr;
+  sqlink_wasm_rtree_slot_sql_value_t *ptr;
   size_t len;
-} sqlite_wasm_rtree_slot_list_sql_value_t;
+} sqlink_wasm_rtree_slot_list_sql_value_t;
 
 typedef struct {
   bool is_err;
   union {
-    sqlite_wasm_rtree_slot_sql_value_t ok;
+    sqlink_wasm_rtree_slot_sql_value_t ok;
     sqlite_cli_unified_string_t err;
   } val;
-} sqlite_wasm_rtree_slot_result_sql_value_string_t;
+} sqlink_wasm_rtree_slot_result_sql_value_string_t;
 
-typedef sqlite_extension_types_sql_value_t sqlite_wasm_geopoly_slot_sql_value_t;
+typedef sqlite_extension_types_sql_value_t sqlink_wasm_geopoly_slot_sql_value_t;
 
-typedef sqlite_extension_metadata_manifest_t sqlite_wasm_geopoly_slot_manifest_t;
+typedef sqlite_extension_metadata_manifest_t sqlink_wasm_geopoly_slot_manifest_t;
 
 typedef struct {
-  sqlite_wasm_geopoly_slot_sql_value_t *ptr;
+  sqlink_wasm_geopoly_slot_sql_value_t *ptr;
   size_t len;
-} sqlite_wasm_geopoly_slot_list_sql_value_t;
+} sqlink_wasm_geopoly_slot_list_sql_value_t;
 
 typedef struct {
   bool is_err;
   union {
-    sqlite_wasm_geopoly_slot_sql_value_t ok;
+    sqlink_wasm_geopoly_slot_sql_value_t ok;
     sqlite_cli_unified_string_t err;
   } val;
-} sqlite_wasm_geopoly_slot_result_sql_value_string_t;
+} sqlink_wasm_geopoly_slot_result_sql_value_string_t;
 
-typedef sqlite_extension_types_sql_value_t sqlite_wasm_demo_slot_sql_value_t;
+typedef sqlite_extension_types_sql_value_t sqlink_wasm_demo_slot_sql_value_t;
 
-typedef sqlite_extension_metadata_manifest_t sqlite_wasm_demo_slot_manifest_t;
+typedef sqlite_extension_metadata_manifest_t sqlink_wasm_demo_slot_manifest_t;
 
 typedef struct {
-  sqlite_wasm_demo_slot_sql_value_t *ptr;
+  sqlink_wasm_demo_slot_sql_value_t *ptr;
   size_t len;
-} sqlite_wasm_demo_slot_list_sql_value_t;
+} sqlink_wasm_demo_slot_list_sql_value_t;
 
 typedef struct {
   bool is_err;
   union {
-    sqlite_wasm_demo_slot_sql_value_t ok;
+    sqlink_wasm_demo_slot_sql_value_t ok;
     sqlite_cli_unified_string_t err;
   } val;
-} sqlite_wasm_demo_slot_result_sql_value_string_t;
+} sqlink_wasm_demo_slot_result_sql_value_string_t;
 
-typedef sqlite_extension_metadata_manifest_t sqlite_wasm_extension_loader_manifest_t;
+typedef sqlite_extension_metadata_manifest_t sqlink_wasm_extension_loader_manifest_t;
 
-typedef sqlite_extension_policy_load_options_t sqlite_wasm_extension_loader_load_options_t;
+typedef sqlite_extension_policy_load_options_t sqlink_wasm_extension_loader_load_options_t;
 
 // Errors the loader may raise (file not found, instantiate
 // failure, policy refusal, ...).
-typedef struct sqlite_wasm_extension_loader_loader_error_t {
+typedef struct sqlink_wasm_extension_loader_loader_error_t {
   int32_t   code;
   sqlite_cli_unified_string_t   message;
-} sqlite_wasm_extension_loader_loader_error_t;
+} sqlink_wasm_extension_loader_loader_error_t;
+
+// State delta the extension proposes  applied by the cli
+// after the invoke returns. `value-json` is JSON-encoded so
+// the interface doesn't have to track sql-value variants
+// across the boundary; the cli decodes by key (and type) in
+// the consumer-side state-delta applier.
+typedef struct sqlink_wasm_extension_loader_state_delta_t {
+  sqlite_cli_unified_string_t   key;
+  sqlite_cli_unified_string_t   value_json;
+} sqlink_wasm_extension_loader_state_delta_t;
 
 typedef struct {
-  bool is_err;
-  union {
-    sqlite_wasm_extension_loader_manifest_t ok;
-    sqlite_wasm_extension_loader_loader_error_t err;
-  } val;
-} sqlite_wasm_extension_loader_result_manifest_loader_error_t;
-
-typedef struct {
-  bool is_err;
-  union {
-    sqlite_wasm_extension_loader_loader_error_t err;
-  } val;
-} sqlite_wasm_extension_loader_result_void_loader_error_t;
-
-typedef struct {
-  sqlite_wasm_extension_loader_manifest_t *ptr;
+  sqlink_wasm_extension_loader_state_delta_t *ptr;
   size_t len;
-} sqlite_wasm_extension_loader_list_manifest_t;
+} sqlink_wasm_extension_loader_list_state_delta_t;
 
-typedef sqlite_extension_types_sql_value_t sqlite_wasm_dispatch_sql_value_t;
+typedef struct sqlink_wasm_extension_loader_dot_command_result_t {
+  sqlite_cli_unified_string_t   text;
+  sqlink_wasm_extension_loader_list_state_delta_t   state_deltas;
+  int32_t   exit_code;
+} sqlink_wasm_extension_loader_dot_command_result_t;
 
-typedef sqlite_extension_types_auth_action_t sqlite_wasm_dispatch_auth_action_t;
-
-typedef sqlite_extension_types_auth_result_t sqlite_wasm_dispatch_auth_result_t;
-
-typedef sqlite_extension_types_update_operation_t sqlite_wasm_dispatch_update_operation_t;
-
-typedef struct {
-  sqlite_wasm_dispatch_sql_value_t *ptr;
-  size_t len;
-} sqlite_wasm_dispatch_list_sql_value_t;
-
-typedef struct {
-  bool is_err;
-  union {
-    sqlite_wasm_dispatch_sql_value_t ok;
-    sqlite_cli_unified_string_t err;
-  } val;
-} sqlite_wasm_dispatch_result_sql_value_string_t;
-
-typedef struct {
-  bool is_err;
-  union {
-    sqlite_cli_unified_string_t err;
-  } val;
-} sqlite_wasm_dispatch_result_void_string_t;
-
-// Archive information
-typedef struct sqlite_wasm_zip_operations_archive_info_t {
+typedef struct sqlink_wasm_extension_loader_described_result_t {
   sqlite_cli_unified_string_t   name;
-  sqlite_cli_unified_string_t   version;
-  sqlite_cli_unified_list_string_t   supported_methods;
-} sqlite_wasm_zip_operations_archive_info_t;
+  sqlite_cli_unified_string_t   digest_hex;
+  // PLAN-latent-cleanup.md L3a: declared capability names
+  // from the extension's manifest (matches the
+  // `policy::Capability` enum spelling, e.g.
+  // "Http", "State", "Cache", "Random"). Populated by the
+  // pre-load describe path; `--trust=prompt` renders this
+  // for the user before asking y/N.
+  sqlite_cli_unified_list_string_t   declared_caps;
+} sqlink_wasm_extension_loader_described_result_t;
 
-// Error codes
-typedef uint8_t sqlite_wasm_zip_operations_error_code_t;
+// PLAN-component-cache.md C3: observability snapshot.
+// Returned by `component-cache-stats` and rendered by
+// `.cache stats components` in the cli.
+typedef struct sqlink_wasm_extension_loader_component_cache_stats_snapshot_t {
+  uint64_t   c1_hits;
+  uint64_t   c2_hits;
+  uint64_t   cold_parses;
+  uint64_t   parse_ms;
+  uint64_t   serialize_ms;
+  uint64_t   deserialize_ms;
+  // Times the cache layer was bypassed by
+  // `SQLITE_WASM_DISABLE_COMPONENT_CACHE` (the
+  // `--no-component-cache` cli flag's plumbing).
+  uint64_t   bypassed;
+  // Current `_component_cache` row count + byte total in
+  // the user db (E1 LRU eviction observability).
+  uint64_t   row_count;
+  uint64_t   total_bytes;
+  uint64_t   max_bytes;
+} sqlink_wasm_extension_loader_component_cache_stats_snapshot_t;
 
-#define SQLITE_WASM_ZIP_OPERATIONS_ERROR_CODE_IO_ERROR 0
-#define SQLITE_WASM_ZIP_OPERATIONS_ERROR_CODE_INVALID_ARCHIVE 1
-#define SQLITE_WASM_ZIP_OPERATIONS_ERROR_CODE_NOT_FOUND 2
-#define SQLITE_WASM_ZIP_OPERATIONS_ERROR_CODE_PERMISSION_DENIED 3
+// One row per entry in the CAS cache's uri_index.
+typedef struct sqlink_wasm_extension_loader_uri_cache_entry_t {
+  sqlite_cli_unified_string_t   uri;
+  sqlite_cli_unified_string_t   hash;
+  uint64_t   fetched_at;
+} sqlink_wasm_extension_loader_uri_cache_entry_t;
 
-typedef struct {
-  bool is_err;
-  union {
-    sqlite_wasm_zip_operations_error_code_t err;
-  } val;
-} sqlite_wasm_zip_operations_result_void_error_code_t;
+// Aggregate statistics for `.cache stats` / `.cache mode` /
+// `.cache config`. `mode` is "external:<path>" or
+// "internal"; `max-bytes` is the LRU cap (0 = unbounded).
+typedef struct sqlink_wasm_extension_loader_cache_stats_t {
+  uint64_t   artifact_count;
+  uint64_t   uri_count;
+  uint64_t   total_bytes;
+  sqlite_cli_unified_string_t   mode;
+  uint64_t   max_bytes;
+} sqlink_wasm_extension_loader_cache_stats_t;
 
-typedef struct {
-  bool is_err;
-  union {
-    sqlite_cli_unified_list_string_t ok;
-    sqlite_wasm_zip_operations_error_code_t err;
-  } val;
-} sqlite_wasm_zip_operations_result_list_string_error_code_t;
-
-// Opaque handles represented as u64
-typedef uint64_t exports_sqlite_wasm_low_level_db_handle_t;
-
-typedef uint64_t exports_sqlite_wasm_low_level_stmt_handle_t;
-
-// SQLite result codes
-typedef uint8_t exports_sqlite_wasm_low_level_result_code_t;
-
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_OK 0
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_ERROR 1
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_INTERNAL 2
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_PERM 3
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_ABORT 4
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_BUSY 5
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_LOCKED 6
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOMEM 7
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_READONLY 8
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_INTERRUPT 9
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_IOERR 10
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_CORRUPT 11
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOTFOUND 12
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_FULL 13
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_CANTOPEN 14
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_PROTOCOL 15
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_EMPTY 16
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_SCHEMA 17
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_TOOBIG 18
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_CONSTRAINT 19
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_MISMATCH 20
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_MISUSE 21
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOLFS 22
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_AUTH 23
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_FORMAT 24
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_RANGE 25
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOTADB 26
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_NOTICE 27
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_WARNING 28
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_ROW 29
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_RESULT_CODE_DONE 30
-
-// SQLite data types
-typedef uint8_t exports_sqlite_wasm_low_level_column_type_t;
-
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_INTEGER 0
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_FLOAT 1
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_TEXT 2
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_BLOB 3
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_COLUMN_TYPE_NULL 4
-
-// Open flags
-typedef uint8_t exports_sqlite_wasm_low_level_open_flags_t;
-
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_READONLY (1 << 0)
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_READWRITE (1 << 1)
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_CREATE (1 << 2)
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_MEMORY (1 << 3)
-#define EXPORTS_SQLITE_WASM_LOW_LEVEL_OPEN_FLAGS_URI (1 << 4)
+// Merge artifacts + URI bindings from another cache db at
+// `path` into this one. INSERT OR IGNORE on artifacts,
+// INSERT OR REPLACE on URIs.
+typedef struct sqlink_wasm_extension_loader_cache_merge_stats_t {
+  uint64_t   artifacts_added;
+  int64_t   uris_net_change;
+} sqlink_wasm_extension_loader_cache_merge_stats_t;
 
 typedef struct {
   bool is_err;
   union {
-    exports_sqlite_wasm_low_level_db_handle_t ok;
-    exports_sqlite_wasm_low_level_result_code_t err;
+    sqlink_wasm_extension_loader_manifest_t ok;
+    sqlink_wasm_extension_loader_loader_error_t err;
   } val;
-} exports_sqlite_wasm_low_level_result_db_handle_result_code_t;
+} sqlink_wasm_extension_loader_result_manifest_loader_error_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlink_wasm_extension_loader_loader_error_t err;
+  } val;
+} sqlink_wasm_extension_loader_result_void_loader_error_t;
+
+typedef struct {
+  sqlite_cli_unified_string_t f0;
+  sqlite_cli_unified_string_t f1;
+} sqlite_cli_unified_tuple2_string_string_t;
+
+typedef struct {
+  sqlite_cli_unified_tuple2_string_string_t *ptr;
+  size_t len;
+} sqlite_cli_unified_list_tuple2_string_string_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlink_wasm_extension_loader_dot_command_result_t ok;
+    sqlink_wasm_extension_loader_loader_error_t err;
+  } val;
+} sqlink_wasm_extension_loader_result_dot_command_result_loader_error_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_list_u8_t ok;
+    sqlink_wasm_extension_loader_loader_error_t err;
+  } val;
+} sqlink_wasm_extension_loader_result_list_u8_loader_error_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlink_wasm_extension_loader_described_result_t ok;
+    sqlink_wasm_extension_loader_loader_error_t err;
+  } val;
+} sqlink_wasm_extension_loader_result_described_result_loader_error_t;
+
+typedef struct {
+  sqlink_wasm_extension_loader_manifest_t *ptr;
+  size_t len;
+} sqlink_wasm_extension_loader_list_manifest_t;
 
 typedef struct {
   bool is_err;
   union {
     sqlite_cli_unified_string_t ok;
-    exports_sqlite_wasm_low_level_result_code_t err;
+    sqlink_wasm_extension_loader_loader_error_t err;
   } val;
-} exports_sqlite_wasm_low_level_result_string_result_code_t;
+} sqlink_wasm_extension_loader_result_string_loader_error_t;
+
+typedef struct {
+  sqlink_wasm_extension_loader_uri_cache_entry_t *ptr;
+  size_t len;
+} sqlink_wasm_extension_loader_list_uri_cache_entry_t;
 
 typedef struct {
   bool is_err;
   union {
-    exports_sqlite_wasm_low_level_stmt_handle_t ok;
-    exports_sqlite_wasm_low_level_result_code_t err;
+    sqlink_wasm_extension_loader_cache_stats_t ok;
+    sqlink_wasm_extension_loader_loader_error_t err;
   } val;
-} exports_sqlite_wasm_low_level_result_stmt_handle_result_code_t;
+} sqlink_wasm_extension_loader_result_cache_stats_loader_error_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    uint64_t ok;
+    sqlink_wasm_extension_loader_loader_error_t err;
+  } val;
+} sqlink_wasm_extension_loader_result_u64_loader_error_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlink_wasm_extension_loader_cache_merge_stats_t ok;
+    sqlink_wasm_extension_loader_loader_error_t err;
+  } val;
+} sqlink_wasm_extension_loader_result_cache_merge_stats_loader_error_t;
+
+typedef struct {
+  sqlite_cli_unified_string_t f0;
+  sqlite_cli_unified_string_t f1;
+  sqlite_cli_unified_string_t f2;
+} sqlite_cli_unified_tuple3_string_string_string_t;
+
+typedef struct {
+  sqlite_cli_unified_tuple3_string_string_string_t *ptr;
+  size_t len;
+} sqlite_cli_unified_list_tuple3_string_string_string_t;
+
+typedef sqlite_extension_types_sql_value_t sqlite_extension_vtab_sql_value_t;
+
+// Constraint operators SQLite's query planner pushes down
+// through `xBestIndex`. Mirrors `SQLITE_INDEX_CONSTRAINT_*`.
+typedef uint8_t sqlite_extension_vtab_constraint_op_t;
+
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_EQ 0
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_GT 1
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_LE 2
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_LT 3
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_GE 4
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_NE 5
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_MATCH 6
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_LIKE 7
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_REGEXP 8
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_GLOB 9
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_IS_NULL 10
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_IS_NOT_NULL 11
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_LIMIT 12
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_OFFSET 13
+#define SQLITE_EXTENSION_VTAB_CONSTRAINT_OP_FUNCTION 14
+
+// One constraint from `xBestIndex`'s `aConstraint[]`.
+// `column = -1` denotes ROWID.
+typedef struct sqlite_extension_vtab_constraint_t {
+  int32_t   column;
+  sqlite_extension_vtab_constraint_op_t   op;
+  bool   usable;
+} sqlite_extension_vtab_constraint_t;
+
+// One ORDER BY term from `xBestIndex`'s `aOrderBy[]`.
+typedef struct sqlite_extension_vtab_orderby_t {
+  int32_t   column;
+  bool   desc;
+} sqlite_extension_vtab_orderby_t;
+
+typedef struct {
+  sqlite_extension_vtab_constraint_t *ptr;
+  size_t len;
+} sqlite_extension_vtab_list_constraint_t;
+
+typedef struct {
+  sqlite_extension_vtab_orderby_t *ptr;
+  size_t len;
+} sqlite_extension_vtab_list_orderby_t;
+
+// Input to `best-index`. `col-used` is the SQLite bitmask
+// of columns the query touches (bit i = column i; bit 63 =
+// "any column ≥ 63"  same encoding SQLite uses).
+typedef struct sqlite_extension_vtab_index_info_t {
+  sqlite_extension_vtab_list_constraint_t   constraints;
+  sqlite_extension_vtab_list_orderby_t   orderbys;
+  uint64_t   col_used;
+} sqlite_extension_vtab_index_info_t;
+
+// Per-constraint output: `argv-index = 0` leaves the
+// constraint to SQLite; non-zero binds it to the matching
+// argv slot in `filter`. `omit = true` tells SQLite to skip
+// the redundant re-check.
+typedef struct sqlite_extension_vtab_constraint_usage_t {
+  int32_t   argv_index;
+  bool   omit;
+} sqlite_extension_vtab_constraint_usage_t;
+
+typedef struct {
+  sqlite_extension_vtab_constraint_usage_t *ptr;
+  size_t len;
+} sqlite_extension_vtab_list_constraint_usage_t;
+
+// Output of `best-index`. The shape mirrors SQLite's
+// `sqlite3_index_info`'s output fields.
+typedef struct sqlite_extension_vtab_index_plan_t {
+  sqlite_extension_vtab_list_constraint_usage_t   constraint_usage;
+  int32_t   idx_num;
+  sqlite_cli_unified_option_string_t   idx_str;
+  double   estimated_cost;
+  int64_t   estimated_rows;
+  bool   orderby_consumed;
+} sqlite_extension_vtab_index_plan_t;
+
+typedef struct {
+  sqlite_extension_vtab_sql_value_t *ptr;
+  size_t len;
+} sqlite_extension_vtab_list_sql_value_t;
+
+// One row in a batched fetch result. `rowid` mirrors what
+// `vtab.rowid` would have returned; `columns` has every
+// column in declared-schema order (use NULL for HIDDEN
+// columns the row doesn't carry).
+typedef struct sqlite_extension_vtab_vtab_row_t {
+  int64_t   rowid;
+  sqlite_extension_vtab_list_sql_value_t   columns;
+} sqlite_extension_vtab_vtab_row_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_string_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlite_extension_vtab_result_string_string_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlite_extension_vtab_result_void_string_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_extension_vtab_index_plan_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlite_extension_vtab_result_index_plan_string_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_extension_vtab_sql_value_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlite_extension_vtab_result_sql_value_string_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    int64_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlite_extension_vtab_result_s64_string_t;
+
+typedef struct {
+  sqlite_extension_vtab_vtab_row_t *ptr;
+  size_t len;
+} sqlite_extension_vtab_list_vtab_row_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_extension_vtab_list_vtab_row_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlite_extension_vtab_result_list_vtab_row_string_t;
+
+typedef sqlite_extension_types_sql_value_t sqlink_wasm_dispatch_sql_value_t;
+
+typedef sqlite_extension_types_auth_action_t sqlink_wasm_dispatch_auth_action_t;
+
+typedef sqlite_extension_types_auth_result_t sqlink_wasm_dispatch_auth_result_t;
+
+typedef sqlite_extension_types_update_operation_t sqlink_wasm_dispatch_update_operation_t;
+
+typedef sqlite_extension_vtab_index_info_t sqlink_wasm_dispatch_index_info_t;
+
+typedef sqlite_extension_vtab_index_plan_t sqlink_wasm_dispatch_index_plan_t;
+
+typedef struct {
+  sqlink_wasm_dispatch_sql_value_t *ptr;
+  size_t len;
+} sqlink_wasm_dispatch_list_sql_value_t;
+
+// One row carried by a batched vtab fetch.
+typedef struct sqlink_wasm_dispatch_vtab_row_t {
+  int64_t   rowid;
+  sqlink_wasm_dispatch_list_sql_value_t   columns;
+} sqlink_wasm_dispatch_vtab_row_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlink_wasm_dispatch_sql_value_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlink_wasm_dispatch_result_sql_value_string_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlink_wasm_dispatch_result_void_string_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_string_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlink_wasm_dispatch_result_string_string_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlink_wasm_dispatch_index_plan_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlink_wasm_dispatch_result_index_plan_string_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    int64_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlink_wasm_dispatch_result_s64_string_t;
+
+typedef struct {
+  sqlink_wasm_dispatch_vtab_row_t *ptr;
+  size_t len;
+} sqlink_wasm_dispatch_list_vtab_row_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlink_wasm_dispatch_list_vtab_row_t ok;
+    sqlite_cli_unified_string_t err;
+  } val;
+} sqlink_wasm_dispatch_result_list_vtab_row_string_t;
+
+// Archive information
+typedef struct sqlink_wasm_zip_operations_archive_info_t {
+  sqlite_cli_unified_string_t   name;
+  sqlite_cli_unified_string_t   version;
+  sqlite_cli_unified_list_string_t   supported_methods;
+} sqlink_wasm_zip_operations_archive_info_t;
+
+// Error codes
+typedef uint8_t sqlink_wasm_zip_operations_error_code_t;
+
+#define SQLINK_WASM_ZIP_OPERATIONS_ERROR_CODE_IO_ERROR 0
+#define SQLINK_WASM_ZIP_OPERATIONS_ERROR_CODE_INVALID_ARCHIVE 1
+#define SQLINK_WASM_ZIP_OPERATIONS_ERROR_CODE_NOT_FOUND 2
+#define SQLINK_WASM_ZIP_OPERATIONS_ERROR_CODE_PERMISSION_DENIED 3
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlink_wasm_zip_operations_error_code_t err;
+  } val;
+} sqlink_wasm_zip_operations_result_void_error_code_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_list_string_t ok;
+    sqlink_wasm_zip_operations_error_code_t err;
+  } val;
+} sqlink_wasm_zip_operations_result_list_string_error_code_t;
+
+// Opaque handles represented as u64
+typedef uint64_t exports_sqlink_wasm_low_level_db_handle_t;
+
+typedef uint64_t exports_sqlink_wasm_low_level_stmt_handle_t;
+
+// SQLite result codes
+typedef uint8_t exports_sqlink_wasm_low_level_result_code_t;
+
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_OK 0
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_ERROR 1
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_INTERNAL 2
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_PERM 3
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_ABORT 4
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_BUSY 5
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_LOCKED 6
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOMEM 7
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_READONLY 8
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_INTERRUPT 9
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_IOERR 10
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_CORRUPT 11
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOTFOUND 12
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_FULL 13
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_CANTOPEN 14
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_PROTOCOL 15
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_EMPTY 16
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_SCHEMA 17
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_TOOBIG 18
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_CONSTRAINT 19
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_MISMATCH 20
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_MISUSE 21
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOLFS 22
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_AUTH 23
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_FORMAT 24
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_RANGE 25
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOTADB 26
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_NOTICE 27
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_WARNING 28
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_ROW 29
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_RESULT_CODE_DONE 30
+
+// SQLite data types
+typedef uint8_t exports_sqlink_wasm_low_level_column_type_t;
+
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_INTEGER 0
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_FLOAT 1
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_TEXT 2
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_BLOB 3
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_COLUMN_TYPE_NULL 4
+
+// Open flags
+typedef uint8_t exports_sqlink_wasm_low_level_open_flags_t;
+
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_READONLY (1 << 0)
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_READWRITE (1 << 1)
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_CREATE (1 << 2)
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_MEMORY (1 << 3)
+#define EXPORTS_SQLINK_WASM_LOW_LEVEL_OPEN_FLAGS_URI (1 << 4)
+
+typedef struct {
+  bool is_err;
+  union {
+    exports_sqlink_wasm_low_level_db_handle_t ok;
+    exports_sqlink_wasm_low_level_result_code_t err;
+  } val;
+} exports_sqlink_wasm_low_level_result_db_handle_result_code_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_string_t ok;
+    exports_sqlink_wasm_low_level_result_code_t err;
+  } val;
+} exports_sqlink_wasm_low_level_result_string_result_code_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    exports_sqlink_wasm_low_level_stmt_handle_t ok;
+    exports_sqlink_wasm_low_level_result_code_t err;
+  } val;
+} exports_sqlink_wasm_low_level_result_stmt_handle_result_code_t;
 
 // SQLite value variant
-typedef struct exports_sqlite_wasm_high_level_value_t {
+typedef struct exports_sqlink_wasm_high_level_value_t {
   uint8_t tag;
   union {
     int64_t     integer;
@@ -759,131 +1398,165 @@ typedef struct exports_sqlite_wasm_high_level_value_t {
     sqlite_cli_unified_string_t     text;
     sqlite_cli_unified_list_u8_t     blob;
   } val;
-} exports_sqlite_wasm_high_level_value_t;
+} exports_sqlink_wasm_high_level_value_t;
 
-#define EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_NULL 0
-#define EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_INTEGER 1
-#define EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_REAL 2
-#define EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_TEXT 3
-#define EXPORTS_SQLITE_WASM_HIGH_LEVEL_VALUE_BLOB 4
+#define EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_NULL 0
+#define EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_INTEGER 1
+#define EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_REAL 2
+#define EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_TEXT 3
+#define EXPORTS_SQLINK_WASM_HIGH_LEVEL_VALUE_BLOB 4
 
 // Error information
-typedef struct exports_sqlite_wasm_high_level_database_error_t {
+typedef struct exports_sqlink_wasm_high_level_database_error_t {
   int32_t   code;
   int32_t   extended_code;
   sqlite_cli_unified_string_t   message;
-} exports_sqlite_wasm_high_level_database_error_t;
+} exports_sqlink_wasm_high_level_database_error_t;
 
 typedef struct {
-  exports_sqlite_wasm_high_level_value_t *ptr;
+  exports_sqlink_wasm_high_level_value_t *ptr;
   size_t len;
-} exports_sqlite_wasm_high_level_list_value_t;
+} exports_sqlink_wasm_high_level_list_value_t;
 
 // Row data
-typedef struct exports_sqlite_wasm_high_level_row_t {
-  exports_sqlite_wasm_high_level_list_value_t   columns;
-} exports_sqlite_wasm_high_level_row_t;
+typedef struct exports_sqlink_wasm_high_level_row_t {
+  exports_sqlink_wasm_high_level_list_value_t   columns;
+} exports_sqlink_wasm_high_level_row_t;
 
 typedef struct {
-  exports_sqlite_wasm_high_level_row_t *ptr;
+  exports_sqlink_wasm_high_level_row_t *ptr;
   size_t len;
-} exports_sqlite_wasm_high_level_list_row_t;
+} exports_sqlink_wasm_high_level_list_row_t;
 
 // Query results
-typedef struct exports_sqlite_wasm_high_level_query_result_t {
+typedef struct exports_sqlink_wasm_high_level_query_result_t {
   sqlite_cli_unified_list_string_t   column_names;
-  exports_sqlite_wasm_high_level_list_row_t   rows;
-} exports_sqlite_wasm_high_level_query_result_t;
+  exports_sqlink_wasm_high_level_list_row_t   rows;
+} exports_sqlink_wasm_high_level_query_result_t;
 
 // Execution result (for INSERT/UPDATE/DELETE)
-typedef struct exports_sqlite_wasm_high_level_exec_result_t {
+typedef struct exports_sqlink_wasm_high_level_exec_result_t {
   int32_t   changes;
   int64_t   last_insert_rowid;
-} exports_sqlite_wasm_high_level_exec_result_t;
+} exports_sqlink_wasm_high_level_exec_result_t;
 
 // Open mode options
-typedef uint8_t exports_sqlite_wasm_high_level_open_mode_t;
+typedef uint8_t exports_sqlink_wasm_high_level_open_mode_t;
 
-#define EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_READ_ONLY 0
-#define EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_READ_WRITE 1
-#define EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_READ_WRITE_CREATE 2
-#define EXPORTS_SQLITE_WASM_HIGH_LEVEL_OPEN_MODE_MEMORY 3
+#define EXPORTS_SQLINK_WASM_HIGH_LEVEL_OPEN_MODE_READ_ONLY 0
+#define EXPORTS_SQLINK_WASM_HIGH_LEVEL_OPEN_MODE_READ_WRITE 1
+#define EXPORTS_SQLINK_WASM_HIGH_LEVEL_OPEN_MODE_READ_WRITE_CREATE 2
+#define EXPORTS_SQLINK_WASM_HIGH_LEVEL_OPEN_MODE_MEMORY 3
 
-typedef struct exports_sqlite_wasm_high_level_own_connection_t {
+typedef struct exports_sqlink_wasm_high_level_own_connection_t {
   int32_t __handle;
-} exports_sqlite_wasm_high_level_own_connection_t;
+} exports_sqlink_wasm_high_level_own_connection_t;
 
-typedef struct exports_sqlite_wasm_high_level_connection_t exports_sqlite_wasm_high_level_connection_t;
+typedef struct exports_sqlink_wasm_high_level_connection_t exports_sqlink_wasm_high_level_connection_t;
 
-typedef exports_sqlite_wasm_high_level_connection_t* exports_sqlite_wasm_high_level_borrow_connection_t;
+typedef exports_sqlink_wasm_high_level_connection_t* exports_sqlink_wasm_high_level_borrow_connection_t;
 
-typedef struct exports_sqlite_wasm_high_level_own_statement_t {
+typedef struct exports_sqlink_wasm_high_level_own_statement_t {
   int32_t __handle;
-} exports_sqlite_wasm_high_level_own_statement_t;
+} exports_sqlink_wasm_high_level_own_statement_t;
 
-typedef struct exports_sqlite_wasm_high_level_statement_t exports_sqlite_wasm_high_level_statement_t;
+typedef struct exports_sqlink_wasm_high_level_statement_t exports_sqlink_wasm_high_level_statement_t;
 
-typedef exports_sqlite_wasm_high_level_statement_t* exports_sqlite_wasm_high_level_borrow_statement_t;
-
-typedef struct {
-  bool is_err;
-  union {
-    exports_sqlite_wasm_high_level_exec_result_t ok;
-    exports_sqlite_wasm_high_level_database_error_t err;
-  } val;
-} exports_sqlite_wasm_high_level_result_exec_result_database_error_t;
+typedef exports_sqlink_wasm_high_level_statement_t* exports_sqlink_wasm_high_level_borrow_statement_t;
 
 typedef struct {
   bool is_err;
   union {
-    exports_sqlite_wasm_high_level_query_result_t ok;
-    exports_sqlite_wasm_high_level_database_error_t err;
+    exports_sqlink_wasm_high_level_exec_result_t ok;
+    exports_sqlink_wasm_high_level_database_error_t err;
   } val;
-} exports_sqlite_wasm_high_level_result_query_result_database_error_t;
+} exports_sqlink_wasm_high_level_result_exec_result_database_error_t;
 
 typedef struct {
   bool is_err;
   union {
-    exports_sqlite_wasm_high_level_own_statement_t ok;
-    exports_sqlite_wasm_high_level_database_error_t err;
+    exports_sqlink_wasm_high_level_query_result_t ok;
+    exports_sqlink_wasm_high_level_database_error_t err;
   } val;
-} exports_sqlite_wasm_high_level_result_own_statement_database_error_t;
+} exports_sqlink_wasm_high_level_result_query_result_database_error_t;
 
 typedef struct {
   bool is_err;
   union {
-    exports_sqlite_wasm_high_level_database_error_t err;
+    exports_sqlink_wasm_high_level_own_statement_t ok;
+    exports_sqlink_wasm_high_level_database_error_t err;
   } val;
-} exports_sqlite_wasm_high_level_result_void_database_error_t;
+} exports_sqlink_wasm_high_level_result_own_statement_database_error_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    exports_sqlink_wasm_high_level_database_error_t err;
+  } val;
+} exports_sqlink_wasm_high_level_result_void_database_error_t;
 
 typedef struct {
   bool is_some;
-  exports_sqlite_wasm_high_level_database_error_t val;
-} exports_sqlite_wasm_high_level_option_database_error_t;
+  exports_sqlink_wasm_high_level_database_error_t val;
+} exports_sqlink_wasm_high_level_option_database_error_t;
 
 typedef struct {
   bool is_some;
-  exports_sqlite_wasm_high_level_row_t val;
-} exports_sqlite_wasm_high_level_option_row_t;
+  exports_sqlink_wasm_high_level_row_t val;
+} exports_sqlink_wasm_high_level_option_row_t;
 
 typedef struct {
   bool is_err;
   union {
-    exports_sqlite_wasm_high_level_option_row_t ok;
-    exports_sqlite_wasm_high_level_database_error_t err;
+    exports_sqlink_wasm_high_level_option_row_t ok;
+    exports_sqlink_wasm_high_level_database_error_t err;
   } val;
-} exports_sqlite_wasm_high_level_result_option_row_database_error_t;
+} exports_sqlink_wasm_high_level_result_option_row_database_error_t;
 
 typedef struct {
   bool is_err;
   union {
-    exports_sqlite_wasm_high_level_own_connection_t ok;
-    exports_sqlite_wasm_high_level_database_error_t err;
+    exports_sqlink_wasm_high_level_own_connection_t ok;
+    exports_sqlink_wasm_high_level_database_error_t err;
   } val;
-} exports_sqlite_wasm_high_level_result_own_connection_database_error_t;
+} exports_sqlink_wasm_high_level_result_own_connection_database_error_t;
+
+// Payload for the `sql-value::wit-value` arm. Carries a
+// structurally-identified, canonical-CBOR-encoded WIT record
+// across the host/extension boundary.
+// 
+// Wire format is canonical CBOR per the `canon:cbor` profile
+// (#486 substrate). Cross-language interoperable; the encoder
+// must produce a payload the decoder accepts regardless of
+// host language.
+typedef struct exports_sqlite_extension_types_wit_value_payload_t {
+  // 32-byte sha256("witcanon:1" || canonical-CBOR(WIT record
+  // shape)) computed via `canon:wit` normalization. The
+  // authoritative match key  hosts look this up against
+  // the per-extension `typed-value-binding` registry to find
+  // the decoder/encoder imports.
+  sqlite_cli_unified_list_u8_t   type_id;
+  // Canonical-CBOR encoding of the record per the `canon:cbor`
+  // profile. Length matches the record shape identified by
+  // `type-id`.
+  sqlite_cli_unified_list_u8_t   bytes;
+  // Human-readable symbolic name + version, for diagnostics.
+  // Example:
+  //   "mobilitydb:wasm/temporal-types@0.1.0/tfloat-sequence"
+  // Hosts use this in error messages but NOT for matching;
+  // `type-id` is the authoritative key.
+  sqlite_cli_unified_string_t   symbolic_name;
+} exports_sqlite_extension_types_wit_value_payload_t;
 
 // Unified SQL value representation. Used for function arguments,
 // function results, parameter binding, and row data.
+// 
+// New in @1.0.0: the `wit-value` arm carries a canonical-CBOR-
+// encoded WIT record alongside an identifying hash + symbolic
+// name. Record-typed shim functions (PLAN-wit-value-extension.md)
+// ferry their args/returns through this arm; hosts decode via
+// the wasm-side decoder/encoder imports listed in
+// `metadata.manifest.typed-values`.
 typedef struct exports_sqlite_extension_types_sql_value_t {
   uint8_t tag;
   union {
@@ -891,6 +1564,7 @@ typedef struct exports_sqlite_extension_types_sql_value_t {
     double     real;
     sqlite_cli_unified_string_t     text;
     sqlite_cli_unified_list_u8_t     blob;
+    exports_sqlite_extension_types_wit_value_payload_t     wit_value;
   } val;
 } exports_sqlite_extension_types_sql_value_t;
 
@@ -904,6 +1578,8 @@ typedef struct exports_sqlite_extension_types_sql_value_t {
 #define EXPORTS_SQLITE_EXTENSION_TYPES_SQL_VALUE_TEXT 3
 // Binary blob.
 #define EXPORTS_SQLITE_EXTENSION_TYPES_SQL_VALUE_BLOB 4
+// Canonical-CBOR-encoded WIT record (new in @1.0.0).
+#define EXPORTS_SQLITE_EXTENSION_TYPES_SQL_VALUE_WIT_VALUE 5
 
 // SQLite error carrying both primary and extended result codes.
 typedef struct exports_sqlite_extension_types_sqlite_error_t {
@@ -1035,6 +1711,16 @@ typedef exports_sqlite_extension_types_query_result_t exports_sqlite_extension_s
 
 typedef exports_sqlite_extension_types_sqlite_error_t exports_sqlite_extension_spi_sqlite_error_t;
 
+// One row in a named-parameter binding list  the host
+// resolves `:name` / `$name` / `@name` to positions for
+// the caller.
+typedef struct exports_sqlite_extension_spi_named_param_t {
+  // Bare name (no sigil; the host adds the leading
+  // `:` / `$` / `@` when binding).
+  sqlite_cli_unified_string_t   name;
+  exports_sqlite_extension_spi_sql_value_t   value;
+} exports_sqlite_extension_spi_named_param_t;
+
 typedef struct {
   exports_sqlite_extension_spi_sql_value_t *ptr;
   size_t len;
@@ -1064,56 +1750,325 @@ typedef struct {
   } val;
 } exports_sqlite_extension_spi_result_s64_sqlite_error_t;
 
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_string_t ok;
+    exports_sqlite_extension_spi_sqlite_error_t err;
+  } val;
+} exports_sqlite_extension_spi_result_string_sqlite_error_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    sqlite_cli_unified_list_u8_t ok;
+    exports_sqlite_extension_spi_sqlite_error_t err;
+  } val;
+} exports_sqlite_extension_spi_result_list_u8_sqlite_error_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    exports_sqlite_extension_spi_sqlite_error_t err;
+  } val;
+} exports_sqlite_extension_spi_result_void_sqlite_error_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    bool ok;
+    exports_sqlite_extension_spi_sqlite_error_t err;
+  } val;
+} exports_sqlite_extension_spi_result_bool_sqlite_error_t;
+
+typedef struct {
+  exports_sqlite_extension_spi_named_param_t *ptr;
+  size_t len;
+} exports_sqlite_extension_spi_list_named_param_t;
+
+typedef struct {
+  exports_sqlite_extension_spi_query_result_t *ptr;
+  size_t len;
+} exports_sqlite_extension_spi_list_query_result_t;
+
+typedef struct {
+  bool is_err;
+  union {
+    exports_sqlite_extension_spi_list_query_result_t ok;
+    exports_sqlite_extension_spi_sqlite_error_t err;
+  } val;
+} exports_sqlite_extension_spi_result_list_query_result_sqlite_error_t;
+
 typedef exports_sqlite_extension_types_log_level_t exports_sqlite_extension_logging_log_level_t;
 
-// Imported Functions from `sqlite:extension/http@0.1.0`
+// Imported Functions from `sqlite:extension/http@1.0.0`
 // Send the request and wait for the full response.
 extern bool sqlite_extension_http_handle(sqlite_extension_http_request_t *req, sqlite_extension_http_response_t *ret, sqlite_extension_http_http_error_t *err);
 
-// Imported Functions from `sqlite:extension/metadata@0.1.0`
+// Imported Functions from `sqlite:extension/metadata@1.0.0`
 // Return the extension's full manifest. Called once by the host
 // after instantiation, before any other guest function is dispatched.
 extern void sqlite_extension_metadata_describe(sqlite_extension_metadata_manifest_t *ret);
 
-// Imported Functions from `sqlite:wasm/fts5-slot@0.1.0`
-extern void sqlite_wasm_fts5_slot_describe(sqlite_wasm_fts5_slot_manifest_t *ret);
-extern bool sqlite_wasm_fts5_slot_call(uint64_t func_id, sqlite_wasm_fts5_slot_list_sql_value_t *args, sqlite_wasm_fts5_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// Imported Functions from `sqlink:wasm/fts5-slot@0.1.0`
+extern void sqlink_wasm_fts5_slot_describe(sqlink_wasm_fts5_slot_manifest_t *ret);
+extern bool sqlink_wasm_fts5_slot_call(uint64_t func_id, sqlink_wasm_fts5_slot_list_sql_value_t *args, sqlink_wasm_fts5_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
 
-// Imported Functions from `sqlite:wasm/json1-slot@0.1.0`
-extern void sqlite_wasm_json1_slot_describe(sqlite_wasm_json1_slot_manifest_t *ret);
-extern bool sqlite_wasm_json1_slot_call(uint64_t func_id, sqlite_wasm_json1_slot_list_sql_value_t *args, sqlite_wasm_json1_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// Imported Functions from `sqlink:wasm/json1-slot@0.1.0`
+extern void sqlink_wasm_json1_slot_describe(sqlink_wasm_json1_slot_manifest_t *ret);
+extern bool sqlink_wasm_json1_slot_call(uint64_t func_id, sqlink_wasm_json1_slot_list_sql_value_t *args, sqlink_wasm_json1_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
 
-// Imported Functions from `sqlite:wasm/rtree-slot@0.1.0`
-extern void sqlite_wasm_rtree_slot_describe(sqlite_wasm_rtree_slot_manifest_t *ret);
-extern bool sqlite_wasm_rtree_slot_call(uint64_t func_id, sqlite_wasm_rtree_slot_list_sql_value_t *args, sqlite_wasm_rtree_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// Imported Functions from `sqlink:wasm/rtree-slot@0.1.0`
+extern void sqlink_wasm_rtree_slot_describe(sqlink_wasm_rtree_slot_manifest_t *ret);
+extern bool sqlink_wasm_rtree_slot_call(uint64_t func_id, sqlink_wasm_rtree_slot_list_sql_value_t *args, sqlink_wasm_rtree_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
 
-// Imported Functions from `sqlite:wasm/geopoly-slot@0.1.0`
-extern void sqlite_wasm_geopoly_slot_describe(sqlite_wasm_geopoly_slot_manifest_t *ret);
-extern bool sqlite_wasm_geopoly_slot_call(uint64_t func_id, sqlite_wasm_geopoly_slot_list_sql_value_t *args, sqlite_wasm_geopoly_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// Imported Functions from `sqlink:wasm/geopoly-slot@0.1.0`
+extern void sqlink_wasm_geopoly_slot_describe(sqlink_wasm_geopoly_slot_manifest_t *ret);
+extern bool sqlink_wasm_geopoly_slot_call(uint64_t func_id, sqlink_wasm_geopoly_slot_list_sql_value_t *args, sqlink_wasm_geopoly_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
 
-// Imported Functions from `sqlite:wasm/demo-slot@0.1.0`
-extern void sqlite_wasm_demo_slot_describe(sqlite_wasm_demo_slot_manifest_t *ret);
-extern bool sqlite_wasm_demo_slot_call(uint64_t func_id, sqlite_wasm_demo_slot_list_sql_value_t *args, sqlite_wasm_demo_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// Imported Functions from `sqlink:wasm/demo-slot@0.1.0`
+extern void sqlink_wasm_demo_slot_describe(sqlink_wasm_demo_slot_manifest_t *ret);
+extern bool sqlink_wasm_demo_slot_call(uint64_t func_id, sqlink_wasm_demo_slot_list_sql_value_t *args, sqlink_wasm_demo_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err);
 
-// Imported Functions from `sqlite:wasm/extension-loader@0.1.0`
+// Imported Functions from `sqlink:wasm/extension-loader@0.1.0`
 // Load a WASM extension component from a host path under the
 // supplied policy. Returns the verified manifest on success — the
 // same shape produced by metadata.describe().
-extern bool sqlite_wasm_extension_loader_load_extension(sqlite_cli_unified_string_t *path, sqlite_wasm_extension_loader_load_options_t *options, sqlite_wasm_extension_loader_manifest_t *ret, sqlite_wasm_extension_loader_loader_error_t *err);
+extern bool sqlink_wasm_extension_loader_load_extension(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_load_options_t *options, sqlink_wasm_extension_loader_manifest_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
 // Unload a previously loaded extension by name.
-extern bool sqlite_wasm_extension_loader_unload_extension(sqlite_cli_unified_string_t *name, sqlite_wasm_extension_loader_loader_error_t *err);
+extern bool sqlink_wasm_extension_loader_unload_extension(sqlite_cli_unified_string_t *name, sqlink_wasm_extension_loader_loader_error_t *err);
+// blake3-hex of the provider bytes for a currently-loaded
+// extension. Computed by the host at load time (which has
+// the bytes; the cli sandbox may not). Returns the empty
+// string for an unknown name. Used by the cli's
+// `_capability_grants` table to pin trust to specific bytes
+// — `PLAN-grants-db.md` G3.
+extern void sqlink_wasm_extension_loader_extension_digest(sqlite_cli_unified_string_t *name, sqlite_cli_unified_string_t *ret);
+// Load a WASM extension component from a byte buffer the
+// caller supplies in-memory. Same shape as `load-extension`
+// but without a filesystem round-trip  used by the cli's
+// startup auto-embed path (each `embed-*-component` cargo
+// feature stuffs the bytes in via `include_bytes!`).
+// 
+// `name-hint` is the registry key the loader uses when
+// the embedded manifest has an empty `name` field; for
+// well-formed extensions it's redundant.
+extern bool sqlink_wasm_extension_loader_load_extension_from_bytes(sqlite_cli_unified_string_t *name_hint, sqlite_cli_unified_list_u8_t *bytes, sqlink_wasm_extension_loader_load_options_t *options, sqlink_wasm_extension_loader_manifest_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Dispatch a dot command by name. Walks loaded extensions
+// for one whose manifest registered `name` as a
+// `dot-command-spec`, invokes its `dot-command.invoke`,
+// and returns a record carrying:
+//   - trailing text the extension wrote to invoke-result.text
+//     (in addition to any streamed `cli-stdout` writes,
+//     which already landed on the host's stdout)
+//   - state-deltas the extension proposed  the cli applies
+//     these to its own session state after the call returns
+//   - exit-code  process exit code for argv-mode dispatch
+// 
+// `cli-state` is a snapshot the cli builds from its
+// SETTINGS thread-local just before this call. The host
+// stores it on the dotcmd-aware Store so the extension's
+// `cli-state.get-*` reads return the cli's actual current
+// values (not the stubs `cli-state` had returned before).
+// Each entry is `(key, json-value)` using the same
+// slash-namespaced keys as the state-delta schema; an
+// extension expecting `display/mode` finds the JSON-string
+// it should decode (`"csv"` etc.).
+// 
+// Error variants:
+//   - code = 404, message = "no such dot-command"
+//     no loaded extension registers that name
+//   - code = 500, message = invoke error text
+//     the extension itself returned an error
+extern bool sqlink_wasm_extension_loader_dispatch_dot_command(sqlite_cli_unified_string_t *name, sqlite_cli_unified_string_t *args, sqlite_cli_unified_list_tuple2_string_string_t *cli_state, sqlink_wasm_extension_loader_dot_command_result_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Phase 4 http-CAS support. The cli's `.sqlink` registry
+// stores `sqlink_cas_resolver` rows; on a session-miss for a
+// row whose digest isn't in `sqlink_artifact`, the cli walks
+// resolvers in priority order. `file` kind is resolved
+// cli-side via `std::fs::read`; `http` (and any other
+// network-backed kind) routes through here so the host's
+// reqwest client + capability gating handles the actual GET.
+// 
+// The host fetches `uri`, blake3-hashes the response body,
+// and returns the bytes only if the hash matches
+// `expected-digest`. On hash mismatch the error message is
+// "digest mismatch: <got> != <expected>"; on network failure
+// the underlying error text is passed through.
+extern bool sqlink_wasm_extension_loader_fetch_cas_uri(sqlite_cli_unified_string_t *uri, sqlite_cli_unified_string_t *expected_digest, sqlite_cli_unified_list_u8_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Describe an extension WITHOUT loading it — reads the bytes,
+// computes the digest, instantiates briefly to call
+// `metadata.describe()`, tears down. Used by the cli to
+// resolve the effective grant Policy BEFORE invoking
+// `load-extension` (PLAN-grants-db.md pre-load enforcement
+// path). The Component cache (C1) means a subsequent real
+// `load-extension` of the same path doesn't re-parse the
+// bytes — the describe + load pair pays one parse total.
+// Returns just the name + digest; the cli uses those for
+// grant-table lookup, and the full manifest comes back
+// from the subsequent `load-extension` call as normal.
+extern bool sqlink_wasm_extension_loader_describe_extension(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_described_result_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// As `describe-extension` but over a URI. v1 supports
+// `file:` and `blake3:` schemes only.
+extern bool sqlink_wasm_extension_loader_describe_extension_from_uri(sqlite_cli_unified_string_t *uri, sqlink_wasm_extension_loader_described_result_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+extern void sqlink_wasm_extension_loader_component_cache_stats(sqlink_wasm_extension_loader_component_cache_stats_snapshot_t *ret);
+// E1: drop every row from `_component_cache`. Returns
+// bytes freed. Exposed via `.cache gc components`.
+extern uint64_t sqlink_wasm_extension_loader_component_cache_purge(void);
 // List currently loaded extensions as their manifests.
-extern void sqlite_wasm_extension_loader_list_extensions(sqlite_wasm_extension_loader_list_manifest_t *ret);
+extern void sqlink_wasm_extension_loader_list_extensions(sqlink_wasm_extension_loader_list_manifest_t *ret);
 // True iff an extension with the given name is currently loaded.
-extern bool sqlite_wasm_extension_loader_is_extension_loaded(sqlite_cli_unified_string_t *name);
+extern bool sqlink_wasm_extension_loader_is_extension_loaded(sqlite_cli_unified_string_t *name);
+// Load an extension from a URI (file:/blake3:/https:/oci:/...).
+// The host's CAS cache stores resolved bytes by their blake3
+// hash; the URI → hash binding lets repeated loads skip the
+// resolver. file: and blake3: schemes are handled in-host;
+// other schemes route through a registered resolver component.
+extern bool sqlink_wasm_extension_loader_load_extension_from_uri(sqlite_cli_unified_string_t *uri, sqlink_wasm_extension_loader_load_options_t *options, sqlink_wasm_extension_loader_manifest_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Register `path` as the resolver for `scheme`. The path
+// points at a `resolving`-world component the host loads
+// like any other extension (policy applied identically).
+extern bool sqlink_wasm_extension_loader_register_resolver(sqlite_cli_unified_string_t *scheme, sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_load_options_t *options, sqlite_cli_unified_string_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Drop the resolver registered for `scheme`.
+extern bool sqlink_wasm_extension_loader_unregister_resolver(sqlite_cli_unified_string_t *scheme, sqlink_wasm_extension_loader_loader_error_t *err);
+// (scheme, extension-name) pairs for every registered resolver.
+extern void sqlink_wasm_extension_loader_list_resolvers(sqlite_cli_unified_list_tuple2_string_string_t *ret);
+// List every URI → hash binding the cache has seen.
+extern void sqlink_wasm_extension_loader_list_cache_uris(sqlink_wasm_extension_loader_list_uri_cache_entry_t *ret);
+// Drop every cached byte + every uri_index entry. Returns the
+// number of files removed.
+extern uint64_t sqlink_wasm_extension_loader_purge_cache(void);
+extern bool sqlink_wasm_extension_loader_get_cache_stats(sqlink_wasm_extension_loader_cache_stats_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Update the LRU byte cap. 0 disables eviction. Does not
+// trigger eviction by itself — call `cache-evict` to apply.
+extern bool sqlink_wasm_extension_loader_cache_set_max_bytes(uint64_t max, sqlink_wasm_extension_loader_loader_error_t *err);
+// Drop unreferenced artifacts. Returns bytes freed.
+extern bool sqlink_wasm_extension_loader_cache_gc(uint64_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Evict in LRU order until total bytes <= target-bytes.
+// Returns bytes freed.
+extern bool sqlink_wasm_extension_loader_cache_evict(uint64_t target_bytes, uint64_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Copy the cache contents into a fresh external db at `path`.
+// Errors if the target already exists.
+extern bool sqlink_wasm_extension_loader_cache_export(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_loader_error_t *err);
+extern bool sqlink_wasm_extension_loader_do_cache_import(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_cache_merge_stats_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Switch the active cache to an external db at `path`. Opens
+// (or creates) the file and replaces the current cache
+// handle. In-flight CAS reads against the prior handle
+// finish on the prior store; the new store handles
+// everything after the swap.
+extern bool sqlink_wasm_extension_loader_cache_use_external(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_loader_error_t *err);
+// Switch the active cache to internal mode layered on the
+// user db at `db-path`. Installs the `__cas_*` tables there
+// (idempotent).
+extern bool sqlink_wasm_extension_loader_cache_use_internal(sqlite_cli_unified_string_t *db_path, sqlink_wasm_extension_loader_loader_error_t *err);
+// From internal mode: export to a fresh external db at
+// `path`, drop the `__cas_*` tables from the current db,
+// and switch the active cache to the new external file.
+// Returns counts of what was transferred.
+extern bool sqlink_wasm_extension_loader_cache_migrate_to_external(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_cache_merge_stats_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// From external mode: open internal mode against
+// `db-path`, merge the current external db's rows in, and
+// switch the active cache to the internal one.
+extern bool sqlink_wasm_extension_loader_cache_migrate_to_internal(sqlite_cli_unified_string_t *db_path, sqlink_wasm_extension_loader_cache_merge_stats_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Run a wasm component targeting the `runnable` world: a
+// compose-dynlink-shaped wasm component that resolves shared
+// providers via the `linker` and exports
+// `sqlink:wasm/run.run() -> result<string, string>`. Returns
+// the component's output string for the cli to print.
+// See PLAN-compose-integration.md.
+extern bool sqlink_wasm_extension_loader_run_wasm(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_load_options_t *options, sqlite_cli_unified_string_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
+// Register a wasm-component provider under `id`. The component
+// targets `compose:dynlink/dynlink-provider` (exports
+// `endpoint`). Subsequent `linker.resolve-by-id(id)` calls from
+// runnable components return an Instance backed by this component.
+extern bool sqlink_wasm_extension_loader_register_wasm_provider(sqlite_cli_unified_string_t *id, sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_loader_error_t *err);
+// Register a wasm component as the language runtime for files
+// with extension `ext` (no leading dot — e.g. "py", "java",
+// "r"). `variant` distinguishes multiple runtimes for the same
+// extension — for example "cpython" vs "micropython" for Python.
+// Pass an empty string for `variant` to register the DEFAULT
+// runtime for `ext`; the cli's `.run foo.<ext>` (no variant)
+// uses the default. `.run foo.<ext> variant` picks a specific
+// variant. `path` must point to a wasm component targeting the
+// `language-runtime` world.
+extern bool sqlink_wasm_extension_loader_register_runtime(sqlite_cli_unified_string_t *ext, sqlite_cli_unified_string_t *flavor, sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_load_options_t *options, sqlink_wasm_extension_loader_loader_error_t *err);
+// Drop the runtime registration for `(ext, variant)`. Errors
+// if no entry exists for that pair.
+extern bool sqlink_wasm_extension_loader_unregister_runtime(sqlite_cli_unified_string_t *ext, sqlite_cli_unified_string_t *flavor, sqlink_wasm_extension_loader_loader_error_t *err);
+// (extension, variant, path) triples for every registered
+// runtime. Default entries have variant = empty string.
+extern void sqlink_wasm_extension_loader_list_runtimes(sqlite_cli_unified_list_tuple3_string_string_string_t *ret);
+// Run a source file through the runtime registered for its
+// `(extension, variant)`. The host derives the extension from
+// `path`. Pass empty `variant` to use the default variant for
+// that extension. The host reads the source contents,
+// instantiates the plugin in a fresh Store, calls
+// `runtime.execute(file-name, source)`. Returns the plugin's
+// output or a loader-error.
+extern bool sqlink_wasm_extension_loader_run_source(sqlite_cli_unified_string_t *path, sqlite_cli_unified_string_t *flavor, sqlite_cli_unified_string_t *ret, sqlink_wasm_extension_loader_loader_error_t *err);
 
-// Imported Functions from `sqlite:wasm/dispatch@0.1.0`
+// Imported Functions from `sqlite:extension/vtab@1.0.0`
+// Module lifecycle. `create` runs on `CREATE VIRTUAL TABLE`
+// and is allowed to materialize backing storage. `connect`
+// runs on subsequent loads of the same db. Eponymous vtabs
+// (per `vtab-spec.eponymous`) see only `connect`. Both
+// return the declared schema as a `CREATE TABLE ...` string.
+extern bool sqlite_extension_vtab_create(uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_string_t *table_name, sqlite_cli_unified_list_string_t *args, sqlite_cli_unified_string_t *ret, sqlite_cli_unified_string_t *err);
+extern bool sqlite_extension_vtab_connect(uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_string_t *table_name, sqlite_cli_unified_list_string_t *args, sqlite_cli_unified_string_t *ret, sqlite_cli_unified_string_t *err);
+// Tears down `CREATE`'s backing storage. Eponymous vtabs
+// never see this.
+extern bool sqlite_extension_vtab_destroy(uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err);
+// Closes the per-instance handle. Always paired with the
+// corresponding `create` / `connect`.
+extern bool sqlite_extension_vtab_disconnect(uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err);
+// Query planner callback. Receives the constraints + order
+// SQLite would use; returns a plan that names which
+// constraints go in `filter`'s argv and the chosen idx-num /
+// idx-str pair `filter` will see again.
+extern bool sqlite_extension_vtab_best_index(uint64_t vtab_id, uint64_t instance_id, sqlite_extension_vtab_index_info_t *info, sqlite_extension_vtab_index_plan_t *ret, sqlite_cli_unified_string_t *err);
+// Open a fresh cursor against an existing instance. The
+// host allocates `cursor-id`; the guest stores per-cursor
+// state keyed by it.
+extern bool sqlite_extension_vtab_open(uint64_t vtab_id, uint64_t instance_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err);
+// Close a cursor. The guest releases per-cursor state.
+extern bool sqlite_extension_vtab_close(uint64_t vtab_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err);
+// Start iteration. `idx-num` / `idx-str` echo what
+// `best-index` returned for this query; `args` carries the
+// bound constraint values in `argv-index` order.
+extern bool sqlite_extension_vtab_filter(uint64_t vtab_id, uint64_t cursor_id, int32_t idx_num, sqlite_cli_unified_string_t *maybe_idx_str, sqlite_extension_vtab_list_sql_value_t *args, sqlite_cli_unified_string_t *err);
+// Advance the cursor by one row.
+extern bool sqlite_extension_vtab_next(uint64_t vtab_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err);
+// True if the cursor is past the last row.
+extern bool sqlite_extension_vtab_eof(uint64_t vtab_id, uint64_t cursor_id);
+// Fetch one column of the current row. `col` is the schema
+// column index (`0..N`).
+extern bool sqlite_extension_vtab_column(uint64_t vtab_id, uint64_t cursor_id, int32_t col, sqlite_extension_vtab_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// Rowid of the current row. SQLite uses this to satisfy
+// rowid joins; vtabs that don't have a natural rowid can
+// return a monotonic counter.
+extern bool sqlite_extension_vtab_rowid(uint64_t vtab_id, uint64_t cursor_id, int64_t *ret, sqlite_cli_unified_string_t *err);
+// Batched fetch  return up to `max-rows` rows starting from
+// the cursor's current position. Each row carries the rowid +
+// every column the schema declares. The host caches the
+// batch and serves `next` / `eof` / `column` / `rowid` from
+// the cache without crossing back into the extension until
+// the batch is exhausted, at which point it calls
+// `fetch-batch` again.
+// 
+// Returning an empty list signals EOF.
+// 
+// Implementations that don't override this default to
+// returning Err("not implemented")  the host's cli
+// trampoline detects the error and falls back to the per-row
+// path. Per-vtab opt-in via `vtab-spec.batched: true`.
+extern bool sqlite_extension_vtab_fetch_batch(uint64_t vtab_id, uint64_t cursor_id, uint32_t max_rows, sqlite_extension_vtab_list_vtab_row_t *ret, sqlite_cli_unified_string_t *err);
+
+// Imported Functions from `sqlink:wasm/dispatch@0.1.0`
 // Invoke `func-id` on the extension previously loaded under
 // `ext-name`, with the given arguments. Errors out if no such
 // extension is loaded, if the extension's `scalar-function.call`
 // returns an error, or if the loaded component doesn't actually
 // export `sqlite:extension/scalar-function`.
-extern bool sqlite_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, sqlite_wasm_dispatch_list_sql_value_t *args, sqlite_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, sqlink_wasm_dispatch_list_sql_value_t *args, sqlink_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err);
 // One row's contribution to an aggregate. `context-id` is
 // per-aggregation and assigned by the in-WASM trampoline (it
 // stashes a u64 counter inside the
@@ -1121,119 +2076,191 @@ extern bool sqlite_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_na
 // allocates for each pending aggregation). The loaded
 // extension uses `context-id` to thread its own running state
 // between `step` and `finalize`.
-extern bool sqlite_wasm_dispatch_aggregate_step(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlite_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_aggregate_step(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlink_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err);
 // Produce the aggregate's final value and release any state
 // keyed by `context-id`. The trampoline calls this once per
 // aggregation after the last `aggregate-step` for that
 // `context-id`.
-extern bool sqlite_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlite_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlink_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// Window-mode path: produce the current aggregate value
+// WITHOUT releasing the state keyed by `context-id`. SQLite
+// invokes this for `xValue` slots — `agg(x) OVER (...)`
+// queries emit one row at a time and need a mid-frame readout
+// the bare `aggregate-finalize` would clobber. Same
+// extension-routing shape as the other aggregate dispatches.
+extern bool sqlink_wasm_dispatch_aggregate_value(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlink_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+// Window-mode path: undo one row's contribution to the
+// aggregation context. SQLite invokes this for `xInverse`
+// slots as a row leaves the window frame so the running
+// state matches the new frame bounds. Mirror of
+// `aggregate-step` — same args, opposite direction.
+extern bool sqlink_wasm_dispatch_aggregate_inverse(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlink_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err);
 // Compare two strings under the collation identified by
 // `collation-id`. Return < 0 if a < b, 0 if a == b, > 0 if a > b.
 // The loaded extension's `collation.compare` does the actual
 // comparison; this dispatch wrapper just routes the call.
-extern int32_t sqlite_wasm_dispatch_collation_compare(sqlite_cli_unified_string_t *ext_name, uint64_t collation_id, sqlite_cli_unified_string_t *a, sqlite_cli_unified_string_t *b);
+extern int32_t sqlink_wasm_dispatch_collation_compare(sqlite_cli_unified_string_t *ext_name, uint64_t collation_id, sqlite_cli_unified_string_t *a, sqlite_cli_unified_string_t *b);
 // Route a SQLite authorizer callback to the loaded extension
 // named `ext-name` (which must have declared `has-authorizer`
 // in its manifest). Return value follows SQLite's auth-action
 // contract: ok = permit, deny = block with error, ignore = no-op.
-extern sqlite_wasm_dispatch_auth_result_t sqlite_wasm_dispatch_authorize(sqlite_cli_unified_string_t *ext_name, sqlite_wasm_dispatch_auth_action_t action, sqlite_cli_unified_string_t *maybe_arg1, sqlite_cli_unified_string_t *maybe_arg2, sqlite_cli_unified_string_t *maybe_database, sqlite_cli_unified_string_t *maybe_trigger);
+extern sqlink_wasm_dispatch_auth_result_t sqlink_wasm_dispatch_authorize(sqlite_cli_unified_string_t *ext_name, sqlink_wasm_dispatch_auth_action_t action, sqlite_cli_unified_string_t *maybe_arg1, sqlite_cli_unified_string_t *maybe_arg2, sqlite_cli_unified_string_t *maybe_database, sqlite_cli_unified_string_t *maybe_trigger);
 // Route a row-level update notification to the loaded extension
 // (declared `has-update-hook`). Fires after the row write
 // commits to the page cache; the host has no way to veto.
-extern void sqlite_wasm_dispatch_on_update(sqlite_cli_unified_string_t *ext_name, sqlite_wasm_dispatch_update_operation_t operation, sqlite_cli_unified_string_t *database, sqlite_cli_unified_string_t *table, int64_t rowid);
+extern void sqlink_wasm_dispatch_on_update(sqlite_cli_unified_string_t *ext_name, sqlink_wasm_dispatch_update_operation_t operation, sqlite_cli_unified_string_t *database, sqlite_cli_unified_string_t *table, int64_t rowid);
 // Route a pre-commit hook. Returning false converts the commit
 // to a rollback (SQLite's standard `xCommitHook != 0` semantics).
-extern bool sqlite_wasm_dispatch_on_commit(sqlite_cli_unified_string_t *ext_name);
+extern bool sqlink_wasm_dispatch_on_commit(sqlite_cli_unified_string_t *ext_name);
 // Route a post-rollback notification.
-extern void sqlite_wasm_dispatch_on_rollback(sqlite_cli_unified_string_t *ext_name);
+extern void sqlink_wasm_dispatch_on_rollback(sqlite_cli_unified_string_t *ext_name);
+// Vtab dispatches. The in-WASM cli registers an
+// `sqlite3_module` whose xCreate/xConnect/xBestIndex/etc
+// callbacks marshal here. `vtab-id` from the manifest +
+// host-assigned `instance-id` per CREATE VIRTUAL TABLE +
+// `cursor-id` per xOpen.
+extern bool sqlink_wasm_dispatch_vtab_create(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_string_t *table_name, sqlite_cli_unified_list_string_t *args, sqlite_cli_unified_string_t *ret, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_connect(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_string_t *table_name, sqlite_cli_unified_list_string_t *args, sqlite_cli_unified_string_t *ret, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_destroy(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_disconnect(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_best_index(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlink_wasm_dispatch_index_info_t *info, sqlink_wasm_dispatch_index_plan_t *ret, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_open(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_close(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_filter(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, int32_t idx_num, sqlite_cli_unified_string_t *maybe_idx_str, sqlink_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_next(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_eof(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id);
+extern bool sqlink_wasm_dispatch_vtab_column(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, int32_t col, sqlink_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_rowid(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, int64_t *ret, sqlite_cli_unified_string_t *err);
+// Batched vtab fetch. The cli's trampoline calls this once per
+// block instead of looping xColumn/xRowid/xNext per row.
+extern bool sqlink_wasm_dispatch_vtab_fetch_batch(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, uint32_t max_rows, sqlink_wasm_dispatch_list_vtab_row_t *ret, sqlite_cli_unified_string_t *err);
+// ── Mutating vtab dispatches ──────────────────────────────
+// 
+// Routed to extensions that declared `vtab-spec.mutable = true`
+// and export the `vtab-update` interface. The cli's
+// sqlite3_module wires its xUpdate / xBegin / xSync / xCommit /
+// xRollback / xRename / xSavepoint / xRelease / xRollbackTo
+// slots to these; the host instantiates the loaded extension
+// and invokes the matching `vtab-update.*` export.
+extern bool sqlink_wasm_dispatch_vtab_update(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlink_wasm_dispatch_list_sql_value_t *args, int64_t *ret, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_begin(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_sync(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_commit(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_rollback(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_rename(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *new_name, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_savepoint(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, int32_t savepoint, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_release(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, int32_t savepoint, sqlite_cli_unified_string_t *err);
+extern bool sqlink_wasm_dispatch_vtab_rollback_to(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, int32_t savepoint, sqlite_cli_unified_string_t *err);
+// xShadowName — module-level. SQLite asks via the cli's
+// `xShadowName` slot; the cli routes here. Returns true if
+// `name` is a shadow table owned by this vtab module.
+extern bool sqlink_wasm_dispatch_vtab_is_shadow_name(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, sqlite_cli_unified_string_t *name);
+// xIntegrity — per-instance integrity check.
+extern bool sqlink_wasm_dispatch_vtab_integrity(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *schema, sqlite_cli_unified_string_t *table_name, uint32_t mode_flags, sqlite_cli_unified_string_t *err);
 
-// Imported Functions from `sqlite:wasm/zip-operations@0.1.0`
+// Imported Functions from `sqlink:wasm/zip-operations@0.1.0`
 // Create a new ZIP archive from files
-extern bool sqlite_wasm_zip_operations_create_archive(sqlite_cli_unified_string_t *path, sqlite_wasm_zip_operations_error_code_t *err);
+extern bool sqlink_wasm_zip_operations_create_archive(sqlite_cli_unified_string_t *path, sqlink_wasm_zip_operations_error_code_t *err);
 // Extract a ZIP archive to destination directory
-extern bool sqlite_wasm_zip_operations_extract_archive(sqlite_cli_unified_string_t *path, sqlite_cli_unified_string_t *dest, sqlite_wasm_zip_operations_error_code_t *err);
+extern bool sqlink_wasm_zip_operations_extract_archive(sqlite_cli_unified_string_t *path, sqlite_cli_unified_string_t *dest, sqlink_wasm_zip_operations_error_code_t *err);
 // List contents of a ZIP archive
-extern bool sqlite_wasm_zip_operations_list_contents(sqlite_cli_unified_string_t *path, sqlite_cli_unified_list_string_t *ret, sqlite_wasm_zip_operations_error_code_t *err);
+extern bool sqlink_wasm_zip_operations_list_contents(sqlite_cli_unified_string_t *path, sqlite_cli_unified_list_string_t *ret, sqlink_wasm_zip_operations_error_code_t *err);
 // Get archive provider information
-extern void sqlite_wasm_zip_operations_get_info(sqlite_wasm_zip_operations_archive_info_t *ret);
+extern void sqlink_wasm_zip_operations_get_info(sqlink_wasm_zip_operations_archive_info_t *ret);
 
-// Exported Functions from `sqlite:wasm/low-level@0.1.0`
-bool exports_sqlite_wasm_low_level_open(sqlite_cli_unified_string_t *filename, exports_sqlite_wasm_low_level_open_flags_t open_flags, exports_sqlite_wasm_low_level_db_handle_t *ret, exports_sqlite_wasm_low_level_result_code_t *err);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_close(exports_sqlite_wasm_low_level_db_handle_t db);
-bool exports_sqlite_wasm_low_level_exec(exports_sqlite_wasm_low_level_db_handle_t db, sqlite_cli_unified_string_t *sql, sqlite_cli_unified_string_t *ret, exports_sqlite_wasm_low_level_result_code_t *err);
-bool exports_sqlite_wasm_low_level_prepare(exports_sqlite_wasm_low_level_db_handle_t db, sqlite_cli_unified_string_t *sql, exports_sqlite_wasm_low_level_stmt_handle_t *ret, exports_sqlite_wasm_low_level_result_code_t *err);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_step(exports_sqlite_wasm_low_level_stmt_handle_t stmt);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_reset(exports_sqlite_wasm_low_level_stmt_handle_t stmt);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_finalize(exports_sqlite_wasm_low_level_stmt_handle_t stmt);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_null(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_int(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index, int32_t value);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_int64(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index, int64_t value);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_double(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index, double value);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_text(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_string_t *value);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_bind_blob(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_list_u8_t *value);
-int32_t exports_sqlite_wasm_low_level_bind_parameter_count(exports_sqlite_wasm_low_level_stmt_handle_t stmt);
-int32_t exports_sqlite_wasm_low_level_bind_parameter_index(exports_sqlite_wasm_low_level_stmt_handle_t stmt, sqlite_cli_unified_string_t *name);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_clear_bindings(exports_sqlite_wasm_low_level_stmt_handle_t stmt);
-int32_t exports_sqlite_wasm_low_level_column_count(exports_sqlite_wasm_low_level_stmt_handle_t stmt);
-void exports_sqlite_wasm_low_level_column_name(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_string_t *ret);
-exports_sqlite_wasm_low_level_column_type_t exports_sqlite_wasm_low_level_get_column_type(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index);
-int32_t exports_sqlite_wasm_low_level_column_int(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index);
-int64_t exports_sqlite_wasm_low_level_column_int64(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index);
-double exports_sqlite_wasm_low_level_column_double(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index);
-void exports_sqlite_wasm_low_level_column_text(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_string_t *ret);
-void exports_sqlite_wasm_low_level_column_blob(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_list_u8_t *ret);
-int32_t exports_sqlite_wasm_low_level_column_bytes(exports_sqlite_wasm_low_level_stmt_handle_t stmt, int32_t index);
-void exports_sqlite_wasm_low_level_errmsg(exports_sqlite_wasm_low_level_db_handle_t db, sqlite_cli_unified_string_t *ret);
-exports_sqlite_wasm_low_level_result_code_t exports_sqlite_wasm_low_level_errcode(exports_sqlite_wasm_low_level_db_handle_t db);
-int32_t exports_sqlite_wasm_low_level_extended_errcode(exports_sqlite_wasm_low_level_db_handle_t db);
-bool exports_sqlite_wasm_low_level_get_autocommit(exports_sqlite_wasm_low_level_db_handle_t db);
-int32_t exports_sqlite_wasm_low_level_changes(exports_sqlite_wasm_low_level_db_handle_t db);
-int32_t exports_sqlite_wasm_low_level_total_changes(exports_sqlite_wasm_low_level_db_handle_t db);
-int64_t exports_sqlite_wasm_low_level_last_insert_rowid(exports_sqlite_wasm_low_level_db_handle_t db);
-void exports_sqlite_wasm_low_level_libversion(sqlite_cli_unified_string_t *ret);
-int32_t exports_sqlite_wasm_low_level_libversion_number(void);
-void exports_sqlite_wasm_low_level_sourceid(sqlite_cli_unified_string_t *ret);
+// Exported Functions from `sqlink:wasm/low-level@0.1.0`
+bool exports_sqlink_wasm_low_level_open(sqlite_cli_unified_string_t *filename, exports_sqlink_wasm_low_level_open_flags_t open_flags, exports_sqlink_wasm_low_level_db_handle_t *ret, exports_sqlink_wasm_low_level_result_code_t *err);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_close(exports_sqlink_wasm_low_level_db_handle_t db);
+bool exports_sqlink_wasm_low_level_exec(exports_sqlink_wasm_low_level_db_handle_t db, sqlite_cli_unified_string_t *sql, sqlite_cli_unified_string_t *ret, exports_sqlink_wasm_low_level_result_code_t *err);
+bool exports_sqlink_wasm_low_level_prepare(exports_sqlink_wasm_low_level_db_handle_t db, sqlite_cli_unified_string_t *sql, exports_sqlink_wasm_low_level_stmt_handle_t *ret, exports_sqlink_wasm_low_level_result_code_t *err);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_step(exports_sqlink_wasm_low_level_stmt_handle_t stmt);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_reset(exports_sqlink_wasm_low_level_stmt_handle_t stmt);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_finalize(exports_sqlink_wasm_low_level_stmt_handle_t stmt);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_null(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_int(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index, int32_t value);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_int64(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index, int64_t value);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_double(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index, double value);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_text(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_string_t *value);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_bind_blob(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_list_u8_t *value);
+int32_t exports_sqlink_wasm_low_level_bind_parameter_count(exports_sqlink_wasm_low_level_stmt_handle_t stmt);
+int32_t exports_sqlink_wasm_low_level_bind_parameter_index(exports_sqlink_wasm_low_level_stmt_handle_t stmt, sqlite_cli_unified_string_t *name);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_clear_bindings(exports_sqlink_wasm_low_level_stmt_handle_t stmt);
+int32_t exports_sqlink_wasm_low_level_column_count(exports_sqlink_wasm_low_level_stmt_handle_t stmt);
+void exports_sqlink_wasm_low_level_column_name(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_string_t *ret);
+exports_sqlink_wasm_low_level_column_type_t exports_sqlink_wasm_low_level_get_column_type(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index);
+int32_t exports_sqlink_wasm_low_level_column_int(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index);
+int64_t exports_sqlink_wasm_low_level_column_int64(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index);
+double exports_sqlink_wasm_low_level_column_double(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index);
+void exports_sqlink_wasm_low_level_column_text(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_string_t *ret);
+void exports_sqlink_wasm_low_level_column_blob(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index, sqlite_cli_unified_list_u8_t *ret);
+int32_t exports_sqlink_wasm_low_level_column_bytes(exports_sqlink_wasm_low_level_stmt_handle_t stmt, int32_t index);
+void exports_sqlink_wasm_low_level_errmsg(exports_sqlink_wasm_low_level_db_handle_t db, sqlite_cli_unified_string_t *ret);
+exports_sqlink_wasm_low_level_result_code_t exports_sqlink_wasm_low_level_errcode(exports_sqlink_wasm_low_level_db_handle_t db);
+int32_t exports_sqlink_wasm_low_level_extended_errcode(exports_sqlink_wasm_low_level_db_handle_t db);
+bool exports_sqlink_wasm_low_level_get_autocommit(exports_sqlink_wasm_low_level_db_handle_t db);
+int32_t exports_sqlink_wasm_low_level_changes(exports_sqlink_wasm_low_level_db_handle_t db);
+int32_t exports_sqlink_wasm_low_level_total_changes(exports_sqlink_wasm_low_level_db_handle_t db);
+int64_t exports_sqlink_wasm_low_level_last_insert_rowid(exports_sqlink_wasm_low_level_db_handle_t db);
+void exports_sqlink_wasm_low_level_libversion(sqlite_cli_unified_string_t *ret);
+int32_t exports_sqlink_wasm_low_level_libversion_number(void);
+void exports_sqlink_wasm_low_level_sourceid(sqlite_cli_unified_string_t *ret);
 
-// Exported Functions from `sqlite:wasm/high-level@0.1.0`
-exports_sqlite_wasm_high_level_own_connection_t exports_sqlite_wasm_high_level_constructor_connection(sqlite_cli_unified_string_t *path, exports_sqlite_wasm_high_level_open_mode_t mode);
-bool exports_sqlite_wasm_high_level_method_connection_execute(exports_sqlite_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlite_wasm_high_level_exec_result_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_connection_execute_with_params(exports_sqlite_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlite_wasm_high_level_list_value_t *params, exports_sqlite_wasm_high_level_exec_result_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_connection_query(exports_sqlite_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlite_wasm_high_level_query_result_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_connection_query_with_params(exports_sqlite_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlite_wasm_high_level_list_value_t *params, exports_sqlite_wasm_high_level_query_result_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_connection_prepare(exports_sqlite_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlite_wasm_high_level_own_statement_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_connection_begin_transaction(exports_sqlite_wasm_high_level_borrow_connection_t self, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_connection_commit(exports_sqlite_wasm_high_level_borrow_connection_t self, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_connection_rollback(exports_sqlite_wasm_high_level_borrow_connection_t self, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_connection_in_autocommit(exports_sqlite_wasm_high_level_borrow_connection_t self);
-bool exports_sqlite_wasm_high_level_method_connection_last_error(exports_sqlite_wasm_high_level_borrow_connection_t self, exports_sqlite_wasm_high_level_database_error_t *ret);
-bool exports_sqlite_wasm_high_level_method_statement_bind(exports_sqlite_wasm_high_level_borrow_statement_t self, int32_t index, exports_sqlite_wasm_high_level_value_t *value, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_statement_bind_all(exports_sqlite_wasm_high_level_borrow_statement_t self, exports_sqlite_wasm_high_level_list_value_t *params, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_statement_execute(exports_sqlite_wasm_high_level_borrow_statement_t self, exports_sqlite_wasm_high_level_exec_result_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_statement_query(exports_sqlite_wasm_high_level_borrow_statement_t self, exports_sqlite_wasm_high_level_query_result_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_statement_step(exports_sqlite_wasm_high_level_borrow_statement_t self, exports_sqlite_wasm_high_level_option_row_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_statement_reset(exports_sqlite_wasm_high_level_borrow_statement_t self, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_method_statement_clear_bindings(exports_sqlite_wasm_high_level_borrow_statement_t self, exports_sqlite_wasm_high_level_database_error_t *err);
-int32_t exports_sqlite_wasm_high_level_method_statement_column_count(exports_sqlite_wasm_high_level_borrow_statement_t self);
-void exports_sqlite_wasm_high_level_method_statement_column_names(exports_sqlite_wasm_high_level_borrow_statement_t self, sqlite_cli_unified_list_string_t *ret);
-int32_t exports_sqlite_wasm_high_level_method_statement_parameter_count(exports_sqlite_wasm_high_level_borrow_statement_t self);
-void exports_sqlite_wasm_high_level_version(sqlite_cli_unified_string_t *ret);
-int32_t exports_sqlite_wasm_high_level_version_number(void);
-bool exports_sqlite_wasm_high_level_open_memory(exports_sqlite_wasm_high_level_own_connection_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
-bool exports_sqlite_wasm_high_level_open_file(sqlite_cli_unified_string_t *path, exports_sqlite_wasm_high_level_own_connection_t *ret, exports_sqlite_wasm_high_level_database_error_t *err);
+// Exported Functions from `sqlink:wasm/high-level@0.1.0`
+exports_sqlink_wasm_high_level_own_connection_t exports_sqlink_wasm_high_level_constructor_connection(sqlite_cli_unified_string_t *path, exports_sqlink_wasm_high_level_open_mode_t mode);
+bool exports_sqlink_wasm_high_level_method_connection_execute(exports_sqlink_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlink_wasm_high_level_exec_result_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_connection_execute_with_params(exports_sqlink_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlink_wasm_high_level_list_value_t *params, exports_sqlink_wasm_high_level_exec_result_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_connection_query(exports_sqlink_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlink_wasm_high_level_query_result_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_connection_query_with_params(exports_sqlink_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlink_wasm_high_level_list_value_t *params, exports_sqlink_wasm_high_level_query_result_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_connection_prepare(exports_sqlink_wasm_high_level_borrow_connection_t self, sqlite_cli_unified_string_t *sql, exports_sqlink_wasm_high_level_own_statement_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_connection_begin_transaction(exports_sqlink_wasm_high_level_borrow_connection_t self, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_connection_commit(exports_sqlink_wasm_high_level_borrow_connection_t self, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_connection_rollback(exports_sqlink_wasm_high_level_borrow_connection_t self, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_connection_in_autocommit(exports_sqlink_wasm_high_level_borrow_connection_t self);
+bool exports_sqlink_wasm_high_level_method_connection_last_error(exports_sqlink_wasm_high_level_borrow_connection_t self, exports_sqlink_wasm_high_level_database_error_t *ret);
+bool exports_sqlink_wasm_high_level_method_statement_bind(exports_sqlink_wasm_high_level_borrow_statement_t self, int32_t index, exports_sqlink_wasm_high_level_value_t *value, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_statement_bind_all(exports_sqlink_wasm_high_level_borrow_statement_t self, exports_sqlink_wasm_high_level_list_value_t *params, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_statement_execute(exports_sqlink_wasm_high_level_borrow_statement_t self, exports_sqlink_wasm_high_level_exec_result_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_statement_query(exports_sqlink_wasm_high_level_borrow_statement_t self, exports_sqlink_wasm_high_level_query_result_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_statement_step(exports_sqlink_wasm_high_level_borrow_statement_t self, exports_sqlink_wasm_high_level_option_row_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_statement_reset(exports_sqlink_wasm_high_level_borrow_statement_t self, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_method_statement_clear_bindings(exports_sqlink_wasm_high_level_borrow_statement_t self, exports_sqlink_wasm_high_level_database_error_t *err);
+int32_t exports_sqlink_wasm_high_level_method_statement_column_count(exports_sqlink_wasm_high_level_borrow_statement_t self);
+void exports_sqlink_wasm_high_level_method_statement_column_names(exports_sqlink_wasm_high_level_borrow_statement_t self, sqlite_cli_unified_list_string_t *ret);
+int32_t exports_sqlink_wasm_high_level_method_statement_parameter_count(exports_sqlink_wasm_high_level_borrow_statement_t self);
+void exports_sqlink_wasm_high_level_version(sqlite_cli_unified_string_t *ret);
+int32_t exports_sqlink_wasm_high_level_version_number(void);
+bool exports_sqlink_wasm_high_level_open_memory(exports_sqlink_wasm_high_level_own_connection_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_open_file(sqlite_cli_unified_string_t *path, exports_sqlink_wasm_high_level_own_connection_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
+bool exports_sqlink_wasm_high_level_default_connection(exports_sqlink_wasm_high_level_own_connection_t *ret, exports_sqlink_wasm_high_level_database_error_t *err);
 
-// Exported Functions from `sqlite:extension/spi@0.1.0`
+// Exported Functions from `sqlite:extension/spi@1.0.0`
 bool exports_sqlite_extension_spi_execute(sqlite_cli_unified_string_t *sql, exports_sqlite_extension_spi_list_sql_value_t *params, exports_sqlite_extension_spi_query_result_t *ret, exports_sqlite_extension_spi_sqlite_error_t *err);
 bool exports_sqlite_extension_spi_execute_scalar(sqlite_cli_unified_string_t *sql, exports_sqlite_extension_spi_list_sql_value_t *params, exports_sqlite_extension_spi_sql_value_t *ret, exports_sqlite_extension_spi_sqlite_error_t *err);
 bool exports_sqlite_extension_spi_execute_batch(sqlite_cli_unified_string_t *sql, int64_t *ret, exports_sqlite_extension_spi_sqlite_error_t *err);
+void exports_sqlite_extension_spi_list_vfs(sqlite_cli_unified_list_string_t *ret);
+bool exports_sqlite_extension_spi_vfs_name(sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_string_t *ret, exports_sqlite_extension_spi_sqlite_error_t *err);
+bool exports_sqlite_extension_spi_serialize_db(sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_list_u8_t *ret, exports_sqlite_extension_spi_sqlite_error_t *err);
+int64_t exports_sqlite_extension_spi_changes(void);
+int64_t exports_sqlite_extension_spi_total_changes(void);
+int64_t exports_sqlite_extension_spi_last_insert_rowid(void);
+int64_t exports_sqlite_extension_spi_current_memory_used(void);
+bool exports_sqlite_extension_spi_backup_into(sqlite_cli_unified_string_t *src_db, sqlite_cli_unified_string_t *dst_path, sqlite_cli_unified_string_t *dst_db, exports_sqlite_extension_spi_sqlite_error_t *err);
+bool exports_sqlite_extension_spi_restore_from(sqlite_cli_unified_string_t *src_path, sqlite_cli_unified_string_t *src_db, sqlite_cli_unified_string_t *dst_db, exports_sqlite_extension_spi_sqlite_error_t *err);
+bool exports_sqlite_extension_spi_set_busy_timeout(int32_t ms, exports_sqlite_extension_spi_sqlite_error_t *err);
+int32_t exports_sqlite_extension_spi_limit(int32_t category, int32_t value);
+bool exports_sqlite_extension_spi_db_config_bool(int32_t op, bool set, bool value, bool *ret, exports_sqlite_extension_spi_sqlite_error_t *err);
+bool exports_sqlite_extension_spi_deserialize_db(sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_list_u8_t *bytes, exports_sqlite_extension_spi_sqlite_error_t *err);
+bool exports_sqlite_extension_spi_execute_multi(sqlite_cli_unified_string_t *sql, exports_sqlite_extension_spi_list_named_param_t *named_params, exports_sqlite_extension_spi_list_query_result_t *ret, exports_sqlite_extension_spi_sqlite_error_t *err);
+bool exports_sqlite_extension_spi_open_db(sqlite_cli_unified_string_t *path, exports_sqlite_extension_spi_sqlite_error_t *err);
 
-// Exported Functions from `sqlite:extension/logging@0.1.0`
+// Exported Functions from `sqlite:extension/logging@1.0.0`
 void exports_sqlite_extension_logging_log(exports_sqlite_extension_logging_log_level_t level, sqlite_cli_unified_string_t *message);
 void exports_sqlite_extension_logging_error(sqlite_cli_unified_string_t *message);
 void exports_sqlite_extension_logging_warn(sqlite_cli_unified_string_t *message);
 void exports_sqlite_extension_logging_info(sqlite_cli_unified_string_t *message);
 void exports_sqlite_extension_logging_debug(sqlite_cli_unified_string_t *message);
 
-// Exported Functions from `sqlite:extension/config@0.1.0`
+// Exported Functions from `sqlite:extension/config@1.0.0`
 bool exports_sqlite_extension_config_get(sqlite_cli_unified_string_t *key, sqlite_cli_unified_string_t *ret);
 bool exports_sqlite_extension_config_set(sqlite_cli_unified_string_t *key, sqlite_cli_unified_string_t *value);
 void exports_sqlite_extension_config_sqlite_version(sqlite_cli_unified_string_t *ret);
@@ -1242,6 +2269,8 @@ void exports_sqlite_extension_config_extension_version(sqlite_cli_unified_string
 // Helper Functions
 
 void sqlite_cli_unified_list_u8_free(sqlite_cli_unified_list_u8_t *ptr);
+
+void sqlite_extension_types_wit_value_payload_free(sqlite_extension_types_wit_value_payload_t *ptr);
 
 void sqlite_extension_types_sql_value_free(sqlite_extension_types_sql_value_t *ptr);
 
@@ -1297,9 +2326,13 @@ void sqlite_cli_unified_option_u64_free(sqlite_cli_unified_option_u64_t *ptr);
 
 void sqlite_extension_policy_http_policy_free(sqlite_extension_policy_http_policy_t *ptr);
 
+void sqlite_extension_policy_dns_policy_free(sqlite_extension_policy_dns_policy_t *ptr);
+
 void sqlite_extension_policy_fs_policy_free(sqlite_extension_policy_fs_policy_t *ptr);
 
 void sqlite_extension_policy_option_http_policy_free(sqlite_extension_policy_option_http_policy_t *ptr);
+
+void sqlite_extension_policy_option_dns_policy_free(sqlite_extension_policy_option_dns_policy_t *ptr);
 
 void sqlite_extension_policy_option_fs_policy_free(sqlite_extension_policy_option_fs_policy_t *ptr);
 
@@ -1311,11 +2344,21 @@ void sqlite_extension_policy_policy_error_free(sqlite_extension_policy_policy_er
 
 void sqlite_extension_metadata_capability_free(sqlite_extension_metadata_capability_t *ptr);
 
+void sqlite_extension_metadata_typed_value_binding_free(sqlite_extension_metadata_typed_value_binding_t *ptr);
+
 void sqlite_extension_metadata_scalar_function_spec_free(sqlite_extension_metadata_scalar_function_spec_t *ptr);
 
 void sqlite_extension_metadata_aggregate_function_spec_free(sqlite_extension_metadata_aggregate_function_spec_t *ptr);
 
 void sqlite_extension_metadata_collation_spec_free(sqlite_extension_metadata_collation_spec_t *ptr);
+
+void sqlite_extension_metadata_vtab_spec_free(sqlite_extension_metadata_vtab_spec_t *ptr);
+
+void sqlite_extension_metadata_dot_command_example_free(sqlite_extension_metadata_dot_command_example_t *ptr);
+
+void sqlite_extension_metadata_list_dot_command_example_free(sqlite_extension_metadata_list_dot_command_example_t *ptr);
+
+void sqlite_extension_metadata_dot_command_spec_free(sqlite_extension_metadata_dot_command_spec_t *ptr);
 
 void sqlite_extension_metadata_list_scalar_function_spec_free(sqlite_extension_metadata_list_scalar_function_spec_t *ptr);
 
@@ -1323,121 +2366,211 @@ void sqlite_extension_metadata_list_aggregate_function_spec_free(sqlite_extensio
 
 void sqlite_extension_metadata_list_collation_spec_free(sqlite_extension_metadata_list_collation_spec_t *ptr);
 
+void sqlite_extension_metadata_list_vtab_spec_free(sqlite_extension_metadata_list_vtab_spec_t *ptr);
+
+void sqlite_extension_metadata_list_dot_command_spec_free(sqlite_extension_metadata_list_dot_command_spec_t *ptr);
+
 void sqlite_extension_metadata_list_capability_free(sqlite_extension_metadata_list_capability_t *ptr);
+
+void sqlite_extension_metadata_list_typed_value_binding_free(sqlite_extension_metadata_list_typed_value_binding_t *ptr);
 
 void sqlite_extension_metadata_manifest_free(sqlite_extension_metadata_manifest_t *ptr);
 
-void sqlite_wasm_fts5_slot_sql_value_free(sqlite_wasm_fts5_slot_sql_value_t *ptr);
+void sqlink_wasm_fts5_slot_sql_value_free(sqlink_wasm_fts5_slot_sql_value_t *ptr);
 
-void sqlite_wasm_fts5_slot_manifest_free(sqlite_wasm_fts5_slot_manifest_t *ptr);
+void sqlink_wasm_fts5_slot_manifest_free(sqlink_wasm_fts5_slot_manifest_t *ptr);
 
-void sqlite_wasm_fts5_slot_list_sql_value_free(sqlite_wasm_fts5_slot_list_sql_value_t *ptr);
+void sqlink_wasm_fts5_slot_list_sql_value_free(sqlink_wasm_fts5_slot_list_sql_value_t *ptr);
 
-void sqlite_wasm_fts5_slot_result_sql_value_string_free(sqlite_wasm_fts5_slot_result_sql_value_string_t *ptr);
+void sqlink_wasm_fts5_slot_result_sql_value_string_free(sqlink_wasm_fts5_slot_result_sql_value_string_t *ptr);
 
-void sqlite_wasm_json1_slot_sql_value_free(sqlite_wasm_json1_slot_sql_value_t *ptr);
+void sqlink_wasm_json1_slot_sql_value_free(sqlink_wasm_json1_slot_sql_value_t *ptr);
 
-void sqlite_wasm_json1_slot_manifest_free(sqlite_wasm_json1_slot_manifest_t *ptr);
+void sqlink_wasm_json1_slot_manifest_free(sqlink_wasm_json1_slot_manifest_t *ptr);
 
-void sqlite_wasm_json1_slot_list_sql_value_free(sqlite_wasm_json1_slot_list_sql_value_t *ptr);
+void sqlink_wasm_json1_slot_list_sql_value_free(sqlink_wasm_json1_slot_list_sql_value_t *ptr);
 
-void sqlite_wasm_json1_slot_result_sql_value_string_free(sqlite_wasm_json1_slot_result_sql_value_string_t *ptr);
+void sqlink_wasm_json1_slot_result_sql_value_string_free(sqlink_wasm_json1_slot_result_sql_value_string_t *ptr);
 
-void sqlite_wasm_rtree_slot_sql_value_free(sqlite_wasm_rtree_slot_sql_value_t *ptr);
+void sqlink_wasm_rtree_slot_sql_value_free(sqlink_wasm_rtree_slot_sql_value_t *ptr);
 
-void sqlite_wasm_rtree_slot_manifest_free(sqlite_wasm_rtree_slot_manifest_t *ptr);
+void sqlink_wasm_rtree_slot_manifest_free(sqlink_wasm_rtree_slot_manifest_t *ptr);
 
-void sqlite_wasm_rtree_slot_list_sql_value_free(sqlite_wasm_rtree_slot_list_sql_value_t *ptr);
+void sqlink_wasm_rtree_slot_list_sql_value_free(sqlink_wasm_rtree_slot_list_sql_value_t *ptr);
 
-void sqlite_wasm_rtree_slot_result_sql_value_string_free(sqlite_wasm_rtree_slot_result_sql_value_string_t *ptr);
+void sqlink_wasm_rtree_slot_result_sql_value_string_free(sqlink_wasm_rtree_slot_result_sql_value_string_t *ptr);
 
-void sqlite_wasm_geopoly_slot_sql_value_free(sqlite_wasm_geopoly_slot_sql_value_t *ptr);
+void sqlink_wasm_geopoly_slot_sql_value_free(sqlink_wasm_geopoly_slot_sql_value_t *ptr);
 
-void sqlite_wasm_geopoly_slot_manifest_free(sqlite_wasm_geopoly_slot_manifest_t *ptr);
+void sqlink_wasm_geopoly_slot_manifest_free(sqlink_wasm_geopoly_slot_manifest_t *ptr);
 
-void sqlite_wasm_geopoly_slot_list_sql_value_free(sqlite_wasm_geopoly_slot_list_sql_value_t *ptr);
+void sqlink_wasm_geopoly_slot_list_sql_value_free(sqlink_wasm_geopoly_slot_list_sql_value_t *ptr);
 
-void sqlite_wasm_geopoly_slot_result_sql_value_string_free(sqlite_wasm_geopoly_slot_result_sql_value_string_t *ptr);
+void sqlink_wasm_geopoly_slot_result_sql_value_string_free(sqlink_wasm_geopoly_slot_result_sql_value_string_t *ptr);
 
-void sqlite_wasm_demo_slot_sql_value_free(sqlite_wasm_demo_slot_sql_value_t *ptr);
+void sqlink_wasm_demo_slot_sql_value_free(sqlink_wasm_demo_slot_sql_value_t *ptr);
 
-void sqlite_wasm_demo_slot_manifest_free(sqlite_wasm_demo_slot_manifest_t *ptr);
+void sqlink_wasm_demo_slot_manifest_free(sqlink_wasm_demo_slot_manifest_t *ptr);
 
-void sqlite_wasm_demo_slot_list_sql_value_free(sqlite_wasm_demo_slot_list_sql_value_t *ptr);
+void sqlink_wasm_demo_slot_list_sql_value_free(sqlink_wasm_demo_slot_list_sql_value_t *ptr);
 
-void sqlite_wasm_demo_slot_result_sql_value_string_free(sqlite_wasm_demo_slot_result_sql_value_string_t *ptr);
+void sqlink_wasm_demo_slot_result_sql_value_string_free(sqlink_wasm_demo_slot_result_sql_value_string_t *ptr);
 
-void sqlite_wasm_extension_loader_manifest_free(sqlite_wasm_extension_loader_manifest_t *ptr);
+void sqlink_wasm_extension_loader_manifest_free(sqlink_wasm_extension_loader_manifest_t *ptr);
 
-void sqlite_wasm_extension_loader_load_options_free(sqlite_wasm_extension_loader_load_options_t *ptr);
+void sqlink_wasm_extension_loader_load_options_free(sqlink_wasm_extension_loader_load_options_t *ptr);
 
-void sqlite_wasm_extension_loader_loader_error_free(sqlite_wasm_extension_loader_loader_error_t *ptr);
+void sqlink_wasm_extension_loader_loader_error_free(sqlink_wasm_extension_loader_loader_error_t *ptr);
 
-void sqlite_wasm_extension_loader_result_manifest_loader_error_free(sqlite_wasm_extension_loader_result_manifest_loader_error_t *ptr);
+void sqlink_wasm_extension_loader_state_delta_free(sqlink_wasm_extension_loader_state_delta_t *ptr);
 
-void sqlite_wasm_extension_loader_result_void_loader_error_free(sqlite_wasm_extension_loader_result_void_loader_error_t *ptr);
+void sqlink_wasm_extension_loader_list_state_delta_free(sqlink_wasm_extension_loader_list_state_delta_t *ptr);
 
-void sqlite_wasm_extension_loader_list_manifest_free(sqlite_wasm_extension_loader_list_manifest_t *ptr);
+void sqlink_wasm_extension_loader_dot_command_result_free(sqlink_wasm_extension_loader_dot_command_result_t *ptr);
 
-void sqlite_wasm_dispatch_sql_value_free(sqlite_wasm_dispatch_sql_value_t *ptr);
+void sqlink_wasm_extension_loader_described_result_free(sqlink_wasm_extension_loader_described_result_t *ptr);
 
-void sqlite_wasm_dispatch_list_sql_value_free(sqlite_wasm_dispatch_list_sql_value_t *ptr);
+void sqlink_wasm_extension_loader_uri_cache_entry_free(sqlink_wasm_extension_loader_uri_cache_entry_t *ptr);
 
-void sqlite_wasm_dispatch_result_sql_value_string_free(sqlite_wasm_dispatch_result_sql_value_string_t *ptr);
+void sqlink_wasm_extension_loader_cache_stats_free(sqlink_wasm_extension_loader_cache_stats_t *ptr);
 
-void sqlite_wasm_dispatch_result_void_string_free(sqlite_wasm_dispatch_result_void_string_t *ptr);
+void sqlink_wasm_extension_loader_result_manifest_loader_error_free(sqlink_wasm_extension_loader_result_manifest_loader_error_t *ptr);
 
-void sqlite_wasm_zip_operations_archive_info_free(sqlite_wasm_zip_operations_archive_info_t *ptr);
+void sqlink_wasm_extension_loader_result_void_loader_error_free(sqlink_wasm_extension_loader_result_void_loader_error_t *ptr);
 
-void sqlite_wasm_zip_operations_result_void_error_code_free(sqlite_wasm_zip_operations_result_void_error_code_t *ptr);
+void sqlite_cli_unified_tuple2_string_string_free(sqlite_cli_unified_tuple2_string_string_t *ptr);
 
-void sqlite_wasm_zip_operations_result_list_string_error_code_free(sqlite_wasm_zip_operations_result_list_string_error_code_t *ptr);
+void sqlite_cli_unified_list_tuple2_string_string_free(sqlite_cli_unified_list_tuple2_string_string_t *ptr);
 
-void exports_sqlite_wasm_low_level_result_db_handle_result_code_free(exports_sqlite_wasm_low_level_result_db_handle_result_code_t *ptr);
+void sqlink_wasm_extension_loader_result_dot_command_result_loader_error_free(sqlink_wasm_extension_loader_result_dot_command_result_loader_error_t *ptr);
 
-void exports_sqlite_wasm_low_level_result_string_result_code_free(exports_sqlite_wasm_low_level_result_string_result_code_t *ptr);
+void sqlink_wasm_extension_loader_result_list_u8_loader_error_free(sqlink_wasm_extension_loader_result_list_u8_loader_error_t *ptr);
 
-void exports_sqlite_wasm_low_level_result_stmt_handle_result_code_free(exports_sqlite_wasm_low_level_result_stmt_handle_result_code_t *ptr);
+void sqlink_wasm_extension_loader_result_described_result_loader_error_free(sqlink_wasm_extension_loader_result_described_result_loader_error_t *ptr);
 
-void exports_sqlite_wasm_high_level_value_free(exports_sqlite_wasm_high_level_value_t *ptr);
+void sqlink_wasm_extension_loader_list_manifest_free(sqlink_wasm_extension_loader_list_manifest_t *ptr);
 
-void exports_sqlite_wasm_high_level_database_error_free(exports_sqlite_wasm_high_level_database_error_t *ptr);
+void sqlink_wasm_extension_loader_result_string_loader_error_free(sqlink_wasm_extension_loader_result_string_loader_error_t *ptr);
 
-void exports_sqlite_wasm_high_level_list_value_free(exports_sqlite_wasm_high_level_list_value_t *ptr);
+void sqlink_wasm_extension_loader_list_uri_cache_entry_free(sqlink_wasm_extension_loader_list_uri_cache_entry_t *ptr);
 
-void exports_sqlite_wasm_high_level_row_free(exports_sqlite_wasm_high_level_row_t *ptr);
+void sqlink_wasm_extension_loader_result_cache_stats_loader_error_free(sqlink_wasm_extension_loader_result_cache_stats_loader_error_t *ptr);
 
-void exports_sqlite_wasm_high_level_list_row_free(exports_sqlite_wasm_high_level_list_row_t *ptr);
+void sqlink_wasm_extension_loader_result_u64_loader_error_free(sqlink_wasm_extension_loader_result_u64_loader_error_t *ptr);
 
-void exports_sqlite_wasm_high_level_query_result_free(exports_sqlite_wasm_high_level_query_result_t *ptr);
+void sqlink_wasm_extension_loader_result_cache_merge_stats_loader_error_free(sqlink_wasm_extension_loader_result_cache_merge_stats_loader_error_t *ptr);
 
-extern void exports_sqlite_wasm_high_level_connection_drop_own(exports_sqlite_wasm_high_level_own_connection_t handle);
+void sqlite_cli_unified_tuple3_string_string_string_free(sqlite_cli_unified_tuple3_string_string_string_t *ptr);
 
-extern exports_sqlite_wasm_high_level_own_connection_t exports_sqlite_wasm_high_level_connection_new(exports_sqlite_wasm_high_level_connection_t *rep);
-extern exports_sqlite_wasm_high_level_connection_t* exports_sqlite_wasm_high_level_connection_rep(exports_sqlite_wasm_high_level_own_connection_t handle);
-void exports_sqlite_wasm_high_level_connection_destructor(exports_sqlite_wasm_high_level_connection_t *rep);
+void sqlite_cli_unified_list_tuple3_string_string_string_free(sqlite_cli_unified_list_tuple3_string_string_string_t *ptr);
 
-extern void exports_sqlite_wasm_high_level_statement_drop_own(exports_sqlite_wasm_high_level_own_statement_t handle);
+void sqlite_extension_vtab_sql_value_free(sqlite_extension_vtab_sql_value_t *ptr);
 
-extern exports_sqlite_wasm_high_level_own_statement_t exports_sqlite_wasm_high_level_statement_new(exports_sqlite_wasm_high_level_statement_t *rep);
-extern exports_sqlite_wasm_high_level_statement_t* exports_sqlite_wasm_high_level_statement_rep(exports_sqlite_wasm_high_level_own_statement_t handle);
-void exports_sqlite_wasm_high_level_statement_destructor(exports_sqlite_wasm_high_level_statement_t *rep);
+void sqlite_extension_vtab_list_constraint_free(sqlite_extension_vtab_list_constraint_t *ptr);
 
-void exports_sqlite_wasm_high_level_result_exec_result_database_error_free(exports_sqlite_wasm_high_level_result_exec_result_database_error_t *ptr);
+void sqlite_extension_vtab_list_orderby_free(sqlite_extension_vtab_list_orderby_t *ptr);
 
-void exports_sqlite_wasm_high_level_result_query_result_database_error_free(exports_sqlite_wasm_high_level_result_query_result_database_error_t *ptr);
+void sqlite_extension_vtab_index_info_free(sqlite_extension_vtab_index_info_t *ptr);
 
-void exports_sqlite_wasm_high_level_result_own_statement_database_error_free(exports_sqlite_wasm_high_level_result_own_statement_database_error_t *ptr);
+void sqlite_extension_vtab_list_constraint_usage_free(sqlite_extension_vtab_list_constraint_usage_t *ptr);
 
-void exports_sqlite_wasm_high_level_result_void_database_error_free(exports_sqlite_wasm_high_level_result_void_database_error_t *ptr);
+void sqlite_extension_vtab_index_plan_free(sqlite_extension_vtab_index_plan_t *ptr);
 
-void exports_sqlite_wasm_high_level_option_database_error_free(exports_sqlite_wasm_high_level_option_database_error_t *ptr);
+void sqlite_extension_vtab_list_sql_value_free(sqlite_extension_vtab_list_sql_value_t *ptr);
 
-void exports_sqlite_wasm_high_level_option_row_free(exports_sqlite_wasm_high_level_option_row_t *ptr);
+void sqlite_extension_vtab_vtab_row_free(sqlite_extension_vtab_vtab_row_t *ptr);
 
-void exports_sqlite_wasm_high_level_result_option_row_database_error_free(exports_sqlite_wasm_high_level_result_option_row_database_error_t *ptr);
+void sqlite_extension_vtab_result_string_string_free(sqlite_extension_vtab_result_string_string_t *ptr);
 
-void exports_sqlite_wasm_high_level_result_own_connection_database_error_free(exports_sqlite_wasm_high_level_result_own_connection_database_error_t *ptr);
+void sqlite_extension_vtab_result_void_string_free(sqlite_extension_vtab_result_void_string_t *ptr);
+
+void sqlite_extension_vtab_result_index_plan_string_free(sqlite_extension_vtab_result_index_plan_string_t *ptr);
+
+void sqlite_extension_vtab_result_sql_value_string_free(sqlite_extension_vtab_result_sql_value_string_t *ptr);
+
+void sqlite_extension_vtab_result_s64_string_free(sqlite_extension_vtab_result_s64_string_t *ptr);
+
+void sqlite_extension_vtab_list_vtab_row_free(sqlite_extension_vtab_list_vtab_row_t *ptr);
+
+void sqlite_extension_vtab_result_list_vtab_row_string_free(sqlite_extension_vtab_result_list_vtab_row_string_t *ptr);
+
+void sqlink_wasm_dispatch_sql_value_free(sqlink_wasm_dispatch_sql_value_t *ptr);
+
+void sqlink_wasm_dispatch_index_info_free(sqlink_wasm_dispatch_index_info_t *ptr);
+
+void sqlink_wasm_dispatch_index_plan_free(sqlink_wasm_dispatch_index_plan_t *ptr);
+
+void sqlink_wasm_dispatch_list_sql_value_free(sqlink_wasm_dispatch_list_sql_value_t *ptr);
+
+void sqlink_wasm_dispatch_vtab_row_free(sqlink_wasm_dispatch_vtab_row_t *ptr);
+
+void sqlink_wasm_dispatch_result_sql_value_string_free(sqlink_wasm_dispatch_result_sql_value_string_t *ptr);
+
+void sqlink_wasm_dispatch_result_void_string_free(sqlink_wasm_dispatch_result_void_string_t *ptr);
+
+void sqlink_wasm_dispatch_result_string_string_free(sqlink_wasm_dispatch_result_string_string_t *ptr);
+
+void sqlink_wasm_dispatch_result_index_plan_string_free(sqlink_wasm_dispatch_result_index_plan_string_t *ptr);
+
+void sqlink_wasm_dispatch_result_s64_string_free(sqlink_wasm_dispatch_result_s64_string_t *ptr);
+
+void sqlink_wasm_dispatch_list_vtab_row_free(sqlink_wasm_dispatch_list_vtab_row_t *ptr);
+
+void sqlink_wasm_dispatch_result_list_vtab_row_string_free(sqlink_wasm_dispatch_result_list_vtab_row_string_t *ptr);
+
+void sqlink_wasm_zip_operations_archive_info_free(sqlink_wasm_zip_operations_archive_info_t *ptr);
+
+void sqlink_wasm_zip_operations_result_void_error_code_free(sqlink_wasm_zip_operations_result_void_error_code_t *ptr);
+
+void sqlink_wasm_zip_operations_result_list_string_error_code_free(sqlink_wasm_zip_operations_result_list_string_error_code_t *ptr);
+
+void exports_sqlink_wasm_low_level_result_db_handle_result_code_free(exports_sqlink_wasm_low_level_result_db_handle_result_code_t *ptr);
+
+void exports_sqlink_wasm_low_level_result_string_result_code_free(exports_sqlink_wasm_low_level_result_string_result_code_t *ptr);
+
+void exports_sqlink_wasm_low_level_result_stmt_handle_result_code_free(exports_sqlink_wasm_low_level_result_stmt_handle_result_code_t *ptr);
+
+void exports_sqlink_wasm_high_level_value_free(exports_sqlink_wasm_high_level_value_t *ptr);
+
+void exports_sqlink_wasm_high_level_database_error_free(exports_sqlink_wasm_high_level_database_error_t *ptr);
+
+void exports_sqlink_wasm_high_level_list_value_free(exports_sqlink_wasm_high_level_list_value_t *ptr);
+
+void exports_sqlink_wasm_high_level_row_free(exports_sqlink_wasm_high_level_row_t *ptr);
+
+void exports_sqlink_wasm_high_level_list_row_free(exports_sqlink_wasm_high_level_list_row_t *ptr);
+
+void exports_sqlink_wasm_high_level_query_result_free(exports_sqlink_wasm_high_level_query_result_t *ptr);
+
+extern void exports_sqlink_wasm_high_level_connection_drop_own(exports_sqlink_wasm_high_level_own_connection_t handle);
+
+extern exports_sqlink_wasm_high_level_own_connection_t exports_sqlink_wasm_high_level_connection_new(exports_sqlink_wasm_high_level_connection_t *rep);
+extern exports_sqlink_wasm_high_level_connection_t* exports_sqlink_wasm_high_level_connection_rep(exports_sqlink_wasm_high_level_own_connection_t handle);
+void exports_sqlink_wasm_high_level_connection_destructor(exports_sqlink_wasm_high_level_connection_t *rep);
+
+extern void exports_sqlink_wasm_high_level_statement_drop_own(exports_sqlink_wasm_high_level_own_statement_t handle);
+
+extern exports_sqlink_wasm_high_level_own_statement_t exports_sqlink_wasm_high_level_statement_new(exports_sqlink_wasm_high_level_statement_t *rep);
+extern exports_sqlink_wasm_high_level_statement_t* exports_sqlink_wasm_high_level_statement_rep(exports_sqlink_wasm_high_level_own_statement_t handle);
+void exports_sqlink_wasm_high_level_statement_destructor(exports_sqlink_wasm_high_level_statement_t *rep);
+
+void exports_sqlink_wasm_high_level_result_exec_result_database_error_free(exports_sqlink_wasm_high_level_result_exec_result_database_error_t *ptr);
+
+void exports_sqlink_wasm_high_level_result_query_result_database_error_free(exports_sqlink_wasm_high_level_result_query_result_database_error_t *ptr);
+
+void exports_sqlink_wasm_high_level_result_own_statement_database_error_free(exports_sqlink_wasm_high_level_result_own_statement_database_error_t *ptr);
+
+void exports_sqlink_wasm_high_level_result_void_database_error_free(exports_sqlink_wasm_high_level_result_void_database_error_t *ptr);
+
+void exports_sqlink_wasm_high_level_option_database_error_free(exports_sqlink_wasm_high_level_option_database_error_t *ptr);
+
+void exports_sqlink_wasm_high_level_option_row_free(exports_sqlink_wasm_high_level_option_row_t *ptr);
+
+void exports_sqlink_wasm_high_level_result_option_row_database_error_free(exports_sqlink_wasm_high_level_result_option_row_database_error_t *ptr);
+
+void exports_sqlink_wasm_high_level_result_own_connection_database_error_free(exports_sqlink_wasm_high_level_result_own_connection_database_error_t *ptr);
+
+void exports_sqlite_extension_types_wit_value_payload_free(exports_sqlite_extension_types_wit_value_payload_t *ptr);
 
 void exports_sqlite_extension_types_sql_value_free(exports_sqlite_extension_types_sql_value_t *ptr);
 
@@ -1461,6 +2594,8 @@ void exports_sqlite_extension_spi_query_result_free(exports_sqlite_extension_spi
 
 void exports_sqlite_extension_spi_sqlite_error_free(exports_sqlite_extension_spi_sqlite_error_t *ptr);
 
+void exports_sqlite_extension_spi_named_param_free(exports_sqlite_extension_spi_named_param_t *ptr);
+
 void exports_sqlite_extension_spi_list_sql_value_free(exports_sqlite_extension_spi_list_sql_value_t *ptr);
 
 void exports_sqlite_extension_spi_result_query_result_sqlite_error_free(exports_sqlite_extension_spi_result_query_result_sqlite_error_t *ptr);
@@ -1468,6 +2603,20 @@ void exports_sqlite_extension_spi_result_query_result_sqlite_error_free(exports_
 void exports_sqlite_extension_spi_result_sql_value_sqlite_error_free(exports_sqlite_extension_spi_result_sql_value_sqlite_error_t *ptr);
 
 void exports_sqlite_extension_spi_result_s64_sqlite_error_free(exports_sqlite_extension_spi_result_s64_sqlite_error_t *ptr);
+
+void exports_sqlite_extension_spi_result_string_sqlite_error_free(exports_sqlite_extension_spi_result_string_sqlite_error_t *ptr);
+
+void exports_sqlite_extension_spi_result_list_u8_sqlite_error_free(exports_sqlite_extension_spi_result_list_u8_sqlite_error_t *ptr);
+
+void exports_sqlite_extension_spi_result_void_sqlite_error_free(exports_sqlite_extension_spi_result_void_sqlite_error_t *ptr);
+
+void exports_sqlite_extension_spi_result_bool_sqlite_error_free(exports_sqlite_extension_spi_result_bool_sqlite_error_t *ptr);
+
+void exports_sqlite_extension_spi_list_named_param_free(exports_sqlite_extension_spi_list_named_param_t *ptr);
+
+void exports_sqlite_extension_spi_list_query_result_free(exports_sqlite_extension_spi_list_query_result_t *ptr);
+
+void exports_sqlite_extension_spi_result_list_query_result_sqlite_error_free(exports_sqlite_extension_spi_result_list_query_result_sqlite_error_t *ptr);
 
 // Sets the string `ret` to reference the input string `s` without copying it
 void sqlite_cli_unified_string_set(sqlite_cli_unified_string_t *ret, const char*s);
