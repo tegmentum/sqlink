@@ -40,6 +40,10 @@ pub mod s3;
 /// default S3 path. #106.
 #[cfg(not(feature = "native-s3"))]
 mod s3_resident;
+/// Resident `http-endpoint` compose:dynlink/endpoint provider routing — the
+/// default HTTP path. #106.
+#[cfg(not(feature = "native-http"))]
+mod http_resident;
 pub mod session_ffi;
 pub mod typed_value;
 pub mod vtab;
@@ -1249,7 +1253,7 @@ impl loaded::sqlite::extension::http::Host for LoadedState {
         loaded::sqlite::extension::http::Response,
         loaded::sqlite::extension::http::HttpError,
     > {
-        use loaded::sqlite::extension::http::{HttpError, Method, Response, Scheme};
+        use loaded::sqlite::extension::http::{HttpError, Method, Scheme};
         let scheme_str = match req.scheme.unwrap_or(Scheme::Https) {
             Scheme::Http => "http",
             Scheme::Https => "https",
@@ -1277,56 +1281,73 @@ impl loaded::sqlite::extension::http::Host for LoadedState {
                 .map_err(|e| HttpError::Other(e.to_string()))?,
         };
 
+        // Policy gate stays HOST-SIDE, BEFORE any dispatch (native or resident).
         check_http_policy(self.http_policy.as_ref(), &authority, method.as_str())?;
 
-        // Build the request. Use the blocking client to avoid an
-        // additional executor handoff inside the already-async
-        // Host trait method body. tokio::task::spawn_blocking would
-        // be more correct under heavy load; v1 just calls.
-        let client = reqwest::blocking::Client::builder()
-            .timeout(
-                req.timeout_ms
-                    .map(|ms| std::time::Duration::from_millis(ms as u64))
-                    .unwrap_or(std::time::Duration::from_secs(30)),
-            )
-            .build()
-            .map_err(|e| HttpError::Other(e.to_string()))?;
+        #[cfg(feature = "native-http")]
+        {
+            // Build the request. Use the blocking client to avoid an
+            // additional executor handoff inside the already-async
+            // Host trait method body. tokio::task::spawn_blocking would
+            // be more correct under heavy load; v1 just calls.
+            let client = reqwest::blocking::Client::builder()
+                .timeout(
+                    req.timeout_ms
+                        .map(|ms| std::time::Duration::from_millis(ms as u64))
+                        .unwrap_or(std::time::Duration::from_secs(30)),
+                )
+                .build()
+                .map_err(|e| HttpError::Other(e.to_string()))?;
 
-        let mut builder = client.request(method, &url);
-        for (k, v) in &req.headers {
-            builder = builder.header(k, v.as_slice());
-        }
-        if let Some(body) = req.body {
-            builder = builder.body(body);
-        }
-        let resp = match builder.send() {
-            Ok(r) => r,
-            Err(e) => {
-                let msg = e.to_string();
-                if e.is_timeout() {
-                    return Err(HttpError::TimedOut);
-                }
-                if e.is_connect() {
-                    return Err(HttpError::ConnectionError(msg));
-                }
-                return Err(HttpError::Other(msg));
+            let mut builder = client.request(method, &url);
+            for (k, v) in &req.headers {
+                builder = builder.header(k, v.as_slice());
             }
-        };
-        let status = resp.status().as_u16();
-        let headers: Vec<(String, Vec<u8>)> = resp
-            .headers()
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.as_bytes().to_vec()))
-            .collect();
-        let body = resp
-            .bytes()
-            .map_err(|e| HttpError::Other(e.to_string()))?
-            .to_vec();
-        Ok(Response {
-            status,
-            headers,
-            body,
-        })
+            if let Some(body) = req.body {
+                builder = builder.body(body);
+            }
+            let resp = match builder.send() {
+                Ok(r) => r,
+                Err(e) => {
+                    let msg = e.to_string();
+                    if e.is_timeout() {
+                        return Err(HttpError::TimedOut);
+                    }
+                    if e.is_connect() {
+                        return Err(HttpError::ConnectionError(msg));
+                    }
+                    return Err(HttpError::Other(msg));
+                }
+            };
+            let status = resp.status().as_u16();
+            let headers: Vec<(String, Vec<u8>)> = resp
+                .headers()
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.as_bytes().to_vec()))
+                .collect();
+            let body = resp
+                .bytes()
+                .map_err(|e| HttpError::Other(e.to_string()))?
+                .to_vec();
+            Ok(loaded::sqlite::extension::http::Response {
+                status,
+                headers,
+                body,
+            })
+        }
+        #[cfg(not(feature = "native-http"))]
+        {
+            // Route through the warm-once resident http-endpoint provider.
+            let _ = &method; // `method` (reqwest::Method) used only for the policy check above.
+            crate::http_resident::request(
+                method.as_str().to_string(),
+                url,
+                req.headers,
+                req.body,
+                req.timeout_ms,
+            )
+            .await
+        }
     }
 }
 
