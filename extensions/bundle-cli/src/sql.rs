@@ -129,3 +129,28 @@ pub const COUNT_MEMBERS_SQL: &str =
 /// INTEGER column: the number of binaries on this bundle.
 pub const COUNT_BINARIES_SQL: &str =
     "SELECT COUNT(*) FROM __cas_bundle_binary WHERE bundle_id = ?1";
+
+/// `?1` = keep_last count (INTEGER). Returns N rows of bundle
+/// ids that fall OUTSIDE the most-recently-used `?1` bundles
+/// (= the GC victims for `--keep N`). The `LIMIT -1 OFFSET ?1`
+/// idiom selects everything past row `?1` in last-used-desc
+/// order; sqlite treats LIMIT -1 as unbounded.
+pub const GC_KEEP_SQL: &str =
+    "SELECT id FROM __cas_bundle \
+     ORDER BY last_used_at DESC, id LIMIT -1 OFFSET ?1";
+
+/// `?1` = cutoff unix seconds (INTEGER). Returns ids of bundles
+/// whose `last_used_at` is older than the cutoff.
+pub const GC_AGE_SQL: &str =
+    "SELECT id FROM __cas_bundle WHERE last_used_at < ?1";
+
+/// `?1` = bundle_id (INTEGER), `?2` = target_triple (TEXT),
+/// `?3` = binary_path (TEXT), `?4` = built_at unix seconds
+/// (INTEGER). UPSERTs into `__cas_bundle_binary`; on conflict
+/// updates the path + timestamp.
+pub const RECORD_BINARY_SQL: &str =
+    "INSERT INTO __cas_bundle_binary(bundle_id, target_triple, binary_path, built_at) \
+     VALUES (?1, ?2, ?3, ?4) \
+     ON CONFLICT(bundle_id, target_triple) DO UPDATE SET \
+        binary_path = excluded.binary_path, \
+        built_at    = excluded.built_at";

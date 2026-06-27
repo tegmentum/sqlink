@@ -115,6 +115,13 @@ mod wasm_export {
         });
     }
 
+    // #554: typed bundles surface + row-shape helpers powered by
+    // dispatch-bridge-cas. Every `bundles::*` call site below is
+    // migrated to `cas::*` against `sql::*_SQL` constants. Lives
+    // at src/wasm_export/cas.rs so it can `use super::bindings`
+    // directly without `pub` plumbing.
+    mod cas;
+
     use bindings::exports::sqlite::extension::dot_command::{
         Guest as DotCommandGuest, InvokeContext, InvokeResult,
     };
@@ -123,12 +130,13 @@ mod wasm_export {
     };
     use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
     use bindings::sqlite::extension::build;
-    use bindings::sqlite::extension::bundles;
     use bindings::sqlite::extension::cli_stdout;
-    use bindings::sqlite::extension::dispatch_bridge_cas;
     use bindings::sqlite::extension::loader_bridge;
     use bindings::sqlite::extension::policy::Capability;
     use bindings::sqlite::extension::types::{SqlValue, SqliteError};
+    // dispatch_bridge_cas is used directly from the cas module's
+    // bindings imports; no direct call sites here in lib.rs after
+    // the #554 migration.
 
     // SQLite primary result code returned by spi.spawn-build when
     // SpawnBuild is declared but not granted at load time. Used
@@ -200,33 +208,6 @@ mod wasm_export {
             }
             Ok(dispatch(ctx.args.trim()))
         }
-    }
-
-    /// Path δ proof-of-pattern: drives a bundle row delete through
-    /// `dispatch_bridge_cas::bridged_execute_cas` against the
-    /// vendored `sql::DELETE_SQL`. Returns `Ok(true)` iff the
-    /// statement removed a row, `Ok(false)` if the id wasn't
-    /// present, or `Err(SqliteError)` on a SQL error.
-    ///
-    /// Pattern: callers that need a `(sql, params) -> bool/i64`
-    /// shape can fold their own typed args into the
-    /// `Vec<SqlValue>` literal and call this helper. More complex
-    /// callers that need row results would parse the
-    /// `QueryResult` returned by `bridged_execute_cas` directly.
-    ///
-    /// Used by `sub_delete` below; the remaining typed
-    /// `bundles::bundle_*` call sites in this module continue to
-    /// flow through the typed `bundles::Host` impl on the
-    /// native host — which itself is a path δ delegate via
-    /// `cas_execute_inner`. Both paths reach the same cas
-    /// connection.
-    #[allow(dead_code)]
-    fn cas_exec_delete(sql: &str, id: u64) -> Result<bool, SqliteError> {
-        let result = dispatch_bridge_cas::bridged_execute_cas(
-            sql,
-            &[SqlValue::Integer(id as i64)],
-        )?;
-        Ok(result.changes > 0)
     }
 
     const BUNDLE_HELP: &str = "\
@@ -325,15 +306,15 @@ underlying set-hash row.";
         }
         let set_hash = hasher.finalize().to_hex().to_string();
 
-        let wit_members: Vec<bundles::BundleMember> = members
+        let wit_members: Vec<cas::BundleMember> = members
             .iter()
-            .map(|m| bundles::BundleMember {
+            .map(|m| cas::BundleMember {
                 extension_name: m.name.clone(),
                 content_hash: m.digest.clone(),
             })
             .collect();
 
-        let id = match bundles::bundle_save(Some(&name), &set_hash, &wit_members) {
+        let id = match cas::bundle_save(Some(&name), &set_hash, &wit_members) {
             Ok(id) => id,
             Err(e) => return err(format!(".bundle save: {}", e.message)),
         };
@@ -351,7 +332,7 @@ underlying set-hash row.";
             // already exists (e.g. a prior `.bundle save` for an
             // identical set under a different name), skip cargo.
             let host_target = loader_bridge::host_target_triple();
-            let detail = match bundles::bundle_show(id) {
+            let detail = match cas::bundle_show(id) {
                 Ok(d) => d,
                 Err(e) => {
                     cli_stdout::write(&out);
@@ -393,7 +374,7 @@ underlying set-hash row.";
     }
 
     fn sub_list() -> InvokeResult {
-        let rows = match bundles::bundle_list() {
+        let rows = match cas::bundle_list() {
             Ok(r) => r,
             Err(e) => return err(format!(".bundle list: {}", e.message)),
         };
@@ -407,7 +388,7 @@ underlying set-hash row.";
             // v1.1 multi-alias: prefer the alias table; if no aliases
             // are bound yet fall back to the legacy display-name
             // column (which is what bundle_save originally inserted).
-            let aliases = bundles::bundle_aliases(s.id).unwrap_or_default();
+            let aliases = cas::bundle_aliases(s.id).unwrap_or_default();
             let names_cell = if !aliases.is_empty() {
                 aliases.join(",")
             } else {
@@ -432,7 +413,7 @@ underlying set-hash row.";
         }
         let old = args[0];
         let new = args[1];
-        let summary = match bundles::bundle_find_by_name(old) {
+        let summary = match cas::bundle_find_by_name(old) {
             Ok(Some(s)) => s,
             Ok(None) => {
                 return err(format!(
@@ -442,7 +423,7 @@ underlying set-hash row.";
             }
             Err(e) => return err(format!(".bundle alias: {}", e.message)),
         };
-        match bundles::bundle_add_alias(summary.id, new) {
+        match cas::bundle_add_alias(summary.id, new) {
             Ok(()) => {
                 cli_stdout::write(&format!(
                     "bundle id={} now aliased as '{}' (in addition to '{}')\n",
@@ -461,7 +442,7 @@ underlying set-hash row.";
             Some(a) => *a,
             None => return err(".bundle unalias: NAME required".into()),
         };
-        match bundles::bundle_remove_alias(alias) {
+        match cas::bundle_remove_alias(alias) {
             Ok(true) => {
                 cli_stdout::write(&format!(
                     "alias '{}' removed (bundle preserved; other aliases unchanged)\n",
@@ -483,9 +464,9 @@ underlying set-hash row.";
             None => return err(".bundle show: NAME or HASH-PREFIX required".into()),
         };
         // Try exact name first, then hash-prefix.
-        let summary = match bundles::bundle_find_by_name(key) {
+        let summary = match cas::bundle_find_by_name(key) {
             Ok(Some(s)) => s,
-            Ok(None) => match bundles::bundle_find_by_hash_prefix(key) {
+            Ok(None) => match cas::bundle_find_by_hash_prefix(key) {
                 Ok(v) if v.len() == 1 => v.into_iter().next().unwrap(),
                 Ok(v) if v.is_empty() => {
                     return err(format!(
@@ -503,7 +484,7 @@ underlying set-hash row.";
             },
             Err(e) => return err(format!(".bundle show: {}", e.message)),
         };
-        let detail = match bundles::bundle_show(summary.id) {
+        let detail = match cas::bundle_show(summary.id) {
             Ok(d) => d,
             Err(e) => return err(format!(".bundle show: {}", e.message)),
         };
@@ -527,7 +508,7 @@ underlying set-hash row.";
         for b in &detail.binaries {
             out.push_str(&format!("    {} -> {}\n", b.target_triple, b.binary_path));
         }
-        bundles::bundle_touch(detail.summary.id);
+        cas::bundle_touch(detail.summary.id);
         cli_stdout::write(&out);
         ok()
     }
@@ -537,7 +518,7 @@ underlying set-hash row.";
             Some(n) => *n,
             None => return err(".bundle delete: NAME required".into()),
         };
-        let summary = match bundles::bundle_find_by_name(name) {
+        let summary = match cas::bundle_find_by_name(name) {
             Ok(Some(s)) => s,
             Ok(None) => {
                 return err(format!(
@@ -547,11 +528,10 @@ underlying set-hash row.";
             }
             Err(e) => return err(format!(".bundle delete: {}", e.message)),
         };
-        // Path δ delegate: drive the DELETE through
-        // dispatch-bridge-cas with the vendored DELETE_SQL.
-        // Same target Connection as the typed bundles::Host
-        // delegate would reach; saves a typed call hop.
-        match cas_exec_delete(crate::sql::DELETE_SQL, summary.id) {
+        // Path-δ delegate via the cas module's typed helper.
+        // Same Connection target the host's bundles::Host (now
+        // also routed through cas_execute_inner) would reach.
+        match cas::bundle_delete(summary.id) {
             Ok(true) => {
                 cli_stdout::write(&format!(
                     "bundle '{}' deleted (id={})\n",
@@ -575,7 +555,7 @@ underlying set-hash row.";
         };
         let name = parsed.name;
         let target_override = parsed.target;
-        let summary = match bundles::bundle_find_by_name(&name) {
+        let summary = match cas::bundle_find_by_name(&name) {
             Ok(Some(s)) => s,
             Ok(None) => {
                 return err(format!(
@@ -585,7 +565,7 @@ underlying set-hash row.";
             }
             Err(e) => return err(format!(".bundle build: {}", e.message)),
         };
-        let detail = match bundles::bundle_show(summary.id) {
+        let detail = match cas::bundle_show(summary.id) {
             Ok(d) => d,
             Err(e) => return err(format!(".bundle build: {}", e.message)),
         };
@@ -600,7 +580,7 @@ underlying set-hash row.";
             .iter()
             .find(|b| b.target_triple == target)
         {
-            bundles::bundle_touch(summary.id);
+            cas::bundle_touch(summary.id);
             cli_stdout::write(&format!(
                 "bundle '{}' already built for {target}: {}\n",
                 sanitize_for_terminal(&name),
@@ -628,7 +608,7 @@ underlying set-hash row.";
     fn do_build(
         name: &str,
         bundle_id: u64,
-        members: &[bundles::BundleMember],
+        members: &[cas::BundleMember],
         target: &str,
     ) -> Result<String, String> {
         let crate_root = resolve_crate_root()?;
@@ -660,7 +640,7 @@ underlying set-hash row.";
                 return Err(format!(".bundle build: {}", e.message));
             }
         };
-        if let Err(e) = bundles::bundle_record_binary(
+        if let Err(e) = cas::bundle_record_binary(
             bundle_id,
             target,
             &out.binary_path,
@@ -676,7 +656,7 @@ underlying set-hash row.";
         // out.binary_path. Surface the recorded path to the user so
         // `.bundle build` output matches what `.bundle show` will
         // report and what the launch-flag exec resolves to.
-        let recorded_path = match bundles::bundle_show(bundle_id) {
+        let recorded_path = match cas::bundle_show(bundle_id) {
             Ok(detail) => detail
                 .binaries
                 .into_iter()
@@ -764,11 +744,11 @@ underlying set-hash row.";
             },
             None => None,
         };
-        let policy = bundles::GcPolicy {
+        let policy = cas::GcPolicy {
             keep_last: parsed.keep_last,
             older_than_secs,
         };
-        let dropped = match bundles::bundle_gc(policy) {
+        let dropped = match cas::bundle_gc(policy) {
             Ok(d) => d,
             Err(e) => return err(format!(".bundle gc: {}", e.message)),
         };
