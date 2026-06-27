@@ -1,0 +1,15 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc dcfee5ee47606bccc617705ad1b6dd31e990b59514650b9986778b858b7ba005 # shrinks to digits = ""
+cc a64bd17ae8c9fec6bc4276008af97a918100ea09be9e9441b7dbf3deb0c2c73f # shrinks to lat1 = 0.0, lon1 = 0.0, lat2 = 0.0, lon2 = 0.0
+cc d59bb2ee1dd270b4ee5c88e8a8b6b867fa0549ed65112ec46a5a9862c4bf3f74 # shrinks to pattern = "", text = ""
+cc e66988b2910d2803c5d7f36f6305af16e04c5ada5944d70bb41e35b154ab04c5 # shrinks to s = "A"
+cc 893ffa8ec11be6388d82573f713ec5aa59fe0c10ebe0221fcf64bc78d1187157 # shrinks to digits = "000000000"
+cc 6171635341de5c4062e84c1eb83162f5273726a401337500422d44a5e2e17b7c # shrinks to _dummy = 0
+cc 4bd48a4fad56365950631477286a5167db2a020a7cb221101169898c5112b48d # shrinks to s = ""
+cc a76862b959d24b31263aeed03f7a55c7dd2194b4002f3f88f2c734859c5631cb # shrinks to bytes = [0, 0, 0, 2]
+cc ed2dd2b1c5fe88acc03c53d9360f90daf37a15b0a218e194b47842854989e384 # shrinks to s = "k(_(*!!#m:\"(l% $(E8"

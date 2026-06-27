@@ -2096,6 +2096,107 @@ its IMPORTS of the 7 transitive interfaces will then match
 upstream's full export shape too, so wac plug can compose
 [upstream + stub-plug + bridge] cleanly.
 
+## #563 — done 2026-06-27
+
+`sqlink-shim-codegen` now auto-emits `compose.wac` alongside the
+bridge crate. Retires the hand-written `compose.wac` that
+#557fix landed for mobilitydb-sqlink-bridge.
+
+### Two-piece landing
+
+1. **Codegen new module** (`sqlink-shim-codegen` ←
+   `feat/auto-emit-compose-wac`, commit `35cbaa4`).
+   `src/wasm_target/emit_compose.rs` reads the bridge's parsed
+   shim packages (the same `shim_packages` set
+   `emit_wit::render_world` enumerates) plus the stub-plug's
+   vendored `wit/world.wit` (when present), then emits a
+   `wac compose` script that:
+
+   - Instantiates each upstream shim as `let <alias> = new
+     <pkg> { ... };` — the trailing ellipsis lets wasi:* +
+     sqlite:extension/* imports stay open for the host.
+   - Instantiates the stub-plug with explicit plug → plug
+     wiring of its transitive imports from upstream — the
+     wiring `wac plug` 0.10 cannot synthesise.
+   - Instantiates the bridge, partitioning each shim import slot
+     between upstream (default) and stub (W4a additions, looked
+     up against the stub-plug's exports set). The trailing
+     `...` lets the contract surface + wasi:* fall through as
+     top-level composition imports.
+   - `export bridge...;` re-exports the bridge's
+     sqlite:extension/* surface.
+
+   Emission SKIPPED when the bridge has no `stub-plug/`
+   subdirectory — postgis bridge today fits that case:
+   `postgis-composed.wasm` satisfies every shim import via
+   `wac plug` directly, no plug → plug wiring needed.
+
+   `emit_readme::readme` now takes a `has_compose_wac: bool` so
+   the bridge's README "Compose with the upstream shim wasm"
+   section picks the right recipe per bridge (`wac compose
+   compose.wac -d ...` vs the existing `wac plug --plug ...`).
+
+2. **Mobilitydb bridge regen** (`mobilitydb-sqlink-bridge` ←
+   `feat/auto-emit-compose-wac`, commit `16b4a1f`). Hand-written
+   `compose.wac` overwritten by the auto-emitted one. Every
+   wiring decision matches the hand-written diff-clean:
+
+   - 54 bridge imports → upstream (`mdb["..."]`).
+   - 8 bridge imports → stub (`stub["..."]`), the W4a additions
+     `typed-join-ops`, `nearest-join-ops`, `time-split-ops`,
+     `value-split-ops`, `to-rows-ops`, `temporal-index-ops`,
+     `spatial-index-ops`, `sequence-json-ops`.
+   - 7 stub-plug transitive imports → upstream (`mdb["..."]`),
+     the `types`, `tbool-ops`, `ttext-ops`, `tcbuffer-ops`,
+     `tgeogpoint-ops`, `tgeompoint3d-ops`, `tpose-ops`
+     interfaces whose types W4a additions reference.
+
+   The auto-emitted script drops the unused `let pg = new
+   postgis:composed { ... };` line the hand-written carried —
+   the mobilitydb bridge's world.wit has no `postgis:wasm/*`
+   imports, so the postgis-composed embedding was pure waste.
+   Composed loadable shrinks 119 MB → 6.8 MB as a result (the
+   `-d postgis:composed=...` flag is no longer required either).
+
+### Verify acceptance
+
+mobilitydb verify subcrate against the auto-composed loadable:
+all 5 acceptance arms green.
+
+  - Phase E: `tfloat_min_value` → `Real(0.5)`.
+  - Phase F (#522): `tfloat_time_span` `option<record>` →
+    decoded `time-period { start: 1e9, end: 3e9, ... }`.
+  - W4b (#558): `kdtree_xy_within` `list<record>` UDTF →
+    2 rows `[10, 20]`.
+  - W2 Phase 2 mop-up (#555): `datespanset_make` round-trip
+    → `[(1, 10), (20, 30)]`.
+  - #557fix W4a: `temporal_join_int` UDTF → 0 rows from
+    stub-plug, no trap, no stubbed error.
+
+### Postgis disposition
+
+Compose.wac NOT emitted for postgis-sqlink-bridge — no
+stub-plug, so `wac plug -p postgis:composed=...` against the
+pre-composed upstream is sufficient. Codegen's
+`emit_compose::write_compose_wac` returns `Ok(false)` and the
+existing README's `wac plug` recipe stays the source of truth.
+
+(Postgis regen against the W4a-composition-fix codegen surfaces
+a pre-existing force-link block reference to wit-bindgen types
+that don't all exist in the postgis bindings module — out of
+scope here; the postgis bridge as currently committed in
+`feat/w3-5-tuple-scalar` continues to build clean.)
+
+### Honest deferrals
+
+- Cross-project framework support (#561): out of scope — the
+  auto-emitter assumes the conventional `stub-plug/wit/world.wit`
+  layout. A datafission / ducklink retarget would need to feed
+  it the same partition data through a different channel.
+- Upstream mdb-temporal-wasm landing the 8 W4a interfaces:
+  once landed, the stub-plug + auto-emitted compose.wac collapse
+  to a plain `wac plug` recipe (no plug → plug wiring needed).
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
