@@ -14,7 +14,7 @@
 #include "sqlite3.h"
 
 #ifdef SQLITE_WASM_UNIFIED
-/* Routes .load through the sqlite:wasm/extension-loader WIT interface
+/* Routes .load through the sqlink:wasm/extension-loader WIT interface
  * the host provides (sqlite-wasm-host crate). The legacy build keeps
  * the placeholder behavior below. */
 #include "sqlite_cli_unified.h"
@@ -557,18 +557,18 @@ static int do_meta_command(CliState *state, const char *line) {
              * .load-with-policy command), all numeric knobs unset
              * (host's defaults apply), no http policy. The fields
              * default to zero / is_some=false from the stack alloc. */
-            sqlite_wasm_extension_loader_load_options_t opts = {0};
+            sqlink_wasm_extension_loader_load_options_t opts = {0};
 
-            sqlite_wasm_extension_loader_manifest_t manifest = {0};
-            sqlite_wasm_extension_loader_loader_error_t err = {0};
+            sqlink_wasm_extension_loader_manifest_t manifest = {0};
+            sqlink_wasm_extension_loader_loader_error_t err = {0};
 
-            bool ok = sqlite_wasm_extension_loader_load_extension(
+            bool ok = sqlink_wasm_extension_loader_load_extension(
                 &wit_path, &opts, &manifest, &err);
             if (!ok) {
                 fprintf(stderr, "Error loading %s: ", arg1);
                 fwrite(err.message.ptr, 1, err.message.len, stderr);
                 fprintf(stderr, " (code %d)\n", err.code);
-                sqlite_wasm_extension_loader_loader_error_free(&err);
+                sqlink_wasm_extension_loader_loader_error_free(&err);
             } else {
                 LoadedExtension *ext = &g_extensions[g_extension_count];
                 strncpy(ext->path, arg1, sizeof(ext->path) - 1);
@@ -593,7 +593,7 @@ static int do_meta_command(CliState *state, const char *line) {
                 /* Register the manifest's scalar/aggregate/collation
                  * entries with the current connection so SQL can
                  * invoke them. Each dispatches through the host via
-                 * sqlite:wasm/dispatch.{scalar-call,aggregate-step,
+                 * sqlink:wasm/dispatch.{scalar-call,aggregate-step,
                  * aggregate-finalize,collation-compare}. */
                 extern void wasm_register_dynamic_manifest(
                     sqlite3 *db, const char *ext_name,
@@ -602,7 +602,7 @@ static int do_meta_command(CliState *state, const char *line) {
 
                 printf("Loaded extension: %s %s from %s (%d functions)\n",
                        ext->name, ext->version, ext->path, ext->num_functions);
-                sqlite_wasm_extension_loader_manifest_free(&manifest);
+                sqlink_wasm_extension_loader_manifest_free(&manifest);
             }
 #else
             /* Legacy build (sqlite-cli.wasm / sqlite-extensible): the
@@ -653,8 +653,8 @@ static int do_meta_command(CliState *state, const char *line) {
                 sqlite3 *db,
                 const sqlite_extension_metadata_manifest_t *manifest);
 
-            sqlite_wasm_extension_loader_list_manifest_t mfs;
-            sqlite_wasm_extension_loader_list_extensions(&mfs);
+            sqlink_wasm_extension_loader_list_manifest_t mfs;
+            sqlink_wasm_extension_loader_list_extensions(&mfs);
             bool unregistered = false;
             for (size_t i = 0; i < mfs.len; i++) {
                 sqlite_extension_metadata_manifest_t *m = &mfs.ptr[i];
@@ -665,12 +665,12 @@ static int do_meta_command(CliState *state, const char *line) {
                     break;
                 }
             }
-            sqlite_wasm_extension_loader_list_manifest_free(&mfs);
+            sqlink_wasm_extension_loader_list_manifest_free(&mfs);
 
             sqlite_cli_unified_string_t name_wit = {
                 (uint8_t *)arg1, strlen(arg1)};
-            sqlite_wasm_extension_loader_loader_error_t err;
-            bool ok = sqlite_wasm_extension_loader_unload_extension(&name_wit, &err);
+            sqlink_wasm_extension_loader_loader_error_t err;
+            bool ok = sqlink_wasm_extension_loader_unload_extension(&name_wit, &err);
             if (ok) {
                 for (int i = 0; i < g_extension_count; i++) {
                     if (g_extensions[i].loaded &&
@@ -690,7 +690,7 @@ static int do_meta_command(CliState *state, const char *line) {
             } else {
                 fprintf(stderr, "Error unloading '%s': %.*s\n", arg1,
                         (int)err.message.len, (char *)err.message.ptr);
-                sqlite_wasm_extension_loader_loader_error_free(&err);
+                sqlink_wasm_extension_loader_loader_error_free(&err);
             }
 #else
             bool found = false;

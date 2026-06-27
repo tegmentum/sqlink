@@ -5,116 +5,325 @@
 
 union int64_double { int64_t a; double b; };
 
-// Imported Functions from `sqlite:extension/http@0.1.0`
+// Imported Functions from `sqlite:extension/http@1.0.0`
 
-__attribute__((__import_module__("sqlite:extension/http@0.1.0"), __import_name__("handle")))
+__attribute__((__import_module__("sqlite:extension/http@1.0.0"), __import_name__("handle")))
 extern void __wasm_import_sqlite_extension_http_handle(uint8_t *, uint8_t *);
 
-// Imported Functions from `sqlite:extension/metadata@0.1.0`
+// Imported Functions from `sqlite:extension/metadata@1.0.0`
 
-__attribute__((__import_module__("sqlite:extension/metadata@0.1.0"), __import_name__("describe")))
+__attribute__((__import_module__("sqlite:extension/metadata@1.0.0"), __import_name__("describe")))
 extern void __wasm_import_sqlite_extension_metadata_describe(uint8_t *);
 
-// Imported Functions from `sqlite:wasm/fts5-slot@0.1.0`
+// Imported Functions from `sqlink:wasm/fts5-slot@0.1.0`
 
-__attribute__((__import_module__("sqlite:wasm/fts5-slot@0.1.0"), __import_name__("describe")))
-extern void __wasm_import_sqlite_wasm_fts5_slot_describe(uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/fts5-slot@0.1.0"), __import_name__("describe")))
+extern void __wasm_import_sqlink_wasm_fts5_slot_describe(uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/fts5-slot@0.1.0"), __import_name__("call")))
-extern void __wasm_import_sqlite_wasm_fts5_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/fts5-slot@0.1.0"), __import_name__("call")))
+extern void __wasm_import_sqlink_wasm_fts5_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
 
-// Imported Functions from `sqlite:wasm/json1-slot@0.1.0`
+// Imported Functions from `sqlink:wasm/json1-slot@0.1.0`
 
-__attribute__((__import_module__("sqlite:wasm/json1-slot@0.1.0"), __import_name__("describe")))
-extern void __wasm_import_sqlite_wasm_json1_slot_describe(uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/json1-slot@0.1.0"), __import_name__("describe")))
+extern void __wasm_import_sqlink_wasm_json1_slot_describe(uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/json1-slot@0.1.0"), __import_name__("call")))
-extern void __wasm_import_sqlite_wasm_json1_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/json1-slot@0.1.0"), __import_name__("call")))
+extern void __wasm_import_sqlink_wasm_json1_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
 
-// Imported Functions from `sqlite:wasm/rtree-slot@0.1.0`
+// Imported Functions from `sqlink:wasm/rtree-slot@0.1.0`
 
-__attribute__((__import_module__("sqlite:wasm/rtree-slot@0.1.0"), __import_name__("describe")))
-extern void __wasm_import_sqlite_wasm_rtree_slot_describe(uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/rtree-slot@0.1.0"), __import_name__("describe")))
+extern void __wasm_import_sqlink_wasm_rtree_slot_describe(uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/rtree-slot@0.1.0"), __import_name__("call")))
-extern void __wasm_import_sqlite_wasm_rtree_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/rtree-slot@0.1.0"), __import_name__("call")))
+extern void __wasm_import_sqlink_wasm_rtree_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
 
-// Imported Functions from `sqlite:wasm/geopoly-slot@0.1.0`
+// Imported Functions from `sqlink:wasm/geopoly-slot@0.1.0`
 
-__attribute__((__import_module__("sqlite:wasm/geopoly-slot@0.1.0"), __import_name__("describe")))
-extern void __wasm_import_sqlite_wasm_geopoly_slot_describe(uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/geopoly-slot@0.1.0"), __import_name__("describe")))
+extern void __wasm_import_sqlink_wasm_geopoly_slot_describe(uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/geopoly-slot@0.1.0"), __import_name__("call")))
-extern void __wasm_import_sqlite_wasm_geopoly_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/geopoly-slot@0.1.0"), __import_name__("call")))
+extern void __wasm_import_sqlink_wasm_geopoly_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
 
-// Imported Functions from `sqlite:wasm/demo-slot@0.1.0`
+// Imported Functions from `sqlink:wasm/demo-slot@0.1.0`
 
-__attribute__((__import_module__("sqlite:wasm/demo-slot@0.1.0"), __import_name__("describe")))
-extern void __wasm_import_sqlite_wasm_demo_slot_describe(uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/demo-slot@0.1.0"), __import_name__("describe")))
+extern void __wasm_import_sqlink_wasm_demo_slot_describe(uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/demo-slot@0.1.0"), __import_name__("call")))
-extern void __wasm_import_sqlite_wasm_demo_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/demo-slot@0.1.0"), __import_name__("call")))
+extern void __wasm_import_sqlink_wasm_demo_slot_call(int64_t, uint8_t *, size_t, uint8_t *);
 
-// Imported Functions from `sqlite:wasm/extension-loader@0.1.0`
+// Imported Functions from `sqlink:wasm/extension-loader@0.1.0`
 
-__attribute__((__import_module__("sqlite:wasm/extension-loader@0.1.0"), __import_name__("load-extension")))
-extern void __wasm_import_sqlite_wasm_extension_loader_load_extension(uint8_t *, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("load-extension")))
+extern void __wasm_import_sqlink_wasm_extension_loader_load_extension(uint8_t *, uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/extension-loader@0.1.0"), __import_name__("unload-extension")))
-extern void __wasm_import_sqlite_wasm_extension_loader_unload_extension(uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("unload-extension")))
+extern void __wasm_import_sqlink_wasm_extension_loader_unload_extension(uint8_t *, size_t, uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/extension-loader@0.1.0"), __import_name__("list-extensions")))
-extern void __wasm_import_sqlite_wasm_extension_loader_list_extensions(uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("extension-digest")))
+extern void __wasm_import_sqlink_wasm_extension_loader_extension_digest(uint8_t *, size_t, uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/extension-loader@0.1.0"), __import_name__("is-extension-loaded")))
-extern int32_t __wasm_import_sqlite_wasm_extension_loader_is_extension_loaded(uint8_t *, size_t);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("load-extension-from-bytes")))
+extern void __wasm_import_sqlink_wasm_extension_loader_load_extension_from_bytes(uint8_t *, uint8_t *);
 
-// Imported Functions from `sqlite:wasm/dispatch@0.1.0`
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("dispatch-dot-command")))
+extern void __wasm_import_sqlink_wasm_extension_loader_dispatch_dot_command(uint8_t *, size_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("scalar-call")))
-extern void __wasm_import_sqlite_wasm_dispatch_scalar_call(uint8_t *, size_t, int64_t, uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("fetch-cas-uri")))
+extern void __wasm_import_sqlink_wasm_extension_loader_fetch_cas_uri(uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("aggregate-step")))
-extern void __wasm_import_sqlite_wasm_dispatch_aggregate_step(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("describe-extension")))
+extern void __wasm_import_sqlink_wasm_extension_loader_describe_extension(uint8_t *, size_t, uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("aggregate-finalize")))
-extern void __wasm_import_sqlite_wasm_dispatch_aggregate_finalize(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("describe-extension-from-uri")))
+extern void __wasm_import_sqlink_wasm_extension_loader_describe_extension_from_uri(uint8_t *, size_t, uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("collation-compare")))
-extern int32_t __wasm_import_sqlite_wasm_dispatch_collation_compare(uint8_t *, size_t, int64_t, uint8_t *, size_t, uint8_t *, size_t);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("component-cache-stats")))
+extern void __wasm_import_sqlink_wasm_extension_loader_component_cache_stats(uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("authorize")))
-extern int32_t __wasm_import_sqlite_wasm_dispatch_authorize(uint8_t *, size_t, int32_t, int32_t, uint8_t *, size_t, int32_t, uint8_t *, size_t, int32_t, uint8_t *, size_t, int32_t, uint8_t *, size_t);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("component-cache-purge")))
+extern int64_t __wasm_import_sqlink_wasm_extension_loader_component_cache_purge(void);
 
-__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("on-update")))
-extern void __wasm_import_sqlite_wasm_dispatch_on_update(uint8_t *, size_t, int32_t, uint8_t *, size_t, uint8_t *, size_t, int64_t);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("list-extensions")))
+extern void __wasm_import_sqlink_wasm_extension_loader_list_extensions(uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("on-commit")))
-extern int32_t __wasm_import_sqlite_wasm_dispatch_on_commit(uint8_t *, size_t);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("is-extension-loaded")))
+extern int32_t __wasm_import_sqlink_wasm_extension_loader_is_extension_loaded(uint8_t *, size_t);
 
-__attribute__((__import_module__("sqlite:wasm/dispatch@0.1.0"), __import_name__("on-rollback")))
-extern void __wasm_import_sqlite_wasm_dispatch_on_rollback(uint8_t *, size_t);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("load-extension-from-uri")))
+extern void __wasm_import_sqlink_wasm_extension_loader_load_extension_from_uri(uint8_t *, uint8_t *);
 
-// Imported Functions from `sqlite:wasm/zip-operations@0.1.0`
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("register-resolver")))
+extern void __wasm_import_sqlink_wasm_extension_loader_register_resolver(uint8_t *, uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/zip-operations@0.1.0"), __import_name__("create-archive")))
-extern void __wasm_import_sqlite_wasm_zip_operations_create_archive(uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("unregister-resolver")))
+extern void __wasm_import_sqlink_wasm_extension_loader_unregister_resolver(uint8_t *, size_t, uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/zip-operations@0.1.0"), __import_name__("extract-archive")))
-extern void __wasm_import_sqlite_wasm_zip_operations_extract_archive(uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("list-resolvers")))
+extern void __wasm_import_sqlink_wasm_extension_loader_list_resolvers(uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/zip-operations@0.1.0"), __import_name__("list-contents")))
-extern void __wasm_import_sqlite_wasm_zip_operations_list_contents(uint8_t *, size_t, uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("list-cache-uris")))
+extern void __wasm_import_sqlink_wasm_extension_loader_list_cache_uris(uint8_t *);
 
-__attribute__((__import_module__("sqlite:wasm/zip-operations@0.1.0"), __import_name__("get-info")))
-extern void __wasm_import_sqlite_wasm_zip_operations_get_info(uint8_t *);
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("purge-cache")))
+extern int64_t __wasm_import_sqlink_wasm_extension_loader_purge_cache(void);
 
-// Exported Functions from `sqlite:wasm/low-level@0.1.0`
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("get-cache-stats")))
+extern void __wasm_import_sqlink_wasm_extension_loader_get_cache_stats(uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("cache-set-max-bytes")))
+extern void __wasm_import_sqlink_wasm_extension_loader_cache_set_max_bytes(int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("cache-gc")))
+extern void __wasm_import_sqlink_wasm_extension_loader_cache_gc(uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("cache-evict")))
+extern void __wasm_import_sqlink_wasm_extension_loader_cache_evict(int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("cache-export")))
+extern void __wasm_import_sqlink_wasm_extension_loader_cache_export(uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("do-cache-import")))
+extern void __wasm_import_sqlink_wasm_extension_loader_do_cache_import(uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("cache-use-external")))
+extern void __wasm_import_sqlink_wasm_extension_loader_cache_use_external(uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("cache-use-internal")))
+extern void __wasm_import_sqlink_wasm_extension_loader_cache_use_internal(uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("cache-migrate-to-external")))
+extern void __wasm_import_sqlink_wasm_extension_loader_cache_migrate_to_external(uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("cache-migrate-to-internal")))
+extern void __wasm_import_sqlink_wasm_extension_loader_cache_migrate_to_internal(uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("run-wasm")))
+extern void __wasm_import_sqlink_wasm_extension_loader_run_wasm(uint8_t *, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("register-wasm-provider")))
+extern void __wasm_import_sqlink_wasm_extension_loader_register_wasm_provider(uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("register-runtime")))
+extern void __wasm_import_sqlink_wasm_extension_loader_register_runtime(uint8_t *, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("unregister-runtime")))
+extern void __wasm_import_sqlink_wasm_extension_loader_unregister_runtime(uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("list-runtimes")))
+extern void __wasm_import_sqlink_wasm_extension_loader_list_runtimes(uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/extension-loader@0.1.0"), __import_name__("run-source")))
+extern void __wasm_import_sqlink_wasm_extension_loader_run_source(uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+// Imported Functions from `sqlite:extension/vtab@1.0.0`
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("create")))
+extern void __wasm_import_sqlite_extension_vtab_create(int64_t, int64_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("connect")))
+extern void __wasm_import_sqlite_extension_vtab_connect(int64_t, int64_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("destroy")))
+extern void __wasm_import_sqlite_extension_vtab_destroy(int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("disconnect")))
+extern void __wasm_import_sqlite_extension_vtab_disconnect(int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("best-index")))
+extern void __wasm_import_sqlite_extension_vtab_best_index(int64_t, int64_t, uint8_t *, size_t, uint8_t *, size_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("open")))
+extern void __wasm_import_sqlite_extension_vtab_open(int64_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("close")))
+extern void __wasm_import_sqlite_extension_vtab_close(int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("filter")))
+extern void __wasm_import_sqlite_extension_vtab_filter(int64_t, int64_t, int32_t, int32_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("next")))
+extern void __wasm_import_sqlite_extension_vtab_next(int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("eof")))
+extern int32_t __wasm_import_sqlite_extension_vtab_eof(int64_t, int64_t);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("column")))
+extern void __wasm_import_sqlite_extension_vtab_column(int64_t, int64_t, int32_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("rowid")))
+extern void __wasm_import_sqlite_extension_vtab_rowid(int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlite:extension/vtab@1.0.0"), __import_name__("fetch-batch")))
+extern void __wasm_import_sqlite_extension_vtab_fetch_batch(int64_t, int64_t, int32_t, uint8_t *);
+
+// Imported Functions from `sqlink:wasm/dispatch@0.1.0`
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("scalar-call")))
+extern void __wasm_import_sqlink_wasm_dispatch_scalar_call(uint8_t *, size_t, int64_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("aggregate-step")))
+extern void __wasm_import_sqlink_wasm_dispatch_aggregate_step(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("aggregate-finalize")))
+extern void __wasm_import_sqlink_wasm_dispatch_aggregate_finalize(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("aggregate-value")))
+extern void __wasm_import_sqlink_wasm_dispatch_aggregate_value(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("aggregate-inverse")))
+extern void __wasm_import_sqlink_wasm_dispatch_aggregate_inverse(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("collation-compare")))
+extern int32_t __wasm_import_sqlink_wasm_dispatch_collation_compare(uint8_t *, size_t, int64_t, uint8_t *, size_t, uint8_t *, size_t);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("authorize")))
+extern int32_t __wasm_import_sqlink_wasm_dispatch_authorize(uint8_t *, size_t, int32_t, int32_t, uint8_t *, size_t, int32_t, uint8_t *, size_t, int32_t, uint8_t *, size_t, int32_t, uint8_t *, size_t);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("on-update")))
+extern void __wasm_import_sqlink_wasm_dispatch_on_update(uint8_t *, size_t, int32_t, uint8_t *, size_t, uint8_t *, size_t, int64_t);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("on-commit")))
+extern int32_t __wasm_import_sqlink_wasm_dispatch_on_commit(uint8_t *, size_t);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("on-rollback")))
+extern void __wasm_import_sqlink_wasm_dispatch_on_rollback(uint8_t *, size_t);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-create")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_create(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-connect")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_connect(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-destroy")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_destroy(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-disconnect")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_disconnect(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-best-index")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_best_index(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *, size_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-open")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_open(uint8_t *, size_t, int64_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-close")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_close(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-filter")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_filter(uint8_t *, size_t, int64_t, int64_t, int32_t, int32_t, uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-next")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_next(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-eof")))
+extern int32_t __wasm_import_sqlink_wasm_dispatch_vtab_eof(uint8_t *, size_t, int64_t, int64_t);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-column")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_column(uint8_t *, size_t, int64_t, int64_t, int32_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-rowid")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_rowid(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-fetch-batch")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_fetch_batch(uint8_t *, size_t, int64_t, int64_t, int32_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-update")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_update(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-begin")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_begin(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-sync")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_sync(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-commit")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_commit(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-rollback")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_rollback(uint8_t *, size_t, int64_t, int64_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-rename")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_rename(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-savepoint")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_savepoint(uint8_t *, size_t, int64_t, int64_t, int32_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-release")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_release(uint8_t *, size_t, int64_t, int64_t, int32_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-rollback-to")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_rollback_to(uint8_t *, size_t, int64_t, int64_t, int32_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-is-shadow-name")))
+extern int32_t __wasm_import_sqlink_wasm_dispatch_vtab_is_shadow_name(uint8_t *, size_t, int64_t, uint8_t *, size_t);
+
+__attribute__((__import_module__("sqlink:wasm/dispatch@0.1.0"), __import_name__("vtab-integrity")))
+extern void __wasm_import_sqlink_wasm_dispatch_vtab_integrity(uint8_t *, size_t, int64_t, int64_t, uint8_t *, size_t, uint8_t *, size_t, int32_t, uint8_t *);
+
+// Imported Functions from `sqlink:wasm/zip-operations@0.1.0`
+
+__attribute__((__import_module__("sqlink:wasm/zip-operations@0.1.0"), __import_name__("create-archive")))
+extern void __wasm_import_sqlink_wasm_zip_operations_create_archive(uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/zip-operations@0.1.0"), __import_name__("extract-archive")))
+extern void __wasm_import_sqlink_wasm_zip_operations_extract_archive(uint8_t *, size_t, uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/zip-operations@0.1.0"), __import_name__("list-contents")))
+extern void __wasm_import_sqlink_wasm_zip_operations_list_contents(uint8_t *, size_t, uint8_t *);
+
+__attribute__((__import_module__("sqlink:wasm/zip-operations@0.1.0"), __import_name__("get-info")))
+extern void __wasm_import_sqlink_wasm_zip_operations_get_info(uint8_t *);
+
+// Exported Functions from `sqlink:wasm/low-level@0.1.0`
 
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#exec")))
-void __wasm_export_exports_sqlite_wasm_low_level_exec_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#exec")))
+void __wasm_export_exports_sqlink_wasm_low_level_exec_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       if ((*((size_t*) (arg0 + (2*sizeof(void*))))) > 0) {
@@ -142,8 +351,8 @@ void __wasm_export_exports_sqlite_wasm_low_level_exec_post_return(uint8_t * arg0
 
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#column-name")))
-void __wasm_export_exports_sqlite_wasm_low_level_column_name_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#column-name")))
+void __wasm_export_exports_sqlink_wasm_low_level_column_name_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
@@ -153,15 +362,15 @@ void __wasm_export_exports_sqlite_wasm_low_level_column_name_post_return(uint8_t
 
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#column-text")))
-void __wasm_export_exports_sqlite_wasm_low_level_column_text_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#column-text")))
+void __wasm_export_exports_sqlink_wasm_low_level_column_text_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#column-blob")))
-void __wasm_export_exports_sqlite_wasm_low_level_column_blob_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#column-blob")))
+void __wasm_export_exports_sqlink_wasm_low_level_column_blob_post_return(uint8_t * arg0) {
   size_t len = *((size_t*) (arg0 + sizeof(void*)));
   if (len > 0) {
     uint8_t *ptr = *((uint8_t **) (arg0 + 0));
@@ -174,8 +383,8 @@ void __wasm_export_exports_sqlite_wasm_low_level_column_blob_post_return(uint8_t
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#errmsg")))
-void __wasm_export_exports_sqlite_wasm_low_level_errmsg_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#errmsg")))
+void __wasm_export_exports_sqlink_wasm_low_level_errmsg_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
@@ -187,26 +396,26 @@ void __wasm_export_exports_sqlite_wasm_low_level_errmsg_post_return(uint8_t * ar
 
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#libversion")))
-void __wasm_export_exports_sqlite_wasm_low_level_libversion_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#libversion")))
+void __wasm_export_exports_sqlink_wasm_low_level_libversion_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/low-level@0.1.0#sourceid")))
-void __wasm_export_exports_sqlite_wasm_low_level_sourceid_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/low-level@0.1.0#sourceid")))
+void __wasm_export_exports_sqlink_wasm_low_level_sourceid_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
 }
 
-// Exported Functions from `sqlite:wasm/high-level@0.1.0`
+// Exported Functions from `sqlink:wasm/high-level@0.1.0`
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.execute")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.execute")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_execute_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -220,8 +429,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_post
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.execute-with-params")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_with_params_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.execute-with-params")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_execute_with_params_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -235,8 +444,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_with
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.query")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.query")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_query_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       size_t len = *((size_t*) (arg0 + (2*sizeof(void*))));
@@ -309,8 +518,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_post_r
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.query-with-params")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_with_params_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.query-with-params")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_query_with_params_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       size_t len = *((size_t*) (arg0 + (2*sizeof(void*))));
@@ -383,8 +592,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_with_p
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.prepare")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_prepare_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.prepare")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_prepare_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -398,8 +607,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_prepare_post
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.begin-transaction")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_begin_transaction_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.begin-transaction")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_begin_transaction_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -413,8 +622,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_begin_transa
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.commit")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_commit_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.commit")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_commit_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -428,8 +637,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_commit_post_
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.rollback")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_rollback_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.rollback")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_rollback_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -444,8 +653,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_rollback_pos
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]connection.last-error")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_connection_last_error_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]connection.last-error")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_connection_last_error_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -459,8 +668,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_connection_last_error_p
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.bind")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.bind")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_bind_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -474,8 +683,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_post_ret
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.bind-all")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_all_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.bind-all")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_bind_all_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -489,8 +698,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_all_post
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.execute")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_execute_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.execute")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_execute_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -504,8 +713,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_execute_post_
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.query")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_query_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.query")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_query_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       size_t len = *((size_t*) (arg0 + (2*sizeof(void*))));
@@ -578,8 +787,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_query_post_re
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.step")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_step_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.step")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_step_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + sizeof(void*)))) {
@@ -639,8 +848,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_step_post_ret
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.reset")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_reset_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.reset")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_reset_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -654,8 +863,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_reset_post_re
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.clear-bindings")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_clear_bindings_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.clear-bindings")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_clear_bindings_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -670,8 +879,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_clear_binding
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#[method]statement.column-names")))
-void __wasm_export_exports_sqlite_wasm_high_level_method_statement_column_names_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#[method]statement.column-names")))
+void __wasm_export_exports_sqlink_wasm_high_level_method_statement_column_names_post_return(uint8_t * arg0) {
   size_t len = *((size_t*) (arg0 + sizeof(void*)));
   if (len > 0) {
     uint8_t *ptr = *((uint8_t **) (arg0 + 0));
@@ -687,16 +896,16 @@ void __wasm_export_exports_sqlite_wasm_high_level_method_statement_column_names_
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#version")))
-void __wasm_export_exports_sqlite_wasm_high_level_version_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#version")))
+void __wasm_export_exports_sqlink_wasm_high_level_version_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#open-memory")))
-void __wasm_export_exports_sqlite_wasm_high_level_open_memory_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#open-memory")))
+void __wasm_export_exports_sqlink_wasm_high_level_open_memory_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -710,8 +919,8 @@ void __wasm_export_exports_sqlite_wasm_high_level_open_memory_post_return(uint8_
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:wasm/high-level@0.1.0#open-file")))
-void __wasm_export_exports_sqlite_wasm_high_level_open_file_post_return(uint8_t * arg0) {
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#open-file")))
+void __wasm_export_exports_sqlink_wasm_high_level_open_file_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
       break;
@@ -725,9 +934,24 @@ void __wasm_export_exports_sqlite_wasm_high_level_open_file_post_return(uint8_t 
   }
 }
 
-// Exported Functions from `sqlite:extension/spi@0.1.0`
+__attribute__((__weak__, __export_name__("cabi_post_sqlink:wasm/high-level@0.1.0#default-connection")))
+void __wasm_export_exports_sqlink_wasm_high_level_default_connection_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@0.1.0#execute")))
+// Exported Functions from `sqlite:extension/spi@1.0.0`
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#execute")))
 void __wasm_export_exports_sqlite_extension_spi_execute_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
@@ -743,17 +967,17 @@ void __wasm_export_exports_sqlite_extension_spi_execute_post_return(uint8_t * ar
         }
         free(ptr);
       }
-      size_t len6 = *((size_t*) (arg0 + (8+3*sizeof(void*))));
-      if (len6 > 0) {
-        uint8_t *ptr7 = *((uint8_t **) (arg0 + (8+2*sizeof(void*))));
-        for (size_t i8 = 0; i8 < len6; i8++) {
-          uint8_t *base = ptr7 + i8 * (2*sizeof(void*));
+      size_t len12 = *((size_t*) (arg0 + (8+3*sizeof(void*))));
+      if (len12 > 0) {
+        uint8_t *ptr13 = *((uint8_t **) (arg0 + (8+2*sizeof(void*))));
+        for (size_t i14 = 0; i14 < len12; i14++) {
+          uint8_t *base = ptr13 + i14 * (2*sizeof(void*));
           (void) base;
-          size_t len3 = *((size_t*) (base + sizeof(void*)));
-          if (len3 > 0) {
-            uint8_t *ptr4 = *((uint8_t **) (base + 0));
-            for (size_t i5 = 0; i5 < len3; i5++) {
-              uint8_t *base = ptr4 + i5 * (8+2*sizeof(void*));
+          size_t len9 = *((size_t*) (base + sizeof(void*)));
+          if (len9 > 0) {
+            uint8_t *ptr10 = *((uint8_t **) (base + 0));
+            for (size_t i11 = 0; i11 < len9; i11++) {
+              uint8_t *base = ptr10 + i11 * (8+6*sizeof(void*));
               (void) base;
               switch ((int32_t) (int32_t) *((uint8_t*) (base + 0))) {
                 case 0: {
@@ -783,12 +1007,36 @@ void __wasm_export_exports_sqlite_extension_spi_execute_post_return(uint8_t * ar
                   }
                   break;
                 }
+                case 5: {
+                  size_t len3 = *((size_t*) (base + (8+1*sizeof(void*))));
+                  if (len3 > 0) {
+                    uint8_t *ptr4 = *((uint8_t **) (base + 8));
+                    for (size_t i5 = 0; i5 < len3; i5++) {
+                      uint8_t *base = ptr4 + i5 * 1;
+                      (void) base;
+                    }
+                    free(ptr4);
+                  }
+                  size_t len6 = *((size_t*) (base + (8+3*sizeof(void*))));
+                  if (len6 > 0) {
+                    uint8_t *ptr7 = *((uint8_t **) (base + (8+2*sizeof(void*))));
+                    for (size_t i8 = 0; i8 < len6; i8++) {
+                      uint8_t *base = ptr7 + i8 * 1;
+                      (void) base;
+                    }
+                    free(ptr7);
+                  }
+                  if ((*((size_t*) (base + (8+5*sizeof(void*))))) > 0) {
+                    free(*((uint8_t **) (base + (8+4*sizeof(void*)))));
+                  }
+                  break;
+                }
               }
             }
-            free(ptr4);
+            free(ptr10);
           }
         }
-        free(ptr7);
+        free(ptr13);
       }
       break;
     }
@@ -801,7 +1049,7 @@ void __wasm_export_exports_sqlite_extension_spi_execute_post_return(uint8_t * ar
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@0.1.0#execute-scalar")))
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#execute-scalar")))
 void __wasm_export_exports_sqlite_extension_spi_execute_scalar_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
@@ -833,6 +1081,30 @@ void __wasm_export_exports_sqlite_extension_spi_execute_scalar_post_return(uint8
           }
           break;
         }
+        case 5: {
+          size_t len0 = *((size_t*) (arg0 + (16+1*sizeof(void*))));
+          if (len0 > 0) {
+            uint8_t *ptr1 = *((uint8_t **) (arg0 + 16));
+            for (size_t i2 = 0; i2 < len0; i2++) {
+              uint8_t *base = ptr1 + i2 * 1;
+              (void) base;
+            }
+            free(ptr1);
+          }
+          size_t len3 = *((size_t*) (arg0 + (16+3*sizeof(void*))));
+          if (len3 > 0) {
+            uint8_t *ptr4 = *((uint8_t **) (arg0 + (16+2*sizeof(void*))));
+            for (size_t i5 = 0; i5 < len3; i5++) {
+              uint8_t *base = ptr4 + i5 * 1;
+              (void) base;
+            }
+            free(ptr4);
+          }
+          if ((*((size_t*) (arg0 + (16+5*sizeof(void*))))) > 0) {
+            free(*((uint8_t **) (arg0 + (16+4*sizeof(void*)))));
+          }
+          break;
+        }
       }
       break;
     }
@@ -845,7 +1117,7 @@ void __wasm_export_exports_sqlite_extension_spi_execute_scalar_post_return(uint8
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@0.1.0#execute-batch")))
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#execute-batch")))
 void __wasm_export_exports_sqlite_extension_spi_execute_batch_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
@@ -860,16 +1132,276 @@ void __wasm_export_exports_sqlite_extension_spi_execute_batch_post_return(uint8_
   }
 }
 
-// Exported Functions from `sqlite:extension/logging@0.1.0`
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#list-vfs")))
+void __wasm_export_exports_sqlite_extension_spi_list_vfs_post_return(uint8_t * arg0) {
+  size_t len = *((size_t*) (arg0 + sizeof(void*)));
+  if (len > 0) {
+    uint8_t *ptr = *((uint8_t **) (arg0 + 0));
+    for (size_t i = 0; i < len; i++) {
+      uint8_t *base = ptr + i * (2*sizeof(void*));
+      (void) base;
+      if ((*((size_t*) (base + sizeof(void*)))) > 0) {
+        free(*((uint8_t **) (base + 0)));
+      }
+    }
+    free(ptr);
+  }
+}
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#vfs-name")))
+void __wasm_export_exports_sqlite_extension_spi_vfs_name_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      if ((*((size_t*) (arg0 + (2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + sizeof(void*))));
+      }
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#serialize-db")))
+void __wasm_export_exports_sqlite_extension_spi_serialize_db_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      size_t len = *((size_t*) (arg0 + (2*sizeof(void*))));
+      if (len > 0) {
+        uint8_t *ptr = *((uint8_t **) (arg0 + sizeof(void*)));
+        for (size_t i = 0; i < len; i++) {
+          uint8_t *base = ptr + i * 1;
+          (void) base;
+        }
+        free(ptr);
+      }
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
+
+
+
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#backup-into")))
+void __wasm_export_exports_sqlite_extension_spi_backup_into_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#restore-from")))
+void __wasm_export_exports_sqlite_extension_spi_restore_from_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#set-busy-timeout")))
+void __wasm_export_exports_sqlite_extension_spi_set_busy_timeout_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#db-config-bool")))
+void __wasm_export_exports_sqlite_extension_spi_db_config_bool_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#deserialize-db")))
+void __wasm_export_exports_sqlite_extension_spi_deserialize_db_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#execute-multi")))
+void __wasm_export_exports_sqlite_extension_spi_execute_multi_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      size_t len15 = *((size_t*) (arg0 + (2*sizeof(void*))));
+      if (len15 > 0) {
+        uint8_t *ptr16 = *((uint8_t **) (arg0 + sizeof(void*)));
+        for (size_t i17 = 0; i17 < len15; i17++) {
+          uint8_t *base = ptr16 + i17 * (16+4*sizeof(void*));
+          (void) base;
+          size_t len = *((size_t*) (base + sizeof(void*)));
+          if (len > 0) {
+            uint8_t *ptr = *((uint8_t **) (base + 0));
+            for (size_t i = 0; i < len; i++) {
+              uint8_t *base = ptr + i * (2*sizeof(void*));
+              (void) base;
+              if ((*((size_t*) (base + sizeof(void*)))) > 0) {
+                free(*((uint8_t **) (base + 0)));
+              }
+            }
+            free(ptr);
+          }
+          size_t len12 = *((size_t*) (base + (3*sizeof(void*))));
+          if (len12 > 0) {
+            uint8_t *ptr13 = *((uint8_t **) (base + (2*sizeof(void*))));
+            for (size_t i14 = 0; i14 < len12; i14++) {
+              uint8_t *base = ptr13 + i14 * (2*sizeof(void*));
+              (void) base;
+              size_t len9 = *((size_t*) (base + sizeof(void*)));
+              if (len9 > 0) {
+                uint8_t *ptr10 = *((uint8_t **) (base + 0));
+                for (size_t i11 = 0; i11 < len9; i11++) {
+                  uint8_t *base = ptr10 + i11 * (8+6*sizeof(void*));
+                  (void) base;
+                  switch ((int32_t) (int32_t) *((uint8_t*) (base + 0))) {
+                    case 0: {
+                      break;
+                    }
+                    case 1: {
+                      break;
+                    }
+                    case 2: {
+                      break;
+                    }
+                    case 3: {
+                      if ((*((size_t*) (base + (8+1*sizeof(void*))))) > 0) {
+                        free(*((uint8_t **) (base + 8)));
+                      }
+                      break;
+                    }
+                    case 4: {
+                      size_t len0 = *((size_t*) (base + (8+1*sizeof(void*))));
+                      if (len0 > 0) {
+                        uint8_t *ptr1 = *((uint8_t **) (base + 8));
+                        for (size_t i2 = 0; i2 < len0; i2++) {
+                          uint8_t *base = ptr1 + i2 * 1;
+                          (void) base;
+                        }
+                        free(ptr1);
+                      }
+                      break;
+                    }
+                    case 5: {
+                      size_t len3 = *((size_t*) (base + (8+1*sizeof(void*))));
+                      if (len3 > 0) {
+                        uint8_t *ptr4 = *((uint8_t **) (base + 8));
+                        for (size_t i5 = 0; i5 < len3; i5++) {
+                          uint8_t *base = ptr4 + i5 * 1;
+                          (void) base;
+                        }
+                        free(ptr4);
+                      }
+                      size_t len6 = *((size_t*) (base + (8+3*sizeof(void*))));
+                      if (len6 > 0) {
+                        uint8_t *ptr7 = *((uint8_t **) (base + (8+2*sizeof(void*))));
+                        for (size_t i8 = 0; i8 < len6; i8++) {
+                          uint8_t *base = ptr7 + i8 * 1;
+                          (void) base;
+                        }
+                        free(ptr7);
+                      }
+                      if ((*((size_t*) (base + (8+5*sizeof(void*))))) > 0) {
+                        free(*((uint8_t **) (base + (8+4*sizeof(void*)))));
+                      }
+                      break;
+                    }
+                  }
+                }
+                free(ptr10);
+              }
+            }
+            free(ptr13);
+          }
+        }
+        free(ptr16);
+      }
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/spi@1.0.0#open-db")))
+void __wasm_export_exports_sqlite_extension_spi_open_db_post_return(uint8_t * arg0) {
+  switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
+    case 0: {
+      break;
+    }
+    case 1: {
+      if ((*((size_t*) (arg0 + (8+2*sizeof(void*))))) > 0) {
+        free(*((uint8_t **) (arg0 + (8+1*sizeof(void*)))));
+      }
+      break;
+    }
+  }
+}
+
+// Exported Functions from `sqlite:extension/logging@1.0.0`
 
 
 
 
 
 
-// Exported Functions from `sqlite:extension/config@0.1.0`
+// Exported Functions from `sqlite:extension/config@1.0.0`
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/config@0.1.0#get")))
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/config@1.0.0#get")))
 void __wasm_export_exports_sqlite_extension_config_get_post_return(uint8_t * arg0) {
   switch ((int32_t) (int32_t) *((uint8_t*) (arg0 + 0))) {
     case 0: {
@@ -885,14 +1417,14 @@ void __wasm_export_exports_sqlite_extension_config_get_post_return(uint8_t * arg
 }
 
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/config@0.1.0#sqlite-version")))
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/config@1.0.0#sqlite-version")))
 void __wasm_export_exports_sqlite_extension_config_sqlite_version_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
   }
 }
 
-__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/config@0.1.0#extension-version")))
+__attribute__((__weak__, __export_name__("cabi_post_sqlite:extension/config@1.0.0#extension-version")))
 void __wasm_export_exports_sqlite_extension_config_extension_version_post_return(uint8_t * arg0) {
   if ((*((size_t*) (arg0 + sizeof(void*)))) > 0) {
     free(*((uint8_t **) (arg0 + 0)));
@@ -911,7 +1443,7 @@ void *cabi_realloc(void *ptr, size_t old_size, size_t align, size_t new_size) {
 }
 
 __attribute__((__aligned__(8)))
-static uint8_t RET_AREA[(24+4*sizeof(void*))];
+static uint8_t RET_AREA[(16+6*sizeof(void*))];
 
 // Helper Functions
 
@@ -923,6 +1455,12 @@ void sqlite_cli_unified_list_u8_free(sqlite_cli_unified_list_u8_t *ptr) {
     }
     free(list_ptr);
   }
+}
+
+void sqlite_extension_types_wit_value_payload_free(sqlite_extension_types_wit_value_payload_t *ptr) {
+  sqlite_cli_unified_list_u8_free(&ptr->type_id);
+  sqlite_cli_unified_list_u8_free(&ptr->bytes);
+  sqlite_cli_unified_string_free(&ptr->symbolic_name);
 }
 
 void sqlite_extension_types_sql_value_free(sqlite_extension_types_sql_value_t *ptr) {
@@ -939,6 +1477,10 @@ void sqlite_extension_types_sql_value_free(sqlite_extension_types_sql_value_t *p
     }
     case 4: {
       sqlite_cli_unified_list_u8_free(&ptr->val.blob);
+      break;
+    }
+    case 5: {
+      sqlite_extension_types_wit_value_payload_free(&ptr->val.wit_value);
       break;
     }
   }
@@ -1150,6 +1692,11 @@ void sqlite_extension_policy_http_policy_free(sqlite_extension_policy_http_polic
   sqlite_cli_unified_option_u32_free(&ptr->timeout_ms);
 }
 
+void sqlite_extension_policy_dns_policy_free(sqlite_extension_policy_dns_policy_t *ptr) {
+  sqlite_cli_unified_list_string_free(&ptr->allowed_domains);
+  sqlite_cli_unified_option_u32_free(&ptr->timeout_ms);
+}
+
 void sqlite_extension_policy_fs_policy_free(sqlite_extension_policy_fs_policy_t *ptr) {
   sqlite_cli_unified_list_string_free(&ptr->readable_prefixes);
   sqlite_cli_unified_list_string_free(&ptr->writable_prefixes);
@@ -1159,6 +1706,12 @@ void sqlite_extension_policy_fs_policy_free(sqlite_extension_policy_fs_policy_t 
 void sqlite_extension_policy_option_http_policy_free(sqlite_extension_policy_option_http_policy_t *ptr) {
   if (ptr->is_some) {
     sqlite_extension_policy_http_policy_free(&ptr->val);
+  }
+}
+
+void sqlite_extension_policy_option_dns_policy_free(sqlite_extension_policy_option_dns_policy_t *ptr) {
+  if (ptr->is_some) {
+    sqlite_extension_policy_dns_policy_free(&ptr->val);
   }
 }
 
@@ -1184,6 +1737,7 @@ void sqlite_extension_policy_load_options_free(sqlite_extension_policy_load_opti
   sqlite_cli_unified_option_u64_free(&ptr->memory_limit_bytes);
   sqlite_cli_unified_option_u64_free(&ptr->epoch_deadline_ms);
   sqlite_extension_policy_option_http_policy_free(&ptr->http_policy);
+  sqlite_extension_policy_option_dns_policy_free(&ptr->dns_policy);
   sqlite_extension_policy_option_fs_policy_free(&ptr->fs_policy);
   sqlite_extension_policy_list_capability_free(&ptr->grant);
 }
@@ -1206,11 +1760,22 @@ void sqlite_extension_policy_policy_error_free(sqlite_extension_policy_policy_er
       sqlite_extension_policy_method_free(&ptr->val.method_not_allowed);
       break;
     }
+    case 5: {
+      sqlite_cli_unified_string_free(&ptr->val.dns_domain_not_allowed);
+      break;
+    }
   }
 }
 
 void sqlite_extension_metadata_capability_free(sqlite_extension_metadata_capability_t *ptr) {
   sqlite_extension_policy_capability_free(ptr);
+}
+
+void sqlite_extension_metadata_typed_value_binding_free(sqlite_extension_metadata_typed_value_binding_t *ptr) {
+  sqlite_cli_unified_list_u8_free(&ptr->type_id);
+  sqlite_cli_unified_string_free(&ptr->symbolic_name);
+  sqlite_cli_unified_string_free(&ptr->decoder_import);
+  sqlite_cli_unified_string_free(&ptr->encoder_import);
 }
 
 void sqlite_extension_metadata_scalar_function_spec_free(sqlite_extension_metadata_scalar_function_spec_t *ptr) {
@@ -1223,6 +1788,35 @@ void sqlite_extension_metadata_aggregate_function_spec_free(sqlite_extension_met
 
 void sqlite_extension_metadata_collation_spec_free(sqlite_extension_metadata_collation_spec_t *ptr) {
   sqlite_cli_unified_string_free(&ptr->name);
+}
+
+void sqlite_extension_metadata_vtab_spec_free(sqlite_extension_metadata_vtab_spec_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->name);
+}
+
+void sqlite_extension_metadata_dot_command_example_free(sqlite_extension_metadata_dot_command_example_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->description);
+  sqlite_cli_unified_string_free(&ptr->command);
+}
+
+void sqlite_extension_metadata_list_dot_command_example_free(sqlite_extension_metadata_list_dot_command_example_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_extension_metadata_dot_command_example_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_extension_metadata_dot_command_example_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlite_extension_metadata_dot_command_spec_free(sqlite_extension_metadata_dot_command_spec_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->name);
+  sqlite_cli_unified_string_free(&ptr->version);
+  sqlite_cli_unified_string_free(&ptr->summary);
+  sqlite_cli_unified_string_free(&ptr->usage);
+  sqlite_cli_unified_string_free(&ptr->help);
+  sqlite_extension_metadata_list_dot_command_example_free(&ptr->examples);
 }
 
 void sqlite_extension_metadata_list_scalar_function_spec_free(sqlite_extension_metadata_list_scalar_function_spec_t *ptr) {
@@ -1258,6 +1852,28 @@ void sqlite_extension_metadata_list_collation_spec_free(sqlite_extension_metadat
   }
 }
 
+void sqlite_extension_metadata_list_vtab_spec_free(sqlite_extension_metadata_list_vtab_spec_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_extension_metadata_vtab_spec_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_extension_metadata_vtab_spec_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlite_extension_metadata_list_dot_command_spec_free(sqlite_extension_metadata_list_dot_command_spec_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_extension_metadata_dot_command_spec_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_extension_metadata_dot_command_spec_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
 void sqlite_extension_metadata_list_capability_free(sqlite_extension_metadata_list_capability_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
@@ -1269,255 +1885,574 @@ void sqlite_extension_metadata_list_capability_free(sqlite_extension_metadata_li
   }
 }
 
+void sqlite_extension_metadata_list_typed_value_binding_free(sqlite_extension_metadata_list_typed_value_binding_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_extension_metadata_typed_value_binding_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_extension_metadata_typed_value_binding_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
 void sqlite_extension_metadata_manifest_free(sqlite_extension_metadata_manifest_t *ptr) {
   sqlite_cli_unified_string_free(&ptr->name);
   sqlite_cli_unified_string_free(&ptr->version);
   sqlite_extension_metadata_list_scalar_function_spec_free(&ptr->scalar_functions);
   sqlite_extension_metadata_list_aggregate_function_spec_free(&ptr->aggregate_functions);
   sqlite_extension_metadata_list_collation_spec_free(&ptr->collations);
+  sqlite_extension_metadata_list_vtab_spec_free(&ptr->vtabs);
+  sqlite_extension_metadata_list_dot_command_spec_free(&ptr->dot_commands);
   sqlite_extension_metadata_list_capability_free(&ptr->declared_capabilities);
+  sqlite_extension_metadata_list_capability_free(&ptr->optional_capabilities);
+  sqlite_cli_unified_option_string_free(&ptr->preferred_prefix);
+  sqlite_cli_unified_option_string_free(&ptr->prefix_expansion);
+  sqlite_extension_metadata_list_typed_value_binding_free(&ptr->typed_values);
 }
 
-void sqlite_wasm_fts5_slot_sql_value_free(sqlite_wasm_fts5_slot_sql_value_t *ptr) {
+void sqlink_wasm_fts5_slot_sql_value_free(sqlink_wasm_fts5_slot_sql_value_t *ptr) {
   sqlite_extension_types_sql_value_free(ptr);
 }
 
-void sqlite_wasm_fts5_slot_manifest_free(sqlite_wasm_fts5_slot_manifest_t *ptr) {
+void sqlink_wasm_fts5_slot_manifest_free(sqlink_wasm_fts5_slot_manifest_t *ptr) {
   sqlite_extension_metadata_manifest_free(ptr);
 }
 
-void sqlite_wasm_fts5_slot_list_sql_value_free(sqlite_wasm_fts5_slot_list_sql_value_t *ptr) {
+void sqlink_wasm_fts5_slot_list_sql_value_free(sqlink_wasm_fts5_slot_list_sql_value_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    sqlite_wasm_fts5_slot_sql_value_t *list_ptr = ptr->ptr;
+    sqlink_wasm_fts5_slot_sql_value_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      sqlite_wasm_fts5_slot_sql_value_free(&list_ptr[i]);
+      sqlink_wasm_fts5_slot_sql_value_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void sqlite_wasm_fts5_slot_result_sql_value_string_free(sqlite_wasm_fts5_slot_result_sql_value_string_t *ptr) {
+void sqlink_wasm_fts5_slot_result_sql_value_string_free(sqlink_wasm_fts5_slot_result_sql_value_string_t *ptr) {
   if (!ptr->is_err) {
-    sqlite_wasm_fts5_slot_sql_value_free(&ptr->val.ok);
+    sqlink_wasm_fts5_slot_sql_value_free(&ptr->val.ok);
   } else {
     sqlite_cli_unified_string_free(&ptr->val.err);
   }
 }
 
-void sqlite_wasm_json1_slot_sql_value_free(sqlite_wasm_json1_slot_sql_value_t *ptr) {
+void sqlink_wasm_json1_slot_sql_value_free(sqlink_wasm_json1_slot_sql_value_t *ptr) {
   sqlite_extension_types_sql_value_free(ptr);
 }
 
-void sqlite_wasm_json1_slot_manifest_free(sqlite_wasm_json1_slot_manifest_t *ptr) {
+void sqlink_wasm_json1_slot_manifest_free(sqlink_wasm_json1_slot_manifest_t *ptr) {
   sqlite_extension_metadata_manifest_free(ptr);
 }
 
-void sqlite_wasm_json1_slot_list_sql_value_free(sqlite_wasm_json1_slot_list_sql_value_t *ptr) {
+void sqlink_wasm_json1_slot_list_sql_value_free(sqlink_wasm_json1_slot_list_sql_value_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    sqlite_wasm_json1_slot_sql_value_t *list_ptr = ptr->ptr;
+    sqlink_wasm_json1_slot_sql_value_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      sqlite_wasm_json1_slot_sql_value_free(&list_ptr[i]);
+      sqlink_wasm_json1_slot_sql_value_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void sqlite_wasm_json1_slot_result_sql_value_string_free(sqlite_wasm_json1_slot_result_sql_value_string_t *ptr) {
+void sqlink_wasm_json1_slot_result_sql_value_string_free(sqlink_wasm_json1_slot_result_sql_value_string_t *ptr) {
   if (!ptr->is_err) {
-    sqlite_wasm_json1_slot_sql_value_free(&ptr->val.ok);
+    sqlink_wasm_json1_slot_sql_value_free(&ptr->val.ok);
   } else {
     sqlite_cli_unified_string_free(&ptr->val.err);
   }
 }
 
-void sqlite_wasm_rtree_slot_sql_value_free(sqlite_wasm_rtree_slot_sql_value_t *ptr) {
+void sqlink_wasm_rtree_slot_sql_value_free(sqlink_wasm_rtree_slot_sql_value_t *ptr) {
   sqlite_extension_types_sql_value_free(ptr);
 }
 
-void sqlite_wasm_rtree_slot_manifest_free(sqlite_wasm_rtree_slot_manifest_t *ptr) {
+void sqlink_wasm_rtree_slot_manifest_free(sqlink_wasm_rtree_slot_manifest_t *ptr) {
   sqlite_extension_metadata_manifest_free(ptr);
 }
 
-void sqlite_wasm_rtree_slot_list_sql_value_free(sqlite_wasm_rtree_slot_list_sql_value_t *ptr) {
+void sqlink_wasm_rtree_slot_list_sql_value_free(sqlink_wasm_rtree_slot_list_sql_value_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    sqlite_wasm_rtree_slot_sql_value_t *list_ptr = ptr->ptr;
+    sqlink_wasm_rtree_slot_sql_value_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      sqlite_wasm_rtree_slot_sql_value_free(&list_ptr[i]);
+      sqlink_wasm_rtree_slot_sql_value_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void sqlite_wasm_rtree_slot_result_sql_value_string_free(sqlite_wasm_rtree_slot_result_sql_value_string_t *ptr) {
+void sqlink_wasm_rtree_slot_result_sql_value_string_free(sqlink_wasm_rtree_slot_result_sql_value_string_t *ptr) {
   if (!ptr->is_err) {
-    sqlite_wasm_rtree_slot_sql_value_free(&ptr->val.ok);
+    sqlink_wasm_rtree_slot_sql_value_free(&ptr->val.ok);
   } else {
     sqlite_cli_unified_string_free(&ptr->val.err);
   }
 }
 
-void sqlite_wasm_geopoly_slot_sql_value_free(sqlite_wasm_geopoly_slot_sql_value_t *ptr) {
+void sqlink_wasm_geopoly_slot_sql_value_free(sqlink_wasm_geopoly_slot_sql_value_t *ptr) {
   sqlite_extension_types_sql_value_free(ptr);
 }
 
-void sqlite_wasm_geopoly_slot_manifest_free(sqlite_wasm_geopoly_slot_manifest_t *ptr) {
+void sqlink_wasm_geopoly_slot_manifest_free(sqlink_wasm_geopoly_slot_manifest_t *ptr) {
   sqlite_extension_metadata_manifest_free(ptr);
 }
 
-void sqlite_wasm_geopoly_slot_list_sql_value_free(sqlite_wasm_geopoly_slot_list_sql_value_t *ptr) {
+void sqlink_wasm_geopoly_slot_list_sql_value_free(sqlink_wasm_geopoly_slot_list_sql_value_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    sqlite_wasm_geopoly_slot_sql_value_t *list_ptr = ptr->ptr;
+    sqlink_wasm_geopoly_slot_sql_value_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      sqlite_wasm_geopoly_slot_sql_value_free(&list_ptr[i]);
+      sqlink_wasm_geopoly_slot_sql_value_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void sqlite_wasm_geopoly_slot_result_sql_value_string_free(sqlite_wasm_geopoly_slot_result_sql_value_string_t *ptr) {
+void sqlink_wasm_geopoly_slot_result_sql_value_string_free(sqlink_wasm_geopoly_slot_result_sql_value_string_t *ptr) {
   if (!ptr->is_err) {
-    sqlite_wasm_geopoly_slot_sql_value_free(&ptr->val.ok);
+    sqlink_wasm_geopoly_slot_sql_value_free(&ptr->val.ok);
   } else {
     sqlite_cli_unified_string_free(&ptr->val.err);
   }
 }
 
-void sqlite_wasm_demo_slot_sql_value_free(sqlite_wasm_demo_slot_sql_value_t *ptr) {
+void sqlink_wasm_demo_slot_sql_value_free(sqlink_wasm_demo_slot_sql_value_t *ptr) {
   sqlite_extension_types_sql_value_free(ptr);
 }
 
-void sqlite_wasm_demo_slot_manifest_free(sqlite_wasm_demo_slot_manifest_t *ptr) {
+void sqlink_wasm_demo_slot_manifest_free(sqlink_wasm_demo_slot_manifest_t *ptr) {
   sqlite_extension_metadata_manifest_free(ptr);
 }
 
-void sqlite_wasm_demo_slot_list_sql_value_free(sqlite_wasm_demo_slot_list_sql_value_t *ptr) {
+void sqlink_wasm_demo_slot_list_sql_value_free(sqlink_wasm_demo_slot_list_sql_value_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    sqlite_wasm_demo_slot_sql_value_t *list_ptr = ptr->ptr;
+    sqlink_wasm_demo_slot_sql_value_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      sqlite_wasm_demo_slot_sql_value_free(&list_ptr[i]);
+      sqlink_wasm_demo_slot_sql_value_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void sqlite_wasm_demo_slot_result_sql_value_string_free(sqlite_wasm_demo_slot_result_sql_value_string_t *ptr) {
+void sqlink_wasm_demo_slot_result_sql_value_string_free(sqlink_wasm_demo_slot_result_sql_value_string_t *ptr) {
   if (!ptr->is_err) {
-    sqlite_wasm_demo_slot_sql_value_free(&ptr->val.ok);
+    sqlink_wasm_demo_slot_sql_value_free(&ptr->val.ok);
   } else {
     sqlite_cli_unified_string_free(&ptr->val.err);
   }
 }
 
-void sqlite_wasm_extension_loader_manifest_free(sqlite_wasm_extension_loader_manifest_t *ptr) {
+void sqlink_wasm_extension_loader_manifest_free(sqlink_wasm_extension_loader_manifest_t *ptr) {
   sqlite_extension_metadata_manifest_free(ptr);
 }
 
-void sqlite_wasm_extension_loader_load_options_free(sqlite_wasm_extension_loader_load_options_t *ptr) {
+void sqlink_wasm_extension_loader_load_options_free(sqlink_wasm_extension_loader_load_options_t *ptr) {
   sqlite_extension_policy_load_options_free(ptr);
 }
 
-void sqlite_wasm_extension_loader_loader_error_free(sqlite_wasm_extension_loader_loader_error_t *ptr) {
+void sqlink_wasm_extension_loader_loader_error_free(sqlink_wasm_extension_loader_loader_error_t *ptr) {
   sqlite_cli_unified_string_free(&ptr->message);
 }
 
-void sqlite_wasm_extension_loader_result_manifest_loader_error_free(sqlite_wasm_extension_loader_result_manifest_loader_error_t *ptr) {
-  if (!ptr->is_err) {
-    sqlite_wasm_extension_loader_manifest_free(&ptr->val.ok);
-  } else {
-    sqlite_wasm_extension_loader_loader_error_free(&ptr->val.err);
-  }
+void sqlink_wasm_extension_loader_state_delta_free(sqlink_wasm_extension_loader_state_delta_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->key);
+  sqlite_cli_unified_string_free(&ptr->value_json);
 }
 
-void sqlite_wasm_extension_loader_result_void_loader_error_free(sqlite_wasm_extension_loader_result_void_loader_error_t *ptr) {
-  if (!ptr->is_err) {
-  } else {
-    sqlite_wasm_extension_loader_loader_error_free(&ptr->val.err);
-  }
-}
-
-void sqlite_wasm_extension_loader_list_manifest_free(sqlite_wasm_extension_loader_list_manifest_t *ptr) {
+void sqlink_wasm_extension_loader_list_state_delta_free(sqlink_wasm_extension_loader_list_state_delta_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    sqlite_wasm_extension_loader_manifest_t *list_ptr = ptr->ptr;
+    sqlink_wasm_extension_loader_state_delta_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      sqlite_wasm_extension_loader_manifest_free(&list_ptr[i]);
+      sqlink_wasm_extension_loader_state_delta_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void sqlite_wasm_dispatch_sql_value_free(sqlite_wasm_dispatch_sql_value_t *ptr) {
+void sqlink_wasm_extension_loader_dot_command_result_free(sqlink_wasm_extension_loader_dot_command_result_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->text);
+  sqlink_wasm_extension_loader_list_state_delta_free(&ptr->state_deltas);
+}
+
+void sqlink_wasm_extension_loader_described_result_free(sqlink_wasm_extension_loader_described_result_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->name);
+  sqlite_cli_unified_string_free(&ptr->digest_hex);
+}
+
+void sqlink_wasm_extension_loader_uri_cache_entry_free(sqlink_wasm_extension_loader_uri_cache_entry_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->uri);
+  sqlite_cli_unified_string_free(&ptr->hash);
+}
+
+void sqlink_wasm_extension_loader_cache_stats_free(sqlink_wasm_extension_loader_cache_stats_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->mode);
+}
+
+void sqlink_wasm_extension_loader_result_manifest_loader_error_free(sqlink_wasm_extension_loader_result_manifest_loader_error_t *ptr) {
+  if (!ptr->is_err) {
+    sqlink_wasm_extension_loader_manifest_free(&ptr->val.ok);
+  } else {
+    sqlink_wasm_extension_loader_loader_error_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_extension_loader_result_void_loader_error_free(sqlink_wasm_extension_loader_result_void_loader_error_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    sqlink_wasm_extension_loader_loader_error_free(&ptr->val.err);
+  }
+}
+
+void sqlite_cli_unified_tuple2_string_string_free(sqlite_cli_unified_tuple2_string_string_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->f0);
+  sqlite_cli_unified_string_free(&ptr->f1);
+}
+
+void sqlite_cli_unified_list_tuple2_string_string_free(sqlite_cli_unified_list_tuple2_string_string_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_cli_unified_tuple2_string_string_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_cli_unified_tuple2_string_string_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlink_wasm_extension_loader_result_dot_command_result_loader_error_free(sqlink_wasm_extension_loader_result_dot_command_result_loader_error_t *ptr) {
+  if (!ptr->is_err) {
+    sqlink_wasm_extension_loader_dot_command_result_free(&ptr->val.ok);
+  } else {
+    sqlink_wasm_extension_loader_loader_error_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_extension_loader_result_list_u8_loader_error_free(sqlink_wasm_extension_loader_result_list_u8_loader_error_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    sqlink_wasm_extension_loader_loader_error_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_extension_loader_result_described_result_loader_error_free(sqlink_wasm_extension_loader_result_described_result_loader_error_t *ptr) {
+  if (!ptr->is_err) {
+    sqlink_wasm_extension_loader_described_result_free(&ptr->val.ok);
+  } else {
+    sqlink_wasm_extension_loader_loader_error_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_extension_loader_list_manifest_free(sqlink_wasm_extension_loader_list_manifest_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlink_wasm_extension_loader_manifest_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlink_wasm_extension_loader_manifest_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlink_wasm_extension_loader_result_string_loader_error_free(sqlink_wasm_extension_loader_result_string_loader_error_t *ptr) {
+  if (!ptr->is_err) {
+    sqlite_cli_unified_string_free(&ptr->val.ok);
+  } else {
+    sqlink_wasm_extension_loader_loader_error_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_extension_loader_list_uri_cache_entry_free(sqlink_wasm_extension_loader_list_uri_cache_entry_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlink_wasm_extension_loader_uri_cache_entry_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlink_wasm_extension_loader_uri_cache_entry_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlink_wasm_extension_loader_result_cache_stats_loader_error_free(sqlink_wasm_extension_loader_result_cache_stats_loader_error_t *ptr) {
+  if (!ptr->is_err) {
+    sqlink_wasm_extension_loader_cache_stats_free(&ptr->val.ok);
+  } else {
+    sqlink_wasm_extension_loader_loader_error_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_extension_loader_result_u64_loader_error_free(sqlink_wasm_extension_loader_result_u64_loader_error_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    sqlink_wasm_extension_loader_loader_error_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_extension_loader_result_cache_merge_stats_loader_error_free(sqlink_wasm_extension_loader_result_cache_merge_stats_loader_error_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    sqlink_wasm_extension_loader_loader_error_free(&ptr->val.err);
+  }
+}
+
+void sqlite_cli_unified_tuple3_string_string_string_free(sqlite_cli_unified_tuple3_string_string_string_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->f0);
+  sqlite_cli_unified_string_free(&ptr->f1);
+  sqlite_cli_unified_string_free(&ptr->f2);
+}
+
+void sqlite_cli_unified_list_tuple3_string_string_string_free(sqlite_cli_unified_list_tuple3_string_string_string_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_cli_unified_tuple3_string_string_string_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_cli_unified_tuple3_string_string_string_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlite_extension_vtab_sql_value_free(sqlite_extension_vtab_sql_value_t *ptr) {
   sqlite_extension_types_sql_value_free(ptr);
 }
 
-void sqlite_wasm_dispatch_list_sql_value_free(sqlite_wasm_dispatch_list_sql_value_t *ptr) {
+void sqlite_extension_vtab_list_constraint_free(sqlite_extension_vtab_list_constraint_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    sqlite_wasm_dispatch_sql_value_t *list_ptr = ptr->ptr;
+    sqlite_extension_vtab_constraint_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      sqlite_wasm_dispatch_sql_value_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void sqlite_wasm_dispatch_result_sql_value_string_free(sqlite_wasm_dispatch_result_sql_value_string_t *ptr) {
+void sqlite_extension_vtab_list_orderby_free(sqlite_extension_vtab_list_orderby_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_extension_vtab_orderby_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlite_extension_vtab_index_info_free(sqlite_extension_vtab_index_info_t *ptr) {
+  sqlite_extension_vtab_list_constraint_free(&ptr->constraints);
+  sqlite_extension_vtab_list_orderby_free(&ptr->orderbys);
+}
+
+void sqlite_extension_vtab_list_constraint_usage_free(sqlite_extension_vtab_list_constraint_usage_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_extension_vtab_constraint_usage_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlite_extension_vtab_index_plan_free(sqlite_extension_vtab_index_plan_t *ptr) {
+  sqlite_extension_vtab_list_constraint_usage_free(&ptr->constraint_usage);
+  sqlite_cli_unified_option_string_free(&ptr->idx_str);
+}
+
+void sqlite_extension_vtab_list_sql_value_free(sqlite_extension_vtab_list_sql_value_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_extension_vtab_sql_value_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_extension_vtab_sql_value_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlite_extension_vtab_vtab_row_free(sqlite_extension_vtab_vtab_row_t *ptr) {
+  sqlite_extension_vtab_list_sql_value_free(&ptr->columns);
+}
+
+void sqlite_extension_vtab_result_string_string_free(sqlite_extension_vtab_result_string_string_t *ptr) {
   if (!ptr->is_err) {
-    sqlite_wasm_dispatch_sql_value_free(&ptr->val.ok);
+    sqlite_cli_unified_string_free(&ptr->val.ok);
   } else {
     sqlite_cli_unified_string_free(&ptr->val.err);
   }
 }
 
-void sqlite_wasm_dispatch_result_void_string_free(sqlite_wasm_dispatch_result_void_string_t *ptr) {
+void sqlite_extension_vtab_result_void_string_free(sqlite_extension_vtab_result_void_string_t *ptr) {
   if (!ptr->is_err) {
   } else {
     sqlite_cli_unified_string_free(&ptr->val.err);
   }
 }
 
-void sqlite_wasm_zip_operations_archive_info_free(sqlite_wasm_zip_operations_archive_info_t *ptr) {
+void sqlite_extension_vtab_result_index_plan_string_free(sqlite_extension_vtab_result_index_plan_string_t *ptr) {
+  if (!ptr->is_err) {
+    sqlite_extension_vtab_index_plan_free(&ptr->val.ok);
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlite_extension_vtab_result_sql_value_string_free(sqlite_extension_vtab_result_sql_value_string_t *ptr) {
+  if (!ptr->is_err) {
+    sqlite_extension_vtab_sql_value_free(&ptr->val.ok);
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlite_extension_vtab_result_s64_string_free(sqlite_extension_vtab_result_s64_string_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlite_extension_vtab_list_vtab_row_free(sqlite_extension_vtab_list_vtab_row_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlite_extension_vtab_vtab_row_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlite_extension_vtab_vtab_row_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlite_extension_vtab_result_list_vtab_row_string_free(sqlite_extension_vtab_result_list_vtab_row_string_t *ptr) {
+  if (!ptr->is_err) {
+    sqlite_extension_vtab_list_vtab_row_free(&ptr->val.ok);
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_dispatch_sql_value_free(sqlink_wasm_dispatch_sql_value_t *ptr) {
+  sqlite_extension_types_sql_value_free(ptr);
+}
+
+void sqlink_wasm_dispatch_index_info_free(sqlink_wasm_dispatch_index_info_t *ptr) {
+  sqlite_extension_vtab_index_info_free(ptr);
+}
+
+void sqlink_wasm_dispatch_index_plan_free(sqlink_wasm_dispatch_index_plan_t *ptr) {
+  sqlite_extension_vtab_index_plan_free(ptr);
+}
+
+void sqlink_wasm_dispatch_list_sql_value_free(sqlink_wasm_dispatch_list_sql_value_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlink_wasm_dispatch_sql_value_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlink_wasm_dispatch_sql_value_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlink_wasm_dispatch_vtab_row_free(sqlink_wasm_dispatch_vtab_row_t *ptr) {
+  sqlink_wasm_dispatch_list_sql_value_free(&ptr->columns);
+}
+
+void sqlink_wasm_dispatch_result_sql_value_string_free(sqlink_wasm_dispatch_result_sql_value_string_t *ptr) {
+  if (!ptr->is_err) {
+    sqlink_wasm_dispatch_sql_value_free(&ptr->val.ok);
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_dispatch_result_void_string_free(sqlink_wasm_dispatch_result_void_string_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_dispatch_result_string_string_free(sqlink_wasm_dispatch_result_string_string_t *ptr) {
+  if (!ptr->is_err) {
+    sqlite_cli_unified_string_free(&ptr->val.ok);
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_dispatch_result_index_plan_string_free(sqlink_wasm_dispatch_result_index_plan_string_t *ptr) {
+  if (!ptr->is_err) {
+    sqlink_wasm_dispatch_index_plan_free(&ptr->val.ok);
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_dispatch_result_s64_string_free(sqlink_wasm_dispatch_result_s64_string_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_dispatch_list_vtab_row_free(sqlink_wasm_dispatch_list_vtab_row_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    sqlink_wasm_dispatch_vtab_row_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      sqlink_wasm_dispatch_vtab_row_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void sqlink_wasm_dispatch_result_list_vtab_row_string_free(sqlink_wasm_dispatch_result_list_vtab_row_string_t *ptr) {
+  if (!ptr->is_err) {
+    sqlink_wasm_dispatch_list_vtab_row_free(&ptr->val.ok);
+  } else {
+    sqlite_cli_unified_string_free(&ptr->val.err);
+  }
+}
+
+void sqlink_wasm_zip_operations_archive_info_free(sqlink_wasm_zip_operations_archive_info_t *ptr) {
   sqlite_cli_unified_string_free(&ptr->name);
   sqlite_cli_unified_string_free(&ptr->version);
 }
 
-void sqlite_wasm_zip_operations_result_void_error_code_free(sqlite_wasm_zip_operations_result_void_error_code_t *ptr) {
+void sqlink_wasm_zip_operations_result_void_error_code_free(sqlink_wasm_zip_operations_result_void_error_code_t *ptr) {
   if (!ptr->is_err) {
   } else {
   }
 }
 
-void sqlite_wasm_zip_operations_result_list_string_error_code_free(sqlite_wasm_zip_operations_result_list_string_error_code_t *ptr) {
+void sqlink_wasm_zip_operations_result_list_string_error_code_free(sqlink_wasm_zip_operations_result_list_string_error_code_t *ptr) {
   if (!ptr->is_err) {
   } else {
   }
 }
 
-void exports_sqlite_wasm_low_level_result_db_handle_result_code_free(exports_sqlite_wasm_low_level_result_db_handle_result_code_t *ptr) {
+void exports_sqlink_wasm_low_level_result_db_handle_result_code_free(exports_sqlink_wasm_low_level_result_db_handle_result_code_t *ptr) {
   if (!ptr->is_err) {
   } else {
   }
 }
 
-void exports_sqlite_wasm_low_level_result_string_result_code_free(exports_sqlite_wasm_low_level_result_string_result_code_t *ptr) {
+void exports_sqlink_wasm_low_level_result_string_result_code_free(exports_sqlink_wasm_low_level_result_string_result_code_t *ptr) {
   if (!ptr->is_err) {
     sqlite_cli_unified_string_free(&ptr->val.ok);
   } else {
   }
 }
 
-void exports_sqlite_wasm_low_level_result_stmt_handle_result_code_free(exports_sqlite_wasm_low_level_result_stmt_handle_result_code_t *ptr) {
+void exports_sqlink_wasm_low_level_result_stmt_handle_result_code_free(exports_sqlink_wasm_low_level_result_stmt_handle_result_code_t *ptr) {
   if (!ptr->is_err) {
   } else {
   }
 }
 
-void exports_sqlite_wasm_high_level_value_free(exports_sqlite_wasm_high_level_value_t *ptr) {
+void exports_sqlink_wasm_high_level_value_free(exports_sqlink_wasm_high_level_value_t *ptr) {
   switch ((int32_t) ptr->tag) {
     case 1: {
       break;
@@ -1535,146 +2470,150 @@ void exports_sqlite_wasm_high_level_value_free(exports_sqlite_wasm_high_level_va
   }
 }
 
-void exports_sqlite_wasm_high_level_database_error_free(exports_sqlite_wasm_high_level_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_database_error_free(exports_sqlink_wasm_high_level_database_error_t *ptr) {
   sqlite_cli_unified_string_free(&ptr->message);
 }
 
-void exports_sqlite_wasm_high_level_list_value_free(exports_sqlite_wasm_high_level_list_value_t *ptr) {
+void exports_sqlink_wasm_high_level_list_value_free(exports_sqlink_wasm_high_level_list_value_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    exports_sqlite_wasm_high_level_value_t *list_ptr = ptr->ptr;
+    exports_sqlink_wasm_high_level_value_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      exports_sqlite_wasm_high_level_value_free(&list_ptr[i]);
+      exports_sqlink_wasm_high_level_value_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void exports_sqlite_wasm_high_level_row_free(exports_sqlite_wasm_high_level_row_t *ptr) {
-  exports_sqlite_wasm_high_level_list_value_free(&ptr->columns);
+void exports_sqlink_wasm_high_level_row_free(exports_sqlink_wasm_high_level_row_t *ptr) {
+  exports_sqlink_wasm_high_level_list_value_free(&ptr->columns);
 }
 
-void exports_sqlite_wasm_high_level_list_row_free(exports_sqlite_wasm_high_level_list_row_t *ptr) {
+void exports_sqlink_wasm_high_level_list_row_free(exports_sqlink_wasm_high_level_list_row_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
-    exports_sqlite_wasm_high_level_row_t *list_ptr = ptr->ptr;
+    exports_sqlink_wasm_high_level_row_t *list_ptr = ptr->ptr;
     for (size_t i = 0; i < list_len; i++) {
-      exports_sqlite_wasm_high_level_row_free(&list_ptr[i]);
+      exports_sqlink_wasm_high_level_row_free(&list_ptr[i]);
     }
     free(list_ptr);
   }
 }
 
-void exports_sqlite_wasm_high_level_query_result_free(exports_sqlite_wasm_high_level_query_result_t *ptr) {
-  exports_sqlite_wasm_high_level_list_row_free(&ptr->rows);
+void exports_sqlink_wasm_high_level_query_result_free(exports_sqlink_wasm_high_level_query_result_t *ptr) {
+  exports_sqlink_wasm_high_level_list_row_free(&ptr->rows);
 }
 
-__attribute__((__import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-drop]connection")))
-extern void __wasm_import_exports_sqlite_wasm_high_level_connection_drop(int32_t handle);
+__attribute__((__import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-drop]connection")))
+extern void __wasm_import_exports_sqlink_wasm_high_level_connection_drop(int32_t handle);
 
-void exports_sqlite_wasm_high_level_connection_drop_own(exports_sqlite_wasm_high_level_own_connection_t handle) {
-  __wasm_import_exports_sqlite_wasm_high_level_connection_drop(handle.__handle);
+void exports_sqlink_wasm_high_level_connection_drop_own(exports_sqlink_wasm_high_level_own_connection_t handle) {
+  __wasm_import_exports_sqlink_wasm_high_level_connection_drop(handle.__handle);
 }
 
-__attribute__(( __import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-new]connection")))
-extern int32_t __wasm_import_exports_sqlite_wasm_high_level_connection_new(int32_t);
+__attribute__(( __import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-new]connection")))
+extern int32_t __wasm_import_exports_sqlink_wasm_high_level_connection_new(int32_t);
 
-__attribute__((__import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-rep]connection")))
-extern int32_t __wasm_import_exports_sqlite_wasm_high_level_connection_rep(int32_t);
+__attribute__((__import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-rep]connection")))
+extern int32_t __wasm_import_exports_sqlink_wasm_high_level_connection_rep(int32_t);
 
-exports_sqlite_wasm_high_level_own_connection_t exports_sqlite_wasm_high_level_connection_new(exports_sqlite_wasm_high_level_connection_t *rep) {
-  return (exports_sqlite_wasm_high_level_own_connection_t) { __wasm_import_exports_sqlite_wasm_high_level_connection_new((int32_t) rep) };
+exports_sqlink_wasm_high_level_own_connection_t exports_sqlink_wasm_high_level_connection_new(exports_sqlink_wasm_high_level_connection_t *rep) {
+  return (exports_sqlink_wasm_high_level_own_connection_t) { __wasm_import_exports_sqlink_wasm_high_level_connection_new((int32_t) rep) };
 }
 
-exports_sqlite_wasm_high_level_connection_t* exports_sqlite_wasm_high_level_connection_rep(exports_sqlite_wasm_high_level_own_connection_t handle) {
-  return (exports_sqlite_wasm_high_level_connection_t*) __wasm_import_exports_sqlite_wasm_high_level_connection_rep(handle.__handle);
+exports_sqlink_wasm_high_level_connection_t* exports_sqlink_wasm_high_level_connection_rep(exports_sqlink_wasm_high_level_own_connection_t handle) {
+  return (exports_sqlink_wasm_high_level_connection_t*) __wasm_import_exports_sqlink_wasm_high_level_connection_rep(handle.__handle);
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[dtor]connection")))
-void __wasm_export_exports_sqlite_wasm_high_level_connection_dtor(exports_sqlite_wasm_high_level_connection_t* arg) {
-  exports_sqlite_wasm_high_level_connection_destructor(arg);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[dtor]connection")))
+void __wasm_export_exports_sqlink_wasm_high_level_connection_dtor(exports_sqlink_wasm_high_level_connection_t* arg) {
+  exports_sqlink_wasm_high_level_connection_destructor(arg);
 }
 
-__attribute__((__import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-drop]statement")))
-extern void __wasm_import_exports_sqlite_wasm_high_level_statement_drop(int32_t handle);
+__attribute__((__import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-drop]statement")))
+extern void __wasm_import_exports_sqlink_wasm_high_level_statement_drop(int32_t handle);
 
-void exports_sqlite_wasm_high_level_statement_drop_own(exports_sqlite_wasm_high_level_own_statement_t handle) {
-  __wasm_import_exports_sqlite_wasm_high_level_statement_drop(handle.__handle);
+void exports_sqlink_wasm_high_level_statement_drop_own(exports_sqlink_wasm_high_level_own_statement_t handle) {
+  __wasm_import_exports_sqlink_wasm_high_level_statement_drop(handle.__handle);
 }
 
-__attribute__(( __import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-new]statement")))
-extern int32_t __wasm_import_exports_sqlite_wasm_high_level_statement_new(int32_t);
+__attribute__(( __import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-new]statement")))
+extern int32_t __wasm_import_exports_sqlink_wasm_high_level_statement_new(int32_t);
 
-__attribute__((__import_module__("[export]sqlite:wasm/high-level@0.1.0"), __import_name__("[resource-rep]statement")))
-extern int32_t __wasm_import_exports_sqlite_wasm_high_level_statement_rep(int32_t);
+__attribute__((__import_module__("[export]sqlink:wasm/high-level@0.1.0"), __import_name__("[resource-rep]statement")))
+extern int32_t __wasm_import_exports_sqlink_wasm_high_level_statement_rep(int32_t);
 
-exports_sqlite_wasm_high_level_own_statement_t exports_sqlite_wasm_high_level_statement_new(exports_sqlite_wasm_high_level_statement_t *rep) {
-  return (exports_sqlite_wasm_high_level_own_statement_t) { __wasm_import_exports_sqlite_wasm_high_level_statement_new((int32_t) rep) };
+exports_sqlink_wasm_high_level_own_statement_t exports_sqlink_wasm_high_level_statement_new(exports_sqlink_wasm_high_level_statement_t *rep) {
+  return (exports_sqlink_wasm_high_level_own_statement_t) { __wasm_import_exports_sqlink_wasm_high_level_statement_new((int32_t) rep) };
 }
 
-exports_sqlite_wasm_high_level_statement_t* exports_sqlite_wasm_high_level_statement_rep(exports_sqlite_wasm_high_level_own_statement_t handle) {
-  return (exports_sqlite_wasm_high_level_statement_t*) __wasm_import_exports_sqlite_wasm_high_level_statement_rep(handle.__handle);
+exports_sqlink_wasm_high_level_statement_t* exports_sqlink_wasm_high_level_statement_rep(exports_sqlink_wasm_high_level_own_statement_t handle) {
+  return (exports_sqlink_wasm_high_level_statement_t*) __wasm_import_exports_sqlink_wasm_high_level_statement_rep(handle.__handle);
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[dtor]statement")))
-void __wasm_export_exports_sqlite_wasm_high_level_statement_dtor(exports_sqlite_wasm_high_level_statement_t* arg) {
-  exports_sqlite_wasm_high_level_statement_destructor(arg);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[dtor]statement")))
+void __wasm_export_exports_sqlink_wasm_high_level_statement_dtor(exports_sqlink_wasm_high_level_statement_t* arg) {
+  exports_sqlink_wasm_high_level_statement_destructor(arg);
 }
 
-void exports_sqlite_wasm_high_level_result_exec_result_database_error_free(exports_sqlite_wasm_high_level_result_exec_result_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_exec_result_database_error_free(exports_sqlink_wasm_high_level_result_exec_result_database_error_t *ptr) {
   if (!ptr->is_err) {
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_query_result_database_error_free(exports_sqlite_wasm_high_level_result_query_result_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_query_result_database_error_free(exports_sqlink_wasm_high_level_result_query_result_database_error_t *ptr) {
   if (!ptr->is_err) {
-    exports_sqlite_wasm_high_level_query_result_free(&ptr->val.ok);
+    exports_sqlink_wasm_high_level_query_result_free(&ptr->val.ok);
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_own_statement_database_error_free(exports_sqlite_wasm_high_level_result_own_statement_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_own_statement_database_error_free(exports_sqlink_wasm_high_level_result_own_statement_database_error_t *ptr) {
   if (!ptr->is_err) {
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_void_database_error_free(exports_sqlite_wasm_high_level_result_void_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_void_database_error_free(exports_sqlink_wasm_high_level_result_void_database_error_t *ptr) {
   if (!ptr->is_err) {
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_option_database_error_free(exports_sqlite_wasm_high_level_option_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_option_database_error_free(exports_sqlink_wasm_high_level_option_database_error_t *ptr) {
   if (ptr->is_some) {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val);
   }
 }
 
-void exports_sqlite_wasm_high_level_option_row_free(exports_sqlite_wasm_high_level_option_row_t *ptr) {
+void exports_sqlink_wasm_high_level_option_row_free(exports_sqlink_wasm_high_level_option_row_t *ptr) {
   if (ptr->is_some) {
-    exports_sqlite_wasm_high_level_row_free(&ptr->val);
+    exports_sqlink_wasm_high_level_row_free(&ptr->val);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_option_row_database_error_free(exports_sqlite_wasm_high_level_result_option_row_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_option_row_database_error_free(exports_sqlink_wasm_high_level_result_option_row_database_error_t *ptr) {
   if (!ptr->is_err) {
-    exports_sqlite_wasm_high_level_option_row_free(&ptr->val.ok);
+    exports_sqlink_wasm_high_level_option_row_free(&ptr->val.ok);
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
 }
 
-void exports_sqlite_wasm_high_level_result_own_connection_database_error_free(exports_sqlite_wasm_high_level_result_own_connection_database_error_t *ptr) {
+void exports_sqlink_wasm_high_level_result_own_connection_database_error_free(exports_sqlink_wasm_high_level_result_own_connection_database_error_t *ptr) {
   if (!ptr->is_err) {
   } else {
-    exports_sqlite_wasm_high_level_database_error_free(&ptr->val.err);
+    exports_sqlink_wasm_high_level_database_error_free(&ptr->val.err);
   }
+}
+
+void exports_sqlite_extension_types_wit_value_payload_free(exports_sqlite_extension_types_wit_value_payload_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->symbolic_name);
 }
 
 void exports_sqlite_extension_types_sql_value_free(exports_sqlite_extension_types_sql_value_t *ptr) {
@@ -1690,6 +2629,10 @@ void exports_sqlite_extension_types_sql_value_free(exports_sqlite_extension_type
       break;
     }
     case 4: {
+      break;
+    }
+    case 5: {
+      exports_sqlite_extension_types_wit_value_payload_free(&ptr->val.wit_value);
       break;
     }
   }
@@ -1757,6 +2700,11 @@ void exports_sqlite_extension_spi_sqlite_error_free(exports_sqlite_extension_spi
   exports_sqlite_extension_types_sqlite_error_free(ptr);
 }
 
+void exports_sqlite_extension_spi_named_param_free(exports_sqlite_extension_spi_named_param_t *ptr) {
+  sqlite_cli_unified_string_free(&ptr->name);
+  exports_sqlite_extension_spi_sql_value_free(&ptr->value);
+}
+
 void exports_sqlite_extension_spi_list_sql_value_free(exports_sqlite_extension_spi_list_sql_value_t *ptr) {
   size_t list_len = ptr->len;
   if (list_len > 0) {
@@ -1786,6 +2734,65 @@ void exports_sqlite_extension_spi_result_sql_value_sqlite_error_free(exports_sql
 
 void exports_sqlite_extension_spi_result_s64_sqlite_error_free(exports_sqlite_extension_spi_result_s64_sqlite_error_t *ptr) {
   if (!ptr->is_err) {
+  } else {
+    exports_sqlite_extension_spi_sqlite_error_free(&ptr->val.err);
+  }
+}
+
+void exports_sqlite_extension_spi_result_string_sqlite_error_free(exports_sqlite_extension_spi_result_string_sqlite_error_t *ptr) {
+  if (!ptr->is_err) {
+    sqlite_cli_unified_string_free(&ptr->val.ok);
+  } else {
+    exports_sqlite_extension_spi_sqlite_error_free(&ptr->val.err);
+  }
+}
+
+void exports_sqlite_extension_spi_result_list_u8_sqlite_error_free(exports_sqlite_extension_spi_result_list_u8_sqlite_error_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    exports_sqlite_extension_spi_sqlite_error_free(&ptr->val.err);
+  }
+}
+
+void exports_sqlite_extension_spi_result_void_sqlite_error_free(exports_sqlite_extension_spi_result_void_sqlite_error_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    exports_sqlite_extension_spi_sqlite_error_free(&ptr->val.err);
+  }
+}
+
+void exports_sqlite_extension_spi_result_bool_sqlite_error_free(exports_sqlite_extension_spi_result_bool_sqlite_error_t *ptr) {
+  if (!ptr->is_err) {
+  } else {
+    exports_sqlite_extension_spi_sqlite_error_free(&ptr->val.err);
+  }
+}
+
+void exports_sqlite_extension_spi_list_named_param_free(exports_sqlite_extension_spi_list_named_param_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    exports_sqlite_extension_spi_named_param_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      exports_sqlite_extension_spi_named_param_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void exports_sqlite_extension_spi_list_query_result_free(exports_sqlite_extension_spi_list_query_result_t *ptr) {
+  size_t list_len = ptr->len;
+  if (list_len > 0) {
+    exports_sqlite_extension_spi_query_result_t *list_ptr = ptr->ptr;
+    for (size_t i = 0; i < list_len; i++) {
+      exports_sqlite_extension_spi_query_result_free(&list_ptr[i]);
+    }
+    free(list_ptr);
+  }
+}
+
+void exports_sqlite_extension_spi_result_list_query_result_sqlite_error_free(exports_sqlite_extension_spi_result_list_query_result_sqlite_error_t *ptr) {
+  if (!ptr->is_err) {
+    exports_sqlite_extension_spi_list_query_result_free(&ptr->val.ok);
   } else {
     exports_sqlite_extension_spi_sqlite_error_free(&ptr->val.err);
   }
@@ -1970,47 +2977,111 @@ bool sqlite_extension_http_handle(sqlite_extension_http_request_t *req, sqlite_e
 }
 
 void sqlite_extension_metadata_describe(sqlite_extension_metadata_manifest_t *ret) {
-  __attribute__((__aligned__(sizeof(void*))))
-  uint8_t ret_area[(13*sizeof(void*))];
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+26*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
   __wasm_import_sqlite_extension_metadata_describe(ptr);
+  sqlite_cli_unified_option_string_t option;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+18*sizeof(void*))))) {
+    case 0: {
+      option.is_some = false;
+      break;
+    }
+    case 1: {
+      option.is_some = true;
+      option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+19*sizeof(void*))))), (*((size_t*) (ptr + (16+20*sizeof(void*))))) };
+      break;
+    }
+  }
+  sqlite_cli_unified_option_string_t option1;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+21*sizeof(void*))))) {
+    case 0: {
+      option1.is_some = false;
+      break;
+    }
+    case 1: {
+      option1.is_some = true;
+      option1.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+22*sizeof(void*))))), (*((size_t*) (ptr + (16+23*sizeof(void*))))) };
+      break;
+    }
+  }
   *ret = (sqlite_extension_metadata_manifest_t) {
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) },
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
     (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr + (4*sizeof(void*))))), (*((size_t*) (ptr + (5*sizeof(void*))))) },
     (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr + (6*sizeof(void*))))), (*((size_t*) (ptr + (7*sizeof(void*))))) },
     (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr + (8*sizeof(void*))))), (*((size_t*) (ptr + (9*sizeof(void*))))) },
-    (bool) (int32_t) *((uint8_t*) (ptr + (10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (1+10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (2+10*sizeof(void*)))),
-    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (11*sizeof(void*))))), (*((size_t*) (ptr + (12*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_vtab_spec_t) (sqlite_extension_metadata_list_vtab_spec_t) { (sqlite_extension_metadata_vtab_spec_t*)(*((uint8_t **) (ptr + (10*sizeof(void*))))), (*((size_t*) (ptr + (11*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_dot_command_spec_t) (sqlite_extension_metadata_list_dot_command_spec_t) { (sqlite_extension_metadata_dot_command_spec_t*)(*((uint8_t **) (ptr + (12*sizeof(void*))))), (*((size_t*) (ptr + (13*sizeof(void*))))) },
+    (bool) (int32_t) *((uint8_t*) (ptr + (14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (1+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (2+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (3+14*sizeof(void*)))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + (8+14*sizeof(void*))))),
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+14*sizeof(void*))))), (*((size_t*) (ptr + (16+15*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+16*sizeof(void*))))), (*((size_t*) (ptr + (16+17*sizeof(void*))))) },
+    (sqlite_cli_unified_option_string_t) option,
+    (sqlite_cli_unified_option_string_t) option1,
+    (sqlite_extension_metadata_list_typed_value_binding_t) (sqlite_extension_metadata_list_typed_value_binding_t) { (sqlite_extension_metadata_typed_value_binding_t*)(*((uint8_t **) (ptr + (16+24*sizeof(void*))))), (*((size_t*) (ptr + (16+25*sizeof(void*))))) },
   };
 }
 
-void sqlite_wasm_fts5_slot_describe(sqlite_wasm_fts5_slot_manifest_t *ret) {
-  __attribute__((__aligned__(sizeof(void*))))
-  uint8_t ret_area[(13*sizeof(void*))];
-  uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_fts5_slot_describe(ptr);
-  *ret = (sqlite_extension_metadata_manifest_t) {
-    (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) },
-    (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
-    (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr + (4*sizeof(void*))))), (*((size_t*) (ptr + (5*sizeof(void*))))) },
-    (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr + (6*sizeof(void*))))), (*((size_t*) (ptr + (7*sizeof(void*))))) },
-    (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr + (8*sizeof(void*))))), (*((size_t*) (ptr + (9*sizeof(void*))))) },
-    (bool) (int32_t) *((uint8_t*) (ptr + (10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (1+10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (2+10*sizeof(void*)))),
-    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (11*sizeof(void*))))), (*((size_t*) (ptr + (12*sizeof(void*))))) },
-  };
-}
-
-bool sqlite_wasm_fts5_slot_call(uint64_t func_id, sqlite_wasm_fts5_slot_list_sql_value_t *args, sqlite_wasm_fts5_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+void sqlink_wasm_fts5_slot_describe(sqlink_wasm_fts5_slot_manifest_t *ret) {
   __attribute__((__aligned__(8)))
-  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t ret_area[(16+26*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_fts5_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
-  sqlite_wasm_fts5_slot_result_sql_value_string_t result;
+  __wasm_import_sqlink_wasm_fts5_slot_describe(ptr);
+  sqlite_cli_unified_option_string_t option;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+18*sizeof(void*))))) {
+    case 0: {
+      option.is_some = false;
+      break;
+    }
+    case 1: {
+      option.is_some = true;
+      option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+19*sizeof(void*))))), (*((size_t*) (ptr + (16+20*sizeof(void*))))) };
+      break;
+    }
+  }
+  sqlite_cli_unified_option_string_t option1;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+21*sizeof(void*))))) {
+    case 0: {
+      option1.is_some = false;
+      break;
+    }
+    case 1: {
+      option1.is_some = true;
+      option1.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+22*sizeof(void*))))), (*((size_t*) (ptr + (16+23*sizeof(void*))))) };
+      break;
+    }
+  }
+  *ret = (sqlite_extension_metadata_manifest_t) {
+    (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) },
+    (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr + (4*sizeof(void*))))), (*((size_t*) (ptr + (5*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr + (6*sizeof(void*))))), (*((size_t*) (ptr + (7*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr + (8*sizeof(void*))))), (*((size_t*) (ptr + (9*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_vtab_spec_t) (sqlite_extension_metadata_list_vtab_spec_t) { (sqlite_extension_metadata_vtab_spec_t*)(*((uint8_t **) (ptr + (10*sizeof(void*))))), (*((size_t*) (ptr + (11*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_dot_command_spec_t) (sqlite_extension_metadata_list_dot_command_spec_t) { (sqlite_extension_metadata_dot_command_spec_t*)(*((uint8_t **) (ptr + (12*sizeof(void*))))), (*((size_t*) (ptr + (13*sizeof(void*))))) },
+    (bool) (int32_t) *((uint8_t*) (ptr + (14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (1+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (2+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (3+14*sizeof(void*)))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + (8+14*sizeof(void*))))),
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+14*sizeof(void*))))), (*((size_t*) (ptr + (16+15*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+16*sizeof(void*))))), (*((size_t*) (ptr + (16+17*sizeof(void*))))) },
+    (sqlite_cli_unified_option_string_t) option,
+    (sqlite_cli_unified_option_string_t) option1,
+    (sqlite_extension_metadata_list_typed_value_binding_t) (sqlite_extension_metadata_list_typed_value_binding_t) { (sqlite_extension_metadata_typed_value_binding_t*)(*((uint8_t **) (ptr + (16+24*sizeof(void*))))), (*((size_t*) (ptr + (16+25*sizeof(void*))))) },
+  };
+}
+
+bool sqlink_wasm_fts5_slot_call(uint64_t func_id, sqlink_wasm_fts5_slot_list_sql_value_t *args, sqlink_wasm_fts5_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+6*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_fts5_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_fts5_slot_result_sql_value_string_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;
@@ -2036,6 +3107,14 @@ bool sqlite_wasm_fts5_slot_call(uint64_t func_id, sqlite_wasm_fts5_slot_list_sql
           variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
           break;
         }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
       }
 
       result.val.ok = variant;
@@ -2056,30 +3135,62 @@ bool sqlite_wasm_fts5_slot_call(uint64_t func_id, sqlite_wasm_fts5_slot_list_sql
   }
 }
 
-void sqlite_wasm_json1_slot_describe(sqlite_wasm_json1_slot_manifest_t *ret) {
-  __attribute__((__aligned__(sizeof(void*))))
-  uint8_t ret_area[(13*sizeof(void*))];
+void sqlink_wasm_json1_slot_describe(sqlink_wasm_json1_slot_manifest_t *ret) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+26*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_json1_slot_describe(ptr);
+  __wasm_import_sqlink_wasm_json1_slot_describe(ptr);
+  sqlite_cli_unified_option_string_t option;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+18*sizeof(void*))))) {
+    case 0: {
+      option.is_some = false;
+      break;
+    }
+    case 1: {
+      option.is_some = true;
+      option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+19*sizeof(void*))))), (*((size_t*) (ptr + (16+20*sizeof(void*))))) };
+      break;
+    }
+  }
+  sqlite_cli_unified_option_string_t option1;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+21*sizeof(void*))))) {
+    case 0: {
+      option1.is_some = false;
+      break;
+    }
+    case 1: {
+      option1.is_some = true;
+      option1.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+22*sizeof(void*))))), (*((size_t*) (ptr + (16+23*sizeof(void*))))) };
+      break;
+    }
+  }
   *ret = (sqlite_extension_metadata_manifest_t) {
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) },
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
     (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr + (4*sizeof(void*))))), (*((size_t*) (ptr + (5*sizeof(void*))))) },
     (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr + (6*sizeof(void*))))), (*((size_t*) (ptr + (7*sizeof(void*))))) },
     (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr + (8*sizeof(void*))))), (*((size_t*) (ptr + (9*sizeof(void*))))) },
-    (bool) (int32_t) *((uint8_t*) (ptr + (10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (1+10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (2+10*sizeof(void*)))),
-    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (11*sizeof(void*))))), (*((size_t*) (ptr + (12*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_vtab_spec_t) (sqlite_extension_metadata_list_vtab_spec_t) { (sqlite_extension_metadata_vtab_spec_t*)(*((uint8_t **) (ptr + (10*sizeof(void*))))), (*((size_t*) (ptr + (11*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_dot_command_spec_t) (sqlite_extension_metadata_list_dot_command_spec_t) { (sqlite_extension_metadata_dot_command_spec_t*)(*((uint8_t **) (ptr + (12*sizeof(void*))))), (*((size_t*) (ptr + (13*sizeof(void*))))) },
+    (bool) (int32_t) *((uint8_t*) (ptr + (14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (1+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (2+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (3+14*sizeof(void*)))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + (8+14*sizeof(void*))))),
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+14*sizeof(void*))))), (*((size_t*) (ptr + (16+15*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+16*sizeof(void*))))), (*((size_t*) (ptr + (16+17*sizeof(void*))))) },
+    (sqlite_cli_unified_option_string_t) option,
+    (sqlite_cli_unified_option_string_t) option1,
+    (sqlite_extension_metadata_list_typed_value_binding_t) (sqlite_extension_metadata_list_typed_value_binding_t) { (sqlite_extension_metadata_typed_value_binding_t*)(*((uint8_t **) (ptr + (16+24*sizeof(void*))))), (*((size_t*) (ptr + (16+25*sizeof(void*))))) },
   };
 }
 
-bool sqlite_wasm_json1_slot_call(uint64_t func_id, sqlite_wasm_json1_slot_list_sql_value_t *args, sqlite_wasm_json1_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+bool sqlink_wasm_json1_slot_call(uint64_t func_id, sqlink_wasm_json1_slot_list_sql_value_t *args, sqlink_wasm_json1_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
   __attribute__((__aligned__(8)))
-  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t ret_area[(16+6*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_json1_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
-  sqlite_wasm_json1_slot_result_sql_value_string_t result;
+  __wasm_import_sqlink_wasm_json1_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_json1_slot_result_sql_value_string_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;
@@ -2105,6 +3216,14 @@ bool sqlite_wasm_json1_slot_call(uint64_t func_id, sqlite_wasm_json1_slot_list_s
           variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
           break;
         }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
       }
 
       result.val.ok = variant;
@@ -2125,30 +3244,62 @@ bool sqlite_wasm_json1_slot_call(uint64_t func_id, sqlite_wasm_json1_slot_list_s
   }
 }
 
-void sqlite_wasm_rtree_slot_describe(sqlite_wasm_rtree_slot_manifest_t *ret) {
-  __attribute__((__aligned__(sizeof(void*))))
-  uint8_t ret_area[(13*sizeof(void*))];
+void sqlink_wasm_rtree_slot_describe(sqlink_wasm_rtree_slot_manifest_t *ret) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+26*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_rtree_slot_describe(ptr);
+  __wasm_import_sqlink_wasm_rtree_slot_describe(ptr);
+  sqlite_cli_unified_option_string_t option;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+18*sizeof(void*))))) {
+    case 0: {
+      option.is_some = false;
+      break;
+    }
+    case 1: {
+      option.is_some = true;
+      option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+19*sizeof(void*))))), (*((size_t*) (ptr + (16+20*sizeof(void*))))) };
+      break;
+    }
+  }
+  sqlite_cli_unified_option_string_t option1;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+21*sizeof(void*))))) {
+    case 0: {
+      option1.is_some = false;
+      break;
+    }
+    case 1: {
+      option1.is_some = true;
+      option1.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+22*sizeof(void*))))), (*((size_t*) (ptr + (16+23*sizeof(void*))))) };
+      break;
+    }
+  }
   *ret = (sqlite_extension_metadata_manifest_t) {
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) },
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
     (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr + (4*sizeof(void*))))), (*((size_t*) (ptr + (5*sizeof(void*))))) },
     (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr + (6*sizeof(void*))))), (*((size_t*) (ptr + (7*sizeof(void*))))) },
     (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr + (8*sizeof(void*))))), (*((size_t*) (ptr + (9*sizeof(void*))))) },
-    (bool) (int32_t) *((uint8_t*) (ptr + (10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (1+10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (2+10*sizeof(void*)))),
-    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (11*sizeof(void*))))), (*((size_t*) (ptr + (12*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_vtab_spec_t) (sqlite_extension_metadata_list_vtab_spec_t) { (sqlite_extension_metadata_vtab_spec_t*)(*((uint8_t **) (ptr + (10*sizeof(void*))))), (*((size_t*) (ptr + (11*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_dot_command_spec_t) (sqlite_extension_metadata_list_dot_command_spec_t) { (sqlite_extension_metadata_dot_command_spec_t*)(*((uint8_t **) (ptr + (12*sizeof(void*))))), (*((size_t*) (ptr + (13*sizeof(void*))))) },
+    (bool) (int32_t) *((uint8_t*) (ptr + (14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (1+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (2+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (3+14*sizeof(void*)))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + (8+14*sizeof(void*))))),
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+14*sizeof(void*))))), (*((size_t*) (ptr + (16+15*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+16*sizeof(void*))))), (*((size_t*) (ptr + (16+17*sizeof(void*))))) },
+    (sqlite_cli_unified_option_string_t) option,
+    (sqlite_cli_unified_option_string_t) option1,
+    (sqlite_extension_metadata_list_typed_value_binding_t) (sqlite_extension_metadata_list_typed_value_binding_t) { (sqlite_extension_metadata_typed_value_binding_t*)(*((uint8_t **) (ptr + (16+24*sizeof(void*))))), (*((size_t*) (ptr + (16+25*sizeof(void*))))) },
   };
 }
 
-bool sqlite_wasm_rtree_slot_call(uint64_t func_id, sqlite_wasm_rtree_slot_list_sql_value_t *args, sqlite_wasm_rtree_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+bool sqlink_wasm_rtree_slot_call(uint64_t func_id, sqlink_wasm_rtree_slot_list_sql_value_t *args, sqlink_wasm_rtree_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
   __attribute__((__aligned__(8)))
-  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t ret_area[(16+6*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_rtree_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
-  sqlite_wasm_rtree_slot_result_sql_value_string_t result;
+  __wasm_import_sqlink_wasm_rtree_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_rtree_slot_result_sql_value_string_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;
@@ -2174,6 +3325,14 @@ bool sqlite_wasm_rtree_slot_call(uint64_t func_id, sqlite_wasm_rtree_slot_list_s
           variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
           break;
         }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
       }
 
       result.val.ok = variant;
@@ -2194,30 +3353,62 @@ bool sqlite_wasm_rtree_slot_call(uint64_t func_id, sqlite_wasm_rtree_slot_list_s
   }
 }
 
-void sqlite_wasm_geopoly_slot_describe(sqlite_wasm_geopoly_slot_manifest_t *ret) {
-  __attribute__((__aligned__(sizeof(void*))))
-  uint8_t ret_area[(13*sizeof(void*))];
+void sqlink_wasm_geopoly_slot_describe(sqlink_wasm_geopoly_slot_manifest_t *ret) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+26*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_geopoly_slot_describe(ptr);
+  __wasm_import_sqlink_wasm_geopoly_slot_describe(ptr);
+  sqlite_cli_unified_option_string_t option;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+18*sizeof(void*))))) {
+    case 0: {
+      option.is_some = false;
+      break;
+    }
+    case 1: {
+      option.is_some = true;
+      option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+19*sizeof(void*))))), (*((size_t*) (ptr + (16+20*sizeof(void*))))) };
+      break;
+    }
+  }
+  sqlite_cli_unified_option_string_t option1;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+21*sizeof(void*))))) {
+    case 0: {
+      option1.is_some = false;
+      break;
+    }
+    case 1: {
+      option1.is_some = true;
+      option1.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+22*sizeof(void*))))), (*((size_t*) (ptr + (16+23*sizeof(void*))))) };
+      break;
+    }
+  }
   *ret = (sqlite_extension_metadata_manifest_t) {
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) },
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
     (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr + (4*sizeof(void*))))), (*((size_t*) (ptr + (5*sizeof(void*))))) },
     (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr + (6*sizeof(void*))))), (*((size_t*) (ptr + (7*sizeof(void*))))) },
     (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr + (8*sizeof(void*))))), (*((size_t*) (ptr + (9*sizeof(void*))))) },
-    (bool) (int32_t) *((uint8_t*) (ptr + (10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (1+10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (2+10*sizeof(void*)))),
-    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (11*sizeof(void*))))), (*((size_t*) (ptr + (12*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_vtab_spec_t) (sqlite_extension_metadata_list_vtab_spec_t) { (sqlite_extension_metadata_vtab_spec_t*)(*((uint8_t **) (ptr + (10*sizeof(void*))))), (*((size_t*) (ptr + (11*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_dot_command_spec_t) (sqlite_extension_metadata_list_dot_command_spec_t) { (sqlite_extension_metadata_dot_command_spec_t*)(*((uint8_t **) (ptr + (12*sizeof(void*))))), (*((size_t*) (ptr + (13*sizeof(void*))))) },
+    (bool) (int32_t) *((uint8_t*) (ptr + (14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (1+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (2+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (3+14*sizeof(void*)))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + (8+14*sizeof(void*))))),
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+14*sizeof(void*))))), (*((size_t*) (ptr + (16+15*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+16*sizeof(void*))))), (*((size_t*) (ptr + (16+17*sizeof(void*))))) },
+    (sqlite_cli_unified_option_string_t) option,
+    (sqlite_cli_unified_option_string_t) option1,
+    (sqlite_extension_metadata_list_typed_value_binding_t) (sqlite_extension_metadata_list_typed_value_binding_t) { (sqlite_extension_metadata_typed_value_binding_t*)(*((uint8_t **) (ptr + (16+24*sizeof(void*))))), (*((size_t*) (ptr + (16+25*sizeof(void*))))) },
   };
 }
 
-bool sqlite_wasm_geopoly_slot_call(uint64_t func_id, sqlite_wasm_geopoly_slot_list_sql_value_t *args, sqlite_wasm_geopoly_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+bool sqlink_wasm_geopoly_slot_call(uint64_t func_id, sqlink_wasm_geopoly_slot_list_sql_value_t *args, sqlink_wasm_geopoly_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
   __attribute__((__aligned__(8)))
-  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t ret_area[(16+6*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_geopoly_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
-  sqlite_wasm_geopoly_slot_result_sql_value_string_t result;
+  __wasm_import_sqlink_wasm_geopoly_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_geopoly_slot_result_sql_value_string_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;
@@ -2243,6 +3434,14 @@ bool sqlite_wasm_geopoly_slot_call(uint64_t func_id, sqlite_wasm_geopoly_slot_li
           variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
           break;
         }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
       }
 
       result.val.ok = variant;
@@ -2263,30 +3462,62 @@ bool sqlite_wasm_geopoly_slot_call(uint64_t func_id, sqlite_wasm_geopoly_slot_li
   }
 }
 
-void sqlite_wasm_demo_slot_describe(sqlite_wasm_demo_slot_manifest_t *ret) {
-  __attribute__((__aligned__(sizeof(void*))))
-  uint8_t ret_area[(13*sizeof(void*))];
+void sqlink_wasm_demo_slot_describe(sqlink_wasm_demo_slot_manifest_t *ret) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+26*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_demo_slot_describe(ptr);
+  __wasm_import_sqlink_wasm_demo_slot_describe(ptr);
+  sqlite_cli_unified_option_string_t option;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+18*sizeof(void*))))) {
+    case 0: {
+      option.is_some = false;
+      break;
+    }
+    case 1: {
+      option.is_some = true;
+      option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+19*sizeof(void*))))), (*((size_t*) (ptr + (16+20*sizeof(void*))))) };
+      break;
+    }
+  }
+  sqlite_cli_unified_option_string_t option1;
+  switch ((int32_t) *((uint8_t*) (ptr + (16+21*sizeof(void*))))) {
+    case 0: {
+      option1.is_some = false;
+      break;
+    }
+    case 1: {
+      option1.is_some = true;
+      option1.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+22*sizeof(void*))))), (*((size_t*) (ptr + (16+23*sizeof(void*))))) };
+      break;
+    }
+  }
   *ret = (sqlite_extension_metadata_manifest_t) {
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) },
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
     (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr + (4*sizeof(void*))))), (*((size_t*) (ptr + (5*sizeof(void*))))) },
     (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr + (6*sizeof(void*))))), (*((size_t*) (ptr + (7*sizeof(void*))))) },
     (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr + (8*sizeof(void*))))), (*((size_t*) (ptr + (9*sizeof(void*))))) },
-    (bool) (int32_t) *((uint8_t*) (ptr + (10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (1+10*sizeof(void*)))),
-    (bool) (int32_t) *((uint8_t*) (ptr + (2+10*sizeof(void*)))),
-    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (11*sizeof(void*))))), (*((size_t*) (ptr + (12*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_vtab_spec_t) (sqlite_extension_metadata_list_vtab_spec_t) { (sqlite_extension_metadata_vtab_spec_t*)(*((uint8_t **) (ptr + (10*sizeof(void*))))), (*((size_t*) (ptr + (11*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_dot_command_spec_t) (sqlite_extension_metadata_list_dot_command_spec_t) { (sqlite_extension_metadata_dot_command_spec_t*)(*((uint8_t **) (ptr + (12*sizeof(void*))))), (*((size_t*) (ptr + (13*sizeof(void*))))) },
+    (bool) (int32_t) *((uint8_t*) (ptr + (14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (1+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (2+14*sizeof(void*)))),
+    (bool) (int32_t) *((uint8_t*) (ptr + (3+14*sizeof(void*)))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + (8+14*sizeof(void*))))),
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+14*sizeof(void*))))), (*((size_t*) (ptr + (16+15*sizeof(void*))))) },
+    (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr + (16+16*sizeof(void*))))), (*((size_t*) (ptr + (16+17*sizeof(void*))))) },
+    (sqlite_cli_unified_option_string_t) option,
+    (sqlite_cli_unified_option_string_t) option1,
+    (sqlite_extension_metadata_list_typed_value_binding_t) (sqlite_extension_metadata_list_typed_value_binding_t) { (sqlite_extension_metadata_typed_value_binding_t*)(*((uint8_t **) (ptr + (16+24*sizeof(void*))))), (*((size_t*) (ptr + (16+25*sizeof(void*))))) },
   };
 }
 
-bool sqlite_wasm_demo_slot_call(uint64_t func_id, sqlite_wasm_demo_slot_list_sql_value_t *args, sqlite_wasm_demo_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+bool sqlink_wasm_demo_slot_call(uint64_t func_id, sqlink_wasm_demo_slot_list_sql_value_t *args, sqlink_wasm_demo_slot_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
   __attribute__((__aligned__(8)))
-  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t ret_area[(16+6*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_demo_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
-  sqlite_wasm_demo_slot_result_sql_value_string_t result;
+  __wasm_import_sqlink_wasm_demo_slot_call((int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_demo_slot_result_sql_value_string_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;
@@ -2312,6 +3543,14 @@ bool sqlite_wasm_demo_slot_call(uint64_t func_id, sqlite_wasm_demo_slot_list_sql
           variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
           break;
         }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
       }
 
       result.val.ok = variant;
@@ -2332,9 +3571,9 @@ bool sqlite_wasm_demo_slot_call(uint64_t func_id, sqlite_wasm_demo_slot_list_sql
   }
 }
 
-bool sqlite_wasm_extension_loader_load_extension(sqlite_cli_unified_string_t *path, sqlite_wasm_extension_loader_load_options_t *options, sqlite_wasm_extension_loader_manifest_t *ret, sqlite_wasm_extension_loader_loader_error_t *err) {
+bool sqlink_wasm_extension_loader_load_extension(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_load_options_t *options, sqlink_wasm_extension_loader_manifest_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
   __attribute__((__aligned__(8)))
-  uint8_t ret_area[(112+12*sizeof(void*))];
+  uint8_t ret_area[(128+14*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
   *((size_t*)(ptr + sizeof(void*))) = (*path).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (*path).ptr;
@@ -2389,49 +3628,97 @@ bool sqlite_wasm_extension_loader_load_extension(sqlite_cli_unified_string_t *pa
   } else {
     *((int8_t*)(ptr + (48+2*sizeof(void*)))) = 0;
   }
-  if (((*options).fs_policy).is_some) {
-    const sqlite_extension_policy_fs_policy_t *payload24 = &((*options).fs_policy).val;
+  if (((*options).dns_policy).is_some) {
+    const sqlite_extension_policy_dns_policy_t *payload24 = &((*options).dns_policy).val;
     *((int8_t*)(ptr + (88+6*sizeof(void*)))) = 1;
-    *((size_t*)(ptr + (96+7*sizeof(void*)))) = ((*payload24).readable_prefixes).len;
-    *((uint8_t **)(ptr + (96+6*sizeof(void*)))) = (uint8_t *) ((*payload24).readable_prefixes).ptr;
-    *((size_t*)(ptr + (96+9*sizeof(void*)))) = ((*payload24).writable_prefixes).len;
-    *((uint8_t **)(ptr + (96+8*sizeof(void*)))) = (uint8_t *) ((*payload24).writable_prefixes).ptr;
-    if (((*payload24).max_write_bytes_per_call).is_some) {
-      const uint64_t *payload26 = &((*payload24).max_write_bytes_per_call).val;
-      *((int8_t*)(ptr + (96+10*sizeof(void*)))) = 1;
-      *((int64_t*)(ptr + (104+10*sizeof(void*)))) = (int64_t) (*payload26);
+    *((size_t*)(ptr + (88+8*sizeof(void*)))) = ((*payload24).allowed_domains).len;
+    *((uint8_t **)(ptr + (88+7*sizeof(void*)))) = (uint8_t *) ((*payload24).allowed_domains).ptr;
+    if (((*payload24).timeout_ms).is_some) {
+      const uint32_t *payload26 = &((*payload24).timeout_ms).val;
+      *((int8_t*)(ptr + (88+9*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (92+9*sizeof(void*)))) = (int32_t) (*payload26);
     } else {
-      *((int8_t*)(ptr + (96+10*sizeof(void*)))) = 0;
+      *((int8_t*)(ptr + (88+9*sizeof(void*)))) = 0;
     }
   } else {
     *((int8_t*)(ptr + (88+6*sizeof(void*)))) = 0;
   }
-  *((size_t*)(ptr + (112+11*sizeof(void*)))) = ((*options).grant).len;
-  *((uint8_t **)(ptr + (112+10*sizeof(void*)))) = (uint8_t *) ((*options).grant).ptr;
-  uint8_t *ptr38 = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_extension_loader_load_extension(ptr, ptr38);
-  sqlite_wasm_extension_loader_result_manifest_loader_error_t result;
-  switch ((int32_t) *((uint8_t*) (ptr38 + 0))) {
+  if (((*options).fs_policy).is_some) {
+    const sqlite_extension_policy_fs_policy_t *payload28 = &((*options).fs_policy).val;
+    *((int8_t*)(ptr + (104+8*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (112+9*sizeof(void*)))) = ((*payload28).readable_prefixes).len;
+    *((uint8_t **)(ptr + (112+8*sizeof(void*)))) = (uint8_t *) ((*payload28).readable_prefixes).ptr;
+    *((size_t*)(ptr + (112+11*sizeof(void*)))) = ((*payload28).writable_prefixes).len;
+    *((uint8_t **)(ptr + (112+10*sizeof(void*)))) = (uint8_t *) ((*payload28).writable_prefixes).ptr;
+    if (((*payload28).max_write_bytes_per_call).is_some) {
+      const uint64_t *payload30 = &((*payload28).max_write_bytes_per_call).val;
+      *((int8_t*)(ptr + (112+12*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (120+12*sizeof(void*)))) = (int64_t) (*payload30);
+    } else {
+      *((int8_t*)(ptr + (112+12*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (104+8*sizeof(void*)))) = 0;
+  }
+  *((size_t*)(ptr + (128+13*sizeof(void*)))) = ((*options).grant).len;
+  *((uint8_t **)(ptr + (128+12*sizeof(void*)))) = (uint8_t *) ((*options).grant).ptr;
+  uint8_t *ptr47 = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_load_extension(ptr, ptr47);
+  sqlink_wasm_extension_loader_result_manifest_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr47 + 0))) {
     case 0: {
       result.is_err = false;
+      sqlite_cli_unified_option_string_t option;
+      switch ((int32_t) *((uint8_t*) (ptr47 + (24+18*sizeof(void*))))) {
+        case 0: {
+          option.is_some = false;
+          break;
+        }
+        case 1: {
+          option.is_some = true;
+          option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (24+19*sizeof(void*))))), (*((size_t*) (ptr47 + (24+20*sizeof(void*))))) };
+          break;
+        }
+      }
+      sqlite_cli_unified_option_string_t option49;
+      switch ((int32_t) *((uint8_t*) (ptr47 + (24+21*sizeof(void*))))) {
+        case 0: {
+          option49.is_some = false;
+          break;
+        }
+        case 1: {
+          option49.is_some = true;
+          option49.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (24+22*sizeof(void*))))), (*((size_t*) (ptr47 + (24+23*sizeof(void*))))) };
+          break;
+        }
+      }
+
       result.val.ok = (sqlite_extension_metadata_manifest_t) {
-        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr38 + sizeof(void*)))), (*((size_t*) (ptr38 + (2*sizeof(void*))))) },
-        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr38 + (3*sizeof(void*))))), (*((size_t*) (ptr38 + (4*sizeof(void*))))) },
-        (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr38 + (5*sizeof(void*))))), (*((size_t*) (ptr38 + (6*sizeof(void*))))) },
-        (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr38 + (7*sizeof(void*))))), (*((size_t*) (ptr38 + (8*sizeof(void*))))) },
-        (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr38 + (9*sizeof(void*))))), (*((size_t*) (ptr38 + (10*sizeof(void*))))) },
-        (bool) (int32_t) *((uint8_t*) (ptr38 + (11*sizeof(void*)))),
-        (bool) (int32_t) *((uint8_t*) (ptr38 + (1+11*sizeof(void*)))),
-        (bool) (int32_t) *((uint8_t*) (ptr38 + (2+11*sizeof(void*)))),
-        (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr38 + (12*sizeof(void*))))), (*((size_t*) (ptr38 + (13*sizeof(void*))))) },
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + 8))), (*((size_t*) (ptr47 + (8+1*sizeof(void*))))) },
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (8+2*sizeof(void*))))), (*((size_t*) (ptr47 + (8+3*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr47 + (8+4*sizeof(void*))))), (*((size_t*) (ptr47 + (8+5*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr47 + (8+6*sizeof(void*))))), (*((size_t*) (ptr47 + (8+7*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr47 + (8+8*sizeof(void*))))), (*((size_t*) (ptr47 + (8+9*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_vtab_spec_t) (sqlite_extension_metadata_list_vtab_spec_t) { (sqlite_extension_metadata_vtab_spec_t*)(*((uint8_t **) (ptr47 + (8+10*sizeof(void*))))), (*((size_t*) (ptr47 + (8+11*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_dot_command_spec_t) (sqlite_extension_metadata_list_dot_command_spec_t) { (sqlite_extension_metadata_dot_command_spec_t*)(*((uint8_t **) (ptr47 + (8+12*sizeof(void*))))), (*((size_t*) (ptr47 + (8+13*sizeof(void*))))) },
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (8+14*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (9+14*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (10+14*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (11+14*sizeof(void*)))),
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr47 + (16+14*sizeof(void*))))),
+        (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr47 + (24+14*sizeof(void*))))), (*((size_t*) (ptr47 + (24+15*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr47 + (24+16*sizeof(void*))))), (*((size_t*) (ptr47 + (24+17*sizeof(void*))))) },
+        (sqlite_cli_unified_option_string_t) option,
+        (sqlite_cli_unified_option_string_t) option49,
+        (sqlite_extension_metadata_list_typed_value_binding_t) (sqlite_extension_metadata_list_typed_value_binding_t) { (sqlite_extension_metadata_typed_value_binding_t*)(*((uint8_t **) (ptr47 + (24+24*sizeof(void*))))), (*((size_t*) (ptr47 + (24+25*sizeof(void*))))) },
       };
       break;
     }
     case 1: {
       result.is_err = true;
-      result.val.err = (sqlite_wasm_extension_loader_loader_error_t) {
-        (int32_t) *((int32_t*) (ptr38 + sizeof(void*))),
-        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr38 + (2*sizeof(void*))))), (*((size_t*) (ptr38 + (3*sizeof(void*))))) },
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr47 + 8)),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (8+1*sizeof(void*))))), (*((size_t*) (ptr47 + (8+2*sizeof(void*))))) },
       };
       break;
     }
@@ -2445,12 +3732,12 @@ bool sqlite_wasm_extension_loader_load_extension(sqlite_cli_unified_string_t *pa
   }
 }
 
-bool sqlite_wasm_extension_loader_unload_extension(sqlite_cli_unified_string_t *name, sqlite_wasm_extension_loader_loader_error_t *err) {
+bool sqlink_wasm_extension_loader_unload_extension(sqlite_cli_unified_string_t *name, sqlink_wasm_extension_loader_loader_error_t *err) {
   __attribute__((__aligned__(sizeof(void*))))
   uint8_t ret_area[(4*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_extension_loader_unload_extension((uint8_t *) (*name).ptr, (*name).len, ptr);
-  sqlite_wasm_extension_loader_result_void_loader_error_t result;
+  __wasm_import_sqlink_wasm_extension_loader_unload_extension((uint8_t *) (*name).ptr, (*name).len, ptr);
+  sqlink_wasm_extension_loader_result_void_loader_error_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;
@@ -2458,7 +3745,7 @@ bool sqlite_wasm_extension_loader_unload_extension(sqlite_cli_unified_string_t *
     }
     case 1: {
       result.is_err = true;
-      result.val.err = (sqlite_wasm_extension_loader_loader_error_t) {
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
         (int32_t) *((int32_t*) (ptr + sizeof(void*))),
         (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
       };
@@ -2473,58 +3760,165 @@ bool sqlite_wasm_extension_loader_unload_extension(sqlite_cli_unified_string_t *
   }
 }
 
-void sqlite_wasm_extension_loader_list_extensions(sqlite_wasm_extension_loader_list_manifest_t *ret) {
+void sqlink_wasm_extension_loader_extension_digest(sqlite_cli_unified_string_t *name, sqlite_cli_unified_string_t *ret) {
   __attribute__((__aligned__(sizeof(void*))))
   uint8_t ret_area[(2*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_extension_loader_list_extensions(ptr);
-  *ret = (sqlite_wasm_extension_loader_list_manifest_t) { (sqlite_wasm_extension_loader_manifest_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) };
+  __wasm_import_sqlink_wasm_extension_loader_extension_digest((uint8_t *) (*name).ptr, (*name).len, ptr);
+  *ret = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) };
 }
 
-bool sqlite_wasm_extension_loader_is_extension_loaded(sqlite_cli_unified_string_t *name) {
-  int32_t ret = __wasm_import_sqlite_wasm_extension_loader_is_extension_loaded((uint8_t *) (*name).ptr, (*name).len);
-  return ret;
-}
-
-bool sqlite_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, sqlite_wasm_dispatch_list_sql_value_t *args, sqlite_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+bool sqlink_wasm_extension_loader_load_extension_from_bytes(sqlite_cli_unified_string_t *name_hint, sqlite_cli_unified_list_u8_t *bytes, sqlink_wasm_extension_loader_load_options_t *options, sqlink_wasm_extension_loader_manifest_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
   __attribute__((__aligned__(8)))
-  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t ret_area[(128+16*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_dispatch_scalar_call((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
-  sqlite_wasm_dispatch_result_sql_value_string_t result;
-  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+  *((size_t*)(ptr + sizeof(void*))) = (*name_hint).len;
+  *((uint8_t **)(ptr + 0)) = (uint8_t *) (*name_hint).ptr;
+  *((size_t*)(ptr + (3*sizeof(void*)))) = (*bytes).len;
+  *((uint8_t **)(ptr + (2*sizeof(void*)))) = (uint8_t *) (*bytes).ptr;
+  if (((*options).fuel_per_call).is_some) {
+    const uint64_t *payload0 = &((*options).fuel_per_call).val;
+    *((int8_t*)(ptr + (4*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (8+4*sizeof(void*)))) = (int64_t) (*payload0);
+  } else {
+    *((int8_t*)(ptr + (4*sizeof(void*)))) = 0;
+  }
+  if (((*options).memory_limit_bytes).is_some) {
+    const uint64_t *payload2 = &((*options).memory_limit_bytes).val;
+    *((int8_t*)(ptr + (16+4*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (24+4*sizeof(void*)))) = (int64_t) (*payload2);
+  } else {
+    *((int8_t*)(ptr + (16+4*sizeof(void*)))) = 0;
+  }
+  if (((*options).epoch_deadline_ms).is_some) {
+    const uint64_t *payload4 = &((*options).epoch_deadline_ms).val;
+    *((int8_t*)(ptr + (32+4*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (40+4*sizeof(void*)))) = (int64_t) (*payload4);
+  } else {
+    *((int8_t*)(ptr + (32+4*sizeof(void*)))) = 0;
+  }
+  if (((*options).http_policy).is_some) {
+    const sqlite_extension_policy_http_policy_t *payload6 = &((*options).http_policy).val;
+    *((int8_t*)(ptr + (48+4*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (56+5*sizeof(void*)))) = ((*payload6).allowed_hosts).len;
+    *((uint8_t **)(ptr + (56+4*sizeof(void*)))) = (uint8_t *) ((*payload6).allowed_hosts).ptr;
+    if (((*payload6).allowed_methods).is_some) {
+      const sqlite_extension_policy_list_method_t *payload8 = &((*payload6).allowed_methods).val;
+      *((int8_t*)(ptr + (56+6*sizeof(void*)))) = 1;
+      *((size_t*)(ptr + (56+8*sizeof(void*)))) = (*payload8).len;
+      *((uint8_t **)(ptr + (56+7*sizeof(void*)))) = (uint8_t *) (*payload8).ptr;
+    } else {
+      *((int8_t*)(ptr + (56+6*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).max_body_bytes).is_some) {
+      const uint64_t *payload20 = &((*payload6).max_body_bytes).val;
+      *((int8_t*)(ptr + (64+8*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (72+8*sizeof(void*)))) = (int64_t) (*payload20);
+    } else {
+      *((int8_t*)(ptr + (64+8*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).timeout_ms).is_some) {
+      const uint32_t *payload22 = &((*payload6).timeout_ms).val;
+      *((int8_t*)(ptr + (80+8*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (84+8*sizeof(void*)))) = (int32_t) (*payload22);
+    } else {
+      *((int8_t*)(ptr + (80+8*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (48+4*sizeof(void*)))) = 0;
+  }
+  if (((*options).dns_policy).is_some) {
+    const sqlite_extension_policy_dns_policy_t *payload24 = &((*options).dns_policy).val;
+    *((int8_t*)(ptr + (88+8*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (88+10*sizeof(void*)))) = ((*payload24).allowed_domains).len;
+    *((uint8_t **)(ptr + (88+9*sizeof(void*)))) = (uint8_t *) ((*payload24).allowed_domains).ptr;
+    if (((*payload24).timeout_ms).is_some) {
+      const uint32_t *payload26 = &((*payload24).timeout_ms).val;
+      *((int8_t*)(ptr + (88+11*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (92+11*sizeof(void*)))) = (int32_t) (*payload26);
+    } else {
+      *((int8_t*)(ptr + (88+11*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (88+8*sizeof(void*)))) = 0;
+  }
+  if (((*options).fs_policy).is_some) {
+    const sqlite_extension_policy_fs_policy_t *payload28 = &((*options).fs_policy).val;
+    *((int8_t*)(ptr + (104+10*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (112+11*sizeof(void*)))) = ((*payload28).readable_prefixes).len;
+    *((uint8_t **)(ptr + (112+10*sizeof(void*)))) = (uint8_t *) ((*payload28).readable_prefixes).ptr;
+    *((size_t*)(ptr + (112+13*sizeof(void*)))) = ((*payload28).writable_prefixes).len;
+    *((uint8_t **)(ptr + (112+12*sizeof(void*)))) = (uint8_t *) ((*payload28).writable_prefixes).ptr;
+    if (((*payload28).max_write_bytes_per_call).is_some) {
+      const uint64_t *payload30 = &((*payload28).max_write_bytes_per_call).val;
+      *((int8_t*)(ptr + (112+14*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (120+14*sizeof(void*)))) = (int64_t) (*payload30);
+    } else {
+      *((int8_t*)(ptr + (112+14*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (104+10*sizeof(void*)))) = 0;
+  }
+  *((size_t*)(ptr + (128+15*sizeof(void*)))) = ((*options).grant).len;
+  *((uint8_t **)(ptr + (128+14*sizeof(void*)))) = (uint8_t *) ((*options).grant).ptr;
+  uint8_t *ptr47 = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_load_extension_from_bytes(ptr, ptr47);
+  sqlink_wasm_extension_loader_result_manifest_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr47 + 0))) {
     case 0: {
       result.is_err = false;
-      sqlite_extension_types_sql_value_t variant;
-      variant.tag = (int32_t) *((uint8_t*) (ptr + 8));
-      switch ((int32_t) variant.tag) {
+      sqlite_cli_unified_option_string_t option;
+      switch ((int32_t) *((uint8_t*) (ptr47 + (24+18*sizeof(void*))))) {
         case 0: {
+          option.is_some = false;
           break;
         }
         case 1: {
-          variant.val.integer = *((int64_t*) (ptr + 16));
+          option.is_some = true;
+          option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (24+19*sizeof(void*))))), (*((size_t*) (ptr47 + (24+20*sizeof(void*))))) };
           break;
         }
-        case 2: {
-          variant.val.real = *((double*) (ptr + 16));
+      }
+      sqlite_cli_unified_option_string_t option49;
+      switch ((int32_t) *((uint8_t*) (ptr47 + (24+21*sizeof(void*))))) {
+        case 0: {
+          option49.is_some = false;
           break;
         }
-        case 3: {
-          variant.val.text = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
-          break;
-        }
-        case 4: {
-          variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+        case 1: {
+          option49.is_some = true;
+          option49.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (24+22*sizeof(void*))))), (*((size_t*) (ptr47 + (24+23*sizeof(void*))))) };
           break;
         }
       }
 
-      result.val.ok = variant;
+      result.val.ok = (sqlite_extension_metadata_manifest_t) {
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + 8))), (*((size_t*) (ptr47 + (8+1*sizeof(void*))))) },
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (8+2*sizeof(void*))))), (*((size_t*) (ptr47 + (8+3*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr47 + (8+4*sizeof(void*))))), (*((size_t*) (ptr47 + (8+5*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr47 + (8+6*sizeof(void*))))), (*((size_t*) (ptr47 + (8+7*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr47 + (8+8*sizeof(void*))))), (*((size_t*) (ptr47 + (8+9*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_vtab_spec_t) (sqlite_extension_metadata_list_vtab_spec_t) { (sqlite_extension_metadata_vtab_spec_t*)(*((uint8_t **) (ptr47 + (8+10*sizeof(void*))))), (*((size_t*) (ptr47 + (8+11*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_dot_command_spec_t) (sqlite_extension_metadata_list_dot_command_spec_t) { (sqlite_extension_metadata_dot_command_spec_t*)(*((uint8_t **) (ptr47 + (8+12*sizeof(void*))))), (*((size_t*) (ptr47 + (8+13*sizeof(void*))))) },
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (8+14*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (9+14*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (10+14*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (11+14*sizeof(void*)))),
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr47 + (16+14*sizeof(void*))))),
+        (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr47 + (24+14*sizeof(void*))))), (*((size_t*) (ptr47 + (24+15*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr47 + (24+16*sizeof(void*))))), (*((size_t*) (ptr47 + (24+17*sizeof(void*))))) },
+        (sqlite_cli_unified_option_string_t) option,
+        (sqlite_cli_unified_option_string_t) option49,
+        (sqlite_extension_metadata_list_typed_value_binding_t) (sqlite_extension_metadata_list_typed_value_binding_t) { (sqlite_extension_metadata_typed_value_binding_t*)(*((uint8_t **) (ptr47 + (24+24*sizeof(void*))))), (*((size_t*) (ptr47 + (24+25*sizeof(void*))))) },
+      };
       break;
     }
     case 1: {
       result.is_err = true;
-      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr47 + 8)),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (8+1*sizeof(void*))))), (*((size_t*) (ptr47 + (8+2*sizeof(void*))))) },
+      };
       break;
     }
   }
@@ -2537,12 +3931,1204 @@ bool sqlite_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_name, uin
   }
 }
 
-bool sqlite_wasm_dispatch_aggregate_step(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlite_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err) {
+bool sqlink_wasm_extension_loader_dispatch_dot_command(sqlite_cli_unified_string_t *name, sqlite_cli_unified_string_t *args, sqlite_cli_unified_list_tuple2_string_string_t *cli_state, sqlink_wasm_extension_loader_dot_command_result_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(6*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_dispatch_dot_command((uint8_t *) (*name).ptr, (*name).len, (uint8_t *) (*args).ptr, (*args).len, (uint8_t *) (*cli_state).ptr, (*cli_state).len, ptr);
+  sqlink_wasm_extension_loader_result_dot_command_result_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlink_wasm_extension_loader_dot_command_result_t) {
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) },
+        (sqlink_wasm_extension_loader_list_state_delta_t) (sqlink_wasm_extension_loader_list_state_delta_t) { (sqlink_wasm_extension_loader_state_delta_t*)(*((uint8_t **) (ptr + (3*sizeof(void*))))), (*((size_t*) (ptr + (4*sizeof(void*))))) },
+        (int32_t) *((int32_t*) (ptr + (5*sizeof(void*)))),
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_fetch_cas_uri(sqlite_cli_unified_string_t *uri, sqlite_cli_unified_string_t *expected_digest, sqlite_cli_unified_list_u8_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(4*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_fetch_cas_uri((uint8_t *) (*uri).ptr, (*uri).len, (uint8_t *) (*expected_digest).ptr, (*expected_digest).len, ptr);
+  sqlink_wasm_extension_loader_result_list_u8_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_describe_extension(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_described_result_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(7*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_describe_extension((uint8_t *) (*path).ptr, (*path).len, ptr);
+  sqlink_wasm_extension_loader_result_described_result_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlink_wasm_extension_loader_described_result_t) {
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) },
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (3*sizeof(void*))))), (*((size_t*) (ptr + (4*sizeof(void*))))) },
+        (sqlite_cli_unified_list_string_t) (sqlite_cli_unified_list_string_t) { (sqlite_cli_unified_string_t*)(*((uint8_t **) (ptr + (5*sizeof(void*))))), (*((size_t*) (ptr + (6*sizeof(void*))))) },
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_describe_extension_from_uri(sqlite_cli_unified_string_t *uri, sqlink_wasm_extension_loader_described_result_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(7*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_describe_extension_from_uri((uint8_t *) (*uri).ptr, (*uri).len, ptr);
+  sqlink_wasm_extension_loader_result_described_result_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlink_wasm_extension_loader_described_result_t) {
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) },
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (3*sizeof(void*))))), (*((size_t*) (ptr + (4*sizeof(void*))))) },
+        (sqlite_cli_unified_list_string_t) (sqlite_cli_unified_list_string_t) { (sqlite_cli_unified_string_t*)(*((uint8_t **) (ptr + (5*sizeof(void*))))), (*((size_t*) (ptr + (6*sizeof(void*))))) },
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+void sqlink_wasm_extension_loader_component_cache_stats(sqlink_wasm_extension_loader_component_cache_stats_snapshot_t *ret) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[80];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_component_cache_stats(ptr);
+  *ret = (sqlink_wasm_extension_loader_component_cache_stats_snapshot_t) {
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 0))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 8))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 16))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 24))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 32))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 40))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 48))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 56))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 64))),
+    (uint64_t) (uint64_t) (*((int64_t*) (ptr + 72))),
+  };
+}
+
+uint64_t sqlink_wasm_extension_loader_component_cache_purge(void) {
+  int64_t ret = __wasm_import_sqlink_wasm_extension_loader_component_cache_purge();
+  return (uint64_t) (ret);
+}
+
+void sqlink_wasm_extension_loader_list_extensions(sqlink_wasm_extension_loader_list_manifest_t *ret) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_list_extensions(ptr);
+  *ret = (sqlink_wasm_extension_loader_list_manifest_t) { (sqlink_wasm_extension_loader_manifest_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) };
+}
+
+bool sqlink_wasm_extension_loader_is_extension_loaded(sqlite_cli_unified_string_t *name) {
+  int32_t ret = __wasm_import_sqlink_wasm_extension_loader_is_extension_loaded((uint8_t *) (*name).ptr, (*name).len);
+  return ret;
+}
+
+bool sqlink_wasm_extension_loader_load_extension_from_uri(sqlite_cli_unified_string_t *uri, sqlink_wasm_extension_loader_load_options_t *options, sqlink_wasm_extension_loader_manifest_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(128+14*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  *((size_t*)(ptr + sizeof(void*))) = (*uri).len;
+  *((uint8_t **)(ptr + 0)) = (uint8_t *) (*uri).ptr;
+  if (((*options).fuel_per_call).is_some) {
+    const uint64_t *payload0 = &((*options).fuel_per_call).val;
+    *((int8_t*)(ptr + (2*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (8+2*sizeof(void*)))) = (int64_t) (*payload0);
+  } else {
+    *((int8_t*)(ptr + (2*sizeof(void*)))) = 0;
+  }
+  if (((*options).memory_limit_bytes).is_some) {
+    const uint64_t *payload2 = &((*options).memory_limit_bytes).val;
+    *((int8_t*)(ptr + (16+2*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (24+2*sizeof(void*)))) = (int64_t) (*payload2);
+  } else {
+    *((int8_t*)(ptr + (16+2*sizeof(void*)))) = 0;
+  }
+  if (((*options).epoch_deadline_ms).is_some) {
+    const uint64_t *payload4 = &((*options).epoch_deadline_ms).val;
+    *((int8_t*)(ptr + (32+2*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (40+2*sizeof(void*)))) = (int64_t) (*payload4);
+  } else {
+    *((int8_t*)(ptr + (32+2*sizeof(void*)))) = 0;
+  }
+  if (((*options).http_policy).is_some) {
+    const sqlite_extension_policy_http_policy_t *payload6 = &((*options).http_policy).val;
+    *((int8_t*)(ptr + (48+2*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (56+3*sizeof(void*)))) = ((*payload6).allowed_hosts).len;
+    *((uint8_t **)(ptr + (56+2*sizeof(void*)))) = (uint8_t *) ((*payload6).allowed_hosts).ptr;
+    if (((*payload6).allowed_methods).is_some) {
+      const sqlite_extension_policy_list_method_t *payload8 = &((*payload6).allowed_methods).val;
+      *((int8_t*)(ptr + (56+4*sizeof(void*)))) = 1;
+      *((size_t*)(ptr + (56+6*sizeof(void*)))) = (*payload8).len;
+      *((uint8_t **)(ptr + (56+5*sizeof(void*)))) = (uint8_t *) (*payload8).ptr;
+    } else {
+      *((int8_t*)(ptr + (56+4*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).max_body_bytes).is_some) {
+      const uint64_t *payload20 = &((*payload6).max_body_bytes).val;
+      *((int8_t*)(ptr + (64+6*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (72+6*sizeof(void*)))) = (int64_t) (*payload20);
+    } else {
+      *((int8_t*)(ptr + (64+6*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).timeout_ms).is_some) {
+      const uint32_t *payload22 = &((*payload6).timeout_ms).val;
+      *((int8_t*)(ptr + (80+6*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (84+6*sizeof(void*)))) = (int32_t) (*payload22);
+    } else {
+      *((int8_t*)(ptr + (80+6*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (48+2*sizeof(void*)))) = 0;
+  }
+  if (((*options).dns_policy).is_some) {
+    const sqlite_extension_policy_dns_policy_t *payload24 = &((*options).dns_policy).val;
+    *((int8_t*)(ptr + (88+6*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (88+8*sizeof(void*)))) = ((*payload24).allowed_domains).len;
+    *((uint8_t **)(ptr + (88+7*sizeof(void*)))) = (uint8_t *) ((*payload24).allowed_domains).ptr;
+    if (((*payload24).timeout_ms).is_some) {
+      const uint32_t *payload26 = &((*payload24).timeout_ms).val;
+      *((int8_t*)(ptr + (88+9*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (92+9*sizeof(void*)))) = (int32_t) (*payload26);
+    } else {
+      *((int8_t*)(ptr + (88+9*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (88+6*sizeof(void*)))) = 0;
+  }
+  if (((*options).fs_policy).is_some) {
+    const sqlite_extension_policy_fs_policy_t *payload28 = &((*options).fs_policy).val;
+    *((int8_t*)(ptr + (104+8*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (112+9*sizeof(void*)))) = ((*payload28).readable_prefixes).len;
+    *((uint8_t **)(ptr + (112+8*sizeof(void*)))) = (uint8_t *) ((*payload28).readable_prefixes).ptr;
+    *((size_t*)(ptr + (112+11*sizeof(void*)))) = ((*payload28).writable_prefixes).len;
+    *((uint8_t **)(ptr + (112+10*sizeof(void*)))) = (uint8_t *) ((*payload28).writable_prefixes).ptr;
+    if (((*payload28).max_write_bytes_per_call).is_some) {
+      const uint64_t *payload30 = &((*payload28).max_write_bytes_per_call).val;
+      *((int8_t*)(ptr + (112+12*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (120+12*sizeof(void*)))) = (int64_t) (*payload30);
+    } else {
+      *((int8_t*)(ptr + (112+12*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (104+8*sizeof(void*)))) = 0;
+  }
+  *((size_t*)(ptr + (128+13*sizeof(void*)))) = ((*options).grant).len;
+  *((uint8_t **)(ptr + (128+12*sizeof(void*)))) = (uint8_t *) ((*options).grant).ptr;
+  uint8_t *ptr47 = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_load_extension_from_uri(ptr, ptr47);
+  sqlink_wasm_extension_loader_result_manifest_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr47 + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_cli_unified_option_string_t option;
+      switch ((int32_t) *((uint8_t*) (ptr47 + (24+18*sizeof(void*))))) {
+        case 0: {
+          option.is_some = false;
+          break;
+        }
+        case 1: {
+          option.is_some = true;
+          option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (24+19*sizeof(void*))))), (*((size_t*) (ptr47 + (24+20*sizeof(void*))))) };
+          break;
+        }
+      }
+      sqlite_cli_unified_option_string_t option49;
+      switch ((int32_t) *((uint8_t*) (ptr47 + (24+21*sizeof(void*))))) {
+        case 0: {
+          option49.is_some = false;
+          break;
+        }
+        case 1: {
+          option49.is_some = true;
+          option49.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (24+22*sizeof(void*))))), (*((size_t*) (ptr47 + (24+23*sizeof(void*))))) };
+          break;
+        }
+      }
+
+      result.val.ok = (sqlite_extension_metadata_manifest_t) {
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + 8))), (*((size_t*) (ptr47 + (8+1*sizeof(void*))))) },
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (8+2*sizeof(void*))))), (*((size_t*) (ptr47 + (8+3*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_scalar_function_spec_t) (sqlite_extension_metadata_list_scalar_function_spec_t) { (sqlite_extension_metadata_scalar_function_spec_t*)(*((uint8_t **) (ptr47 + (8+4*sizeof(void*))))), (*((size_t*) (ptr47 + (8+5*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_aggregate_function_spec_t) (sqlite_extension_metadata_list_aggregate_function_spec_t) { (sqlite_extension_metadata_aggregate_function_spec_t*)(*((uint8_t **) (ptr47 + (8+6*sizeof(void*))))), (*((size_t*) (ptr47 + (8+7*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_collation_spec_t) (sqlite_extension_metadata_list_collation_spec_t) { (sqlite_extension_metadata_collation_spec_t*)(*((uint8_t **) (ptr47 + (8+8*sizeof(void*))))), (*((size_t*) (ptr47 + (8+9*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_vtab_spec_t) (sqlite_extension_metadata_list_vtab_spec_t) { (sqlite_extension_metadata_vtab_spec_t*)(*((uint8_t **) (ptr47 + (8+10*sizeof(void*))))), (*((size_t*) (ptr47 + (8+11*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_dot_command_spec_t) (sqlite_extension_metadata_list_dot_command_spec_t) { (sqlite_extension_metadata_dot_command_spec_t*)(*((uint8_t **) (ptr47 + (8+12*sizeof(void*))))), (*((size_t*) (ptr47 + (8+13*sizeof(void*))))) },
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (8+14*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (9+14*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (10+14*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr47 + (11+14*sizeof(void*)))),
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr47 + (16+14*sizeof(void*))))),
+        (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr47 + (24+14*sizeof(void*))))), (*((size_t*) (ptr47 + (24+15*sizeof(void*))))) },
+        (sqlite_extension_metadata_list_capability_t) (sqlite_extension_metadata_list_capability_t) { (sqlite_extension_metadata_capability_t*)(*((uint8_t **) (ptr47 + (24+16*sizeof(void*))))), (*((size_t*) (ptr47 + (24+17*sizeof(void*))))) },
+        (sqlite_cli_unified_option_string_t) option,
+        (sqlite_cli_unified_option_string_t) option49,
+        (sqlite_extension_metadata_list_typed_value_binding_t) (sqlite_extension_metadata_list_typed_value_binding_t) { (sqlite_extension_metadata_typed_value_binding_t*)(*((uint8_t **) (ptr47 + (24+24*sizeof(void*))))), (*((size_t*) (ptr47 + (24+25*sizeof(void*))))) },
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr47 + 8)),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (8+1*sizeof(void*))))), (*((size_t*) (ptr47 + (8+2*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_register_resolver(sqlite_cli_unified_string_t *scheme, sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_load_options_t *options, sqlite_cli_unified_string_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(128+16*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  *((size_t*)(ptr + sizeof(void*))) = (*scheme).len;
+  *((uint8_t **)(ptr + 0)) = (uint8_t *) (*scheme).ptr;
+  *((size_t*)(ptr + (3*sizeof(void*)))) = (*path).len;
+  *((uint8_t **)(ptr + (2*sizeof(void*)))) = (uint8_t *) (*path).ptr;
+  if (((*options).fuel_per_call).is_some) {
+    const uint64_t *payload0 = &((*options).fuel_per_call).val;
+    *((int8_t*)(ptr + (4*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (8+4*sizeof(void*)))) = (int64_t) (*payload0);
+  } else {
+    *((int8_t*)(ptr + (4*sizeof(void*)))) = 0;
+  }
+  if (((*options).memory_limit_bytes).is_some) {
+    const uint64_t *payload2 = &((*options).memory_limit_bytes).val;
+    *((int8_t*)(ptr + (16+4*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (24+4*sizeof(void*)))) = (int64_t) (*payload2);
+  } else {
+    *((int8_t*)(ptr + (16+4*sizeof(void*)))) = 0;
+  }
+  if (((*options).epoch_deadline_ms).is_some) {
+    const uint64_t *payload4 = &((*options).epoch_deadline_ms).val;
+    *((int8_t*)(ptr + (32+4*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (40+4*sizeof(void*)))) = (int64_t) (*payload4);
+  } else {
+    *((int8_t*)(ptr + (32+4*sizeof(void*)))) = 0;
+  }
+  if (((*options).http_policy).is_some) {
+    const sqlite_extension_policy_http_policy_t *payload6 = &((*options).http_policy).val;
+    *((int8_t*)(ptr + (48+4*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (56+5*sizeof(void*)))) = ((*payload6).allowed_hosts).len;
+    *((uint8_t **)(ptr + (56+4*sizeof(void*)))) = (uint8_t *) ((*payload6).allowed_hosts).ptr;
+    if (((*payload6).allowed_methods).is_some) {
+      const sqlite_extension_policy_list_method_t *payload8 = &((*payload6).allowed_methods).val;
+      *((int8_t*)(ptr + (56+6*sizeof(void*)))) = 1;
+      *((size_t*)(ptr + (56+8*sizeof(void*)))) = (*payload8).len;
+      *((uint8_t **)(ptr + (56+7*sizeof(void*)))) = (uint8_t *) (*payload8).ptr;
+    } else {
+      *((int8_t*)(ptr + (56+6*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).max_body_bytes).is_some) {
+      const uint64_t *payload20 = &((*payload6).max_body_bytes).val;
+      *((int8_t*)(ptr + (64+8*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (72+8*sizeof(void*)))) = (int64_t) (*payload20);
+    } else {
+      *((int8_t*)(ptr + (64+8*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).timeout_ms).is_some) {
+      const uint32_t *payload22 = &((*payload6).timeout_ms).val;
+      *((int8_t*)(ptr + (80+8*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (84+8*sizeof(void*)))) = (int32_t) (*payload22);
+    } else {
+      *((int8_t*)(ptr + (80+8*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (48+4*sizeof(void*)))) = 0;
+  }
+  if (((*options).dns_policy).is_some) {
+    const sqlite_extension_policy_dns_policy_t *payload24 = &((*options).dns_policy).val;
+    *((int8_t*)(ptr + (88+8*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (88+10*sizeof(void*)))) = ((*payload24).allowed_domains).len;
+    *((uint8_t **)(ptr + (88+9*sizeof(void*)))) = (uint8_t *) ((*payload24).allowed_domains).ptr;
+    if (((*payload24).timeout_ms).is_some) {
+      const uint32_t *payload26 = &((*payload24).timeout_ms).val;
+      *((int8_t*)(ptr + (88+11*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (92+11*sizeof(void*)))) = (int32_t) (*payload26);
+    } else {
+      *((int8_t*)(ptr + (88+11*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (88+8*sizeof(void*)))) = 0;
+  }
+  if (((*options).fs_policy).is_some) {
+    const sqlite_extension_policy_fs_policy_t *payload28 = &((*options).fs_policy).val;
+    *((int8_t*)(ptr + (104+10*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (112+11*sizeof(void*)))) = ((*payload28).readable_prefixes).len;
+    *((uint8_t **)(ptr + (112+10*sizeof(void*)))) = (uint8_t *) ((*payload28).readable_prefixes).ptr;
+    *((size_t*)(ptr + (112+13*sizeof(void*)))) = ((*payload28).writable_prefixes).len;
+    *((uint8_t **)(ptr + (112+12*sizeof(void*)))) = (uint8_t *) ((*payload28).writable_prefixes).ptr;
+    if (((*payload28).max_write_bytes_per_call).is_some) {
+      const uint64_t *payload30 = &((*payload28).max_write_bytes_per_call).val;
+      *((int8_t*)(ptr + (112+14*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (120+14*sizeof(void*)))) = (int64_t) (*payload30);
+    } else {
+      *((int8_t*)(ptr + (112+14*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (104+10*sizeof(void*)))) = 0;
+  }
+  *((size_t*)(ptr + (128+15*sizeof(void*)))) = ((*options).grant).len;
+  *((uint8_t **)(ptr + (128+14*sizeof(void*)))) = (uint8_t *) ((*options).grant).ptr;
+  uint8_t *ptr47 = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_register_resolver(ptr, ptr47);
+  sqlink_wasm_extension_loader_result_string_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr47 + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + sizeof(void*)))), (*((size_t*) (ptr47 + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr47 + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (2*sizeof(void*))))), (*((size_t*) (ptr47 + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_unregister_resolver(sqlite_cli_unified_string_t *scheme, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(4*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_unregister_resolver((uint8_t *) (*scheme).ptr, (*scheme).len, ptr);
+  sqlink_wasm_extension_loader_result_void_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+void sqlink_wasm_extension_loader_list_resolvers(sqlite_cli_unified_list_tuple2_string_string_t *ret) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_list_resolvers(ptr);
+  *ret = (sqlite_cli_unified_list_tuple2_string_string_t) { (sqlite_cli_unified_tuple2_string_string_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) };
+}
+
+void sqlink_wasm_extension_loader_list_cache_uris(sqlink_wasm_extension_loader_list_uri_cache_entry_t *ret) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_list_cache_uris(ptr);
+  *ret = (sqlink_wasm_extension_loader_list_uri_cache_entry_t) { (sqlink_wasm_extension_loader_uri_cache_entry_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) };
+}
+
+uint64_t sqlink_wasm_extension_loader_purge_cache(void) {
+  int64_t ret = __wasm_import_sqlink_wasm_extension_loader_purge_cache();
+  return (uint64_t) (ret);
+}
+
+bool sqlink_wasm_extension_loader_get_cache_stats(sqlink_wasm_extension_loader_cache_stats_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(40+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_get_cache_stats(ptr);
+  sqlink_wasm_extension_loader_result_cache_stats_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlink_wasm_extension_loader_cache_stats_t) {
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr + 8))),
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr + 16))),
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr + 24))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 32))), (*((size_t*) (ptr + (32+1*sizeof(void*))))) },
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr + (32+2*sizeof(void*))))),
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + 8)),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (8+1*sizeof(void*))))), (*((size_t*) (ptr + (8+2*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_cache_set_max_bytes(uint64_t max, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(4*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_cache_set_max_bytes((int64_t) (max), ptr);
+  sqlink_wasm_extension_loader_result_void_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_cache_gc(uint64_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_cache_gc(ptr);
+  sqlink_wasm_extension_loader_result_u64_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (uint64_t) (*((int64_t*) (ptr + 8)));
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + 8)),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (8+1*sizeof(void*))))), (*((size_t*) (ptr + (8+2*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_cache_evict(uint64_t target_bytes, uint64_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_cache_evict((int64_t) (target_bytes), ptr);
+  sqlink_wasm_extension_loader_result_u64_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (uint64_t) (*((int64_t*) (ptr + 8)));
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + 8)),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (8+1*sizeof(void*))))), (*((size_t*) (ptr + (8+2*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_cache_export(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(4*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_cache_export((uint8_t *) (*path).ptr, (*path).len, ptr);
+  sqlink_wasm_extension_loader_result_void_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_do_cache_import(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_cache_merge_stats_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_do_cache_import((uint8_t *) (*path).ptr, (*path).len, ptr);
+  sqlink_wasm_extension_loader_result_cache_merge_stats_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlink_wasm_extension_loader_cache_merge_stats_t) {
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr + 8))),
+        (int64_t) *((int64_t*) (ptr + 16)),
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + 8)),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (8+1*sizeof(void*))))), (*((size_t*) (ptr + (8+2*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_cache_use_external(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(4*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_cache_use_external((uint8_t *) (*path).ptr, (*path).len, ptr);
+  sqlink_wasm_extension_loader_result_void_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_cache_use_internal(sqlite_cli_unified_string_t *db_path, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(4*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_cache_use_internal((uint8_t *) (*db_path).ptr, (*db_path).len, ptr);
+  sqlink_wasm_extension_loader_result_void_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_cache_migrate_to_external(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_cache_merge_stats_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_cache_migrate_to_external((uint8_t *) (*path).ptr, (*path).len, ptr);
+  sqlink_wasm_extension_loader_result_cache_merge_stats_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlink_wasm_extension_loader_cache_merge_stats_t) {
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr + 8))),
+        (int64_t) *((int64_t*) (ptr + 16)),
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + 8)),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (8+1*sizeof(void*))))), (*((size_t*) (ptr + (8+2*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_cache_migrate_to_internal(sqlite_cli_unified_string_t *db_path, sqlink_wasm_extension_loader_cache_merge_stats_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_cache_migrate_to_internal((uint8_t *) (*db_path).ptr, (*db_path).len, ptr);
+  sqlink_wasm_extension_loader_result_cache_merge_stats_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlink_wasm_extension_loader_cache_merge_stats_t) {
+        (uint64_t) (uint64_t) (*((int64_t*) (ptr + 8))),
+        (int64_t) *((int64_t*) (ptr + 16)),
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + 8)),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (8+1*sizeof(void*))))), (*((size_t*) (ptr + (8+2*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_run_wasm(sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_load_options_t *options, sqlite_cli_unified_string_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(128+14*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  *((size_t*)(ptr + sizeof(void*))) = (*path).len;
+  *((uint8_t **)(ptr + 0)) = (uint8_t *) (*path).ptr;
+  if (((*options).fuel_per_call).is_some) {
+    const uint64_t *payload0 = &((*options).fuel_per_call).val;
+    *((int8_t*)(ptr + (2*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (8+2*sizeof(void*)))) = (int64_t) (*payload0);
+  } else {
+    *((int8_t*)(ptr + (2*sizeof(void*)))) = 0;
+  }
+  if (((*options).memory_limit_bytes).is_some) {
+    const uint64_t *payload2 = &((*options).memory_limit_bytes).val;
+    *((int8_t*)(ptr + (16+2*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (24+2*sizeof(void*)))) = (int64_t) (*payload2);
+  } else {
+    *((int8_t*)(ptr + (16+2*sizeof(void*)))) = 0;
+  }
+  if (((*options).epoch_deadline_ms).is_some) {
+    const uint64_t *payload4 = &((*options).epoch_deadline_ms).val;
+    *((int8_t*)(ptr + (32+2*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (40+2*sizeof(void*)))) = (int64_t) (*payload4);
+  } else {
+    *((int8_t*)(ptr + (32+2*sizeof(void*)))) = 0;
+  }
+  if (((*options).http_policy).is_some) {
+    const sqlite_extension_policy_http_policy_t *payload6 = &((*options).http_policy).val;
+    *((int8_t*)(ptr + (48+2*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (56+3*sizeof(void*)))) = ((*payload6).allowed_hosts).len;
+    *((uint8_t **)(ptr + (56+2*sizeof(void*)))) = (uint8_t *) ((*payload6).allowed_hosts).ptr;
+    if (((*payload6).allowed_methods).is_some) {
+      const sqlite_extension_policy_list_method_t *payload8 = &((*payload6).allowed_methods).val;
+      *((int8_t*)(ptr + (56+4*sizeof(void*)))) = 1;
+      *((size_t*)(ptr + (56+6*sizeof(void*)))) = (*payload8).len;
+      *((uint8_t **)(ptr + (56+5*sizeof(void*)))) = (uint8_t *) (*payload8).ptr;
+    } else {
+      *((int8_t*)(ptr + (56+4*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).max_body_bytes).is_some) {
+      const uint64_t *payload20 = &((*payload6).max_body_bytes).val;
+      *((int8_t*)(ptr + (64+6*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (72+6*sizeof(void*)))) = (int64_t) (*payload20);
+    } else {
+      *((int8_t*)(ptr + (64+6*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).timeout_ms).is_some) {
+      const uint32_t *payload22 = &((*payload6).timeout_ms).val;
+      *((int8_t*)(ptr + (80+6*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (84+6*sizeof(void*)))) = (int32_t) (*payload22);
+    } else {
+      *((int8_t*)(ptr + (80+6*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (48+2*sizeof(void*)))) = 0;
+  }
+  if (((*options).dns_policy).is_some) {
+    const sqlite_extension_policy_dns_policy_t *payload24 = &((*options).dns_policy).val;
+    *((int8_t*)(ptr + (88+6*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (88+8*sizeof(void*)))) = ((*payload24).allowed_domains).len;
+    *((uint8_t **)(ptr + (88+7*sizeof(void*)))) = (uint8_t *) ((*payload24).allowed_domains).ptr;
+    if (((*payload24).timeout_ms).is_some) {
+      const uint32_t *payload26 = &((*payload24).timeout_ms).val;
+      *((int8_t*)(ptr + (88+9*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (92+9*sizeof(void*)))) = (int32_t) (*payload26);
+    } else {
+      *((int8_t*)(ptr + (88+9*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (88+6*sizeof(void*)))) = 0;
+  }
+  if (((*options).fs_policy).is_some) {
+    const sqlite_extension_policy_fs_policy_t *payload28 = &((*options).fs_policy).val;
+    *((int8_t*)(ptr + (104+8*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (112+9*sizeof(void*)))) = ((*payload28).readable_prefixes).len;
+    *((uint8_t **)(ptr + (112+8*sizeof(void*)))) = (uint8_t *) ((*payload28).readable_prefixes).ptr;
+    *((size_t*)(ptr + (112+11*sizeof(void*)))) = ((*payload28).writable_prefixes).len;
+    *((uint8_t **)(ptr + (112+10*sizeof(void*)))) = (uint8_t *) ((*payload28).writable_prefixes).ptr;
+    if (((*payload28).max_write_bytes_per_call).is_some) {
+      const uint64_t *payload30 = &((*payload28).max_write_bytes_per_call).val;
+      *((int8_t*)(ptr + (112+12*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (120+12*sizeof(void*)))) = (int64_t) (*payload30);
+    } else {
+      *((int8_t*)(ptr + (112+12*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (104+8*sizeof(void*)))) = 0;
+  }
+  *((size_t*)(ptr + (128+13*sizeof(void*)))) = ((*options).grant).len;
+  *((uint8_t **)(ptr + (128+12*sizeof(void*)))) = (uint8_t *) ((*options).grant).ptr;
+  uint8_t *ptr47 = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_run_wasm(ptr, ptr47);
+  sqlink_wasm_extension_loader_result_string_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr47 + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + sizeof(void*)))), (*((size_t*) (ptr47 + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr47 + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (2*sizeof(void*))))), (*((size_t*) (ptr47 + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_register_wasm_provider(sqlite_cli_unified_string_t *id, sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(4*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_register_wasm_provider((uint8_t *) (*id).ptr, (*id).len, (uint8_t *) (*path).ptr, (*path).len, ptr);
+  sqlink_wasm_extension_loader_result_void_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_register_runtime(sqlite_cli_unified_string_t *ext, sqlite_cli_unified_string_t *flavor, sqlite_cli_unified_string_t *path, sqlink_wasm_extension_loader_load_options_t *options, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(128+18*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  *((size_t*)(ptr + sizeof(void*))) = (*ext).len;
+  *((uint8_t **)(ptr + 0)) = (uint8_t *) (*ext).ptr;
+  *((size_t*)(ptr + (3*sizeof(void*)))) = (*flavor).len;
+  *((uint8_t **)(ptr + (2*sizeof(void*)))) = (uint8_t *) (*flavor).ptr;
+  *((size_t*)(ptr + (5*sizeof(void*)))) = (*path).len;
+  *((uint8_t **)(ptr + (4*sizeof(void*)))) = (uint8_t *) (*path).ptr;
+  if (((*options).fuel_per_call).is_some) {
+    const uint64_t *payload0 = &((*options).fuel_per_call).val;
+    *((int8_t*)(ptr + (6*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (8+6*sizeof(void*)))) = (int64_t) (*payload0);
+  } else {
+    *((int8_t*)(ptr + (6*sizeof(void*)))) = 0;
+  }
+  if (((*options).memory_limit_bytes).is_some) {
+    const uint64_t *payload2 = &((*options).memory_limit_bytes).val;
+    *((int8_t*)(ptr + (16+6*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (24+6*sizeof(void*)))) = (int64_t) (*payload2);
+  } else {
+    *((int8_t*)(ptr + (16+6*sizeof(void*)))) = 0;
+  }
+  if (((*options).epoch_deadline_ms).is_some) {
+    const uint64_t *payload4 = &((*options).epoch_deadline_ms).val;
+    *((int8_t*)(ptr + (32+6*sizeof(void*)))) = 1;
+    *((int64_t*)(ptr + (40+6*sizeof(void*)))) = (int64_t) (*payload4);
+  } else {
+    *((int8_t*)(ptr + (32+6*sizeof(void*)))) = 0;
+  }
+  if (((*options).http_policy).is_some) {
+    const sqlite_extension_policy_http_policy_t *payload6 = &((*options).http_policy).val;
+    *((int8_t*)(ptr + (48+6*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (56+7*sizeof(void*)))) = ((*payload6).allowed_hosts).len;
+    *((uint8_t **)(ptr + (56+6*sizeof(void*)))) = (uint8_t *) ((*payload6).allowed_hosts).ptr;
+    if (((*payload6).allowed_methods).is_some) {
+      const sqlite_extension_policy_list_method_t *payload8 = &((*payload6).allowed_methods).val;
+      *((int8_t*)(ptr + (56+8*sizeof(void*)))) = 1;
+      *((size_t*)(ptr + (56+10*sizeof(void*)))) = (*payload8).len;
+      *((uint8_t **)(ptr + (56+9*sizeof(void*)))) = (uint8_t *) (*payload8).ptr;
+    } else {
+      *((int8_t*)(ptr + (56+8*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).max_body_bytes).is_some) {
+      const uint64_t *payload20 = &((*payload6).max_body_bytes).val;
+      *((int8_t*)(ptr + (64+10*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (72+10*sizeof(void*)))) = (int64_t) (*payload20);
+    } else {
+      *((int8_t*)(ptr + (64+10*sizeof(void*)))) = 0;
+    }
+    if (((*payload6).timeout_ms).is_some) {
+      const uint32_t *payload22 = &((*payload6).timeout_ms).val;
+      *((int8_t*)(ptr + (80+10*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (84+10*sizeof(void*)))) = (int32_t) (*payload22);
+    } else {
+      *((int8_t*)(ptr + (80+10*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (48+6*sizeof(void*)))) = 0;
+  }
+  if (((*options).dns_policy).is_some) {
+    const sqlite_extension_policy_dns_policy_t *payload24 = &((*options).dns_policy).val;
+    *((int8_t*)(ptr + (88+10*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (88+12*sizeof(void*)))) = ((*payload24).allowed_domains).len;
+    *((uint8_t **)(ptr + (88+11*sizeof(void*)))) = (uint8_t *) ((*payload24).allowed_domains).ptr;
+    if (((*payload24).timeout_ms).is_some) {
+      const uint32_t *payload26 = &((*payload24).timeout_ms).val;
+      *((int8_t*)(ptr + (88+13*sizeof(void*)))) = 1;
+      *((int32_t*)(ptr + (92+13*sizeof(void*)))) = (int32_t) (*payload26);
+    } else {
+      *((int8_t*)(ptr + (88+13*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (88+10*sizeof(void*)))) = 0;
+  }
+  if (((*options).fs_policy).is_some) {
+    const sqlite_extension_policy_fs_policy_t *payload28 = &((*options).fs_policy).val;
+    *((int8_t*)(ptr + (104+12*sizeof(void*)))) = 1;
+    *((size_t*)(ptr + (112+13*sizeof(void*)))) = ((*payload28).readable_prefixes).len;
+    *((uint8_t **)(ptr + (112+12*sizeof(void*)))) = (uint8_t *) ((*payload28).readable_prefixes).ptr;
+    *((size_t*)(ptr + (112+15*sizeof(void*)))) = ((*payload28).writable_prefixes).len;
+    *((uint8_t **)(ptr + (112+14*sizeof(void*)))) = (uint8_t *) ((*payload28).writable_prefixes).ptr;
+    if (((*payload28).max_write_bytes_per_call).is_some) {
+      const uint64_t *payload30 = &((*payload28).max_write_bytes_per_call).val;
+      *((int8_t*)(ptr + (112+16*sizeof(void*)))) = 1;
+      *((int64_t*)(ptr + (120+16*sizeof(void*)))) = (int64_t) (*payload30);
+    } else {
+      *((int8_t*)(ptr + (112+16*sizeof(void*)))) = 0;
+    }
+  } else {
+    *((int8_t*)(ptr + (104+12*sizeof(void*)))) = 0;
+  }
+  *((size_t*)(ptr + (128+17*sizeof(void*)))) = ((*options).grant).len;
+  *((uint8_t **)(ptr + (128+16*sizeof(void*)))) = (uint8_t *) ((*options).grant).ptr;
+  uint8_t *ptr47 = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_register_runtime(ptr, ptr47);
+  sqlink_wasm_extension_loader_result_void_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr47 + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr47 + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr47 + (2*sizeof(void*))))), (*((size_t*) (ptr47 + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_extension_loader_unregister_runtime(sqlite_cli_unified_string_t *ext, sqlite_cli_unified_string_t *flavor, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(4*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_unregister_runtime((uint8_t *) (*ext).ptr, (*ext).len, (uint8_t *) (*flavor).ptr, (*flavor).len, ptr);
+  sqlink_wasm_extension_loader_result_void_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+void sqlink_wasm_extension_loader_list_runtimes(sqlite_cli_unified_list_tuple3_string_string_string_t *ret) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_list_runtimes(ptr);
+  *ret = (sqlite_cli_unified_list_tuple3_string_string_string_t) { (sqlite_cli_unified_tuple3_string_string_string_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) };
+}
+
+bool sqlink_wasm_extension_loader_run_source(sqlite_cli_unified_string_t *path, sqlite_cli_unified_string_t *flavor, sqlite_cli_unified_string_t *ret, sqlink_wasm_extension_loader_loader_error_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(4*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_extension_loader_run_source((uint8_t *) (*path).ptr, (*path).len, (uint8_t *) (*flavor).ptr, (*flavor).len, ptr);
+  sqlink_wasm_extension_loader_result_string_loader_error_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlink_wasm_extension_loader_loader_error_t) {
+        (int32_t) *((int32_t*) (ptr + sizeof(void*))),
+        (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
+      };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_create(uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_string_t *table_name, sqlite_cli_unified_list_string_t *args, sqlite_cli_unified_string_t *ret, sqlite_cli_unified_string_t *err) {
   __attribute__((__aligned__(sizeof(void*))))
   uint8_t ret_area[(3*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_dispatch_aggregate_step((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (int64_t) (context_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
-  sqlite_wasm_dispatch_result_void_string_t result;
+  __wasm_import_sqlite_extension_vtab_create((int64_t) (vtab_id), (int64_t) (instance_id), (uint8_t *) (*db_name).ptr, (*db_name).len, (uint8_t *) (*table_name).ptr, (*table_name).len, (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlite_extension_vtab_result_string_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_connect(uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_string_t *table_name, sqlite_cli_unified_list_string_t *args, sqlite_cli_unified_string_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_connect((int64_t) (vtab_id), (int64_t) (instance_id), (uint8_t *) (*db_name).ptr, (*db_name).len, (uint8_t *) (*table_name).ptr, (*table_name).len, (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlite_extension_vtab_result_string_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_destroy(uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_destroy((int64_t) (vtab_id), (int64_t) (instance_id), ptr);
+  sqlite_extension_vtab_result_void_string_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;
@@ -2562,12 +5148,206 @@ bool sqlite_wasm_dispatch_aggregate_step(sqlite_cli_unified_string_t *ext_name, 
   }
 }
 
-bool sqlite_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlite_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
-  __attribute__((__aligned__(8)))
-  uint8_t ret_area[(16+2*sizeof(void*))];
+bool sqlite_extension_vtab_disconnect(uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_dispatch_aggregate_finalize((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (int64_t) (context_id), ptr);
-  sqlite_wasm_dispatch_result_sql_value_string_t result;
+  __wasm_import_sqlite_extension_vtab_disconnect((int64_t) (vtab_id), (int64_t) (instance_id), ptr);
+  sqlite_extension_vtab_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_best_index(uint64_t vtab_id, uint64_t instance_id, sqlite_extension_vtab_index_info_t *info, sqlite_extension_vtab_index_plan_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(32+6*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_best_index((int64_t) (vtab_id), (int64_t) (instance_id), (uint8_t *) ((*info).constraints).ptr, ((*info).constraints).len, (uint8_t *) ((*info).orderbys).ptr, ((*info).orderbys).len, (int64_t) ((*info).col_used), ptr);
+  sqlite_extension_vtab_result_index_plan_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_cli_unified_option_string_t option;
+      switch ((int32_t) *((uint8_t*) (ptr + (8+3*sizeof(void*))))) {
+        case 0: {
+          option.is_some = false;
+          break;
+        }
+        case 1: {
+          option.is_some = true;
+          option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (8+4*sizeof(void*))))), (*((size_t*) (ptr + (8+5*sizeof(void*))))) };
+          break;
+        }
+      }
+
+      result.val.ok = (sqlite_extension_vtab_index_plan_t) {
+        (sqlite_extension_vtab_list_constraint_usage_t) (sqlite_extension_vtab_list_constraint_usage_t) { (sqlite_extension_vtab_constraint_usage_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) },
+        (int32_t) *((int32_t*) (ptr + (8+2*sizeof(void*)))),
+        (sqlite_cli_unified_option_string_t) option,
+        (double) *((double*) (ptr + (8+6*sizeof(void*)))),
+        (int64_t) *((int64_t*) (ptr + (16+6*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr + (24+6*sizeof(void*)))),
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_open(uint64_t vtab_id, uint64_t instance_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_open((int64_t) (vtab_id), (int64_t) (instance_id), (int64_t) (cursor_id), ptr);
+  sqlite_extension_vtab_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_close(uint64_t vtab_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_close((int64_t) (vtab_id), (int64_t) (cursor_id), ptr);
+  sqlite_extension_vtab_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_filter(uint64_t vtab_id, uint64_t cursor_id, int32_t idx_num, sqlite_cli_unified_string_t *maybe_idx_str, sqlite_extension_vtab_list_sql_value_t *args, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  sqlite_cli_unified_option_string_t idx_str;
+  idx_str.is_some = maybe_idx_str != NULL;if (maybe_idx_str) {
+    idx_str.val = *maybe_idx_str;
+  }
+  int32_t option;
+  uint8_t * option1;
+  size_t option2;
+  if ((idx_str).is_some) {
+    const sqlite_cli_unified_string_t *payload0 = &(idx_str).val;
+    option = 1;
+    option1 = (uint8_t *) (*payload0).ptr;
+    option2 = (*payload0).len;
+  } else {
+    option = 0;
+    option1 = 0;
+    option2 = 0;
+  }
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_filter((int64_t) (vtab_id), (int64_t) (cursor_id), idx_num, option, option1, option2, (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlite_extension_vtab_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_next(uint64_t vtab_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_next((int64_t) (vtab_id), (int64_t) (cursor_id), ptr);
+  sqlite_extension_vtab_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_eof(uint64_t vtab_id, uint64_t cursor_id) {
+  int32_t ret = __wasm_import_sqlite_extension_vtab_eof((int64_t) (vtab_id), (int64_t) (cursor_id));
+  return ret;
+}
+
+bool sqlite_extension_vtab_column(uint64_t vtab_id, uint64_t cursor_id, int32_t col, sqlite_extension_vtab_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+6*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_column((int64_t) (vtab_id), (int64_t) (cursor_id), col, ptr);
+  sqlite_extension_vtab_result_sql_value_string_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;
@@ -2593,6 +5373,14 @@ bool sqlite_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t *ext_na
           variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
           break;
         }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
       }
 
       result.val.ok = variant;
@@ -2613,12 +5401,293 @@ bool sqlite_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t *ext_na
   }
 }
 
-int32_t sqlite_wasm_dispatch_collation_compare(sqlite_cli_unified_string_t *ext_name, uint64_t collation_id, sqlite_cli_unified_string_t *a, sqlite_cli_unified_string_t *b) {
-  int32_t ret = __wasm_import_sqlite_wasm_dispatch_collation_compare((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (collation_id), (uint8_t *) (*a).ptr, (*a).len, (uint8_t *) (*b).ptr, (*b).len);
+bool sqlite_extension_vtab_rowid(uint64_t vtab_id, uint64_t cursor_id, int64_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(8+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_rowid((int64_t) (vtab_id), (int64_t) (cursor_id), ptr);
+  sqlite_extension_vtab_result_s64_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = *((int64_t*) (ptr + 8));
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlite_extension_vtab_fetch_batch(uint64_t vtab_id, uint64_t cursor_id, uint32_t max_rows, sqlite_extension_vtab_list_vtab_row_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlite_extension_vtab_fetch_batch((int64_t) (vtab_id), (int64_t) (cursor_id), (int32_t) (max_rows), ptr);
+  sqlite_extension_vtab_result_list_vtab_row_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlite_extension_vtab_list_vtab_row_t) { (sqlite_extension_vtab_vtab_row_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_scalar_call(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, sqlink_wasm_dispatch_list_sql_value_t *args, sqlink_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+6*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_scalar_call((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_dispatch_result_sql_value_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_extension_types_sql_value_t variant;
+      variant.tag = (int32_t) *((uint8_t*) (ptr + 8));
+      switch ((int32_t) variant.tag) {
+        case 0: {
+          break;
+        }
+        case 1: {
+          variant.val.integer = *((int64_t*) (ptr + 16));
+          break;
+        }
+        case 2: {
+          variant.val.real = *((double*) (ptr + 16));
+          break;
+        }
+        case 3: {
+          variant.val.text = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 4: {
+          variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
+      }
+
+      result.val.ok = variant;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_aggregate_step(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlink_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_aggregate_step((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (int64_t) (context_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_aggregate_finalize(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlink_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+6*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_aggregate_finalize((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (int64_t) (context_id), ptr);
+  sqlink_wasm_dispatch_result_sql_value_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_extension_types_sql_value_t variant;
+      variant.tag = (int32_t) *((uint8_t*) (ptr + 8));
+      switch ((int32_t) variant.tag) {
+        case 0: {
+          break;
+        }
+        case 1: {
+          variant.val.integer = *((int64_t*) (ptr + 16));
+          break;
+        }
+        case 2: {
+          variant.val.real = *((double*) (ptr + 16));
+          break;
+        }
+        case 3: {
+          variant.val.text = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 4: {
+          variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
+      }
+
+      result.val.ok = variant;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_aggregate_value(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlink_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+6*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_aggregate_value((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (int64_t) (context_id), ptr);
+  sqlink_wasm_dispatch_result_sql_value_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_extension_types_sql_value_t variant;
+      variant.tag = (int32_t) *((uint8_t*) (ptr + 8));
+      switch ((int32_t) variant.tag) {
+        case 0: {
+          break;
+        }
+        case 1: {
+          variant.val.integer = *((int64_t*) (ptr + 16));
+          break;
+        }
+        case 2: {
+          variant.val.real = *((double*) (ptr + 16));
+          break;
+        }
+        case 3: {
+          variant.val.text = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 4: {
+          variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
+      }
+
+      result.val.ok = variant;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_aggregate_inverse(sqlite_cli_unified_string_t *ext_name, uint64_t func_id, uint64_t context_id, sqlink_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_aggregate_inverse((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (func_id), (int64_t) (context_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+int32_t sqlink_wasm_dispatch_collation_compare(sqlite_cli_unified_string_t *ext_name, uint64_t collation_id, sqlite_cli_unified_string_t *a, sqlite_cli_unified_string_t *b) {
+  int32_t ret = __wasm_import_sqlink_wasm_dispatch_collation_compare((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (collation_id), (uint8_t *) (*a).ptr, (*a).len, (uint8_t *) (*b).ptr, (*b).len);
   return ret;
 }
 
-sqlite_wasm_dispatch_auth_result_t sqlite_wasm_dispatch_authorize(sqlite_cli_unified_string_t *ext_name, sqlite_wasm_dispatch_auth_action_t action, sqlite_cli_unified_string_t *maybe_arg1, sqlite_cli_unified_string_t *maybe_arg2, sqlite_cli_unified_string_t *maybe_database, sqlite_cli_unified_string_t *maybe_trigger) {
+sqlink_wasm_dispatch_auth_result_t sqlink_wasm_dispatch_authorize(sqlite_cli_unified_string_t *ext_name, sqlink_wasm_dispatch_auth_action_t action, sqlite_cli_unified_string_t *maybe_arg1, sqlite_cli_unified_string_t *maybe_arg2, sqlite_cli_unified_string_t *maybe_database, sqlite_cli_unified_string_t *maybe_trigger) {
   sqlite_cli_unified_option_string_t arg1;
   arg1.is_some = maybe_arg1 != NULL;if (maybe_arg1) {
     arg1.val = *maybe_arg1;
@@ -2687,79 +5756,722 @@ sqlite_wasm_dispatch_auth_result_t sqlite_wasm_dispatch_authorize(sqlite_cli_uni
     option16 = 0;
     option17 = 0;
   }
-  int32_t ret = __wasm_import_sqlite_wasm_dispatch_authorize((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int32_t) action, option, option1, option2, option5, option6, option7, option10, option11, option12, option15, option16, option17);
+  int32_t ret = __wasm_import_sqlink_wasm_dispatch_authorize((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int32_t) action, option, option1, option2, option5, option6, option7, option10, option11, option12, option15, option16, option17);
   return ret;
 }
 
-void sqlite_wasm_dispatch_on_update(sqlite_cli_unified_string_t *ext_name, sqlite_wasm_dispatch_update_operation_t operation, sqlite_cli_unified_string_t *database, sqlite_cli_unified_string_t *table, int64_t rowid) {
-  __wasm_import_sqlite_wasm_dispatch_on_update((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int32_t) operation, (uint8_t *) (*database).ptr, (*database).len, (uint8_t *) (*table).ptr, (*table).len, rowid);
+void sqlink_wasm_dispatch_on_update(sqlite_cli_unified_string_t *ext_name, sqlink_wasm_dispatch_update_operation_t operation, sqlite_cli_unified_string_t *database, sqlite_cli_unified_string_t *table, int64_t rowid) {
+  __wasm_import_sqlink_wasm_dispatch_on_update((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int32_t) operation, (uint8_t *) (*database).ptr, (*database).len, (uint8_t *) (*table).ptr, (*table).len, rowid);
 }
 
-bool sqlite_wasm_dispatch_on_commit(sqlite_cli_unified_string_t *ext_name) {
-  int32_t ret = __wasm_import_sqlite_wasm_dispatch_on_commit((uint8_t *) (*ext_name).ptr, (*ext_name).len);
+bool sqlink_wasm_dispatch_on_commit(sqlite_cli_unified_string_t *ext_name) {
+  int32_t ret = __wasm_import_sqlink_wasm_dispatch_on_commit((uint8_t *) (*ext_name).ptr, (*ext_name).len);
   return ret;
 }
 
-void sqlite_wasm_dispatch_on_rollback(sqlite_cli_unified_string_t *ext_name) {
-  __wasm_import_sqlite_wasm_dispatch_on_rollback((uint8_t *) (*ext_name).ptr, (*ext_name).len);
+void sqlink_wasm_dispatch_on_rollback(sqlite_cli_unified_string_t *ext_name) {
+  __wasm_import_sqlink_wasm_dispatch_on_rollback((uint8_t *) (*ext_name).ptr, (*ext_name).len);
 }
 
-bool sqlite_wasm_zip_operations_create_archive(sqlite_cli_unified_string_t *path, sqlite_wasm_zip_operations_error_code_t *err) {
-  __attribute__((__aligned__(1)))
-  uint8_t ret_area[2];
-  uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_zip_operations_create_archive((uint8_t *) (*path).ptr, (*path).len, ptr);
-  sqlite_wasm_zip_operations_result_void_error_code_t result;
-  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
-    case 0: {
-      result.is_err = false;
-      break;
-    }
-    case 1: {
-      result.is_err = true;
-      result.val.err = (int32_t) *((uint8_t*) (ptr + 1));
-      break;
-    }
-  }
-  if (!result.is_err) {
-    return 1;
-  } else {
-    *err = result.val.err;
-    return 0;
-  }
-}
-
-bool sqlite_wasm_zip_operations_extract_archive(sqlite_cli_unified_string_t *path, sqlite_cli_unified_string_t *dest, sqlite_wasm_zip_operations_error_code_t *err) {
-  __attribute__((__aligned__(1)))
-  uint8_t ret_area[2];
-  uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_zip_operations_extract_archive((uint8_t *) (*path).ptr, (*path).len, (uint8_t *) (*dest).ptr, (*dest).len, ptr);
-  sqlite_wasm_zip_operations_result_void_error_code_t result;
-  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
-    case 0: {
-      result.is_err = false;
-      break;
-    }
-    case 1: {
-      result.is_err = true;
-      result.val.err = (int32_t) *((uint8_t*) (ptr + 1));
-      break;
-    }
-  }
-  if (!result.is_err) {
-    return 1;
-  } else {
-    *err = result.val.err;
-    return 0;
-  }
-}
-
-bool sqlite_wasm_zip_operations_list_contents(sqlite_cli_unified_string_t *path, sqlite_cli_unified_list_string_t *ret, sqlite_wasm_zip_operations_error_code_t *err) {
+bool sqlink_wasm_dispatch_vtab_create(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_string_t *table_name, sqlite_cli_unified_list_string_t *args, sqlite_cli_unified_string_t *ret, sqlite_cli_unified_string_t *err) {
   __attribute__((__aligned__(sizeof(void*))))
   uint8_t ret_area[(3*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_zip_operations_list_contents((uint8_t *) (*path).ptr, (*path).len, ptr);
-  sqlite_wasm_zip_operations_result_list_string_error_code_t result;
+  __wasm_import_sqlink_wasm_dispatch_vtab_create((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), (uint8_t *) (*db_name).ptr, (*db_name).len, (uint8_t *) (*table_name).ptr, (*table_name).len, (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_dispatch_result_string_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_connect(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *db_name, sqlite_cli_unified_string_t *table_name, sqlite_cli_unified_list_string_t *args, sqlite_cli_unified_string_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_connect((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), (uint8_t *) (*db_name).ptr, (*db_name).len, (uint8_t *) (*table_name).ptr, (*table_name).len, (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_dispatch_result_string_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_destroy(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_destroy((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_disconnect(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_disconnect((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_best_index(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlink_wasm_dispatch_index_info_t *info, sqlink_wasm_dispatch_index_plan_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(32+6*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_best_index((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), (uint8_t *) ((*info).constraints).ptr, ((*info).constraints).len, (uint8_t *) ((*info).orderbys).ptr, ((*info).orderbys).len, (int64_t) ((*info).col_used), ptr);
+  sqlink_wasm_dispatch_result_index_plan_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_cli_unified_option_string_t option;
+      switch ((int32_t) *((uint8_t*) (ptr + (8+3*sizeof(void*))))) {
+        case 0: {
+          option.is_some = false;
+          break;
+        }
+        case 1: {
+          option.is_some = true;
+          option.val = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (8+4*sizeof(void*))))), (*((size_t*) (ptr + (8+5*sizeof(void*))))) };
+          break;
+        }
+      }
+
+      result.val.ok = (sqlite_extension_vtab_index_plan_t) {
+        (sqlite_extension_vtab_list_constraint_usage_t) (sqlite_extension_vtab_list_constraint_usage_t) { (sqlite_extension_vtab_constraint_usage_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) },
+        (int32_t) *((int32_t*) (ptr + (8+2*sizeof(void*)))),
+        (sqlite_cli_unified_option_string_t) option,
+        (double) *((double*) (ptr + (8+6*sizeof(void*)))),
+        (int64_t) *((int64_t*) (ptr + (16+6*sizeof(void*)))),
+        (bool) (int32_t) *((uint8_t*) (ptr + (24+6*sizeof(void*)))),
+      };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_open(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_open((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), (int64_t) (cursor_id), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_close(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_close((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (cursor_id), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_filter(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, int32_t idx_num, sqlite_cli_unified_string_t *maybe_idx_str, sqlink_wasm_dispatch_list_sql_value_t *args, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  sqlite_cli_unified_option_string_t idx_str;
+  idx_str.is_some = maybe_idx_str != NULL;if (maybe_idx_str) {
+    idx_str.val = *maybe_idx_str;
+  }
+  int32_t option;
+  uint8_t * option1;
+  size_t option2;
+  if ((idx_str).is_some) {
+    const sqlite_cli_unified_string_t *payload0 = &(idx_str).val;
+    option = 1;
+    option1 = (uint8_t *) (*payload0).ptr;
+    option2 = (*payload0).len;
+  } else {
+    option = 0;
+    option1 = 0;
+    option2 = 0;
+  }
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_filter((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (cursor_id), idx_num, option, option1, option2, (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_next(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_next((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (cursor_id), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_eof(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id) {
+  int32_t ret = __wasm_import_sqlink_wasm_dispatch_vtab_eof((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (cursor_id));
+  return ret;
+}
+
+bool sqlink_wasm_dispatch_vtab_column(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, int32_t col, sqlink_wasm_dispatch_sql_value_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(16+6*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_column((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (cursor_id), col, ptr);
+  sqlink_wasm_dispatch_result_sql_value_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      sqlite_extension_types_sql_value_t variant;
+      variant.tag = (int32_t) *((uint8_t*) (ptr + 8));
+      switch ((int32_t) variant.tag) {
+        case 0: {
+          break;
+        }
+        case 1: {
+          variant.val.integer = *((int64_t*) (ptr + 16));
+          break;
+        }
+        case 2: {
+          variant.val.real = *((double*) (ptr + 16));
+          break;
+        }
+        case 3: {
+          variant.val.text = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 4: {
+          variant.val.blob = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) };
+          break;
+        }
+        case 5: {
+          variant.val.wit_value = (sqlite_extension_types_wit_value_payload_t) {
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + 16))), (*((size_t*) (ptr + (16+1*sizeof(void*))))) },
+            (sqlite_cli_unified_list_u8_t) (sqlite_cli_unified_list_u8_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+2*sizeof(void*))))), (*((size_t*) (ptr + (16+3*sizeof(void*))))) },
+            (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (16+4*sizeof(void*))))), (*((size_t*) (ptr + (16+5*sizeof(void*))))) },
+          };
+          break;
+        }
+      }
+
+      result.val.ok = variant;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_rowid(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, int64_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(8+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_rowid((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (cursor_id), ptr);
+  sqlink_wasm_dispatch_result_s64_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = *((int64_t*) (ptr + 8));
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_fetch_batch(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t cursor_id, uint32_t max_rows, sqlink_wasm_dispatch_list_vtab_row_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_fetch_batch((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (cursor_id), (int32_t) (max_rows), ptr);
+  sqlink_wasm_dispatch_result_list_vtab_row_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = (sqlink_wasm_dispatch_list_vtab_row_t) { (sqlink_wasm_dispatch_vtab_row_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_update(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlink_wasm_dispatch_list_sql_value_t *args, int64_t *ret, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(8)))
+  uint8_t ret_area[(8+2*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_update((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), (uint8_t *) (*args).ptr, (*args).len, ptr);
+  sqlink_wasm_dispatch_result_s64_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      result.val.ok = *((int64_t*) (ptr + 8));
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 8))), (*((size_t*) (ptr + (8+1*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    *ret = result.val.ok;
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_begin(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_begin((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_sync(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_sync((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_commit(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_commit((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_rollback(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_rollback((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_rename(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *new_name, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_rename((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), (uint8_t *) (*new_name).ptr, (*new_name).len, ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_savepoint(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, int32_t savepoint, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_savepoint((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), savepoint, ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_release(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, int32_t savepoint, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_release((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), savepoint, ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_rollback_to(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, int32_t savepoint, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_rollback_to((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), savepoint, ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_dispatch_vtab_is_shadow_name(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, sqlite_cli_unified_string_t *name) {
+  int32_t ret = __wasm_import_sqlink_wasm_dispatch_vtab_is_shadow_name((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (uint8_t *) (*name).ptr, (*name).len);
+  return ret;
+}
+
+bool sqlink_wasm_dispatch_vtab_integrity(sqlite_cli_unified_string_t *ext_name, uint64_t vtab_id, uint64_t instance_id, sqlite_cli_unified_string_t *schema, sqlite_cli_unified_string_t *table_name, uint32_t mode_flags, sqlite_cli_unified_string_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_dispatch_vtab_integrity((uint8_t *) (*ext_name).ptr, (*ext_name).len, (int64_t) (vtab_id), (int64_t) (instance_id), (uint8_t *) (*schema).ptr, (*schema).len, (uint8_t *) (*table_name).ptr, (*table_name).len, (int32_t) (mode_flags), ptr);
+  sqlink_wasm_dispatch_result_void_string_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + sizeof(void*)))), (*((size_t*) (ptr + (2*sizeof(void*))))) };
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_zip_operations_create_archive(sqlite_cli_unified_string_t *path, sqlink_wasm_zip_operations_error_code_t *err) {
+  __attribute__((__aligned__(1)))
+  uint8_t ret_area[2];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_zip_operations_create_archive((uint8_t *) (*path).ptr, (*path).len, ptr);
+  sqlink_wasm_zip_operations_result_void_error_code_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (int32_t) *((uint8_t*) (ptr + 1));
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_zip_operations_extract_archive(sqlite_cli_unified_string_t *path, sqlite_cli_unified_string_t *dest, sqlink_wasm_zip_operations_error_code_t *err) {
+  __attribute__((__aligned__(1)))
+  uint8_t ret_area[2];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_zip_operations_extract_archive((uint8_t *) (*path).ptr, (*path).len, (uint8_t *) (*dest).ptr, (*dest).len, ptr);
+  sqlink_wasm_zip_operations_result_void_error_code_t result;
+  switch ((int32_t) *((uint8_t*) (ptr + 0))) {
+    case 0: {
+      result.is_err = false;
+      break;
+    }
+    case 1: {
+      result.is_err = true;
+      result.val.err = (int32_t) *((uint8_t*) (ptr + 1));
+      break;
+    }
+  }
+  if (!result.is_err) {
+    return 1;
+  } else {
+    *err = result.val.err;
+    return 0;
+  }
+}
+
+bool sqlink_wasm_zip_operations_list_contents(sqlite_cli_unified_string_t *path, sqlite_cli_unified_list_string_t *ret, sqlink_wasm_zip_operations_error_code_t *err) {
+  __attribute__((__aligned__(sizeof(void*))))
+  uint8_t ret_area[(3*sizeof(void*))];
+  uint8_t *ptr = (uint8_t *) &ret_area;
+  __wasm_import_sqlink_wasm_zip_operations_list_contents((uint8_t *) (*path).ptr, (*path).len, ptr);
+  sqlink_wasm_zip_operations_result_list_string_error_code_t result;
   switch ((int32_t) *((uint8_t*) (ptr + 0))) {
     case 0: {
       result.is_err = false;
@@ -2781,25 +6493,25 @@ bool sqlite_wasm_zip_operations_list_contents(sqlite_cli_unified_string_t *path,
   }
 }
 
-void sqlite_wasm_zip_operations_get_info(sqlite_wasm_zip_operations_archive_info_t *ret) {
+void sqlink_wasm_zip_operations_get_info(sqlink_wasm_zip_operations_archive_info_t *ret) {
   __attribute__((__aligned__(sizeof(void*))))
   uint8_t ret_area[(6*sizeof(void*))];
   uint8_t *ptr = (uint8_t *) &ret_area;
-  __wasm_import_sqlite_wasm_zip_operations_get_info(ptr);
-  *ret = (sqlite_wasm_zip_operations_archive_info_t) {
+  __wasm_import_sqlink_wasm_zip_operations_get_info(ptr);
+  *ret = (sqlink_wasm_zip_operations_archive_info_t) {
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + 0))), (*((size_t*) (ptr + sizeof(void*)))) },
     (sqlite_cli_unified_string_t) (sqlite_cli_unified_string_t) { (uint8_t*)(*((uint8_t **) (ptr + (2*sizeof(void*))))), (*((size_t*) (ptr + (3*sizeof(void*))))) },
     (sqlite_cli_unified_list_string_t) (sqlite_cli_unified_list_string_t) { (sqlite_cli_unified_string_t*)(*((uint8_t **) (ptr + (4*sizeof(void*))))), (*((size_t*) (ptr + (5*sizeof(void*))))) },
   };
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#open")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_open(uint8_t * arg, size_t arg0, int32_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#open")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_open(uint8_t * arg, size_t arg0, int32_t arg1) {
   sqlite_cli_unified_string_t arg2 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
-  exports_sqlite_wasm_low_level_result_db_handle_result_code_t ret;
-  exports_sqlite_wasm_low_level_db_handle_t ok;
-  exports_sqlite_wasm_low_level_result_code_t err;
-  ret.is_err = !exports_sqlite_wasm_low_level_open(&arg2, arg1, &ok, &err);
+  exports_sqlink_wasm_low_level_result_db_handle_result_code_t ret;
+  exports_sqlink_wasm_low_level_db_handle_t ok;
+  exports_sqlink_wasm_low_level_result_code_t err;
+  ret.is_err = !exports_sqlink_wasm_low_level_open(&arg2, arg1, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -2808,28 +6520,28 @@ uint8_t * __wasm_export_exports_sqlite_wasm_low_level_open(uint8_t * arg, size_t
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int8_t*)(ptr + 8)) = (int32_t) *payload3;
   } else {
-    const exports_sqlite_wasm_low_level_db_handle_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_low_level_db_handle_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int64_t*)(ptr + 8)) = (int64_t) (*payload);
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#close")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_close(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_close((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#close")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_close(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_close((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#exec")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_exec(int64_t arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#exec")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_exec(int64_t arg, uint8_t * arg0, size_t arg1) {
   sqlite_cli_unified_string_t arg2 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_low_level_result_string_result_code_t ret;
+  exports_sqlink_wasm_low_level_result_string_result_code_t ret;
   sqlite_cli_unified_string_t ok;
-  exports_sqlite_wasm_low_level_result_code_t err;
-  ret.is_err = !exports_sqlite_wasm_low_level_exec((uint64_t) (arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_low_level_result_code_t err;
+  ret.is_err = !exports_sqlink_wasm_low_level_exec((uint64_t) (arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -2838,7 +6550,7 @@ uint8_t * __wasm_export_exports_sqlite_wasm_low_level_exec(int64_t arg, uint8_t 
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int8_t*)(ptr + sizeof(void*))) = (int32_t) *payload3;
   } else {
     const sqlite_cli_unified_string_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
@@ -2848,13 +6560,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_low_level_exec(int64_t arg, uint8_t 
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#prepare")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_prepare(int64_t arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#prepare")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_prepare(int64_t arg, uint8_t * arg0, size_t arg1) {
   sqlite_cli_unified_string_t arg2 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_low_level_result_stmt_handle_result_code_t ret;
-  exports_sqlite_wasm_low_level_stmt_handle_t ok;
-  exports_sqlite_wasm_low_level_result_code_t err;
-  ret.is_err = !exports_sqlite_wasm_low_level_prepare((uint64_t) (arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_low_level_result_stmt_handle_result_code_t ret;
+  exports_sqlink_wasm_low_level_stmt_handle_t ok;
+  exports_sqlink_wasm_low_level_result_code_t err;
+  ret.is_err = !exports_sqlink_wasm_low_level_prepare((uint64_t) (arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -2863,242 +6575,242 @@ uint8_t * __wasm_export_exports_sqlite_wasm_low_level_prepare(int64_t arg, uint8
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_low_level_result_code_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int8_t*)(ptr + 8)) = (int32_t) *payload3;
   } else {
-    const exports_sqlite_wasm_low_level_stmt_handle_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_low_level_stmt_handle_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int64_t*)(ptr + 8)) = (int64_t) (*payload);
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#step")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_step(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_step((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#step")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_step(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_step((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#reset")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_reset(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_reset((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#reset")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_reset(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_reset((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#finalize")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_finalize(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_finalize((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#finalize")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_finalize(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_finalize((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-null")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_null(int64_t arg, int32_t arg0) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_null((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-null")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_null(int64_t arg, int32_t arg0) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_null((uint64_t) (arg), arg0);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-int")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_int(int64_t arg, int32_t arg0, int32_t arg1) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_int((uint64_t) (arg), arg0, arg1);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-int")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_int(int64_t arg, int32_t arg0, int32_t arg1) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_int((uint64_t) (arg), arg0, arg1);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-int64")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_int64(int64_t arg, int32_t arg0, int64_t arg1) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_int64((uint64_t) (arg), arg0, arg1);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-int64")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_int64(int64_t arg, int32_t arg0, int64_t arg1) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_int64((uint64_t) (arg), arg0, arg1);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-double")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_double(int64_t arg, int32_t arg0, double arg1) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_double((uint64_t) (arg), arg0, arg1);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-double")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_double(int64_t arg, int32_t arg0, double arg1) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_double((uint64_t) (arg), arg0, arg1);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-text")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_text(int64_t arg, int32_t arg0, uint8_t * arg1, size_t arg2) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-text")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_text(int64_t arg, int32_t arg0, uint8_t * arg1, size_t arg2) {
   sqlite_cli_unified_string_t arg3 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg1), (arg2) };
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_text((uint64_t) (arg), arg0, &arg3);
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_text((uint64_t) (arg), arg0, &arg3);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-blob")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_blob(int64_t arg, int32_t arg0, uint8_t * arg1, size_t arg2) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-blob")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_blob(int64_t arg, int32_t arg0, uint8_t * arg1, size_t arg2) {
   sqlite_cli_unified_list_u8_t arg3 = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(arg1), (arg2) };
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_bind_blob((uint64_t) (arg), arg0, &arg3);
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_bind_blob((uint64_t) (arg), arg0, &arg3);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-parameter-count")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_parameter_count(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_bind_parameter_count((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-parameter-count")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_parameter_count(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_bind_parameter_count((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#bind-parameter-index")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_bind_parameter_index(int64_t arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#bind-parameter-index")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_bind_parameter_index(int64_t arg, uint8_t * arg0, size_t arg1) {
   sqlite_cli_unified_string_t arg2 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg0), (arg1) };
-  int32_t ret = exports_sqlite_wasm_low_level_bind_parameter_index((uint64_t) (arg), &arg2);
+  int32_t ret = exports_sqlink_wasm_low_level_bind_parameter_index((uint64_t) (arg), &arg2);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#clear-bindings")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_clear_bindings(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_clear_bindings((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#clear-bindings")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_clear_bindings(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_clear_bindings((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-count")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_column_count(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_column_count((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-count")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_column_count(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_column_count((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-name")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_column_name(int64_t arg, int32_t arg0) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-name")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_column_name(int64_t arg, int32_t arg0) {
   sqlite_cli_unified_string_t ret;
-  exports_sqlite_wasm_low_level_column_name((uint64_t) (arg), arg0, &ret);
+  exports_sqlink_wasm_low_level_column_name((uint64_t) (arg), arg0, &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#get-column-type")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_get_column_type(int64_t arg, int32_t arg0) {
-  exports_sqlite_wasm_low_level_column_type_t ret = exports_sqlite_wasm_low_level_get_column_type((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#get-column-type")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_get_column_type(int64_t arg, int32_t arg0) {
+  exports_sqlink_wasm_low_level_column_type_t ret = exports_sqlink_wasm_low_level_get_column_type((uint64_t) (arg), arg0);
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-int")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_column_int(int64_t arg, int32_t arg0) {
-  int32_t ret = exports_sqlite_wasm_low_level_column_int((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-int")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_column_int(int64_t arg, int32_t arg0) {
+  int32_t ret = exports_sqlink_wasm_low_level_column_int((uint64_t) (arg), arg0);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-int64")))
-int64_t __wasm_export_exports_sqlite_wasm_low_level_column_int64(int64_t arg, int32_t arg0) {
-  int64_t ret = exports_sqlite_wasm_low_level_column_int64((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-int64")))
+int64_t __wasm_export_exports_sqlink_wasm_low_level_column_int64(int64_t arg, int32_t arg0) {
+  int64_t ret = exports_sqlink_wasm_low_level_column_int64((uint64_t) (arg), arg0);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-double")))
-double __wasm_export_exports_sqlite_wasm_low_level_column_double(int64_t arg, int32_t arg0) {
-  double ret = exports_sqlite_wasm_low_level_column_double((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-double")))
+double __wasm_export_exports_sqlink_wasm_low_level_column_double(int64_t arg, int32_t arg0) {
+  double ret = exports_sqlink_wasm_low_level_column_double((uint64_t) (arg), arg0);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-text")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_column_text(int64_t arg, int32_t arg0) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-text")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_column_text(int64_t arg, int32_t arg0) {
   sqlite_cli_unified_string_t ret;
-  exports_sqlite_wasm_low_level_column_text((uint64_t) (arg), arg0, &ret);
+  exports_sqlink_wasm_low_level_column_text((uint64_t) (arg), arg0, &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-blob")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_column_blob(int64_t arg, int32_t arg0) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-blob")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_column_blob(int64_t arg, int32_t arg0) {
   sqlite_cli_unified_list_u8_t ret;
-  exports_sqlite_wasm_low_level_column_blob((uint64_t) (arg), arg0, &ret);
+  exports_sqlink_wasm_low_level_column_blob((uint64_t) (arg), arg0, &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#column-bytes")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_column_bytes(int64_t arg, int32_t arg0) {
-  int32_t ret = exports_sqlite_wasm_low_level_column_bytes((uint64_t) (arg), arg0);
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#column-bytes")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_column_bytes(int64_t arg, int32_t arg0) {
+  int32_t ret = exports_sqlink_wasm_low_level_column_bytes((uint64_t) (arg), arg0);
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#errmsg")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_errmsg(int64_t arg) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#errmsg")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_errmsg(int64_t arg) {
   sqlite_cli_unified_string_t ret;
-  exports_sqlite_wasm_low_level_errmsg((uint64_t) (arg), &ret);
+  exports_sqlink_wasm_low_level_errmsg((uint64_t) (arg), &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#errcode")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_errcode(int64_t arg) {
-  exports_sqlite_wasm_low_level_result_code_t ret = exports_sqlite_wasm_low_level_errcode((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#errcode")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_errcode(int64_t arg) {
+  exports_sqlink_wasm_low_level_result_code_t ret = exports_sqlink_wasm_low_level_errcode((uint64_t) (arg));
   return (int32_t) ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#extended-errcode")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_extended_errcode(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_extended_errcode((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#extended-errcode")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_extended_errcode(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_extended_errcode((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#get-autocommit")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_get_autocommit(int64_t arg) {
-  bool ret = exports_sqlite_wasm_low_level_get_autocommit((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#get-autocommit")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_get_autocommit(int64_t arg) {
+  bool ret = exports_sqlink_wasm_low_level_get_autocommit((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#changes")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_changes(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_changes((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#changes")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_changes(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_changes((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#total-changes")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_total_changes(int64_t arg) {
-  int32_t ret = exports_sqlite_wasm_low_level_total_changes((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#total-changes")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_total_changes(int64_t arg) {
+  int32_t ret = exports_sqlink_wasm_low_level_total_changes((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#last-insert-rowid")))
-int64_t __wasm_export_exports_sqlite_wasm_low_level_last_insert_rowid(int64_t arg) {
-  int64_t ret = exports_sqlite_wasm_low_level_last_insert_rowid((uint64_t) (arg));
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#last-insert-rowid")))
+int64_t __wasm_export_exports_sqlink_wasm_low_level_last_insert_rowid(int64_t arg) {
+  int64_t ret = exports_sqlink_wasm_low_level_last_insert_rowid((uint64_t) (arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#libversion")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_libversion(void) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#libversion")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_libversion(void) {
   sqlite_cli_unified_string_t ret;
-  exports_sqlite_wasm_low_level_libversion(&ret);
+  exports_sqlink_wasm_low_level_libversion(&ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#libversion-number")))
-int32_t __wasm_export_exports_sqlite_wasm_low_level_libversion_number(void) {
-  int32_t ret = exports_sqlite_wasm_low_level_libversion_number();
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#libversion-number")))
+int32_t __wasm_export_exports_sqlink_wasm_low_level_libversion_number(void) {
+  int32_t ret = exports_sqlink_wasm_low_level_libversion_number();
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/low-level@0.1.0#sourceid")))
-uint8_t * __wasm_export_exports_sqlite_wasm_low_level_sourceid(void) {
+__attribute__((__export_name__("sqlink:wasm/low-level@0.1.0#sourceid")))
+uint8_t * __wasm_export_exports_sqlink_wasm_low_level_sourceid(void) {
   sqlite_cli_unified_string_t ret;
-  exports_sqlite_wasm_low_level_sourceid(&ret);
+  exports_sqlink_wasm_low_level_sourceid(&ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[constructor]connection")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_constructor_connection(uint8_t * arg, size_t arg0, int32_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[constructor]connection")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_constructor_connection(uint8_t * arg, size_t arg0, int32_t arg1) {
   sqlite_cli_unified_string_t arg2 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
-  exports_sqlite_wasm_high_level_own_connection_t ret = exports_sqlite_wasm_high_level_constructor_connection(&arg2, arg1);
+  exports_sqlink_wasm_high_level_own_connection_t ret = exports_sqlink_wasm_high_level_constructor_connection(&arg2, arg1);
   return (ret).__handle;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.execute")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute(uint8_t * arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.execute")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_execute(uint8_t * arg, uint8_t * arg0, size_t arg1) {
   sqlite_cli_unified_string_t arg2 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_result_exec_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_exec_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_execute(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_high_level_result_exec_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_exec_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_execute(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3107,27 +6819,27 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + 8)) = (*payload3).code;
     *((int32_t*)(ptr + 12)) = (*payload3).extended_code;
     *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload3).message).len;
     *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload3).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + 8)) = (*payload).changes;
     *((int64_t*)(ptr + 16)) = (*payload).last_insert_rowid;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.execute-with-params")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute_with_params(uint8_t * arg, uint8_t * arg0, size_t arg1, uint8_t * arg2, size_t arg3) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.execute-with-params")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_execute_with_params(uint8_t * arg, uint8_t * arg0, size_t arg1, uint8_t * arg2, size_t arg3) {
   sqlite_cli_unified_string_t arg4 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_list_value_t arg5 = (exports_sqlite_wasm_high_level_list_value_t) { (exports_sqlite_wasm_high_level_value_t*)(arg2), (arg3) };
-  exports_sqlite_wasm_high_level_result_exec_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_exec_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_execute_with_params(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg4, &arg5, &ok, &err);
+  exports_sqlink_wasm_high_level_list_value_t arg5 = (exports_sqlink_wasm_high_level_list_value_t) { (exports_sqlink_wasm_high_level_value_t*)(arg2), (arg3) };
+  exports_sqlink_wasm_high_level_result_exec_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_exec_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_execute_with_params(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg4, &arg5, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3136,26 +6848,26 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_execute
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload6 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload6 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + 8)) = (*payload6).code;
     *((int32_t*)(ptr + 12)) = (*payload6).extended_code;
     *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload6).message).len;
     *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload6).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + 8)) = (*payload).changes;
     *((int64_t*)(ptr + 16)) = (*payload).last_insert_rowid;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.query")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query(uint8_t * arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.query")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_query(uint8_t * arg, uint8_t * arg0, size_t arg1) {
   sqlite_cli_unified_string_t arg2 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_result_query_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_query_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_query(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_high_level_result_query_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_query_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_query(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3164,13 +6876,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query(u
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload8 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload8 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload8).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload8).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload8).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload8).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((size_t*)(ptr + (2*sizeof(void*)))) = ((*payload).column_names).len;
     *((uint8_t **)(ptr + sizeof(void*))) = (uint8_t *) ((*payload).column_names).ptr;
     *((size_t*)(ptr + (4*sizeof(void*)))) = ((*payload).rows).len;
@@ -3179,14 +6891,14 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query(u
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.query-with-params")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_with_params(uint8_t * arg, uint8_t * arg0, size_t arg1, uint8_t * arg2, size_t arg3) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.query-with-params")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_query_with_params(uint8_t * arg, uint8_t * arg0, size_t arg1, uint8_t * arg2, size_t arg3) {
   sqlite_cli_unified_string_t arg4 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_list_value_t arg5 = (exports_sqlite_wasm_high_level_list_value_t) { (exports_sqlite_wasm_high_level_value_t*)(arg2), (arg3) };
-  exports_sqlite_wasm_high_level_result_query_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_query_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_query_with_params(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg4, &arg5, &ok, &err);
+  exports_sqlink_wasm_high_level_list_value_t arg5 = (exports_sqlink_wasm_high_level_list_value_t) { (exports_sqlink_wasm_high_level_value_t*)(arg2), (arg3) };
+  exports_sqlink_wasm_high_level_result_query_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_query_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_query_with_params(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg4, &arg5, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3195,13 +6907,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_w
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload11 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload11 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload11).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload11).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload11).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload11).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((size_t*)(ptr + (2*sizeof(void*)))) = ((*payload).column_names).len;
     *((uint8_t **)(ptr + sizeof(void*))) = (uint8_t *) ((*payload).column_names).ptr;
     *((size_t*)(ptr + (4*sizeof(void*)))) = ((*payload).rows).len;
@@ -3210,13 +6922,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_query_w
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.prepare")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_prepare(uint8_t * arg, uint8_t * arg0, size_t arg1) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.prepare")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_prepare(uint8_t * arg, uint8_t * arg0, size_t arg1) {
   sqlite_cli_unified_string_t arg2 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_result_own_statement_database_error_t ret;
-  exports_sqlite_wasm_high_level_own_statement_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_prepare(((exports_sqlite_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
+  exports_sqlink_wasm_high_level_result_own_statement_database_error_t ret;
+  exports_sqlink_wasm_high_level_own_statement_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_prepare(((exports_sqlink_wasm_high_level_connection_t*) arg), &arg2, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3225,29 +6937,29 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_prepare
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload3).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload3).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload3).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload3).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_own_statement_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_own_statement_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.begin-transaction")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_begin_transaction(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_begin_transaction(((exports_sqlite_wasm_high_level_connection_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.begin-transaction")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_begin_transaction(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_begin_transaction(((exports_sqlink_wasm_high_level_connection_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -3258,17 +6970,17 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_begin_t
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.commit")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_commit(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_commit(((exports_sqlite_wasm_high_level_connection_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.commit")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_commit(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_commit(((exports_sqlink_wasm_high_level_connection_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -3279,17 +6991,17 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_commit(
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.rollback")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_rollback(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_connection_rollback(((exports_sqlite_wasm_high_level_connection_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.rollback")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_rollback(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_connection_rollback(((exports_sqlink_wasm_high_level_connection_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -3300,23 +7012,23 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_rollbac
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.in-autocommit")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_method_connection_in_autocommit(uint8_t * arg) {
-  bool ret = exports_sqlite_wasm_high_level_method_connection_in_autocommit(((exports_sqlite_wasm_high_level_connection_t*) arg));
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.in-autocommit")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_method_connection_in_autocommit(uint8_t * arg) {
+  bool ret = exports_sqlink_wasm_high_level_method_connection_in_autocommit(((exports_sqlink_wasm_high_level_connection_t*) arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]connection.last-error")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_last_error(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_database_error_t val;
-  bool ret = exports_sqlite_wasm_high_level_method_connection_last_error(((exports_sqlite_wasm_high_level_connection_t*) arg), &val);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]connection.last-error")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_connection_last_error(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_database_error_t val;
+  bool ret = exports_sqlink_wasm_high_level_method_connection_last_error(((exports_sqlink_wasm_high_level_connection_t*) arg), &val);
 
-  exports_sqlite_wasm_high_level_option_database_error_t ret0;
+  exports_sqlink_wasm_high_level_option_database_error_t ret0;
   ret0.is_some = ret;
   ret0.val = val;
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret0).is_some) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload1 = &(ret0).val;
+    const exports_sqlink_wasm_high_level_database_error_t *payload1 = &(ret0).val;
     *((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload1).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload1).extended_code;
@@ -3328,9 +7040,9 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_connection_last_er
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.bind")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind(uint8_t * arg, int32_t arg0, int32_t arg1, int64_t arg2, size_t arg3) {
-  exports_sqlite_wasm_high_level_value_t variant;
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.bind")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_bind(uint8_t * arg, int32_t arg0, int32_t arg1, int64_t arg2, size_t arg3) {
+  exports_sqlink_wasm_high_level_value_t variant;
   variant.tag = arg1;
   switch ((int32_t) variant.tag) {
     case 0: {
@@ -3353,16 +7065,16 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind(uin
       break;
     }
   }
-  exports_sqlite_wasm_high_level_value_t arg4 = variant;
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_bind(((exports_sqlite_wasm_high_level_statement_t*) arg), arg0, &arg4, &err);
+  exports_sqlink_wasm_high_level_value_t arg4 = variant;
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_bind(((exports_sqlink_wasm_high_level_statement_t*) arg), arg0, &arg4, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload5 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload5 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload5).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload5).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload5).message).len;
@@ -3373,18 +7085,18 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind(uin
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.bind-all")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_all(uint8_t * arg, uint8_t * arg0, size_t arg1) {
-  exports_sqlite_wasm_high_level_list_value_t arg2 = (exports_sqlite_wasm_high_level_list_value_t) { (exports_sqlite_wasm_high_level_value_t*)(arg0), (arg1) };
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_bind_all(((exports_sqlite_wasm_high_level_statement_t*) arg), &arg2, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.bind-all")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_bind_all(uint8_t * arg, uint8_t * arg0, size_t arg1) {
+  exports_sqlink_wasm_high_level_list_value_t arg2 = (exports_sqlink_wasm_high_level_list_value_t) { (exports_sqlink_wasm_high_level_value_t*)(arg0), (arg1) };
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_bind_all(((exports_sqlink_wasm_high_level_statement_t*) arg), &arg2, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload3 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload3).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload3).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload3).message).len;
@@ -3395,12 +7107,12 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_bind_all
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.execute")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_execute(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_exec_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_exec_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_execute(((exports_sqlite_wasm_high_level_statement_t*) arg), &ok, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.execute")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_execute(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_exec_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_exec_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_execute(((exports_sqlink_wasm_high_level_statement_t*) arg), &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3409,25 +7121,25 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_execute(
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + 8)) = (*payload0).code;
     *((int32_t*)(ptr + 12)) = (*payload0).extended_code;
     *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload0).message).len;
     *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload0).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_exec_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + 8)) = (*payload).changes;
     *((int64_t*)(ptr + 16)) = (*payload).last_insert_rowid;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.query")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_query(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_query_result_database_error_t ret;
-  exports_sqlite_wasm_high_level_query_result_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_query(((exports_sqlite_wasm_high_level_statement_t*) arg), &ok, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.query")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_query(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_query_result_database_error_t ret;
+  exports_sqlink_wasm_high_level_query_result_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_query(((exports_sqlink_wasm_high_level_statement_t*) arg), &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3436,13 +7148,13 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_query(ui
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload5 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload5 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload5).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload5).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload5).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload5).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((size_t*)(ptr + (2*sizeof(void*)))) = ((*payload).column_names).len;
     *((uint8_t **)(ptr + sizeof(void*))) = (uint8_t *) ((*payload).column_names).ptr;
     *((size_t*)(ptr + (4*sizeof(void*)))) = ((*payload).rows).len;
@@ -3451,12 +7163,12 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_query(ui
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.step")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_step(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_option_row_database_error_t ret;
-  exports_sqlite_wasm_high_level_option_row_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_step(((exports_sqlite_wasm_high_level_statement_t*) arg), &ok, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.step")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_step(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_option_row_database_error_t ret;
+  exports_sqlink_wasm_high_level_option_row_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_step(((exports_sqlink_wasm_high_level_statement_t*) arg), &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3465,15 +7177,15 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_step(uin
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload7 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload7 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload7).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload7).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload7).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload7).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_option_row_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_option_row_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     if ((*payload).is_some) {
-      const exports_sqlite_wasm_high_level_row_t *payload1 = &(*payload).val;
+      const exports_sqlink_wasm_high_level_row_t *payload1 = &(*payload).val;
       *((int8_t*)(ptr + sizeof(void*))) = 1;
       *((size_t*)(ptr + (3*sizeof(void*)))) = ((*payload1).columns).len;
       *((uint8_t **)(ptr + (2*sizeof(void*)))) = (uint8_t *) ((*payload1).columns).ptr;
@@ -3484,17 +7196,17 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_step(uin
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.reset")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_reset(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_reset(((exports_sqlite_wasm_high_level_statement_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.reset")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_reset(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_reset(((exports_sqlink_wasm_high_level_statement_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -3505,17 +7217,17 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_reset(ui
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.clear-bindings")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_clear_bindings(uint8_t * arg) {
-  exports_sqlite_wasm_high_level_result_void_database_error_t ret;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_method_statement_clear_bindings(((exports_sqlite_wasm_high_level_statement_t*) arg), &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.clear-bindings")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_clear_bindings(uint8_t * arg) {
+  exports_sqlink_wasm_high_level_result_void_database_error_t ret;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_method_statement_clear_bindings(((exports_sqlink_wasm_high_level_statement_t*) arg), &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
@@ -3526,50 +7238,50 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_clear_bi
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.column-count")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_method_statement_column_count(uint8_t * arg) {
-  int32_t ret = exports_sqlite_wasm_high_level_method_statement_column_count(((exports_sqlite_wasm_high_level_statement_t*) arg));
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.column-count")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_method_statement_column_count(uint8_t * arg) {
+  int32_t ret = exports_sqlink_wasm_high_level_method_statement_column_count(((exports_sqlink_wasm_high_level_statement_t*) arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.column-names")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_method_statement_column_names(uint8_t * arg) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.column-names")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_method_statement_column_names(uint8_t * arg) {
   sqlite_cli_unified_list_string_t ret;
-  exports_sqlite_wasm_high_level_method_statement_column_names(((exports_sqlite_wasm_high_level_statement_t*) arg), &ret);
+  exports_sqlink_wasm_high_level_method_statement_column_names(((exports_sqlink_wasm_high_level_statement_t*) arg), &ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#[method]statement.parameter-count")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_method_statement_parameter_count(uint8_t * arg) {
-  int32_t ret = exports_sqlite_wasm_high_level_method_statement_parameter_count(((exports_sqlite_wasm_high_level_statement_t*) arg));
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#[method]statement.parameter-count")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_method_statement_parameter_count(uint8_t * arg) {
+  int32_t ret = exports_sqlink_wasm_high_level_method_statement_parameter_count(((exports_sqlink_wasm_high_level_statement_t*) arg));
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#version")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_version(void) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#version")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_version(void) {
   sqlite_cli_unified_string_t ret;
-  exports_sqlite_wasm_high_level_version(&ret);
+  exports_sqlink_wasm_high_level_version(&ret);
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   *((size_t*)(ptr + sizeof(void*))) = (ret).len;
   *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#version-number")))
-int32_t __wasm_export_exports_sqlite_wasm_high_level_version_number(void) {
-  int32_t ret = exports_sqlite_wasm_high_level_version_number();
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#version-number")))
+int32_t __wasm_export_exports_sqlink_wasm_high_level_version_number(void) {
+  int32_t ret = exports_sqlink_wasm_high_level_version_number();
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#open-memory")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_open_memory(void) {
-  exports_sqlite_wasm_high_level_result_own_connection_database_error_t ret;
-  exports_sqlite_wasm_high_level_own_connection_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_open_memory(&ok, &err);
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#open-memory")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_open_memory(void) {
+  exports_sqlink_wasm_high_level_result_own_connection_database_error_t ret;
+  exports_sqlink_wasm_high_level_own_connection_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_open_memory(&ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3578,25 +7290,25 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_open_memory(void) {
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload0).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:wasm/high-level@0.1.0#open-file")))
-uint8_t * __wasm_export_exports_sqlite_wasm_high_level_open_file(uint8_t * arg, size_t arg0) {
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#open-file")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_open_file(uint8_t * arg, size_t arg0) {
   sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
-  exports_sqlite_wasm_high_level_result_own_connection_database_error_t ret;
-  exports_sqlite_wasm_high_level_own_connection_t ok;
-  exports_sqlite_wasm_high_level_database_error_t err;
-  ret.is_err = !exports_sqlite_wasm_high_level_open_file(&arg1, &ok, &err);
+  exports_sqlink_wasm_high_level_result_own_connection_database_error_t ret;
+  exports_sqlink_wasm_high_level_own_connection_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_open_file(&arg1, &ok, &err);
   if (ret.is_err) {
     ret.val.err = err;
   }
@@ -3605,19 +7317,45 @@ uint8_t * __wasm_export_exports_sqlite_wasm_high_level_open_file(uint8_t * arg, 
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_wasm_high_level_database_error_t *payload2 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    const exports_sqlink_wasm_high_level_database_error_t *payload2 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload2).code;
     *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload2).extended_code;
     *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload2).message).len;
     *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload2).message).ptr;
   } else {
-    const exports_sqlite_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    const exports_sqlink_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:extension/spi@0.1.0#execute")))
+__attribute__((__export_name__("sqlink:wasm/high-level@0.1.0#default-connection")))
+uint8_t * __wasm_export_exports_sqlink_wasm_high_level_default_connection(void) {
+  exports_sqlink_wasm_high_level_result_own_connection_database_error_t ret;
+  exports_sqlink_wasm_high_level_own_connection_t ok;
+  exports_sqlink_wasm_high_level_database_error_t err;
+  ret.is_err = !exports_sqlink_wasm_high_level_default_connection(&ok, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  if (!ret.is_err) {
+    ret.val.ok = ok;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlink_wasm_high_level_database_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload0).message).ptr;
+  } else {
+    const exports_sqlink_wasm_high_level_own_connection_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload).__handle;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#execute")))
 uint8_t * __wasm_export_exports_sqlite_extension_spi_execute(uint8_t * arg, size_t arg0, uint8_t * arg1, size_t arg2) {
   sqlite_cli_unified_string_t arg3 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
   exports_sqlite_extension_spi_list_sql_value_t arg4 = (exports_sqlite_extension_spi_list_sql_value_t) { (exports_sqlite_extension_spi_sql_value_t*)(arg1), (arg2) };
@@ -3633,11 +7371,11 @@ uint8_t * __wasm_export_exports_sqlite_extension_spi_execute(uint8_t * arg, size
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_extension_spi_sqlite_error_t *payload10 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
-    *((int32_t*)(ptr + 8)) = (*payload10).code;
-    *((int32_t*)(ptr + 12)) = (*payload10).extended_code;
-    *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload10).message).len;
-    *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload10).message).ptr;
+    const exports_sqlite_extension_spi_sqlite_error_t *payload11 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + 8)) = (*payload11).code;
+    *((int32_t*)(ptr + 12)) = (*payload11).extended_code;
+    *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload11).message).len;
+    *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload11).message).ptr;
   } else {
     const exports_sqlite_extension_spi_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     *((size_t*)(ptr + (8+1*sizeof(void*)))) = ((*payload).columns).len;
@@ -3650,7 +7388,7 @@ uint8_t * __wasm_export_exports_sqlite_extension_spi_execute(uint8_t * arg, size
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:extension/spi@0.1.0#execute-scalar")))
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#execute-scalar")))
 uint8_t * __wasm_export_exports_sqlite_extension_spi_execute_scalar(uint8_t * arg, size_t arg0, uint8_t * arg1, size_t arg2) {
   sqlite_cli_unified_string_t arg3 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
   exports_sqlite_extension_spi_list_sql_value_t arg4 = (exports_sqlite_extension_spi_list_sql_value_t) { (exports_sqlite_extension_spi_sql_value_t*)(arg1), (arg2) };
@@ -3666,11 +7404,11 @@ uint8_t * __wasm_export_exports_sqlite_extension_spi_execute_scalar(uint8_t * ar
   }
   uint8_t *ptr = (uint8_t *) &RET_AREA;
   if ((ret).is_err) {
-    const exports_sqlite_extension_spi_sqlite_error_t *payload10 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
-    *((int32_t*)(ptr + 8)) = (*payload10).code;
-    *((int32_t*)(ptr + 12)) = (*payload10).extended_code;
-    *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload10).message).len;
-    *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload10).message).ptr;
+    const exports_sqlite_extension_spi_sqlite_error_t *payload11 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + 8)) = (*payload11).code;
+    *((int32_t*)(ptr + 12)) = (*payload11).extended_code;
+    *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload11).message).len;
+    *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload11).message).ptr;
   } else {
     const exports_sqlite_extension_spi_sql_value_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
     switch ((int32_t) (*payload).tag) {
@@ -3704,12 +7442,23 @@ uint8_t * __wasm_export_exports_sqlite_extension_spi_execute_scalar(uint8_t * ar
         *((uint8_t **)(ptr + 16)) = (uint8_t *) (*payload9).ptr;
         break;
       }
+      case 5: {
+        const exports_sqlite_extension_types_wit_value_payload_t *payload10 = &(*payload).val.wit_value;
+        *((int8_t*)(ptr + 8)) = 5;
+        *((size_t*)(ptr + (16+1*sizeof(void*)))) = ((*payload10).type_id).len;
+        *((uint8_t **)(ptr + 16)) = (uint8_t *) ((*payload10).type_id).ptr;
+        *((size_t*)(ptr + (16+3*sizeof(void*)))) = ((*payload10).bytes).len;
+        *((uint8_t **)(ptr + (16+2*sizeof(void*)))) = (uint8_t *) ((*payload10).bytes).ptr;
+        *((size_t*)(ptr + (16+5*sizeof(void*)))) = ((*payload10).symbolic_name).len;
+        *((uint8_t **)(ptr + (16+4*sizeof(void*)))) = (uint8_t *) ((*payload10).symbolic_name).ptr;
+        break;
+      }
     }
   }
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:extension/spi@0.1.0#execute-batch")))
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#execute-batch")))
 uint8_t * __wasm_export_exports_sqlite_extension_spi_execute_batch(uint8_t * arg, size_t arg0) {
   sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
   exports_sqlite_extension_spi_result_s64_sqlite_error_t ret;
@@ -3736,37 +7485,302 @@ uint8_t * __wasm_export_exports_sqlite_extension_spi_execute_batch(uint8_t * arg
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:extension/logging@0.1.0#log")))
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#list-vfs")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_list_vfs(void) {
+  sqlite_cli_unified_list_string_t ret;
+  exports_sqlite_extension_spi_list_vfs(&ret);
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  *((size_t*)(ptr + sizeof(void*))) = (ret).len;
+  *((uint8_t **)(ptr + 0)) = (uint8_t *) (ret).ptr;
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#vfs-name")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_vfs_name(uint8_t * arg, size_t arg0) {
+  sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
+  exports_sqlite_extension_spi_result_string_sqlite_error_t ret;
+  sqlite_cli_unified_string_t ok;
+  exports_sqlite_extension_spi_sqlite_error_t err;
+  ret.is_err = !exports_sqlite_extension_spi_vfs_name(&arg1, &ok, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  if (!ret.is_err) {
+    ret.val.ok = ok;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_extension_spi_sqlite_error_t *payload2 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload2).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload2).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload2).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload2).message).ptr;
+  } else {
+    const sqlite_cli_unified_string_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    *((size_t*)(ptr + (2*sizeof(void*)))) = (*payload).len;
+    *((uint8_t **)(ptr + sizeof(void*))) = (uint8_t *) (*payload).ptr;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#serialize-db")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_serialize_db(uint8_t * arg, size_t arg0) {
+  sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
+  exports_sqlite_extension_spi_result_list_u8_sqlite_error_t ret;
+  sqlite_cli_unified_list_u8_t ok;
+  exports_sqlite_extension_spi_sqlite_error_t err;
+  ret.is_err = !exports_sqlite_extension_spi_serialize_db(&arg1, &ok, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  if (!ret.is_err) {
+    ret.val.ok = ok;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_extension_spi_sqlite_error_t *payload2 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload2).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload2).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload2).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload2).message).ptr;
+  } else {
+    const sqlite_cli_unified_list_u8_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    *((size_t*)(ptr + (2*sizeof(void*)))) = (*payload).len;
+    *((uint8_t **)(ptr + sizeof(void*))) = (uint8_t *) (*payload).ptr;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#changes")))
+int64_t __wasm_export_exports_sqlite_extension_spi_changes(void) {
+  int64_t ret = exports_sqlite_extension_spi_changes();
+  return ret;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#total-changes")))
+int64_t __wasm_export_exports_sqlite_extension_spi_total_changes(void) {
+  int64_t ret = exports_sqlite_extension_spi_total_changes();
+  return ret;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#last-insert-rowid")))
+int64_t __wasm_export_exports_sqlite_extension_spi_last_insert_rowid(void) {
+  int64_t ret = exports_sqlite_extension_spi_last_insert_rowid();
+  return ret;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#current-memory-used")))
+int64_t __wasm_export_exports_sqlite_extension_spi_current_memory_used(void) {
+  int64_t ret = exports_sqlite_extension_spi_current_memory_used();
+  return ret;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#backup-into")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_backup_into(uint8_t * arg, size_t arg0, uint8_t * arg1, size_t arg2, uint8_t * arg3, size_t arg4) {
+  sqlite_cli_unified_string_t arg5 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
+  sqlite_cli_unified_string_t arg6 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg1), (arg2) };
+  sqlite_cli_unified_string_t arg7 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg3), (arg4) };
+  exports_sqlite_extension_spi_result_void_sqlite_error_t ret;
+  exports_sqlite_extension_spi_sqlite_error_t err;
+  ret.is_err = !exports_sqlite_extension_spi_backup_into(&arg5, &arg6, &arg7, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_extension_spi_sqlite_error_t *payload8 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload8).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload8).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload8).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload8).message).ptr;
+  } else {
+    *((int8_t*)(ptr + 0)) = 0;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#restore-from")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_restore_from(uint8_t * arg, size_t arg0, uint8_t * arg1, size_t arg2, uint8_t * arg3, size_t arg4) {
+  sqlite_cli_unified_string_t arg5 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
+  sqlite_cli_unified_string_t arg6 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg1), (arg2) };
+  sqlite_cli_unified_string_t arg7 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg3), (arg4) };
+  exports_sqlite_extension_spi_result_void_sqlite_error_t ret;
+  exports_sqlite_extension_spi_sqlite_error_t err;
+  ret.is_err = !exports_sqlite_extension_spi_restore_from(&arg5, &arg6, &arg7, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_extension_spi_sqlite_error_t *payload8 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload8).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload8).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload8).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload8).message).ptr;
+  } else {
+    *((int8_t*)(ptr + 0)) = 0;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#set-busy-timeout")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_set_busy_timeout(int32_t arg) {
+  exports_sqlite_extension_spi_result_void_sqlite_error_t ret;
+  exports_sqlite_extension_spi_sqlite_error_t err;
+  ret.is_err = !exports_sqlite_extension_spi_set_busy_timeout(arg, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_extension_spi_sqlite_error_t *payload0 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload0).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload0).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload0).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload0).message).ptr;
+  } else {
+    *((int8_t*)(ptr + 0)) = 0;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#limit")))
+int32_t __wasm_export_exports_sqlite_extension_spi_limit(int32_t arg, int32_t arg0) {
+  int32_t ret = exports_sqlite_extension_spi_limit(arg, arg0);
+  return ret;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#db-config-bool")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_db_config_bool(int32_t arg, int32_t arg0, int32_t arg1) {
+  exports_sqlite_extension_spi_result_bool_sqlite_error_t ret;
+  bool ok;
+  exports_sqlite_extension_spi_sqlite_error_t err;
+  ret.is_err = !exports_sqlite_extension_spi_db_config_bool(arg, arg0, arg1, &ok, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  if (!ret.is_err) {
+    ret.val.ok = ok;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_extension_spi_sqlite_error_t *payload2 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload2).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload2).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload2).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload2).message).ptr;
+  } else {
+    const bool *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    *((int8_t*)(ptr + sizeof(void*))) = *payload;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#deserialize-db")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_deserialize_db(uint8_t * arg, size_t arg0, uint8_t * arg1, size_t arg2) {
+  sqlite_cli_unified_string_t arg3 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
+  sqlite_cli_unified_list_u8_t arg4 = (sqlite_cli_unified_list_u8_t) { (uint8_t*)(arg1), (arg2) };
+  exports_sqlite_extension_spi_result_void_sqlite_error_t ret;
+  exports_sqlite_extension_spi_sqlite_error_t err;
+  ret.is_err = !exports_sqlite_extension_spi_deserialize_db(&arg3, &arg4, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_extension_spi_sqlite_error_t *payload5 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload5).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload5).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload5).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload5).message).ptr;
+  } else {
+    *((int8_t*)(ptr + 0)) = 0;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#execute-multi")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_execute_multi(uint8_t * arg, size_t arg0, uint8_t * arg1, size_t arg2) {
+  sqlite_cli_unified_string_t arg3 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
+  exports_sqlite_extension_spi_list_named_param_t arg4 = (exports_sqlite_extension_spi_list_named_param_t) { (exports_sqlite_extension_spi_named_param_t*)(arg1), (arg2) };
+  exports_sqlite_extension_spi_result_list_query_result_sqlite_error_t ret;
+  exports_sqlite_extension_spi_list_query_result_t ok;
+  exports_sqlite_extension_spi_sqlite_error_t err;
+  ret.is_err = !exports_sqlite_extension_spi_execute_multi(&arg3, &arg4, &ok, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  if (!ret.is_err) {
+    ret.val.ok = ok;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_extension_spi_sqlite_error_t *payload11 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload11).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload11).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload11).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload11).message).ptr;
+  } else {
+    const exports_sqlite_extension_spi_list_query_result_t *payload = &(ret).val.ok;*((int8_t*)(ptr + 0)) = 0;
+    *((size_t*)(ptr + (2*sizeof(void*)))) = (*payload).len;
+    *((uint8_t **)(ptr + sizeof(void*))) = (uint8_t *) (*payload).ptr;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/spi@1.0.0#open-db")))
+uint8_t * __wasm_export_exports_sqlite_extension_spi_open_db(uint8_t * arg, size_t arg0) {
+  sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
+  exports_sqlite_extension_spi_result_void_sqlite_error_t ret;
+  exports_sqlite_extension_spi_sqlite_error_t err;
+  ret.is_err = !exports_sqlite_extension_spi_open_db(&arg1, &err);
+  if (ret.is_err) {
+    ret.val.err = err;
+  }
+  uint8_t *ptr = (uint8_t *) &RET_AREA;
+  if ((ret).is_err) {
+    const exports_sqlite_extension_spi_sqlite_error_t *payload2 = &(ret).val.err;*((int8_t*)(ptr + 0)) = 1;
+    *((int32_t*)(ptr + sizeof(void*))) = (*payload2).code;
+    *((int32_t*)(ptr + (4+1*sizeof(void*)))) = (*payload2).extended_code;
+    *((size_t*)(ptr + (8+2*sizeof(void*)))) = ((*payload2).message).len;
+    *((uint8_t **)(ptr + (8+1*sizeof(void*)))) = (uint8_t *) ((*payload2).message).ptr;
+  } else {
+    *((int8_t*)(ptr + 0)) = 0;
+  }
+  return ptr;
+}
+
+__attribute__((__export_name__("sqlite:extension/logging@1.0.0#log")))
 void __wasm_export_exports_sqlite_extension_logging_log(int32_t arg, uint8_t * arg0, size_t arg1) {
   sqlite_cli_unified_string_t arg2 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg0), (arg1) };
   exports_sqlite_extension_logging_log(arg, &arg2);
 }
 
-__attribute__((__export_name__("sqlite:extension/logging@0.1.0#error")))
+__attribute__((__export_name__("sqlite:extension/logging@1.0.0#error")))
 void __wasm_export_exports_sqlite_extension_logging_error(uint8_t * arg, size_t arg0) {
   sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
   exports_sqlite_extension_logging_error(&arg1);
 }
 
-__attribute__((__export_name__("sqlite:extension/logging@0.1.0#warn")))
+__attribute__((__export_name__("sqlite:extension/logging@1.0.0#warn")))
 void __wasm_export_exports_sqlite_extension_logging_warn(uint8_t * arg, size_t arg0) {
   sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
   exports_sqlite_extension_logging_warn(&arg1);
 }
 
-__attribute__((__export_name__("sqlite:extension/logging@0.1.0#info")))
+__attribute__((__export_name__("sqlite:extension/logging@1.0.0#info")))
 void __wasm_export_exports_sqlite_extension_logging_info(uint8_t * arg, size_t arg0) {
   sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
   exports_sqlite_extension_logging_info(&arg1);
 }
 
-__attribute__((__export_name__("sqlite:extension/logging@0.1.0#debug")))
+__attribute__((__export_name__("sqlite:extension/logging@1.0.0#debug")))
 void __wasm_export_exports_sqlite_extension_logging_debug(uint8_t * arg, size_t arg0) {
   sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
   exports_sqlite_extension_logging_debug(&arg1);
 }
 
-__attribute__((__export_name__("sqlite:extension/config@0.1.0#get")))
+__attribute__((__export_name__("sqlite:extension/config@1.0.0#get")))
 uint8_t * __wasm_export_exports_sqlite_extension_config_get(uint8_t * arg, size_t arg0) {
   sqlite_cli_unified_string_t arg1 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
   sqlite_cli_unified_string_t val;
@@ -3787,7 +7801,7 @@ uint8_t * __wasm_export_exports_sqlite_extension_config_get(uint8_t * arg, size_
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:extension/config@0.1.0#set")))
+__attribute__((__export_name__("sqlite:extension/config@1.0.0#set")))
 int32_t __wasm_export_exports_sqlite_extension_config_set(uint8_t * arg, size_t arg0, uint8_t * arg1, size_t arg2) {
   sqlite_cli_unified_string_t arg3 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg), (arg0) };
   sqlite_cli_unified_string_t arg4 = (sqlite_cli_unified_string_t) { (uint8_t*)(arg1), (arg2) };
@@ -3795,7 +7809,7 @@ int32_t __wasm_export_exports_sqlite_extension_config_set(uint8_t * arg, size_t 
   return ret;
 }
 
-__attribute__((__export_name__("sqlite:extension/config@0.1.0#sqlite-version")))
+__attribute__((__export_name__("sqlite:extension/config@1.0.0#sqlite-version")))
 uint8_t * __wasm_export_exports_sqlite_extension_config_sqlite_version(void) {
   sqlite_cli_unified_string_t ret;
   exports_sqlite_extension_config_sqlite_version(&ret);
@@ -3805,7 +7819,7 @@ uint8_t * __wasm_export_exports_sqlite_extension_config_sqlite_version(void) {
   return ptr;
 }
 
-__attribute__((__export_name__("sqlite:extension/config@0.1.0#extension-version")))
+__attribute__((__export_name__("sqlite:extension/config@1.0.0#extension-version")))
 uint8_t * __wasm_export_exports_sqlite_extension_config_extension_version(void) {
   sqlite_cli_unified_string_t ret;
   exports_sqlite_extension_config_extension_version(&ret);
