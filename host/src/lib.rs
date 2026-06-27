@@ -30,7 +30,16 @@ pub mod component_blob_cache;
 pub mod compose_provider;
 pub mod policy;
 pub mod prefix_registry;
+/// Native, in-host S3 path (aws-sigv4 + reqwest). Superseded by the resident
+/// `s3-endpoint` provider (`s3_resident`); kept behind the `native-s3` feature
+/// for fallback / comparison (then to be removed once the resident path has
+/// soaked). #106.
+#[cfg(feature = "native-s3")]
 pub mod s3;
+/// Resident `s3-endpoint` compose:dynlink/endpoint provider routing — the
+/// default S3 path. #106.
+#[cfg(not(feature = "native-s3"))]
+mod s3_resident;
 pub mod session_ffi;
 pub mod typed_value;
 pub mod vtab;
@@ -3578,11 +3587,18 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
         if !self.s3_granted {
             return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
         }
-        tokio::task::spawn_blocking(move || {
-            crate::s3::op_get_object(endpoint, credentials, bucket, key, options)
-        })
-        .await
-        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        #[cfg(feature = "native-s3")]
+        {
+            tokio::task::spawn_blocking(move || {
+                crate::s3::op_get_object(endpoint, credentials, bucket, key, options)
+            })
+            .await
+            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        }
+        #[cfg(not(feature = "native-s3"))]
+        {
+            crate::s3_resident::get_object(endpoint, credentials, bucket, key, options).await
+        }
     }
 
     async fn put_object(
@@ -3600,11 +3616,18 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
         if !self.s3_granted {
             return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
         }
-        tokio::task::spawn_blocking(move || {
-            crate::s3::op_put_object(endpoint, credentials, bucket, key, body, options)
-        })
-        .await
-        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        #[cfg(feature = "native-s3")]
+        {
+            tokio::task::spawn_blocking(move || {
+                crate::s3::op_put_object(endpoint, credentials, bucket, key, body, options)
+            })
+            .await
+            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        }
+        #[cfg(not(feature = "native-s3"))]
+        {
+            crate::s3_resident::put_object(endpoint, credentials, bucket, key, body, options).await
+        }
     }
 
     async fn delete_object(
@@ -3617,11 +3640,18 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
         if !self.s3_granted {
             return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
         }
-        tokio::task::spawn_blocking(move || {
-            crate::s3::op_delete_object(endpoint, credentials, bucket, key)
-        })
-        .await
-        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        #[cfg(feature = "native-s3")]
+        {
+            tokio::task::spawn_blocking(move || {
+                crate::s3::op_delete_object(endpoint, credentials, bucket, key)
+            })
+            .await
+            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        }
+        #[cfg(not(feature = "native-s3"))]
+        {
+            crate::s3_resident::delete_object(endpoint, credentials, bucket, key).await
+        }
     }
 
     async fn head_object(
@@ -3637,11 +3667,18 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
         if !self.s3_granted {
             return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
         }
-        tokio::task::spawn_blocking(move || {
-            crate::s3::op_head_object(endpoint, credentials, bucket, key)
-        })
-        .await
-        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        #[cfg(feature = "native-s3")]
+        {
+            tokio::task::spawn_blocking(move || {
+                crate::s3::op_head_object(endpoint, credentials, bucket, key)
+            })
+            .await
+            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        }
+        #[cfg(not(feature = "native-s3"))]
+        {
+            crate::s3_resident::head_object(endpoint, credentials, bucket, key).await
+        }
     }
 
     async fn list_objects(
@@ -3657,11 +3694,18 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
         if !self.s3_granted {
             return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
         }
-        tokio::task::spawn_blocking(move || {
-            crate::s3::op_list_objects(endpoint, credentials, bucket, options)
-        })
-        .await
-        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        #[cfg(feature = "native-s3")]
+        {
+            tokio::task::spawn_blocking(move || {
+                crate::s3::op_list_objects(endpoint, credentials, bucket, options)
+            })
+            .await
+            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        }
+        #[cfg(not(feature = "native-s3"))]
+        {
+            crate::s3_resident::list_objects(endpoint, credentials, bucket, options).await
+        }
     }
 
     async fn copy_object(
@@ -3679,8 +3723,24 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
         if !self.s3_granted {
             return Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted);
         }
-        tokio::task::spawn_blocking(move || {
-            crate::s3::op_copy_object(
+        #[cfg(feature = "native-s3")]
+        {
+            tokio::task::spawn_blocking(move || {
+                crate::s3::op_copy_object(
+                    endpoint,
+                    credentials,
+                    source_bucket,
+                    source_key,
+                    dest_bucket,
+                    dest_key,
+                )
+            })
+            .await
+            .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+        }
+        #[cfg(not(feature = "native-s3"))]
+        {
+            crate::s3_resident::copy_object(
                 endpoint,
                 credentials,
                 source_bucket,
@@ -3688,9 +3748,8 @@ impl loaded::sqlite::extension::s3_base::Host for LoadedState {
                 dest_bucket,
                 dest_key,
             )
-        })
-        .await
-        .map_err(|e| loaded::sqlite::extension::s3_base::S3Error::Internal(format!("join: {e}")))?
+            .await
+        }
     }
 }
 

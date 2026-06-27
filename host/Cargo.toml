@@ -239,6 +239,10 @@ stdsql-extension      = { path = "../extensions/stdsql",    optional = true, fea
 list-extension        = { path = "../extensions/list",      optional = true, features = ["embed"], default-features = false }
 
 [features]
+# Use the native, in-host S3 path (aws-sigv4 + reqwest) instead of the default
+# resident s3-endpoint compose:dynlink/endpoint provider. Fallback/comparison
+# only; slated for removal once the resident path has soaked (#106).
+native-s3 = []
 embed-sha3   = ["dep:sha3-extension"]
 embed-uuid   = ["dep:uuid-extension"]
 embed-regexp = ["dep:regexp-extension"]
