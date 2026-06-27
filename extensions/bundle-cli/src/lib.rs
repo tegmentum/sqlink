@@ -25,6 +25,13 @@ extern crate alloc;
 use alloc::format;
 use alloc::string::String;
 
+/// Vendored CAS-cache SQL string surface. Single source of truth
+/// lives in the host-side `sqlite_cas_cache::bundles_exec::*_SQL`
+/// consts; this is a build-time copy because bundle-cli is
+/// wasm32-wasip2 and can't pull in libsqlite3-sys.
+#[cfg(target_arch = "wasm32")]
+mod sql;
+
 /// LOW-severity defensive fix: bundle names + hash strings flow from
 /// operator-supplied dot-cmd argv straight into stdout via
 /// `cli_stdout::write(format!("...{name}..."))`. Without sanitization
@@ -96,10 +103,14 @@ mod wasm_export {
     use alloc::string::{String, ToString};
     use alloc::vec::Vec;
 
+    // #533: purpose-built world for .bundle. Drops wal-frames +
+    // s3-base (bundle-cli has no use for either) and adds
+    // dispatch-bridge-cas, the SPI surface bundle-cli reaches
+    // through to drive cas-conn SQL directly.
     mod bindings {
         wit_bindgen::generate!({
             path: "../../sqlite-loader-wit/wit",
-            world: "dotcmd-aware",
+            world: "bundle-cli",
             generate_all,
         });
     }
@@ -114,6 +125,7 @@ mod wasm_export {
     use bindings::sqlite::extension::build;
     use bindings::sqlite::extension::bundles;
     use bindings::sqlite::extension::cli_stdout;
+    use bindings::sqlite::extension::dispatch_bridge_cas;
     use bindings::sqlite::extension::loader_bridge;
     use bindings::sqlite::extension::policy::Capability;
     use bindings::sqlite::extension::types::{SqlValue, SqliteError};
@@ -188,6 +200,33 @@ mod wasm_export {
             }
             Ok(dispatch(ctx.args.trim()))
         }
+    }
+
+    /// Path δ proof-of-pattern: drives a bundle row delete through
+    /// `dispatch_bridge_cas::bridged_execute_cas` against the
+    /// vendored `sql::DELETE_SQL`. Returns `Ok(true)` iff the
+    /// statement removed a row, `Ok(false)` if the id wasn't
+    /// present, or `Err(SqliteError)` on a SQL error.
+    ///
+    /// Pattern: callers that need a `(sql, params) -> bool/i64`
+    /// shape can fold their own typed args into the
+    /// `Vec<SqlValue>` literal and call this helper. More complex
+    /// callers that need row results would parse the
+    /// `QueryResult` returned by `bridged_execute_cas` directly.
+    ///
+    /// Used by `sub_delete` below; the remaining typed
+    /// `bundles::bundle_*` call sites in this module continue to
+    /// flow through the typed `bundles::Host` impl on the
+    /// native host — which itself is a path δ delegate via
+    /// `cas_execute_inner`. Both paths reach the same cas
+    /// connection.
+    #[allow(dead_code)]
+    fn cas_exec_delete(sql: &str, id: u64) -> Result<bool, SqliteError> {
+        let result = dispatch_bridge_cas::bridged_execute_cas(
+            sql,
+            &[SqlValue::Integer(id as i64)],
+        )?;
+        Ok(result.changes > 0)
     }
 
     const BUNDLE_HELP: &str = "\
@@ -508,8 +547,12 @@ underlying set-hash row.";
             }
             Err(e) => return err(format!(".bundle delete: {}", e.message)),
         };
-        match bundles::bundle_delete(summary.id) {
-            Ok(()) => {
+        // Path δ delegate: drive the DELETE through
+        // dispatch-bridge-cas with the vendored DELETE_SQL.
+        // Same target Connection as the typed bundles::Host
+        // delegate would reach; saves a typed call hop.
+        match cas_exec_delete(crate::sql::DELETE_SQL, summary.id) {
+            Ok(true) => {
                 cli_stdout::write(&format!(
                     "bundle '{}' deleted (id={})\n",
                     sanitize_for_terminal(name),
@@ -517,6 +560,10 @@ underlying set-hash row.";
                 ));
                 ok()
             }
+            Ok(false) => err(format!(
+                ".bundle delete: bundle {:?} vanished between lookup and delete",
+                sanitize_for_terminal(name)
+            )),
             Err(e) => err(format!(".bundle delete: {}", e.message)),
         }
     }
