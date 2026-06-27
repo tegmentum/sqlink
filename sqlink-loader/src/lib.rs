@@ -49,6 +49,7 @@ mod load;
 mod register;
 mod state;
 mod value;
+mod vtab;
 
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int, c_void};
@@ -123,6 +124,7 @@ unsafe fn init_inner(db: *mut sqlite3, p_api: *const sqlite3_api_routines) -> Re
                         ext = entry,
                         scalar = counts.scalar,
                         aggregate = counts.aggregate,
+                        vtab = counts.vtab,
                         skipped = counts.skipped,
                         "sqlink-loader loaded"
                     );
@@ -233,8 +235,8 @@ unsafe extern "C" fn sqlink_load_ext_xfunc(
     match result {
         Ok(counts) => {
             let msg = format!(
-                "loaded {name}: {} scalar, {} aggregate ({} skipped: unsupported kind)",
-                counts.scalar, counts.aggregate, counts.skipped
+                "loaded {name}: {} scalar, {} aggregate, {} vtab ({} skipped: unsupported kind)",
+                counts.scalar, counts.aggregate, counts.vtab, counts.skipped
             );
             write_result(
                 &api,

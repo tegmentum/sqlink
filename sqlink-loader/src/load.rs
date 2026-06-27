@@ -39,9 +39,15 @@ use crate::register;
 pub struct InstallCounts {
     pub scalar: u32,
     pub aggregate: u32,
+    /// Count of vtabs (UDTFs / virtual tables) successfully
+    /// registered via `sqlite3_create_module_v2`. Populated by
+    /// task #489's wiring of `VtabSpec` through the loader's
+    /// pApi-routed vtab adapter. See `crate::vtab` for the
+    /// trampoline surface.
+    pub vtab: u32,
     /// Number of manifest entries we KNEW about but skipped
     /// because their kind isn't supported in this iteration
-    /// (collations / vtabs / hooks). Surfaced for diagnostics.
+    /// (collations / hooks). Surfaced for diagnostics.
     pub skipped: u32,
 }
 
@@ -215,10 +221,43 @@ pub unsafe fn load_and_install(
         }
     }
 
-    // Collations / vtabs / hooks: not in this iteration. Surface
+    // Vtabs (UDTFs / virtual tables). Task #489 wires the manifest
+    // entries through `sqlite3_create_module_v2`. Read-only +
+    // eponymous vtabs are fully supported in this iteration;
+    // mutable (xUpdate / transactional) vtabs fall back to the
+    // read-only template — sufficient for the catalog today (zero
+    // mutable vtabs declared) and tagged for the next task when
+    // the count exceeds zero.
+    for spec in &ext.vtabs {
+        let rc = crate::vtab::register_vtab_module(
+            api,
+            db,
+            host_for_dispatch.clone(),
+            rt.clone(),
+            &spec.name,
+            &ext_name,
+            spec.id,
+            spec.eponymous,
+            spec.mutable,
+            spec.batched,
+        );
+        if rc == SQLITE_OK {
+            counts.vtab += 1;
+        } else {
+            tracing::warn!(
+                ext = %ext_name,
+                vtab = %spec.name,
+                rc,
+                eponymous = spec.eponymous,
+                mutable = spec.mutable,
+                "sqlink-loader register_vtab_module failed"
+            );
+        }
+    }
+
+    // Collations / hooks: still not in this iteration. Surface
     // the count so the env-var dispatcher can log a hint.
     let skipped = ext.collations.len()
-        + ext.vtabs.len()
         + (ext.has_authorizer as usize)
         + (ext.has_update_hook as usize)
         + (ext.has_commit_hook as usize);
@@ -339,6 +378,7 @@ mod tests {
         let c = InstallCounts::default();
         assert_eq!(c.scalar, 0);
         assert_eq!(c.aggregate, 0);
+        assert_eq!(c.vtab, 0);
         assert_eq!(c.skipped, 0);
     }
 
@@ -347,12 +387,14 @@ mod tests {
         let a = InstallCounts {
             scalar: 3,
             aggregate: 1,
+            vtab: 4,
             skipped: 2,
         };
         let b = a; // Copy
         let c = a.clone(); // Clone
         assert_eq!(a.scalar, b.scalar);
         assert_eq!(a.scalar, c.scalar);
+        assert_eq!(a.vtab, b.vtab);
         // Debug is required by the warn! call site.
         let _ = format!("{a:?}");
     }

@@ -53,9 +53,161 @@ pub struct sqlite3_blob {
     _private: [u8; 0],
 }
 
+// `sqlite3_module` is a struct of function pointers + an iVersion
+// header sqlite3 dereferences on every vtab op. The loader's vtab
+// path (see `vtab.rs`) needs to hand sqlite3 a populated module via
+// the pApi-routed `create_module_v2` call — so we mirror the C
+// layout here rather than leaving it opaque.
+//
+// Field order MUST match sqlite3.h's `struct sqlite3_module`
+// declaration. We carry through iVersion=2 (which adds xSavepoint /
+// xRelease / xRollbackTo) so a mutable vtab template can be plugged
+// in later without an api.rs change. iVersion=3+ fields
+// (xShadowName, xIntegrity) are NOT included — the loader-side
+// module registers with iVersion=1 today and a NULL trailing slot
+// is interpreted as iVersion=1 by older sqlite3 builds. New slots
+// here only matter for newer sqlite3 versions that look past
+// iVersion; ours leaves iVersion=1 so the read is bounded.
 #[repr(C)]
 pub struct sqlite3_module {
-    _private: [u8; 0],
+    pub i_version: c_int,
+    pub x_create: Option<
+        unsafe extern "C" fn(
+            *mut sqlite3,
+            *mut c_void,
+            c_int,
+            *const *const c_char,
+            *mut *mut sqlite3_vtab,
+            *mut *mut c_char,
+        ) -> c_int,
+    >,
+    pub x_connect: Option<
+        unsafe extern "C" fn(
+            *mut sqlite3,
+            *mut c_void,
+            c_int,
+            *const *const c_char,
+            *mut *mut sqlite3_vtab,
+            *mut *mut c_char,
+        ) -> c_int,
+    >,
+    pub x_best_index:
+        Option<unsafe extern "C" fn(*mut sqlite3_vtab, *mut sqlite3_index_info) -> c_int>,
+    pub x_disconnect: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> c_int>,
+    pub x_destroy: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> c_int>,
+    pub x_open: Option<
+        unsafe extern "C" fn(*mut sqlite3_vtab, *mut *mut sqlite3_vtab_cursor) -> c_int,
+    >,
+    pub x_close: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor) -> c_int>,
+    pub x_filter: Option<
+        unsafe extern "C" fn(
+            *mut sqlite3_vtab_cursor,
+            c_int,
+            *const c_char,
+            c_int,
+            *mut *mut sqlite3_value,
+        ) -> c_int,
+    >,
+    pub x_next: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor) -> c_int>,
+    pub x_eof: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor) -> c_int>,
+    pub x_column: Option<
+        unsafe extern "C" fn(*mut sqlite3_vtab_cursor, *mut sqlite3_context, c_int) -> c_int,
+    >,
+    pub x_rowid: Option<unsafe extern "C" fn(*mut sqlite3_vtab_cursor, *mut sqlite3_int64) -> c_int>,
+    pub x_update: Option<
+        unsafe extern "C" fn(
+            *mut sqlite3_vtab,
+            c_int,
+            *mut *mut sqlite3_value,
+            *mut sqlite3_int64,
+        ) -> c_int,
+    >,
+    pub x_begin: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> c_int>,
+    pub x_sync: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> c_int>,
+    pub x_commit: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> c_int>,
+    pub x_rollback: Option<unsafe extern "C" fn(*mut sqlite3_vtab) -> c_int>,
+    pub x_find_function: Option<
+        unsafe extern "C" fn(
+            *mut sqlite3_vtab,
+            c_int,
+            *const c_char,
+            *mut Option<
+                unsafe extern "C" fn(*mut sqlite3_context, c_int, *mut *mut sqlite3_value),
+            >,
+            *mut *mut c_void,
+        ) -> c_int,
+    >,
+    pub x_rename: Option<unsafe extern "C" fn(*mut sqlite3_vtab, *const c_char) -> c_int>,
+    pub x_savepoint: Option<unsafe extern "C" fn(*mut sqlite3_vtab, c_int) -> c_int>,
+    pub x_release: Option<unsafe extern "C" fn(*mut sqlite3_vtab, c_int) -> c_int>,
+    pub x_rollback_to: Option<unsafe extern "C" fn(*mut sqlite3_vtab, c_int) -> c_int>,
+}
+
+/// Base of an sqlite3 vtab — sqlite3 owns the first three fields,
+/// any per-extension state is appended after by the implementation.
+/// Mirrors `sqlite3.h`'s `struct sqlite3_vtab`.
+#[repr(C)]
+pub struct sqlite3_vtab {
+    pub p_module: *const sqlite3_module,
+    pub n_ref: c_int,
+    pub z_err_msg: *mut c_char,
+}
+
+/// Base of an sqlite3 vtab cursor. The only required field is the
+/// owning vtab pointer; xOpen typically allocates a larger struct
+/// with this as its first field and downcasts on later callbacks.
+#[repr(C)]
+pub struct sqlite3_vtab_cursor {
+    pub p_vtab: *mut sqlite3_vtab,
+}
+
+#[repr(C)]
+pub struct sqlite3_index_constraint {
+    pub i_column: c_int,
+    pub op: c_uchar,
+    pub usable: c_uchar,
+    pub i_term_offset: c_int,
+}
+
+#[repr(C)]
+pub struct sqlite3_index_orderby {
+    pub i_column: c_int,
+    pub desc: c_uchar,
+}
+
+#[repr(C)]
+pub struct sqlite3_index_constraint_usage {
+    pub argv_index: c_int,
+    pub omit: c_uchar,
+}
+
+/// `sqlite3_index_info` carried to xBestIndex. The output fields
+/// (`idx_num` onward) are mutated by the trampoline; the input
+/// fields are read.
+///
+/// Field order mirrors sqlite3.h's `struct sqlite3_index_info`,
+/// terminating at `col_used` (3.10.0+). We capture every field
+/// modern sqlite3 carries so xBestIndex can populate them without
+/// out-of-bounds writes; older sqlite3 versions that lack `idx_flags`
+/// / `col_used` are not v1 targets (host sqlite3 < 3.10.0 is rare
+/// in the wild).
+#[repr(C)]
+pub struct sqlite3_index_info {
+    // Inputs
+    pub n_constraint: c_int,
+    pub a_constraint: *mut sqlite3_index_constraint,
+    pub n_order_by: c_int,
+    pub a_order_by: *mut sqlite3_index_orderby,
+    // Outputs
+    pub a_constraint_usage: *mut sqlite3_index_constraint_usage,
+    pub idx_num: c_int,
+    pub idx_str: *mut c_char,
+    pub need_to_free_idx_str: c_int,
+    pub order_by_consumed: c_int,
+    pub estimated_cost: f64,
+    pub estimated_rows: sqlite3_int64,
+    pub idx_flags: c_int,
+    pub col_used: sqlite3_uint64,
 }
 
 #[repr(C)]
@@ -65,11 +217,6 @@ pub struct sqlite3_mutex {
 
 #[repr(C)]
 pub struct sqlite3_vfs {
-    _private: [u8; 0],
-}
-
-#[repr(C)]
-pub struct sqlite3_index_info {
     _private: [u8; 0],
 }
 
@@ -97,8 +244,31 @@ pub type sqlite_uint64 = u64;
 
 pub const SQLITE_OK: c_int = 0;
 pub const SQLITE_ERROR: c_int = 1;
+pub const SQLITE_INTERNAL: c_int = 2;
 pub const SQLITE_NOMEM: c_int = 7;
 pub const SQLITE_MISUSE: c_int = 21;
+
+// xBestIndex constraint-op codes. Mirror sqlite3.h's
+// `SQLITE_INDEX_CONSTRAINT_*` macros — the loader's vtab adapter
+// translates these into the wit-side `vtab::ConstraintOp` enum
+// before calling `dispatch_vtab_best_index`.
+pub const SQLITE_INDEX_CONSTRAINT_EQ: c_int = 2;
+pub const SQLITE_INDEX_CONSTRAINT_GT: c_int = 4;
+pub const SQLITE_INDEX_CONSTRAINT_LE: c_int = 8;
+pub const SQLITE_INDEX_CONSTRAINT_LT: c_int = 16;
+pub const SQLITE_INDEX_CONSTRAINT_GE: c_int = 32;
+pub const SQLITE_INDEX_CONSTRAINT_MATCH: c_int = 64;
+pub const SQLITE_INDEX_CONSTRAINT_LIKE: c_int = 65;
+pub const SQLITE_INDEX_CONSTRAINT_GLOB: c_int = 66;
+pub const SQLITE_INDEX_CONSTRAINT_REGEXP: c_int = 67;
+pub const SQLITE_INDEX_CONSTRAINT_NE: c_int = 68;
+pub const SQLITE_INDEX_CONSTRAINT_ISNOT: c_int = 69;
+pub const SQLITE_INDEX_CONSTRAINT_ISNOTNULL: c_int = 70;
+pub const SQLITE_INDEX_CONSTRAINT_ISNULL: c_int = 71;
+pub const SQLITE_INDEX_CONSTRAINT_IS: c_int = 72;
+pub const SQLITE_INDEX_CONSTRAINT_LIMIT: c_int = 73;
+pub const SQLITE_INDEX_CONSTRAINT_OFFSET: c_int = 74;
+pub const SQLITE_INDEX_CONSTRAINT_FUNCTION: c_int = 150;
 
 // Text encoding flags (subset).
 pub const SQLITE_UTF8: c_int = 1;
@@ -208,7 +378,11 @@ pub struct sqlite3_api_routines {
     pub create_module: *const c_void,
     pub data_count: *const c_void,
     pub db_handle: *const c_void,
-    pub declare_vtab: *const c_void,
+    // Vtab schema declaration. Called from xCreate / xConnect to
+    // tell sqlite the column shape of the virtual table. Returns 0
+    // on success; on error the loader copies the message into
+    // *pzErrMsg with sqlite3's allocator.
+    pub declare_vtab: Option<unsafe extern "C" fn(*mut sqlite3, *const c_char) -> c_int>,
     pub enable_shared_cache: *const c_void,
     pub errcode: *const c_void,
     pub errmsg: Option<unsafe extern "C" fn(*mut sqlite3) -> *const c_char>,
@@ -301,8 +475,19 @@ pub struct sqlite3_api_routines {
     >,
     pub prepare16_v2: *const c_void,
     pub clear_bindings: *const c_void,
-    // Added by 3.4.1
-    pub create_module_v2: *const c_void,
+    // Added by 3.4.1. The pApi-equivalent of
+    // sqlite3_create_module_v2: register a virtual table module on
+    // a connection. The loader's vtab path uses this to install the
+    // module struct it built for each VtabSpec in a manifest.
+    pub create_module_v2: Option<
+        unsafe extern "C" fn(
+            *mut sqlite3,
+            *const c_char,
+            *const sqlite3_module,
+            *mut c_void,
+            Option<unsafe extern "C" fn(*mut c_void)>,
+        ) -> c_int,
+    >,
     // Added by 3.5.0
     pub bind_zeroblob: *const c_void,
     pub blob_bytes: *const c_void,
