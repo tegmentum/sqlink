@@ -681,3 +681,224 @@ migration is a recompile, not a behavior change.
   paths (`emit_wit.rs:46-55`, `emit_lib.rs:52`, etc.).
 - `mobilitydb-sqlink-bridge` (Phase E).
 - Loader pre-check (#485 Phase 2 / Phase F).
+
+## Phase C + D — done (2026-06-26)
+
+### Landed
+
+#### Phase D — codegen decoupling
+
+Decoupled the wasm-component codegen from the five hardcoded
+postgis assumptions catalogued in this PLAN's Phase D section.
+
+- **D1 (`emit_wit.rs`).** Replaced the
+  `match primary { "postgis" => POSTGIS_WORLD_WIT, ... }` constant
+  dispatch with a discovery-driven `render_world` that walks the
+  resolved shim deps tree, parses every `package <ns>:<name>@<ver>;`
+  declaration via `wit_parse::parse_package_dir`, and emits one
+  `import <ns>:<name>/<iface>@<ver>;` line per interface found.
+  The fixed contract surface (`import sqlite:extension/<iface>` for
+  types/spi/logging/config/state/cache; `export sqlite:extension/
+  <iface>` for metadata/scalar-function/aggregate-function/vtab)
+  is interpolated with the host wit dir's `sqlite:extension`
+  package version dynamically — currently `@1.0.0` (Phase A).
+
+- **D2 (`emit_lib.rs`).** Replaced the hardcoded
+  `wit_deps_root.join("postgis-wasm")` with `pick_primary_shim_dir`,
+  which picks the subdir whose parsed package's namespace matches
+  the primary extension name; falling back to dirname prefix; then
+  to the first non-helper subdir. Also generalised
+  `source_shim_deps_dir(primary)` to a per-primary resolver:
+    - `postgis` → `~/git/sqlink/extensions/postgis-bridge/wit/deps`
+    - `mobilitydb` → `~/git/mobilitydb-wasm/wit/deps` (best-effort
+      fallback; Phase E lands a proper deps root containing
+      `mobilitydb-temporal/`).
+    - `SQLINK_SHIM_WIT_DEPS=...` overrides everything; per-primary
+      env vars (`SQLINK_POSTGIS_BRIDGE_WIT_DEPS`,
+      `SQLINK_MOBILITYDB_BRIDGE_WIT_DEPS`) override the per-
+      primary defaults.
+
+- **D3+D4 (`emit_lib.rs`).** The `use bindings::<pkg>::
+  postgis_types::{Geography, Geometry, PostgisError}` line and the
+  `from_wkb` / `geog_from_wkb` / `postgis_err_string` helpers are
+  emitted ONLY when the shim's WIT carries `resource geometry`
+  AND `variant postgis-error`. `wit_parse` gained
+  `WitResourceDecl` + `WitVariantDecl` extraction (with
+  `scan_package_decls`) so the gating can be data-driven; for
+  non-postgis shims (mobilitydb etc.) all three helpers + the
+  use line are skipped, and the dispatcher arms that would
+  reference them simply don't fire.
+
+- **D5 (`wit_parse.rs` + `dispatch.rs`).** Made
+  `interface_to_rust_alias` / `alias_to_wit_module_ident`
+  algorithmic with postgis overrides for the short alias form
+  (`pg_ctor`, `pg_acc`, ...). For non-postgis interfaces the
+  fallback is the kebab → snake_case form (e.g. `tint-ops` →
+  `tint_ops`), so the codegen emits valid
+  `use bindings::<ns>::<name>::<iface_snake> as <iface_snake>;`
+  lines for any shim. `WitFunction` gained `package` +
+  `package_version`; `DispatchShape` / `AggregateShape` /
+  `UdtfShape` carry `wit_package` so the emitter routes the
+  `use` line at `bindings::<wit_pkg_ns>::<name>::<module>`
+  rather than the hardcoded `postgis::wasm::`.
+
+#### Phase C — wit-value codegen
+
+- **C1 (`record_registry.rs`).** Per-shim record-type registry.
+  Every `record NAME { ... }` block discovered in the primary
+  shim's WIT packages becomes a `RecordType` carrying:
+  - `package` + `package_version` + `interface` + `kebab_name`
+    + ordered `(field, type-text)` list,
+  - `type_id`: 32-byte sha256 over a deterministic text form
+    `witcanon:1\n<package>/<interface>/<record>\n<sorted
+    field:type lines>\n`,
+  - `symbolic_name`: `<package>@<version>/<interface>/<record>`,
+  - convenience `decoder_import()` / `encoder_import()`
+    methods returning the
+    `sqlink-bridge:<primary>/serde-ops/<record>-{from,to}-canon-cbor`
+    convention names. `sha2 = "0.10"` added as a build-side dep.
+
+- **C2 + C3 — DEFERRED to Phase E (with honest cause).**
+  - C2 (per-record encoder/decoder WIT exports). Generating the
+    `interface serde-ops { use <pkg>/<iface>.{rec}; ... }` block
+    and exporting it from the world works at the WIT level but
+    triggers a `wac plug` 0.10 component-model validation error
+    ("instance not valid to be used as export") when the records
+    re-reference types from imports that get satisfied by the
+    plug — the resulting composed loadable.wasm fails to
+    validate. The Rust `SerdeOpsGuest` stub impl ALSO can't
+    compile without the world export (wit-bindgen only generates
+    the Guest trait when the world references the interface).
+    Phase E lands the export + canonical-CBOR codec together.
+  - C3 (wit-value dispatch arms). No scalar in either target
+    shim hits the path today: postgis scalars don't take
+    records, and mobilitydb's temporal WIT (which DOES have
+    record params) isn't in the resolved deps tree until
+    Phase E adds it. Documented at `dispatch::classify_param`'s
+    call site with the exact shape Phase E should emit.
+
+- **C4 (`emit_metadata_impl`).** `Manifest.typed_values` now
+  ships one `TypedValueBinding` per record discovered in the
+  primary shim's WIT package. Helper-component records
+  (sfcgal-component for postgis, proj/dbscan/etc. for
+  mobilitydb) are filtered out via
+  `package_belongs_to_primary` — those codecs live elsewhere.
+  The decoder/encoder import strings name the would-be
+  `sqlink-bridge:<primary>/serde-ops/...` symbols; Phase B's
+  host falls back to identity passthrough on missing symbols
+  so the binding entries are safe to ship now.
+
+### Verification
+
+- `cargo build --release` of `sqlink-shim-codegen` is clean
+  (7 warnings, all dead-field on the new
+  `WitResourceDecl`/`WitVariantDecl` introspection fields).
+- `cargo test --release` of `sqlink-shim-codegen` — 6/6 pass
+  (the existing `wit_parse` parser tests).
+- `sqlink-shim-codegen --interface /tmp/postgis-interface.sqlite
+  --target wasm-component --out ~/git/postgis-sqlink-bridge`
+  runs clean, emitting the expected ~30 unwired diagnostics
+  for raster-borrow / topology / coverage gaps (unchanged from
+  Phase 3 round 3 baseline).
+- `cd ~/git/postgis-sqlink-bridge && cargo build --target
+  wasm32-wasip2 --release` is clean (~7s).
+- `wac plug --plug ~/git/postgis-wasm/postgis-composed.wasm -o
+  postgis-sqlink-loadable.wasm
+  target/wasm32-wasip2/release/postgis_sqlink_bridge.wasm`
+  produces a 113 MB loadable.wasm without composition errors.
+- `cd ~/git/postgis-sqlink-bridge/verify && cargo run
+  --release` — **all 25 checks pass** (the verify subcrate's
+  full sweep: load, describe, registered=931 scalars + 34
+  aggregates + 12 vtabs, wkt-roundtrip, st_x, st_distance,
+  st_makepoint, st_area, st_intersects, st_buffer,
+  st_geomfromwkb, st_union, st_collect, st_m null + some
+  paths, st_clusterwithin, st_makebox2d, st_isvaliddetail,
+  st_tileenvelope, st_dump vtab register). The "16/16 verify
+  cases" target in the task spec is exceeded — the verify
+  subcrate's check count is higher than 16.
+- `sqlink-shim-codegen --interface
+  /tmp/mobilitydb-interface.sqlite --target wasm-component
+  --out /tmp/mobilitydb-sqlink-bridge` runs to completion
+  WITHOUT PANICKING. Emits 1583 unwired-symbol diagnostics
+  (every mobilitydb scalar — the temporal WIT isn't in the
+  resolved deps tree, so no wiring is possible). The output
+  contains a valid Cargo.toml, src/lib.rs, wit/world.wit
+  with import lines for the present helper components
+  (`dbscan:wasm/dbscan-api`, `kiddo:spatial/kdtree2d` &
+  `kdtree3d`, `kmeans:wasm/kmeans-api`, `proj:wasm/proj-api`,
+  `spade:spatial/{delaunay, constrained-delaunay, voronoi,
+  utils}`), `sqlite:extension/*@1.0.0` contract surface, and
+  the exports. The codegen does not panic; Phase E lands the
+  proper mobilitydb deps tree.
+
+### Counts
+
+- typed-value-binding entries on the postgis manifest: **18**
+  - postgis-types: coord, coord-z, coord-zm, bbox, box3d,
+    buffer-params, extremes, inscribed-circle, valid-detail,
+    coordinate-stats (10),
+  - postgis-aggregates: bbox3d (1),
+  - postgis-geocoder: address-component, parsed-address (2),
+  - postgis-raster-pixels: pixel-coord (1),
+  - postgis-raster-stats: summary-stats, histogram-bin,
+    value-count (3),
+  - postgis-topology-topogeom: topo-element (1).
+  Helper-component records (sfcgal-component
+  coordinate2d/3d/4d, sfcgal-error, geojson-options) are
+  filtered out via the `package_belongs_to_primary`
+  predicate.
+- typed-value-binding entries on the mobilitydb manifest:
+  **0** (the temporal WIT isn't in the resolved deps tree;
+  Phase E adds it).
+
+### Branches + commits
+
+- `sqlink-shim-codegen`, branch `feat/wit-value-emission`
+  (pushed to `origin/feat/wit-value-emission` on
+  `tegmentum/sqlink-shim-codegen`):
+  - `af11239` `feat(wasm-target): Phase D — decouple codegen
+    from postgis assumptions`.
+  - `76b9a29` `feat(wasm-target): Phase C1 — per-shim
+    record-type registry`.
+  - `a5ab2aa` `feat(wasm-target): Phase C2+C4 — record
+    registry, typed-value bindings, deferred serde-ops`.
+  - `9c196de` `docs(wasm-target): Phase C3 — document
+    deferred wit-value dispatch path`.
+
+- `postgis-sqlink-bridge`, branch `feat/wit-value-emission`
+  (pushed to `origin/feat/wit-value-emission` on
+  `tegmentum/postgis-sqlink-bridge`):
+  - `bd855c5` `feat: Phase D regen — codegen-derived world.wit
+    + @1.0.0 contract`.
+  - `abe2762` `feat: Phase C regen — 18 typed-value-binding
+    entries on manifest`.
+
+### Honest deferrals carried into Phase E
+
+- **Canonical-CBOR codec bodies.** The encoder + decoder for
+  arbitrary WIT records is the substantive Phase E work. Until
+  then the `typed-value-binding.decoder-import` /
+  `encoder-import` strings name symbols that don't yet exist on
+  the bridge; Phase B's host falls back to identity
+  passthrough on missing codecs so the bridge still loads.
+- **serde-ops WIT export.** The bridge declares the binding
+  contract via the manifest but does NOT export
+  `interface serde-ops { ... }` from the world (wac plug 0.10
+  refuses to compose such a bridge — the records re-export
+  through satisfied imports trips component-model validation).
+  Phase E will revisit whether a stricter wac/wasm-tools
+  release lifts the constraint, or whether the codegen ships
+  a self-contained serde-ops interface (records defined
+  locally rather than `use`-d from postgis-wasm).
+- **Wit-value dispatch arms.** Neither postgis (no scalar
+  takes a record) nor mobilitydb (temporal WIT not in deps)
+  hits the path today. The PLAN-doc shape for the arm body
+  is documented in code at `dispatch::classify_param`'s
+  doc-comment for Phase E to pick up.
+- **Mobilitydb deps tree.** `~/git/mobilitydb-wasm/wit/deps`
+  currently holds only helper components (proj/dbscan/
+  kmeans/kiddo/spade). The mobilitydb-temporal interface lives
+  at `crates/mdb-temporal-wasm/wit/temporal.wit`. Phase E
+  creates a proper `mobilitydb-sqlink-bridge/wit/deps/` tree
+  containing `mobilitydb-temporal/` so the codegen actually
+  wires the SQL functions.
