@@ -272,6 +272,148 @@ These get tracked as upstream feature requests OR as
 that EMITS the list of upstream-missing names would be useful for
 filing those feature requests.
 
+## W1 — done (2026-06-27)
+
+Status: closed (#541) with a smaller net wins than the plan
+originally projected, and with the prefix-stripping mechanism
+reframed as a non-issue. Branches landed:
+
+- `tegmentum/sqlink-shim-codegen@feat/mobilitydb-name-match`
+- `tegmentum/mobilitydb-sqlink-bridge@feat/mobilitydb-name-match`
+
+### Before / after
+
+| Metric | Before | After | Delta |
+|---|---:|---:|---:|
+| mobilitydb "no WIT function matches" | 897 | 808 | -89 (-67 parser, -22 suffix-strip) |
+| mobilitydb "no WIT aggregate" | 54 | 54 | 0 (gated on W4 aggregate-index broadening) |
+| mobilitydb no-WIT total | **951** | **862** | **-89** |
+
+The codegen now wires 1486 scalars (up from 1399), 61 aggregates,
+45 vtabs, and 59 typed-value-bindings. All three Phase E + #522
+acceptance gates pass (`tfloat_min_value` round-trip,
+`tfloat_time_span` option<record> round-trip, `tfloat_at_period`
+None-side dispatch). `wasm-tools validate` is clean on the
+6.2 MB composed `mobilitydb-sqlink-loadable.wasm`.
+
+### Root-cause reframing: the plan's premise was off
+
+The plan's central conjecture was that mobilitydb uses bare WIT
+function names inside type-tagged interfaces (e.g.
+`tfloat-ops::min-value`) and the SQL surface adds a `tfloat_`
+prefix that the codegen had to strip. That's wrong. The upstream
+`mobilitydb-wasm/crates/mdb-temporal-wasm/wit/temporal.wit`
+keeps the prefix on every declared function — `tfloat-ops`
+exports `tfloat-min-value`, `tfloat-time-span`, etc. SQL name
+`tfloat_min_value` therefore maps to WIT kebab `tfloat-min-value`
+directly via `kebab_to_snake`; no stripping needed.
+
+The actual gap was a parser bug in `sqlink-shim-codegen`'s
+`parse_func_line`: the matcher hardcoded a single-space `:` to
+`func(` separator and silently dropped any line right-aligned with
+extra whitespace (e.g. `tfloat-abs:    func(...)`).
+mobilitydb-temporal.wit uses this style heavily for column-aligned
+readability, masking ~70 functions across `tfloat-math-ops`,
+`bitemporal-residue-ops`, and other interfaces. Fixing the
+parser to accept any whitespace run recovered 67 wins. A regression
+test (`parses_multispace_between_colon_and_func_keyword`) locks
+the new behavior.
+
+### Suffix-strip fallback (the +22)
+
+Two duplicate SQL surface variants of the same upstream function:
+- `<name>_wit` — the wit-value-encoded binary variant (7 hits).
+- `<name>_scalar` — the primitive-binary variant (15 hits).
+
+Example: `tint_min_value_wit` and `tint_min_value_scalar` both
+collapse to `tint-min-value` in `tint-ops`. Extended `find_wit_fn`
+with a last-resort suffix-strip pass (`SCALAR_NAME_SUFFIXES =
+["_wit", "_scalar"]`) gated to fire only after exact + no-hyphen +
+`st_`-strip all miss, so genuine `*_wit` / `*_scalar` WIT functions
+still take precedence.
+
+Mirrored the pattern for aggregates with `AGGREGATE_NAME_SUFFIXES =
+["_agg", "_aggregate"]` against the aggregate index. The mobilitydb
+aggregate residue (54) doesn't budge today because the
+aggregate-index in `build_aggregate_registry` hardcodes
+`postgis-aggregates` as the canonical interface — mobilitydb's
+`temporal-aggregate-ops` doesn't surface, and `classify_aggregate_shape`
+additionally requires `list<borrow<geometry>>` as the first param,
+which mobilitydb's aggregates never satisfy (they take
+`list<tfloat-sequence>` etc.). The suffix-strip code path is in
+place so W4's index-broadening + classify-widening will deliver
+those wins without further codegen edits.
+
+### Honest residue
+
+After the W1 patches, 862 names remain unwired. Cross-referenced
+against the vendored `temporal.wit`:
+
+- **0 names exist in WIT but stay unwired.** Every snake-cased
+  SQL name that has a matching WIT kebab is now wired.
+- **808 scalar names + 54 aggregate names are genuinely missing
+  from upstream** `mobilitydb-temporal` (verified by `comm` between
+  the unwired-names set and the WIT kebab-name set after snake
+  conversion).
+
+This is the same substrate-blocker the plan flagged as "STOP and
+report" territory: the prefix-stripping mechanism the plan
+imagined isn't applicable, and most of the residue is genuinely
+upstream-missing surface (not a heuristic gap).
+
+### Per-prefix breakdown of the residue (informational)
+
+|Prefix|Count (unwired)|
+|---|---:|
+|`tfloat_*`|201|
+|`tgeompoint_*`|158|
+|`tint_*`|140|
+|`tgeompoint3d_*`|40|
+|`ttext_*`|34|
+|`tgeometry_*`|30|
+|`tbool_*`|28|
+|`tgeogpoint_*`|19|
+|`tcbuffer_*`|19|
+|`tnpoint_*`|18|
+|`bitemporal_*`|16|
+|`tpose_*`|15|
+|`temporal_*`|15|
+|Other (periodset_*, tfloatrange_*, nsegment_*, …)|75|
+
+All counts are post-W1. Each of these would need an upstream
+`mobilitydb-wasm` PR adding the missing function before the codegen
+could wire it.
+
+### Deferrals (honest list)
+
+- **Aggregate index broadening** (folds into W4): generalise
+  `build_aggregate_registry` beyond `postgis-aggregates`-only;
+  widen `classify_aggregate_shape` past `list<borrow<geometry>>`.
+  Currently 54 mobilitydb aggregates noisily report "no WIT
+  aggregate" instead of routing through the type-tagged WIT
+  functions that DO exist (`tfloat-temporal-min`, etc.). Suffix
+  strip is wired in advance — index broadening is the prerequisite.
+- **Postgis regen** stays unchanged by W1's parser + suffix-strip
+  fix (verified by running survey on both interface DBs and
+  diff'ing the resulting `--`-prefixed diagnostic lines — byte
+  identical). The postgis-sqlink-bridge crate has unrelated
+  drift from the un-regenerated #523 short-circuit pass; that's a
+  separate housekeeping commit, not a W1 deliverable.
+- **`_agg` suffix on mobilitydb aggregates** doesn't currently
+  recover wins (gated on aggregate-index broadening above); kept
+  in code for W4.
+
+### Files touched
+
+- `sqlink-shim-codegen/src/wasm_target/wit_parse.rs` — parser
+  whitespace fix + regression test.
+- `sqlink-shim-codegen/src/wasm_target/dispatch.rs` —
+  `SCALAR_NAME_SUFFIXES` + `AGGREGATE_NAME_SUFFIXES` constants +
+  suffix-strip fallback in `find_wit_fn` and
+  `build_aggregate_registry`.
+- `mobilitydb-sqlink-bridge/src/lib.rs` + `wit/world.wit` —
+  regen.
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
