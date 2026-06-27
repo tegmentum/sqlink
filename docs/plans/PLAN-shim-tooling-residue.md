@@ -414,6 +414,86 @@ could wire it.
 - `mobilitydb-sqlink-bridge/src/lib.rs` + `wit/world.wit` —
   regen.
 
+## W3.3 — done (2026-06-27)
+
+#543's third item: pixel-type enum marshaling. WIT `enum` types now
+classify through the dispatcher; the codegen emits per-arm
+SqlValue::Integer(N) <-> wit-bindgen-generated `EnumType::Variant`
+conversions keyed on case declaration order.
+
+### Approach
+
+Routes WIT enums through the existing `WitType::Unsupported(name)`
+classify path (parser already produced a bare kebab name; no new
+`WitType` variant needed). At classify time both `classify_param`
+and `classify_return` consult an `enums: &[EnumWithPackage]`
+registry BEFORE the record-registry check; matches route to the
+new `ParamShape::Enum` / `RetShape::Enum` shapes.
+
+A `collect_package_enums(wit_deps_dir)` helper parallels
+`collect_package_aliases` and pairs each `WitEnumDecl` with its
+owning package's ns_name so the emit_lib path can register the
+enum's declaring-interface alias (e.g. `pg_rast_types` for
+`pixel-type`) in `used_aliases` even when the calling scalar
+lives in a different module.
+
+emit_arm_body produces a numeric-discriminant match (Pascal-cased
+to mirror wit-bindgen's kebab->Pascal): on the param side, a
+match on `arg_i64` with one arm per case + an "other => Err"
+default; on the return side, a match on the returned variant
+producing the declaration-order integer.
+
+### Results
+
+- Postgis raster scalars previously left unwired due to pixel-type
+  args/returns: 5 distinct WIT functions covering 7 SQL arms.
+  - `st-add-band` (param pixel-t) -> `st_addband`, `st_add_band`.
+  - `st-band-pixel-type` (return pixel-type) -> `st_bandpixeltype`,
+    `st_band_pixel_type`.
+  - `st-map-algebra-expr` (param pixel-t) -> `st_mapalgebra`,
+    `st_map_algebra`.
+  - `st-reclass` (param pixel-t) -> `st_reclass`.
+- 81 generated lines reference `pg_rast_types::PixelType::*` across
+  4 param-decode arms (9 variants each * 2 SQL aliases * 2 fns =
+  36) + 2 return-encode arms (9 variants * 2 SQL aliases = 18) +
+  remaining wired by alias paths.
+- Postgis-sqlink-bridge `cargo build --target wasm32-wasip2
+  --release` clean. `wac plug` against postgis-composed.wasm
+  succeeds; `wasm-tools validate` passes the 113 MB
+  postgis-sqlink-loadable.wasm.
+- Verify subcrate gains Case 17: empty 4x4 raster -> add band with
+  pixel-type=8 (float64) -> read back via st_bandpixeltype, assert
+  discriminant round-trips to 8. `cargo check` clean; runtime link
+  blocked by a pre-existing system libsqlite3 missing
+  `sqlite3session_*` (unrelated to W3.3).
+
+### Files touched
+
+- `sqlink-shim-codegen/src/wasm_target/dispatch.rs` — new
+  `ParamShape::Enum` / `RetShape::Enum` variants,
+  `EnumWithPackage` wrapper, `collect_package_enums`,
+  `kebab_to_pascal`, threaded `enums` through `classify_shape`,
+  `classify_param`, `classify_return`, `classify_aggregate_shape`,
+  `classify_udtf_shape`, `build_full`,
+  `build_aggregate_registry`, `build_udtf_registry`. emit_arm_body
+  emits both param and return arms.
+- `sqlink-shim-codegen/src/wasm_target/emit_lib.rs` — register
+  enum-owning interface aliases in `used_aliases` when an Enum
+  shape appears in any scalar's params or return.
+- `postgis-sqlink-bridge/src/lib.rs` — regen.
+- `postgis-sqlink-bridge/verify/src/main.rs` — Case 17 pixel-type
+  round-trip.
+
+### Deferred (out of scope, tracked separately)
+
+- W3.1 ResourceMethod (#547) — parser still drops resource
+  methods.
+- W3.2 ListRasterBorrow (#548) — aggregate machinery still
+  Geometry-coupled.
+- W3.4 list-of-record returns (#550).
+- W3.5 tuple-split (#551).
+- W3.6 topology blob passthrough (#552).
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
