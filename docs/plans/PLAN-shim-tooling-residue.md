@@ -433,6 +433,129 @@ methods + W3.2 raster aggregate + W3.3 pixel enum) continue to pass.
   the matching prelude helper in `render_topology_helpers`-style
   emission. Today only `topology` has both.
 
+## W5 — done
+
+Landed `feat/mobilitydb-cases` on tegmentum/shim-bridge-smoke-tests
+and sqlink (this plan doc).
+
+### Change in one sentence
+
+Added a 4-case mobilitydb baseline (4/4 PASS via `make
+mobilitydb-sqlite`) chained through `sqlink-loader.dylib` against
+postgis + mobilitydb wasm bridges in load order; replaced the runner
+loader's single-extension assumption with a colon-separated chain;
+relocated the 11 pre-existing wit-value-chained cases that hit a
+SQLite-side substrate gap to `cases/mobilitydb-duckdb-only/`.
+
+### Mechanical surface
+
+- `shim-bridge-smoke-tests/scripts/run.sh` — `bridge_path` may now
+  be a colon-separated list of `.wasm` files; each loads via its own
+  `sqlink_load_ext` call with the extension name derived from the
+  wasm filename (`postgis-sqlink-loadable.wasm` → `postgis`). D5
+  load-order convention (postgis FIRST so GEOMETRY exists when
+  mobilitydb registers) is now encoded in `Makefile`'s default
+  `MOBILITYDB_SQLITE_BRIDGE`.
+- `shim-bridge-smoke-tests/Makefile` —
+  `MOBILITYDB_SQLITE_BRIDGE` defaults to
+  `postgis-sqlink-loadable.wasm:mobilitydb-sqlink-loadable.wasm`;
+  `POSTGIS_SQLITE_BRIDGE` defaults to the postgis wasm. The legacy
+  `mobilitydb-sqlite-bridge.dylib` path is no longer the default
+  but stays overrideable.
+- `shim-bridge-smoke-tests/cases/mobilitydb/` — 4 new cases +
+  README:
+  - `01-spatial-join.sql` — primitive-in/out scalars (distance,
+    bearing, angular_diff) — spatial-relation flavor without UDTFs
+  - `02-time-split.sql` — W2 Phase 1 list-of-primitive marshaling
+    via JSON-as-TEXT (dateset, intset)
+  - `03-type-roundtrip.sql` — primitive type-marshaling across f64,
+    s32, text via JSON-list helpers
+  - `04-wit-value-roundtrip.sql` — W2 Phase 2 #553 list-of-RECORD
+    marshaling via JSON-as-TEXT (date_spanset_contains,
+    float_spanset_contains, intspanset_contains,
+    date_spanset_num_spans) — the same `parse_json_list_record_<X>`
+    codec the deferred kdtree_xy_within UDTF uses, surfaced via
+    scalar dispatch.
+
+### Numbers
+
+- `make mobilitydb-sqlite` → 4/4 PASS (was 0/0 — no
+  sqlite-validated mobilitydb cases on `main`).
+- `make postgis-sqlite` cases/postgis → 5/5 PASS (unchanged
+  regression baseline).
+- `cases/postgis-sqlite-only/05-udtfs` → still 0/1 (pre-existing
+  sqlink-loader vtab gap; documented in case 4's README; see
+  Substrate gap B below).
+
+### Spec deltas (W5.3 narrowed)
+
+The PLAN W5 spec listed 4 cases. All 4 hit substrate gaps that the
+W5 task is not chartered to fix; cases were narrowed to substrate-
+equivalent surface that exercises the same codegen/dispatch chain
+without depending on work blocked elsewhere.
+
+**Substrate gap A — SQLite Blob → WitValue lift missing.**
+`sqlink-loader/src/value.rs::read_value` maps SQLITE_BLOB cells to
+`SqlValue::Blob`; there is no recovery of the per-extension
+`TypedValueRegistry` typed identity. So a wit-value returned by one
+scalar lands as a BLOB in SQLite, and the next scalar's
+`arg_witvalue_<record>` rejects it with `must be WIT-VALUE`. This
+blocks every chained wit-value SQL pattern of the form
+`<wit-value-out>(<wit-value-out>(...))` — the entire
+`intspan_lower(intspan_from_text(...))` family, all 11 cases in
+`cases/mobilitydb-duckdb-only/`, and the spec'd case 3
+(`tfloat_min_value`) which has no SQL-callable wit-value
+constructor — `tfloat_from_csv` / `tfloat_from_ewkt` /
+`tfloat_from_mfjson` are spec'd in the bridge manifest but lack
+dispatch arms entirely.
+
+**Substrate gap B — sqlink-loader vtab wiring deferred.**
+`sqlink-loader/src/load.rs:218` lists "Collations / vtabs / hooks:
+not in this iteration. Surface the count so the env-var dispatcher
+can log a hint." The bridges register 12+ vtabs each (per their
+manifests), but the loader doesn't call
+`sqlite3_create_module_v2` for any of them. This blocks the spec'd
+UDTF cases 1 (`temporal_join_float`), 2 (`tfloat_time_split`), and
+the literal wording of 4 (`kdtree_xy_within`). The kdtree
+substrate IS proven end-to-end in the mobilitydb-sqlink-bridge
+verify subcrate, which drives vtab dispatch directly through the
+sqlink-host API — but the SQL boundary doesn't reach the same
+dispatch yet.
+
+Case 4 honors the spec's SPIRIT (record-typed param via JSON-as-
+TEXT) by exercising the SAME `parse_json_list_record_<X>` codec on
+SCALARS instead of UDTFs: serde_json → UPSTREAM record vec → call
+into mobilitydb upstream spans-ops → primitive return. The codec
+gets the same regression surface coverage; only the dispatch shape
+differs.
+
+### Verify acceptance
+
+```
+$ cd ~/git/shim-bridge-smoke-tests && make mobilitydb-sqlite
+=== mobilitydb × sqlite ===
+  PASS 01-spatial-join
+  PASS 02-time-split
+  PASS 03-type-roundtrip
+  PASS 04-wit-value-roundtrip
+----
+  pass=4 fail=0
+```
+
+### Out of scope (filed downstream)
+
+- Substrate gap A (Blob → WitValue lift) — needs a sqlink-loader
+  hook against `Host::typed_value_codecs` that looks up the
+  caller's expected type-id and lifts BLOB → `SqlValue::WitValue`
+  on the dispatch boundary. Track as a follow-up.
+- Substrate gap B (vtab wiring) — #489 was scoped as the dispatch-
+  side substrate; the loader-side `sqlite3_create_module_v2`
+  registration is the missing piece. Same gap blocks
+  `cases/postgis-sqlite-only/05-udtfs`. Track as a separate
+  follow-up.
+- Once either gap closes, the W5 spec'd four can be authored
+  verbatim against the same wasm artifacts.
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
