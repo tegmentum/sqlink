@@ -1616,3 +1616,180 @@ work — each row's WKB is wrapped in a 1-element
   become addressable from SQL.
 - **Tuple / list-of-X row fields.** Same treatment as nested
   records; folded into the same follow-up.
+
+## #490 — Raster + topology shims + name-match index (done 2026-06-27)
+
+### What landed
+
+Reframed from "add upstream shims" to "extend codegen to consume the
+shims that postgis-wasm already exposes." Survey of the postgis-wasm
+WIT confirmed 11 raster interfaces + 5 topology interfaces are
+already declared upstream; the gap was on the codegen side:
+
+1. **borrow&lt;raster&gt; / borrow&lt;topology&gt; param shapes wired.**
+   `WitType::Raster { borrowed }` + `WitType::Topology { borrowed }`
+   variants land in `wit_parse.rs`. The borrow parser recognises
+   `borrow&lt;raster&gt;` and `borrow&lt;topology&gt;`; bare-name
+   parsing recognises `raster` and `topology`. New ParamShapes
+   (`Raster`, `Topology`) and RetShapes (`RasterBlob`,
+   `OptionRasterBlob`, `FirstRasterBlob`; `TopologyBlob`,
+   `OptionTopologyBlob`, `FirstTopologyBlob`) emit `from_raster_binary`
+   / `from_topology_bytes` decoders and `.as_binary()` / `.to_bytes()`
+   encoders in the dispatch arm bodies. Symmetric to the existing
+   `Geom` / `GeomBlob` path.
+
+2. **Helper prelude composition.** `emit_lib.rs` gained per-resource
+   gates (`shim_has_raster_resource`, `shim_has_topology_resource`)
+   that conditionally emit `use ...::{Raster, RasterError}` /
+   `use ...::{Topology, TopologyError}` lines plus
+   `render_raster_helpers` / `render_topology_helpers` bodies
+   (`from_raster_binary`, `raster_err_string`, `from_topology_bytes`,
+   `topology_err_string`). The mobilitydb bridge is unaffected
+   because the gates fire only when the WIT declares the resource +
+   the matching error variant.
+
+3. **Interface alias table extended.** `postgis-raster-types` →
+   `pg_rast_types`, `postgis-topology-types` → `pg_topo_types`. These
+   carry the resource definitions plus the free `from-binary` /
+   `from-bytes` decoders the helpers compose.
+
+4. **WIT-function name matching broadened (sub-stream B).**
+   Surveys showed 62 scalars whose SQL name (`st_addface`,
+   `st_astopojson`, `st_aspng`) didn't snake-match the WIT name
+   (`add-face` in `postgis-topology-edit`, `as-topojson` in
+   `postgis-topology-output`, `as-png` in `postgis-raster-output`).
+   `index_wit_fns_nohyphen` builds a secondary
+   `kebab.replace('-', "") → [&WitFunction]` index. `find_wit_fn`
+   tries each candidate against (1) the snake index, (2) the
+   no-hyphen index after stripping underscores, (3) the same two
+   with leading `st_` removed. `pick_tiebreak` prefers
+   `postgis-topology-*` interfaces when the candidate looks
+   topology-ish (contains `topo`/`face`/`edge`/`node`) and
+   `postgis-raster-*` when it looks raster-ish
+   (`rast`/`pixel`/`band`/`png`/`tiff`/`array`). Both `build_full`
+   (scalars) and `build_udtf_registry` (UDTFs) use the extended
+   lookup; aggregates keep their bespoke primary+fallback indices.
+
+5. **parse_text now skips resource-method declarations.** Inside a
+   `resource NAME { ... }` block, the line-oriented parser used to
+   capture `width: func() -&gt; u32;` as a free `WitFunction`. Those
+   aren't callable as `module::width(...)` — they're called via the
+   resource handle — and they silently collided with same-name free
+   functions in the snake index (raster's `srid` would clobber the
+   free `st-srid` once prefix-stripping was in play). Resource-depth
+   tracking drops them at parse time.
+
+### Numbers
+
+| Metric                                     | Before #490 | After #490 |
+|--------------------------------------------|------------:|-----------:|
+| Distinct upstream `pg_*::name` calls       |         289 |        354 |
+| Scalar match arms (incl SQL aliases)       |         677 |        884 |
+| Unwired postgis symbols (regen log)        |        ~174 |         58 |
+| Raster surface (pg_rast_* across 11 ifaces)|           0 |        122 |
+| Topology surface (pg_topo_* across 4 ifaces)|          0 |         39 |
+
+Per-interface wiring (after):
+
+```
+pg_rast_acc:    38    pg_topo_edit:   18    pg_rast_pred:   16
+pg_topo_out:    12    pg_rast_px:     10    pg_topo_query:   9
+pg_rast_proc:    9    pg_rast_out:     4    pg_rast_stats:   3
+pg_rast_ctor:    2    pg_rast_vec:     1
+```
+
+The bridge wasm builds clean against wasm32-wasip2 and validates
+with wasm-tools (1.0 MB binary). Mobilitydb regen showed +3
+distinct upstream calls (479 → 482) — the name-match broadening
+helped a handful of mobilitydb scalars too — and no regression.
+
+### Sample of newly-wired functions per category
+
+- **Raster accessor** (A): `st_width`, `st_height`, `st_srid`,
+  `st_upperleftx`, `st_upperlefty`, `st_scalex`, `st_scaley`,
+  `st_skewx`, `st_skewy`, `st_numbands`.
+- **Raster output** (A): `st_aspng`, `st_astiff`.
+- **Raster predicate** (A): `st_rasterintersects`,
+  `st_rastercontains`, `st_rasterwithin`.
+- **Raster processing** (A): `st_slope`, `st_aspect`,
+  `st_hillshade`, `st_roughness`, `st_tri`, `st_tpi`,
+  `st_resize`, `st_rescale`.
+- **Topology edit** (B name-match): `st_addface`,
+  `st_addisoedge`, `st_addisonode`, `st_modedgesplit`,
+  `st_newedgessplit`, `st_modedgeheal`.
+- **Topology output** (B name-match): `st_astopojson`,
+  `st_getnodegeometry`, `st_getedgegeometry`, `st_getfacegeometry`.
+- **Topology query** (B name-match): `st_getnodebypoint`,
+  `st_getedgebypoint`, `st_validatetopology`.
+
+### Verified
+
+- Codegen `cargo build --release` clean (warnings only, all pre-existing
+  dead-code on `interface` fields of decl structs).
+- Bridge `cargo build --target wasm32-wasip2 --release` clean.
+- `wasm-tools validate
+  target/wasm32-wasip2/release/postgis_sqlink_bridge.wasm` passes.
+- Mobilitydb regen + build clean; no regression on the existing
+  482 distinct upstream calls.
+- Regen log of remaining 58 unwired postgis scalars captured for
+  follow-up triage (see Deferred below).
+
+### Deferred
+
+- **Topology resource-method accessors** (~7 scalars):
+  `st_topologyname`, `st_topologysrid`, `st_topologyprecision`,
+  `st_topologynodecount`, `st_topologyedgecount`,
+  `st_topologyfacecount`. Each maps to a resource method on
+  `topology` (e.g. `topo.name()`); the current dispatch shapes
+  only emit free-function calls. A new
+  `ResourceMethod { resource_arg_idx }` shape that emits
+  `let t = from_topology_bytes(...)?; SqlValue::Text(t.name())`
+  would unlock them in ~2 hours of codegen work. Same shape unlocks
+  `st_topogeomelementcount`, `st_topogeomtopotype`,
+  `st_topogeomgetelements`, `st_topogeomgeometry`.
+- **Raster aggregate** (1 scalar): `st_rast_union_aggregate`
+  takes `list<borrow<raster>>`. The aggregate path's
+  primary+fallback indices look only for `list<borrow<geometry>>`
+  first params; extending them is mechanical (a new
+  `ListRasterBorrow` analogue of `ListGeomBorrow`) but out of
+  scope here.
+- **`pixel-type` enum** (4 scalars): `st_addband`, `st_mapalgebra`,
+  `st_mapalgebra2`, `st_reclass` take a `pixel-type` enum
+  parameter; `st_bandpixeltype` returns one. The dispatcher
+  alphabet has no `WitType::Enum`. Adding enum recognition + a
+  Text|Int rendering for the SQL side is a focused follow-up.
+- **List-of-record returns** (4 scalars):
+  `st_histogram` → `list<histogram-bin>`,
+  `st_pixelofvalue` → `list<pixel-coord>`,
+  `st_valuecount` → `list<value-count>`,
+  `st_normalizeaddress` → `list<address-component>`.
+  The Phase F `FirstWitValueRecord` path handles `list<record>`
+  but requires the record to be in the per-shim registry; these
+  ones aren't being picked up. Registry-coverage fix.
+- **Tuple-split returns** (3 scalars): `st_worldtorastercoord`,
+  `st_worldtorastercoordcol`, `st_worldtorastercoordrow` return
+  `tuple<s32, s32>` and the SQL side wants the col / row /
+  composite separately. Needs three small dispatch arms (split
+  via override).
+- **Topology blob passthrough** (2 scalars):
+  `st_topologyfrombytes` / `st_topologytobytes` should resolve
+  to identity-with-validation. Pick up via an override entry.
+- **Genuine "no upstream" residue** (≈25 scalars): the directional
+  bbox operators (`st_bboxabove`, `st_bboxbelow`,
+  `st_bboxleftof`, `st_bboxrightof`, `st_bboxoverright`), the
+  `*_2` variant signatures (`st_addface2`, `st_modedgeheal2`, …),
+  the geography↔geometry text encoders (`st_asgeogtext`,
+  `st_geogfromewkt`, `st_geogtogeom`), and a handful of raster
+  pixel-array accessors (`st_arraycols`, `st_arrayrows`,
+  `st_arrayvalue`) have no matching upstream WIT today. They
+  belong on an upstream postgis-wasm roadmap, not on the
+  codegen.
+
+### Reaches
+
+The original task framed the gap as "~75 missing functions"; the
+survey showed 174 unwired total. After #490 the residue is 58 of
+which roughly half are genuine upstream gaps. The codegen extensions
+hit the target dispatcher coverage (288 → 354 distinct scalars,
++23% on top of the pre-#490 base, or ~88% of the 402-scalar postgis
+interface DB ceiling) without disturbing the mobilitydb surface.
