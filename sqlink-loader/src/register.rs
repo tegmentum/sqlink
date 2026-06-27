@@ -24,7 +24,7 @@ use crate::api::{
     sqlite3, sqlite3_context, sqlite3_value, ApiRoutines, SQLITE_DETERMINISTIC, SQLITE_OK,
     SQLITE_UTF8,
 };
-use crate::value::{read_value, write_error, write_result};
+use crate::value::{read_value_lifted, write_error, write_result};
 
 // ─── Scalar trampoline ───────────────────────────────────────────
 
@@ -60,7 +60,7 @@ unsafe extern "C" fn scalar_xfunc(
     let mut args: Vec<SqlValue> = Vec::with_capacity(argc as usize);
     for i in 0..argc {
         let v = *argv.add(i as usize);
-        args.push(read_value(&scalar_ctx.api, v));
+        args.push(read_value_lifted(&scalar_ctx.api, v, &scalar_ctx.host));
     }
 
     // block_on  the host's dispatch_scalar is async. We can't use
@@ -222,7 +222,7 @@ unsafe extern "C" fn agg_xstep(
     let mut args: Vec<SqlValue> = Vec::with_capacity(argc as usize);
     for i in 0..argc {
         let v = *argv.add(i as usize);
-        args.push(read_value(&agg.api, v));
+        args.push(read_value_lifted(&agg.api, v, &agg.host));
     }
     let result = agg.rt.block_on(agg.host.dispatch_aggregate_step(
         &agg.ext_name,
@@ -369,7 +369,7 @@ unsafe extern "C" fn agg_xinverse(
     let mut args: Vec<SqlValue> = Vec::with_capacity(argc as usize);
     for i in 0..argc {
         let v = *argv.add(i as usize);
-        args.push(read_value(&agg.api, v));
+        args.push(read_value_lifted(&agg.api, v, &agg.host));
     }
     let result = agg.rt.block_on(agg.host.dispatch_aggregate_inverse(
         &agg.ext_name,
