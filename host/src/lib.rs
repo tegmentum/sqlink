@@ -225,7 +225,6 @@ pub mod loaded_bundle_cli {
             "sqlite:extension/policy":        super::loaded::sqlite::extension::policy,
             "sqlite:extension/http":          super::loaded::sqlite::extension::http,
             "sqlite:extension/build":         super::loaded::sqlite::extension::build,
-            "sqlite:extension/bundles":       super::loaded::sqlite::extension::bundles,
             "sqlite:extension/cli-stdout":    super::loaded_dotcmd_aware::sqlite::extension::cli_stdout,
             "sqlite:extension/cli-stderr":    super::loaded_dotcmd_aware::sqlite::extension::cli_stderr,
             "sqlite:extension/cli-state":     super::loaded_dotcmd_aware::sqlite::extension::cli_state,
@@ -4068,9 +4067,7 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
     ) -> std::result::Result<u64, loaded::sqlite::extension::types::SqliteError> {
         // MEDIUM-severity defensive fix: cap + sanitize all
         // extension-supplied string args before they reach the
-        // cas-cache. Untrusted bytes-in: a 100MB name would alloc;
-        // embedded NUL or control chars confuse sqlite bind_text
-        // and downstream display.
+        // cas-cache.
         if let Some(n) = name.as_deref() {
             validate_bundle_str(n, "name", BUNDLE_NAME_MAX).map_err(bundle_arg_err)?;
         }
@@ -4081,35 +4078,106 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
             validate_bundle_str(&m.content_hash, "content_hash", BUNDLE_SET_HASH_MAX)
                 .map_err(bundle_arg_err)?;
         }
+
+        // Path δ delegate: open-coded version of
+        // `bundles_exec::bundle_save`. Same idempotency rules:
+        //   1. If `name` resolves to an existing bundle with the
+        //      same set_hash, bump touch + return its id.
+        //   2. If `name` resolves to a different set_hash, fail
+        //      with the alias-conflict shape.
+        //   3. If no name-match, look up by set_hash; on hit,
+        //      attach name as alias if provided, bump touch,
+        //      return its id.
+        //   4. Otherwise INSERT the bundle row + each member row.
         let cache = bundles_open_cache(self)?;
-        let members: Vec<sqlite_cas_cache::BundleMember> = members
-            .into_iter()
-            .map(|m| sqlite_cas_cache::BundleMember {
-                extension_name: m.extension_name,
-                content_hash: m.content_hash,
-            })
-            .collect();
-        let result = cache.with_bundles_conn(|conn| {
-            sqlite_cas_cache::bundles_exec::bundle_save(
-                conn,
-                name.as_deref(),
-                &set_hash,
-                &members,
-            )
-        });
-        match result {
-            Ok(id) => Ok(id),
-            Err(e) => {
-                if let Some(conflict) = e.downcast_ref::<sqlite_cas_cache::BundleAliasConflict>() {
+
+        // Step 1: name lookup.
+        if let Some(n) = name.as_deref() {
+            let existing_q = cas_execute_inner(
+                &cache,
+                sqlite_cas_cache::bundles_exec::FIND_BY_NAME_SQL,
+                vec![loaded::sqlite::extension::types::SqlValue::Text(n.to_string())],
+            )?;
+            if let Some(row) = existing_q.rows.into_iter().next() {
+                let mut existing = read_summary_row(&row, "save")?;
+                if existing.set_hash != set_hash {
                     return Err(loaded::sqlite::extension::types::SqliteError {
                         code: libsqlite3_sys::SQLITE_CONSTRAINT,
                         extended_code: libsqlite3_sys::SQLITE_CONSTRAINT,
-                        message: format!("bundles.save: alias conflict: {conflict}"),
+                        message: format!(
+                            "bundles.save: alias conflict: name {n:?} already bound to \
+                             set_hash={old} (new attempt: set_hash={new})",
+                            old = existing.set_hash,
+                            new = set_hash
+                        ),
                     });
                 }
-                Err(bundles_err("bundles.save", e))
+                // Touch + return.
+                let _ = cas_execute_inner(
+                    &cache,
+                    sqlite_cas_cache::bundles_exec::TOUCH_SQL,
+                    vec![
+                        loaded::sqlite::extension::types::SqlValue::Integer(existing.id as i64),
+                        loaded::sqlite::extension::types::SqlValue::Integer(unix_now_secs()),
+                    ],
+                );
+                existing.last_used_at = unix_now_secs() as u64;
+                return Ok(existing.id);
             }
         }
+
+        // Step 2: set_hash lookup.
+        let hash_q = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::FIND_FIRST_BY_HASH_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Text(set_hash.clone())],
+        )?;
+        if let Some(row) = hash_q.rows.into_iter().next() {
+            let existing = read_summary_row(&row, "save")?;
+            if let Some(n) = name.as_deref() {
+                save_add_alias_inner(&cache, existing.id, n)?;
+            }
+            let _ = cas_execute_inner(
+                &cache,
+                sqlite_cas_cache::bundles_exec::TOUCH_SQL,
+                vec![
+                    loaded::sqlite::extension::types::SqlValue::Integer(existing.id as i64),
+                    loaded::sqlite::extension::types::SqlValue::Integer(unix_now_secs()),
+                ],
+            );
+            return Ok(existing.id);
+        }
+
+        // Step 3: fresh insert + members.
+        let now = unix_now_secs();
+        let insert_q = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::BUNDLE_INSERT_SQL,
+            vec![
+                match name.as_deref() {
+                    Some(n) => loaded::sqlite::extension::types::SqlValue::Text(n.to_string()),
+                    None => loaded::sqlite::extension::types::SqlValue::Null,
+                },
+                loaded::sqlite::extension::types::SqlValue::Text(set_hash),
+                loaded::sqlite::extension::types::SqlValue::Integer(now),
+            ],
+        )?;
+        let id = insert_q.last_insert_rowid as u64;
+        if let Some(n) = name.as_deref() {
+            save_add_alias_inner(&cache, id, n)?;
+        }
+        for m in members {
+            cas_execute_inner(
+                &cache,
+                sqlite_cas_cache::bundles_exec::MEMBER_INSERT_SQL,
+                vec![
+                    loaded::sqlite::extension::types::SqlValue::Integer(id as i64),
+                    loaded::sqlite::extension::types::SqlValue::Text(m.extension_name),
+                    loaded::sqlite::extension::types::SqlValue::Text(m.content_hash),
+                ],
+            )?;
+        }
+        Ok(id)
     }
 
     async fn bundle_find_by_name(
@@ -4119,13 +4187,24 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         Option<loaded::sqlite::extension::bundles::BundleSummary>,
         loaded::sqlite::extension::types::SqliteError,
     > {
+        // Path δ delegate: FIND_BY_NAME_SQL is a LEFT JOIN
+        // through __cas_bundle_alias so the lookup resolves
+        // both direct names and alias names. 0-or-1 row of the
+        // standard 5-col summary shape.
         let cache = bundles_open_cache(self)?;
-        cache
-            .with_bundles_conn(|conn| {
-                sqlite_cas_cache::bundles_exec::bundle_find_by_name(conn, &name)
-            })
-            .map(|opt| opt.map(bundles_summary_to_wit))
-            .map_err(|e| bundles_err("bundles.find-by-name", e))
+        let result = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::FIND_BY_NAME_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Text(name)],
+        )?;
+        match result.rows.into_iter().next() {
+            Some(row) => {
+                let mut s = read_summary_row(&row, "find-by-name")?;
+                fill_summary_counts(&cache, &mut s)?;
+                Ok(Some(s))
+            }
+            None => Ok(None),
+        }
     }
 
     async fn bundle_find_by_hash_prefix(
@@ -4135,13 +4214,42 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         Vec<loaded::sqlite::extension::bundles::BundleSummary>,
         loaded::sqlite::extension::types::SqliteError,
     > {
+        // Path δ delegate. Defensive prefix validation mirrors
+        // the v1.5 round 2 free function: reject empty + non-hex
+        // input so the LIKE pattern can't get exploited.
+        if prefix.is_empty() {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_ERROR,
+                extended_code: libsqlite3_sys::SQLITE_ERROR,
+                message: "bundles.find-by-hash-prefix: empty prefix \
+                          (use bundle-list for all)"
+                    .into(),
+            });
+        }
+        if let Some(bad) = prefix.chars().find(|c| !c.is_ascii_hexdigit()) {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_ERROR,
+                extended_code: libsqlite3_sys::SQLITE_ERROR,
+                message: format!(
+                    "bundles.find-by-hash-prefix: non-hex char {bad:?} in prefix \
+                     (LIKE wildcards / other metacharacters are not allowed)"
+                ),
+            });
+        }
+        let pattern = format!("{prefix}%");
         let cache = bundles_open_cache(self)?;
-        cache
-            .with_bundles_conn(|conn| {
-                sqlite_cas_cache::bundles_exec::bundle_find_by_hash_prefix(conn, &prefix)
-            })
-            .map(|v| v.into_iter().map(bundles_summary_to_wit).collect())
-            .map_err(|e| bundles_err("bundles.find-by-hash-prefix", e))
+        let result = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::FIND_BY_HASH_PREFIX_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Text(pattern)],
+        )?;
+        let mut out = Vec::with_capacity(result.rows.len());
+        for row in result.rows {
+            let mut s = read_summary_row(&row, "find-by-hash-prefix")?;
+            fill_summary_counts(&cache, &mut s)?;
+            out.push(s);
+        }
+        Ok(out)
     }
 
     async fn bundle_list(
@@ -4150,11 +4258,21 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         Vec<loaded::sqlite::extension::bundles::BundleSummary>,
         loaded::sqlite::extension::types::SqliteError,
     > {
+        // Path δ delegate: LIST_SQL → N rows of the standard
+        // 5-col summary; populate counts per-row.
         let cache = bundles_open_cache(self)?;
-        cache
-            .with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_list(conn))
-            .map(|v| v.into_iter().map(bundles_summary_to_wit).collect())
-            .map_err(|e| bundles_err("bundles.list", e))
+        let result = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::LIST_SQL,
+            vec![],
+        )?;
+        let mut out = Vec::with_capacity(result.rows.len());
+        for row in result.rows {
+            let mut s = read_summary_row(&row, "list")?;
+            fill_summary_counts(&cache, &mut s)?;
+            out.push(s);
+        }
+        Ok(out)
     }
 
     async fn bundle_show(
@@ -4164,36 +4282,58 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         loaded::sqlite::extension::bundles::BundleDetail,
         loaded::sqlite::extension::types::SqliteError,
     > {
+        // Path δ delegate: SHOW_SUMMARY_SQL (0-or-1 row) +
+        // MEMBERS_SQL + BINARIES_SQL. NOTFOUND when summary
+        // missing.
         let cache = bundles_open_cache(self)?;
-        match cache.with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_show(conn, id))
-        {
-            Ok(Some(d)) => Ok(loaded::sqlite::extension::bundles::BundleDetail {
-                summary: bundles_summary_to_wit(d.summary),
-                members: d
-                    .members
-                    .into_iter()
-                    .map(|m| loaded::sqlite::extension::bundles::BundleMember {
-                        extension_name: m.extension_name,
-                        content_hash: m.content_hash,
-                    })
-                    .collect(),
-                binaries: d
-                    .binaries
-                    .into_iter()
-                    .map(|b| loaded::sqlite::extension::bundles::BundleBinary {
-                        target_triple: b.target_triple,
-                        binary_path: b.binary_path,
-                        built_at: b.built_at,
-                    })
-                    .collect(),
-            }),
-            Ok(None) => Err(loaded::sqlite::extension::types::SqliteError {
+        let summary_q = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::SHOW_SUMMARY_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
+        )?;
+        let Some(summary_row) = summary_q.rows.into_iter().next() else {
+            return Err(loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_NOTFOUND,
                 extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
                 message: format!("bundles.show: id {id} not found"),
-            }),
-            Err(e) => Err(bundles_err("bundles.show", e)),
+            });
+        };
+        let mut summary = read_summary_row(&summary_row, "show")?;
+
+        let members_q = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::MEMBERS_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
+        )?;
+        let mut members = Vec::with_capacity(members_q.rows.len());
+        for row in members_q.rows {
+            members.push(loaded::sqlite::extension::bundles::BundleMember {
+                extension_name: row_text(&row, 0, "show", "extension_name")?,
+                content_hash: row_text(&row, 1, "show", "content_hash")?,
+            });
         }
+
+        let binaries_q = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::BINARIES_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
+        )?;
+        let mut binaries = Vec::with_capacity(binaries_q.rows.len());
+        for row in binaries_q.rows {
+            binaries.push(loaded::sqlite::extension::bundles::BundleBinary {
+                target_triple: row_text(&row, 0, "show", "target_triple")?,
+                binary_path: row_text(&row, 1, "show", "binary_path")?,
+                built_at: row_int(&row, 2, "show", "built_at")? as u64,
+            });
+        }
+
+        summary.member_count = members.len() as u32;
+        summary.binary_count = binaries.len() as u32;
+        Ok(loaded::sqlite::extension::bundles::BundleDetail {
+            summary,
+            members,
+            binaries,
+        })
     }
 
     async fn bundle_delete(
@@ -4224,16 +4364,47 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         &mut self,
         policy: loaded::sqlite::extension::bundles::GcPolicy,
     ) -> std::result::Result<Vec<u64>, loaded::sqlite::extension::types::SqliteError> {
+        // Path δ delegate: pick victims via GC_AGE_SQL +
+        // GC_KEEP_SQL (one or both, depending on policy fields),
+        // dedupe, DELETE each, return the list of ids dropped.
         let cache = bundles_open_cache(self)?;
-        let rust_policy = sqlite_cas_cache::BundleGcPolicy {
-            keep_last: policy.keep_last,
-            older_than_secs: policy.older_than_secs,
-        };
-        cache
-            .with_bundles_conn(|conn| {
-                sqlite_cas_cache::bundles_exec::bundle_gc(conn, rust_policy)
-            })
-            .map_err(|e| bundles_err("bundles.gc", e))
+        let now = unix_now_secs();
+        let mut victims: Vec<u64> = Vec::new();
+
+        if let Some(older) = policy.older_than_secs {
+            let cutoff = (now as u64).saturating_sub(older);
+            let q = cas_execute_inner(
+                &cache,
+                sqlite_cas_cache::bundles_exec::GC_AGE_SQL,
+                vec![loaded::sqlite::extension::types::SqlValue::Integer(cutoff as i64)],
+            )?;
+            for row in q.rows {
+                victims.push(row_int(&row, 0, "gc", "id")? as u64);
+            }
+        }
+
+        if let Some(keep) = policy.keep_last {
+            let q = cas_execute_inner(
+                &cache,
+                sqlite_cas_cache::bundles_exec::GC_KEEP_SQL,
+                vec![loaded::sqlite::extension::types::SqlValue::Integer(keep as i64)],
+            )?;
+            for row in q.rows {
+                let id = row_int(&row, 0, "gc", "id")? as u64;
+                if !victims.contains(&id) {
+                    victims.push(id);
+                }
+            }
+        }
+
+        for id in &victims {
+            cas_execute_inner(
+                &cache,
+                sqlite_cas_cache::bundles_exec::DELETE_SQL,
+                vec![loaded::sqlite::extension::types::SqlValue::Integer(*id as i64)],
+            )?;
+        }
+        Ok(victims)
     }
 
     async fn bundle_record_binary(
@@ -4245,17 +4416,24 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         // v1.1: copy the cargo target output into a per-bundle
         // managed dir (`~/.cache/sqlink/builds/<set_hash>/<basename>`)
         // before recording so different bundles for the same target
-        // don't trample each other (cargo writes every wasm32-wasip2
-        // build to the same target/<triple>/release/<bin> path).
+        // don't trample each other.
         let cache = bundles_open_cache(self)?;
-        let detail = cache
-            .with_bundles_conn(|conn| sqlite_cas_cache::bundles_exec::bundle_show(conn, id))
-            .map_err(|e| bundles_err("bundles.record-binary (lookup set_hash)", e))?
-            .ok_or_else(|| loaded::sqlite::extension::types::SqliteError {
+
+        // Lookup set_hash via SHOW_SUMMARY_SQL (path δ delegate).
+        let summary_q = cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::SHOW_SUMMARY_SQL,
+            vec![loaded::sqlite::extension::types::SqlValue::Integer(id as i64)],
+        )?;
+        let Some(summary_row) = summary_q.rows.into_iter().next() else {
+            return Err(loaded::sqlite::extension::types::SqliteError {
                 code: libsqlite3_sys::SQLITE_NOTFOUND,
                 extended_code: libsqlite3_sys::SQLITE_NOTFOUND,
                 message: format!("bundles.record-binary: bundle {id} not found"),
-            })?;
+            });
+        };
+        let set_hash = row_text(&summary_row, 2, "record-binary", "set_hash")?;
+
         let src = std::path::PathBuf::from(&binary_path);
         let basename =
             src.file_name()
@@ -4267,7 +4445,7 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
                     ),
                 })?;
         let dest_dir =
-            sqlite_cas_cache::SqliteCasStore::default_builds_dir(&detail.summary.set_hash);
+            sqlite_cas_cache::SqliteCasStore::default_builds_dir(&set_hash);
         let dest = dest_dir.join(basename);
         std::fs::create_dir_all(&dest_dir).map_err(|e| {
             loaded::sqlite::extension::types::SqliteError {
@@ -4289,16 +4467,19 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
             ),
         })?;
         let dest_str = dest.to_string_lossy().into_owned();
-        cache
-            .with_bundles_conn(|conn| {
-                sqlite_cas_cache::bundles_exec::bundle_record_binary(
-                    conn,
-                    id,
-                    &target_triple,
-                    &dest_str,
-                )
-            })
-            .map_err(|e| bundles_err("bundles.record-binary", e))
+
+        // UPSERT via RECORD_BINARY_SQL (path δ delegate).
+        cas_execute_inner(
+            &cache,
+            sqlite_cas_cache::bundles_exec::RECORD_BINARY_SQL,
+            vec![
+                loaded::sqlite::extension::types::SqlValue::Integer(id as i64),
+                loaded::sqlite::extension::types::SqlValue::Text(target_triple),
+                loaded::sqlite::extension::types::SqlValue::Text(dest_str),
+                loaded::sqlite::extension::types::SqlValue::Integer(unix_now_secs()),
+            ],
+        )?;
+        Ok(())
     }
 
     async fn bundle_touch(&mut self, id: u64) {
@@ -4329,12 +4510,11 @@ impl loaded::sqlite::extension::bundles::Host for LoadedState {
         bundle_id: u64,
         alias: String,
     ) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+        // Path δ delegate via `save_add_alias_inner` (the same
+        // helper `bundle_save` uses for its step-1 / step-2
+        // alias attach).
         let cache = bundles_open_cache(self)?;
-        cache
-            .with_bundles_conn(|conn| {
-                sqlite_cas_cache::bundles_exec::bundle_add_alias(conn, bundle_id, &alias)
-            })
-            .map_err(|e| bundles_err("bundles.add-alias", e))
+        save_add_alias_inner(&cache, bundle_id, &alias)
     }
 
     async fn bundle_remove_alias(
@@ -4440,28 +4620,184 @@ fn bundles_open_cache(
     Ok(cache.clone())
 }
 
-/// Wrap an anyhow error into the WIT sqlite-error shape.
-fn bundles_err(method: &str, e: anyhow::Error) -> loaded::sqlite::extension::types::SqliteError {
-    loaded::sqlite::extension::types::SqliteError {
-        code: libsqlite3_sys::SQLITE_ERROR,
-        extended_code: libsqlite3_sys::SQLITE_ERROR,
-        message: format!("{method}: {e}"),
+/// SQLite primary-result-code shortcuts. Kept inline to dodge a
+/// cross-module import in the bundles dispatcher.
+const SQLITE_ROW_NOT_TEXT: i32 = libsqlite3_sys::SQLITE_ERROR;
+const SQLITE_ROW_NOT_INT: i32 = libsqlite3_sys::SQLITE_ERROR;
+const SQLITE_ROW_MISSING_COL: i32 = libsqlite3_sys::SQLITE_ERROR;
+
+/// Pull an INTEGER column out of a `cas_execute_inner` row at
+/// position `idx`. Used by every bundles-CRUD parser below.
+/// Errors carry a precise `bundles.{method}` prefix so the user
+/// can trace which method's row decode tripped.
+fn row_int(
+    row: &[loaded::sqlite::extension::types::SqlValue],
+    idx: usize,
+    method: &str,
+    col: &str,
+) -> std::result::Result<i64, loaded::sqlite::extension::types::SqliteError> {
+    match row.get(idx) {
+        Some(loaded::sqlite::extension::types::SqlValue::Integer(n)) => Ok(*n),
+        Some(other) => Err(loaded::sqlite::extension::types::SqliteError {
+            code: SQLITE_ROW_NOT_INT,
+            extended_code: SQLITE_ROW_NOT_INT,
+            message: format!("bundles.{method}: {col} not integer: {other:?}"),
+        }),
+        None => Err(loaded::sqlite::extension::types::SqliteError {
+            code: SQLITE_ROW_MISSING_COL,
+            extended_code: SQLITE_ROW_MISSING_COL,
+            message: format!("bundles.{method}: {col} column missing"),
+        }),
     }
 }
 
-/// Convert the cas-cache `BundleSummary` into the WIT-side record.
-fn bundles_summary_to_wit(
-    s: sqlite_cas_cache::BundleSummary,
-) -> loaded::sqlite::extension::bundles::BundleSummary {
-    loaded::sqlite::extension::bundles::BundleSummary {
-        id: s.id,
-        name: s.name,
-        set_hash: s.set_hash,
-        created_at: s.created_at,
-        last_used_at: s.last_used_at,
-        member_count: s.member_count,
-        binary_count: s.binary_count,
+fn row_text(
+    row: &[loaded::sqlite::extension::types::SqlValue],
+    idx: usize,
+    method: &str,
+    col: &str,
+) -> std::result::Result<String, loaded::sqlite::extension::types::SqliteError> {
+    match row.get(idx) {
+        Some(loaded::sqlite::extension::types::SqlValue::Text(s)) => Ok(s.clone()),
+        Some(other) => Err(loaded::sqlite::extension::types::SqliteError {
+            code: SQLITE_ROW_NOT_TEXT,
+            extended_code: SQLITE_ROW_NOT_TEXT,
+            message: format!("bundles.{method}: {col} not text: {other:?}"),
+        }),
+        None => Err(loaded::sqlite::extension::types::SqliteError {
+            code: SQLITE_ROW_MISSING_COL,
+            extended_code: SQLITE_ROW_MISSING_COL,
+            message: format!("bundles.{method}: {col} column missing"),
+        }),
     }
+}
+
+fn row_text_opt(
+    row: &[loaded::sqlite::extension::types::SqlValue],
+    idx: usize,
+    method: &str,
+    col: &str,
+) -> std::result::Result<Option<String>, loaded::sqlite::extension::types::SqliteError> {
+    match row.get(idx) {
+        Some(loaded::sqlite::extension::types::SqlValue::Text(s)) => Ok(Some(s.clone())),
+        Some(loaded::sqlite::extension::types::SqlValue::Null) => Ok(None),
+        Some(other) => Err(loaded::sqlite::extension::types::SqliteError {
+            code: SQLITE_ROW_NOT_TEXT,
+            extended_code: SQLITE_ROW_NOT_TEXT,
+            message: format!("bundles.{method}: {col} not text-or-null: {other:?}"),
+        }),
+        None => Err(loaded::sqlite::extension::types::SqliteError {
+            code: SQLITE_ROW_MISSING_COL,
+            extended_code: SQLITE_ROW_MISSING_COL,
+            message: format!("bundles.{method}: {col} column missing"),
+        }),
+    }
+}
+
+/// Read a 5-column `__cas_bundle` row into a partially-populated
+/// `BundleSummary` (member_count + binary_count zero-filled — fill
+/// them with `fill_summary_counts` if the caller needs them).
+fn read_summary_row(
+    row: &[loaded::sqlite::extension::types::SqlValue],
+    method: &str,
+) -> std::result::Result<
+    loaded::sqlite::extension::bundles::BundleSummary,
+    loaded::sqlite::extension::types::SqliteError,
+> {
+    Ok(loaded::sqlite::extension::bundles::BundleSummary {
+        id: row_int(row, 0, method, "id")? as u64,
+        name: row_text_opt(row, 1, method, "name")?,
+        set_hash: row_text(row, 2, method, "set_hash")?,
+        created_at: row_int(row, 3, method, "created_at")? as u64,
+        last_used_at: row_int(row, 4, method, "last_used_at")? as u64,
+        member_count: 0,
+        binary_count: 0,
+    })
+}
+
+fn fill_summary_counts(
+    cache: &crate::cache::Cache,
+    s: &mut loaded::sqlite::extension::bundles::BundleSummary,
+) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+    let m = cas_execute_inner(
+        cache,
+        sqlite_cas_cache::bundles_exec::COUNT_MEMBERS_SQL,
+        vec![loaded::sqlite::extension::types::SqlValue::Integer(s.id as i64)],
+    )?;
+    s.member_count = m
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| match v {
+            loaded::sqlite::extension::types::SqlValue::Integer(n) => Some(*n as u32),
+            _ => None,
+        })
+        .unwrap_or(0);
+    let b = cas_execute_inner(
+        cache,
+        sqlite_cas_cache::bundles_exec::COUNT_BINARIES_SQL,
+        vec![loaded::sqlite::extension::types::SqlValue::Integer(s.id as i64)],
+    )?;
+    s.binary_count = b
+        .rows
+        .first()
+        .and_then(|r| r.first())
+        .and_then(|v| match v {
+            loaded::sqlite::extension::types::SqlValue::Integer(n) => Some(*n as u32),
+            _ => None,
+        })
+        .unwrap_or(0);
+    Ok(())
+}
+
+fn unix_now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// Bind an alias to a bundle, idempotent if `alias` already
+/// points at `bundle_id`; alias-conflict if it points elsewhere.
+/// Used by both `bundle_save` (during step-1 / step-2 attach) and
+/// `bundle_add_alias` itself.
+fn save_add_alias_inner(
+    cache: &crate::cache::Cache,
+    bundle_id: u64,
+    alias: &str,
+) -> std::result::Result<(), loaded::sqlite::extension::types::SqliteError> {
+    let find_q = cas_execute_inner(
+        cache,
+        sqlite_cas_cache::bundles_exec::ALIAS_FIND_SQL,
+        vec![loaded::sqlite::extension::types::SqlValue::Text(alias.to_string())],
+    )?;
+    let existing = find_q.rows.into_iter().next().and_then(|r| match r.first() {
+        Some(loaded::sqlite::extension::types::SqlValue::Integer(n)) => Some(*n as u64),
+        _ => None,
+    });
+    match existing {
+        Some(id) if id == bundle_id => return Ok(()),
+        Some(other) => {
+            return Err(loaded::sqlite::extension::types::SqliteError {
+                code: libsqlite3_sys::SQLITE_CONSTRAINT,
+                extended_code: libsqlite3_sys::SQLITE_CONSTRAINT,
+                message: format!(
+                    "bundles.add-alias: alias {alias:?} already bound to bundle id={other}"
+                ),
+            });
+        }
+        None => {}
+    }
+    cas_execute_inner(
+        cache,
+        sqlite_cas_cache::bundles_exec::ALIAS_INSERT_SQL,
+        vec![
+            loaded::sqlite::extension::types::SqlValue::Text(alias.to_string()),
+            loaded::sqlite::extension::types::SqlValue::Integer(bundle_id as i64),
+            loaded::sqlite::extension::types::SqlValue::Integer(unix_now_secs()),
+        ],
+    )?;
+    Ok(())
 }
 
 /// Single shared CAS-execute path. Both
