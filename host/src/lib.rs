@@ -13565,4 +13565,92 @@ mod contract_guard_tests {
         assert!(err.contains("UNVERSIONED"), "flags legacy: {err}");
         assert!(err.contains("sqlite:extension"), "names the package: {err}");
     }
+
+    // ─── F5: end-to-end conformance via Host::load_extension_from_bytes ──
+    //
+    // The unit cases above exercise the datalink-contract helpers in
+    // isolation. F5 closes the loop by feeding deliberately-skewed
+    // synthetic components through the SAME entry point production
+    // dispatch uses (`Host::load_extension_from_bytes`). Proves no
+    // dispatch path slips past the guard, no cryptic wasmtime trap
+    // leaks through, and the rejection message is the
+    // PLAN-wit-contract-versioning Phase 2 wording — across every
+    // skew shape we expect to see (@0.1.0 legacy, @2.0.0 future).
+    //
+    // Synthesis uses `wat::parse_str`; an empty-instance import is
+    // enough for the contract guard's import-name walk to pick up
+    // the package version.
+
+    use super::Host;
+
+    fn block_on<F: std::future::Future>(f: F) -> F::Output {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("rt")
+            .block_on(f)
+    }
+
+    fn synth_component_targeting(ver: &str) -> Vec<u8> {
+        let wat = format!(
+            r#"(component
+              (import "sqlite:extension/types@{ver}" (instance))
+            )"#
+        );
+        wat::parse_str(&wat).expect("parse synth component WAT")
+    }
+
+    fn default_policy() -> sqlite_extension_policy::Policy {
+        // Match the loader's default-grant set so the contract guard
+        // (which fires BEFORE policy.check_manifest) is the only thing
+        // gating these tests.
+        use sqlite_extension_policy::{Capability, Policy};
+        Policy::deny_all().with_grants(vec![
+            Capability::Random,
+            Capability::Hashing,
+            Capability::Encoding,
+            Capability::Text,
+            Capability::Cache,
+            Capability::State,
+            Capability::Spi,
+            Capability::Prepared,
+            Capability::Schema,
+            Capability::Transaction,
+        ])
+    }
+
+    #[test]
+    fn host_rejects_v0_1_synthetic_via_load_extension_from_bytes() {
+        let bytes = synth_component_targeting("0.1.0");
+        let host = Host::new().expect("host new");
+        let err =
+            block_on(host.load_extension_from_bytes(bytes, "v0_1_synth", default_policy()))
+                .expect_err("v0.1 synthetic must be rejected by v1 host through load_extension_from_bytes");
+        let msg = err.to_string();
+        assert!(msg.contains("v0_1_synth"), "names the extension: {msg}");
+        assert!(
+            msg.contains("sqlite:extension contract 0.x"),
+            "states the targeted major: {msg}"
+        );
+        assert!(msg.contains("contract 1.x"), "states the host major: {msg}");
+        assert!(msg.contains("rebuild"), "actionable: {msg}");
+    }
+
+    #[test]
+    fn host_rejects_v2_synthetic_via_load_extension_from_bytes() {
+        // Forward-compat case: a hypothetical @2.x extension shouldn't
+        // load into a @1.x host. Same code path, same message shape.
+        let bytes = synth_component_targeting("2.0.0");
+        let host = Host::new().expect("host new");
+        let err =
+            block_on(host.load_extension_from_bytes(bytes, "v2_synth", default_policy()))
+                .expect_err("v2.x synthetic must be rejected by v1 host through load_extension_from_bytes");
+        let msg = err.to_string();
+        assert!(msg.contains("v2_synth"), "names the extension: {msg}");
+        assert!(
+            msg.contains("sqlite:extension contract 2.x"),
+            "states the targeted major: {msg}"
+        );
+        assert!(msg.contains("contract 1.x"), "states the host major: {msg}");
+    }
 }
