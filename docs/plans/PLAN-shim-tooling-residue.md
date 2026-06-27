@@ -1759,6 +1759,343 @@ Two takeaways for future plan increments:
 - Future codegen task: "preserve full upstream instance shape"
   flag for vendored deps (W4c-like).
 
+## W4a composition fix — done (#557fix) 2026-06-27
+
+Landed `feat/w4a-composition-fix` on sqlink-shim-codegen,
+mobilitydb-sqlink-bridge, and sqlink (this plan doc). The W4a
+regen's composed loadable now has ZERO `mobilitydb:temporal/*` or
+`postgis:wasm/*` imports — matches the postgis-sqlink-loadable
+shape — and `temporal_join_int` dispatches end-to-end through the
+verify subcrate.
+
+### Change in one sentence
+
+Codegen emits a force-link block keeping every upstream function +
+type alive past LLVM DCE so the bridge's component-import shape
+equals upstream's export shape, and a `wac compose` script wires
+the stub-plug's transitive imports from upstream — closing the
+substrate gap `wac plug` 0.10 can't close on its own.
+
+### Two-piece fix
+
+1. **Codegen force-link block** (`sqlink-shim-codegen` ←
+   `feat/w4a-composition-fix`, commit `11c697b`).
+   `emit_lib.rs::render_force_link_upstream_imports` walks every
+   primary-shim WIT package, emits two `#[used]` static slices of
+   a Sync `*const ()` newtype:
+
+   - `__FORCE_LINK_UPSTREAM_FNS` — one element per free function
+     in every primary-shim interface, initialised by casting the
+     fn item to `*const ()`. Resource methods skipped (fully-
+     qualified-method syntax doesn't coerce cleanly).
+   - `__FORCE_LINK_UPSTREAM_TYPES` — one element per record /
+     variant / enum / flags type, initialised by
+     `core::ptr::null::<T>() as *const ()`. The null-pointer cast
+     forces T to be "used" in the type system without allocating
+     a runtime value.
+
+   wit-component's `process_live_type_imports` walks the actual
+   core wasm imports and prunes unused functions/types from the
+   bridge's component-import shape. The `#[used]` static keeps
+   the static itself past LLVM DCE; static initialisation forces
+   each address-of to be retained; each retained wrapper keeps its
+   wit-bindgen-generated `extern "C"` lowering; wit-component
+   encodes the full upstream shape into the bridge's imports.
+
+   For mobilitydb: 849 function references + 46 type references.
+   ttext-ops, tbool-ops, tcbuffer-ops, tgeogpoint-ops,
+   tgeompoint3d-ops, tpose-ops, types — all now match upstream's
+   export shape byte-for-byte.
+
+2. **`wac compose` script** (`mobilitydb-sqlink-bridge` ←
+   `feat/w4a-composition-fix`, commit `45202b9`).
+   The wac plug failure is NOT primarily structural-equivalence:
+   it's that wac plug 0.10 only does plug→socket wiring, not
+   plug→plug. The stub-plug imports 7 transitive interfaces
+   (`types`, `tbool-ops`, `ttext-ops`, `tcbuffer-ops`,
+   `tgeogpoint-ops`, `tgeompoint3d-ops`, `tpose-ops`) from
+   upstream mdb-temporal-wasm; wac plug processes plugs
+   independently against the socket, so the stub-plug's imports
+   never get connected to mdb-temporal's exports.
+
+   The new `compose.wac` script instantiates upstream + stub-plug
+   + bridge + postgis-composed, explicitly wiring stub-plug's
+   imports from mdb-temporal's exports:
+
+   ```
+   let mdb = new mobilitydb:temporal { ... };
+   let stub = new sqlink-bridge:mobilitydb-w4a-stub {
+       "mobilitydb:temporal/types@0.1.0": mdb[...],
+       "mobilitydb:temporal/tbool-ops@0.1.0": mdb[...],
+       ...
+   };
+   let pg = new postgis:composed { ... };
+   let bridge = new sqlink-bridge:mobilitydb {
+       ...mdb interfaces (49)...,
+       ...stub interfaces (8 W4a)...,
+   };
+   export bridge...;
+   ```
+
+   `wac compose -d pkg=path -d ... -o mobilitydb-sqlink-loadable.wasm`
+   produces a clean composed loadable.
+
+### Diagnosis (what wit-bindgen + wit-component emit vs what wac plug needs)
+
+Initial hypothesis (from the W4a fork plan): wac plug rejected the
+composition because the bridge's import shape was TRIMMED (only
+the functions the bridge actually calls) and upstream's export
+shape is FULL. The structural-equivalence check would fail and wac
+plug couldn't bridge subset-to-superset.
+
+This hypothesis was partly right and partly wrong:
+
+- Right: wit-component DOES prune the bridge's component-import
+  shape to the canonical-ABI lowerings the bridge actually calls.
+  `generate_all` keeps the wit-bindgen-emitted Rust bindings, but
+  LLVM DCEs the wrappers if no code calls them, and wit-component
+  encodes only the kept lowerings. The fix (`render_force_link_*`)
+  is the right shape for this.
+
+- Wrong: wac plug 0.10's subtype check IS name-based, not
+  positional. plug ⊇ socket passes cleanly regardless of order or
+  trimming. Even with the trimmed bridge, wac plug logged "using
+  export X for plug" for all 49 upstream→bridge matches AND
+  called `set_instantiation_argument` successfully. The reason the
+  composed loadable still had 15 imports was different:
+
+  - 8 of those 15 were the W4a-added interfaces (`typed-join-ops`,
+    `nearest-join-ops`, `time-split-ops`, `value-split-ops`,
+    `to-rows-ops`, `temporal-index-ops`, `spatial-index-ops`,
+    `sequence-json-ops`) that have NO upstream provider — wac
+    plug correctly couldn't satisfy them. The stub-plug exists
+    to fill this gap.
+
+  - 7 of those 15 were the TRANSITIVE interfaces the stub-plug
+    imports (`types`, `tbool-ops`, `ttext-ops`, `tcbuffer-ops`,
+    `tgeogpoint-ops`, `tgeompoint3d-ops`, `tpose-ops`). The
+    socket's args for these WERE satisfied via plug aliases from
+    upstream — but the STUB-PLUG's imports for the same
+    interfaces remained open, because wac plug doesn't do
+    plug→plug wiring. Those open stub-plug imports became
+    top-level imports of the composition.
+
+  Force-link alone wouldn't have closed the 7. The wac-compose
+  script is what closes them.
+
+### Why we kept the force-link
+
+Even though force-link wasn't the root cause of the wac plug
+failure, it's a worthwhile defensive measure:
+
+- It produces a deterministic import shape that matches upstream
+  byte-for-byte. wac plug 0.10's subtype check tolerates subset
+  shapes, but future versions or stricter tools might not.
+- It makes the bridge wasm self-documenting: every upstream
+  function and type the bridge could reach is structurally
+  declared as an import, not pruned to "what we happened to use
+  this round."
+- The cost is small: a single dead-code block plus minor LTO
+  retention overhead. The 1.6 MB bridge wasm doesn't grow
+  measurably.
+
+### Verify acceptance
+
+Verify subcrate runs end-to-end against the composed loadable:
+
+  - Phase E: `tfloat_min_value` round-trip → `Real(0.5)`.
+  - Phase F (#522): `tfloat_time_span` `option<record>` →
+    decoded `time-period { start: 1e9, end: 3e9, ... }`.
+  - W4b (#558): `kdtree_xy_within` `list<record>` UDTF →
+    2 rows `[10, 20]`.
+  - W2 Phase 2 mop-up (#555): `datespanset_make`
+    `list<tuple<s32,s32>>` round-trip → `[(1, 10), (20, 30)]`.
+  - **#557fix W4a: `temporal_join_int` UDTF** → 0 rows from
+    stub-plug, NO trap, NO stubbed-error. The composition
+    substrate gap is closed.
+
+### Stub-plug disposition
+
+Kept. The 8 W4a interfaces still have no upstream implementation;
+the stub-plug provides empty-row bodies so the composition
+instantiates. Once `mobilitydb-wasm` upstream ships the W4a
+interfaces (the longer-term coordination round), the stub-plug
+can be retired and the wac-compose script simplified to plug
+upstream directly into the bridge.
+
+### Honest deferrals
+
+- W4a UDTF behaviour: empty result sets until upstream lands.
+  The dispatch path is proven to work; the WIT-side bodies aren't
+  yet implementations.
+- Future codegen task: the `compose.wac` script is hand-written
+  per-bridge today. Auto-emitting it from the codegen (with the
+  interface list pulled from the parsed WIT) is a small follow-up;
+  filed as W4c-equivalent.
+- Cross-project framework support (#561): out of scope here.
+
+## W4a composition fix — survey (#557fix.1) 2026-06-27
+
+Survey of the substrate gap that #557's W4a regen surfaced.
+The 29 vendored UDTF declarations build green and `wac plug`
+exits 0, but the resulting composed loadable still declares 15
+unsatisfied `mobilitydb:temporal/*` imports — the composition
+fails to instantiate inside sqlink-host.
+
+### Reproducing the failure
+
+```
+cd ~/git/mobilitydb-sqlink-bridge
+wac plug \
+  --plug ~/git/postgis-wasm/postgis-composed.wasm \
+  --plug ~/git/datafission/extensions/mobilitydb/deps/mdb-temporal-wasm.wasm \
+  -o mobilitydb-sqlink-loadable.wasm \
+  target/wasm32-wasip2/release/mobilitydb_sqlink_bridge.wasm
+# exit 0
+wasm-tools component targets \
+  --world 'sqlite:extension/tabular@1.0.0' \
+  ../sqlink/sqlite-loader-wit/wit \
+  mobilitydb-sqlink-loadable.wasm
+# error: missing import named `mobilitydb:temporal/types@0.1.0`
+```
+
+`wasm-tools component wit` on the composed loadable shows 15
+remaining mobilitydb imports:
+
+```
+import mobilitydb:temporal/types@0.1.0;
+import mobilitydb:temporal/tbool-ops@0.1.0;
+import mobilitydb:temporal/ttext-ops@0.1.0;
+import mobilitydb:temporal/typed-join-ops@0.1.0;        # W4a (no upstream)
+import mobilitydb:temporal/nearest-join-ops@0.1.0;      # W4a (no upstream)
+import mobilitydb:temporal/time-split-ops@0.1.0;        # W4a (no upstream)
+import mobilitydb:temporal/value-split-ops@0.1.0;       # W4a (no upstream)
+import mobilitydb:temporal/tcbuffer-ops@0.1.0;
+import mobilitydb:temporal/tgeogpoint-ops@0.1.0;
+import mobilitydb:temporal/tgeompoint3d-ops@0.1.0;
+import mobilitydb:temporal/tpose-ops@0.1.0;
+import mobilitydb:temporal/to-rows-ops@0.1.0;           # W4a (no upstream)
+import mobilitydb:temporal/temporal-index-ops@0.1.0;    # W4a (no upstream)
+import mobilitydb:temporal/spatial-index-ops@0.1.0;     # W4a (no upstream)
+import mobilitydb:temporal/sequence-json-ops@0.1.0;     # W4a (no upstream)
+```
+
+Split:
+
+- 8 W4a additions — `typed-join-ops`, `nearest-join-ops`,
+  `time-split-ops`, `value-split-ops`, `to-rows-ops`,
+  `temporal-index-ops`, `spatial-index-ops`, `sequence-json-ops`.
+  Upstream `mdb-temporal-wasm` doesn't export these.
+- 7 transitive trimmed-shape edges — `types`, `tbool-ops`,
+  `ttext-ops`, `tcbuffer-ops`, `tgeogpoint-ops`, `tgeompoint3d-ops`,
+  `tpose-ops`. Upstream DOES export these, but wac plug fails to
+  satisfy them.
+
+### Trimmed-shape diagnosis
+
+`wasm-tools component wit` on the bridge wasm shows the bridge's
+imported `ttext-ops` interface contains 11 functions:
+
+```
+interface ttext-ops {
+    use types.{timestamp-tz, time-period};
+    record ttext-instant { ... }
+    record ttext-sequence { ... }
+    ttext-num-instants:  func(seq: ttext-sequence) -> u32;
+    ttext-value-at:      func(seq: ttext-sequence, t: timestamp-tz) -> option<string>;
+    ttext-start-value:   func(seq: ttext-sequence) -> option<string>;
+    ttext-end-value:     func(seq: ttext-sequence) -> option<string>;
+    ttext-start-timestamp: func(seq: ttext-sequence) -> option<timestamp-tz>;
+    ttext-end-timestamp:   func(seq: ttext-sequence) -> option<timestamp-tz>;
+    ttext-time-span:     func(seq: ttext-sequence) -> option<time-period>;
+    ttext-duration:      func(seq: ttext-sequence) -> s64;
+    ttext-to-json:       func(seq: ttext-sequence) -> string;
+    ttext-to-csv:        func(seq: ttext-sequence) -> string;
+    ttext-from-csv:      func(csv: string) -> option<ttext-sequence>;
+}
+```
+
+Upstream's exported `ttext-ops` has the same record shape PLUS 17
+more functions (`ttext-instant-new`, `ttext-sequence-new`,
+`ttext-at-period`, `ttext-at-value`, `ttext-minus-value`,
+`ttext-ever-eq`, `ttext-always-eq`, `ttext-upper`, `ttext-lower`,
+`ttext-ltrim`, `ttext-rtrim`, `ttext-btrim`, `ttext-concat-str`,
+`ttext-prepend-str`, `ttext-left`, `ttext-right`, `ttext-concat`).
+
+Same pattern for `types`, `tbool-ops`, `tcbuffer-ops`,
+`tgeogpoint-ops`, `tgeompoint3d-ops`, `tpose-ops` — bridge has a
+subset, upstream has the superset.
+
+### Why wit-bindgen produces the trimmed shape
+
+The bridge's vendored WIT (`mobilitydb-sqlink-bridge/wit/deps/
+mobilitydb-temporal/temporal.wit`) declares the FULL upstream
+interface — every function. `wit-bindgen::generate!` runs with
+`generate_all`, so Rust bindings exist for every function. The
+`#[link_section = "component-type:..."]` custom section embeds
+the full WIT.
+
+But `wit-component` (run as part of the wasm32-wasip2 lower
+process) builds the COMPONENT'S import type from the actually-
+lowered functions: `wit-component-0.220.1/src/encoding.rs:484`:
+
+```rust
+for (_, func) in interface.functions.iter() {
+    if !info.lowerings.contains_key(&func.name) {
+        continue;
+    }
+    let idx = encoder.encode_func_type(resolve, func)?;
+    encoder.ty.export(&func.name, ComponentTypeRef::Func(idx));
+}
+```
+
+`info.lowerings` is populated from the actual core wasm imports —
+only the canonical-ABI `extern "C"` blocks that survived LLVM's
+DCE. Functions wit-bindgen generated bindings for but that the
+bridge never called get dropped. So the import shape ends up
+trimmed to "functions the bridge actually calls."
+
+### Why wac plug doesn't bridge the gap
+
+`wac plug`'s subtype check (`wac-graph-0.10.1/src/plug.rs:54-58`,
+`graph.rs:1136-1145`) treats plug ⊇ socket as a valid subtype
+relation, so the `set_instantiation_argument` call succeeds at
+the graph level. But the resulting component's wasm-validate-
+clean encoding STILL declares the socket's trimmed imports as
+imports of the composition root — wac plug doesn't synthesize an
+adapter that bridges "trimmed import" ← "full export". The
+upstream's full instance gets aliased into the graph, but the
+encoded output keeps the socket's import slot open.
+
+This is observable end-to-end: `wac plug` exits 0 but
+`wasm-tools component targets --world tabular@1.0.0` reports
+`missing import named mobilitydb:temporal/types@0.1.0`. The
+sqlink-host loader hits the same error one layer up
+("instance not found in linker").
+
+### Fix plan (#557fix.2-5)
+
+Make the bridge's IMPORT shape match the upstream's EXPORT shape
+exactly. Codegen-side mechanism: emit a `__force_link_*` block
+in the bridge's `src/lib.rs` that takes a function pointer of
+every upstream function in every imported primary-shim
+interface, wrapped in a `#[used]` static. The function-pointer
+references prevent LLVM DCE; the wit-bindgen wrappers and their
+`extern "C"` declarations survive; `wit-component` lowers them
+all; the bridge's import shape becomes the upstream's full shape.
+
+`wac plug` then has matching shapes on both sides of the socket
+edge — the trimmed-import-vs-full-export structural mismatch
+disappears.
+
+For the 8 W4a-added interfaces (`typed-join-ops`, etc.) the
+existing `stub-plug/` crate still has to provide bodies until
+the cross-project coordination round lands real implementations
+upstream. The stub-plug benefits from the same force-link emit:
+its IMPORTS of the 7 transitive interfaces will then match
+upstream's full export shape too, so wac plug can compose
+[upstream + stub-plug + bridge] cleanly.
+
 ## References
 
 - `docs/plans/PLAN-codegen-retarget.md` — the parent codegen plan
