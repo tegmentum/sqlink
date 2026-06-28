@@ -1,0 +1,301 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-aggregate-substrate" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>PLAN: Extend aggregate substrate for mobilitydb temporal types (#607) | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-aggregate-substrate /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="PLAN: Extend aggregate substrate for mobilitydb temporal types (#607) | sqlink"/><meta data-rh=true name=description content=607) /><meta data-rh=true property=og:description content=607) /><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-aggregate-substrate /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-aggregate-substrate hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-aggregate-substrate hreflang=x-default /><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a class="navbar__item navbar__link" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><main class="docMainContainer_TBSr docMainContainerEnhanced_lQrH"><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>PLAN: Extend aggregate substrate for mobilitydb temporal types (#607)</h1></header>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-28>Status (2026-06-28)<a href=#status-2026-06-28 class=hash-link aria-label="Direct link to Status (2026-06-28)" title="Direct link to Status (2026-06-28)" translate=no>​</a></h2>
+<p>Captured from the fork's substrate survey during the #607/#608 batch.
+The original framing of #607 — "add AccKind variants + classifier
+branches + per-target match arms" — turned out wrong on substrate
+inspection. This plan captures the actual scope so a future session can
+execute it correctly.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=problem>Problem<a href=#problem class=hash-link aria-label="Direct link to Problem" title="Direct link to Problem" translate=no>​</a></h2>
+<p>14 mobilitydb temporal-type aggregates (<code>tint_temporal_min</code>,
+<code>ttext_concat_agg</code>, <code>tnpoint_*</code>, <code>tpose_*</code>, etc.) fall through the
+codegen's aggregate-shape classifier. The current <code>AccKind</code> enum in
+<code>datalink-shim-codegen-core/src/interface_db.rs</code> only covers <code>Geom</code> and
+<code>Raster</code> (from #547 / #548 work). Wiring these unlocks aggregate
+coverage on ALL THREE targets (sqlink / ducklink / datafission)
+symmetrically — a real win when it lands.</p>
+<p>But the wiring is NOT a simple enum extension. The temporal-aggregate
+substrate diverges from the Geom/Raster pattern on THREE independent
+axes, each of which requires real codegen-core changes.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-findings-from-fork-survey-2026-06-28>Substrate findings (from fork survey 2026-06-28)<a href=#substrate-findings-from-fork-survey-2026-06-28 class=hash-link aria-label="Direct link to Substrate findings (from fork survey 2026-06-28)" title="Direct link to Substrate findings (from fork survey 2026-06-28)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=axis-1--owned-lists-vs-borrowed-lists>Axis 1 — Owned lists vs borrowed lists<a href=#axis-1--owned-lists-vs-borrowed-lists class=hash-link aria-label="Direct link to Axis 1 — Owned lists vs borrowed lists" title="Direct link to Axis 1 — Owned lists vs borrowed lists" translate=no>​</a></h3>
+<p>Geom and Raster aggregates take <code>list&lt;borrow&lt;X>></code>:</p>
+<div class="language-wit codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-wit codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">st-extent-threed: func(geoms: list&lt;borrow&lt;geometry>>) -> bbox3d;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">st-raster-union-aggregate: func(rs: list&lt;borrow&lt;raster>>, ...) -> raster;</span><br/></div></code></pre></div></div>
+<p>Temporal aggregates take <strong>owned</strong> <code>list&lt;X-sequence></code>:</p>
+<div class="language-wit codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-wit codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">tfloat-min-value-aggregate: func(sequences: list&lt;tfloat-sequence>) -> option&lt;tfloat-sequence>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">tint-temporal-max: func(sequences: list&lt;tint-sequence>) -> option&lt;tint-sequence>;</span><br/></div></code></pre></div></div>
+<p><code>WitType::ListGeomBorrow</code> and <code>WitType::ListRasterBorrow</code> are explicit
+parser variants today. There is NO <code>WitType::List&lt;X>Owned</code> for any
+record-typed family. The <code>wit_parse</code> <code>list&lt;...></code> collapse rule
+(<code>crates/datalink-shim-codegen-core/src/wit_parse.rs:~1381</code>) has explicit
+branches for geometry and raster only.</p>
+<p><strong>Required change</strong>: new <code>WitType::ListResourceOwned { kebab: String }</code>
+variant, OR per-family ListTfloatOwned / ListTintOwned / etc.
+Recommendation: the generic <code>ListResourceOwned { kebab }</code> variant — keeps
+the parser simple, defers per-family logic to the classifier.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=axis-2--per-row-decode-is-wit-value-cbor-not-blob-wkb>Axis 2 — Per-row decode is wit-value (CBOR), not blob (WKB)<a href=#axis-2--per-row-decode-is-wit-value-cbor-not-blob-wkb class=hash-link aria-label="Direct link to Axis 2 — Per-row decode is wit-value (CBOR), not blob (WKB)" title="Direct link to Axis 2 — Per-row decode is wit-value (CBOR), not blob (WKB)" translate=no>​</a></h3>
+<p>Geom/Raster aggregator state is <code>Vec&lt;Vec&lt;u8>></code> — raw WKB / raster binary
+bytes collected per row at <code>step</code>, then lifted to <code>Geometry</code>/<code>Raster</code>
+via <code>from_wkb</code> / <code>from_raster_binary</code> at <code>finalize</code>. The per-row
+SqlValue is <code>Blob</code>, and the codec is a single fn call.</p>
+<p>Temporal-type per-row SqlValue is <code>WitValue { type_id, bytes, symbolic_name }</code>. The bytes are canonical-CBOR encoding the upstream
+record (e.g., <code>TfloatSequence</code>). Decoding to upstream Rust type requires
+the bridge's per-record <code>&lt;record>_from_canon_cbor</code> codec + a ciborium
+round-trip.</p>
+<p>Current <code>emit_aggregate_step_body</code> / <code>emit_aggregate_finalize_body</code>
+(<code>datalink-shim-sqlite-emit/src/dispatch.rs:~755-818</code>) collect <code>Vec&lt;Vec&lt;u8>></code>
+blobs. The temporal path needs a fundamentally different shape:</p>
+<ul>
+<li class=""><strong>step body</strong>: extract <code>WitValuePayload</code> from arg; push to
+<code>Vec&lt;WitValuePayload></code> (or <code>Vec&lt;UpstreamType></code> if we decode eagerly at
+step time — see DD1 below)</li>
+<li class=""><strong>finalize body</strong>: decode each payload via the matching local codec
+→ upstream Rust type; collect into <code>Vec&lt;UpstreamType></code>; call upstream
+aggregator; encode result back via local codec → <code>WitValuePayload</code>
+→ wrap in SqlValue::WitValue / Duckvalue::Complex / ScalarValue::Binary
+per target</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=axis-3--return-type-is-optionx-sequence-record>Axis 3 — Return type is <code>option&lt;X-sequence></code> record<a href=#axis-3--return-type-is-optionx-sequence-record class=hash-link aria-label="Direct link to axis-3--return-type-is-optionx-sequence-record" title="Direct link to axis-3--return-type-is-optionx-sequence-record" translate=no>​</a></h3>
+<p>Geom/Raster aggregates return naked resources; finalize encodes via
+<code>as_wkb()</code> / <code>as_binary()</code> → <code>SqlValue::Blob</code> / <code>Duckvalue::Blob</code> /
+<code>ScalarValue::Binary</code>.</p>
+<p>Temporal aggregates return <code>option&lt;X-sequence></code> — already represented
+in IR by <code>RetShape::OptionWitValueRecord</code>. So return-shape classification
+doesn't need new variants; it just needs the AccKind→RetShape mapping
+to handle this case (today the aggregate-RetShape coupling is
+hard-coded to <code>GeomBlob</code> / <code>RasterBlob</code> analogs).</p>
+<p>For the encoding side, finalize needs to call the local-record encoder
+back to <code>WitValuePayload</code>. This mirrors the existing <code>WitValueRecord</code>
+return-encoding pattern from the per-shape-arms work (#590/#596) — just
+adapted for the aggregate finalize site.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=affected-resource-families>Affected resource families<a href=#affected-resource-families class=hash-link aria-label="Direct link to Affected resource families" title="Direct link to Affected resource families" translate=no>​</a></h2>
+<p>From <code>mobilitydb-temporal/temporal.wit</code> interface <code>temporal-aggregate-ops</code>
+(lines 1754-1810): 9 distinct resource types each contributing 1-3
+aggregates:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Resource<th style=text-align:right>Aggregates (approximate count)<tbody><tr><td>tfloat<td style=text-align:right>4 (min/max/sum/avg, time-span variants)<tr><td>tint<td style=text-align:right>3<tr><td>tbool<td style=text-align:right>2<tr><td>ttext<td style=text-align:right>1 (concat)<tr><td>tgeompoint<td style=text-align:right>3 (incl. tgeompoint-st-extent → option<stbox>)</stbox><tr><td>tgeogpoint<td style=text-align:right>2<tr><td>tnpoint<td style=text-align:right>1<tr><td>tpose<td style=text-align:right>1<tr><td>tcbuffer<td style=text-align:right>1<tr><td><strong>total</strong><td style=text-align:right><strong>~18</strong> (the "14" cited in the original task was rough)</table>
+<p>Per-family × 3 targets = ~27 implementation surfaces in
+<code>emit_aggregate_step_body</code> / <code>emit_aggregate_finalize_body</code>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=proposed-ir--classifier-changes>Proposed IR + classifier changes<a href=#proposed-ir--classifier-changes class=hash-link aria-label="Direct link to Proposed IR + classifier changes" title="Direct link to Proposed IR + classifier changes" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-0-substrate-must-land-first>Phase 0 substrate (must land first)<a href=#phase-0-substrate-must-land-first class=hash-link aria-label="Direct link to Phase 0 substrate (must land first)" title="Direct link to Phase 0 substrate (must land first)" translate=no>​</a></h3>
+<div class="language-rust codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-rust codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token comment" style=color:#999988;font-style:italic>// crates/datalink-shim-codegen-core/src/wit_parse.rs</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>pub</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>enum</span><span class="token plain"> </span><span class="token type-definition class-name">WitType</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>// ... existing variants</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token class-name">ListResourceOwned</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"> kebab</span><span class="token punctuation" style=color:#393A34>:</span><span class="token plain"> </span><span class="token class-name">String</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>}</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">  </span><span class="token comment" style=color:#999988;font-style:italic>// NEW: list&lt;X-sequence> owned</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>}</span><br/></div></code></pre></div></div>
+<p>Parser branch for <code>list&lt;X-sequence></code>: when <code>X</code> is a record-typed name
+(not <code>geometry</code> / <code>raster</code>), construct <code>ListResourceOwned { kebab }</code>
+with <code>kebab = "X-sequence"</code>.</p>
+<div class="language-rust codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-rust codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token comment" style=color:#999988;font-style:italic>// crates/datalink-shim-codegen-core/src/interface_db.rs</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>pub</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>enum</span><span class="token plain"> </span><span class="token type-definition class-name">AccKind</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token class-name">Geom</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>// existing</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token class-name">Raster</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">  </span><span class="token comment" style=color:#999988;font-style:italic>// existing</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>/// New: resource-record aggregator. Carries the upstream resource</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>/// kebab (e.g. "tfloat-sequence") + the codec triple needed to</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>/// shuttle wit-value payloads through the aggregator state.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token class-name">Record</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"> kebab</span><span class="token punctuation" style=color:#393A34>:</span><span class="token plain"> </span><span class="token class-name">String</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>}</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>pub</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>struct</span><span class="token plain"> </span><span class="token type-definition class-name">AggregateShape</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>pub</span><span class="token plain"> accumulator_kind</span><span class="token punctuation" style=color:#393A34>:</span><span class="token plain"> </span><span class="token class-name">AccKind</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>// ... existing fields</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>/// Set when AccKind::Record. The interface DB name of the</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>/// upstream record type (matches an entry in record_registry).</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>pub</span><span class="token plain"> record_type_id</span><span class="token punctuation" style=color:#393A34>:</span><span class="token plain"> </span><span class="token class-name">Option</span><span class="token operator" style=color:#393A34>&lt;</span><span class="token class-name">RecordKey</span><span class="token operator" style=color:#393A34>></span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>}</span><br/></div></code></pre></div></div>
+<p>Classifier branch in <code>classify_aggregate_shape</code>: when the upstream
+signature is <code>func(list&lt;R-sequence>) -> option&lt;R-sequence></code> with
+matching parameter and return record types, classify as
+<code>AccKind::Record { kebab: "R-sequence" }</code> carrying the record_type_id.</p>
+<p>When the return record DIFFERS from the input record (e.g.,
+<code>tgeompoint-st-extent</code> returns <code>option&lt;stbox></code> from
+<code>list&lt;tgeompoint-sequence></code>), still classify as <code>AccKind::Record</code> but
+carry both — perhaps <code>AccKind::Record { input_kebab, output_kebab }</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-1--sqlite-emit-reference-for-one-family>Phase 1 — sqlite-emit reference for ONE family<a href=#phase-1--sqlite-emit-reference-for-one-family class=hash-link aria-label="Direct link to Phase 1 — sqlite-emit reference for ONE family" title="Direct link to Phase 1 — sqlite-emit reference for ONE family" translate=no>​</a></h3>
+<p>Pick <code>tfloat-min-value-aggregate</code> as the pilot (simplest signature, well-
+documented postgresql semantics). Implement the full aggregate emit
+shape:</p>
+<div class="language-rust codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-rust codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token comment" style=color:#999988;font-style:italic>// step body (collects WitValuePayloads)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>// step_arm:</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> pw </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token function" style=color:#d73a49>arg_witvalue</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">args</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token number" style=color:#36acaa>0</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"tfloat_min_value"</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token function" style=color:#d73a49>push_witvalue_state</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">context_id</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> pw</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token class-name">Ok</span><span class="token punctuation" style=color:#393A34>(</span><span class="token class-name">SqlValue</span><span class="token punctuation" style=color:#393A34>::</span><span class="token class-name">Null</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>// finalize body (decodes, runs aggregator, encodes)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>// finalize_arm:</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> payloads </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token function" style=color:#d73a49>take_witvalue_state</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">context_id</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>mut</span><span class="token plain"> upstream_vec</span><span class="token punctuation" style=color:#393A34>:</span><span class="token plain"> </span><span class="token class-name">Vec</span><span class="token operator" style=color:#393A34>&lt;</span><span class="token class-name">TfloatSequence</span><span class="token operator" style=color:#393A34>></span><span class="token plain"> </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token class-name">Vec</span><span class="token punctuation" style=color:#393A34>::</span><span class="token function" style=color:#d73a49>with_capacity</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">payloads</span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>len</span><span class="token punctuation" style=color:#393A34>(</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>for</span><span class="token plain"> pw </span><span class="token keyword" style=color:#00009f>in</span><span class="token plain"> payloads </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        </span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> upstream </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token function" style=color:#d73a49>tfloat_sequence_from_canon_cbor</span><span class="token punctuation" style=color:#393A34>(</span><span class="token operator" style=color:#393A34>&</span><span class="token plain">pw</span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">bytes</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">            </span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>map_err</span><span class="token punctuation" style=color:#393A34>(</span><span class="token closure-params closure-punctuation punctuation" style=color:#393A34>|</span><span class="token closure-params">e</span><span class="token closure-params closure-punctuation punctuation" style=color:#393A34>|</span><span class="token plain"> </span><span class="token macro property" style=color:#36acaa>format!</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"tfloat_min_value: decode: {}"</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> e</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        upstream_vec</span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>push</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">upstream</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token punctuation" style=color:#393A34>}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> result_opt </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token namespace" style=opacity:0.7>mdb_agg</span><span class="token namespace punctuation" style=opacity:0.7;color:#393A34>::</span><span class="token function" style=color:#d73a49>tfloat_min_value_aggregate</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">upstream_vec</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>match</span><span class="token plain"> result_opt </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        </span><span class="token class-name">Some</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">seq</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>=></span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">            </span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> bytes </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token function" style=color:#d73a49>tfloat_sequence_to_canon_cbor</span><span class="token punctuation" style=color:#393A34>(</span><span class="token operator" style=color:#393A34>&</span><span class="token plain">seq</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                </span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>map_err</span><span class="token punctuation" style=color:#393A34>(</span><span class="token closure-params closure-punctuation punctuation" style=color:#393A34>|</span><span class="token closure-params">e</span><span class="token closure-params closure-punctuation punctuation" style=color:#393A34>|</span><span class="token plain"> </span><span class="token macro property" style=color:#36acaa>format!</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"tfloat_min_value: encode: {}"</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> e</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">            </span><span class="token class-name">Ok</span><span class="token punctuation" style=color:#393A34>(</span><span class="token class-name">SqlValue</span><span class="token punctuation" style=color:#393A34>::</span><span class="token class-name">WitValue</span><span class="token punctuation" style=color:#393A34>(</span><span class="token class-name">WitValuePayload</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                type_id</span><span class="token punctuation" style=color:#393A34>:</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>&lt;</span><span class="token plain">baked at codegen time</span><span class="token operator" style=color:#393A34>></span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                bytes</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                symbolic_name</span><span class="token punctuation" style=color:#393A34>:</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"mobilitydb-temporal/tfloat-ops/tfloat-sequence"</span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>into</span><span class="token punctuation" style=color:#393A34>(</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">            </span><span class="token punctuation" style=color:#393A34>}</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        </span><span class="token punctuation" style=color:#393A34>}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        </span><span class="token class-name">None</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>=></span><span class="token plain"> </span><span class="token class-name">Ok</span><span class="token punctuation" style=color:#393A34>(</span><span class="token class-name">SqlValue</span><span class="token punctuation" style=color:#393A34>::</span><span class="token class-name">Null</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token punctuation" style=color:#393A34>}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>}</span><br/></div></code></pre></div></div>
+<p>Two new sqlite-emit helpers needed: <code>push_witvalue_state</code> and
+<code>take_witvalue_state</code> (analogs of <code>push_geom_state</code> / <code>take_geom_state</code>).</p>
+<p>Verification: tfloat_min_value wires; postgis-sqlink byte-identical to
+main; mobilitydb-sqlink count goes from 14 → 15.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-2--duckdb-emit--datafission-emit-for-tfloat_min_value>Phase 2 — duckdb-emit + datafission-emit for tfloat_min_value<a href=#phase-2--duckdb-emit--datafission-emit-for-tfloat_min_value class=hash-link aria-label="Direct link to Phase 2 — duckdb-emit + datafission-emit for tfloat_min_value" title="Direct link to Phase 2 — duckdb-emit + datafission-emit for tfloat_min_value" translate=no>​</a></h3>
+<p>Same logic adapted for each target's value carrier:</p>
+<ul>
+<li class="">
+<p><strong>duckdb</strong>: per-row <code>Duckvalue::Complex { type_expr, json }</code>; decode
+via <code>serde_json::from_str</code> (or canonical-CBOR if needed) to upstream;
+finalize encodes back via the same path.</p>
+</li>
+<li class="">
+<p><strong>datafission</strong>: per-row <code>ScalarValue::Binary</code> with WTV magic-prefix</p>
+<ul>
+<li class="">canonical-CBOR (per #559 / #604 convention); decode via stripping
+the 36-byte header + ciborium; finalize re-frames with the prefix.</li>
+</ul>
+</li>
+</ul>
+<p>Both targets need handle-table machinery for accumulator state — the
+duckdb-emit/datafission-emit batches already established this.</p>
+<p>Verification: tfloat_min_value wires on both new targets too;
+mobilitydb-ducklink count: 0 → 1; mobilitydb-datafission count: 0 → 1.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-3--fan-out-to-remaining-8-families>Phase 3 — fan out to remaining 8 families<a href=#phase-3--fan-out-to-remaining-8-families class=hash-link aria-label="Direct link to Phase 3 — fan out to remaining 8 families" title="Direct link to Phase 3 — fan out to remaining 8 families" translate=no>​</a></h3>
+<p>Each subsequent family adds:</p>
+<ul>
+<li class="">One AccKind::Record { kebab } classifier match (or the kebab is
+routed automatically by the generic Record arm if the codec is in
+the record registry)</li>
+<li class="">Three per-target emit body sites that name the family's codec funcs</li>
+</ul>
+<p>Order suggestion (by structural similarity, easiest first):</p>
+<ol>
+<li class="">tfloat (pilot — Phase 1/2)</li>
+<li class="">tint, tbool, ttext (primitive content; same pattern)</li>
+<li class="">tgeompoint, tgeogpoint (geometry-content; reuses geom encode)</li>
+<li class="">tnpoint, tpose, tcbuffer (custom records; per-codec)</li>
+<li class="">tgeompoint-st-extent (different output record; one-off)</li>
+</ol>
+<p>Final verification: all ~18 mobilitydb aggregates wired across all
+3 targets; mobilitydb-sqlink count goes from 14 → 32; mobilitydb-
+ducklink + datafission count goes from 0 → 18.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=key-architectural-decisions-to-lock-before-implementing>Key architectural decisions to lock before implementing<a href=#key-architectural-decisions-to-lock-before-implementing class=hash-link aria-label="Direct link to Key architectural decisions to lock before implementing" title="Direct link to Key architectural decisions to lock before implementing" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dd1-eager-vs-lazy-decode>DD1. Eager vs lazy decode<a href=#dd1-eager-vs-lazy-decode class=hash-link aria-label="Direct link to DD1. Eager vs lazy decode" title="Direct link to DD1. Eager vs lazy decode" translate=no>​</a></h3>
+<p>Two options for the per-row decode timing:</p>
+<ul>
+<li class="">
+<p><strong>Lazy (recommended)</strong>: step collects <code>Vec&lt;WitValuePayload></code>; finalize
+decodes all payloads when it builds the upstream <code>Vec&lt;UpstreamType></code>.
+Cheaper step (no codec call per row); finalize does N decodes.</p>
+</li>
+<li class="">
+<p><strong>Eager</strong>: step decodes payload to upstream type immediately; pushes
+to <code>Vec&lt;UpstreamType></code>. Better cache locality; finalize is just the
+upstream call + encode. But the state must carry the upstream type
+through, which complicates the cross-target handle-table generics.</p>
+</li>
+</ul>
+<p>Lock as: lazy by default. Codegen can later opt some families into
+eager if profiling shows it matters.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dd2-recordkey-codec-name-resolution>DD2. RecordKey codec name resolution<a href=#dd2-recordkey-codec-name-resolution class=hash-link aria-label="Direct link to DD2. RecordKey codec name resolution" title="Direct link to DD2. RecordKey codec name resolution" translate=no>​</a></h3>
+<p>The codec function names (e.g., <code>tfloat_sequence_from_canon_cbor</code>) come
+from the record registry's per-record codec entries. The classifier
+needs to find the right entry by <code>kebab</code> → record_type_id → codec entry.</p>
+<p>This already exists for the per-shape-arms work (#590/#596). The
+aggregate path just calls into the same record_registry lookup.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dd3-per-target-handle-table-reuse>DD3. Per-target handle table reuse<a href=#dd3-per-target-handle-table-reuse class=hash-link aria-label="Direct link to DD3. Per-target handle table reuse" title="Direct link to DD3. Per-target handle table reuse" translate=no>​</a></h3>
+<p>DuckDB and Datafission already have handle-table machinery from the
+aggregates+UDTFs batch (datalink fc5af5c). The temporal-aggregate
+state goes into the SAME handle table — just with a different
+<code>AccState</code> variant carrying <code>Vec&lt;WitValuePayload></code> instead of
+<code>Vec&lt;Vec&lt;u8>></code>. The state enum needs a new variant; existing init /
+step / finalize functions need a small match-arm extension.</p>
+<p>Sqlite uses thread-local <code>Vec&lt;Vec&lt;u8>></code> keyed by context_id (no
+explicit handle); the temporal path adds a parallel
+<code>Vec&lt;WitValuePayload></code> thread-local.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dd4-aggregate-override-coexistence>DD4. Aggregate override coexistence<a href=#dd4-aggregate-override-coexistence class=hash-link aria-label="Direct link to DD4. Aggregate override coexistence" title="Direct link to DD4. Aggregate override coexistence" translate=no>​</a></h3>
+<p>The new <code>aggregate_function_overrides()</code> table (from #608's
+st_3dextent fix) consults overrides BEFORE classifier name-matching.
+Temporal aggregates use canonical names matching their WIT signatures,
+so the override table isn't load-bearing here. But if any mobilitydb
+aggregate has a SQL-name vs WIT-name mismatch, an override entry
+short-circuits the name match.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=sequencing-with-other-in-flight-work>Sequencing with other in-flight work<a href=#sequencing-with-other-in-flight-work class=hash-link aria-label="Direct link to Sequencing with other in-flight work" title="Direct link to Sequencing with other in-flight work" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>#609 + #610</strong> (upstream postgis-wasm WIT gaps) — independent;
+separate upstream coordination. Doesn't block this plan.</li>
+<li class=""><strong>Window functions / pragmas / casts / multi-custom-type / spatial-
+index / system-catalog / index-plugin</strong> — out of scope. Same family-
+by-family scaling pattern would apply if and when they become
+priorities.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=risks>Risks<a href=#risks class=hash-link aria-label="Direct link to Risks" title="Direct link to Risks" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>Codec roundtrip cost.</strong> For very large aggregations (millions of
+rows), the per-row CBOR decode at finalize time is real CPU work.
+Profile after Phase 2 with the verify subcrate; switch to eager
+decode (DD1) if needed.</li>
+<li class=""><strong>Handle table memory bloat.</strong> Worst case the accumulator state
+carries N WitValuePayloads each holding ~100 bytes of CBOR. Hundred-
+k-row aggregation = ~10 MB. Acceptable for wasm32 today but worth
+noting.</li>
+<li class=""><strong>Per-record codec coverage.</strong> Phase 1/2 assume the bridges already
+emit <code>&lt;record>_from_canon_cbor</code> / <code>&lt;record>_to_canon_cbor</code> for every
+temporal record type. Verify by inspection — if any family's
+codec is missing, the fix is in the per-shape-arms work, not the
+aggregate work.</li>
+<li class=""><strong>DuckDB Complex JSON-on-the-wire.</strong> The duckdb-emit per-shape-arms
+decision (#590) routes WitValueRecord via JSON. Aggregate temporal
+state through duckdb thus does JSON serialization for each row. May
+be heavier than the CBOR path on sqlite/datafission. Acceptable for
+initial wiring; revisit if profiling shows it.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=open-questions>Open questions<a href=#open-questions class=hash-link aria-label="Direct link to Open questions" title="Direct link to Open questions" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>OQ1.</strong> Should the <code>tgeompoint-st-extent</code> case (different input vs
+output record) drive a richer <code>AccKind::Record { input_kebab, output_kebab }</code>, or should we just special-case it in the classifier?
+Pick when implementing Phase 3.5.</li>
+<li class=""><strong>OQ2.</strong> Does any temporal aggregate take EXTRA args beyond the
+list (e.g., a tolerance or interval parameter)? Inspect each
+signature. Existing <code>AggregateShape.aggregator_extras</code> may already
+handle this.</li>
+<li class=""><strong>OQ3.</strong> Should the bridge crate's local serde-ops interface gain a
+<code>&lt;record>-canon-cbor-batch</code> method that decodes a Vec of payloads in
+one call? Marginally faster than the per-row pattern. Defer unless
+profiling demands.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=references>References<a href=#references class=hash-link aria-label="Direct link to References" title="Direct link to References" translate=no>​</a></h2>
+<ul>
+<li class=""><code>crates/datalink-shim-codegen-core/src/interface_db.rs</code> — current
+AccKind / AggregateShape definitions</li>
+<li class=""><code>crates/datalink-shim-codegen-core/src/wit_parse.rs</code> — WitType
+parser</li>
+<li class="">`crates/datalink-shim-sqlite-emit/src/dispatch.rs::emit_aggregate_step_body
+<ul>
+<li class="">emit_aggregate_finalize_body` — Geom/Raster reference</li>
+</ul>
+</li>
+<li class=""><code>crates/datalink-shim-duckdb-emit/src/emit_lib.rs</code> (HANDLE_TABLE
+<ul>
+<li class="">AccState pattern from aggregates+UDTFs batch)</li>
+</ul>
+</li>
+<li class=""><code>crates/datalink-shim-datafission-emit/src/emit_lib.rs</code> (HANDLE_TABLE
+<ul>
+<li class="">AGGREGATE_STATE_BLOCK)</li>
+</ul>
+</li>
+<li class=""><code>~/git/datafission/wit/.../aggregate-function-registry@1.0.0</code> — the
+datafission contract surface (init/step/merge/finalize/destroy)</li>
+<li class=""><code>~/git/sqlink/docs/plans/PLAN-shim-codegen-datalink-migration.md</code> —
+the α architecture this work extends</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-aggregate-substrate.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#status-2026-06-28 class="table-of-contents__link toc-highlight">Status (2026-06-28)</a><li><a href=#problem class="table-of-contents__link toc-highlight">Problem</a><li><a href=#substrate-findings-from-fork-survey-2026-06-28 class="table-of-contents__link toc-highlight">Substrate findings (from fork survey 2026-06-28)</a><ul><li><a href=#axis-1--owned-lists-vs-borrowed-lists class="table-of-contents__link toc-highlight">Axis 1 — Owned lists vs borrowed lists</a><li><a href=#axis-2--per-row-decode-is-wit-value-cbor-not-blob-wkb class="table-of-contents__link toc-highlight">Axis 2 — Per-row decode is wit-value (CBOR), not blob (WKB)</a><li><a href=#axis-3--return-type-is-optionx-sequence-record class="table-of-contents__link toc-highlight">Axis 3 — Return type is <code>option&lt;X-sequence></code> record</a></ul><li><a href=#affected-resource-families class="table-of-contents__link toc-highlight">Affected resource families</a><li><a href=#proposed-ir--classifier-changes class="table-of-contents__link toc-highlight">Proposed IR + classifier changes</a><ul><li><a href=#phase-0-substrate-must-land-first class="table-of-contents__link toc-highlight">Phase 0 substrate (must land first)</a><li><a href=#phase-1--sqlite-emit-reference-for-one-family class="table-of-contents__link toc-highlight">Phase 1 — sqlite-emit reference for ONE family</a><li><a href=#phase-2--duckdb-emit--datafission-emit-for-tfloat_min_value class="table-of-contents__link toc-highlight">Phase 2 — duckdb-emit + datafission-emit for tfloat_min_value</a><li><a href=#phase-3--fan-out-to-remaining-8-families class="table-of-contents__link toc-highlight">Phase 3 — fan out to remaining 8 families</a></ul><li><a href=#key-architectural-decisions-to-lock-before-implementing class="table-of-contents__link toc-highlight">Key architectural decisions to lock before implementing</a><ul><li><a href=#dd1-eager-vs-lazy-decode class="table-of-contents__link toc-highlight">DD1. Eager vs lazy decode</a><li><a href=#dd2-recordkey-codec-name-resolution class="table-of-contents__link toc-highlight">DD2. RecordKey codec name resolution</a><li><a href=#dd3-per-target-handle-table-reuse class="table-of-contents__link toc-highlight">DD3. Per-target handle table reuse</a><li><a href=#dd4-aggregate-override-coexistence class="table-of-contents__link toc-highlight">DD4. Aggregate override coexistence</a></ul><li><a href=#sequencing-with-other-in-flight-work class="table-of-contents__link toc-highlight">Sequencing with other in-flight work</a><li><a href=#risks class="table-of-contents__link toc-highlight">Risks</a><li><a href=#open-questions class="table-of-contents__link toc-highlight">Open questions</a><li><a href=#references class="table-of-contents__link toc-highlight">References</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

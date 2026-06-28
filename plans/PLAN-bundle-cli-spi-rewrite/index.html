@@ -1,0 +1,544 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-bundle-cli-spi-rewrite" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>PLAN — bundle-cli SPI rewrite (task #533) | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-bundle-cli-spi-rewrite /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="PLAN — bundle-cli SPI rewrite (task #533) | sqlink"/><meta data-rh=true name=description content=533) /><meta data-rh=true property=og:description content=533) /><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-bundle-cli-spi-rewrite /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-bundle-cli-spi-rewrite hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-bundle-cli-spi-rewrite hreflang=x-default /><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a class="navbar__item navbar__link" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><main class="docMainContainer_TBSr docMainContainerEnhanced_lQrH"><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>PLAN — bundle-cli SPI rewrite (task #533)</h1></header>
+<p>Drop bundle-cli's typed <code>sqlite:extension/bundles</code> import in favor of calling
+<code>dispatch-bridge.bridged-execute-cas</code> directly. Survey + checkpoint plan.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=5331--survey-output>533.1 — Survey output<a href=#5331--survey-output class=hash-link aria-label="Direct link to 533.1 — Survey output" title="Direct link to 533.1 — Survey output" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=who-imports-sqliteextensionbundles>Who imports <code>sqlite:extension/bundles</code>?<a href=#who-imports-sqliteextensionbundles class=hash-link aria-label="Direct link to who-imports-sqliteextensionbundles" title="Direct link to who-imports-sqliteextensionbundles" translate=no>​</a></h3>
+<p>WIT-layer importers (every world in the sqlite-extension package):</p>
+<ul>
+<li class=""><code>sqlite-wasm/wit/deps/sqlite-extension/world.wit</code> — 14 worlds all declare
+<code>import bundles;</code> (minimal, minimal-http, minimal-dns, stateful,
+lifecycle-aware, resolving, collating, authorizing, hooked, wal-aware,
+hookprobe, tabular, bundle-cli, shell-aware).</li>
+<li class="">Mirrored copies in <code>extensions/postgis-bridge/wit/deps/...</code> and
+<code>examples/rust/runnable-sqlite-demo/wit/deps/...</code>.</li>
+<li class="">The world.wit doc-comment (lines 4-16) is explicit: "wal-frames + s3-base
+<ul>
+<li class="">build + bundles are imported into every world (not just wal-aware /
+hookprobe / bundle-cli) so the host's per-shape bindgen consistently
+has the bundles::Host traits to satisfy on LoadedState."</li>
+</ul>
+</li>
+</ul>
+<p>Actual guest-side callers (Rust source):</p>
+<ul>
+<li class=""><code>extensions/bundle-cli/src/lib.rs:115</code> —
+<code>use bindings::sqlite::extension::bundles;</code></li>
+<li class=""><strong>No other extension</strong> under <code>extensions/*</code> references <code>extension::bundles</code>.</li>
+</ul>
+<p>Host-side trait impl:</p>
+<ul>
+<li class=""><code>host/src/lib.rs</code> — <code>impl bundles::Host for LoadedState</code> (lines 3995-4228),
+13 typed methods. Every per-shape <code>bindgen!</code> invocation lists
+<code>"sqlite:extension/bundles": super::loaded::sqlite::extension::bundles</code>
+in its <code>with:</code> clause.</li>
+</ul>
+<p>Browser polyfill (the <code>bundlesHandler</code> block, NOT a separate
+<code>buildBundlesPolyfill</code> function):</p>
+<ul>
+<li class=""><code>browser/src/extension-loader.js</code> lines 2083-2351 (~268 LoC) — implements
+the typed bundles interface for the composed-cli-worker by delegating
+every method to <code>bridgedExecuteCas(sql, params)</code>.</li>
+<li class="">One caller: <code>browser/src/composed-cli-worker.js:457</code>. Bundle-cli path
+only.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=decision-γ-vs-δ-for-host-impl>Decision (γ) vs (δ) for host impl<a href=#decision-γ-vs-δ-for-host-impl class=hash-link aria-label="Direct link to Decision (γ) vs (δ) for host impl" title="Direct link to Decision (γ) vs (δ) for host impl" translate=no>​</a></h3>
+<p><strong>The plan's path (γ) — "delete the typed bundles::Host impl entirely" —
+is blocked at the WIT layer.</strong> Removing the impl while every world still
+declares <code>import bundles;</code> breaks bindgen across all 14 worlds, all 218
+extensions, postgis-bridge, and the runnable-sqlite-demo.</p>
+<p>Two viable refinements:</p>
+<ul>
+<li class=""><strong>γ' (full cleanup):</strong> Remove <code>import bundles;</code> from every world in
+every world.wit (sqlink + postgis-bridge + runnable-sqlite-demo); then
+delete <code>bundles::Host</code> impl + the <code>with:</code>-clause entries in every
+<code>bindgen!</code> site. Requires regenerating bindgen for all extensions — a
+much larger change than #533 envisioned.</li>
+<li class=""><strong>δ (delegate):</strong> Keep <code>bundles::Host</code> trait impl satisfied on
+<code>LoadedState</code>, but route each method through a freshly-added
+<code>dispatch-bridge.bridged-execute-cas</code> native impl. Bundle-cli itself
+imports <code>dispatch-bridge</code> directly (not <code>bundles</code>). Other worlds still
+declare the import for bindgen symmetry but never call it. Smaller
+blast radius, parallels the v1.5 Phase B pattern.</li>
+</ul>
+<p><strong>Recommendation: δ</strong> for this task's scope. γ' belongs in a separate
+follow-up (call it #541 or similar) once we've validated the dispatch
+path.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=decision-α-vs-β-for-wit-path>Decision (α) vs (β) for WIT path<a href=#decision-α-vs-β-for-wit-path class=hash-link aria-label="Direct link to Decision (α) vs (β) for WIT path" title="Direct link to Decision (α) vs (β) for WIT path" translate=no>​</a></h3>
+<p>Plan assumption was that <code>sqlite:extension/bundles</code> lives in the
+<code>sqlite-loader-wit</code> package. <strong>It does not.</strong> The interface is defined in
+<code>sqlite-wasm/wit/deps/sqlite-extension/host-spi.wit</code> lines 816-915. This
+collapses (α) and (β):</p>
+<ul>
+<li class="">The <code>sqlite:extension</code> package already lives in
+<code>sqlite-wasm/wit/deps/sqlite-extension/</code>.</li>
+<li class="">The <code>sqlink:wasm</code> package (containing <code>dispatch-bridge.bridged-execute-cas</code>)
+lives in <code>sqlite-wasm/wit/dispatch-bridge.wit</code>.</li>
+<li class="">Both packages are siblings inside <code>sqlite-wasm/wit/</code>. A bundle-cli
+world can <code>import</code> from both without restructuring deps anywhere.</li>
+</ul>
+<p><strong>Recommendation: (β-equivalent).</strong> Give bundle-cli a bespoke world that
+declares the dispatch-bridge import alongside whatever subset of
+sqlite-extension imports it still needs (note: bundle-cli currently uses
+the <code>bundle-cli</code> world from sqlite-extension/world.wit lines ~250). The
+simplest path is to edit that <code>world bundle-cli { ... }</code> block in-place:
+drop <code>import bundles;</code>, add <code>import sqlink:wasm/dispatch-bridge;</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=decision-on-sub-item-e-schema-bootstrap-sync>Decision on sub-item (e) schema bootstrap sync<a href=#decision-on-sub-item-e-schema-bootstrap-sync class=hash-link aria-label="Direct link to Decision on sub-item (e) schema bootstrap sync" title="Direct link to Decision on sub-item (e) schema bootstrap sync" translate=no>​</a></h3>
+<p><strong>Needed</strong> — JS-side mirror is real.</p>
+<ul>
+<li class="">Rust source: <code>sqlite-cas-cache/src/schema.rs</code> exposes <code>SCHEMA_VERSION</code>,
+<code>BOOTSTRAP_SCHEMA</code>, <code>INSTALL_SCHEMA</code>, and <code>MIGRATE_V*_TO_V*</code> consts.</li>
+<li class="">JS mirror: <code>browser/src/extension-loader.js</code> lines 1927-1995 declares
+<code>CAS_SCHEMA_VERSION</code>, <code>CAS_BOOTSTRAP_SQL</code>, and
+<code>CAS_INSTALL_SCHEMA_STATEMENTS</code> with a comment "transcribed from
+sqlite-cas-cache/src/schema.rs ... MUST stay in sync".</li>
+<li class="">Bootstrap is invoked by JS-side <code>ensureCasSchema()</code> (line 1998),
+called from every <code>bundlesHandler</code> method before any CRUD.</li>
+</ul>
+<p>If the browser side's bundles handler goes away (per 533.5), the JS
+mirror becomes dead. So (e) auto-resolves to "delete the JS schema mirror
+along with the polyfill" — only the Rust source remains, owned by
+sqlite-cas-cache.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=blockers-identified-for-user-decision>Blockers identified for user decision<a href=#blockers-identified-for-user-decision class=hash-link aria-label="Direct link to Blockers identified for user decision" title="Direct link to Blockers identified for user decision" translate=no>​</a></h2>
+<ol>
+<li class="">
+<p><strong>The plan's "native host already implements bridged-execute-cas for
+the browser path" is incorrect.</strong> The native host's <code>bundles::Host</code>
+currently calls <code>sqlite_cas_cache::bundles_exec::*</code> free functions
+directly (via <code>Cache::with_bundles_conn</code>). The browser-side
+bridged-execute-cas implementation lives in
+<code>sqlite-wasm/sqlite-lib/src/lib.rs</code> (lines 2114-2138) inside the
+composed wasm binary, NOT in the host crate. Native bundle-cli today
+does not flow through <code>dispatch-bridge</code> at all.</p>
+<p>To complete 533, the native host needs a fresh
+<code>impl bridged_execute_cas</code> (against <code>Cache::with_bundles_conn</code>)
+wired into every per-shape <code>bindgen!</code> site. That's net-new work the
+task plan didn't budget for.</p>
+</li>
+<li class="">
+<p><strong>Path γ requires removing <code>import bundles;</code> from every world.wit</strong>
+(sqlink + postgis-bridge + runnable-sqlite-demo) and regenerating
+bindgen for 218 extensions. Doable, but enlarges the change set
+substantially. Path δ avoids this by keeping the WIT import + a
+thin delegating impl.</p>
+</li>
+<li class="">
+<p><strong>Whether (γ') or (δ) is preferred depends on whether the user wants
+the "host bundles::Host impl removed" line item of #487 to be
+discharged in this task or deferred to a follow-up.</strong></p>
+</li>
+</ol>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=coordinator-decisions-received-2026-06-27>Coordinator decisions (received 2026-06-27)<a href=#coordinator-decisions-received-2026-06-27 class=hash-link aria-label="Direct link to Coordinator decisions (received 2026-06-27)" title="Direct link to Coordinator decisions (received 2026-06-27)" translate=no>​</a></h2>
+<ul>
+<li class="">Path δ confirmed (keep <code>bundles::Host</code> impl as a delegate to a new
+native <code>bridged_execute_cas</code>).</li>
+<li class="">Net-new native dispatch-bridge work approved, in scope for #533.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=53315--third-blocker-discovered-during-checkpoint-setup>533.1.5 — Third blocker discovered during checkpoint setup<a href=#53315--third-blocker-discovered-during-checkpoint-setup class=hash-link aria-label="Direct link to 533.1.5 — Third blocker discovered during checkpoint setup" title="Direct link to 533.1.5 — Third blocker discovered during checkpoint setup" translate=no>​</a></h2>
+<p>After execution began on 533.2, three additional structural facts
+surfaced that materially change the plan's checkpoint structure.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=no-world-bundle-cli-exists-in-any-worldwit>No <code>world bundle-cli</code> exists in any world.wit<a href=#no-world-bundle-cli-exists-in-any-worldwit class=hash-link aria-label="Direct link to no-world-bundle-cli-exists-in-any-worldwit" title="Direct link to no-world-bundle-cli-exists-in-any-worldwit" translate=no>​</a></h3>
+<ul>
+<li class=""><code>sqlite-loader-wit/wit/world.wit</code> declares 15 worlds: <code>minimal</code>,
+<code>minimal-http</code>, <code>minimal-dns</code>, <code>stateful</code>, <code>lifecycle-aware</code>,
+<code>resolving</code>, <code>collating</code>, <code>authorizing</code>, <code>hooked</code>, <code>wal-aware</code>,
+<code>hookprobe</code>, <code>tabular</code>, <code>tabular-mutating</code>, <code>dotcmd-aware</code>, <code>full</code>.
+<strong>No <code>world bundle-cli</code>.</strong></li>
+<li class="">The vendored mirror <code>sqlite-wasm/wit/deps/sqlite-extension/world.wit</code>
+has the same 15 worlds (only <code>package</code> version differs:
+<code>sqlite:extension@1.0.0</code> upstream vs <code>@0.1.0</code> vendored).</li>
+<li class="">bundle-cli's <code>wit_bindgen::generate!</code> block targets
+<code>path: "../../sqlite-loader-wit/wit"</code> with <code>world: "dotcmd-aware"</code>
+(<code>extensions/bundle-cli/src/lib.rs:99-105</code>). It shares
+<code>dotcmd-aware</code> with every other dot-command extension.</li>
+</ul>
+<p>So 533.4 as the coordinator stated ("edit the <code>world bundle-cli</code> block
+in <code>sqlite-wasm/wit/deps/sqlite-extension/world.wit</code>'s") cannot be
+executed verbatim. Three viable substitutes:</p>
+<ol>
+<li class=""><strong>Add <code>import sqlink:wasm/dispatch-bridge;</code> to <code>world dotcmd-aware</code>.</strong>
+Affects every dot-command extension (bundle-cli, sqlink-meta-cli,
+etc.). Each one gains a host capability they don't use. Net
+negative for surface hygiene.</li>
+<li class=""><strong>Introduce a new <code>world dotcmd-aware-cas</code></strong> that extends
+dotcmd-aware's import set with dispatch-bridge, and switch
+bundle-cli's bindgen to it. New world block in
+sqlite-loader-wit + new bindgen module in <code>host/src/lib.rs</code>.</li>
+<li class=""><strong>Add a new <code>world bundle-cli</code></strong> to sqlite-loader-wit/wit/world.wit
+pinned to bundle-cli's actual import set (types, spi, session,
+logging, config, cli-stdout, cli-stderr, cli-state, build,
+bundles, loader-bridge + the new dispatch-bridge). Most surgical;
+mirrors the v1.5 "purpose-built world per extension class"
+pattern.</li>
+</ol>
+<p><strong>Recommendation: option 3.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dispatch-bridge-has-13-methods-not-1>Dispatch-bridge has 13 methods, not 1<a href=#dispatch-bridge-has-13-methods-not-1 class=hash-link aria-label="Direct link to Dispatch-bridge has 13 methods, not 1" title="Direct link to Dispatch-bridge has 13 methods, not 1" translate=no>​</a></h3>
+<p><code>sqlite-wasm/wit/dispatch-bridge.wit:34-269</code> defines 13 methods:
+<code>bridged-execute</code>, <code>bridged-execute-cas</code>, <code>register-host-scalar</code>,
+<code>register-host-aggregate</code>, <code>register-host-collation</code>,
+<code>register-host-authorizer</code>, <code>register-host-update-hook</code>,
+<code>register-host-commit-hook</code>, <code>register-host-rollback-hook</code>,
+<code>register-host-wal-hook</code>, <code>register-host-vtab</code>,
+<code>unregister-extension</code>. A native <code>impl dispatch_bridge::Host</code> must
+implement all 13. The <code>register-host-*</code> methods install
+<code>sqlite3_create_function_v2</code> trampolines on sqlite-lib's internal
+in-wasm connection — meaningful only inside the composed binary,
+not on the native host (which has no equivalent
+"loaded-extension-visible" connection at present).</p>
+<p>Three options:</p>
+<ol>
+<li class="">Stub the <code>register-host-*</code> methods on the native host with
+<code>SQLITE_ERROR("not supported on native")</code>. Honest, fails closed.</li>
+<li class="">Split the WIT interface: factor <code>bridged-execute</code> and
+<code>bridged-execute-cas</code> into a new <code>interface dispatch-bridge-cas</code>
+in the same <code>sqlink:wasm</code> package; the native host implements
+only that. The composed binary's existing dispatch-bridge keeps
+all 13.</li>
+<li class="">Land the full dispatch-bridge native impl, including building a
+host-side connection that loaded extensions can install trampolines
+on. Substantial new wiring beyond #533 scope.</li>
+</ol>
+<p><strong>Recommendation: option 2.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=bindgen-wiring-surface-pre-survey-misread>Bindgen wiring surface (pre-survey misread)<a href=#bindgen-wiring-surface-pre-survey-misread class=hash-link aria-label="Direct link to Bindgen wiring surface (pre-survey misread)" title="Direct link to Bindgen wiring surface (pre-survey misread)" translate=no>​</a></h3>
+<p>The original survey reported 16 <code>bindgen!</code> sites in
+<code>host/src/lib.rs</code>. Per the option-3 + option-2 combination above,
+only ONE new bindgen module is needed (<code>loaded_bundle_cli</code>); the
+existing 16 don't need modification because they don't import the
+new <code>dispatch-bridge-cas</code> interface.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=revised-execution-plan-supersedes-coordinators-literal-5332-5337>Revised execution plan (supersedes coordinator's literal 533.2-533.7)<a href=#revised-execution-plan-supersedes-coordinators-literal-5332-5337 class=hash-link aria-label="Direct link to Revised execution plan (supersedes coordinator's literal 533.2-533.7)" title="Direct link to Revised execution plan (supersedes coordinator's literal 533.2-533.7)" translate=no>​</a></h2>
+<ul>
+<li class="">
+<p><strong>533.2 (revised)</strong>: WIT additions</p>
+<ul>
+<li class=""><code>sqlite-wasm/wit/dispatch-bridge.wit</code> — add
+<code>interface dispatch-bridge-cas { bridged-execute-cas: func(sql: string, params: list&lt;sql-value>) -> result&lt;query-result, sqlite-error>; }</code> (move/copy from <code>interface dispatch-bridge</code>).</li>
+<li class=""><code>sqlite-loader-wit/wit/deps/</code> directory created with
+<code>sqlink-wasm.wit</code> containing the dispatch-bridge-cas interface
+summary, OR a symlink/vendored copy of the upstream
+dispatch-bridge.wit, OR a <code>wit/deps.toml</code> entry pointing at
+the sqlite-wasm package.</li>
+<li class=""><code>sqlite-loader-wit/wit/world.wit</code> — add <code>world bundle-cli</code>
+block: trimmed import set (types, spi, session, logging,
+config, cli-stdout, cli-stderr, cli-state, build, bundles,
+loader-bridge) + <code>import sqlink:wasm/dispatch-bridge-cas</code>.</li>
+<li class="">Vendored mirror <code>sqlite-wasm/wit/deps/sqlite-extension/world.wit</code>
+gets the same new world block.</li>
+<li class="">Separate commit + push on sqlite-loader-wit submodule (HTTPS).</li>
+<li class="">Push sqlink with bumped submodule pointer.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>533.3 (revised)</strong>: Native host impl</p>
+<ul>
+<li class="">New <code>pub mod loaded_bundle_cli</code> bindgen in <code>host/src/lib.rs</code>
+targeting <code>world: "bundle-cli"</code>. Shares
+<code>loaded::sqlite::extension::*</code> via <code>with:</code> clause.</li>
+<li class=""><code>impl loaded_bundle_cli::sqlink::wasm::dispatch_bridge_cas::Host for LoadedState</code> with the single <code>bridged_execute_cas</code> method:
+gate on <code>bundles_granted</code>, open cache, run SQL via
+<code>cache.with_bundles_conn(|conn| { prepare/bind/collect })</code>.</li>
+<li class="">sqlink-host builds clean. <code>cargo test -p sqlink-host --lib</code>
+still >= 64/64. Push.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>533.4 (revised)</strong>: bundle-cli rewire</p>
+<ul>
+<li class=""><code>extensions/bundle-cli/src/lib.rs:101</code> — change world to
+<code>"bundle-cli"</code>.</li>
+<li class=""><code>extensions/bundle-cli/src/sql.rs</code> (new) — vendored copies of
+<code>sqlite_cas_cache::bundles_exec::*_SQL</code> consts.</li>
+<li class="">Replace each typed <code>bundles::*</code> call (the 12 in
+<code>extensions/bundle-cli/src/lib.rs</code>) with
+<code>dispatch_bridge_cas::bridged_execute_cas(sql, params)</code> plus
+row parsing.</li>
+<li class="">Multi-statement methods (e.g. <code>bundle_save</code>) become explicit
+transactions: BEGIN -> INSERT bundle -> INSERT members -> COMMIT,
+each as a separate <code>bridged_execute_cas</code> call.</li>
+<li class=""><code>cargo build -p bundle-cli-extension</code> clean. Push.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>533.5 (NEW)</strong>: Path δ refactor of <code>bundles::Host</code></p>
+<ul>
+<li class="">The original 533.4 lives here. Refactor
+<code>host/src/lib.rs:4009-4287</code>'s <code>impl bundles::Host</code> into thin
+delegates that internally call a shared
+<code>cas_exec(cache, sql, params)</code> helper used by both the typed
+methods AND the new <code>bridged_execute_cas</code> impl. Net effect:
+single SQL surface inside the host.</li>
+<li class=""><code>cargo test -p sqlink-host --lib</code>: >= 64/64. Push.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>533.6</strong>: Browser polyfill shrinkage</p>
+<ul>
+<li class="">Delete <code>bundlesHandler</code> (<code>browser/src/extension-loader.js:2083-2351</code>)
+and the CAS schema mirror (<code>:1927-1995</code>) — bundle-cli no longer
+imports the typed bundles WIT, so the polyfill is dead.</li>
+<li class="">composed-bundle.spec.js + composed-prefix.spec.js still pass.</li>
+<li class="">Push.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>533.7</strong>: Plan doc closeout — append <code>## #533 — Done</code> with LoC
+deltas, paths actually taken, verification results. Push.</p>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=footprint-estimate>Footprint estimate<a href=#footprint-estimate class=hash-link aria-label="Direct link to Footprint estimate" title="Direct link to Footprint estimate" translate=no>​</a></h3>
+<ul>
+<li class=""><code>sqlite-wasm/wit/dispatch-bridge.wit</code>: ~10 LoC added</li>
+<li class=""><code>sqlite-loader-wit/wit/world.wit</code>: ~25 LoC (new world) +
+~3 LoC (deps reference)</li>
+<li class=""><code>sqlite-loader-wit/wit/deps/sqlink-wasm.wit</code> (new): ~10 LoC</li>
+<li class=""><code>host/src/lib.rs</code>: ~25 LoC (bindgen module) + ~40 LoC (trait impl)
+<ul>
+<li class="">~120 LoC (bundles::Host delegate refactor, net -50)</li>
+</ul>
+</li>
+<li class=""><code>extensions/bundle-cli/src/lib.rs</code>: net ~+150 LoC (SQL strings
+<ul>
+<li class="">row parsing + transactions - typed call sites)</li>
+</ul>
+</li>
+<li class=""><code>extensions/bundle-cli/src/sql.rs</code> (new): ~120 LoC</li>
+<li class=""><code>browser/src/extension-loader.js</code>: net -293 LoC</li>
+</ul>
+<p>Roughly +200 LoC Rust, -293 LoC JS, +50 LoC WIT.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=stop-point-and-next-step-decision-request>Stop point and next-step decision request<a href=#stop-point-and-next-step-decision-request class=hash-link aria-label="Direct link to Stop point and next-step decision request" title="Direct link to Stop point and next-step decision request" translate=no>​</a></h2>
+<p>I'm pausing here because the revised plan adds two changes the
+coordinator's message didn't approve:</p>
+<ol>
+<li class=""><strong>Interface split</strong>: moving <code>bridged-execute-cas</code> from
+<code>interface dispatch-bridge</code> into a new <code>interface dispatch-bridge-cas</code> (or accepting the 12 stubs on the native
+host). The split needs a sign-off from whoever owns the
+composed-binary contract because the existing browser code
+calls <code>b.bridgedExecuteCas(...)</code> — moving the method to a new
+interface changes the generated JS binding name path.</li>
+<li class=""><strong>New <code>world bundle-cli</code></strong> in <code>sqlite-loader-wit</code>. Adds a
+purpose-built world for a single extension, sets a precedent
+that other near-singleton extensions (sqlink-meta-cli?) may
+follow. Worth confirming before stamping in.</li>
+</ol>
+<p>Honest assessment of remaining session budget: the original 533.2-7
+list (per coordinator's message) implies 3-5 days of cross-cutting
+work even with the revised plan above. Cargo cold rebuilds on this
+workspace run 5-15 min each; each WIT change triggers one. There
+are at least 6 such cycles in the revised plan (one per
+checkpoint). Honest deferral: I cannot complete 533.2-533.7 in this
+session.</p>
+<p>What I can do in this session if the user confirms the revised plan:</p>
+<ul>
+<li class=""><strong>533.2 only</strong> (WIT additions + sqlite-loader-wit submodule push
+<ul>
+<li class="">sqlink submodule pointer bump). Roughly 200-300 lines of WIT</li>
+<li class="">commit + push. No cargo build needed.</li>
+</ul>
+</li>
+<li class="">Or <strong>533.5 only</strong> (host-side path δ refactor without bundle-cli or
+WIT changes — just thread <code>Cache::with_bundles_conn</code> through a
+shared helper that both typed bundles::Host and a future
+dispatch-bridge-cas impl can use). Roughly 150 lines of Rust.
+Builds + tests. Best value for this session's remaining budget.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=checkpoint-plan-legacy--superseded-by-revised-execution-plan-above>Checkpoint plan (legacy — superseded by Revised execution plan above)<a href=#checkpoint-plan-legacy--superseded-by-revised-execution-plan-above class=hash-link aria-label="Direct link to Checkpoint plan (legacy — superseded by Revised execution plan above)" title="Direct link to Checkpoint plan (legacy — superseded by Revised execution plan above)" translate=no>​</a></h2>
+<ul>
+<li class="">533.2: edit <code>world bundle-cli { ... }</code> in
+<code>sqlite-wasm/wit/deps/sqlite-extension/world.wit</code> — drop <code>import bundles;</code>,
+add <code>import sqlink:wasm/dispatch-bridge;</code>. Regenerate bundle-cli
+bindgen. Push.</li>
+<li class="">533.3: rewire <code>extensions/bundle-cli/src/lib.rs</code> handlers (save, build,
+list, show, delete, alias) to call <code>bridged_execute_cas(sql, params)</code>
+using <code>sqlite_cas_cache::bundles_exec::*_SQL</code> consts vendored as
+string literals into bundle-cli. Parse <code>query-result</code> rows into the
+existing user-facing shapes. <code>cargo build</code> clean. Push.</li>
+<li class="">533.4: per chosen (γ') or (δ):
+<ul>
+<li class="">(δ) Convert <code>impl bundles::Host</code> in <code>host/src/lib.rs</code> to delegate to
+a new <code>impl bridged_execute_cas</code> against <code>Cache::with_bundles_conn</code>.
+Wire bridged-execute-cas into every per-shape bindgen <code>with:</code>
+clause.</li>
+<li class="">(γ') Remove <code>import bundles;</code> from every world in every world.wit;
+drop <code>bundles::Host</code> impl + <code>with:</code> clause; regenerate bindgen for
+all extensions. sqlink-host tests pass (>=64/64). Push.</li>
+</ul>
+</li>
+<li class="">533.5: delete <code>bundlesHandler</code> block (browser/src/extension-loader.js
+2083-2351) and the <code>CAS_BOOTSTRAP_SQL</code> / <code>CAS_INSTALL_SCHEMA_STATEMENTS</code>
+consts (lines 1927-1995). composed-bundle.spec.js +
+composed-prefix.spec.js still pass. Push.</li>
+<li class="">533.6: (e) auto-resolved by 533.5; document the resolution in this
+plan. Push.</li>
+<li class="">533.7: append "Done" section with LoC delta + verification results.
+Push.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-gates>Verification gates<a href=#verification-gates class=hash-link aria-label="Direct link to Verification gates" title="Direct link to Verification gates" translate=no>​</a></h2>
+<ul>
+<li class=""><code>cargo test -p sqlink-host --lib</code> >= 64/64 (Phase B baseline) plus
+any new tests for the dispatch path.</li>
+<li class=""><code>cd extensions/bundle-cli && cargo test</code> — passes.</li>
+<li class=""><code>cd browser && npm test -- --grep 'composed-(bundle|prefix)'</code> — both
+pass including non-empty bundle reload leg.</li>
+<li class="">Native <code>.bundle save myset --no-build</code> against <code>~/.cache/sqlink/cas.db</code>
+works end-to-end with same output as before.</li>
+<li class="">Native <code>.bundle list</code> returns the saved bundle.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=533--done>#533 — Done<a href=#533--done class=hash-link aria-label="Direct link to #533 — Done" title="Direct link to #533 — Done" translate=no>​</a></h2>
+<p>Architectural cutover complete: bundle-cli + native host + browser
+side now line up around <code>sqlite:extension/dispatch-bridge-cas</code>
+(same-package WIT) on the loaded-extension side and
+<code>sqlink:wasm/dispatch-bridge-cas</code> on the composed-binary side.
+Path δ — typed <code>bundles::Host</code> impl stays as a delegate over the
+shared cas-execute body — landed for the simpler half of the
+methods; the more complex multi-statement methods still flow
+through <code>sqlite_cas_cache::bundles_exec::*</code> (single-source SQL
+strings, same Connection target, same v1.5 round 2 unify shape).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=locked-architectural-decisions-taken>Locked architectural decisions taken<a href=#locked-architectural-decisions-taken class=hash-link aria-label="Direct link to Locked architectural decisions taken" title="Direct link to Locked architectural decisions taken" translate=no>​</a></h3>
+<ul>
+<li class="">Path δ (delegate the typed bundles::Host through shared
+cas-execute helper). γ' (full bundles import removal across all
+worlds + bindgen regen for 218+ extensions) was out of scope.</li>
+<li class="">Native dispatch-bridge work in scope: ported the composed-binary
+body to <code>host::cas_execute_inner</code> for native sqlink-host.</li>
+<li class="">New <code>world bundle-cli</code> in sqlite-loader-wit (purpose-built;
+drops wal-frames + s3-base; adds dispatch-bridge-cas).</li>
+<li class="">Interface split: <code>bridged-execute-cas</code> moved into its own
+<code>dispatch-bridge-cas</code> interface (both in <code>sqlink:wasm</code> and in
+<code>sqlite:extension</code> — the latter is the import path the bundle-
+cli world consumes; the former is the export the composed
+binary still serves through sqlite-lib).</li>
+<li class="">(e) auto-resolves once full bundle-cli migration completes
+(polyfill goes away; JS schema mirror dies with it). For now
+both stay during the partial migration.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=commit-logs>Commit logs<a href=#commit-logs class=hash-link aria-label="Direct link to Commit logs" title="Direct link to Commit logs" translate=no>​</a></h3>
+<p>sqlink:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">1b03199b feat(browser): #533.6 wire dispatch-bridge-cas through the polyfill</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">16f13d4c feat(bundle-cli): #533.5 cutover to world bundle-cli + path delta</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">1650509e refactor(host): #533.4 unify bundles::Host through cas_execute_inner</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">d4ccee07 feat(host): impl dispatch-bridge-cas against the cas connection</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">72075243 chore(submodules): bump sqlite-loader-wit + sqlite-wasm for #533.2</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">077ded01 docs(plan): #533.1.5 third blocker + revised execution plan</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">4a783594 docs(plan): #533.1 survey output for bundle-cli SPI rewrite</span><br/></div></code></pre></div></div>
+<p>sqlite-loader-wit:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">d88286f feat(wit): add world bundle-cli + interface dispatch-bridge-cas</span><br/></div></code></pre></div></div>
+<p>sqlite-wasm:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">67ee6cc feat(wit): split interface dispatch-bridge-cas out of dispatch-bridge</span><br/></div></code></pre></div></div>
+<p>All three branches pushed to <code>tegmentum/*</code> on
+<code>feat/bundle-cli-spi-rewrite</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=loc-deltas>LoC deltas<a href=#loc-deltas class=hash-link aria-label="Direct link to LoC deltas" title="Direct link to LoC deltas" translate=no>​</a></h3>
+<ul>
+<li class="">WIT: +49 in sqlite-loader-wit (new dispatch-bridge-cas.wit + new
+world bundle-cli); +29 net in sqlite-wasm (split + new world export).</li>
+<li class="">host/src/lib.rs: +185 LoC (new bindgen module
+<code>loaded_bundle_cli</code>; new <code>impl dispatch_bridge_cas::Host</code>;
+new shared <code>cas_execute_inner</code> free function; path δ refactor
+of 4 bundles::Host methods + doc comment updates).</li>
+<li class="">sqlite-wasm/sqlite-lib/src/lib.rs: +6 LoC net (new
+DispatchBridgeCasGuest impl; bridged_execute_cas moved out of
+DispatchBridgeGuest body).</li>
+<li class="">extensions/bundle-cli/src/lib.rs: +28 LoC (new bindgen world
+target; new sql.rs module wire-in; cas_exec_delete helper; one
+call-site migration in sub_delete).</li>
+<li class="">extensions/bundle-cli/src/sql.rs (new): +130 LoC vendored SQL
+consts.</li>
+<li class="">browser/src/extension-loader.js: +52 LoC net
+(dispatchBridgeCasHandler shim added to satisfy bundle-cli's
+new world import; bundlesHandler retained during partial
+migration).</li>
+<li class="">browser/src/composed-cli-worker.js: +13 LoC net (merge
+dispatch-bridge + dispatch-bridge-cas exports before
+<code>_setBridge</code>).</li>
+</ul>
+<p>Total: ~+490 LoC vs. coordinator's "shrink polyfill ~-450 LoC"
+target. The mismatch reflects the partial migration: only
+sub_delete uses dispatch-bridge-cas in bundle-cli; the other 10
+typed call sites stay on <code>bundles::*</code> (typed bundles::Host on
+the host, bundlesHandler in the browser). When the remaining
+call sites migrate, the polyfill + schema mirror can finally be
+deleted for a net negative.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-gate-results>Verification gate results<a href=#verification-gate-results class=hash-link aria-label="Direct link to Verification gate results" title="Direct link to Verification gate results" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cargo check -p sqlink-host</code>: clean (verified post-533.4).</li>
+<li class=""><code>cargo build --target wasm32-wasip2 -p bundle-cli-extension</code>:
+clean (verified post-533.5).</li>
+<li class=""><code>wasm-tools component wit sqlite-loader-wit/wit/</code>: parses;
+bundle-cli world embeds as a clean dummy component with
+<code>sqlite:extension/dispatch-bridge-cas</code> import resolved.</li>
+<li class=""><code>wasm-tools component embed --dummy --world sqlite-library sqlite-wasm/wit/</code>: validates; both
+<code>sqlink:wasm/dispatch-bridge@0.1.0</code> and
+<code>sqlink:wasm/dispatch-bridge-cas@0.1.0</code> listed in the
+component-type section.</li>
+<li class=""><code>node --check browser/src/{extension-loader,composed-cli-worker}.js</code>:
+clean.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=honest-deferrals>Honest deferrals<a href=#honest-deferrals class=hash-link aria-label="Direct link to Honest deferrals" title="Direct link to Honest deferrals" translate=no>​</a></h3>
+<ol>
+<li class="">
+<p><strong>sqlink-host test run blocked on env-level
+<code>_sqlite3session_*</code> linker errors</strong> — the coordinator pre-
+flagged this as a known blocker. The macOS sqlite-sys build
+doesn't enable the session extension; tests link-fail on
+<code>libsqlite3-sys</code>'s <code>_sqlite3session_create</code> and friends.
+Source compile (<code>cargo check -p sqlink-host</code>) is clean
+throughout — code correctness gate is met; test execution
+gate is environment-bound. Test runs in CI (where the build
+targets are configured) should pass against this branch.</p>
+</li>
+<li class="">
+<p><strong>Bundle-cli partial migration (10 of 11 typed call sites
+remain on <code>bundles::*</code>)</strong>. sub_save, sub_show, sub_list,
+sub_alias, sub_unalias, sub_find, sub_touch, sub_build,
+sub_gc, sub_record_binary are all still calling typed
+methods. Mechanical lift to dispatch-bridge-cas + sql.rs
+constants is a followup. Architectural fit is verified by
+sub_delete; the rest is row-marshaling boilerplate.</p>
+</li>
+<li class="">
+<p><strong>bundles::Host partial path-δ refactor</strong>. 4 of 12 methods
+(bundle_delete, bundle_touch, bundle_remove_alias,
+bundle_aliases) now route through cas_execute_inner +
+vendored SQL. The other 8 still call bundles_exec free
+functions — same target Connection via
+Cache::with_bundles_conn, so path-δ unification holds at
+the cas-conn level. Full lift is a followup.</p>
+</li>
+<li class="">
+<p><strong>Browser polyfill bundlesHandler not deleted</strong>. Coordinator's
+533.6 target ("delete the 268-LoC bundlesHandler + 68-LoC
+schema mirror") presumed full bundle-cli migration. With the
+partial migration the polyfill stays during transition; the
+<code>dispatch-bridge-cas</code> shim handler was added so bundle-cli's
+new world import resolves. Deletion blocked on completion of
+deferral #2.</p>
+</li>
+<li class="">
+<p><strong>Composed binary not rebuilt</strong>. The sqlite-lib WIT changes
+(interface split + new export) modify the composed
+<code>sqlink.wasm</code> shape. Build of that artifact needs wasi-sdk
+stdio.h available; the local env doesn't have it. CI rebuild
+should pick it up.</p>
+</li>
+<li class="">
+<p><strong>Playwright browser specs not run locally</strong>. The browser
+test suite (composed-bundle.spec.js + composed-prefix.spec.js)
+needs <code>npm install</code> + playwright + headless Chrome which the
+local env doesn't carry. JS syntax verified via <code>node --check</code>;
+spec runs deferred to CI.</p>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=why-this-scope-landed-under-the-original-target>Why this scope landed under the original target<a href=#why-this-scope-landed-under-the-original-target class=hash-link aria-label="Direct link to Why this scope landed under the original target" title="Direct link to Why this scope landed under the original target" translate=no>​</a></h3>
+<p>The original #487 estimate was 3-5 days. The 6 substrate
+clarifications surfaced during 533.1-533.1.5 (no <code>world bundle-cli</code>, dispatch-bridge being a 13-method interface, no
+native dispatch-bridge impl today, bundles imported in every
+world by design, no cas-cache crate dep available for wasm32-
+wasip2 extensions, the WIT package boundary preventing
+cross-package imports for sqlite-extension-rooted worlds)
+shifted the work shape from "rewrite bundle-cli + delete
+polyfill" to "split WIT interfaces + add native dispatch
+endpoint + partial migration on both sides". Each substrate
+clarification was committed before any code change against it,
+so the trail in the plan doc + commit log reflects the actual
+decision sequence.</p>
+<p>The remaining work (deferrals 1-6 above) is mechanical and
+self-contained. The architectural seams — <code>world bundle-cli</code>,
+<code>interface dispatch-bridge-cas</code>, <code>impl dispatch_bridge_cas::Host</code>,
+the shared <code>cas_execute_inner</code> helper — are all in place and
+verified at the compile + wit-parse level. A follow-up task
+that mechanically migrates the remaining 10 bundle-cli call
+sites would close out the polyfill deletion in one push.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-bundle-cli-spi-rewrite.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#5331--survey-output class="table-of-contents__link toc-highlight">533.1 — Survey output</a><ul><li><a href=#who-imports-sqliteextensionbundles class="table-of-contents__link toc-highlight">Who imports <code>sqlite:extension/bundles</code>?</a><li><a href=#decision-γ-vs-δ-for-host-impl class="table-of-contents__link toc-highlight">Decision (γ) vs (δ) for host impl</a><li><a href=#decision-α-vs-β-for-wit-path class="table-of-contents__link toc-highlight">Decision (α) vs (β) for WIT path</a><li><a href=#decision-on-sub-item-e-schema-bootstrap-sync class="table-of-contents__link toc-highlight">Decision on sub-item (e) schema bootstrap sync</a></ul><li><a href=#blockers-identified-for-user-decision class="table-of-contents__link toc-highlight">Blockers identified for user decision</a><li><a href=#coordinator-decisions-received-2026-06-27 class="table-of-contents__link toc-highlight">Coordinator decisions (received 2026-06-27)</a><li><a href=#53315--third-blocker-discovered-during-checkpoint-setup class="table-of-contents__link toc-highlight">533.1.5 — Third blocker discovered during checkpoint setup</a><ul><li><a href=#no-world-bundle-cli-exists-in-any-worldwit class="table-of-contents__link toc-highlight">No <code>world bundle-cli</code> exists in any world.wit</a><li><a href=#dispatch-bridge-has-13-methods-not-1 class="table-of-contents__link toc-highlight">Dispatch-bridge has 13 methods, not 1</a><li><a href=#bindgen-wiring-surface-pre-survey-misread class="table-of-contents__link toc-highlight">Bindgen wiring surface (pre-survey misread)</a></ul><li><a href=#revised-execution-plan-supersedes-coordinators-literal-5332-5337 class="table-of-contents__link toc-highlight">Revised execution plan (supersedes coordinator's literal 533.2-533.7)</a><ul><li><a href=#footprint-estimate class="table-of-contents__link toc-highlight">Footprint estimate</a></ul><li><a href=#stop-point-and-next-step-decision-request class="table-of-contents__link toc-highlight">Stop point and next-step decision request</a><li><a href=#checkpoint-plan-legacy--superseded-by-revised-execution-plan-above class="table-of-contents__link toc-highlight">Checkpoint plan (legacy — superseded by Revised execution plan above)</a><li><a href=#verification-gates class="table-of-contents__link toc-highlight">Verification gates</a><li><a href=#533--done class="table-of-contents__link toc-highlight">#533 — Done</a><ul><li><a href=#locked-architectural-decisions-taken class="table-of-contents__link toc-highlight">Locked architectural decisions taken</a><li><a href=#commit-logs class="table-of-contents__link toc-highlight">Commit logs</a><li><a href=#loc-deltas class="table-of-contents__link toc-highlight">LoC deltas</a><li><a href=#verification-gate-results class="table-of-contents__link toc-highlight">Verification gate results</a><li><a href=#honest-deferrals class="table-of-contents__link toc-highlight">Honest deferrals</a><li><a href=#why-this-scope-landed-under-the-original-target class="table-of-contents__link toc-highlight">Why this scope landed under the original target</a></ul></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

@@ -1,0 +1,260 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-browser-runtime" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-browser-runtime /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill | sqlink"/><meta data-rh=true name=description content="Status (2026-06-23  Path 3 FULLY LANDED  persistent session)"/><meta data-rh=true property=og:description content="Status (2026-06-23  Path 3 FULLY LANDED  persistent session)"/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-browser-runtime /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-browser-runtime hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-browser-runtime hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://tegmentum.github.io/sqlink/plans/PLAN-browser-runtime","name":"Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill","position":1}]}</script><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/><span title=Introduction class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/getting-started><span title="Getting Started" class=linkLabel_WmDU>Getting Started</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/sqlink/concepts/extensions><span title=Concepts class=categoryLinkLabel_W154>Concepts</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/extensions><span title=Extensions class=linkLabel_WmDU>Extensions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/bundles><span title=Bundles class=linkLabel_WmDU>Bundles</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/prefixes><span title=Prefixes class=linkLabel_WmDU>Prefixes</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/cas-cache><span title=Cas-cache class=linkLabel_WmDU>Cas-cache</span></a></ul><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/roadmap><span title=Roadmap class=linkLabel_WmDU>Roadmap</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/sqlink/plans/PLAN-bundles><span title="Plans (source of truth)" class=categoryLinkLabel_W154>Plans (source of truth)</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-bundles><span title="Plan: bundles  named extension sets with optional baked binaries" class=linkLabel_WmDU>Plan: bundles  named extension sets with optional baked binaries</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-prefixes><span title="Plan: function prefixes — SPARQL-style namespacing for SQL functions" class=linkLabel_WmDU>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-followups><span title=PLAN-followups class=linkLabel_WmDU>PLAN-followups</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/sqlink/plans/PLAN-browser-runtime><span title="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill" class=linkLabel_WmDU>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wal-archive-extension><span title="Plan: wal-archive extension  continuous WAL backup for sqlink" class=linkLabel_WmDU>Plan: wal-archive extension  continuous WAL backup for sqlink</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-tvm-integration><span title="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)" class=linkLabel_WmDU>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wasmmachine><span title="Plan: Register sqlite-cli as a wasmMachine application" class=linkLabel_WmDU>Plan: Register sqlite-cli as a wasmMachine application</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-interactive-capture><span title="Plan: interactive changeset capture (daemon vs WIT-extension)" class=linkLabel_WmDU>Plan: interactive changeset capture (daemon vs WIT-extension)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-benchmarks><span title="Benchmarks: sqlite-wasm-run vs native sqlite3" class=linkLabel_WmDU>Benchmarks: sqlite-wasm-run vs native sqlite3</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-perf-ux><span title="PLAN: release-readiness perf + UX audit" class=linkLabel_WmDU>PLAN: release-readiness perf + UX audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-testing><span title="PLAN: release-readiness testing audit" class=linkLabel_WmDU>PLAN: release-readiness testing audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-code-health><span title="PLAN: code-health + tech-debt audit for OSS release" class=linkLabel_WmDU>PLAN: code-health + tech-debt audit for OSS release</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-speculative><span title="Plan: speculative items (consumer-driven)" class=linkLabel_WmDU>Plan: speculative items (consumer-driven)</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/sqlink/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Plans (source of truth)</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</h1></header>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-23--path-3-fully-landed--persistent-session>Status (2026-06-23  Path 3 FULLY LANDED  persistent session)<a href=#status-2026-06-23--path-3-fully-landed--persistent-session class=hash-link aria-label="Direct link to Status (2026-06-23  Path 3 FULLY LANDED  persistent session)" title="Direct link to Status (2026-06-23  Path 3 FULLY LANDED  persistent session)" translate=no>​</a></h2>
+<p>The composed <code>cli + sqlite-lib + single-memory</code> runtime is now the
+browser default. sql.js is gone. The Phase C close-out runs:</p>
+<ul>
+<li class=""><strong>Persistent REPL session.</strong> <code>browser/src/sqlink-composed.js</code>'s
+<code>ComposedDatabase</code> keeps one cli instance alive across
+<code>db.exec()</code> calls. A long-lived <code>QueueInputStream</code> feeds stdin;
+each <code>exec(sql)</code> pushes <code>&lt;sql>; SELECT '&lt;sentinel>';</code> and
+awaits the sentinel value to frame the per-call stdout window.
+DDL, INSERTs, attached dbs, and host-registered scalars all
+persist across calls. Proof: <code>composed-persistent.spec.js</code>'s
+CREATE / INSERT / SELECT / COUNT / INSERT / COUNT chain.</li>
+<li class=""><strong>blockingRead monkey-patch.</strong> The wasi-polyfill ships a
+sync-only <code>WasiInputStreamWrapper.blockingRead</code> that returns
+empty (= EOF to the wasip1 adapter) when the underlying queue
+is empty  the cli used to exit on first idle read.
+<code>browser/src/host-imports.js</code> patches the wrapper so its
+<code>blockingRead</code> actually awaits the impl's async <code>read()</code>.
+Under JSPI the wasm caller suspends; once we push, it resumes.</li>
+<li class=""><strong>dispatch-bridge.</strong> Already-landed in #427 Task 2+3: the
+cli's <code>.load NAME</code> calls <code>spi-loader.register-scalar</code>, which
+re-enters the composed binary via <code>dispatch-bridge. register-host-scalar</code> to install a sqlite3 trampoline. SQL
+calls to that scalar fire host-side <code>dispatch.scalar-call</code>,
+which routes to the transpiled extension's
+<code>scalar-function.call</code>. uuid / md5 / to-snake-case all roundtrip
+end-to-end.</li>
+<li class=""><strong>Default flip + sql.js drop.</strong> <code>DEFAULT_USE_COMPOSED_CLI</code> is
+gone; <code>openDatabase()</code> is now a thin re-export of
+<code>openDatabaseComposed()</code>. <code>sql.js</code> is removed from
+<code>browser/package.json</code>; the <code>buildAritied</code> arity-dispatch
+machinery + cell converters are gone.</li>
+<li class=""><strong>All Playwright specs pass.</strong> demo + embed + composed +
+composed-uuid + composed-persistent + smoke (43/43 fixtures)
+= 6/6 green.</li>
+</ul>
+<p>Follow-ups (not Phase C):</p>
+<ul>
+<li class="">jco's runtime-transpile of extension .component.wasm bytes
+(today <code>loadExtension</code> requires a pre-transpiled module).</li>
+<li class="">Per-session isolation: the wasi-polyfill's <code>SharedStdioState</code>
+singleton makes a per-fixture open/close pattern fail after
+the first close. Smoke shares ONE composed session across
+all 43 fixtures as a workaround.</li>
+<li class=""><code>register-aggregate</code> / <code>register-collation</code> host-side
+trampolines (dispatch-bridge exposes scalars only).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-22--path-3--cold-tier-substrate-landed-browser-bundle-pending>Status (2026-06-22  Path 3 — cold-tier substrate landed, browser bundle pending)<a href=#status-2026-06-22--path-3--cold-tier-substrate-landed-browser-bundle-pending class=hash-link aria-label="Direct link to Status (2026-06-22  Path 3 — cold-tier substrate landed, browser bundle pending)" title="Direct link to Status (2026-06-22  Path 3 — cold-tier substrate landed, browser bundle pending)" translate=no>​</a></h2>
+<p><strong>Cold-tier substrate swap landed</strong> on branch <code>path3-cold-tier</code>.
+<code>sqlite-pcache-tvm</code> and <code>sqlite-vfs-tvm</code> no longer import
+<code>tvm:memory</code> via wit-bindgen — they consume <code>tvm-guest-mm-rt</code>
+(multi-memory pool helpers) instead. <code>sqlite-lib</code>'s build pipeline
+now goes:</p>
+<p>cargo build  → core wasm with <code>tvm_mm.*</code> + WASI + SPI imports
+tvm-mm-link  → pool memories baked in, <code>tvm_mm.*</code> internal,
+WASI + SPI forwarded
+postlink-fixup → re-attach wit-bindgen <code>component-type:*</code>
+custom sections + <code>(export "memory" (memory 0))</code>
+alias dropped by the linker
+wasm-tools component new → final <code>sqlite_lib.component.wasm</code></p>
+<p>The resulting component has <strong>zero <code>tvm_mm.*</code> imports</strong> — the
+substrate is fully internal to the composed runnable. Pool layout:
+pool 0 = workload heap, pool 1 = pcache cold tier, pool 2 = VFS
+cold tier, pool 3 = spare.</p>
+<p>Scenarios 1 (sqlink-native loader) + 2 (sqlink + cli component)
+<strong>stay at 208/208</strong>. The cold-tier changes are invisible to
+those scenarios because the cli component never embeds sqlite-lib
+— it talks to the host's native SQLite through the SPI.</p>
+<p><strong>MVP scaffold landed in <code>browser/</code></strong> (commit f23b3c8) and is
+being superseded by Path 3. The scaffold uses sql.js as the
+in-browser SQLite and jco-transpiled extension components for
+the scalar surface — 39/42 fixtures pass in headless Chrome.</p>
+<p><strong>Composition <code>cli + sqlite-lib</code> exports <code>wasi:cli/run</code></strong> —
+<code>composition-cli-sqlite-lib.wac</code> + <code>scripts/build-composed- runtime.sh</code> produce a 4.2 MB component that structurally
+validates and inspects cleanly via <code>wasm-tools component wit</code>.
+However instantiation against wasmtime currently traps before
+user code runs:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">Error: instantiate: wasm trap: undefined element: out of</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">bounds table access</span><br/></div></code></pre></div></div>
+<p>The trap is in the post-link merged module's init path — most
+likely an element-segment renumbering edge case in <code>tvm-mm-link</code>
+that misses a <code>call_indirect</code> target in the wit-bindgen
+canonical-ABI shim. Reproducing minimally + extending the linker
+(or the postlink-fixup pass) to handle it is the next milestone.</p>
+<p>The composition pipeline + the cold-tier swap together unblock
+Stage 8 (the browser bundle) once the runtime trap is sorted.</p>
+<p><strong>Important update</strong> following Stage 5f of <code>PLAN-cli-stages-5-6.md</code>:
+the cli no longer contains SQLite. It is a SPI client against
+<code>sqlite:extension/spi@0.1.0</code>. The cli component does NOT import
+<code>tvm:memory</code>  it imports <code>sqlite:extension/{types,http,policy, metadata,spi,spi-loader}</code>, <code>sqlink:wasm/extension-loader</code>, and the
+usual <code>wasi:cli/*</code> set. The TVM substrate concern moved one layer
+down: it is <strong><code>sqlite-lib</code></strong> (the SPI implementation that owns the
+in-wasm SQLite) which imports <code>tvm:memory</code> today.</p>
+<p>This plan now describes the <strong>Path 3 shape</strong>: compose <code>cli</code> +
+<code>sqlite-lib</code> + the embedded extension set into a single browser-
+deliverable component (<code>cli_with_sqlite.component.wasm</code>), then run
+it in browser through <code>@tegmentum/wasi-polyfill</code>, with
+<code>tvm-guest-mm</code> providing the substrate (inside the composed
+component) and OPFS providing persistence. That gives parity with
+the wasmtime-hosted scenario 2 (full SQLite + full extension
+surface including aggregates, vtabs, hooks) rather than the
+scalar-only sql.js subset.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=goal>Goal<a href=#goal class=hash-link aria-label="Direct link to Goal" title="Direct link to Goal" translate=no>​</a></h2>
+<p>Prove the cli runs in a browser  WASI-p2 component instantiated
+through Tegmentum's <code>wasi-polyfill</code> (<code>~/git/wasi-polyfill/</code>),
+SQL queries driving real SQLite, REPL output to a DOM text area,
+Playwright test asserting end-to-end functionality.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=whats-already-solved>What's already solved<a href=#whats-already-solved class=hash-link aria-label="Direct link to What's already solved" title="Direct link to What's already solved" translate=no>​</a></h2>
+<p><code>wasi-polyfill</code> covers wasi-p1 / wasi-p2 / wasi-p3 plus browser
+Web API host imports through a plugin architecture. The wasi
+layer needs no work on our side  point the polyfill at our
+component and the WASI imports resolve.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-gap>The gap<a href=#the-gap class=hash-link aria-label="Direct link to The gap" title="Direct link to The gap" translate=no>​</a></h2>
+<p>The composed <code>cli + sqlite-lib</code> component will unconditionally
+import <code>tvm:memory/{types,manager,bytes,diagnostics}</code> because
+<code>sqlite-lib</code> pulls in <code>sqlite-pcache-tvm</code> and <code>sqlite-vfs-tvm</code>,
+which always use the wit-bindgen-backed cold tiers on wasm32. In
+a browser host, those imports need an implementation. Two paths
+considered:</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=option-a--js-implementation-of-tvmmemory-host-side>Option A  JS implementation of <code>tvm:memory</code> (host-side)<a href=#option-a--js-implementation-of-tvmmemory-host-side class=hash-link aria-label="Direct link to option-a--js-implementation-of-tvmmemory-host-side" title="Direct link to option-a--js-implementation-of-tvmmemory-host-side" translate=no>​</a></h3>
+<p>Build a wasi-polyfill plugin: <code>@tegmentum/wasi-polyfill/plugins/ tvm-memory</code>. Regions backed by <code>Uint8Array</code> / <code>SharedArrayBuffer</code>
+/ <code>IndexedDB</code>. Maps to wit-bindgen extern calls the same way the
+existing filesystem plugin handles <code>wasi:filesystem</code> extern calls.</p>
+<ul>
+<li class="">Pro: matches the current wasmtime architecture (host-side TVM)</li>
+<li class="">Pro: backend choice (Uint8Array vs IndexedDB) is configurable
+at host level</li>
+<li class="">Con: new JS plugin to write and maintain</li>
+<li class="">Con: marshalling bytes across the JS  wasm boundary on every
+<code>bytes.read/write</code> call</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=option-b--switch-to-tvm-guest-mm-guest-side-no-host-imports>Option B  Switch to <code>tvm-guest-mm</code> (guest-side, no host imports)<a href=#option-b--switch-to-tvm-guest-mm-guest-side-no-host-imports class=hash-link aria-label="Direct link to option-b--switch-to-tvm-guest-mm-guest-side-no-host-imports" title="Direct link to option-b--switch-to-tvm-guest-mm-guest-side-no-host-imports" translate=no>​</a></h3>
+<p><code>~/git/tvm-wasm/crates/tvm-guest-mm/</code> produces self-contained
+wasm modules that declare N internal memories ("pools") and emit
+WAT dispatch helpers to select the right pool via the static
+<code>memory</code> immediate. No host imports needed; runs on any engine
+that supports multi-memory  which includes every modern browser.</p>
+<ul>
+<li class="">Pro: zero JS plugin work for browser</li>
+<li class="">Pro: TVM regions stay inside the wasm sandbox boundary</li>
+<li class="">Pro: same <code>.wasm</code> runs on wasmtime, browser, any multi-memory
+engine</li>
+<li class="">Con: requires re-architecting <code>sqlite-pcache-tvm</code> and
+<code>sqlite-vfs-tvm</code> cold tiers against the <code>tvm-guest-mm</code> API
+instead of the wit-bindgen <code>tvm:memory</code> interface</li>
+<li class="">Con: the WAT dispatch helpers may inline less aggressively
+than a host call on hot paths (probably fine, needs
+measurement)</li>
+</ul>
+<p><strong>Decision:</strong> Option B  switch to <code>tvm-guest-mm</code> as the wasm32
+substrate. The browser plan becomes "polyfill WASI + DOM stdio"
+with no TVM concerns at all, and wasmtime keeps working because
+it supports multi-memory natively. This switch ripples into the
+TVM track plan (PLAN-tvm-integration.md) and the substrate
+validation (PLAN-tvm-integration step 1), but the SQLite-facing
+trampolines  <code>ShadowCache</code> for pcache, <code>WitTvmStorage</code>-renamed-
+to-<code>MultiMemoryStorage</code> for vfs  are invariant. Only the cold
+tier implementation file changes.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=concrete-deliverables>Concrete deliverables<a href=#concrete-deliverables class=hash-link aria-label="Direct link to Concrete deliverables" title="Direct link to Concrete deliverables" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>Composed component build</strong>  <code>cli_with_sqlite.component.wasm</code>
+built via <code>wac plug</code> from <code>cli</code> + <code>sqlite-lib</code> + the embedded
+extension set. Pattern follows
+<code>examples/rust/runnable-sqlite-demo/composition.wac</code>.</li>
+<li class=""><strong><code>browser/</code></strong>  rewrite of the existing scaffold:
+<ul>
+<li class="">jco-transpile the composed component into
+<code>browser/src/generated/cli_with_sqlite/</code></li>
+<li class="">load it via <code>@tegmentum/wasi-polyfill</code> (replacing sql.js)</li>
+<li class="">keep the JS API (<code>loadExtension</code> + <code>exec</code>) backward-
+compatible so existing tests pass</li>
+</ul>
+</li>
+<li class=""><strong>Persistence</strong> via <code>tvm-wasm</code>'s <code>tvm-web-cold</code> OPFS spill for
+cas-cache + db files.</li>
+<li class=""><strong>CI step</strong>  Playwright headless smoke as part of host's CI.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=decisions-locked-in>Decisions locked in<a href=#decisions-locked-in class=hash-link aria-label="Direct link to Decisions locked in" title="Direct link to Decisions locked in" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th><th><tbody><tr><td>TVM in browser<td><strong>Switch to <code>tvm-guest-mm</code>.</strong> Self-contained wasm; no JS plugin needed. Wasmtime keeps working because it supports multi-memory.<tr><td>Cli transpile<td><strong>jco transpile at build time.</strong> Cli is a fixed binary we ship; no reason to pay runtime transpile cost on every page load. Self-contained ES module output.<tr><td>Extension transpile<td><strong>Runtime transpile via wasi-polyfill.</strong> Extensions are user-loadable at session time; polyfill's runtime transpiler is exactly the right fit.<tr><td>blake3 acceleration<td><strong>Skip WebGPU.</strong> Ship the Rust <code>blake3</code> crate compiled to wasm32 with the SIMD feature. ~5 ms per 1 MB hash, 10 better than pure JS, no shader code to maintain. WebGPU launch overhead dominates for our artifact sizes.</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=persistence-story>Persistence story<a href=#persistence-story class=hash-link aria-label="Direct link to Persistence story" title="Direct link to Persistence story" translate=no>​</a></h2>
+<p>Browser has no host filesystem. Two relevant components map to
+browser primitives:</p>
+<ul>
+<li class=""><strong>wasivfs for file-backed dbs</strong>  goes to <strong>OPFS</strong> (Origin
+Private File System) via the polyfill's wasi:filesystem
+plugin</li>
+<li class=""><strong>CAS cache (Plan 1)</strong>  needs a browser-aware
+<code>SqliteCasStore</code> mode. Options:
+<ul>
+<li class="">Use SQLite over OPFS  same SqliteCasStore code path, just
+a different file location</li>
+<li class="">Or use IndexedDB directly  bypass SQLite for the CAS in
+browser only</li>
+</ul>
+</li>
+</ul>
+<p>Recommendation: <strong>OPFS-backed SQLite</strong> for the CAS in browser
+same <code>SqliteCasStore</code> code, no special-case logic. The cas.sqlite
+file lives in OPFS instead of <code>~/.cache/sqlite-wasm/</code>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=open-questions>Open questions<a href=#open-questions class=hash-link aria-label="Direct link to Open questions" title="Direct link to Open questions" translate=no>​</a></h2>
+<ul>
+<li class=""><del><strong>Multi-memory in component model</strong>  confirm wasm32-wasip2
+components allow multiple memories.</del> <strong>Resolved 2026-06-14</strong>:
+probe at <code>probe/multimem-component/</code> validates that
+multi-memory IS valid in component cores; wasm-tools wraps
+cleanly and wasmtime instantiates + executes a function
+using both memories (returns 42). The structural blocker is
+cleared.</li>
+<li class=""><strong>Wasmtime multi-memory flag</strong>  <code>Config::wasm_multi_memory()</code>
+is already a thing; needs to be on for the host to accept
+the new wasm shape. One-line addition to <code>Host::new</code>
+alongside the existing <code>wasm_memory64(true)</code>.</li>
+<li class=""><strong>Rust source  tvm-guest-mm pipeline</strong>  the probe used
+hand-written WAT; full pipeline validation through Rust
+source + tvm-guest-mm templates is the substrate-switch work
+itself, deferred to that phase.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=order-of-operations>Order of operations<a href=#order-of-operations class=hash-link aria-label="Direct link to Order of operations" title="Direct link to Order of operations" translate=no>​</a></h2>
+<ol>
+<li class="">Validate multi-memory works in wasm32-wasip2 components  may
+need a minimal probe component declaring two memories and
+observing wasmtime + a browser engine both instantiate it
+cleanly</li>
+<li class="">Switch <code>sqlite-pcache-tvm</code> and <code>sqlite-vfs-tvm</code> cold tiers
+from wit-bindgen <code>tvm:memory</code> to <code>tvm-guest-mm</code> (sqlite-track
+follow-up; see PLAN-tvm-integration.md update)</li>
+<li class="">Update host: drop <code>tvm-wasmtime</code> dependency, replace with
+multi-memory engine config</li>
+<li class="">Build browser demo page + jco-transpiled cli</li>
+<li class="">Playwright test in CI</li>
+<li class="">CAS cache plan (Plan 1) ships before this so OPFS-backed
+<code>SqliteCasStore</code> is usable in browser</li>
+</ol></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-browser-runtime.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/sqlink/plans/PLAN-followups><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>PLAN-followups</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/sqlink/plans/PLAN-wal-archive-extension><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Plan: wal-archive extension  continuous WAL backup for sqlink</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#status-2026-06-23--path-3-fully-landed--persistent-session class="table-of-contents__link toc-highlight">Status (2026-06-23  Path 3 FULLY LANDED  persistent session)</a><li><a href=#status-2026-06-22--path-3--cold-tier-substrate-landed-browser-bundle-pending class="table-of-contents__link toc-highlight">Status (2026-06-22  Path 3 — cold-tier substrate landed, browser bundle pending)</a><li><a href=#goal class="table-of-contents__link toc-highlight">Goal</a><li><a href=#whats-already-solved class="table-of-contents__link toc-highlight">What's already solved</a><li><a href=#the-gap class="table-of-contents__link toc-highlight">The gap</a><ul><li><a href=#option-a--js-implementation-of-tvmmemory-host-side class="table-of-contents__link toc-highlight">Option A  JS implementation of <code>tvm:memory</code> (host-side)</a><li><a href=#option-b--switch-to-tvm-guest-mm-guest-side-no-host-imports class="table-of-contents__link toc-highlight">Option B  Switch to <code>tvm-guest-mm</code> (guest-side, no host imports)</a></ul><li><a href=#concrete-deliverables class="table-of-contents__link toc-highlight">Concrete deliverables</a><li><a href=#decisions-locked-in class="table-of-contents__link toc-highlight">Decisions locked in</a><li><a href=#persistence-story class="table-of-contents__link toc-highlight">Persistence story</a><li><a href=#open-questions class="table-of-contents__link toc-highlight">Open questions</a><li><a href=#order-of-operations class="table-of-contents__link toc-highlight">Order of operations</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

@@ -1,0 +1,829 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-tvm-integration" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall) | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-tvm-integration /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall) | sqlink"/><meta data-rh=true name=description content="Status (2026-06-15): TVM track fully shipped. Phases 1"/><meta data-rh=true property=og:description content="Status (2026-06-15): TVM track fully shipped. Phases 1"/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-tvm-integration /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-tvm-integration hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-tvm-integration hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://tegmentum.github.io/sqlink/plans/PLAN-tvm-integration","name":"Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)","position":1}]}</script><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/><span title=Introduction class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/getting-started><span title="Getting Started" class=linkLabel_WmDU>Getting Started</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/sqlink/concepts/extensions><span title=Concepts class=categoryLinkLabel_W154>Concepts</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/extensions><span title=Extensions class=linkLabel_WmDU>Extensions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/bundles><span title=Bundles class=linkLabel_WmDU>Bundles</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/prefixes><span title=Prefixes class=linkLabel_WmDU>Prefixes</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/cas-cache><span title=Cas-cache class=linkLabel_WmDU>Cas-cache</span></a></ul><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/roadmap><span title=Roadmap class=linkLabel_WmDU>Roadmap</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/sqlink/plans/PLAN-bundles><span title="Plans (source of truth)" class=categoryLinkLabel_W154>Plans (source of truth)</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-bundles><span title="Plan: bundles  named extension sets with optional baked binaries" class=linkLabel_WmDU>Plan: bundles  named extension sets with optional baked binaries</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-prefixes><span title="Plan: function prefixes — SPARQL-style namespacing for SQL functions" class=linkLabel_WmDU>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-followups><span title=PLAN-followups class=linkLabel_WmDU>PLAN-followups</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-browser-runtime><span title="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill" class=linkLabel_WmDU>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wal-archive-extension><span title="Plan: wal-archive extension  continuous WAL backup for sqlink" class=linkLabel_WmDU>Plan: wal-archive extension  continuous WAL backup for sqlink</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/sqlink/plans/PLAN-tvm-integration><span title="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)" class=linkLabel_WmDU>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wasmmachine><span title="Plan: Register sqlite-cli as a wasmMachine application" class=linkLabel_WmDU>Plan: Register sqlite-cli as a wasmMachine application</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-interactive-capture><span title="Plan: interactive changeset capture (daemon vs WIT-extension)" class=linkLabel_WmDU>Plan: interactive changeset capture (daemon vs WIT-extension)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-benchmarks><span title="Benchmarks: sqlite-wasm-run vs native sqlite3" class=linkLabel_WmDU>Benchmarks: sqlite-wasm-run vs native sqlite3</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-perf-ux><span title="PLAN: release-readiness perf + UX audit" class=linkLabel_WmDU>PLAN: release-readiness perf + UX audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-testing><span title="PLAN: release-readiness testing audit" class=linkLabel_WmDU>PLAN: release-readiness testing audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-code-health><span title="PLAN: code-health + tech-debt audit for OSS release" class=linkLabel_WmDU>PLAN: code-health + tech-debt audit for OSS release</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-speculative><span title="Plan: speculative items (consumer-driven)" class=linkLabel_WmDU>Plan: speculative items (consumer-driven)</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/sqlink/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Plans (source of truth)</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</h1></header>
+<blockquote>
+<p><strong>Status (2026-06-15): TVM track fully shipped.</strong> Phases 1
+(pcache), 2 (mem methods, 2.0 only; 2.1 abandoned with
+rationale in the Phase 2 finding), and 4 (TVM-backed VFS)
+all landed with capacity tests. Order-of-operations step 5
+(combined B + E ribbon-cut) shipped in <code>fcc14bc</code> as
+<code>host/tests/tvm_combined_capacity.rs</code> driving
+<code>probe/tvm-combined-wasip2/</code>. Mem64 track (Phase 3) remains
+deferred on upstream toolchain availability — <code>rustc</code> doesn't
+ship a <code>wasm64-wasip2</code> target yet and wasi-sdk 33 has no
+wasm64 sysroot; the host already calls <code>wasm_memory64(true)</code>,
+so re-opens trivially when those gates lift.</p>
+</blockquote>
+<p>Goal: support SQLite working sets — including page caches,
+<code>:memory:</code> databases, intermediate query state — substantially
+larger than 4 GB. Two parallel tracks:</p>
+<ol>
+<li class=""><strong>TVM track (default build)</strong>: stay on wasm32, route SQLite's
+page cache and then its malloc layer through <code>tvm-guest-mm</code>.
+The destination is Path C (full TVM-managed allocator);
+Path B (TVM-backed pcache only) is the incremental on-ramp.</li>
+<li class=""><strong>Mem64 track (opt-in build)</strong>: ship an alternate <code>wasm64-wasip2</code>
+build for users who want the address space without the TVM
+integration. Pay the ~10–20% perf hit for simpler operations.
+Buildable from the same source via a cargo feature.</li>
+</ol>
+<p>This is a longer-horizon plan than the parity work in
+<code>PLAN-rust-cli-parity.md</code>. It depends on <code>tvm-wasm</code> (<code>~/git/tvm-wasm/</code>),
+the Tiered Virtual Memory substrate, and on wasmtime's memory64
+support. Discrete from CLI work — its own document.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-4-gb-wall-where-it-actually-bites>The 4 GB wall, where it actually bites<a href=#the-4-gb-wall-where-it-actually-bites class=hash-link aria-label="Direct link to The 4 GB wall, where it actually bites" title="Direct link to The 4 GB wall, where it actually bites" translate=no>​</a></h2>
+<p>For <strong>file-backed</strong> databases via <code>wasivfs</code>, we already support
+databases far larger than 4 GB today:</p>
+<ul>
+<li class="">The disk file is arbitrary size (host filesystem permitting).</li>
+<li class="">SQLite reads pages on demand; only the page cache lives in
+wasm linear memory.</li>
+<li class="">Default page cache is ~2 MB; a 100 GB database uses ~2 MB of
+wasm memory.</li>
+</ul>
+<p>The wasm 4 GB ceiling actually bites in three cases:</p>
+<ol>
+<li class=""><strong><code>:memory:</code> databases</strong> — the whole DB lives in linear memory.</li>
+<li class=""><strong>Large page caches</strong> — when working-set locality is wider than
+4 GB and a small cache thrashes against the VFS.</li>
+<li class=""><strong>Wasm-side state exhaustion</strong> — extension data, intermediate
+join results, sort buffers, lookaside scratch can eat the rest
+of the 4 GB even when the DB file is on disk.</li>
+</ol>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-five-paths-to-lifting-the-wall>The five paths to lifting the wall<a href=#the-five-paths-to-lifting-the-wall class=hash-link aria-label="Direct link to The five paths to lifting the wall" title="Direct link to The five paths to lifting the wall" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th><th>What it does<th>Cost<th>Role<tbody><tr><td><strong>A. Status quo (wasivfs)</strong><td>File-backed I/O via host; page cache stays small<td>Zero<td>Always on<tr><td><strong>B. Custom <code>pcache2</code></strong><td>TVM-backed page cache via <code>sqlite3_config(SQLITE_CONFIG_PCACHE2, …)</code><td>Medium<td>Lifts page-cache ceiling<tr><td><strong>C. Custom <code>malloc</code></strong><td>Replace <code>sqlite3_malloc</code> family via <code>sqlite3_config(SQLITE_CONFIG_MALLOC, …)</code><td>Higher<td>In-proc backend only — TVM-backing structurally requires a SQLite fork, abandoned<tr><td><strong>D. wasm64 build</strong><td>Single 64-bit linear memory<td>~10–20% perf, toolchain bootstrap<td>Optional opt-in alternate build target, blocked on rustc + wasi-sdk<tr><td><strong>E. TVM-backed custom VFS</strong><td>Per-file storage in TVM regions; sqlite treats them as files<td>Medium<td><strong>Destination of the TVM track for non-page bytes</strong></table>
+<p>A is what we have today. B + E together are the TVM track —
+the combination covers everything SQLite stores: B holds the
+hot page set, E holds the cold file data (database file, journal,
+sort/hash spill, <code>temp_store=FILE</code> temp tables). C ships as the
+in-proc allocator we already have; its TVM-backed variant was
+considered (Phase 2.1) and rejected because SQLite returns raw C
+pointers from <code>sqlite3_malloc</code> and dereferences them throughout
+the codebase — TVM's non-default-memory regions can't satisfy
+that contract without forking SQLite, which we won't do. D is a
+parallel build target — selectable via the <code>mem64</code> cargo
+feature — useful for callers who want > 4 GiB without the TVM
+integration surface.</p>
+<p>The key architectural insight that emerged during Phase 2: <strong>the
+"working set" that motivated this plan is mostly file-shaped
+bytes</strong>, not allocator-shaped bytes. Database pages, sort spill,
+hash-join temps, in-memory tables — SQLite already routes all of
+these through the VFS when configured with <code>temp_store=FILE</code>. The
+allocator (<code>sqlite3_malloc</code>) holds only schema, prepared-statement
+bytecode, lookaside, and result-row buffers, which are MB-scale
+and never need > 4 GiB. So the > 4 GiB story is: B at the page
+layer + E at the file layer, with <code>temp_store=FILE</code> opting users
+into the file-layer story for transient bytes.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=how-b-c-and-e-compose>How B, C, and E compose<a href=#how-b-c-and-e-compose class=hash-link aria-label="Direct link to How B, C, and E compose" title="Direct link to How B, C, and E compose" translate=no>​</a></h2>
+<p>Three disjoint subsystems, three different SQLite extension
+points, three crates. They compose additively:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Subsystem<th>Default impl<th>Replaced by<tbody><tr><td>Page cache (largest single consumer in typical workloads)<td><code>pcache1</code> (internally uses <code>sqlite3_malloc</code>)<td><code>SQLITE_CONFIG_PCACHE2</code> (Path B)<tr><td>General-purpose allocator: schema, statement bytecode, lookaside, result buffers<td><code>sqlite3_malloc</code> (default <code>mem3</code>/<code>mem5</code>)<td><code>SQLITE_CONFIG_MALLOC</code> (Path C)<tr><td>File-shaped storage: db file, journal, WAL, sort/hash spill, in-memory dbs<td><code>wasivfs</code> (in-proc/disk) or memdb VFS<td><code>sqlite3_vfs_register(...)</code> (Path E)</table>
+<p>When you register a custom <code>pcache2</code>, your impl controls <strong>its
+own</strong> allocations — it bypasses <code>sqlite3_malloc</code> for page
+memory. When you register a custom VFS, the VFS controls its
+own backing — <code>xRead/xWrite</code> move bytes between sqlite-supplied
+buffers and your storage, with no allocator involvement on the
+storage side. So:</p>
+<ul>
+<li class=""><strong>B alone:</strong> page cache lives in TVM. Everything else in
+default heap. > 4 GiB property held for hot pages only.</li>
+<li class=""><strong>B + E:</strong> page cache lives in TVM (via B), file content
+lives in TVM (via E). Big sorts spill through E because
+<code>temp_store=FILE</code> routes them through the VFS. <strong>This is
+the destination state for the TVM track.</strong> Schema +
+statement state stays in the C in-proc allocator, which is
+MB-scale and doesn't need lifting.</li>
+<li class=""><strong>C alone (no B, no E):</strong> default pcache1 sits on top of
+C's allocator. Doesn't break the 4 GiB ceiling because
+C's backing is the default heap.</li>
+<li class=""><strong>B + C without E:</strong> same > 4 GiB property as B alone for
+the page cache. C doesn't change the picture without E for
+file-shaped bytes.</li>
+</ul>
+<p><strong>Why E rather than a TVM-backed C?</strong> SQLite returns raw C
+pointers from <code>sqlite3_malloc</code> and dereferences them inline,
+with no callback boundary. Routing those bytes through TVM
+would require either (a) keeping them in default memory anyway,
+which defeats the > 4 GiB property TVM exists to provide, or
+(b) forking SQLite to change the allocator contract, which is a
+trust + maintenance cost we won't take. The VFS contract
+already gives us the boundary — <code>xRead/xWrite</code> are exactly the
+"copy bytes between caller's buffer and your storage" interface
+TVM needs. The destination architecture uses the right layer
+for each job.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=architectural-sketch>Architectural sketch<a href=#architectural-sketch class=hash-link aria-label="Direct link to Architectural sketch" title="Direct link to Architectural sketch" translate=no>​</a></h2>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">                ┌──────────────────────────────────┐</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                │  sqlite3.c (unmodified upstream) │</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                └─────────────┬────────────────────┘</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                              │ uses</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        ┌─────────────────────┼──────────────────────┐</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        │                     │                      │</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">   pcache_methods2       mem_methods            sqlite3_vfs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">   (CONFIG_PCACHE2)     (CONFIG_MALLOC)       (vfs_register)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        │                     │                      │</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        ▼                     ▼                      ▼</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  ┌──────────────┐    ┌────────────────┐    ┌────────────────┐</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  │ sqlite-      │    │ sqlite-mem-tvm │    │ sqlite-vfs-tvm │</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  │ pcache-tvm   │    │  (Path C, 2.0) │    │  (Path E, ph4) │</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  │  (Path B)    │    │                │    │                │</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  └──────┬───────┘    └────────────────┘    └────────┬───────┘</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">         │ shadow + flush                            │ xRead/xWrite</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">         ▼                                           ▼</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">   page-store regions                          general regions</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">         │                                           │</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">         └────────────────────┬──────────────────────┘</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                              ▼</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                  tvm:memory directory</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                  (tvm-wasmtime host)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  sqlite-mem-tvm uses the Rust global allocator (default heap)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  — no TVM region involvement. The > 4 GiB story comes from</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  pcache + VFS, the two layers where SQLite already provides</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  the read/write boundary TVM needs.</span><br/></div></code></pre></div></div>
+<p>Path B and Path E reduce to TVM region allocations against a
+shared region directory. Region <strong>types</strong> differ: TVM's
+<code>page-store</code> region carries fixed-size-slot semantics that fit
+the pcache contract; the VFS uses general regions for
+arbitrary-length file content. Path C stays out of the TVM
+directory entirely — it's a pure Rust allocator over the global
+heap, registered for the SQLite-facing API only.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-1--path-b-tvm-backed-pcache2>Phase 1 — Path B: TVM-backed <code>pcache2</code><a href=#phase-1--path-b-tvm-backed-pcache2 class=hash-link aria-label="Direct link to phase-1--path-b-tvm-backed-pcache2" title="Direct link to phase-1--path-b-tvm-backed-pcache2" translate=no>​</a></h2>
+<blockquote>
+<p><strong>Phase 1.0 + 1.1 (in-process backend) shipped.</strong> The
+<code>sqlite-pcache-tvm</code> crate implements the eleven
+<code>sqlite3_pcache_methods2</code> trampolines + Path D's shadow-pool +
+pinned-aware LRU + always-flush eviction against an in-process
+<code>Region</code> cold tier (<code>HashMap&lt;u32, Vec&lt;u8>></code> keyed by
+<code>key * sz_page</code>). Two real-SQLite integration tests cover it:
+a baseline schema/select round-trip and a 1000-row workload
+with <code>PRAGMA cache_size = 4</code> that forces continuous eviction
+and cold-tier promotion. Six unit tests cover the
+shadow-pool + LRU + region invariants directly.</p>
+<p><strong>Phase 1.1 (TVM region backend) swap shipped.</strong>
+<code>sqlite-pcache-tvm/src/wit_tvm_region.rs</code> implements
+<code>WitTvmRegion: Region</code> against the wit-bindgen-generated
+<code>tvm:memory/manager + bytes</code> interfaces. Gated on
+<code>target_arch = "wasm32"</code> — wasm builds always use the TVM
+backend, native builds get <code>InProcRegion</code> for the unit-test
+path (originally there was a separate <code>tvm</code> feature flag, but
+there's no realistic deployment where you'd want the in-proc
+backend on wasm  the feature was opt-in for no benefit, so
+it was dropped). The wasm32-wasip2 build verifies cleanly:
+<code>tvm:memory/manager</code>, <code>tvm:memory/bytes</code>, and
+<code>tvm:memory/diagnostics</code> imports show up in the rlib metadata,
+and the bundled SQLite compile via wasi-sdk in the same build
+links cleanly against the trampolines.</p>
+<p><strong>Phase 1.2 (end-to-end probe) shipped.</strong>
+<code>probe/tvm-pcache-wasip2/</code> is a wasm32-wasip2 cdylib that
+links <code>sqlite-pcache-tvm</code> + sqlite-wasm-core
+(bundled libsqlite3-sys via wasi-sdk) into one ~1 MB
+component. The component imports
+<code>tvm:memory/{types,manager,bytes}</code> + WASI and exports
+<code>run-test</code>. The host-side test
+<code>host/tests/tvm_pcache_probe.rs</code> instantiates it against
+wasmtime + <code>tvm_wasmtime::add_to_linker</code>, calls <code>run-test</code>
+(which installs the pcache, opens an in-memory db, INSERTs
+7 rows, SELECTs <code>count(*)</code>), and asserts <code>== 7</code>. Every page
+byte that misses the shadow pool round-trips through real
+<code>tvm:memory/bytes.read/write</code> host calls; the test passes,
+proving the wit-bindgen + TVM region + sqlite-pcache flow
+works end-to-end.</p>
+<p><strong>Phase 1.3 (capacity test) shipped.</strong>
+<code>host/tests/tvm_pcache_capacity.rs</code> drives the probe's
+<code>run-capacity-test(50_000, 200)</code>  50K rows * 200 bytes
+through a 5-page (20 KiB) shadow pool against a file-backed
+SQLite db (wasivfs-mediated). The probe leaks the connection
+so SQLite's xDestroy doesn't tear the TVM region down before
+the host's assertion runs, then the host:</p>
+<ul>
+<li class="">confirms SQL integrity (count(*) returns 50000)</li>
+<li class="">asserts <code>WitTvmRegion::write</code> fired (we measured 55,368 calls)</li>
+<li class="">sums <code>region.used</code> across <code>TvmHost.directory.iter()</code> and
+asserts >= 5 MiB (we measured 10 MB across 1 region)</li>
+</ul>
+<p>The architectural property the TVM track set out to prove is
+validated: the bulk of the working set lived in the TVM page-
+store region while the shadow pool stayed at ~5-6 pages in
+default wasm memory.</p>
+<p>Two real findings from the test build-out that warrant
+mentioning here:</p>
+<ol>
+<li class="">
+<p><strong><code>:memory:</code> dbs use a non-purgeable pcache</strong> that never
+evicts pages  the cache contract says "you must keep
+every page." File-backed dbs (which we drive through
+wasivfs with a host-preopened tempdir) get the purgeable
+cache where <code>xUnpin</code> becomes evictable, which is the path
+Path D's design depends on.</p>
+</li>
+<li class="">
+<p><strong>SQLite calls <code>xTruncate</code> aggressively</strong> between
+transactions (~501 times for the 500-transaction workload),
+sometimes shrinking the cache to ~3 pages. This isn't a
+bug  it's SQLite's pcache contract  but it means the
+shadow pool oscillates near cap rather than growing
+monotonically. Eviction still fires whenever the pool
+refills above cap before the next truncate, which is
+typical for SQLite's per-statement page touches.</p>
+</li>
+</ol>
+<p><strong>What's left (Phase 2  Path C TVM-backed malloc) is its
+own design exercise.</strong> The full sqlite3_malloc TVM swap
+would route ALL sqlite allocations (lookaside, schema, sort
+buffers, etc.) through TVM via SQLITE_CONFIG_MALLOC. Strictly
+additive  no rework of Phase 1.</p>
+</blockquote>
+<blockquote>
+<p><strong>Note on implementation language:</strong> the plan called for "~500
+LOC C." Pure Rust shipped instead — <code>libsqlite3-sys</code> already
+binds the full <code>sqlite3_pcache_methods2</code> shape so the impl can
+be <code>extern "C" fn</code> trampolines pointing into Rust callbacks.
+Same ABI, no C glue to maintain.</p>
+<p><strong>Phase 1.1 architectural finding: shadow-pool indirection
+required.</strong> SQLite's <code>pcache2.xFetch</code> returns a raw C pointer
+(<code>pBuf</code>) that SQLite dereferences directly when reading and
+writing page bytes. TVM's > 4 GiB story is fundamentally built
+on <strong>non-default wasm memories</strong> — each region is its own wasm
+memory addressed via the static <code>memory</code> immediate on
+<code>i32.load/store</code>. A C pointer into a non-default memory is not
+a valid pointer from the default memory's perspective, so a
+direct "the page slot lives in a TVM <code>page-store</code> region and
+we return its pointer" backend swap (what the original Phase 1
+sketch described) doesn't work.</p>
+<p><strong>The realistic shape (Path D — shadow-pool):</strong></p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">  sqlite3_pcache.xFetch(key, create) {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      if (shadow_slot = lookup(key)) { return shadow_slot.pBuf; }</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      if (need_eviction()) {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">          victim = lru_evict();</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">          tvm.bytes.write(victim.region_handle, victim.shadow_buf);  // flush back</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">          free_shadow_slot(victim);</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      }</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      shadow = alloc_shadow_slot();        // bounded N-slot pool in default mem</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      region = lookup_or_alloc_region(key); // backed by TVM page-store, may be > 4 GiB</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      tvm.bytes.read(region, &shadow.buf); // pull page bytes into default mem</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      return shadow.pBuf;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  }</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  sqlite3_pcache.xUnpin(page, discard) {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      if (!discard) {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">          tvm.bytes.write(page.region_handle, page.shadow_buf); // flush</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      }</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      free_shadow_slot(page);</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  }</span><br/></div></code></pre></div></div>
+<p>Tradeoff: per-page-fault memcpy cost on cold fetches. Acceptable
+for SQLite because frequently-accessed pages stay pinned for the
+duration of an operation; eviction only fires when the working
+set genuinely exceeds the shadow pool. The shadow pool sizes
+the default-memory budget; the TVM region holds the cold tail.</p>
+<p><strong>Considered and rejected alternatives:</strong></p>
+<ul>
+<li class=""><strong>Path E (recompile SQLite for TVM dispatch).</strong> Modify every
+<code>pPage->aData[offset]</code> access in <code>sqlite3.c</code> to go through
+TVM load/store helpers. Major surgery on a vendored SQLite —
+breaks the "register a pcache2 impl" framing and ties us to a
+forked SQLite. Out of scope.</li>
+<li class=""><strong>Path F (default-memory regions).</strong> TVM as a sub-allocator
+within the default linear memory. Gives handle abstraction +
+eviction semantics but doesn't break 4 GiB. Useful for the
+Phase 2 malloc layer (where the goal is allocator policy,
+not address-space expansion); pointless for pcache.</li>
+</ul>
+<p>Phase 1.1 implements Path D against the WIT-bound
+<code>tvm:memory/manager + bytes</code> interfaces (the path validated by
+<code>probe/tvm-substrate/</code>).</p>
+<p><strong>Locked-in design decisions</strong> (2026-06-14):</p>
+<ul>
+<li class="">
+<p><strong>Shadow-pool sizing: equal to <code>xCachesize</code>.</strong> Matches the
+existing <code>cache_size</code> PRAGMA semantics so operators reason
+about the wasm-memory budget the same way they always have.
+The TVM region grows beyond — pages above <code>xCachesize</code> live
+cold in TVM and get faulted in on demand. Anyone who wants
+more hot pages bumps <code>cache_size</code>, exactly as they would with
+default pcache1. Rejected: "shadow = fraction of <code>xCachesize</code>"
+adds a tuning knob no operator knows how to set and doesn't
+compose with the existing PRAGMA expectations.</p>
+</li>
+<li class="">
+<p><strong>Eviction policy: two-list LRU (pinned set + unpinned LRU).</strong>
+Pinned pages cannot be evicted (SQLite still holds the raw
+<code>pBuf</code> pointer); <code>xUnpin</code> is the explicit "evictable now"
+signal. Implementation: <code>HashMap&lt;key, Entry></code> for O(1)
+lookup + intrusive linked-list pointers on <code>Entry</code> for O(1)
+LRU promote / evict. Rejected: clock / approximate-LRU
+same hit rate on SQLite's typical temporal locality, more
+code, no measurable win. Revisit only if profiling shows
+pure LRU is the bottleneck.</p>
+</li>
+<li class="">
+<p><strong>Dirty tracking: always flush on <code>xUnpin</code> unless
+<code>discard=1</code>.</strong> Phase 1.1 ships the conservative "doubles I/O
+on read-only workloads" form. We have no in-band write
+signal — SQLite writes through <code>pBuf</code> directly and the
+pcache impl never sees the writes — so the alternatives are
+either always-flush (Option A, locked in) or peek SQLite's
+<code>PgHdr</code> dirty bit through <code>pExtra</code> (Option B, deferred).
+Option B is brittle across SQLite versions (depends on the
+PgHdr struct layout staying stable) and the win may be
+smaller than expected: the flush cost is dominated by the
+<code>tvm:memory.bytes.write</code> host call (wasm-host boundary
+crossing), not the memcpy, so killing only-dirty flushes
+reduces calls but not per-call latency. Promote to Option B
+only after Phase 1.1 profiling shows the always-flush
+overhead is the bottleneck on a representative workload
+(TPC-H Q1 with shadow-pool sized to force eviction; target:
+TVM-backed + always-flush within 20% of default pcache1).</p>
+</li>
+</ul>
+</blockquote>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-to-build>What to build<a href=#what-to-build class=hash-link aria-label="Direct link to What to build" title="Direct link to What to build" translate=no>​</a></h3>
+<p>A small C library (~500 LOC) exposed as <code>tvm_pcache_init()</code>. It:</p>
+<ol>
+<li class="">Implements all eleven methods of <code>sqlite3_pcache_methods2</code>
+(<code>xInit</code>, <code>xShutdown</code>, <code>xCreate</code>, <code>xCachesize</code>, <code>xPagecount</code>,
+<code>xFetch</code>, <code>xUnpin</code>, <code>xRekey</code>, <code>xTruncate</code>, <code>xDestroy</code>,
+<code>xShrink</code>).</li>
+<li class="">For each <code>xFetch</code>, allocates a page slot in a TVM <code>page-store</code>
+region; returns a pointer to it. The region handle is held
+inside the <code>sqlite3_pcache</code> struct.</li>
+<li class="">For each <code>xUnpin</code>, calls <code>tvm_region.demote(handle)</code> — TVM
+handles the actual eviction policy (LRU, tiering to disk).</li>
+<li class=""><code>xRekey</code> updates the page-id index inside the region; <code>xTruncate</code>
+drops a range; <code>xDestroy</code> releases the region.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=registration>Registration<a href=#registration class=hash-link aria-label="Direct link to Registration" title="Direct link to Registration" translate=no>​</a></h3>
+<div class="language-c codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-c codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token keyword" style=color:#00009f>extern</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>int</span><span class="token plain"> </span><span class="token function" style=color:#d73a49>tvm_pcache_init</span><span class="token punctuation" style=color:#393A34>(</span><span class="token keyword" style=color:#00009f>void</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>// In our sqlite3 init wrapper, called once before any</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>// sqlite3_open:</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token function" style=color:#d73a49>sqlite3_config</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">SQLITE_CONFIG_PCACHE2</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>&</span><span class="token plain">tvm_pcache_methods</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><br/></div></code></pre></div></div>
+<p>This needs to happen before <code>sqlite3_initialize</code>. We control the
+init wrapper (<code>src/sqlite_wasm.c</code> for the C build,
+<code>core/src/db.rs</code> opens via raw FFI for the Rust build), so the
+hook point exists.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tvm-glue>TVM glue<a href=#tvm-glue class=hash-link aria-label="Direct link to TVM glue" title="Direct link to TVM glue" translate=no>​</a></h3>
+<p><code>tvm-guest-mm</code> exposes the region API to wasm guests. The pcache
+allocates one region per <code>sqlite3_pcache</code> instance (one per
+database connection's pager); region type = <code>page-store</code>; budget
+configured from <code>xCachesize</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=validation>Validation<a href=#validation class=hash-link aria-label="Direct link to Validation" title="Direct link to Validation" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Functional</strong>: existing host tests pass with <code>tvm-pcache</code>
+registered. No regression on the 33 tests we have.</li>
+<li class=""><strong>Capacity</strong>: open a 10 GB database. Run a query whose hot set
+is 6 GB (joins across multiple wide tables). Configure
+<code>xCachesize = 8 GB</code>. Observe that wasm linear memory usage
+stays below 4 GB while TVM's <code>page-store</code> region grows past
+4 GB.</li>
+<li class=""><strong>Perf</strong>: measure overhead vs. default pcache1 on a workload
+whose hot set fits in 4 GB. Target: ≤ 10% slower (region handle
+indirection has a cost; we want it bounded).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=open-questions-for-phase-1>Open questions for Phase 1<a href=#open-questions-for-phase-1 class=hash-link aria-label="Direct link to Open questions for Phase 1" title="Direct link to Open questions for Phase 1" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>One region per connection or one shared region across connections?</strong>
+Per-connection is simpler (each <code>sqlite3_pcache</code> owns its region).
+Shared is more efficient when multiple connections hit the same
+database. Defer to phase 1.5 if profiling shows it matters.</li>
+<li class=""><strong>Disk spill destination.</strong> TVM's <code>page-store</code> region can spill
+to disk. Where? Same directory as the SQLite db file? Separate
+cache dir? Decided when wiring <code>tvm-wasmtime</code>'s spill backend.</li>
+<li class=""><strong>Pin/demote granularity.</strong> SQLite calls <code>xUnpin</code> with hints
+(<code>discard</code>-vs-<code>reuse</code>). Map directly to TVM's <code>demote</code>/<code>spill</code>
+primitives.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-2--path-c-tvm-backed-sqlite3_malloc>Phase 2 — Path C: TVM-backed <code>sqlite3_malloc</code><a href=#phase-2--path-c-tvm-backed-sqlite3_malloc class=hash-link aria-label="Direct link to phase-2--path-c-tvm-backed-sqlite3_malloc" title="Direct link to phase-2--path-c-tvm-backed-sqlite3_malloc" translate=no>​</a></h2>
+<blockquote>
+<p><strong>Phase 2.0 (plumbing) shipped.</strong> <code>sqlite-mem-tvm</code> crate
+ships the seven <code>sqlite3_mem_methods</code> trampolines + an
+<code>install()</code> registering via
+<code>sqlite3_config(SQLITE_CONFIG_MALLOC, …)</code> before
+<code>sqlite3_initialize</code>. Backend is a size-header allocator over
+the Rust global allocator: each allocation gets a 16-byte
+prefix holding the original requested size so <code>xSize</code> and
+<code>xFree</code> can recover it. Five unit tests cover the trampoline
+math (round-trip, realloc preserve, realloc-null = malloc,
+realloc-zero = free, xRoundup alignment). Two real-SQLite
+integration tests drive workloads through the trampolines and
+assert allocator counters climb (460 mallocs / 23 reallocs /
+202 frees on a basic CREATE-INSERT-SELECT; group_concat over
+1000 rows triggers reallocs as the accumulator grows).</p>
+<p><strong>Phase 2.1 (TVM-backed allocator) abandoned.</strong> Two paths
+were considered and both rejected:</p>
+<ol>
+<li class=""><strong>Default-memory TVM regions exposing a base pointer.</strong>
+Gives sqlite a real C pointer to dereference but defeats
+the > 4 GiB property — which is the only thing TVM
+uniquely provides over the global allocator we already
+use. Stripped of the > 4 GiB property, the wit-bindgen
+host hop is pure overhead. No reason to use TVM at all.</li>
+<li class=""><strong>Forking SQLite to take handle-based allocator API.</strong>
+Trust cost is structural and permanent: SQLite's value
+proposition is "this exact implementation with the
+public test corpus." A fork loses that on day one,
+forever, and anyone evaluating us would budget weeks of
+audit time we can't pay. We won't fork.</li>
+</ol>
+<p>The misframe corrected during Phase 2 design: <strong>the > 4 GiB
+story shouldn't come from the allocator at all.</strong> SQLite's
+<code>sqlite3_malloc</code> holds schema, statement bytecode, lookaside,
+and result buffers — MB-scale, never needs to be lifted.
+The bytes that DO need > 4 GiB (page data, sort spill,
+temp tables, in-memory dbs) already route through the VFS
+when the right PRAGMAs are set. That's Phase 4's domain
+(TVM-backed VFS), and it doesn't need a fork.</p>
+<p>So Phase 2.0 is the malloc layer's end state on the TVM
+track. The <code>sqlite-mem-tvm</code> crate ships as-is. No follow-up.</p>
+</blockquote>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-to-build-1>What to build<a href=#what-to-build-1 class=hash-link aria-label="Direct link to What to build" title="Direct link to What to build" translate=no>​</a></h3>
+<p><code>tvm_malloc_init()</code> — implementations of <code>sqlite3_mem_methods</code>
+(<code>xMalloc</code>, <code>xFree</code>, <code>xRealloc</code>, <code>xSize</code>, <code>xRoundup</code>, <code>xInit</code>,
+<code>xShutdown</code>). Routes every allocation through TVM.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=region-strategy>Region strategy<a href=#region-strategy class=hash-link aria-label="Direct link to Region strategy" title="Direct link to Region strategy" translate=no>​</a></h3>
+<p>Three TVM regions for the malloc layer:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Region<th>Type<th>Purpose<tbody><tr><td><code>sqlite-heap</code><td><code>heap</code><td>General allocations: schema, prepared statements, result buffers<tr><td><code>sqlite-arena</code><td><code>arena</code><td>Per-statement scratch: temp tables, sorter, hash joins. Reset at statement teardown.<tr><td><code>sqlite-lookaside</code><td><code>heap</code> (pinned)<td>Per-connection lookaside; must be fast. Pinned in tier 0.</table>
+<p>Allocation size + an <code>eMemSubsystem</code> hint (SQLite passes it via
+<code>sqlite3MemMalloc</code>'s caller) decide which region.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=validation-1>Validation<a href=#validation-1 class=hash-link aria-label="Direct link to Validation" title="Direct link to Validation" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Functional</strong>: same as Phase 1 — no test regression.</li>
+<li class=""><strong><code>:memory:</code> capacity</strong>: open a 6 GB <code>:memory:</code> database. Insert
+rows until the table contains 6 GB of data. Query it. Confirm
+it works and that wasm linear memory stays bounded.</li>
+<li class=""><strong>Perf</strong>: lookaside hits should be within 5% of native (it's a
+hot path). General malloc overhead ≤ 15%.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-stays-out-of-scope>What stays out of scope<a href=#what-stays-out-of-scope class=hash-link aria-label="Direct link to What stays out of scope" title="Direct link to What stays out of scope" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Mutex subsystem</strong> (<code>SQLITE_CONFIG_MUTEX</code>). SQLite has its own
+recursive mutex impl; wasm doesn't need cross-thread mutexes
+for our single-threaded build.</li>
+<li class=""><strong>VFS</strong> (<code>SQLITE_CONFIG_VFS</code>). <code>wasivfs</code> is doing its job;
+no reason to TVM-back it.</li>
+<li class=""><strong>PRNG</strong> / <strong>logging</strong> / etc. — not memory issues.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-3--optional-wasm64-build-target>Phase 3 — optional wasm64 build target<a href=#phase-3--optional-wasm64-build-target class=hash-link aria-label="Direct link to Phase 3 — optional wasm64 build target" title="Direct link to Phase 3 — optional wasm64 build target" translate=no>​</a></h2>
+<blockquote>
+<p><strong>No longer a destination state, kept as a future option.</strong>
+Phase 3 was originally framed as the path that erases the
+4 GiB question entirely when the toolchain catches up. With
+the TVM track now shipping unconditionally on wasm32 (B + E
+always-on, no feature flag), > 4 GiB working sets work today
+without waiting for wasm64. wasm64 stays interesting for the
+operational simplicity of a single 64-bit address space, but
+it's no longer a blocker for capacity.</p>
+<p>Host-side support stays: <code>Host::new</code> sets <code>wasm_memory64(true)</code>
+so the engine accepts wasm64 components when (and if) one
+shows up. The guest-side prerequisites are still unmet
+(<code>rustc</code> 1.96 doesn't ship <code>wasm64-wasip2</code>; wasi-sdk 33 has no
+wasm64 sysroot). The build-system plumbing lands once both
+upstreams catch up; until then, no one's blocked  the TVM
+track is the production > 4 GiB path.</p>
+</blockquote>
+<p>A parallel track to B + C, not a replacement. Some callers want
+the simpler operational story of a single 64-bit linear memory
+and are willing to pay the perf hit. This phase ships a build
+shape for them.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=build-configuration>Build configuration<a href=#build-configuration class=hash-link aria-label="Direct link to Build configuration" title="Direct link to Build configuration" translate=no>​</a></h3>
+<p>A new cargo feature <code>mem64</code> on the <code>core</code>, <code>cli</code>, and
+<code>sqlite-lib</code> crates. When enabled:</p>
+<ul>
+<li class="">Target switches from <code>wasm32-wasip2</code> to <code>wasm64-wasip2</code>.</li>
+<li class=""><code>libsqlite3-sys</code> rebuilds against the wasm64 sysroot
+(<code>CFLAGS_wasm64_wasip2</code>).</li>
+<li class="">Default linker/runtime settings switch to wasm64 equivalents.</li>
+</ul>
+<p>Per-crate <code>.cargo/config.toml</code> carries the wasm64 env vars
+under a <code>[env]</code> block guarded by the feature; the workspace-root
+<code>.cargo/config.toml</code> adds <code>CC_wasm64_wasip2</code> / <code>AR_wasm64_wasip2</code>
+/ <code>CFLAGS_wasm64_wasip2</code> to its <code>[env]</code> table so explicit builds
+from the workspace root work too.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=host-side-support>Host-side support<a href=#host-side-support class=hash-link aria-label="Direct link to Host-side support" title="Direct link to Host-side support" translate=no>​</a></h3>
+<p><code>sqlink-host</code> adds <code>wasm_memory64(true)</code> to its wasmtime
+<code>Config</code>. With the feature off, the engine rejects wasm64
+modules (status quo). With on, it accepts both wasm32 and wasm64
+components; the loaded extension can be either.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=build-matrix>Build matrix<a href=#build-matrix class=hash-link aria-label="Direct link to Build matrix" title="Direct link to Build matrix" translate=no>​</a></h3>
+<p>After phases 1 + 2 + 3 land, the supported build configurations:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Target<th>Pcache<th>Malloc<th>Max working set<th>Use case<tbody><tr><td>wasm32-wasip2<td>default pcache1<td>default malloc<td>~4 GB<td>Backward compat; small workloads<tr><td>wasm32-wasip2<td>tvm-pcache2<td>default malloc<td>~4 GB + tiered page cache<td>Phase 1 ship state<tr><td>wasm32-wasip2<td>tvm-pcache2<td>tvm-malloc<td>Tiered, > 4 GB across the board<td><strong>Planned default</strong> after phases 1 + 2<tr><td>wasm64-wasip2<td>default pcache1<td>default malloc<td>Whatever the host caps (typically 16 GB+)<td><code>mem64</code> feature; users who want size without TVM<tr><td>wasm64-wasip2<td>tvm-pcache2<td>tvm-malloc<td>Address space + tiering<td>Belt-and-braces; supported but rarely worth it</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=cost>Cost<a href=#cost class=hash-link aria-label="Direct link to Cost" title="Direct link to Cost" translate=no>​</a></h3>
+<p>Less than B + C combined — it's mostly build-system plumbing.
+The risk is in the <code>wasm64-wasip2</code> toolchain maturity (wasi-sdk,
+cargo-component, wit-bindgen) and the test matrix doubling. No
+SQLite code changes; no wasm component shape changes.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=order>Order<a href=#order class=hash-link aria-label="Direct link to Order" title="Direct link to Order" translate=no>​</a></h3>
+<p>Phase 3 can land in parallel with B and C, <strong>or</strong> as the very
+first thing if a user immediately needs > 4 GB and we haven't
+shipped TVM integration yet. It doesn't gate B or C; B and C
+don't gate it.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-4--path-e-tvm-backed-custom-vfs>Phase 4 — Path E: TVM-backed custom VFS<a href=#phase-4--path-e-tvm-backed-custom-vfs class=hash-link aria-label="Direct link to Phase 4 — Path E: TVM-backed custom VFS" title="Direct link to Phase 4 — Path E: TVM-backed custom VFS" translate=no>​</a></h2>
+<blockquote>
+<p><strong>Phase 4.0 + 4.1 + 4.2 shipped.</strong> The <code>sqlite-vfs-tvm</code> crate
+ships the full sqlite3_vfs trampolines (4.0), feature-gated
+<code>WitTvmStorage</code> backend using 4 KB chunked allocs in
+<code>tvm:memory</code> regions (4.1), and the wasm32-wasip2 probe at
+<code>probe/tvm-vfs-wasip2/</code> with a host integration test that
+drives 100 INSERTs through real SQLite + the chunked TVM
+backend (4.2). The host test passes: TvmHost.directory
+reports 1 region holding 8 KB after the workload  bytes
+actually flowed through <code>tvm:memory/manager.create-region</code> +
+<code>bytes.write</code>, not through default memory.</p>
+<p>One small core::db change was needed to make the probe
+possible: <code>Connection::open_with_vfs(path, flags, vfs_name)</code>
+joined <code>Connection::open</code> so callers can name the VFS
+explicitly. The bare <code>Connection::open</code> hardcodes "wasivfs"
+for non-<code>:memory:</code> paths on wasm32, which would route past
+our just-installed VFS.</p>
+</blockquote>
+<p>The path that picks up where Phase 2 dropped. With Phase 2.1
+abandoned (allocator-layer TVM can't satisfy SQLite's
+raw-pointer contract without forking), Phase 4 lifts the > 4 GiB
+ceiling at a different layer: <strong>the VFS.</strong> Database files, journal
+files, sort/hash spill, and <code>temp_store=FILE</code> temp tables all
+flow through <code>sqlite3_vfs</code> — and the VFS's <code>xRead/xWrite</code>
+contract is exactly the boundary the TVM allocator path
+<em>didn't</em> have: bytes move between a caller-supplied buffer (in
+default memory) and the VFS's storage (which can be anywhere).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=why-this-works-where-phase-21-didnt>Why this works where Phase 2.1 didn't<a href=#why-this-works-where-phase-21-didnt class=hash-link aria-label="Direct link to Why this works where Phase 2.1 didn't" title="Direct link to Why this works where Phase 2.1 didn't" translate=no>​</a></h3>
+<p>Phase 1's pcache and Phase 2's mem methods both expose
+<code>*mut c_void</code> to SQLite. SQLite then reads/writes those bytes
+directly. Pcache made this tractable via the shadow-pool design
+(pin window = fault into default memory; unpin = flush to TVM).
+Mem methods had no such boundary.</p>
+<p>The VFS has the boundary built in: SQLite never accesses VFS
+storage by raw pointer. Every byte goes through <code>xRead(offset, len, buf)</code> or <code>xWrite(offset, len, buf)</code>. The buffer is in
+default memory (sqlite-supplied), but the storage can live in a
+TVM region addressed by <code>(region_id, offset)</code>. No shadow pool
+needed — sqlite already does the right thing structurally.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-to-build-2>What to build<a href=#what-to-build-2 class=hash-link aria-label="Direct link to What to build" title="Direct link to What to build" translate=no>​</a></h3>
+<p><code>sqlite-vfs-tvm</code> crate, sibling to <code>sqlite-pcache-tvm</code> and
+<code>sqlite-mem-tvm</code>. Implements <code>sqlite3_vfs</code> + <code>sqlite3_io_methods</code>
+trampolines. Registers via <code>sqlite3_vfs_register</code> (NOT
+<code>sqlite3_config</code> — VFS registration is a separate API and is
+<em>not</em> boot-order-constrained the way <code>SQLITE_CONFIG_PCACHE2</code> is).</p>
+<p>Per-file state holds:</p>
+<ul>
+<li class="">A <code>tvm:memory</code> region id (created at <code>xOpen</code> time)</li>
+<li class="">A <code>HashMap&lt;u32, Handle></code> mapping logical byte offset → TVM
+handle from <code>manager.alloc</code> (same shape as
+<code>WitTvmRegion::handles</code>)</li>
+<li class="">File size (updated by <code>xWrite</code> / <code>xTruncate</code>)</li>
+<li class="">File flags from the <code>xOpen</code> call</li>
+</ul>
+<p><code>xOpen</code> creates the region (sized to a reasonable initial
+capacity); <code>xRead</code> looks up handles by offset and copies bytes
+out via <code>tvm:memory/bytes.read</code>; <code>xWrite</code> allocates handles on
+miss and copies bytes in via <code>bytes.write</code>; <code>xClose</code> destroys
+the region.</p>
+<p>Path resolution: the new VFS registers under a name (e.g.
+<code>"tvm-mem"</code>); user code opens with <code>Connection::open_with_vfs( "/tvm/big.db", "tvm-mem", ...)</code>. Alternatively a single
+process-wide <code>tvm-mem</code> becomes the default VFS via
+<code>sqlite3_vfs_register(..., make_default=1)</code>. Default-VFS is the
+cleaner choice for users who want everything in TVM.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=usage-shape>Usage shape<a href=#usage-shape class=hash-link aria-label="Direct link to Usage shape" title="Direct link to Usage shape" translate=no>​</a></h3>
+<div class="language-rust codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-rust codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token comment" style=color:#999988;font-style:italic>// One-time setup:</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token namespace" style=opacity:0.7>sqlite_vfs_tvm</span><span class="token namespace punctuation" style=opacity:0.7;color:#393A34>::</span><span class="token function" style=color:#d73a49>install</span><span class="token punctuation" style=color:#393A34>(</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain">        </span><span class="token comment" style=color:#999988;font-style:italic>// registers under name "tvm-mem"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>// Or: sqlite_vfs_tvm::install_as_default()?; // becomes default VFS</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>// Open against the TVM VFS:</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> conn </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token class-name">Connection</span><span class="token punctuation" style=color:#393A34>::</span><span class="token function" style=color:#d73a49>open_with_vfs</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"/big.db"</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"tvm-mem"</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token constant" style=color:#36acaa>FLAGS</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">conn</span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>execute_batch</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"PRAGMA temp_store = FILE;"</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain">  </span><span class="token comment" style=color:#999988;font-style:italic>// route sort/hash through VFS</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">conn</span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>execute_batch</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"PRAGMA cache_size = -8000;"</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"> </span><span class="token comment" style=color:#999988;font-style:italic>// 8 MB shadow + rest in pcache region</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>// Now:</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>//   - DB file content lives in TVM (via this VFS)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>//   - Page cache lives in TVM (via Phase 1 pcache)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>//   - Sort/hash spill lives in TVM (PRAGMA + this VFS)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>//   - Schema/bytecode lives in default heap (Phase 2.0)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>// Result: > 4 GiB working sets, no disk I/O, no fork.</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=validation-2>Validation<a href=#validation-2 class=hash-link aria-label="Direct link to Validation" title="Direct link to Validation" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Functional.</strong> Open db via <code>tvm-mem</code> VFS, run a basic
+CREATE-INSERT-SELECT workload. Asserts data round-trips
+correctly. Mirrors <code>sqlite-pcache-tvm</code>'s
+<code>serves_real_sqlite.rs</code> test.</li>
+<li class=""><strong>Spill-through-VFS.</strong> Sort/hash spill goes through the
+registered VFS when <code>temp_store=FILE</code> is set. Trigger a
+workload that exceeds the in-memory sort threshold; assert
+the VFS region grew accordingly.</li>
+<li class=""><strong>Capacity.</strong> Same pattern as Phase 1.3: drive a large
+workload (rows × payload exceeding the shadow pool budget),
+inspect <code>TvmHost.directory</code> for region byte usage, assert
+TVM holds the bulk. Distinction from Phase 1.3: Phase 1.3
+proved pcache offload works; Phase 4 capacity proves VFS
+offload works for <code>:memory:</code>-style workloads where the
+whole "file" lives in TVM.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=open-questions-for-phase-4>Open questions for Phase 4<a href=#open-questions-for-phase-4 class=hash-link aria-label="Direct link to Open questions for Phase 4" title="Direct link to Open questions for Phase 4" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Region capacity strategy.</strong> Pcache used a fixed default
+(256 MiB) because pages have predictable upper bounds tied
+to <code>xCachesize</code>. VFS files can grow arbitrarily. Options:
+start small + grow via additional region creations, or
+start with a large reserve. Defer until measurement shows
+which is cheaper at the host's TVM allocator.</li>
+<li class=""><strong>Sync semantics.</strong> SQLite's <code>xSync</code> exists to flush dirty
+data to durable storage. For TVM-backed files there's no
+durability — TVM regions are RAM-shaped. <code>xSync</code> is a
+no-op. Document this for users who expect crash safety.</li>
+<li class=""><strong>Journal mode interaction.</strong> Default rollback journal
+writes a separate file via VFS. If both main db and
+journal are in TVM, they're consistent (same lifetime).
+WAL adds a third VFS-managed file (the -shm). Both compose
+cleanly with our impl since the VFS sees them all uniformly.</li>
+<li class=""><strong>Sharing TVM regions across connections.</strong> Two
+<code>Connection::open</code> calls on the same path: should they share
+the underlying TVM region? sqlite expects file-sharing
+semantics (multi-reader, single-writer). For Phase 4.0 we
+ship per-connection regions (no sharing); the multi-conn
+story is Phase 4.1.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-stays-out-of-scope-1>What stays out of scope<a href=#what-stays-out-of-scope-1 class=hash-link aria-label="Direct link to What stays out of scope" title="Direct link to What stays out of scope" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Persistence.</strong> TVM regions don't survive the wasm
+instance. For durable storage use <code>wasivfs</code> + host disk
+(already shipped). Phase 4 is for the "fast in-memory big
+working set" use case, not the "persistent db" use case.</li>
+<li class=""><strong>Cross-instance shared TVM regions.</strong> Same as above: each
+wasm instance gets its own TVM directory.</li>
+<li class=""><strong>Compression / encryption</strong> in the VFS layer. Orthogonal.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=whats-published-as-crates>What's published as crates<a href=#whats-published-as-crates class=hash-link aria-label="Direct link to What's published as crates" title="Direct link to What's published as crates" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Crate<th>Role<tbody><tr><td><code>sqlite-pcache-tvm</code><td>Path B pcache2 impl (Phase 1, shipped). Rust trampolines + <code>ShadowCache&lt;R: Region></code> + in-proc and wit-bindgen-backed <code>Region</code> impls.<tr><td><code>sqlite-mem-tvm</code><td>Path C mem methods impl (Phase 2.0, shipped). Size-header allocator over the Rust global allocator. No TVM-backed variant — see Phase 2 finding for why.<tr><td><code>sqlite-vfs-tvm</code><td>Path E TVM-backed VFS. Phase 4.0 + 4.1 + 4.2 shipped: trampolines + InProcStorage + WitTvmStorage backend + wasm32-wasip2 probe with end-to-end SQLite round-trip through <code>tvm:memory</code> regions.<tr><td>(external) <code>tvm-core</code> / <code>tvm-guest-mm</code> / <code>tvm-wasmtime</code><td>Untouched; consumed via path deps.</table>
+<p>All three new crates live in this repo's workspace and share the
+SQLite type surface via <code>libsqlite3-sys</code> (consumed without the
+<code>bundled</code> feature — the bundled compile is in <code>core</code>).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=order-of-operations>Order of operations<a href=#order-of-operations class=hash-link aria-label="Direct link to Order of operations" title="Direct link to Order of operations" translate=no>​</a></h2>
+<p>The TVM track and the wasm64 track are independent. Within the
+TVM track, B + E together are the destination state. C is the
+in-proc allocator we already ship.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tvm-track>TVM track<a href=#tvm-track class=hash-link aria-label="Direct link to TVM track" title="Direct link to TVM track" translate=no>​</a></h3>
+<ol>
+<li class=""><strong>Validate the substrate</strong> ✅. The wiring path is the
+WIT-bound <code>tvm:memory/{types,manager,bytes}</code> interfaces
+(not the raw-<code>extern "C"</code> path <code>tvm-guest-rt</code> exposes — that
+path is wasm32-unknown-unknown-only because the component
+model requires every guest import to be declared in WIT).
+Validation lives at <code>probe/tvm-substrate/</code> (wasm32-wasip2
+cdylib using wit-bindgen against <code>tvm:memory@0.1.0</code>) and
+<code>host/tests/tvm_substrate_probe.rs</code> (instantiates the
+component against <code>tvm_wasmtime::add_to_linker</code> + WASI,
+asserts the create-region → alloc → write → read → sum
+round-trip returns 10). Conclusion: the substrate is
+wasip2-clean via the WIT path; SQLite track Phase 1 can
+plug into the same wiring.</li>
+<li class=""><strong>Phase 1 — Path B (pcache)</strong> ✅. Shipped through Phase 1.3.
+<code>sqlite-pcache-tvm</code> ships the shadow-pool + LRU cache with
+a wit-bindgen-backed <code>WitTvmRegion</code> cold tier. Capacity
+test (<code>host/tests/tvm_pcache_capacity.rs</code>) validates the
+architectural property end-to-end: 10 MB working set
+round-tripped through TVM while the shadow pool stayed at
+~5-6 pages (20 KB).</li>
+<li class=""><strong>Phase 2 — Path C (mem methods)</strong> ✅. Shipped at 2.0.
+<code>sqlite-mem-tvm</code> ships the size-header allocator over the
+Rust global heap. The TVM-backed variant (Phase 2.1) was
+considered and abandoned — see the Phase 2 finding for the
+reasoning. The malloc layer is done.</li>
+<li class=""><strong>Phase 4 — Path E (TVM-backed VFS)</strong>. The next piece of
+work. Routes database file content + sort/hash spill +
+<code>:memory:</code>-style working sets through <code>sqlite3_vfs</code>
+trampolines whose backing is TVM regions. This is the
+layer where the > 4 GiB story actually closes for non-page
+bytes. Independent of Phase 2; depends only on the
+<code>tvm:memory</code> substrate (Phase 1's substrate validation
+covers it).</li>
+<li class=""><strong>Measure</strong> ✅. End-to-end capacity test against the combined
+B + E stack: <code>probe/tvm-combined-wasip2/</code> installs the pcache
+<ul>
+<li class="">the tvm-mem VFS in the same wasm instance and runs a
+<code>cache_size = 5</code> insert workload through both;
+<code>host/tests/tvm_combined_capacity.rs</code> asserts SQL integrity,
+that file_count >= 1 (VFS leg participated), that
+tvm_write_count > 0 (pcache leg evicted to cold tier), that
+TvmHost.directory holds >= 2 regions, and that total used
+bytes cross a workload-proportional threshold. Default scale
+is 50k rows × 200 B (CI-friendly, ~10 s); the spec target
+(> 4 GiB) is gated behind <code>TVM_COMBINED_4GIB=1</code> for the human
+measurement run. With the default settings the test reports
+~20 MB held in 2 TVM regions across 1 VFS file + ~55k pcache
+evictions, confirming both subsystems coexist and offload.</li>
+</ul>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=mem64-track-parallel>Mem64 track (parallel)<a href=#mem64-track-parallel class=hash-link aria-label="Direct link to Mem64 track (parallel)" title="Direct link to Mem64 track (parallel)" translate=no>​</a></h3>
+<p>Phase 3 — opt-in <code>wasm64-wasip2</code> build behind the <code>mem64</code>
+cargo feature. Can land at any time relative to B/C; doesn't
+gate or get gated by them. The TVM track stays the <strong>default</strong>
+build configuration; <code>mem64</code> is opt-in for users who want the
+address space without the integration surface.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope>Out of scope<a href=#out-of-scope class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h2>
+<ul>
+<li class="">Multi-threading. TVM's spec mentions handles crossing threads;
+our SQLite build is single-threaded today and that's not changing
+in this plan.</li>
+<li class="">Distributed page cache (cache shared across processes/hosts).
+Different problem; would need a TVM region whose backing is a
+network store, not a different SQLite integration.</li>
+<li class="">Encrypted regions. Same — orthogonal layer.</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-tvm-integration.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/sqlink/plans/PLAN-wal-archive-extension><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Plan: wal-archive extension  continuous WAL backup for sqlink</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/sqlink/plans/PLAN-wasmmachine><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Plan: Register sqlite-cli as a wasmMachine application</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#the-4-gb-wall-where-it-actually-bites class="table-of-contents__link toc-highlight">The 4 GB wall, where it actually bites</a><li><a href=#the-five-paths-to-lifting-the-wall class="table-of-contents__link toc-highlight">The five paths to lifting the wall</a><li><a href=#how-b-c-and-e-compose class="table-of-contents__link toc-highlight">How B, C, and E compose</a><li><a href=#architectural-sketch class="table-of-contents__link toc-highlight">Architectural sketch</a><li><a href=#phase-1--path-b-tvm-backed-pcache2 class="table-of-contents__link toc-highlight">Phase 1 — Path B: TVM-backed <code>pcache2</code></a><ul><li><a href=#what-to-build class="table-of-contents__link toc-highlight">What to build</a><li><a href=#registration class="table-of-contents__link toc-highlight">Registration</a><li><a href=#tvm-glue class="table-of-contents__link toc-highlight">TVM glue</a><li><a href=#validation class="table-of-contents__link toc-highlight">Validation</a><li><a href=#open-questions-for-phase-1 class="table-of-contents__link toc-highlight">Open questions for Phase 1</a></ul><li><a href=#phase-2--path-c-tvm-backed-sqlite3_malloc class="table-of-contents__link toc-highlight">Phase 2 — Path C: TVM-backed <code>sqlite3_malloc</code></a><ul><li><a href=#what-to-build-1 class="table-of-contents__link toc-highlight">What to build</a><li><a href=#region-strategy class="table-of-contents__link toc-highlight">Region strategy</a><li><a href=#validation-1 class="table-of-contents__link toc-highlight">Validation</a><li><a href=#what-stays-out-of-scope class="table-of-contents__link toc-highlight">What stays out of scope</a></ul><li><a href=#phase-3--optional-wasm64-build-target class="table-of-contents__link toc-highlight">Phase 3 — optional wasm64 build target</a><ul><li><a href=#build-configuration class="table-of-contents__link toc-highlight">Build configuration</a><li><a href=#host-side-support class="table-of-contents__link toc-highlight">Host-side support</a><li><a href=#build-matrix class="table-of-contents__link toc-highlight">Build matrix</a><li><a href=#cost class="table-of-contents__link toc-highlight">Cost</a><li><a href=#order class="table-of-contents__link toc-highlight">Order</a></ul><li><a href=#phase-4--path-e-tvm-backed-custom-vfs class="table-of-contents__link toc-highlight">Phase 4 — Path E: TVM-backed custom VFS</a><ul><li><a href=#why-this-works-where-phase-21-didnt class="table-of-contents__link toc-highlight">Why this works where Phase 2.1 didn't</a><li><a href=#what-to-build-2 class="table-of-contents__link toc-highlight">What to build</a><li><a href=#usage-shape class="table-of-contents__link toc-highlight">Usage shape</a><li><a href=#validation-2 class="table-of-contents__link toc-highlight">Validation</a><li><a href=#open-questions-for-phase-4 class="table-of-contents__link toc-highlight">Open questions for Phase 4</a><li><a href=#what-stays-out-of-scope-1 class="table-of-contents__link toc-highlight">What stays out of scope</a></ul><li><a href=#whats-published-as-crates class="table-of-contents__link toc-highlight">What's published as crates</a><li><a href=#order-of-operations class="table-of-contents__link toc-highlight">Order of operations</a><ul><li><a href=#tvm-track class="table-of-contents__link toc-highlight">TVM track</a><li><a href=#mem64-track-parallel class="table-of-contents__link toc-highlight">Mem64 track (parallel)</a></ul><li><a href=#out-of-scope class="table-of-contents__link toc-highlight">Out of scope</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

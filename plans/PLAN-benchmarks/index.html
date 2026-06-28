@@ -1,0 +1,590 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-benchmarks" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>Benchmarks: sqlite-wasm-run vs native sqlite3 | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-benchmarks /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Benchmarks: sqlite-wasm-run vs native sqlite3 | sqlink"/><meta data-rh=true name=description content="Status (2026-06-22): living benchmark record. Both the"/><meta data-rh=true property=og:description content="Status (2026-06-22): living benchmark record. Both the"/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-benchmarks /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-benchmarks hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-benchmarks hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://tegmentum.github.io/sqlink/plans/PLAN-benchmarks","name":"Benchmarks: sqlite-wasm-run vs native sqlite3","position":1}]}</script><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/><span title=Introduction class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/getting-started><span title="Getting Started" class=linkLabel_WmDU>Getting Started</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/sqlink/concepts/extensions><span title=Concepts class=categoryLinkLabel_W154>Concepts</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/extensions><span title=Extensions class=linkLabel_WmDU>Extensions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/bundles><span title=Bundles class=linkLabel_WmDU>Bundles</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/prefixes><span title=Prefixes class=linkLabel_WmDU>Prefixes</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/cas-cache><span title=Cas-cache class=linkLabel_WmDU>Cas-cache</span></a></ul><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/roadmap><span title=Roadmap class=linkLabel_WmDU>Roadmap</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/sqlink/plans/PLAN-bundles><span title="Plans (source of truth)" class=categoryLinkLabel_W154>Plans (source of truth)</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-bundles><span title="Plan: bundles  named extension sets with optional baked binaries" class=linkLabel_WmDU>Plan: bundles  named extension sets with optional baked binaries</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-prefixes><span title="Plan: function prefixes — SPARQL-style namespacing for SQL functions" class=linkLabel_WmDU>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-followups><span title=PLAN-followups class=linkLabel_WmDU>PLAN-followups</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-browser-runtime><span title="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill" class=linkLabel_WmDU>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wal-archive-extension><span title="Plan: wal-archive extension  continuous WAL backup for sqlink" class=linkLabel_WmDU>Plan: wal-archive extension  continuous WAL backup for sqlink</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-tvm-integration><span title="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)" class=linkLabel_WmDU>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wasmmachine><span title="Plan: Register sqlite-cli as a wasmMachine application" class=linkLabel_WmDU>Plan: Register sqlite-cli as a wasmMachine application</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-interactive-capture><span title="Plan: interactive changeset capture (daemon vs WIT-extension)" class=linkLabel_WmDU>Plan: interactive changeset capture (daemon vs WIT-extension)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/sqlink/plans/PLAN-benchmarks><span title="Benchmarks: sqlite-wasm-run vs native sqlite3" class=linkLabel_WmDU>Benchmarks: sqlite-wasm-run vs native sqlite3</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-perf-ux><span title="PLAN: release-readiness perf + UX audit" class=linkLabel_WmDU>PLAN: release-readiness perf + UX audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-testing><span title="PLAN: release-readiness testing audit" class=linkLabel_WmDU>PLAN: release-readiness testing audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-code-health><span title="PLAN: code-health + tech-debt audit for OSS release" class=linkLabel_WmDU>PLAN: code-health + tech-debt audit for OSS release</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-speculative><span title="Plan: speculative items (consumer-driven)" class=linkLabel_WmDU>Plan: speculative items (consumer-driven)</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/sqlink/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Plans (source of truth)</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Benchmarks: sqlite-wasm-run vs native sqlite3</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Benchmarks: sqlite-wasm-run vs native sqlite3</h1></header>
+<blockquote>
+<p><strong>Status (2026-06-22): living benchmark record.</strong> Both the
+pre-perf-push and post-perf-push snapshots are kept here as
+the canonical reference. Re-run via <code>make bench</code> after any
+perf-relevant change to refresh.</p>
+</blockquote>
+<p>First numbers on the table. Until now the project's perf claims
+("you can ship a 50 MB wasm cli that runs anywhere") were
+unverified  this doc establishes the actual cost of running
+SQLite through a wasm component vs the native binary.</p>
+<p>The harness is <code>tooling/bench.py</code>. Run it yourself with:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">make bench                                  # all workloads, default sizes</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">python3 tooling/bench.py --sizes 100000     # just the big ones</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">python3 tooling/bench.py --workloads read   # one workload</span><br/></div></code></pre></div></div>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=methodology>Methodology<a href=#methodology class=hash-link aria-label="Direct link to Methodology" title="Direct link to Methodology" translate=no>​</a></h2>
+<p>Each measurement is the median of N trials (default 3). Each
+trial uses a fresh on-disk db in a fresh tempdir, then runs the
+workload's SQL through <code>subprocess.run</code> with <code>time.perf_counter</code>
+around the call. The whole-process wall-clock time is what's
+reported  cli startup is INCLUDED, deliberately, so the small
+sizes show the constant overhead the user pays.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th><th><tbody><tr><td>native<td><code>sqlite3 3.43.2</code> (system)<tr><td>wasm<td><code>sqlite-wasm-run</code> (wasmtime) + <code>sqlite_cli.component.wasm</code> (libsqlite3-sys 0.38, SQLite 3.53.2)<tr><td>repeats<td>3 (median)<tr><td>db<td>file-backed in a fresh tempdir per trial<tr><td>journal<td><code>delete</code> unless workload is <code>*-wal</code></table>
+<p>Caveat: native is 3.43.2; wasm is 3.53.2. Planner differences
+exist but are small at this workload shape.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=results>Results<a href=#results class=hash-link aria-label="Direct link to Results" title="Direct link to Results" translate=no>​</a></h2>
+<p>Snapshot from one run (Apple Silicon, macOS, June 2026).</p>
+<p>Two rows per workload: <code>.wasm</code> parsed + compiled on every
+invocation (the default before this session), and <code>.cwasm</code>
+precompiled once via <code>make precompile-cli</code> and loaded via
+<code>Component::deserialize_file</code>. Run <code>make bench</code> for the first,
+<code>make bench CWASM=1</code> for the second.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=original-snapshot-pre-perf-push-kept-for-context>Original snapshot (pre-perf-push, kept for context)<a href=#original-snapshot-pre-perf-push-kept-for-context class=hash-link aria-label="Direct link to Original snapshot (pre-perf-push, kept for context)" title="Direct link to Original snapshot (pre-perf-push, kept for context)" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Workload<th style=text-align:right>Size<th style=text-align:right>native<th style=text-align:right>.wasm<th style=text-align:right>ratio<th style=text-align:right>.cwasm<th style=text-align:right>ratio<tbody><tr><td><code>insert</code><td style=text-align:right>1,000<td style=text-align:right>7 ms<td style=text-align:right>628 ms<td style=text-align:right>79.5x<td style=text-align:right>53 ms<td style=text-align:right><strong>7.5x</strong><tr><td><code>insert</code><td style=text-align:right>10,000<td style=text-align:right>19 ms<td style=text-align:right>486 ms<td style=text-align:right>23.2x<td style=text-align:right>100 ms<td style=text-align:right><strong>5.2x</strong><tr><td><code>insert</code><td style=text-align:right>100,000<td style=text-align:right>138 ms<td style=text-align:right>1.32 s<td style=text-align:right>9.0x<td style=text-align:right>563 ms<td style=text-align:right><strong>4.1x</strong><tr><td><code>insert-wal</code><td style=text-align:right>1,000<td style=text-align:right>12 ms<td style=text-align:right>473 ms<td style=text-align:right>39.4x<td style=text-align:right>~ same<td style=text-align:right>~ same<tr><td><code>insert-wal</code><td style=text-align:right>100,000<td style=text-align:right>150 ms<td style=text-align:right>1.16 s<td style=text-align:right>7.8x<td style=text-align:right>~ same<td style=text-align:right>~ same<tr><td><code>read</code><td style=text-align:right>1,000<td style=text-align:right>17 ms<td style=text-align:right>707 ms<td style=text-align:right>35.5x<td style=text-align:right>109 ms<td style=text-align:right><strong>6.5x</strong><tr><td><code>read</code><td style=text-align:right>10,000<td style=text-align:right>108 ms<td style=text-align:right>1.39 s<td style=text-align:right>11.2x<td style=text-align:right>671 ms<td style=text-align:right><strong>6.2x</strong><tr><td><code>read</code><td style=text-align:right>100,000<td style=text-align:right>1.08 s<td style=text-align:right>6.42 s<td style=text-align:right>5.5x<td style=text-align:right>6.32 s<td style=text-align:right><strong>5.8x</strong><tr><td><code>agg</code><td style=text-align:right>1,000<td style=text-align:right>9 ms<td style=text-align:right>434 ms<td style=text-align:right>45.0x<td style=text-align:right>51 ms<td style=text-align:right><strong>5.5x</strong><tr><td><code>agg</code><td style=text-align:right>10,000<td style=text-align:right>23 ms<td style=text-align:right>458 ms<td style=text-align:right>20.3x<td style=text-align:right>104 ms<td style=text-align:right><strong>4.5x</strong><tr><td><code>agg</code><td style=text-align:right>100,000<td style=text-align:right>159 ms<td style=text-align:right>946 ms<td style=text-align:right>6.0x<td style=text-align:right>614 ms<td style=text-align:right><strong>3.9x</strong><tr><td><code>join</code><td style=text-align:right>1,000<td style=text-align:right>10 ms<td style=text-align:right>442 ms<td style=text-align:right>47.3x<td style=text-align:right>76 ms<td style=text-align:right><strong>7.9x</strong><tr><td><code>join</code><td style=text-align:right>10,000<td style=text-align:right>21 ms<td style=text-align:right>468 ms<td style=text-align:right>22.8x<td style=text-align:right>115 ms<td style=text-align:right><strong>5.6x</strong><tr><td><code>join</code><td style=text-align:right>100,000<td style=text-align:right>129 ms<td style=text-align:right>899 ms<td style=text-align:right>7.0x<td style=text-align:right>569 ms<td style=text-align:right><strong>4.4x</strong></table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=post-perf-push-snapshot-current-cwasm-only>Post-perf-push snapshot (current; .cwasm only)<a href=#post-perf-push-snapshot-current-cwasm-only class=hash-link aria-label="Direct link to Post-perf-push snapshot (current; .cwasm only)" title="Direct link to Post-perf-push snapshot (current; .cwasm only)" translate=no>​</a></h3>
+<p>After the six perf rounds shipped in commits <code>21c941d</code> (pragma
+defaults + sqlite flags), <code>14a0baf</code> (pread + LTO + memory_reservation),
+<code>026f350</code> (256 MB page cache), <code>1325026</code> (SIMD + vec0 kernels),
+<code>d62ef61</code> (fuel-disabled engine for the cli), and <code>6773484</code>
+(WIT vtab <code>fetch_batch</code>):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Workload<th style=text-align:right>Size<th style=text-align:right>native<th style=text-align:right>wasm<th style=text-align:right>ratio<th style=text-align:right>drop vs pre-push<tbody><tr><td><code>insert</code><td style=text-align:right>1,000<td style=text-align:right>7 ms<td style=text-align:right>41 ms<td style=text-align:right><strong>6.2x</strong><td style=text-align:right>7.5x → 6.2x<tr><td><code>insert</code><td style=text-align:right>10,000<td style=text-align:right>18 ms<td style=text-align:right>72 ms<td style=text-align:right><strong>3.9x</strong><td style=text-align:right>5.2x → 3.9x<tr><td><code>insert</code><td style=text-align:right>100,000<td style=text-align:right>135 ms<td style=text-align:right>396 ms<td style=text-align:right><strong>2.9x</strong><td style=text-align:right>4.1x → 2.9x<tr><td><code>read</code><td style=text-align:right>1,000<td style=text-align:right>15 ms<td style=text-align:right>86 ms<td style=text-align:right><strong>5.6x</strong><td style=text-align:right>6.5x → 5.6x<tr><td><code>read</code><td style=text-align:right>10,000<td style=text-align:right>105 ms<td style=text-align:right>517 ms<td style=text-align:right><strong>4.9x</strong><td style=text-align:right>6.2x → 4.9x<tr><td><code>read</code><td style=text-align:right>100,000<td style=text-align:right>1.06 s<td style=text-align:right>4.89 s<td style=text-align:right><strong>4.6x</strong><td style=text-align:right>5.8x → 4.6x<tr><td><code>agg</code><td style=text-align:right>1,000<td style=text-align:right>8 ms<td style=text-align:right>38 ms<td style=text-align:right><strong>5.0x</strong><td style=text-align:right>5.5x → 5.0x<tr><td><code>agg</code><td style=text-align:right>10,000<td style=text-align:right>21 ms<td style=text-align:right>74 ms<td style=text-align:right><strong>3.6x</strong><td style=text-align:right>4.5x → 3.6x<tr><td><code>agg</code><td style=text-align:right>100,000<td style=text-align:right>153 ms<td style=text-align:right>415 ms<td style=text-align:right><strong>2.7x</strong><td style=text-align:right>3.9x → 2.7x<tr><td><code>join</code><td style=text-align:right>1,000<td style=text-align:right>9 ms<td style=text-align:right>51 ms<td style=text-align:right><strong>5.7x</strong><td style=text-align:right>7.9x → 5.7x<tr><td><code>join</code><td style=text-align:right>10,000<td style=text-align:right>19 ms<td style=text-align:right>79 ms<td style=text-align:right><strong>4.1x</strong><td style=text-align:right>5.6x → 4.1x<tr><td><code>join</code><td style=text-align:right>100,000<td style=text-align:right>125 ms<td style=text-align:right>377 ms<td style=text-align:right><strong>3.0x</strong><td style=text-align:right>4.4x → 3.0x</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=batched-vtab-scan-new-column>Batched vtab scan (new column)<a href=#batched-vtab-scan-new-column class=hash-link aria-label="Direct link to Batched vtab scan (new column)" title="Direct link to Batched vtab scan (new column)" translate=no>​</a></h3>
+<p>The WIT vtab <code>fetch_batch</code> path (shipped <code>6773484</code>) collapses N
+WIT crossings to N/batch_size crossings. For series (the
+canonical proof port) at 100k rows:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Path<th style=text-align:right>Time<tbody><tr><td>per-row WIT (xColumn + xRowid + xNext + xEof per row × N rows)<td style=text-align:right>367 ms<tr><td><code>fetch_batch</code> (one crossing per 64 rows)<td style=text-align:right><strong>49 ms</strong></table>
+<p>→ <strong>7.3x speedup</strong> on the WIT-loaded vtab scan; embed-path vtabs
+were already this fast.</p>
+<p>Phase A of <code>PLAN-perf-rollout.md</code> rolled this across 8 more
+read-only vtabs (<code>listargs</code>, <code>vec_each</code>, <code>completion</code>,
+<code>text-utils</code>, <code>time-series</code>, <code>trie</code>, <code>pmtiles</code>, <code>vec0</code>); the
+proof bench (<code>prefixes</code> over a 10000-char input) showed 238 →
+210 ms (~12%) where the workload's group_concat aggregation
+dominates the total time.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=best-ratios-this-run-hit>Best ratios this run hit<a href=#best-ratios-this-run-hit class=hash-link aria-label="Direct link to Best ratios this run hit" title="Direct link to Best ratios this run hit" translate=no>​</a></h3>
+<ul>
+<li class=""><code>agg</code> 100k at <strong>2.7x</strong> native — closest the catalog has gotten</li>
+<li class=""><code>insert</code> 100k at <strong>2.9x</strong></li>
+<li class=""><code>join</code> 100k at <strong>3.0x</strong></li>
+<li class=""><code>read</code> 100k at <strong>4.6x</strong> — bottleneck is now sqlite-compiled-to-
+wasm vs sqlite-native plus the wasi shim cost per page; the
+memvfs experiment (commit <code>4f83e82</code>) confirmed those calls are
+already absorbed by the OS file cache on macOS, so further
+read-side wins need either lower-level wasmtime changes or a
+workload that pushes past the OS cache.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=precompilation--the-big-startup-win>Precompilation  the big startup win<a href=#precompilation--the-big-startup-win class=hash-link aria-label="Direct link to Precompilation  the big startup win" title="Direct link to Precompilation  the big startup win" translate=no>​</a></h2>
+<p>The <code>.wasm</code>  <code>.cwasm</code> swap is the headline finding of this
+session. Wasmtime's <code>Engine::precompile_component</code> AOT-compiles
+the component to a host-CPU-specific blob; loading via
+<code>Component::deserialize_file</code> then skips parse + validate +
+cranelift compile.</p>
+<p>Bare SQL throughput:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">$ for i in 1..5; do time sqlite-wasm-run cli.wasm  &lt;&lt;&lt;'SELECT 1;'; done</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        ~370 ms wall-clock per invocation</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">$ for i in 1..5; do time sqlite-wasm-run cli.cwasm &lt;&lt;&lt;'SELECT 1;'; done</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        ~10 ms wall-clock per invocation</span><br/></div></code></pre></div></div>
+<p><strong>~37x reduction in startup overhead.</strong> From <code>make bench</code> above:</p>
+<ul>
+<li class="">1k-row workloads (startup-dominated): from 28-80x  3-8x</li>
+<li class="">100k-row workloads (steady-state): from 5.5-9x  3.9-5.8x</li>
+</ul>
+<p>Cost: the <code>.cwasm</code> blob is ~5x larger (12 MB vs 2.5 MB for the
+cli) because it embeds native machine code. Not portable across
+CPU architectures or wasmtime versions  must be regenerated on
+each machine after upgrades. <code>make precompile-cli</code> is the one-
+liner; depends on the <code>.wasm</code> and the host binary, so it
+re-runs automatically.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-this-tells-us>What this tells us<a href=#what-this-tells-us class=hash-link aria-label="Direct link to What this tells us" title="Direct link to What this tells us" translate=no>​</a></h2>
+<p><strong>Steady-state overhead is ~4-6x with precompilation, 5-9x
+without.</strong> At 100k rows the ratio converges to a small single-
+digit multiple. That's the actual cost of the wasm component
+model + wasmtime instantiation + wasi shims for file I/O. The
+1k-row numbers are startup-dominated  every <code>.wasm</code> workload
+paid ~370 ms before the first row was inserted. Precompiling
+to <code>.cwasm</code> cuts that to ~10 ms.</p>
+<p><strong>Read is the closest to native.</strong> At 100k rows <code>read</code> lands at
+5.5x  the B-tree traversal is sqlite3 code that wasm doesn't
+slow down meaningfully; only the wasi shim cost on each
+sqlite3_step() boundary shows up.</p>
+<p><strong>Insert is around 9x.</strong> Every INSERT crosses the wasi boundary
+for the page-write fsync path. Larger transactions amortize this
+(insert-wal at 100k is 7.8x; insert without WAL is 9.0x).</p>
+<p><strong>WAL costs nothing extra at single-writer scale.</strong> The 1k-row
+insert vs insert-wal numbers are noisy at this size (39x vs 79x,
+but with 8-12 ms native variance the wasm numbers swing around
+too). At 10k+ rows the difference is in single-digit ms range
+on the native side and well within noise on the wasm side. WAL
+exists for concurrent readers; this single-writer harness can't
+exercise that.</p>
+<p><strong>The constant overhead is real and significant.</strong> ~400 ms per
+invocation is paid up front. That's wasmtime fast-path
+instantiation, component-model module wiring, and the wasi
+preopen / argv setup. For an interactive cli session this is
+paid once (the cli stays running); for batch scripts that
+invoke <code>sqlite-wasm-run</code> per statement, this dominates anything
+smaller than a few thousand rows.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=wit-extension-boundary-cost--measured>WIT extension boundary cost  measured<a href=#wit-extension-boundary-cost--measured class=hash-link aria-label="Direct link to WIT extension boundary cost  measured" title="Direct link to WIT extension boundary cost  measured" translate=no>​</a></h2>
+<p>The <code>ext-scalar</code> workload loads the sha3 extension and runs
+<code>SELECT sum(length(sha3_256(name))) FROM t</code>  every row crosses
+the canonical ABI. <code>builtin-scalar</code> is the same shape but with
+<code>length(name)</code>, a sqlite builtin compiled into the wasm cli with
+no inter-component crossing. The delta is the WIT cost.</p>
+<p>Measured on <code>.cwasm</code> at three sizes (median of 3 trials):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Workload<th style=text-align:right>1k<th style=text-align:right>10k<th style=text-align:right>100k<tbody><tr><td><code>builtin-scalar</code><td style=text-align:right>54 ms<td style=text-align:right>99 ms<td style=text-align:right>583 ms<tr><td><code>ext-scalar</code><td style=text-align:right>150 ms<td style=text-align:right>222 ms<td style=text-align:right>955 ms</table>
+<p>Marginal per-row cost (subtract the smaller size from the larger):</p>
+<ul>
+<li class="">Builtin scalar (<code>length</code>): 5.4 µs/row  wasm overhead vs native</li>
+<li class="">WIT scalar (<code>sha3_256</code>): 8.1 µs/row  wasm + WIT + sha3 work</li>
+<li class=""><strong>Delta = ~2.7 µs per WIT boundary crossing</strong></li>
+</ul>
+<p>That number is sha3-with-empty-payload work plus the canonical
+ABI cost. The sha3 portion is fast (tens of ns); most of the
+2.7 µs is the WIT crossing: serialize args  cross-store call
+deserialize result. For comparison, a native sqlite scalar
+dispatch is ~100 ns  the WIT crossing is <strong>~25-30x slower per
+call</strong> than native.</p>
+<p>What that means for real workloads:</p>
+<ul>
+<li class="">100k rows  ~270 ms of pure WIT overhead. Not catastrophic
+at this scale, but it dominates for tight scalar loops.</li>
+<li class="">The cost is FIXED PER CALL  payload size barely matters.</li>
+<li class="">The embed path eliminates this for any extension compiled
+in at build time: a 100k-row <code>SELECT sha3_256(name)</code> drops
+from 951 ms (WIT) to 679 ms (embedded)  exactly the 272 ms
+predicted. See PLAN-embed-extensions.md for the user-facing
+tool (<code>sqlite-wasm-run compose --embed NAME[,NAME...]</code>).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=page-size-tuning--measured>Page-size tuning  measured<a href=#page-size-tuning--measured class=hash-link aria-label="Direct link to Page-size tuning  measured" title="Direct link to Page-size tuning  measured" translate=no>​</a></h2>
+<p>Two outcomes for two workload shapes (measured on <code>.cwasm</code>):</p>
+<p><strong>Bulk insert in a single BEGIN/COMMIT</strong> (100k rows):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th><th style=text-align:right>native<th style=text-align:right>wasm<tbody><tr><td>page_size=4096 (default)<td style=text-align:right>138 ms<td style=text-align:right>572 ms<tr><td>page_size=16384 + 200MB cache<td style=text-align:right>135 ms<td style=text-align:right>548 ms</table>
+<p>Effectively a wash. SQLite already batches writes within a
+transaction so per-page wasi calls aren't the bottleneck.</p>
+<p><strong>Auto-commit per row</strong> (500 rows, no BEGIN/COMMIT):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th><th style=text-align:right>native<th style=text-align:right>wasm<tbody><tr><td>page_size=4096 (default)<td style=text-align:right>1.94 s<td style=text-align:right>18.6 s<tr><td>page_size=16384<td style=text-align:right>1.23 s<td style=text-align:right>18.7 s</table>
+<p>Native got <strong>37% faster</strong>. Wasm got nothing.</p>
+<p>The diagnosis is in the asymmetry. Native fsync per commit is
+cheap (macOS is essentially a no-op for HFS+/APFS), so the
+per-byte cost matters and bigger pages cut total bytes written.
+Wasm goes through wasmtime  wasi  host fsync per commit, and
+the per-call overhead dominates everything else  cutting bytes
+per call doesn't help. The lesson: <strong>for our wasm runtime,
+page_size doesn't move the needle.</strong> Tell users to batch their
+inserts in a transaction; the page_size lever is a native-side
+trick.</p>
+<p>(The <code>cli-smokes/page_size</code> smoke still ships, to prove the
+pragma reaches wasivfs end-to-end.)</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-this-still-doesnt-measure>What this still doesn't measure<a href=#what-this-still-doesnt-measure class=hash-link aria-label="Direct link to What this still doesn't measure" title="Direct link to What this still doesn't measure" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>Cold startup</strong>  every trial here gets a freshly-instantiated
+wasm. Wasmtime caches compiled modules to disk; repeated runs
+in the same shell are faster than these numbers suggest.</li>
+<li class=""><strong>vec0  sqlite-vec parity</strong>  the catalog claim that vec0 is
+competitive with sqlite-vec needs a side-by-side KNN bench.
+Punt for now; needs the extension running through the wasm
+cli AND a native sqlite3 with sqlite-vec loaded, which is
+more setup than this scaffolding covers.</li>
+<li class=""><strong>Concurrent readers under WAL</strong>  single-process single-
+threaded WASI can't exercise this. Would need a multi-
+process driver that spawns several cli readers against the
+same on-disk db.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=wins-this-run-unlocked>Wins this run unlocked<a href=#wins-this-run-unlocked class=hash-link aria-label="Direct link to Wins this run unlocked" title="Direct link to Wins this run unlocked" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Finding<th>Implication<tbody><tr><td><strong>Precompile drops startup 370 ms  10 ms (37x).</strong><td>The biggest single improvement. Small-workload ratios drop from 50-80x to 5-8x. README-quotable.<tr><td>Steady-state overhead with <code>.cwasm</code>: 4-6x<td>Quotable. "Wasm cli runs SQLite at ~4-6x cost of native for non-trivial workloads, single-digit multiple."<tr><td><code>insert-wal</code> matches <code>insert</code><td>The WAL unlock (libsqlite3-sys 0.30  0.38) doesn't add overhead for single-writer workloads  it's purely a capability addition.<tr><td>100k rows in 563 ms (<code>.cwasm</code>)<td>Real production-size workloads complete in half a second; the wasm cli is usable, not a toy.<tr><td><code>read</code> lands at 5.5-6x<td>The read path is the closest to native, because most of the time is in sqlite3's B-tree walk (compiled to wasm just like everything else)  the WIT call boundary doesn't dominate.<tr><td><strong>WIT boundary = ~2.7 µs/call (~25-30x native).</strong><td>This is the cost the composed-cli design would eliminate for embedded extensions. At 100k-row tight scalar loops, it's ~270 ms of pure boundary overhead.<tr><td><strong>page_size tuning is a native trick.</strong><td>Bigger pages save 37% on native auto-commit workloads but nothing in wasm  per-wasi-call overhead dominates byte volume. Tell users to batch in transactions, not tune page_size.</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=follow-up-items>Follow-up items<a href=#follow-up-items class=hash-link aria-label="Direct link to Follow-up items" title="Direct link to Follow-up items" translate=no>​</a></h2>
+<ul>
+<li class="">Add a <code>wasm</code> column for <code>wasmtime serve</code>-style persistent process
+(one instantiation, many invocations) to isolate startup
+amortization.</li>
+<li class="">Add an extension-overhead workload (e.g. <code>SELECT sha3(name) FROM t</code>
+vs a native shathree.so load) to measure the WIT boundary cost.</li>
+<li class="">Compare cold vs warm wasmtime cache to show what the
+component-cache buys.</li>
+<li class="">Run on Linux x86_64 too. Apple Silicon results are reproducible
+here but might not translate.</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-benchmarks.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/sqlink/plans/PLAN-interactive-capture><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Plan: interactive changeset capture (daemon vs WIT-extension)</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/sqlink/plans/PLAN-release-readiness-perf-ux><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>PLAN: release-readiness perf + UX audit</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#methodology class="table-of-contents__link toc-highlight">Methodology</a><li><a href=#results class="table-of-contents__link toc-highlight">Results</a><ul><li><a href=#original-snapshot-pre-perf-push-kept-for-context class="table-of-contents__link toc-highlight">Original snapshot (pre-perf-push, kept for context)</a><li><a href=#post-perf-push-snapshot-current-cwasm-only class="table-of-contents__link toc-highlight">Post-perf-push snapshot (current; .cwasm only)</a><li><a href=#batched-vtab-scan-new-column class="table-of-contents__link toc-highlight">Batched vtab scan (new column)</a><li><a href=#best-ratios-this-run-hit class="table-of-contents__link toc-highlight">Best ratios this run hit</a></ul><li><a href=#precompilation--the-big-startup-win class="table-of-contents__link toc-highlight">Precompilation  the big startup win</a><li><a href=#what-this-tells-us class="table-of-contents__link toc-highlight">What this tells us</a><li><a href=#wit-extension-boundary-cost--measured class="table-of-contents__link toc-highlight">WIT extension boundary cost  measured</a><li><a href=#page-size-tuning--measured class="table-of-contents__link toc-highlight">Page-size tuning  measured</a><li><a href=#what-this-still-doesnt-measure class="table-of-contents__link toc-highlight">What this still doesn't measure</a><li><a href=#wins-this-run-unlocked class="table-of-contents__link toc-highlight">Wins this run unlocked</a><li><a href=#follow-up-items class="table-of-contents__link toc-highlight">Follow-up items</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

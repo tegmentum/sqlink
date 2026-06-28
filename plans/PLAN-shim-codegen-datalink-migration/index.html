@@ -1,0 +1,261 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-shim-codegen-datalink-migration" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>PLAN: Migrate sqlink-shim-codegen into datalink (α refactor) | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-shim-codegen-datalink-migration /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="PLAN: Migrate sqlink-shim-codegen into datalink (α refactor) | sqlink"/><meta data-rh=true name=description content="Status (2026-06-28)"/><meta data-rh=true property=og:description content="Status (2026-06-28)"/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-shim-codegen-datalink-migration /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-shim-codegen-datalink-migration hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-shim-codegen-datalink-migration hreflang=x-default /><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a class="navbar__item navbar__link" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><main class="docMainContainer_TBSr docMainContainerEnhanced_lQrH"><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>PLAN: Migrate sqlink-shim-codegen into datalink (α refactor)</h1></header>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-28>Status (2026-06-28)<a href=#status-2026-06-28 class=hash-link aria-label="Direct link to Status (2026-06-28)" title="Direct link to Status (2026-06-28)" translate=no>​</a></h2>
+<p>User has locked <strong>option (α)</strong> from #561: move the shim-bridge codegen
+into the shared <code>~/git/datalink</code> substrate, parallel to how
+<code>shim_sqlite!</code> / <code>shim_duckdb!</code> already split the extension-core macros
+in <code>datalink-extcore</code>. This plan captures the structural analysis +
+migration sequence so it can be executed in a future session.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=problem>Problem<a href=#problem class=hash-link aria-label="Direct link to Problem" title="Direct link to Problem" translate=no>​</a></h2>
+<p><code>sqlink-shim-codegen</code> is sqlink-private today and emits SQLite-shaped
+wasm bridges (<code>sqlite:extension@1.0.0</code>). When the framework extends to
+DuckDB (via ducklink) — and longer-term to datafission — we need the
+codegen to support per-database emit without duplicating the substrate.</p>
+<p>The proof point for the split already exists in <code>datalink-extcore</code>:</p>
+<ul>
+<li class=""><code>shim_sqlite!</code> (193 LoC) — generates sqlink extension shim</li>
+<li class=""><code>shim_duckdb!</code> (301 LoC) — generates ducklink extension shim</li>
+<li class="">~50% of the macros is shared structurally (marshalling pattern,
+DECLS dispatch loop, NULL handling); the LoC delta is genuinely
+per-database hooks (handle table, lifecycle, registration, typed
+errors).</li>
+</ul>
+<p>The shim-bridge codegen is a code-generator (~25K LoC per output) not
+a macro (~200-300 LoC per output), but the same core/emit split fits.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=target-shape>Target shape<a href=#target-shape class=hash-link aria-label="Direct link to Target shape" title="Direct link to Target shape" translate=no>​</a></h2>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">~/git/datalink/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  crates/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    datalink-shim-codegen-core/        # NEW — Tier 2 substrate</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      src/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        interface_db.rs                # SQLite parsing from /tmp/*-interface.sqlite</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        wit_parse.rs                   # walker + reachability + record registry</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        record_registry.rs             # canonical-CBOR type-id derivation</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        force_link.rs                  # reachability-filtered __FORCE_LINK_*</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        compose_emit.rs                # compose.wac auto-emission (#563)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        override_tables.rs             # operator/passthrough/tuple_pick overrides</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        name_match.rs                  # #490 walker + W1 prefix-strip</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    datalink-shim-sqlite-emit/         # NEW — sqlink target</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      src/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        dispatch.rs                    # SqlValue marshalling + ParamShape/RetShape</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        emit_lib.rs                    # sqlite:extension dispatch arms</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        emit_wit.rs                    # bridge WIT world + serde-ops local records</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        emit_cargo.rs                  # bridge crate Cargo.toml</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        emit_readme.rs                 # consume has_compose_wac (#563)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        vtab.rs                        # #531 CREATE TABLE schemas + #532 row mat</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    datalink-shim-duckdb-emit/         # NEW — ducklink target (future)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      src/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        dispatch.rs                    # Duckvalue marshalling</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        emit_lib.rs                    # duckdb:extension callbacks (6 arms)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        emit_wit.rs                    # bridge WIT for duckdb world</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        emit_cargo.rs                  # Cargo.toml</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        emit_readme.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        table_func.rs                  # Resultset returns (vs vtab cursor)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        register.rs                    # explicit register_scalars()</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        lifecycle.rs                   # load/reconfigure/shutdown</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  tooling/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    shim-codegen/                      # CLI that dispatches per-target</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">      src/main.rs                      # --target sqlite | duckdb</span><br/></div></code></pre></div></div>
+<p><code>sqlink-shim-codegen</code> becomes a thin CLI wrapper that:</p>
+<ol>
+<li class="">Adds <code>datalink-shim-codegen-core</code> + <code>datalink-shim-sqlite-emit</code> as
+workspace deps</li>
+<li class="">Reduces to ~100 LoC of CLI glue</li>
+<li class="">Optionally retires when datalink's <code>tooling/shim-codegen/</code> ships</li>
+</ol>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=whats-actually-shared-vs-per-database>What's actually shared vs per-database<a href=#whats-actually-shared-vs-per-database class=hash-link aria-label="Direct link to What's actually shared vs per-database" title="Direct link to What's actually shared vs per-database" translate=no>​</a></h2>
+<p>Quantitative breakdown of current sqlink-shim-codegen (post-#565
+estimate, ~12-15K LoC):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Category<th style=text-align:right>LoC est.<th>Bucket<tbody><tr><td>Interface DB parsing<td style=text-align:right>~1,500<td>core<tr><td>WIT walker + reachability (#565) + record registry<td style=text-align:right>~3,500<td>core<tr><td>Force-link emission (#557fix + #565 filter)<td style=text-align:right>~400<td>core<tr><td>compose.wac emission (#563)<td style=text-align:right>~500<td>core<tr><td>Override tables (operator/passthrough/tuple_pick)<td style=text-align:right>~250<td>core<tr><td>Name-matching heuristic (#490 + W1)<td style=text-align:right>~800<td>core<tr><td>Reachability + RecordType + alias resolution<td style=text-align:right>~1,500<td>core<tr><td><strong>Core subtotal</strong><td style=text-align:right><strong>~8,450</strong><td><strong>65-70%</strong><tr><td>Dispatch arm emission (SqlValue match arms)<td style=text-align:right>~2,500<td>sqlite-emit<tr><td>Vtab CREATE TABLE schemas + multi-col xColumn<td style=text-align:right>~1,000<td>sqlite-emit<tr><td>Bridge WIT + serde-ops local records<td style=text-align:right>~800<td>sqlite-emit<tr><td>Cargo / README / misc<td style=text-align:right>~400<td>sqlite-emit<tr><td><strong>SQLite emit subtotal</strong><td style=text-align:right><strong>~4,700</strong><td><strong>30-35%</strong></table>
+<p>Projection for duckdb-emit (when added): ~5-7K LoC due to:</p>
+<ul>
+<li class="">Handle table machinery (analog of shim_duckdb's ~30 LoC per
+extension, scaled to per-function dispatch)</li>
+<li class=""><code>Resultset</code> table functions (vs SQLite's vtab cursor model)</li>
+<li class=""><code>call_scalar_batch</code> + per-row loop</li>
+<li class=""><code>register_scalars()</code> with explicit <code>Logicaltype</code> translation</li>
+<li class=""><code>load</code>/<code>reconfigure</code>/<code>shutdown</code> lifecycle</li>
+<li class="">Typed <code>Duckerror</code> instead of String</li>
+</ul>
+<p>Total estimated framework after migration:</p>
+<ul>
+<li class="">core: ~8.5K LoC (shared across all DBs)</li>
+<li class="">sqlite-emit: ~4.7K LoC</li>
+<li class="">duckdb-emit: ~5.5K LoC (when added)</li>
+<li class="">Compared to current: a small net growth for the duckdb-emit, but
+ZERO redundancy — DuckDB-only work lives in DuckDB-only files.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=key-architectural-decisions-locked-by-this-plan>Key architectural decisions (locked by this plan)<a href=#key-architectural-decisions-locked-by-this-plan class=hash-link aria-label="Direct link to Key architectural decisions (locked by this plan)" title="Direct link to Key architectural decisions (locked by this plan)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=d1-neutralvalue-extension-for-record-types>D1. NeutralValue extension for record types<a href=#d1-neutralvalue-extension-for-record-types class=hash-link aria-label="Direct link to D1. NeutralValue extension for record types" title="Direct link to D1. NeutralValue extension for record types" translate=no>​</a></h3>
+<p>The <code>NeutralValue::Complex { type_expr, json }</code> escape hatch already
+exists in <code>datalink-extcore</code> (FROZEN closed set + this one arm). Shim
+bridges ferry <strong>geometry / raster / topology / tfloat-sequence / etc.</strong></p>
+<p><strong>Decision: ride the existing Complex escape.</strong> <code>type_expr</code> becomes
+the symbolic name (e.g., <code>"postgis:wasm/types@0.1.0/geometry"</code>),
+<code>json</code> becomes the canonical-CBOR bytes (matches our wit-value magic-
+prefix convention from #559). Per-database adapters lift Blob ↔
+Complex at the value-marshalling boundary using their host's typed-
+value registry. <strong>No NeutralValue extension required.</strong></p>
+<p>This means the FROZEN set stays FROZEN; the per-database adapters
+extend the escape hatch's interpretation, not the value model.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=d2-per-database-udtf-model>D2. Per-database UDTF model<a href=#d2-per-database-udtf-model class=hash-link aria-label="Direct link to D2. Per-database UDTF model" title="Direct link to D2. Per-database UDTF model" translate=no>​</a></h3>
+<p>SQLite's vtab + xColumn vs DuckDB's <code>Resultset</code> returns are
+architecturally different. Solutions:</p>
+<ul>
+<li class="">The core extracts the SHAPE of each UDTF (param types, row shape,
+HIDDEN args) into a database-agnostic IR.</li>
+<li class="">Per-database emit produces:
+<ul>
+<li class="">SQLite: vtab module + CREATE TABLE + xColumn dispatch (today's
+#531 + #532 work)</li>
+<li class="">DuckDB: callback that builds + returns <code>Resultset</code></li>
+</ul>
+</li>
+</ul>
+<p>Both emit-sides consume the same IR; the IR carries the row shape +
+HIDDEN/visible column metadata. Neither needs to know the other.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=d3-registration-model>D3. Registration model<a href=#d3-registration-model class=hash-link aria-label="Direct link to D3. Registration model" title="Direct link to D3. Registration model" translate=no>​</a></h3>
+<p>SQLite scalars are described in <code>Manifest::scalar_functions</code>; the host
+wires them at load time. DuckDB requires the extension to actively
+call <code>registry.register(name, args, ret, callback, opts)</code> against
+the runtime's scalar capability.</p>
+<p><strong>Decision: per-database emit owns registration.</strong> Core produces the
+function metadata (name, args, ret, deterministic, etc.) into an IR;
+sqlite-emit puts it in Manifest; duckdb-emit emits <code>register_scalars()</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=d4-magic-prefix-wit-value-lift-survives-the-migration>D4. Magic-prefix wit-value lift survives the migration<a href=#d4-magic-prefix-wit-value-lift-survives-the-migration class=hash-link aria-label="Direct link to D4. Magic-prefix wit-value lift survives the migration" title="Direct link to D4. Magic-prefix wit-value lift survives the migration" translate=no>​</a></h3>
+<p>The 36-byte header <code>WTV\x01 + type_id + canonical-CBOR</code> (#559) is
+host-side convention used by sqlink-loader. It's per-loader, not per-
+database. ducklink-loader (or its equivalent) needs the same lift on
+its side. Both inherit the convention from <code>datalink-loader-core</code>
+when that crate exists (Tier 2 / <code>datalink-runtime</code> per CONSOLIDATION.md).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=migration-sequence>Migration sequence<a href=#migration-sequence class=hash-link aria-label="Direct link to Migration sequence" title="Direct link to Migration sequence" translate=no>​</a></h2>
+<p>Four steps, each independently mergeable:</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=step-1--in-tree-refactor-of-sqlink-shim-codegen>Step 1 — In-tree refactor of sqlink-shim-codegen<a href=#step-1--in-tree-refactor-of-sqlink-shim-codegen class=hash-link aria-label="Direct link to Step 1 — In-tree refactor of sqlink-shim-codegen" title="Direct link to Step 1 — In-tree refactor of sqlink-shim-codegen" translate=no>​</a></h3>
+<p>Reorganize modules WITHOUT moving to datalink yet:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">sqlink-shim-codegen/src/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  core/                   # what will become datalink-shim-codegen-core</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    interface_db.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    wit_parse.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    record_registry.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    force_link.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    compose_emit.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    override_tables.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    name_match.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  emit_sqlite/            # what will become datalink-shim-sqlite-emit</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    dispatch.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    emit_lib.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    emit_wit.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    emit_cargo.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    emit_readme.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    vtab.rs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  main.rs                 # CLI; --target sqlite (default)</span><br/></div></code></pre></div></div>
+<p>Verification: no behavior change. Regen postgis + mobilitydb bridges
+byte-identical to current main.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=step-2--move-core-to-datalink>Step 2 — Move <code>core/</code> to datalink<a href=#step-2--move-core-to-datalink class=hash-link aria-label="Direct link to step-2--move-core-to-datalink" title="Direct link to step-2--move-core-to-datalink" translate=no>​</a></h3>
+<p>Extract <code>core/</code> modules into new <code>datalink/crates/datalink-shim-codegen-core/</code>
+crate. <code>sqlink-shim-codegen</code> adds the git dep and re-exports.</p>
+<p>Verification: bridges still regen byte-identical.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=step-3--move-emit_sqlite-to-datalink>Step 3 — Move <code>emit_sqlite/</code> to datalink<a href=#step-3--move-emit_sqlite-to-datalink class=hash-link aria-label="Direct link to step-3--move-emit_sqlite-to-datalink" title="Direct link to step-3--move-emit_sqlite-to-datalink" translate=no>​</a></h3>
+<p>Extract <code>emit_sqlite/</code> modules into
+<code>datalink/crates/datalink-shim-sqlite-emit/</code>. <code>sqlink-shim-codegen</code>
+becomes a ~100 LoC CLI wrapper around the two datalink crates.</p>
+<p>Verification: bridges still regen byte-identical.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=step-4--add-datalink-shim-duckdb-emit-when-ducklink-is-ready>Step 4 — Add datalink-shim-duckdb-emit (when ducklink is ready)<a href=#step-4--add-datalink-shim-duckdb-emit-when-ducklink-is-ready class=hash-link aria-label="Direct link to Step 4 — Add datalink-shim-duckdb-emit (when ducklink is ready)" title="Direct link to Step 4 — Add datalink-shim-duckdb-emit (when ducklink is ready)" translate=no>​</a></h3>
+<p>New crate in datalink. Follows the IR established in steps 1-3. CLI
+gets <code>--target duckdb</code> arm. ducklink-shim-codegen could become a thin
+sibling wrapper.</p>
+<p>Verification: regenerate the same postgis-interface.sqlite against
+<code>--target duckdb</code>; bridge component builds against DuckDB's WIT
+contract; loads in ducklink-loader; at least one PostGIS scalar
+round-trips.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=sequencing-with-other-in-flight-work>Sequencing with other in-flight work<a href=#sequencing-with-other-in-flight-work class=hash-link aria-label="Direct link to Sequencing with other in-flight work" title="Direct link to Sequencing with other in-flight work" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>#552 W3.6 hold</strong> — independent of migration; resolve or close
+when surfaced.</li>
+<li class=""><strong>#561 cross-project framework support</strong> — folds into this plan;
+steps 1-4 ARE its execution.</li>
+<li class=""><strong>#565 / #563 / #557fix family</strong> — already merged on current main;
+migration step 1 picks them up as-is.</li>
+<li class=""><strong>datalink-runtime (Tier 2 in CONSOLIDATION.md)</strong> — orthogonal but
+related. The shim-bridge codegen migration doesn't gate on it; both
+can land independently.</li>
+<li class=""><strong>Wasmtime version skew</strong> — datalink-runtime gates on sqlink/ducklink
+matching wasmtime versions. Shim-codegen migration doesn't care.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=risks>Risks<a href=#risks class=hash-link aria-label="Direct link to Risks" title="Direct link to Risks" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>Behavior drift during refactor.</strong> Each step needs a regen-and-diff
+check against the prior step's output. Mitigate: golden-file tests
+in the codegen.</li>
+<li class=""><strong>Per-database IR design churn.</strong> The core/emit IR will probably need
+iteration. Mitigate: write IR with only SQLite emit consuming it
+first (steps 1-3); revisit when DuckDB emit lands.</li>
+<li class=""><strong>Datalink workspace structure already chose <code>valuemodel</code> + <code>extcore</code>
+as separate crates.</strong> A <code>shim-codegen-core</code> should match that style.</li>
+<li class=""><strong>Wasm-component target idiosyncrasies (force-link, compose.wac,
+reachability) ARE substrate.</strong> They belong in core, not per-DB. Don't
+accidentally classify them as per-DB.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=open-decisions-capture-dont-lock>Open decisions (capture, don't lock)<a href=#open-decisions-capture-dont-lock class=hash-link aria-label="Direct link to Open decisions (capture, don't lock)" title="Direct link to Open decisions (capture, don't lock)" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>DD1. CLI surface.</strong> sqlink-shim-codegen retires, or stays as a thin
+wrapper for backward-compat scripts that already call it?</li>
+<li class=""><strong>DD2. Datalink workspace inclusion.</strong> Add as Tier-2 crates alongside
+<code>datalink-runtime</code> per CONSOLIDATION.md, or as a separate Tier-1
+tooling-style addition?</li>
+<li class=""><strong>DD3. IR format between core and emit.</strong> Plain Rust structs in a
+shared module, OR something more structured (CBOR-serializable for
+potential build-time caching)?</li>
+<li class=""><strong>DD4. Test infrastructure.</strong> Per-emit golden files, OR a shared
+contract test in the core that each emit validates against?</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification>Verification<a href=#verification class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h2>
+<ul>
+<li class="">Step 1: regen postgis + mobilitydb bridges byte-identical.</li>
+<li class="">Step 2: same, after core extraction.</li>
+<li class="">Step 3: same, after emit extraction.</li>
+<li class="">Step 4: postgis bridge regenerated for DuckDB target builds + loads
+in ducklink-loader; at least one scalar (<code>ST_AsText</code> is a good
+candidate — minimal dependencies) round-trips.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=references>References<a href=#references class=hash-link aria-label="Direct link to References" title="Direct link to References" translate=no>​</a></h2>
+<ul>
+<li class=""><code>~/git/datalink/CONSOLIDATION.md</code> — the tiered consolidation strategy.</li>
+<li class=""><code>~/git/datalink/crates/datalink-extcore/src/shim_sqlite.rs</code> — the
+shim_sqlite! macro (193 LoC; precedent for shared substrate).</li>
+<li class=""><code>~/git/datalink/crates/datalink-extcore/src/shim_duckdb.rs</code> — the
+shim_duckdb! macro (301 LoC; precedent for per-DB delta).</li>
+<li class=""><code>~/git/sqlink/docs/plans/PLAN-shim-tooling-residue.md</code> — captures the
+current state of the codegen (W1-W5, #557fix, #563, #565, etc.).</li>
+<li class=""><code>~/git/sqlink/sqlink-loader/</code> — sqlite:extension loader, the SQLite
+pole of the per-host adapter.</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-shim-codegen-datalink-migration.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#status-2026-06-28 class="table-of-contents__link toc-highlight">Status (2026-06-28)</a><li><a href=#problem class="table-of-contents__link toc-highlight">Problem</a><li><a href=#target-shape class="table-of-contents__link toc-highlight">Target shape</a><li><a href=#whats-actually-shared-vs-per-database class="table-of-contents__link toc-highlight">What's actually shared vs per-database</a><li><a href=#key-architectural-decisions-locked-by-this-plan class="table-of-contents__link toc-highlight">Key architectural decisions (locked by this plan)</a><ul><li><a href=#d1-neutralvalue-extension-for-record-types class="table-of-contents__link toc-highlight">D1. NeutralValue extension for record types</a><li><a href=#d2-per-database-udtf-model class="table-of-contents__link toc-highlight">D2. Per-database UDTF model</a><li><a href=#d3-registration-model class="table-of-contents__link toc-highlight">D3. Registration model</a><li><a href=#d4-magic-prefix-wit-value-lift-survives-the-migration class="table-of-contents__link toc-highlight">D4. Magic-prefix wit-value lift survives the migration</a></ul><li><a href=#migration-sequence class="table-of-contents__link toc-highlight">Migration sequence</a><ul><li><a href=#step-1--in-tree-refactor-of-sqlink-shim-codegen class="table-of-contents__link toc-highlight">Step 1 — In-tree refactor of sqlink-shim-codegen</a><li><a href=#step-2--move-core-to-datalink class="table-of-contents__link toc-highlight">Step 2 — Move <code>core/</code> to datalink</a><li><a href=#step-3--move-emit_sqlite-to-datalink class="table-of-contents__link toc-highlight">Step 3 — Move <code>emit_sqlite/</code> to datalink</a><li><a href=#step-4--add-datalink-shim-duckdb-emit-when-ducklink-is-ready class="table-of-contents__link toc-highlight">Step 4 — Add datalink-shim-duckdb-emit (when ducklink is ready)</a></ul><li><a href=#sequencing-with-other-in-flight-work class="table-of-contents__link toc-highlight">Sequencing with other in-flight work</a><li><a href=#risks class="table-of-contents__link toc-highlight">Risks</a><li><a href=#open-decisions-capture-dont-lock class="table-of-contents__link toc-highlight">Open decisions (capture, don't lock)</a><li><a href=#verification class="table-of-contents__link toc-highlight">Verification</a><li><a href=#references class="table-of-contents__link toc-highlight">References</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

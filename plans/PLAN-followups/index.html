@@ -1,0 +1,1520 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-followups" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>PLAN-followups | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-followups /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="PLAN-followups | sqlink"/><meta data-rh=true name=description content="v1.6 polish: post-v1.5 follow-ups (#487)"/><meta data-rh=true property=og:description content="v1.6 polish: post-v1.5 follow-ups (#487)"/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-followups /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-followups hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-followups hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://tegmentum.github.io/sqlink/plans/PLAN-followups","name":"PLAN-followups","position":1}]}</script><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/><span title=Introduction class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/getting-started><span title="Getting Started" class=linkLabel_WmDU>Getting Started</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/sqlink/concepts/extensions><span title=Concepts class=categoryLinkLabel_W154>Concepts</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/extensions><span title=Extensions class=linkLabel_WmDU>Extensions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/bundles><span title=Bundles class=linkLabel_WmDU>Bundles</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/prefixes><span title=Prefixes class=linkLabel_WmDU>Prefixes</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/cas-cache><span title=Cas-cache class=linkLabel_WmDU>Cas-cache</span></a></ul><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/roadmap><span title=Roadmap class=linkLabel_WmDU>Roadmap</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/sqlink/plans/PLAN-bundles><span title="Plans (source of truth)" class=categoryLinkLabel_W154>Plans (source of truth)</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-bundles><span title="Plan: bundles  named extension sets with optional baked binaries" class=linkLabel_WmDU>Plan: bundles  named extension sets with optional baked binaries</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-prefixes><span title="Plan: function prefixes — SPARQL-style namespacing for SQL functions" class=linkLabel_WmDU>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/sqlink/plans/PLAN-followups><span title=PLAN-followups class=linkLabel_WmDU>PLAN-followups</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-browser-runtime><span title="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill" class=linkLabel_WmDU>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wal-archive-extension><span title="Plan: wal-archive extension  continuous WAL backup for sqlink" class=linkLabel_WmDU>Plan: wal-archive extension  continuous WAL backup for sqlink</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-tvm-integration><span title="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)" class=linkLabel_WmDU>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wasmmachine><span title="Plan: Register sqlite-cli as a wasmMachine application" class=linkLabel_WmDU>Plan: Register sqlite-cli as a wasmMachine application</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-interactive-capture><span title="Plan: interactive changeset capture (daemon vs WIT-extension)" class=linkLabel_WmDU>Plan: interactive changeset capture (daemon vs WIT-extension)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-benchmarks><span title="Benchmarks: sqlite-wasm-run vs native sqlite3" class=linkLabel_WmDU>Benchmarks: sqlite-wasm-run vs native sqlite3</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-perf-ux><span title="PLAN: release-readiness perf + UX audit" class=linkLabel_WmDU>PLAN: release-readiness perf + UX audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-testing><span title="PLAN: release-readiness testing audit" class=linkLabel_WmDU>PLAN: release-readiness testing audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-code-health><span title="PLAN: code-health + tech-debt audit for OSS release" class=linkLabel_WmDU>PLAN: code-health + tech-debt audit for OSS release</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-speculative><span title="Plan: speculative items (consumer-driven)" class=linkLabel_WmDU>Plan: speculative items (consumer-driven)</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/sqlink/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Plans (source of truth)</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>PLAN-followups</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>PLAN-followups</h1></header><h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=v16-polish-post-v15-follow-ups-487>v1.6 polish: post-v1.5 follow-ups (#487)<a href=#v16-polish-post-v15-follow-ups-487 class=hash-link aria-label="Direct link to v1.6 polish: post-v1.5 follow-ups (#487)" title="Direct link to v1.6 polish: post-v1.5 follow-ups (#487)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-27>Status (2026-06-27)<a href=#status-2026-06-27 class=hash-link aria-label="Direct link to Status (2026-06-27)" title="Direct link to Status (2026-06-27)" translate=no>​</a></h3>
+<p>Three sub-items captured by v1.5 round 2 + round 3 deferrals; one
+(Sub-item C) landed, two (A, B) deferred with a substrate-blocker
+report.</p>
+<ul>
+<li class=""><strong>Sub-item C — wasm-tools component new per-artifact rationale:
+DONE.</strong></li>
+<li class=""><strong>Sub-item A — bundle-cli SPI rewrite to dispatch-bridge:
+DEFERRED (substrate blocker; see analysis below).</strong></li>
+<li class=""><strong>Sub-item B — JS polyfill SQL strings auto-sync from Rust
+constants: DEFERRED, downstream of A. If A retires the polyfill
+SQL strings entirely, B is moot.</strong></li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=sub-item-c-per-artifact-wasm-tools-rationale--done>Sub-item C: per-artifact wasm-tools rationale — DONE<a href=#sub-item-c-per-artifact-wasm-tools-rationale--done class=hash-link aria-label="Direct link to Sub-item C: per-artifact wasm-tools rationale — DONE" title="Direct link to Sub-item C: per-artifact wasm-tools rationale — DONE" translate=no>​</a></h3>
+<p>Survey output:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Artifact<th>Source<th>crate-type<th>wit-bindgen<th>Output kind<th><code>wasm-tools component new</code>?<tbody><tr><td><code>sqlite_cli.wasm</code><td><code>cli/</code><td><code>cdylib</code><td>macro<td>CORE module + custom<td>YES — kept<tr><td><code>sqlite_lib.wasm</code><td>submodule <code>sqlite-wasm/sqlite-lib/</code><td><code>cdylib</code><td>macro<td>CORE module + custom<td>YES — kept<tr><td><code>extensions/*/*.wasm</code><td>each extension cdylib<td><code>cdylib</code> (+ <code>rlib</code>)<td>macro<td>mostly CORE; some auto-component<td>auto-detected per-artifact</table>
+<p>None of the three categories build via <code>cargo component build</code>,
+so <code>wasm-tools component new</code> is always required for cargo-built
+cdylibs. Some toolchain configurations produce a component
+directly (auto-detect on wasm32-wasip2); the script branches.</p>
+<p>v1.5 round 1 incorrectly assumed <code>wasm32-wasip2</code> always emits
+components and considered the step dead; round 2 corrected by
+un-removing it for <code>sqlite_cli.wasm</code> and <code>sqlite_lib.wasm</code>
+specifically. This sub-item documents the per-artifact decision
+inline in each script so a future reader does not re-make round
+1's mistake.</p>
+<p>Scripts annotated with per-artifact rationale:</p>
+<ol>
+<li class=""><code>scripts/build-composed-runtime.sh</code> — <code>sqlite_cli.wasm</code> →
+core module → kept.</li>
+<li class=""><code>scripts/build-composed-runtime-single-memory.sh</code> —
+same.</li>
+<li class=""><code>scripts/encode-extension-components.sh</code> — auto-detect via
+<code>wasm-tools print</code> head, copy-through if already a component
+else <code>wasm-tools component new</code>. Comment captures the per-
+artifact branch rationale.</li>
+<li class=""><code>sqlite-wasm/scripts/build-sqlite-lib-component.sh</code> — lives in
+the sqlite-wasm submodule; left in place (already correct).
+If the comment-add lands separately, it is purely cosmetic.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=sub-item-a-bundle-cli-spi-rewrite--deferred-substrate-blocker>Sub-item A: bundle-cli SPI rewrite — DEFERRED (substrate blocker)<a href=#sub-item-a-bundle-cli-spi-rewrite--deferred-substrate-blocker class=hash-link aria-label="Direct link to Sub-item A: bundle-cli SPI rewrite — DEFERRED (substrate blocker)" title="Direct link to Sub-item A: bundle-cli SPI rewrite — DEFERRED (substrate blocker)" translate=no>​</a></h3>
+<p>Goal: rewire <code>extensions/bundle-cli/src/lib.rs</code> to call
+<code>sqlink:wasm/dispatch-bridge.bridged-execute-cas</code> directly instead
+of <code>sqlite:extension/bundles</code>, so the browser polyfill
+(<code>browser/src/extension-loader.js</code> lines ~1898-2351, ~450 lines)
+can retire its <code>sqlite:extension/bundles</code> typed shim.</p>
+<p><strong>The blocker</strong>: bundle-cli's WIT world (<code>dotcmd-aware</code> in
+<code>sqlite-loader-wit/wit/world.wit</code>) belongs to the
+<code>sqlite:extension@1.0.0</code> package, while <code>dispatch-bridge</code> lives in
+<code>sqlink:wasm@0.1.0</code> (defined in <code>sqlite-wasm/wit/dispatch-bridge.wit</code>).
+The two packages are not currently mutually-importable in a way
+that lets bundle-cli's <code>wit_bindgen::generate!</code> macro reach
+<code>sqlink:wasm/dispatch-bridge</code> without cross-package wit-deps
+restructuring.</p>
+<p>Specifically:</p>
+<ol>
+<li class="">
+<p><strong>WIT package boundary.</strong> sqlite-loader-wit's worlds today
+only import interfaces in their own package
+(<code>sqlite:extension/{spi, session, bundles, ...}</code>). Adding a
+cross-package import would require either:</p>
+<ul>
+<li class="">extending sqlite-loader-wit's <code>wit/deps/</code> to vendor the
+<code>sqlink:wasm</code> package (mirrors what sqlite-wasm already
+does the other way at <code>sqlite-wasm/wit/deps/sqlite-extension/</code>),
+OR</li>
+<li class="">giving bundle-cli a bespoke world definition outside
+sqlite-loader-wit so its bindgen path can be a UNION of
+both wit dirs.
+Either path crosses a submodule + package-versioning boundary
+not previously crossed by any in-tree extension.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>Native host's bundle-cli load path.</strong> <code>host/src/lib.rs</code>'s
+<code>loaded_dotcmd_aware</code> module satisfies bundle-cli's imports
+via <code>wasmtime::component::bindgen</code> against the dotcmd-aware
+world. It implements <code>sqlite:extension/bundles::Host</code>
+(<code>host/src/lib.rs</code> line 4009) directly against
+<code>sqlite_cas_cache::bundles_exec</code>. Switching bundle-cli to
+dispatch-bridge would require:</p>
+<ul>
+<li class="">adding a <code>dispatch_bridge::Host</code> impl on <code>LoadedState</code>
+(open the cas connection, run <code>bridged_execute_cas(sql, params)</code> through <code>sqlite_cas_cache::bundles_exec</code>'s
+shared SQL constants);</li>
+<li class="">extending the <code>bindgen!</code> macro's <code>with:</code> map to include
+the new package's interfaces;</li>
+<li class="">possibly adding the sqlink:wasm WITs to the host's wit
+path search.
+Net new native code: ~150-200 lines. Manageable, but
+downstream of (1).</li>
+</ul>
+</li>
+<li class="">
+<p><strong>bundle-cli runtime rewrite.</strong> Once the WIT can import
+<code>bridged-execute-cas</code>, the bundle-cli body itself needs every
+typed call (<code>bundles::bundle_save(name, set_hash, members)</code>)
+rewritten to:</p>
+<ul>
+<li class="">compose the right SQL string from <code>bundles_exec::*_SQL</code>
+constants;</li>
+<li class="">bind parameters as <code>sql-value</code> list;</li>
+<li class="">call <code>bridged_execute_cas(sql, params)</code>;</li>
+<li class="">parse the returned <code>query-result</code> rows back into typed
+struct shapes.
+Net new wasm-side code: ~400-500 lines (replacing ~300 lines
+of typed-call sites). Doable but couples to (1)'s WIT shape.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>WAC composition wiring (browser path).</strong> The composed
+browser binary's current recipe
+(<code>composition-cli-sqlite-lib.wac</code>) doesn't wire bundle-cli's
+imports through sqlite-lib's dispatch-bridge export — it just
+re-exports dispatch-bridge to the JS host. If bundle-cli (a
+SEPARATE in-cli component, loaded at runtime via
+<code>extension_loader.load-extension-from-bytes</code>) imports
+dispatch-bridge, sqlite-lib's export needs to flow through to
+it. Today's loader runtime doesn't compose dynamically; it
+calls <code>Component::new(bytes)</code> then satisfies imports through
+the host wit-bindgen path. The browser-side polyfill would
+need to expose dispatch-bridge as a runtime-bindgen-satisfiable
+import to bundle-cli — which means re-implementing the same
+bridge surface in JS that sqlite-lib already exports. That
+loops back to a polyfill, just under a different interface
+name; the polyfill removal Sub-item A targets does NOT cleanly
+follow.</p>
+</li>
+</ol>
+<p><strong>Conclusion (the substrate blocker)</strong>: of points (1)-(4), point
+(4) is the deal-breaker for the polyfill-removal goal. Even with
+the WIT cross-package work done, the runtime-bindgen path that
+the JS host uses to satisfy bundle-cli's imports means dispatch-
+bridge still has to be polyfilled JS-side; it just moves from
+<code>sqlite:extension/bundles</code> (twelve typed methods) to
+<code>sqlink:wasm/dispatch-bridge.bridged-execute-cas</code> (one method).</p>
+<p>The MOVE itself reduces the polyfill from ~450 lines to ~30-50
+lines (one execute-cas method plus the schema bootstrap), which
+is the genuine win Sub-item A aimed at. But this requires:
+* sqlite-loader-wit deps restructuring (or a bundle-cli
+bespoke world);
+* native host's dotcmd-aware bindgen extended to satisfy
+sqlink:wasm/dispatch-bridge for bundle-cli;
+* bundle-cli rewrite (~500 lines);
+* polyfill restructuring (the bundles handler set goes from
+twelve typed methods to one execute-cas method);
+* acceptance test pass on composed-bundle.spec.js (including
+reload leg).</p>
+<p><strong>Estimated effort</strong>: 3-5 days of focused work, spanning two
+submodules + workspace + browser. NOT feasible in a single
+session that also covers Sub-items B and C cleanly.</p>
+<p><strong>Recommendation</strong>: split Sub-item A into its own follow-up
+task (#487a or a new task ID) with explicit phases:
+a. WIT cross-package import substrate (deps/ wiring, decide
+between vendoring vs bespoke world).
+b. Native host's dotcmd-aware bindgen extension.
+c. bundle-cli SPI call-site rewrite.
+d. Browser polyfill restructuring.
+e. Composed-bundle browser test pass; bundle-cli native test
+pass.</p>
+<p>Until then the v1.5 round 2 architecture (bundle-cli imports the
+typed <code>bundles</code> SPI; native host implements it directly; browser
+polyfill emulates it through bridged-execute-cas) remains the
+shipping shape. Both sides are tested and work end-to-end; the
+v1.6 polish goal was code-shape cleanup, not functional fix.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=sub-item-b-js-polyfill-sql-strings-auto-sync-from-rust--deferred>Sub-item B: JS polyfill SQL strings auto-sync from Rust — DEFERRED<a href=#sub-item-b-js-polyfill-sql-strings-auto-sync-from-rust--deferred class=hash-link aria-label="Direct link to Sub-item B: JS polyfill SQL strings auto-sync from Rust — DEFERRED" title="Direct link to Sub-item B: JS polyfill SQL strings auto-sync from Rust — DEFERRED" translate=no>​</a></h3>
+<p>Downstream of Sub-item A. Two cases:</p>
+<ul>
+<li class="">
+<p><strong>If A's polyfill restructuring lands</strong>: the remaining JS-side
+SQL surface is just the schema bootstrap statements; the
+typed-method SQL drops out entirely. B becomes a small win
+(auto-sync the schema bootstrap statements from
+<code>sqlite_cas_cache::schema::INSTALL_SCHEMA</code> instead of inline
+JS). Effort: 0.5 day, choose path β (shared text file
+<code>sqlite-cas-cache/sql/install_schema.sql</code> imported by both
+Rust <code>include_str!</code> and the JS polyfill <code>import.meta.url</code>-
+fetched at build time).</p>
+</li>
+<li class="">
+<p><strong>If A stays unlanded</strong>: B's value is preserved (the ~12
+typed-method SQL strings in the polyfill still need to be
+byte-aligned with <code>bundles_exec::*_SQL</code>). Path α (build-time
+codegen) would parse the Rust consts into JSON via a
+<code>build.rs</code> step and emit a <code>bundle-cli-sql.js</code> the browser
+imports. Effort: 1-1.5 days. Path β stays an option too but
+requires extracting the consts to a shared <code>.sql</code> file first,
+which mechanically changes ~150 lines of Rust.</p>
+</li>
+</ul>
+<p>Either way, B does not block any shipping path today (the
+hand-sync is currently honest — both sides drive the same
+end-to-end test surface — and v1.5 round 3's transcription is
+byte-aligned with the Rust constants as documented in the
+polyfill's leading comment). Recommend doing B together with
+A, after A's substrate clears.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-this-fork>Verification (this fork)<a href=#verification-this-fork class=hash-link aria-label="Direct link to Verification (this fork)" title="Direct link to Verification (this fork)" translate=no>​</a></h3>
+<ul>
+<li class=""><code>bash -n scripts/build-composed-runtime.sh scripts/build-composed-runtime-single-memory.sh scripts/encode-extension-components.sh</code> — all three pass.
+(Doc-only changes; no behavior delta. End-to-end build
+requires the wasm32-wasip2 toolchain + wasi-sdk + composed-
+runtime prerequisites; not re-run in this fork because
+Sub-item C is documentation-only.)</li>
+<li class="">Sub-item A + B verification deferred along with the work.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=honest-deferrals>Honest deferrals<a href=#honest-deferrals class=hash-link aria-label="Direct link to Honest deferrals" title="Direct link to Honest deferrals" translate=no>​</a></h3>
+<ul>
+<li class="">Sub-item A: full rewrite deferred. Substrate-blocker report
+above. Recommend splitting into its own task.</li>
+<li class="">Sub-item B: deferred together with A.</li>
+<li class="">The doc comment in <code>sqlite-wasm/scripts/build-sqlite-lib- component.sh</code> (submodule-side) is intentionally NOT modified
+in this fork to avoid an extra submodule bump for a purely
+cosmetic change; the script is already correct and is
+referenced from the v1.6 plan-doc summary above.</li>
+</ul>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=v12-browser-composed-cli-auto-load-via-js-registry>v1.2: Browser composed-cli auto-load via JS registry<a href=#v12-browser-composed-cli-auto-load-via-js-registry class=hash-link aria-label="Direct link to v1.2: Browser composed-cli auto-load via JS registry" title="Direct link to v1.2: Browser composed-cli auto-load via JS registry" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background>Background<a href=#background class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p><code>composed-bundle.spec.js</code> + <code>composed-prefix.spec.js</code> were
+un-skipped in #479 with the assumption that <code>.bundle save</code> /
+<code>.prefix add</code> etc. would round-trip via <code>ComposedDatabase. execDotCommand</code>. Running them with <code>npm test</code> in <code>browser/</code>
+shows the assumption was wrong:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">auto-load core-dotcmd failed: extension 'core-dotcmd' not in JS</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  registry. Call db.loadExtension(name, bytes) first. (404).</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">auto-load bundle-cli failed: ...</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">auto-load prefix-cli failed: ...</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[+9 cascading 404s for sqlink-meta-cli, sha3sum-cli, serialize-cli,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain"> archive-cli, session-cli, sqlite-utils-{schema,fts,maint,data}]</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-architectural-mismatch>The architectural mismatch<a href=#the-architectural-mismatch class=hash-link aria-label="Direct link to The architectural mismatch" title="Direct link to The architectural mismatch" translate=no>​</a></h3>
+<p>The cli's startup code in <code>cli/src/lib.rs</code> calls
+<code>extension_loader::load_extension_from_bytes("prefix-cli", PREFIX_CLI_BYTES, &options)</code> for each of its 12 cli-family
+extensions. The bytes are baked in at compile-time via
+<code>include_bytes!</code>. The <strong>native</strong> loader honors the bytes.</p>
+<p>The <strong>browser polyfill</strong> (<code>browser/src/extension-loader.js</code>)
+ignores the bytes and looks the extension up by NAME in a
+pre-registered JS registry (<code>opts.embed</code> map in
+<code>openDatabaseComposed</code>). The registry is populated only from
+<code>browser/scripts/transpile-extensions.mjs</code>'s <code>PICK</code> list,
+which currently has just 2 entries: <code>bundle_cli</code>, <code>prefix_cli</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=why-the-prior-479-fix-wasnt-enough>Why the prior #479 fix wasn't enough<a href=#why-the-prior-479-fix-wasnt-enough class=hash-link aria-label="Direct link to Why the prior #479 fix wasn't enough" title="Direct link to Why the prior #479 fix wasn't enough" translate=no>​</a></h3>
+<p><code>#479</code> (commits <code>aca8d484</code> / <code>3afee868</code> / <code>7ae1644f</code>) added the
+<code>execDotCommand</code> method + Playwright assertions but didn't
+touch the polyfill registry or the transpile PICK list. Without
+those, the cli's <code>load_extension_from_bytes</code> calls 404 inside
+the polyfill and every cli-family extension stays unregistered;
+the dot-cmd dispatch table is empty; <code>.prefix list</code> / <code>.bundle list</code> report "Unknown command".</p>
+<p>The Playwright assertions that passed (e.g. <code>addOut</code> matched
+<code>/foaf/</code>) did so coincidentally — the URL contained "foaf" and
+the cli's "Unknown command: .prefix add foaf <url>" response
+trivially matched the regex.</url></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope>Scope<a href=#scope class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<p>Four pieces. Each can be its own commit; or bundled if small.</p>
+<ol>
+<li class="">
+<p><strong>Expand the transpile PICK list</strong> in
+<code>browser/scripts/transpile-extensions.mjs</code> from 2 to 12:
+<code>core-dotcmd</code>, <code>sqlink-meta-cli</code>, <code>sha3sum-cli</code>,
+<code>serialize-cli</code>, <code>archive-cli</code>, <code>session-cli</code>,
+<code>sqlite-utils-schema</code>, <code>sqlite-utils-data</code>,
+<code>sqlite-utils-fts</code>, <code>sqlite-utils-maint</code>, plus the existing
+<code>bundle-cli</code>, <code>prefix-cli</code>. Re-run <code>npm run pretest</code> to
+regenerate <code>browser/src/generated/index.js</code> with all 12 in
+<code>EXTENSION_LOADERS</code>.</p>
+</li>
+<li class="">
+<p><strong>Pass all 12 in <code>opts.embed</code></strong> in the two test HTMLs
+(<code>composed-bundle.html</code>, <code>composed-prefix.html</code>): change
+<code>openDatabaseComposed({})</code> to <code>openDatabaseComposed({embed: ['core-dotcmd', 'sqlink-meta-cli', ..., 'prefix-cli']})</code>.
+Without this, the registry stays empty even with PICK
+expanded.</p>
+</li>
+<li class="">
+<p><strong>Verify the polyfill's <code>instantiateFromBytes</code> path works</strong>.
+<code>extension-loader.js:610</code> has <code>registry.instantiateFromBytes = (bytes) => instantiateExtensionFromBytes(bytes)</code>. If this
+path is functional, an alternative to the embed-by-name
+approach is to make the polyfill honor the bytes the cli
+passes. Cheaper than expanding the transpile pipeline if it
+works.</p>
+</li>
+<li class="">
+<p><strong>Decide on the polyfill's contract</strong>. Two viable shapes:</p>
+<ul>
+<li class="">(a) Cli passes bytes → polyfill instantiates from bytes
+directly (matches native loader semantics).</li>
+<li class="">(b) Cli looks up by name → polyfill resolves against the
+pre-transpiled module map (current behavior).
+v1.2 should pick one + document it. If (a), retire the
+transpile PICK list dance; if (b), generate the PICK list
+from the cli's <code>include_bytes!</code> list automatically.</li>
+</ul>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort>Effort<a href=#effort class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>1.5-2 days. Most of it is verifying option (a) works (probably
+half a day with debug iterations) + updating the two specs
+once the auto-load path stabilizes. Option (b)'s "expand PICK
+to 12" path is faster (a few hours) but leaves the
+architectural mismatch in place for v1.3 to address.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies>Dependencies<a href=#dependencies class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<ul>
+<li class=""><code>c558327</code> in sqlite-wasm (WIT sync, landed) — without this,
+<code>wac compose</code> itself fails before the runtime even loads.</li>
+<li class=""><code>aca8d484</code> in sqlink (<code>execDotCommand</code> method, landed).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-v13>Out of scope (v1.3+)<a href=#out-of-scope-v13 class=hash-link aria-label="Direct link to Out of scope (v1.3+)" title="Direct link to Out of scope (v1.3+)" translate=no>​</a></h3>
+<ul>
+<li class="">General dispatch-bridge for externally-loaded (<code>.load PATH</code>)
+dot-cmd-aware extensions in the browser. Today <code>.load</code> from
+the cli's interactive prompt is a separate code path; this
+v1.2 item only targets the auto-loaded built-in cli-family
+extensions.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status>Status<a href=#status class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p><strong>Foundation merged, deeper substrate gap surfaced.</strong></p>
+<p>Two commits landed (<code>e9684ed6</code> polyfill bytes-path + <code>a7dd537e</code>
+jspi async-imports marking). These unblock the bytes-path (no
+more 404 "not in JS registry") and the async wiring (no more
+<code>_utf8AllocateAndEncode received [undefined]</code>). The cli's
+auto-load loop now reaches per-extension instantiation for all
+12 cli-family bytes.</p>
+<p><strong>But each per-extension instantiation now fails at a SECOND
+substrate gap</strong>: the cli-family extensions import SPI interfaces
+the polyfill's <code>buildExtensionAdditionalImports</code> doesn't
+provide. Runtime-bindgen instantiates each extension in
+ISOLATION against the polyfill — which has no idea how to wire
+back into the composed cli's own SPI implementations.</p>
+<p>Missing SPI imports per extension:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Extension<th>Missing import surface<tbody><tr><td>core-dotcmd<td><code>sqlite:extension/cli-state</code> (getBool)<tr><td>sqlink-meta-cli<td><code>sqlite:extension/loader-bridge</code> (loadExtensionFromBytes)<tr><td>serialize-cli, archive-cli<td><code>sqlite:extension/cli-stdout</code> (write)<tr><td>sqlite-utils-maint<td><code>sqlite:extension/cli-state</code> (getText)<tr><td>bundle-cli<td><code>sqlite:extension/build</code> (spawnBuild)<tr><td>prefix-cli<td><code>sqlite:extension/loader-bridge</code> (applyPrefixPin)</table>
+<p>The native loader satisfies these via the composed cli's own
+exports. The browser needs per-interface host handlers in the
+polyfill that proxy back to the cli runtime — non-trivial
+because each handler needs to access cli state from inside an
+extension's instantiation closure.</p>
+<p>Tests still fail (<code>Unknown command: .prefix list</code>) because
+prefix-cli's instantiation errors out at the loader-bridge gap;
+same for bundle-cli. The foundation merge keeps the byte-path
+viable but the round-trip end-to-end test continues to fail.</p>
+<p>Captured by task #481. SPI bridging tracked separately as v1.3
+(see next section).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=v13-browser-cli-family-spi-bridging>v1.3: Browser cli-family SPI bridging<a href=#v13-browser-cli-family-spi-bridging class=hash-link aria-label="Direct link to v1.3: Browser cli-family SPI bridging" title="Direct link to v1.3: Browser cli-family SPI bridging" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-1>Background<a href=#background-1 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>v1.2 (#481) landed the byte-path + async wiring foundation but
+uncovered that cli-family extensions import 4 SPI interfaces
+the browser polyfill doesn't satisfy. Each handler needs to
+proxy back to the composed cli's own implementations:</p>
+<ul>
+<li class=""><code>sqlite:extension/cli-state</code> — get/set cli session state (used
+by core-dotcmd, sqlite-utils-maint).</li>
+<li class=""><code>sqlite:extension/cli-stdout</code> — write to the cli's stdout pipe
+(used by serialize-cli, archive-cli).</li>
+<li class=""><code>sqlite:extension/loader-bridge</code> — load other extensions +
+apply prefix-pins (used by sqlink-meta-cli, prefix-cli).</li>
+<li class=""><code>sqlite:extension/build</code> — spawn-build for <code>.bundle build</code>
+(used by bundle-cli).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=three-viable-shapes-re-ranked-after-attempted-execution>Three viable shapes (RE-RANKED after attempted execution)<a href=#three-viable-shapes-re-ranked-after-attempted-execution class=hash-link aria-label="Direct link to Three viable shapes (RE-RANKED after attempted execution)" title="Direct link to Three viable shapes (RE-RANKED after attempted execution)" translate=no>​</a></h3>
+<p>The original v1.3 recommendation was option 2 (~3 days). A fork
+investigation found the estimate was wrong because the
+cli-family extensions IMPORT host-side interfaces that no
+WAC-composable component EXPORTS today:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Imported by<th>Interface<th>Defined in<th>Exported by<tbody><tr><td>prefix-cli, sqlink-meta-cli<td><code>sqlite:extension/loader-bridge</code><td><code>sqlite-loader-wit/wit/loader-bridge.wit</code><td>(none — host impl only)<tr><td>core-dotcmd, sqlite-utils-maint<td><code>sqlite:extension/cli-state</code><td><code>sqlite-loader-wit/wit/dotcmd.wit:138</code><td>(none)<tr><td>serialize-cli, archive-cli<td><code>sqlite:extension/cli-stdout</code><td><code>sqlite-loader-wit/wit/dotcmd.wit:90</code><td>(none)<tr><td>bundle-cli<td><code>sqlite:extension/build</code><td><code>sqlite-loader-wit/wit/host-spi.wit</code><td>sqlite-lib (OK)</table>
+<p>The native sqlink-host implements <code>loader-bridge</code> / <code>cli-state</code> /
+<code>cli-stdout</code> in <code>host/src/lib.rs</code> as wasmtime host impls — never
+as wasm exports. WAC can't wire an import to "Rust code in a
+wasmtime runtime"; it needs a peer component.</p>
+<p><strong>Re-ranked options:</strong></p>
+<ol>
+<li class="">
+<p><strong>Per-interface polyfill handlers</strong> — NOW THE CHEAPEST. Add
+JS handlers in the browser polyfill for <code>loader-bridge</code>,
+<code>cli-state</code>, <code>cli-stdout</code> that proxy back to the cli runtime
+via shared state. <code>build</code> is already partially in sqlite-lib.
+Estimated: ~1 week (1-2 days per interface).</p>
+</li>
+<li class="">
+<p><strong>Extract cli-host-shim component + WAC recipe</strong> — was the
+original v1.3 plan; ACTUAL effort is ~10 days, not ~3:</p>
+<ul>
+<li class="">Carve <code>loader-bridge</code> / <code>cli-state</code> / <code>cli-stdout</code> impls out
+of <code>host/src/lib.rs</code> into a separate <code>cli-host-shim</code> crate
+with proper WIT exports (~1 week of WIT design + Rust
+restructure).</li>
+<li class="">Then the 14-side WAC recipe extension (~3 days).</li>
+<li class="">Plus the cli's <code>extension-loader.load-extension-from-bytes</code>
+calls need to either be no-ops or route through the shim.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>Stub SPI surfaces with no-ops</strong> — ~1 day. Lets the test
+specs "pass" but with hollow assertions (dot-cmds that read
+state would return empty; stdout writes would be lost). Loses
+the round-trip coverage the specs are meant to provide.
+Counterproductive.</p>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=recommendation>Recommendation<a href=#recommendation class=hash-link aria-label="Direct link to Recommendation" title="Direct link to Recommendation" translate=no>​</a></h3>
+<p><strong>Option 1 (per-interface polyfill handlers)</strong> is now the
+cheapest path to closing the test specs. It keeps the host-impl
+boundary clean (Rust stays in Rust; JS gets browser-flavored
+proxies). Option 2 is architecturally cleaner but ~2× the effort
+and requires touching host crate internals.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-1>Status<a href=#status-1 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p><strong>Stopped per substrate-gap escape hatch after attempt at option
+2.</strong> Fork (a85fd7c8) found WAC can't compose the cli-family
+because the import surfaces have no exporting component. PLAN
+updated with corrected analysis. Captured by task #482.</p>
+<p>Pick option 1 to actually close the test specs, or accept that
+the foundation merge (#481) is enough and the specs stay
+in their broken-since-#479 state.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=attempt-2-finding-2026-06-25--option-1-list-was-incomplete>Attempt 2 finding (2026-06-25) — option 1 list was incomplete<a href=#attempt-2-finding-2026-06-25--option-1-list-was-incomplete class=hash-link aria-label="Direct link to Attempt 2 finding (2026-06-25) — option 1 list was incomplete" title="Direct link to Attempt 2 finding (2026-06-25) — option 1 list was incomplete" translate=no>​</a></h3>
+<p>Branch <code>feat/browser-spi-handlers</code> (5 commits, in /tmp/sqlink-
+spi-handlers worktree, unpushed) implemented option 1 end-to-end:</p>
+<ol>
+<li class="">Extended <code>EXTENSION_IMPORT_STUB_NAMES</code> with <code>loader-bridge</code>,
+<code>cli-stdout</code>, <code>cli-stderr</code>, <code>cli-state</code>, <code>build</code>, <code>bundles</code>.</li>
+<li class="">Added <code>buildCliHostHandlers({registry, cliState, onStdout, onStderr})</code> in <code>browser/src/extension-loader.js</code> with real
+impls for <code>loader-bridge</code> (proxies through registry), <code>cli-state</code>
+(state Map + dotcmd.wit schema defaults), <code>cli-stdout</code> /
+<code>cli-stderr</code> (route to onStdout/onStderr).</li>
+<li class="">Plumbed optional handlers through
+<code>buildExtensionAdditionalImports(handlers)</code> +
+<code>instantiateExtensionFromBytes(bytes, {handlers})</code>.</li>
+<li class="">Wired ComposedDatabase.open() to build the handlers AFTER
+onStdout is defined, then patch
+<code>registry.instantiateFromBytes</code> so cli-family bytes-instantiation
+gets real handlers.</li>
+<li class=""><strong>Bonus</strong>: discovered the v1 polyfill's
+<code>extension-loader.dispatch_dot_command</code> was a 404 stub; wired
+it to walk the registry, find the owning extension's
+<code>dot-command.invoke</code> export, route the call, and translate the
+invoke-result (sql-value deltas) back to the host
+dispatch-dot-command-result shape (json-encoded deltas).</li>
+</ol>
+<p>After all that, the tests now show <strong>real extension invocation</strong>
+and <strong>real text output</strong> — but BOTH still fail because:</p>
+<ul>
+<li class=""><code>.prefix add foaf …</code> → <code>Error: sqlite: sqlink-browser scenario-3: sqlite:extension/spi.execute not implemented</code></li>
+<li class=""><code>.bundle list</code> → <code>sqlite:extension/bundles.bundleList not implemented</code></li>
+</ul>
+<p><strong>Root cause</strong>: <code>composition-cli-sqlite-lib.wac:45</code> wires
+<code>sqlite:extension/spi@0.1.0</code> INTERNALLY between cli and lib but
+does NOT re-export it (line 49 only re-exports <code>wasi:cli/run</code> +
+<code>dispatch-bridge</code>). Cli-family extensions loaded via JS-side
+runtime-bindgen therefore see the JS stub for spi.execute, not
+the composed binary's real impl. dispatch-bridge has only
+register-trampoline entries (register-host-scalar/aggregate/etc.)
+— no host-execute / spi-passthrough.</p>
+<p><strong>So option 1's 4-handler list was incomplete.</strong> spi.execute is
+the actual show-stopper for both round-trip specs, and it
+requires either:</p>
+<ul>
+<li class="">Adding a <code>bridged-execute</code> entry to dispatch-bridge in
+sqlite-lib (host-side Rust + WIT change + rebuild), OR</li>
+<li class="">Re-exporting <code>sqlite:extension/spi</code> from the composed binary
+(wac recipe change + rebuild composed wasm), OR</li>
+<li class="">A JS-side parallel SQLite (sql.js) — defeats the round-trip
+purpose since the state wouldn't be visible to the user's SQL.</li>
+</ul>
+<p>All three touch host-side substrate the option-1 framing
+explicitly excluded. <strong>Per substrate-gap escape hatch, stopping
+work here.</strong> The 5 commits sit on <code>feat/browser-spi-handlers</code>
+unmerged — keep around for the cli-state / cli-stdout /
+dispatch-dot-command wiring (those land cleanly whenever spi gets
+exposed), but the branch shouldn't merge alone since neither test
+passes.</p>
+<p>Real path forward is option 2's substrate change: add a
+host-execute capability to dispatch-bridge so the JS host can
+route extension spi.execute calls back through the composed
+binary's internal connection. Estimate ~3-5 days (1 day WIT +
+sqlite-lib impl, 1 day JS routing, 1-2 days tests + polish).
+Tracked under task #482 (now in_progress, paused).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=v14-browser-spi-bridging-via-dispatch-bridgebridged-execute>v1.4: Browser SPI bridging via dispatch-bridge.bridged-execute<a href=#v14-browser-spi-bridging-via-dispatch-bridgebridged-execute class=hash-link aria-label="Direct link to v1.4: Browser SPI bridging via dispatch-bridge.bridged-execute" title="Direct link to v1.4: Browser SPI bridging via dispatch-bridge.bridged-execute" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-25-done>Status (2026-06-25): DONE<a href=#status-2026-06-25-done class=hash-link aria-label="Direct link to Status (2026-06-25): DONE" title="Direct link to Status (2026-06-25): DONE" translate=no>​</a></h3>
+<p><code>composed-prefix.spec.js</code> passes end-to-end with real round-trip
+output:</p>
+<ul>
+<li class=""><code>.prefix add foaf http://xmlns.com/foaf/0.1/</code>
+→ <code>prefix "foaf" -> "http://xmlns.com/foaf/0.1/" registered</code></li>
+<li class=""><code>.prefix list</code> → <code>NAME EXPANSION LAST_USED DESCRIPTION</code> table
+with the foaf row.</li>
+<li class=""><code>.prefix expansion foaf</code> → <code>http://xmlns.com/foaf/0.1/</code>.</li>
+<li class=""><code>.prefix delete foaf</code> → <code>deleted prefix "foaf"</code>.</li>
+<li class="">subsequent <code>.prefix list</code> → <code>(no prefixes registered)</code>.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-landed>What landed<a href=#what-landed class=hash-link aria-label="Direct link to What landed" title="Direct link to What landed" translate=no>​</a></h3>
+<ol>
+<li class=""><code>sqlite-wasm</code>: added <code>bridged-execute(sql, params) -> result&lt;query- result, sqlite-error></code> to <code>sqlink:wasm/dispatch-bridge</code> + the
+matching <code>DispatchBridgeGuest::bridged_execute</code> impl on <code>SqliteLib</code>
+that proxies to the same <code>SpiGuest::execute</code> path against the
+shared connection.</li>
+<li class=""><code>composition-cli-sqlite-lib.wac</code>: also re-export
+<code>sqlite:extension/types@0.1.0</code> from sqlite-lib  the dispatch-bridge
+alias-export uses sql-value + query-result, so the types interface
+has to be reachable through the composed binary's export graph or
+wac compose validation rejects with "instance not valid to be used
+as export".</li>
+<li class=""><code>browser/src/extension-loader.js</code>: <code>buildCliHostHandlers</code> now
+returns an <code>sqlite:extension/spi</code> handler. Execute proxies through
+<code>dispatch-bridge.bridged-execute</code>; other spi methods (execute-batch,
+list-vfs, ...) fall back to a structured "not bridged in v1.4"
+error so jco's runtime-bindgen probe doesn't trap. Added
+<code>_setBridge(dispatchBridge)</code> setter the consumer calls after
+<code>bindgen.instantiate(...)</code>.</li>
+<li class=""><code>browser/src/sqlink-composed.js</code>: wires the dispatch-bridge handle
+into <code>cliHostHandlers</code> right after <code>spiLoader._setBindgenResult</code>,
+before <code>wasi:cli/run.run()</code> starts.</li>
+<li class=""><code>cli/src/sqlink_registry.rs</code>: <code>ensure_schemas</code> now bootstraps the
+<code>__sqlink_prefix*</code> tables alongside the <code>sqlink_*</code> ones. Native
+sqlink-host installs the prefix schema via
+<code>prefix_registry::install_schema(&conn)</code> at session boot but the
+browser composed-cli scenario has no native host. Without this,
+<code>.prefix add</code> surfaced <code>Error: no such table: __sqlink_prefix</code>.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=side-effect-composed-bundlespecjs-skipped>Side effect: composed-bundle.spec.js skipped<a href=#side-effect-composed-bundlespecjs-skipped class=hash-link aria-label="Direct link to Side effect: composed-bundle.spec.js skipped" title="Direct link to Side effect: composed-bundle.spec.js skipped" translate=no>​</a></h3>
+<p><code>.bundle save/list/show/delete</code> touches the host-resident
+<code>sqlite:extension/bundles</code> cas-cache registry, not sqlite-lib's
+SQLite connection. dispatch-bridge can't reach it; the polyfill
+still returns the structured stub. Captured as v1.5 (bundles
+registry bridging): either a JS cas-cache shim that satisfies the
+import surface or a wasm-side bundles store with its own dispatch-
+bridge entry. Bundle spec marked <code>test.skip</code> with a comment
+pointing at the v1.5 gap.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=side-effect-wac-compose-recipe-change-is-load-bearing>Side effect: WAC compose recipe change is load-bearing<a href=#side-effect-wac-compose-recipe-change-is-load-bearing class=hash-link aria-label="Direct link to Side effect: WAC compose recipe change is load-bearing" title="Direct link to Side effect: WAC compose recipe change is load-bearing" translate=no>​</a></h3>
+<p>Adding <code>bridged-execute</code> (which uses sql-value + query-result from
+<code>sqlite:extension/types</code>) made wac compose 0.10 reject the
+dispatch-bridge alias-export with "instance not valid to be used
+as export (at offset 0x4c5c76)". Resolved by also exporting
+<code>sqlite:extension/types@0.1.0</code> from the composed binary. Mentioned
+here because future dispatch-bridge entries that import additional
+types may hit the same trap.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=v15-round-6-composed-cli-wasm-runtime-in-a-dedicated-worker--done>v1.5 round 6: composed-cli wasm runtime in a dedicated Worker — DONE<a href=#v15-round-6-composed-cli-wasm-runtime-in-a-dedicated-worker--done class=hash-link aria-label="Direct link to v1.5 round 6: composed-cli wasm runtime in a dedicated Worker — DONE" title="Direct link to v1.5 round 6: composed-cli wasm runtime in a dedicated Worker — DONE" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-26-done--non-empty-bundle-reload-leg-passes>Status (2026-06-26): DONE — non-empty bundle reload-leg passes<a href=#status-2026-06-26-done--non-empty-bundle-reload-leg-passes class=hash-link aria-label="Direct link to Status (2026-06-26): DONE — non-empty bundle reload-leg passes" title="Direct link to Status (2026-06-26): DONE — non-empty bundle reload-leg passes" translate=no>​</a></h3>
+<p><code>composed-bundle.spec.js</code>'s reload-leg now passes with a NON-EMPTY
+bundle (3 user-loaded scalar extensions: aba/bic/crc → members=3 in
+the cas db, surface in <code>.bundle show myset</code> after page navigation).
+The OPFS cas db file is 61 KB and starts with <code>SQLite format 3</code>
+magic header — a real SQLite db, openable by any external client.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=architecture-change>Architecture change<a href=#architecture-change class=hash-link aria-label="Direct link to Architecture change" title="Direct link to Architecture change" translate=no>​</a></h3>
+<p>Round 4's β-prime sync-cache held the entire cas db bytes in a
+JS-side <code>Uint8Array</code> on the main thread; <code>flushAll</code> ran after each
+execDotCommand. This worked for tiny data but had a synchronous
+write hazard: a <code>beforeunload</code> flush had to use the async OPFS API
+under a synchronous unload event, which Chromium sometimes dropped
+silently. The fix attempt in round 5 (Worker + SAB + Atomics) hit a
+hard Web-spec blocker: <code>Atomics.wait</code> is forbidden on the browser
+main thread (Window context).</p>
+<p>Round 6 sidesteps both problems by hosting the entire composed-cli
+wasm runtime in a dedicated module Worker. From the Worker:</p>
+<ul>
+<li class=""><code>FileSystemSyncAccessHandle.read/write/sync/truncate/...</code> are
+legal (sync from JS, sync from wasm — perfect for the VFS).</li>
+<li class="">The opfs-host wit-imports call SAH methods directly inline.
+No SAB, no Atomics, no separate OPFS worker.</li>
+<li class="">Same architecture @sqlite.org/sqlite-wasm uses for OPFS.</li>
+</ul>
+<p>Main thread (<code>sqlink-composed.js</code>) becomes a <code>ComposedDatabase</code>
+postMessage proxy. The user-facing API (open/exec/execScalar/
+execDotCommand/loadExtension/close) is unchanged — every call
+postMessages to the worker via a sequence-id pairing protocol.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-landed-1>What landed<a href=#what-landed-1 class=hash-link aria-label="Direct link to What landed" title="Direct link to What landed" translate=no>​</a></h3>
+<ol>
+<li class=""><code>browser/src/composed-cli-worker.js</code>: new file (~480 LoC). Hosts
+the entire wasm runtime, builds the extension registry +
+cli-host handlers + spi-loader + opfs-host inside the worker,
+instantiates the composed cli wasm with JSPI, owns
+QueueInputStream + globalStdioState + sentinel framing.
+<code>init/exec/execDotCommand/loadExtension/close</code> handlers.</li>
+<li class=""><code>browser/src/composed-cli-worker.js#createWorkerOpfsHost</code>:
+pre-opens SAHs for <code>/sqlink/cas.db</code> AND <code>/sqlink/cas.db-journal</code>
+at init time (because the wit-imported <code>open()</code> is SYNC from
+wasm's POV but <code>createSyncAccessHandle()</code> is ASYNC — we cannot
+open on demand). <code>open(path, false)</code> reports size=0 as
+<code>not-found</code> so SQLite's hot-journal probe interprets an unwritten
+journal as absent. <code>delete()</code> truncates to 0 (instead of
+unlinking) so the SAH stays alive across the next transaction.</li>
+<li class=""><code>browser/src/sqlink-composed.js</code>: rewritten as a thin
+postMessage proxy (~240 LoC, down from 760). <code>loadExtension</code>
+takes raw bytes (Uint8Array); the bare-name path fetches bytes
+from the <code>&lt;name>_extension.component.wasm</code> symlink in
+<code>browser/public/</code>.</li>
+<li class=""><code>browser/src/host-imports.js</code>: <code>opts.opfsHost</code> is now required
+(constructed by the worker, passed in). No longer constructs
+<code>createOpfsHost()</code> internally.</li>
+<li class=""><code>browser/src/opfs-host.js</code>: deleted — the β-prime sync-cache
+impl is superseded by the worker's direct-SAH host.</li>
+<li class=""><code>browser/src/opfs-worker.js</code>: deleted — round 5's SAB+Atomics
+scaffolding is no longer needed (the cli IS the worker now).</li>
+<li class=""><code>browser/scripts/link-composed-wasm.mjs</code>: extended to symlink
+aba/bic/crc <code>*_extension.component.wasm</code> into
+<code>browser/public/</code> so the bundle test can fetch real bytes.</li>
+<li class=""><code>browser/tests/composed-bundle.html</code>: phase 1 loads aba+bic+crc
+via <code>db.loadExtension(name, bytes)</code> before <code>.bundle save myset --no-build</code>, producing a 3-member non-empty bundle.</li>
+<li class=""><code>browser/tests/composed-bundle.spec.js</code>: asserts <code>members=3</code> in
+saveOut and <code>members (3)</code> in showOut on the reload leg —
+decisively proves bundle bytes survived the OPFS round-trip.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=departures-from-prior-rounds>Departures from prior rounds<a href=#departures-from-prior-rounds class=hash-link aria-label="Direct link to Departures from prior rounds" title="Direct link to Departures from prior rounds" translate=no>​</a></h3>
+<ul>
+<li class="">Round 4's β-prime (sync-cache + flushAll) is retired entirely.
+Direct-SAH in the worker is simpler and more durable: every
+SQLite write hits OPFS synchronously through the same SAH
+the page reload re-opens.</li>
+<li class="">Round 5's SAB+Atomics α architecture is also retired entirely.
+<code>Atomics.wait</code> is illegal on the main thread; round 6 sidesteps
+by moving wasm into the worker so the main thread doesn't need
+to block at all.</li>
+<li class=""><code>loadExtension(name, transpiledModule)</code> shape is no longer
+supported (the transpiled module would have to be cloneable
+across the worker boundary, which it isn't — it carries
+closures). Use <code>loadExtension(name, bytes)</code> instead; the
+worker handles runtime-bindgen on its side.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-verification-matrix-run-before-commit>Substrate verification matrix (run before commit)<a href=#substrate-verification-matrix-run-before-commit class=hash-link aria-label="Direct link to Substrate verification matrix (run before commit)" title="Direct link to Substrate verification matrix (run before commit)" translate=no>​</a></h3>
+<ul>
+<li class=""><code>browser/playwright composed-bundle.spec.js</code> (2 tests): both
+pass. Reload-leg: saveOut="members=3", showOut="members (3): aba
+bic crc", opfsHeader="SQLite format 3\0", opfsSize=61440 bytes.</li>
+<li class=""><code>browser/playwright composed-prefix.spec.js</code>: passes (no
+regression on the v1.4 round-trip — full proxy shape works).</li>
+<li class=""><code>sqlite-cas-cache cargo test -- --test-threads=1</code>: 91/91.</li>
+<li class=""><code>sqlink-host cargo test --lib</code>: 49/49.</li>
+<li class=""><code>bundle-cli cargo test</code>: 5/5.</li>
+<li class=""><code>sqlite-vfs-tvm cargo test --tests</code>: 17/17.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=v15-round-4-opfs-backed-vfs-for-the-cas-connection--done>v1.5 round 4: OPFS-backed VFS for the cas connection — DONE<a href=#v15-round-4-opfs-backed-vfs-for-the-cas-connection--done class=hash-link aria-label="Direct link to v1.5 round 4: OPFS-backed VFS for the cas connection — DONE" title="Direct link to v1.5 round 4: OPFS-backed VFS for the cas connection — DONE" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-26-done--reload-persistence-verified-end-to-end>Status (2026-06-26): DONE — reload persistence verified end-to-end<a href=#status-2026-06-26-done--reload-persistence-verified-end-to-end class=hash-link aria-label="Direct link to Status (2026-06-26): DONE — reload persistence verified end-to-end" title="Direct link to Status (2026-06-26): DONE — reload persistence verified end-to-end" translate=no>​</a></h3>
+<p><code>composed-bundle.spec.js</code>'s reload-leg now passes. Phase 1 runs
+<code>.bundle save myset</code>, the host writes the cas db to
+<code>/sqlink/cas.db</code> in navigator.storage's origin private root, the
+page navigates to phase 2 (fresh wasm runtime, brand-new
+<code>shared_cas_conn</code>), and <code>.bundle list</code> / <code>.bundle show</code> surface
+the bundle from phase 1.</p>
+<p>Substrate verification (the spec's "v1.6 substrate verification"
+item): the OPFS file's first 16 bytes are <code>"SQLite format 3\\0"</code>
+— it IS a SQLite db, openable by any external SQLite client
+(sqlite3 cli, @sqlite.org/sqlite-wasm). Not a snapshot blob.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-landed-2>What landed<a href=#what-landed-2 class=hash-link aria-label="Direct link to What landed" title="Direct link to What landed" translate=no>​</a></h3>
+<ol>
+<li class=""><code>sqlite-wasm/wit/opfs-host.wit</code>: new interface declaring
+<code>open / read / write / truncate / sync / size / close / delete</code>
+on u64 file handles with primitive payloads. Imported by the
+<code>sqlite-library</code> world.</li>
+<li class=""><code>sqlite-wasm/sqlite-vfs-tvm/src/opfs.rs</code>: new <code>"opfs"</code> VFS table
+that trampolines each IO method through a dyn <code>OpfsBackend</code>
+trait. Keeps sqlite-vfs-tvm free of wit-bindgen; sqlite-lib
+supplies the WIT-backed impl. Tests prove real SQLite drives
+the VFS for CREATE/INSERT/SELECT round-trips against a
+MemBackend fixture.</li>
+<li class=""><code>sqlite-wasm/sqlite-lib/src/lib.rs</code>: wasm32 <code>shared_cas_conn</code>
+opens through <code>vfs="opfs"</code> at path <code>/sqlink/cas.db</code>.
+<code>tvm_cold_tier_init</code> registers the <code>WitOpfsBackend</code>
+(wit-bindgen shim in <code>opfs_backend.rs</code>) and installs the VFS
+alongside the existing <code>tvm-mem</code>.</li>
+<li class=""><code>browser/src/opfs-host.js</code>: JS impl of
+<code>sqlink:wasm/opfs-host</code>. Sync from the wasm guest's POV —
+bytes live in a JS-side Uint8Array cache; OPFS round-trips
+happen at <code>preload</code> (before instantiate) and <code>flushAll</code>
+(after each <code>execDotCommand</code>). Architecture note: option β
+(suspend via JSPI) couldn't tunnel through the
+<code>cli → dispatch-dot-command JS → bundle-cli wasm → bundles polyfill JS → bridgedExecuteCas → opfs VFS</code> call chain (the
+JS frames break JSPI's suspension surface), and option α
+(Worker + SAB + Atomics) would have required >500 LoC of
+cross-thread plumbing plus COOP/COEP setup. The sync-cache
+architecture matches the call shape AND the bundle registry's
+data volume (~ few KiB per save) without complexity.</li>
+<li class=""><code>browser/tests/composed-bundle.html</code>: phase=1 saves a bundle;
+phase=2 lists + shows + reads the OPFS file's first 16 bytes
+for SQLite-magic verification.</li>
+<li class=""><code>browser/tests/composed-bundle.spec.js</code>: reload-leg un-skipped
+(was <code>test.skip</code> in round 3). Asserts on phase 2's list/show
+outputs AND on the <code>"SQLite format 3"</code> magic header.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=departures-from-the-round-3-spec>Departures from the round-3 spec<a href=#departures-from-the-round-3-spec class=hash-link aria-label="Direct link to Departures from the round-3 spec" title="Direct link to Departures from the round-3 spec" translate=no>​</a></h3>
+<ul>
+<li class="">Used JSPI-aware sync-cache (option β-prime) instead of
+Worker+SAB+Atomics (option α). The round-3 spec mandated α;
+this round chose β-prime after the polyfill's call shape
+ruled out plain β AND α's complexity proved disproportionate
+to the data volume. Trade-off documented in <code>opfs-host.js</code>'s
+header comment.</li>
+<li class="">Persistence cadence: <code>flushAll()</code> runs after every
+<code>execDotCommand</code> (so even a single <code>.bundle save</code> survives an
+unclean unload), not just at db.close(). Slightly more OPFS
+writes than minimal, but bounded by the dot-cmd rate (≤ tens
+per second under normal usage).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-verification-matrix-run-before-commit-1>Substrate verification matrix (run before commit)<a href=#substrate-verification-matrix-run-before-commit-1 class=hash-link aria-label="Direct link to Substrate verification matrix (run before commit)" title="Direct link to Substrate verification matrix (run before commit)" translate=no>​</a></h3>
+<ul>
+<li class=""><code>sqlite-vfs-tvm/tests/opfs_serves_real_sqlite.rs</code>: real
+SQLite drives the opfs VFS via the OpfsBackend trait. Passes.</li>
+<li class=""><code>sqlite-wasm/sqlite-vfs-tvm cargo test</code>: all 11 tests pass.</li>
+<li class=""><code>cargo test -p sqlite-cas-cache -p sqlink-host</code>: native tests
+green (cas-cache opens against the host filesystem, not the
+opfs VFS — the wasm32-gated wiring doesn't affect them).</li>
+<li class=""><code>browser/playwright composed-bundle.spec.js</code> (2 tests):
+both pass.</li>
+<li class=""><code>browser/playwright composed-prefix.spec.js</code>: passes (no
+regression on the v1.4 round-trip).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=v15-round-3-browser-bundles-bridging-via-bridged-execute-cas>v1.5 round 3: Browser bundles bridging via bridged-execute-cas<a href=#v15-round-3-browser-bundles-bridging-via-bridged-execute-cas class=hash-link aria-label="Direct link to v1.5 round 3: Browser bundles bridging via bridged-execute-cas" title="Direct link to v1.5 round 3: Browser bundles bridging via bridged-execute-cas" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-26-done--reload-persistence-delivered-in-round-4>Status (2026-06-26): DONE — reload persistence delivered in round 4<a href=#status-2026-06-26-done--reload-persistence-delivered-in-round-4 class=hash-link aria-label="Direct link to Status (2026-06-26): DONE — reload persistence delivered in round 4" title="Direct link to Status (2026-06-26): DONE — reload persistence delivered in round 4" translate=no>​</a></h3>
+<p><code>composed-bundle.spec.js</code>'s main round-trip leg passes end-to-end
+with real cas-cache output:</p>
+<ul>
+<li class=""><code>.bundle save myset --no-build</code>
+-> <code>bundle 'myset' saved (id=1, set_hash=af1349b9..., members=0)</code></li>
+<li class=""><code>.bundle list</code> -> the <code>myset</code> row, members + binaries counts.</li>
+<li class=""><code>.bundle show myset</code> -> set_hash + created_at + last_used.</li>
+<li class=""><code>.bundle delete myset</code> -> deletion message.</li>
+<li class="">subsequent <code>.bundle list</code> -> <code>(no bundles)</code>.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-landed-3>What landed<a href=#what-landed-3 class=hash-link aria-label="Direct link to What landed" title="Direct link to What landed" translate=no>​</a></h3>
+<ol>
+<li class=""><code>sqlite-wasm</code>: added <code>bridged-execute-cas(sql, params) -> result&lt; query-result, sqlite-error></code> to <code>sqlink:wasm/dispatch-bridge</code> +
+the matching <code>DispatchBridgeGuest::bridged_execute_cas</code> impl
+on <code>SqliteLib</code>. Routes to a NEW thread-local <code>SHARED_CAS_CONN</code>
+that's distinct from the user-data <code>SHARED_CONN</code>. On native
+it opens <code>~/.cache/sqlink/cas.db</code> with the default VFS; on
+wasm32 it transitionally opens <code>:memory:</code> (see deferral below).</li>
+<li class=""><code>browser/src/extension-loader.js</code>: <code>buildCliHostHandlers</code> now
+returns an <code>sqlite:extension/bundles</code> handler that drives
+<code>bundleSave / bundleFindByName / bundleFindByHashPrefix / bundleList / bundleShow / bundleDelete / bundleRecordBinary / bundleTouch / bundleAddAlias / bundleRemoveAlias / bundleAliases</code>
+inline against <code>dispatch-bridge.bridged-execute-cas</code>. SQL
+transcribed from <code>sqlite-cas-cache::bundles_exec</code>'s <code>pub const</code>
+constants. <code>bundleGc</code> throws a structured "not implemented"
+error (not on the test path).</li>
+<li class=""><code>browser/src/extension-loader.js</code>: schema bootstrap (BOOTSTRAP +
+INSTALL) runs lazily on first call. Split per-statement because
+sqlite-lib's <code>bridged-execute*</code> uses sqlite3_prepare semantics
+(single statement per call), so the Rust crate's monolithic
+BEGIN/COMMIT INSTALL_SCHEMA cant be a single blob in JS.</li>
+<li class="">Tests: <code>composed-bundle.spec.js</code> un-skipped for the main round-
+trip leg with tightened substrate greps that fail decisively
+on "not bridged / not implemented / no such table / no such vfs".
+Reload-leg added but stays <code>test.skip</code> (see deferral).</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=opfs-backed-vfs-for-the-cas-connection--delivered-in-round-4>OPFS-backed VFS for the cas connection — delivered in round 4<a href=#opfs-backed-vfs-for-the-cas-connection--delivered-in-round-4 class=hash-link aria-label="Direct link to OPFS-backed VFS for the cas connection — delivered in round 4" title="Direct link to OPFS-backed VFS for the cas connection — delivered in round 4" translate=no>​</a></h3>
+<p>See the "v1.5 round 4: OPFS-backed VFS for the cas connection —
+DONE" section above. The round-3 deferral is closed; the cas
+connection now opens through the <code>"opfs"</code> VFS on wasm32 and
+<code>composed-bundle.spec.js</code>'s reload-leg passes end-to-end.</p>
+<p>The round-3 spec called for option α (Worker + SyncAccessHandle</p>
+<ul>
+<li class="">SharedArrayBuffer + Atomics); round 4 chose option β-prime
+(sync-cache + explicit flushAll at execDotCommand boundaries)
+because the polyfill's call shape ruled out the simpler β and
+α's complexity was disproportionate to the bundle registry's
+data volume. Architecture rationale lives in the
+<code>browser/src/opfs-host.js</code> header comment.</li>
+</ul>
+<hr/>
+<h1>Plan: v1 follow-ups — roadmap for outstanding post-v1 work</h1>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-25>Status (2026-06-25)<a href=#status-2026-06-25 class=hash-link aria-label="Direct link to Status (2026-06-25)" title="Direct link to Status (2026-06-25)" translate=no>​</a></h2>
+<p>Roadmap for outstanding work after the v1 shipping push (bundles +
+prefixes + cas-cache + cli + tests + CI + fuzz/mutation infra all
+landed and pushed to origin/main). Single document covering many
+small-to-medium follow-ups because each is too small for its own
+PLAN doc but the total picture (effort + sequencing + dependencies)
+matters for pacing.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=motivation>Motivation<a href=#motivation class=hash-link aria-label="Direct link to Motivation" title="Direct link to Motivation" translate=no>​</a></h2>
+<p>Multiple individual PLAN docs (PLAN-bundles, PLAN-prefixes,
+PLAN-cas-cache, PLAN-wal-archive) each captured a single feature
+end-to-end. Several smaller items surfaced during their
+implementation got noted as "v1.1" or "deferred" in the source
+docs. This roadmap consolidates them so:</p>
+<ul>
+<li class="">The total post-v1 effort is visible in one place.</li>
+<li class="">Priorities are explicit (not just "v1.1" without ranking).</li>
+<li class="">Dependencies between items are surfaced.</li>
+<li class="">Fan-out structure is clear when several can run in parallel.</li>
+</ul>
+<p>This is NOT a feature plan; each item below references its
+originating PLAN-*.md or commit for the full context. Items here
+get a one-paragraph summary + effort + dependencies + scope cut.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=priority--sequencing>Priority + sequencing<a href=#priority--sequencing class=hash-link aria-label="Direct link to Priority + sequencing" title="Direct link to Priority + sequencing" translate=no>​</a></h2>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">P0 (blocking)         P1 (high value)             P2 (medium)              P3 (nice-to-have)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">─────────────────────────────────────────────────────────────────────────────────────────</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">CI green-up    ───►   Prefix v1.1 sweep    ───►   Single-slot hook       More fuzz targets</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                      Live .prefix prefer         audit recording        Longer fuzz runs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                      Cosmetic warnings           install_loaded_ext</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                  refactor</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                  Bundles browser</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                  dispatch driver</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                  Bundle multi-aliasing</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                  .load auto-cache</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                  HTTPS resolver mock</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                  Hostile-fs fixtures</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                  Migration-arm tests</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                  cargo-mutants re-run</span><br/></div></code></pre></div></div>
+<p>P0 blocks everything because a red CI hides real regressions in
+subsequent work. P1 items have high-value + low risk + no
+dependencies on each other and can fan out in parallel. P2 items
+mostly group around shared infrastructure (test harnesses) or
+shared file regions; some can parallelize.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p0-ci-green-up>P0: CI green-up<a href=#p0-ci-green-up class=hash-link aria-label="Direct link to P0: CI green-up" title="Direct link to P0: CI green-up" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-2>Background<a href=#background-2 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>The recent push triggers (<code>8f82db5</code> prefixes hot-path merge, prior
+<code>241008b</code> compression-multiplexer + <code>cca5735</code> cargo fmt fixes) all
+went red on real GitHub Actions despite the local act-based
+verification. Three distinct things broke at different runs:</p>
+<ul>
+<li class=""><code>cargo fmt --check</code> syntax (fixed in cca5735, then regressed
+somehow — need to check).</li>
+<li class=""><code>CARGO_BUILD_TARGET: ""</code> corrupting <code>cargo install</code> (fixed in
+cca5735).</li>
+<li class="">Workspace manifest load failing on missing
+compression-multiplexer (fixed in 241008b by publishing +
+submoduling).</li>
+</ul>
+<p>Post-fix push (<code>8f82db5</code>) still shows <code>failure</code> in 17s on real CI.
+Likely a fourth issue — possibly the prefix substrate's 217-file
+Manifest{} sweep introduced fmt drift OR a workspace member dep
+that wasn't covered by my earlier excludes.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-1>Scope<a href=#scope-1 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Pull <code>gh run view &lt;ID> --log-failed</code> on the failing run to see
+the actual error.</li>
+<li class="">Fix whatever surfaces. Likely candidates:
+<ul>
+<li class=""><code>cargo fmt --check</code> finding drift in one of the 217 patched
+Cargo.toml files or the Manifest{} sweep.</li>
+<li class="">Workspace member missing from the <code>--exclude</code> list now that
+prefix-cli exists (mirror bundle-cli's treatment).</li>
+<li class="">wasi-sdk download URL drift.</li>
+</ul>
+</li>
+<li class="">Re-verify under <code>act</code> before pushing.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-1>Effort<a href=#effort-1 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day. First-CI-run-after-merge regressions are usually small
+mechanical fixes.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-1>Dependencies<a href=#dependencies-1 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope>Out of scope<a href=#out-of-scope class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Adding new CI jobs (separate effort).</li>
+<li class="">act-specific edge cases (already documented in
+<code>scripts/ci-local.sh</code>).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2>Status<a href=#status-2 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Open. Run number <code>28187557158</code> is the latest red CI; needs
+investigation.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p1-prefixes-v11-migration-sweep>P1: Prefixes v1.1 migration sweep<a href=#p1-prefixes-v11-migration-sweep class=hash-link aria-label="Direct link to P1: Prefixes v1.1 migration sweep" title="Direct link to P1: Prefixes v1.1 migration sweep" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-3>Background<a href=#background-3 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>PLAN-prefixes.md ships v1 with a deprecation-window fallback for
+extensions that don't declare <code>preferred-prefix</code> +
+<code>prefix-expansion</code> in their manifest. All 217 in-tree extensions
+currently run on the synthetic-expansion fallback
+(<code>sqlink-internal://&lt;crate></code>). v1.1 makes the manifest fields a
+hard error.</p>
+<p>Before v1.1 cuts over, every in-tree extension needs real
+<code>(prefix, expansion)</code> pairs assigned. The substrate fork already
+batch-patched the Manifest{} literals with <code>None, None</code> defaults
+(wit-bindgen forces all fields) — this sweep replaces the <code>None</code>s
+with sensible real values.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-2>Scope<a href=#scope-2 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Categorize the 217 extensions by family (cli-family /
+sqlite-utils-* / dotcmd-* / vec-* / single-purpose scalars).</li>
+<li class="">Per-family prefix conventions (sketch):
+<ul>
+<li class="">cli-family (<code>bundle-cli</code>, <code>prefix-cli</code>, <code>serialize-cli</code>,
+etc.): prefix = <code>sqlink-&lt;short></code>, expansion =
+<code>com.tegmentum.sqlink.cli.&lt;short></code>.</li>
+<li class="">sqlite-utils-*: prefix = <code>sqlite-&lt;short></code>, expansion =
+<code>org.sqlite.utils.&lt;short></code>.</li>
+<li class="">Generic single-purpose (<code>uuid</code>, <code>json1</code>, <code>csv</code>, ...):
+prefix = <code>&lt;name></code>, expansion = <code>org.&lt;community>.&lt;name></code> or
+<code>com.tegmentum.sqlink.ext.&lt;name></code> for in-tree experimental.</li>
+<li class="">vec-*: prefix = <code>vec</code>, expansion = <code>org.faiss.vec</code> (or
+similar; check upstream identifiers).</li>
+</ul>
+</li>
+<li class="">Update each extension's Cargo.toml <code>[package.metadata.extension]</code>
+block (or the equivalent — verify the actual location of these
+fields).</li>
+<li class="">Re-run encode-extension-components.sh (the wit-skew guard auto-
+rebuilds).</li>
+<li class="">Re-run extension-smoke + prefix integration tests to confirm
+no regression.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-2>Effort<a href=#effort-2 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>1.5 days. Most of it is mechanical sed-style edits; a couple hours
+for category decisions; rest is verification.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-2>Dependencies<a href=#dependencies-2 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None (the substrate already accepts both real and synthetic forms).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-1>Out of scope<a href=#out-of-scope-1 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Globally-unique-expansion registry (v2; see PLAN-prefixes.md
+"Out of scope").</li>
+<li class="">Hard-error on missing fields — that's the v1.1 release cut, not
+this sweep. Separate commit/PR.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-3>Status<a href=#status-3 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p1-live-prefix-prefer-bare-name-re-registration-on-pin-write>P1: Live <code>.prefix prefer</code> (bare-name re-registration on pin write)<a href=#p1-live-prefix-prefer-bare-name-re-registration-on-pin-write class=hash-link aria-label="Direct link to p1-live-prefix-prefer-bare-name-re-registration-on-pin-write" title="Direct link to p1-live-prefix-prefer-bare-name-re-registration-on-pin-write" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-4>Background<a href=#background-4 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>PLAN-prefixes.md's <code>.prefix prefer NAME EXTENSION</code> writes a row to
+<code>__sqlink_prefix_pin</code> but the bare-name re-registration only fires
+on next session. v1 simplification documented in the dot-cmd help
+text. Operators who want the pin to take effect today have to
+restart the cli.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-3>Scope<a href=#scope-3 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Inside <code>.prefix prefer</code>'s implementation, after writing the
+<code>__sqlink_prefix_pin</code> row:
+<ul>
+<li class="">Find every other extension that has registered
+<code>(function_name, n_args)</code> at the same arity.</li>
+<li class="">For each, look up the FUNCTION pointer / wasm dispatch ID
+via the substrate's <code>Host</code> registration cache.</li>
+<li class="">Re-register the bare name with SQLite pointing at the pinned
+extension's implementation (use the same <code>register_host_loaded_*</code>
+path the register-X impls use).</li>
+</ul>
+</li>
+<li class=""><code>prefix unprefer NAME</code> similarly re-registers per SQLite default
+(last-loaded wins) — easiest via re-applying the load order to
+the bare name.</li>
+<li class="">Add an integration test (<code>prefix_prefer_live_swap</code>) that verifies
+the bare-name dispatch changes within a single session after
+<code>.prefix prefer</code>.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-3>Effort<a href=#effort-3 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day. Mostly plumbing through existing structures.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-3>Dependencies<a href=#dependencies-3 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-2>Out of scope<a href=#out-of-scope-2 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Cross-database pin synchronization (v2).</li>
+<li class="">Pin lock-in (preventing rename once functions registered; v2).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-4>Status<a href=#status-4 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p1-cosmetic-warnings-cleanup>P1: Cosmetic warnings cleanup<a href=#p1-cosmetic-warnings-cleanup class=hash-link aria-label="Direct link to P1: Cosmetic warnings cleanup" title="Direct link to P1: Cosmetic warnings cleanup" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-5>Background<a href=#background-5 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>Two pre-existing warnings every fork mentions:</p>
+<ul>
+<li class=""><code>non_snake_case</code> in <code>sqlink-host</code> bin (probably the binary's
+entry-point fn or a generated identifier).</li>
+<li class="">Unused import at <code>cli/src/lib.rs:771</code>
+(<code>bindings::sqlite::extension::types::SqlValue</code>).</li>
+</ul>
+<p>Cosmetic only; not load-bearing. Worth cleaning so future forks
+don't keep flagging them.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-4>Scope<a href=#scope-4 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Fix the <code>non_snake_case</code> site (probably <code>#[allow(non_snake_case)]</code>
+with rationale or rename if the binding name doesn't matter).</li>
+<li class="">Remove the unused import OR add <code>#[cfg(...)]</code> if it's
+conditionally used.</li>
+<li class="">Run <code>cargo clippy --workspace</code> to catch any other low-hanging
+warnings while in the file.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-4>Effort<a href=#effort-4 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>15 minutes — two 1-line fixes.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-4>Dependencies<a href=#dependencies-4 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-3>Out of scope<a href=#out-of-scope-3 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Workspace-wide clippy cleanup (separate effort).</li>
+<li class="">Auto-format pass.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-5>Status<a href=#status-5 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p2-single-slot-hook-audit-only-recording>P2: Single-slot hook audit-only recording<a href=#p2-single-slot-hook-audit-only-recording class=hash-link aria-label="Direct link to P2: Single-slot hook audit-only recording" title="Direct link to P2: Single-slot hook audit-only recording" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-6>Background<a href=#background-6 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>PLAN-prefixes.md's substrate intentionally skipped single-slot
+hooks (authorizer / update / commit / wal) — they have no name to
+qualify and at most one per connection, so the prefix model
+doesn't apply. v1.1 can add audit-only recording into
+<code>__sqlink_prefix_function</code> for diagnostic visibility.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-5>Scope<a href=#scope-5 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">In each of the four <code>register_X_hook</code> host impls (authorizer,
+update, commit, wal), record a synthetic row in
+<code>__sqlink_prefix_function</code>:
+<ul>
+<li class=""><code>function_name</code> = <code>__hook_&lt;shape></code> (e.g. <code>__hook_authorizer</code>)</li>
+<li class=""><code>n_args</code> = sentinel value like <code>-1</code></li>
+<li class=""><code>extension_name</code> = the registering extension</li>
+</ul>
+</li>
+<li class=""><code>.prefix conflicts</code> already SELECTs by <code>function_name</code> — these
+synthetic hook rows would surface in the conflicts view if
+multiple extensions register the same hook (last-wins by SQLite
+default, but the operator can now see who's claimed the slot).</li>
+<li class="">Add an integration test exercising this for at least one hook
+shape.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-5>Effort<a href=#effort-5 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-5>Dependencies<a href=#dependencies-5 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-4>Out of scope<a href=#out-of-scope-4 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Actually qualifying single-slot hooks (they have no name; not
+meaningful).</li>
+<li class="">Operator-resolvable hook collisions (would require deeper
+changes to SQLite's hook API; SQLite enforces last-wins
+natively).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-6>Status<a href=#status-6 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p2-install_loaded_extension-refactor-dry>P2: <code>install_loaded_extension</code> refactor (DRY)<a href=#p2-install_loaded_extension-refactor-dry class=hash-link aria-label="Direct link to p2-install_loaded_extension-refactor-dry" title="Direct link to p2-install_loaded_extension-refactor-dry" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-7>Background<a href=#background-7 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>Recovery fork (commit <code>d6256f5</code>) extracted
+<code>Host::ensure_prefix_for_extension</code> + <code>Host::record_function_for_extension</code>
+helpers and wired them into the 4 <code>register_X</code> impls. But
+<code>install_loaded_extension</code> (host/src/lib.rs:7197) still has its
+own inline prefix-recording logic — left as-is because it has
+"extra collision-warn + pin-lookup logic that doesn't shape
+cleanly into the new helpers" (per the recovery fork's report).</p>
+<p>Now that the helpers are stable + the integration tests are
+passing, refactor <code>install_loaded_extension</code> to call them too.
+Eliminates ~50 lines of duplicate logic.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-6>Scope<a href=#scope-6 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Read <code>install_loaded_extension</code> carefully to identify the
+collision-warn + pin-lookup logic that didn't fit the helpers.</li>
+<li class="">Either:
+<ul>
+<li class="">Extend <code>record_function_for_extension</code> to return enough info
+that <code>install_loaded_extension</code> can do its collision-warn
+inline, OR</li>
+<li class="">Add a third helper <code>Host::warn_on_function_collision(...)</code>
+that both code paths can use.</li>
+</ul>
+</li>
+<li class="">Replace install_loaded_extension's inline logic with helper
+calls.</li>
+<li class="">Verify: <code>cargo test -p sqlink-host --lib prefix_registry::tests</code>
+<ul>
+<li class=""><code>cargo test -p extension-smoke --test extension_smoke_prefixes</code>
+both still pass.</li>
+</ul>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-6>Effort<a href=#effort-6 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-6>Dependencies<a href=#dependencies-6 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>Depends on the existing helpers landing (already on main).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-5>Out of scope<a href=#out-of-scope-5 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Renaming install_loaded_extension (it's pub; sqlink-native
+imports it).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-7>Status<a href=#status-7 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p2-bundles-browser-composed-cli-dispatch_dot_command-driver>P2: Bundles browser composed-cli <code>dispatch_dot_command</code> driver<a href=#p2-bundles-browser-composed-cli-dispatch_dot_command-driver class=hash-link aria-label="Direct link to p2-bundles-browser-composed-cli-dispatch_dot_command-driver" title="Direct link to p2-bundles-browser-composed-cli-dispatch_dot_command-driver" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-8>Background<a href=#background-8 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>PLAN-bundles.md v1 noted: the browser composed-cli has no
+<code>dispatch_dot_command</code> driver — <code>extension-loader.js:12</code> returns
+404 when bundle-cli's <code>.bundle save</code> etc. dispatch through it.
+v1.1 polish fork added the bundle-cli to browser PICK list but
+the actual end-to-end browser test (<code>composed-bundle.spec.js</code>)
+uses <code>test.skip()</code> with a documented reason.</p>
+<p>Same gating applies to <code>.prefix</code> in the browser if/when prefixes
+land cleanly there.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-7>Scope<a href=#scope-7 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Build a dispatch driver in the composed cli's JS layer that
+routes <code>.xxx CMD ARGS</code> calls to the loaded extension's
+<code>dispatch_dot_command</code> export.</li>
+<li class="">Verify browser composed-cli round-trips a <code>.bundle save myset --no-build</code> through the dispatcher.</li>
+<li class="">Update <code>composed-bundle.spec.js</code> to remove the <code>test.skip()</code> and
+exercise the full round-trip.</li>
+<li class="">Mirror in <code>composed-prefix.spec.js</code>.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-7>Effort<a href=#effort-7 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>1-2 days. Browser-side wasi-cli plumbing has its own learning
+curve.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-7>Dependencies<a href=#dependencies-7 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None (the wasm side is already in place).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-6>Out of scope<a href=#out-of-scope-6 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Streaming output for long-running dot-cmds (v2).</li>
+<li class="">Browser-side <code>.bundle build</code> (intentionally errors out per the
+existing stub — wasm components can't spawn processes).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-8>Status<a href=#status-8 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>DONE. The original framing ("add a dispatch_dot_command driver in
+extension-loader.js") was a red herring. Investigation surfaced
+that bundle-cli + prefix-cli are EMBEDDED in the composed cli
+component via <code>include_bytes!</code> in <code>cli/src/lib.rs</code> and dispatch
+INTERNAL to the wasm cli — the JS host-import path was never the
+right surface. The actual gap was a public method on
+<code>ComposedDatabase</code> (browser/src/sqlink-composed.js) to drive a
+single dot-command through the existing sentinel-bounded stdin
+pipe.</p>
+<p>Resolved by <code>ComposedDatabase.execDotCommand(line)</code> (commit
+<code>aca8d484</code>), the sibling of <code>exec()</code> that writes a raw dot-cmd line</p>
+<ul>
+<li class="">sentinel SELECT through the persistent stdin queue and returns
+the cli's stdout window. <code>composed-bundle.spec.js</code> and
+<code>composed-prefix.spec.js</code> now exercise <code>.bundle save / list / show / delete</code> and <code>.prefix add / list / expansion / delete</code>
+end-to-end against the composed cli with no skip — assertions
+substring-match the cli's actual stdout.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p2-bundle-multi-name-aliasing>P2: Bundle multi-name aliasing<a href=#p2-bundle-multi-name-aliasing class=hash-link aria-label="Direct link to P2: Bundle multi-name aliasing" title="Direct link to P2: Bundle multi-name aliasing" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-9>Background<a href=#background-9 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>PLAN-bundles.md v1 supports a single name per <code>set_hash</code> via the
+<code>__cas_bundle.name UNIQUE</code> constraint. True multi-name aliasing
+needs a separate <code>__cas_bundle_alias</code> table so two names can
+point at the same set_hash.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-8>Scope<a href=#scope-8 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">New <code>__cas_bundle_alias</code> table:
+<div class="language-sql codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-sql codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>TABLE</span><span class="token plain"> __cas_bundle_alias </span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    name </span><span class="token keyword" style=color:#00009f>TEXT</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>PRIMARY</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>KEY</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    bundle_id </span><span class="token keyword" style=color:#00009f>INTEGER</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>REFERENCES</span><span class="token plain"> __cas_bundle</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">id</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>ON</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>DELETE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>CASCADE</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    created_at </span><span class="token keyword" style=color:#00009f>INTEGER</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><br/></div></code></pre></div></div>
+</li>
+<li class="">Migrate <code>__cas_bundle.name</code> from PRIMARY KEY to nullable
+display-name; aliases move to the new table.</li>
+<li class="">Update <code>bundle_save</code> + <code>bundle_find_by_name</code> to use the alias
+table.</li>
+<li class="">Update <code>.bundle list</code> to show all aliases per row.</li>
+<li class="">Test: two distinct names pointing at the same set_hash.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-8>Effort<a href=#effort-8 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>1 day (schema migration + bundle-cli + cas-cache API + tests).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-8>Dependencies<a href=#dependencies-8 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-7>Out of scope<a href=#out-of-scope-7 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Cross-database alias sync (v2).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-9>Status<a href=#status-9 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Documented v1.1 in PLAN-bundles.md.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p2-load-auto-cache-into-cas-cache-by-content-hash>P2: <code>.load</code> auto-cache into cas-cache by content-hash<a href=#p2-load-auto-cache-into-cas-cache-by-content-hash class=hash-link aria-label="Direct link to p2-load-auto-cache-into-cas-cache-by-content-hash" title="Direct link to p2-load-auto-cache-into-cas-cache-by-content-hash" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-10>Background<a href=#background-10 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>Currently <code>.load /path/to/foo.component.wasm</code> doesn't push the
+bytes into cas-cache by content-hash; it just opens the file
+directly. After <code>.load</code>, <code>--bundle-load</code> referencing that
+extension hits the cas-cache-miss error path because the
+extension's bytes are only on the operator's filesystem, not in
+the registry.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-9>Scope<a href=#scope-9 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">After a successful <code>.load PATH</code>, compute content-hash + insert
+into cas-cache via the existing <code>cas_cache.put_bytes</code> API.</li>
+<li class="">Update <code>--bundle-load</code> resolution to check both cas-cache and
+the original PATH (if recorded somewhere).</li>
+<li class="">Test: load → save bundle → restart cli → <code>--bundle-load</code> works
+without manual cas-cache priming.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-9>Effort<a href=#effort-9 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-9>Dependencies<a href=#dependencies-9 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-8>Out of scope<a href=#out-of-scope-8 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Auto-pruning loaded-but-not-bundled extensions from cas-cache.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-10>Status<a href=#status-10 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Documented v1.1 in PLAN-bundles.md.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p2-https-resolver-mocking-infrastructure>P2: HTTPS resolver mocking infrastructure<a href=#p2-https-resolver-mocking-infrastructure class=hash-link aria-label="Direct link to P2: HTTPS resolver mocking infrastructure" title="Direct link to P2: HTTPS resolver mocking infrastructure" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-11>Background<a href=#background-11 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>cargo-mutants triage flagged 3 surviving mutants in
+<code>sqlite-cas-cache/src/resolver.rs:179, 187</code> (<code>HttpsResolver::resolve</code>,
+delete <code>!</code>) because the tests don't have an HTTPS mock — they
+either skip the network path entirely or run against the real
+internet (flaky in CI).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-10>Scope<a href=#scope-10 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Add <code>mockito</code> (or <code>wiremock-rs</code>) as a dev-dependency.</li>
+<li class="">Spin up a mock HTTPS server in the test fixtures that returns
+controllable responses.</li>
+<li class="">Replace the network-path tests with mocked variants.</li>
+<li class="">Mutation re-run on resolver.rs to confirm the 3 mutants now die.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-10>Effort<a href=#effort-10 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-10>Dependencies<a href=#dependencies-10 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-9>Out of scope<a href=#out-of-scope-9 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Replacing the production HTTPS client (still uses reqwest).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-11>Status<a href=#status-11 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p2-hostile-filesystem-test-fixtures>P2: Hostile-filesystem test fixtures<a href=#p2-hostile-filesystem-test-fixtures class=hash-link aria-label="Direct link to P2: Hostile-filesystem test fixtures" title="Direct link to P2: Hostile-filesystem test fixtures" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-12>Background<a href=#background-12 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>cargo-mutants flagged <code>store::open_external</code> (delete <code>!</code> on a
+file-existence check) as surviving because no test exercises the
+error path with EACCES / read-only parent dir. Possible with a
+<code>tempfile::TempDir</code> + <code>std::os::unix::fs::PermissionsExt</code>, but
+flaky in CI runners with permission-stripping (containers
+sometimes ignore chmod).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-11>Scope<a href=#scope-11 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Add <code>permissions-ci-skip</code> helper that conditionally skips when
+the runner can't enforce filesystem permissions.</li>
+<li class="">Test: create a read-only parent dir, attempt <code>open_external</code>,
+assert it fails gracefully.</li>
+<li class="">Mutation re-run to confirm mutant dies.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-11>Effort<a href=#effort-11 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-11>Dependencies<a href=#dependencies-11 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-10>Out of scope<a href=#out-of-scope-10 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Adversarial-filesystem testing beyond permissions (NFS races
+etc.).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-12>Status<a href=#status-12 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p2-schema-migration-test-fixtures>P2: Schema-migration test fixtures<a href=#p2-schema-migration-test-fixtures class=hash-link aria-label="Direct link to P2: Schema-migration test fixtures" title="Direct link to P2: Schema-migration test fixtures" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-13>Background<a href=#background-13 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>cargo-mutants flagged <code>store::install_schema:274, 279</code> (the
+v1→v2 and v2→v3 migration arms) as surviving — no test writes a
+legacy schema-version row + opens to trigger the migration.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-12>Scope<a href=#scope-12 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Add a <code>legacy_v1_db_fixture()</code> helper that creates a fresh
+cas-cache db with <code>__cas_meta.schema_version = '1'</code> + the v1
+schema only.</li>
+<li class="">Test: open with current store, assert migration runs +
+schema_version updates + new tables exist.</li>
+<li class="">Same for v2.</li>
+<li class="">Mutation re-run to confirm both arms now die.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-12>Effort<a href=#effort-12 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-12>Dependencies<a href=#dependencies-12 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-11>Out of scope<a href=#out-of-scope-11 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Backward-migration (downgrade) tests — not supported.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-13>Status<a href=#status-13 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p2-cargo-mutants-re-run>P2: cargo-mutants re-run<a href=#p2-cargo-mutants-re-run class=hash-link aria-label="Direct link to P2: cargo-mutants re-run" title="Direct link to P2: cargo-mutants re-run" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-14>Background<a href=#background-14 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>The mutation-testing round (commits 9ca5128, 7267a13, a0c95dd)
+added 6 new tests closing 8-10 mutants in sqlite-cas-cache.
+Estimated post-fix kill rate: <strong>92-94%</strong> — but never re-measured.
+Worth running again after the architectural-mutant work above to
+confirm + get a fresh number.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-13>Scope<a href=#scope-13 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cargo mutants -p sqlite-cas-cache --output mutants-out-cas-cache --timeout-multiplier 3 --in-place</code> — ~22 min runtime.</li>
+<li class=""><code>cargo mutants -p sqlink-loader</code> — ~6 min runtime.</li>
+<li class="">Report the actual caught/missed counts.</li>
+<li class="">Close any new mutants that surfaced from the architectural
+work.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-13>Effort<a href=#effort-13 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day total (most is wall-clock for the runs).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-13>Dependencies<a href=#dependencies-13 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>The HTTPS-mocking + hostile-fs + migration-arm work above (so the
+re-run sees the improvement).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-12>Out of scope<a href=#out-of-scope-12 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Adding mutation testing to additional crates (sqlink-host
+baseline scan is ~80-150 mutants per the prior research; the
+initial scope was intentionally narrow).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-14>Status<a href=#status-14 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p3-more-fuzz-targets>P3: More fuzz targets<a href=#p3-more-fuzz-targets class=hash-link aria-label="Direct link to P3: More fuzz targets" title="Direct link to P3: More fuzz targets" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-15>Background<a href=#background-15 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>The fuzz infra round added 5 targets:</p>
+<ul>
+<li class=""><code>policy_check_manifest</code></li>
+<li class=""><code>cas_put_bytes_roundtrip</code></li>
+<li class=""><code>bundle_save_set_hash</code></li>
+<li class=""><code>parse_duration</code></li>
+<li class=""><code>parse_load_args</code></li>
+</ul>
+<p>Three more were considered but not implemented:</p>
+<ul>
+<li class=""><code>spawn_build</code> path validation (post-P0 security fixes — verify
+the validators reject the path-escape attacks they should).</li>
+<li class=""><code>bundle-cli</code> argv parser (untrusted operator input).</li>
+<li class=""><code>sqlink-cli-argv</code> parser (untrusted argv, already extracted as
+a native crate).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-14>Scope<a href=#scope-14 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">One fuzz_targets/*.rs per target.</li>
+<li class="">Seed corpus from prior P0 attack patterns + existing argv
+fixtures.</li>
+<li class="">5-min smoke runs in fuzz-smoke CI per target.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-14>Effort<a href=#effort-14 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>1 day (3 small targets).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-14>Dependencies<a href=#dependencies-14 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-13>Out of scope<a href=#out-of-scope-13 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Differential fuzzing across parsers (v2).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-15>Status<a href=#status-15 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=p3-longer-fuzz-runs>P3: Longer fuzz runs<a href=#p3-longer-fuzz-runs class=hash-link aria-label="Direct link to P3: Longer fuzz runs" title="Direct link to P3: Longer fuzz runs" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=background-16>Background<a href=#background-16 class=hash-link aria-label="Direct link to Background" title="Direct link to Background" translate=no>​</a></h3>
+<p>The extended-fuzz round (<code>test/fuzz-cas-extended</code> branch, merged)
+ran <code>cas_put_bytes_roundtrip</code> + <code>bundle_save_set_hash</code> for 20 min
+each with no crashes. Coverage plateaued at ~417/549 feature
+edges. Sharply diminishing returns at this point — going to
+hours per target would explore deeper paths but with no
+guarantee of finding anything.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-15>Scope<a href=#scope-15 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">One-shot extended run (4-6 hours per target, weekend wall-clock).</li>
+<li class="">Report coverage delta vs the 20-min runs.</li>
+<li class="">Triage any findings.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-15>Effort<a href=#effort-15 class=hash-link aria-label="Direct link to Effort" title="Direct link to Effort" translate=no>​</a></h3>
+<p>0.5 day human + ~12 hours wall-clock per target.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies-15>Dependencies<a href=#dependencies-15 class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h3>
+<p>None.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-14>Out of scope<a href=#out-of-scope-14 class=hash-link aria-label="Direct link to Out of scope" title="Direct link to Out of scope" translate=no>​</a></h3>
+<ul>
+<li class="">Continuous fuzzing infra (OSS-Fuzz integration — separate plan).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-16>Status<a href=#status-16 class=hash-link aria-label="Direct link to Status" title="Direct link to Status" translate=no>​</a></h3>
+<p>Not started.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=fan-out-strategy>Fan-out strategy<a href=#fan-out-strategy class=hash-link aria-label="Direct link to Fan-out strategy" title="Direct link to Fan-out strategy" translate=no>​</a></h2>
+<p>Group items into rounds based on dependency + region:</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=round-1-sequential-or-single-fork>Round 1 (sequential or single fork)<a href=#round-1-sequential-or-single-fork class=hash-link aria-label="Direct link to Round 1 (sequential or single fork)" title="Direct link to Round 1 (sequential or single fork)" translate=no>​</a></h3>
+<ul>
+<li class="">P0 CI green-up — must precede anything else; pushes can't be
+trusted while CI is red.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=round-2-parallel-forks-no-overlap>Round 2 (parallel forks, no overlap)<a href=#round-2-parallel-forks-no-overlap class=hash-link aria-label="Direct link to Round 2 (parallel forks, no overlap)" title="Direct link to Round 2 (parallel forks, no overlap)" translate=no>​</a></h3>
+<ul>
+<li class="">Fork A: P1 cosmetic warnings (15 min) + P1 live <code>.prefix prefer</code>
+(0.5 day) — both small + low-risk.</li>
+<li class="">Fork B: P1 prefix v1.1 migration sweep (1.5 days) —
+217-extension Cargo.toml batch edit.</li>
+<li class="">Fork C: P2 install_loaded_extension refactor (0.5 day) — DRY-up.</li>
+<li class="">Fork D: P2 single-slot hook audit recording (0.5 day) —
+audit-only path.</li>
+</ul>
+<p>Round 2 finishes ~1-2 wall-clock days assuming parallelism.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=round-3-parallel-forks>Round 3 (parallel forks)<a href=#round-3-parallel-forks class=hash-link aria-label="Direct link to Round 3 (parallel forks)" title="Direct link to Round 3 (parallel forks)" translate=no>​</a></h3>
+<ul>
+<li class="">Fork E: P2 bundle multi-name aliasing (1 day) + .load auto-cache
+(0.5 day) — both touch cas-cache + bundle-cli.</li>
+<li class="">Fork F: P2 bundle browser dispatch driver (1-2 days) —
+composed-cli JS layer.</li>
+<li class="">Fork G: P2 HTTPS resolver mocking + hostile-fs + migration-arm
+test fixtures (1.5 days total) — test-infra trio.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=round-4-sequential>Round 4 (sequential)<a href=#round-4-sequential class=hash-link aria-label="Direct link to Round 4 (sequential)" title="Direct link to Round 4 (sequential)" translate=no>​</a></h3>
+<ul>
+<li class="">P2 cargo-mutants re-run (depends on Round 3's Fork G).</li>
+<li class="">P3 more fuzz targets.</li>
+<li class="">P3 longer fuzz runs.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=estimated-total-effort>Estimated total effort<a href=#estimated-total-effort class=hash-link aria-label="Direct link to Estimated total effort" title="Direct link to Estimated total effort" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Round<th>Items<th>Sequential effort<th>Parallel wall-clock<tbody><tr><td>Round 1<td>P0 CI<td>0.5 day<td>0.5 day<tr><td>Round 2<td>4 P1 items<td>3 days<td>1-2 days<tr><td>Round 3<td>4 P2 items<td>4-5 days<td>1-2 days<tr><td>Round 4<td>3 mixed items<td>1.5 days + wall-clock<td>1 day + wall-clock<tr><td><strong>Total</strong><td><strong>~12 items</strong><td><strong>~9-10 days sequential</strong><td><strong>~3-5 days parallel</strong></table>
+<p>Parallel-fork pacing assumes the established commit-per-step
+discipline + worktree-per-fork pattern.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-genuinely-deferred>Out of scope (genuinely deferred)<a href=#out-of-scope-genuinely-deferred class=hash-link aria-label="Direct link to Out of scope (genuinely deferred)" title="Direct link to Out of scope (genuinely deferred)" translate=no>​</a></h2>
+<p>These items appear in various PLAN-*.md "Out of scope" sections
+and are listed here only for visibility — no work planned in this
+roadmap:</p>
+<ul>
+<li class=""><strong>Cross-target builds</strong> (bundles): wasi-sdk / zig-cc / cross.
+Per-user setup; not per-bundle.</li>
+<li class=""><strong>Bundle registry/publishing</strong>: tegmentum-org bundle registry
+for sharing across machines.</li>
+<li class=""><strong>Bundle <code>--with-schema</code> / <code>--with-data</code></strong>: overlaps with
+wal-archive territory.</li>
+<li class=""><strong>sqlink-host as rlib</strong>: production-install path so generated
+crates depend on rlib not workspace source.</li>
+<li class=""><strong>Per-query prefix overrides</strong> (prefixes): <code>SELECT prefix foaf=other; foaf__name(...)</code> SQL syntax.</li>
+<li class=""><strong>Prefix-scoped permissions</strong>: gate per-prefix at capability
+layer ("only operator can use system__*").</li>
+<li class=""><strong>Prefix registry hosting</strong>: org-wide registry verifying
+globally-unique expansions.</li>
+<li class=""><strong>Cross-database prefix sync</strong>.</li>
+<li class=""><strong>Bulk prefix import/export</strong>.</li>
+<li class=""><strong>OSS-Fuzz integration</strong>: continuous fuzzing infra (separate
+CI investment).</li>
+<li class=""><strong>Workspace-wide clippy cleanup</strong>: cosmetic but large.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=references>References<a href=#references class=hash-link aria-label="Direct link to References" title="Direct link to References" translate=no>​</a></h2>
+<ul>
+<li class=""><code>PLAN-bundles.md</code>, <code>PLAN-prefixes.md</code>, <code>PLAN-cas-cache.md</code>,
+<code>PLAN-wal-archive.md</code> — source plans for items derived from
+v1 deferrals.</li>
+<li class="">Recent commits referenced inline (e.g. <code>d6256f5</code> for the
+hot-path helpers, <code>9ca5128</code>/<code>7267a13</code>/<code>a0c95dd</code> for the
+mutation test additions).</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-followups.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/sqlink/plans/PLAN-prefixes><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Plan: function prefixes — SPARQL-style namespacing for SQL functions</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/sqlink/plans/PLAN-browser-runtime><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#v16-polish-post-v15-follow-ups-487 class="table-of-contents__link toc-highlight">v1.6 polish: post-v1.5 follow-ups (#487)</a><ul><li><a href=#status-2026-06-27 class="table-of-contents__link toc-highlight">Status (2026-06-27)</a><li><a href=#sub-item-c-per-artifact-wasm-tools-rationale--done class="table-of-contents__link toc-highlight">Sub-item C: per-artifact wasm-tools rationale — DONE</a><li><a href=#sub-item-a-bundle-cli-spi-rewrite--deferred-substrate-blocker class="table-of-contents__link toc-highlight">Sub-item A: bundle-cli SPI rewrite — DEFERRED (substrate blocker)</a><li><a href=#sub-item-b-js-polyfill-sql-strings-auto-sync-from-rust--deferred class="table-of-contents__link toc-highlight">Sub-item B: JS polyfill SQL strings auto-sync from Rust — DEFERRED</a><li><a href=#verification-this-fork class="table-of-contents__link toc-highlight">Verification (this fork)</a><li><a href=#honest-deferrals class="table-of-contents__link toc-highlight">Honest deferrals</a></ul><li><a href=#v12-browser-composed-cli-auto-load-via-js-registry class="table-of-contents__link toc-highlight">v1.2: Browser composed-cli auto-load via JS registry</a><ul><li><a href=#background class="table-of-contents__link toc-highlight">Background</a><li><a href=#the-architectural-mismatch class="table-of-contents__link toc-highlight">The architectural mismatch</a><li><a href=#why-the-prior-479-fix-wasnt-enough class="table-of-contents__link toc-highlight">Why the prior #479 fix wasn't enough</a><li><a href=#scope class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-v13 class="table-of-contents__link toc-highlight">Out of scope (v1.3+)</a><li><a href=#status class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#v13-browser-cli-family-spi-bridging class="table-of-contents__link toc-highlight">v1.3: Browser cli-family SPI bridging</a><ul><li><a href=#background-1 class="table-of-contents__link toc-highlight">Background</a><li><a href=#three-viable-shapes-re-ranked-after-attempted-execution class="table-of-contents__link toc-highlight">Three viable shapes (RE-RANKED after attempted execution)</a><li><a href=#recommendation class="table-of-contents__link toc-highlight">Recommendation</a><li><a href=#status-1 class="table-of-contents__link toc-highlight">Status</a><li><a href=#attempt-2-finding-2026-06-25--option-1-list-was-incomplete class="table-of-contents__link toc-highlight">Attempt 2 finding (2026-06-25) — option 1 list was incomplete</a></ul><li><a href=#v14-browser-spi-bridging-via-dispatch-bridgebridged-execute class="table-of-contents__link toc-highlight">v1.4: Browser SPI bridging via dispatch-bridge.bridged-execute</a><ul><li><a href=#status-2026-06-25-done class="table-of-contents__link toc-highlight">Status (2026-06-25): DONE</a><li><a href=#what-landed class="table-of-contents__link toc-highlight">What landed</a><li><a href=#side-effect-composed-bundlespecjs-skipped class="table-of-contents__link toc-highlight">Side effect: composed-bundle.spec.js skipped</a><li><a href=#side-effect-wac-compose-recipe-change-is-load-bearing class="table-of-contents__link toc-highlight">Side effect: WAC compose recipe change is load-bearing</a></ul><li><a href=#v15-round-6-composed-cli-wasm-runtime-in-a-dedicated-worker--done class="table-of-contents__link toc-highlight">v1.5 round 6: composed-cli wasm runtime in a dedicated Worker — DONE</a><ul><li><a href=#status-2026-06-26-done--non-empty-bundle-reload-leg-passes class="table-of-contents__link toc-highlight">Status (2026-06-26): DONE — non-empty bundle reload-leg passes</a><li><a href=#architecture-change class="table-of-contents__link toc-highlight">Architecture change</a><li><a href=#what-landed-1 class="table-of-contents__link toc-highlight">What landed</a><li><a href=#departures-from-prior-rounds class="table-of-contents__link toc-highlight">Departures from prior rounds</a><li><a href=#substrate-verification-matrix-run-before-commit class="table-of-contents__link toc-highlight">Substrate verification matrix (run before commit)</a></ul><li><a href=#v15-round-4-opfs-backed-vfs-for-the-cas-connection--done class="table-of-contents__link toc-highlight">v1.5 round 4: OPFS-backed VFS for the cas connection — DONE</a><ul><li><a href=#status-2026-06-26-done--reload-persistence-verified-end-to-end class="table-of-contents__link toc-highlight">Status (2026-06-26): DONE — reload persistence verified end-to-end</a><li><a href=#what-landed-2 class="table-of-contents__link toc-highlight">What landed</a><li><a href=#departures-from-the-round-3-spec class="table-of-contents__link toc-highlight">Departures from the round-3 spec</a><li><a href=#substrate-verification-matrix-run-before-commit-1 class="table-of-contents__link toc-highlight">Substrate verification matrix (run before commit)</a></ul><li><a href=#v15-round-3-browser-bundles-bridging-via-bridged-execute-cas class="table-of-contents__link toc-highlight">v1.5 round 3: Browser bundles bridging via bridged-execute-cas</a><ul><li><a href=#status-2026-06-26-done--reload-persistence-delivered-in-round-4 class="table-of-contents__link toc-highlight">Status (2026-06-26): DONE — reload persistence delivered in round 4</a><li><a href=#what-landed-3 class="table-of-contents__link toc-highlight">What landed</a><li><a href=#opfs-backed-vfs-for-the-cas-connection--delivered-in-round-4 class="table-of-contents__link toc-highlight">OPFS-backed VFS for the cas connection — delivered in round 4</a></ul><li><a href=#status-2026-06-25 class="table-of-contents__link toc-highlight">Status (2026-06-25)</a><li><a href=#motivation class="table-of-contents__link toc-highlight">Motivation</a><li><a href=#priority--sequencing class="table-of-contents__link toc-highlight">Priority + sequencing</a><li><a href=#p0-ci-green-up class="table-of-contents__link toc-highlight">P0: CI green-up</a><ul><li><a href=#background-2 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-1 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-1 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-1 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-2 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p1-prefixes-v11-migration-sweep class="table-of-contents__link toc-highlight">P1: Prefixes v1.1 migration sweep</a><ul><li><a href=#background-3 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-2 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-2 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-2 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-1 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-3 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p1-live-prefix-prefer-bare-name-re-registration-on-pin-write class="table-of-contents__link toc-highlight">P1: Live <code>.prefix prefer</code> (bare-name re-registration on pin write)</a><ul><li><a href=#background-4 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-3 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-3 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-3 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-2 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-4 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p1-cosmetic-warnings-cleanup class="table-of-contents__link toc-highlight">P1: Cosmetic warnings cleanup</a><ul><li><a href=#background-5 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-4 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-4 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-4 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-3 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-5 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p2-single-slot-hook-audit-only-recording class="table-of-contents__link toc-highlight">P2: Single-slot hook audit-only recording</a><ul><li><a href=#background-6 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-5 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-5 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-5 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-4 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-6 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p2-install_loaded_extension-refactor-dry class="table-of-contents__link toc-highlight">P2: <code>install_loaded_extension</code> refactor (DRY)</a><ul><li><a href=#background-7 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-6 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-6 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-6 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-5 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-7 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p2-bundles-browser-composed-cli-dispatch_dot_command-driver class="table-of-contents__link toc-highlight">P2: Bundles browser composed-cli <code>dispatch_dot_command</code> driver</a><ul><li><a href=#background-8 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-7 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-7 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-7 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-6 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-8 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p2-bundle-multi-name-aliasing class="table-of-contents__link toc-highlight">P2: Bundle multi-name aliasing</a><ul><li><a href=#background-9 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-8 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-8 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-8 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-7 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-9 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p2-load-auto-cache-into-cas-cache-by-content-hash class="table-of-contents__link toc-highlight">P2: <code>.load</code> auto-cache into cas-cache by content-hash</a><ul><li><a href=#background-10 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-9 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-9 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-9 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-8 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-10 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p2-https-resolver-mocking-infrastructure class="table-of-contents__link toc-highlight">P2: HTTPS resolver mocking infrastructure</a><ul><li><a href=#background-11 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-10 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-10 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-10 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-9 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-11 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p2-hostile-filesystem-test-fixtures class="table-of-contents__link toc-highlight">P2: Hostile-filesystem test fixtures</a><ul><li><a href=#background-12 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-11 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-11 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-11 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-10 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-12 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p2-schema-migration-test-fixtures class="table-of-contents__link toc-highlight">P2: Schema-migration test fixtures</a><ul><li><a href=#background-13 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-12 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-12 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-12 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-11 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-13 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p2-cargo-mutants-re-run class="table-of-contents__link toc-highlight">P2: cargo-mutants re-run</a><ul><li><a href=#background-14 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-13 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-13 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-13 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-12 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-14 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p3-more-fuzz-targets class="table-of-contents__link toc-highlight">P3: More fuzz targets</a><ul><li><a href=#background-15 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-14 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-14 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-14 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-13 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-15 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#p3-longer-fuzz-runs class="table-of-contents__link toc-highlight">P3: Longer fuzz runs</a><ul><li><a href=#background-16 class="table-of-contents__link toc-highlight">Background</a><li><a href=#scope-15 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#effort-15 class="table-of-contents__link toc-highlight">Effort</a><li><a href=#dependencies-15 class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-14 class="table-of-contents__link toc-highlight">Out of scope</a><li><a href=#status-16 class="table-of-contents__link toc-highlight">Status</a></ul><li><a href=#fan-out-strategy class="table-of-contents__link toc-highlight">Fan-out strategy</a><ul><li><a href=#round-1-sequential-or-single-fork class="table-of-contents__link toc-highlight">Round 1 (sequential or single fork)</a><li><a href=#round-2-parallel-forks-no-overlap class="table-of-contents__link toc-highlight">Round 2 (parallel forks, no overlap)</a><li><a href=#round-3-parallel-forks class="table-of-contents__link toc-highlight">Round 3 (parallel forks)</a><li><a href=#round-4-sequential class="table-of-contents__link toc-highlight">Round 4 (sequential)</a></ul><li><a href=#estimated-total-effort class="table-of-contents__link toc-highlight">Estimated total effort</a><li><a href=#out-of-scope-genuinely-deferred class="table-of-contents__link toc-highlight">Out of scope (genuinely deferred)</a><li><a href=#references class="table-of-contents__link toc-highlight">References</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

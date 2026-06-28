@@ -1,0 +1,404 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-speculative" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>Plan: speculative items (consumer-driven) | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-speculative /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Plan: speculative items (consumer-driven) | sqlink"/><meta data-rh=true name=description content="Status: drafted, deliberately unstarted. Every item here"/><meta data-rh=true property=og:description content="Status: drafted, deliberately unstarted. Every item here"/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-speculative /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-speculative hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-speculative hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://tegmentum.github.io/sqlink/plans/PLAN-speculative","name":"Plan: speculative items (consumer-driven)","position":1}]}</script><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/><span title=Introduction class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/getting-started><span title="Getting Started" class=linkLabel_WmDU>Getting Started</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/sqlink/concepts/extensions><span title=Concepts class=categoryLinkLabel_W154>Concepts</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/extensions><span title=Extensions class=linkLabel_WmDU>Extensions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/bundles><span title=Bundles class=linkLabel_WmDU>Bundles</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/prefixes><span title=Prefixes class=linkLabel_WmDU>Prefixes</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/cas-cache><span title=Cas-cache class=linkLabel_WmDU>Cas-cache</span></a></ul><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/roadmap><span title=Roadmap class=linkLabel_WmDU>Roadmap</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/sqlink/plans/PLAN-bundles><span title="Plans (source of truth)" class=categoryLinkLabel_W154>Plans (source of truth)</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-bundles><span title="Plan: bundles  named extension sets with optional baked binaries" class=linkLabel_WmDU>Plan: bundles  named extension sets with optional baked binaries</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-prefixes><span title="Plan: function prefixes — SPARQL-style namespacing for SQL functions" class=linkLabel_WmDU>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-followups><span title=PLAN-followups class=linkLabel_WmDU>PLAN-followups</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-browser-runtime><span title="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill" class=linkLabel_WmDU>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wal-archive-extension><span title="Plan: wal-archive extension  continuous WAL backup for sqlink" class=linkLabel_WmDU>Plan: wal-archive extension  continuous WAL backup for sqlink</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-tvm-integration><span title="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)" class=linkLabel_WmDU>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wasmmachine><span title="Plan: Register sqlite-cli as a wasmMachine application" class=linkLabel_WmDU>Plan: Register sqlite-cli as a wasmMachine application</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-interactive-capture><span title="Plan: interactive changeset capture (daemon vs WIT-extension)" class=linkLabel_WmDU>Plan: interactive changeset capture (daemon vs WIT-extension)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-benchmarks><span title="Benchmarks: sqlite-wasm-run vs native sqlite3" class=linkLabel_WmDU>Benchmarks: sqlite-wasm-run vs native sqlite3</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-perf-ux><span title="PLAN: release-readiness perf + UX audit" class=linkLabel_WmDU>PLAN: release-readiness perf + UX audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-testing><span title="PLAN: release-readiness testing audit" class=linkLabel_WmDU>PLAN: release-readiness testing audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-code-health><span title="PLAN: code-health + tech-debt audit for OSS release" class=linkLabel_WmDU>PLAN: code-health + tech-debt audit for OSS release</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/sqlink/plans/PLAN-speculative><span title="Plan: speculative items (consumer-driven)" class=linkLabel_WmDU>Plan: speculative items (consumer-driven)</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/sqlink/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Plans (source of truth)</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Plan: speculative items (consumer-driven)</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Plan: speculative items (consumer-driven)</h1></header>
+<blockquote>
+<p><strong>Status: drafted, deliberately unstarted.</strong> Every item here
+has the same problem  the design space is wide enough that
+picking a point without a real user steering risks shipping
+the wrong shape and locking in a bad contract. This doc
+captures what we'd do <strong>if</strong> a concrete consumer asked, so the
+design conversation can pick up at "you said X; we'd build Y"
+instead of "what should we build?"</p>
+</blockquote>
+<p>Five items, ordered by how close each is to having an obvious
+consumer.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#<th>Item<th>Consumer signal we're waiting for<tbody><tr><td>1<td>Writable CSV / excel / zipfile<td>A user writing tabular data from SQL who can't use INSERT INTO a normal table<tr><td>2<td>Session Phase 2/3 (capture + apply WIT plumbing)<td>A replication / offline-sync / CDC consumer for SQLite<tr><td>3<td>Per-engine wasm_memory64 + tighter wasmtime config<td>A workload pushing >4 GB of working set<tr><td>4<td>Extension dependency declarations<td>Multi-extension catalogs where one ext requires another<tr><td>5<td>Browser runtime<td>A browser-first deployment story</table>
+<p>Each section: <strong>goal</strong>  what we'd build; <strong>what to ask the
+consumer</strong>  the open questions that need answers before
+starting; <strong>scope</strong>  rough effort; <strong>acceptance</strong>  what shipping
+looks like.</p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=1--writable-file-backed-vtabs-csv--excel--zipfile>1 — Writable file-backed vtabs (CSV / excel / zipfile)<a href=#1--writable-file-backed-vtabs-csv--excel--zipfile class=hash-link aria-label="Direct link to 1 — Writable file-backed vtabs (CSV / excel / zipfile)" title="Direct link to 1 — Writable file-backed vtabs (CSV / excel / zipfile)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=goal>Goal<a href=#goal class=hash-link aria-label="Direct link to Goal" title="Direct link to Goal" translate=no>​</a></h3>
+<p>Extend the existing read-only <code>csv</code>, <code>excel</code>, <code>zipfile</code>
+extensions with INSERT/UPDATE/DELETE that write back to the
+underlying file. The vtab-mutating contract (commit <code>b334c43</code>)
+provides the infrastructure  xUpdate + xBegin/xCommit/xRollback
+are wired across WIT and embed paths. The <code>csv</code> extension's
+embed path (commit <code>d11ffb2</code>) is the proof port; excel and
+zipfile are the same shape with a different file format.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-to-ask-the-consumer>What to ask the consumer<a href=#what-to-ask-the-consumer class=hash-link aria-label="Direct link to What to ask the consumer" title="Direct link to What to ask the consumer" translate=no>​</a></h3>
+<p>The design hinges on three orthogonal questions; each has a
+defensible default but the wrong default for a specific user
+imposes weeks of rework:</p>
+<ol>
+<li class="">
+<p><strong>Persistence model.</strong> Three options, very different
+characteristics:</p>
+<ul>
+<li class=""><strong>(a) Buffer until COMMIT, atomic temp+rename.</strong> What
+<code>csv</code> ships today on the embed path. Strong correctness;
+transaction-aware; can OOM on big files.</li>
+<li class=""><strong>(b) Append-only INSERT, batch UPDATE/DELETE in memory.</strong>
+Append-only is cheap (single fd_write at COMMIT); mutations
+buffer like (a). Hybrid pays only when you mutate.
+Doesn't work for excel (workbook is structural, not
+appendable).</li>
+<li class=""><strong>(c) Mutate-in-place with periodic background flush.</strong>
+What sqlite itself does. Most complex; requires careful
+fsync semantics; only worth it if the user has very large
+files they want to write to incrementally.</li>
+</ul>
+<p><strong>Ask:</strong> "What's the largest file you'll mutate in a
+transaction? Do you need partial failures to leave the
+file consistent, or is 'commit succeeded or commit didn't
+happen' the contract?"</p>
+</li>
+<li class="">
+<p><strong>Concurrency.</strong> Three options:</p>
+<ul>
+<li class=""><strong>(a) No locking, single-writer assumed.</strong> Matches our
+wasm sandbox today; same as what <code>wasivfs</code> does.</li>
+<li class=""><strong>(b) File-lock on open</strong> (flock / fcntl). Multi-process
+coordination; defeats wasi's lack of locking primitives.
+Don't ship without a real ask.</li>
+<li class=""><strong>(c) Optimistic concurrency</strong> with version tag in a
+side channel. Heavier; only for shared-file scenarios.</li>
+</ul>
+<p><strong>Ask:</strong> "Is this file only written by one cli at a time,
+or do you have multiple readers + writers?"</p>
+</li>
+<li class="">
+<p><strong>Schema evolution.</strong> Two options:</p>
+<ul>
+<li class=""><strong>(a) Fixed schema</strong> declared at CREATE VIRTUAL TABLE
+time. What csv embed does today (8 generic TEXT columns).
+INSERT with fewer columns pads NULLs.</li>
+<li class=""><strong>(b) Schema follows the file</strong> (header row for csv,
+sheet structure for excel). Auto-grow on first INSERT;
+migrate on schema change. More work; only useful if the
+user wants to use the vtab as the source-of-truth.</li>
+</ul>
+<p><strong>Ask:</strong> "Will the user's SQL hardcode column names, or do
+they want the vtab to discover the schema from the file?"</p>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope>Scope<a href=#scope class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<p>Per extension, assuming the consumer's answers are
+(a)/(a)/(a) (defaults shipped on csv):</p>
+<ul>
+<li class=""><code>excel</code>: ~half day. xlsx is a zip of XML  serialize
+changes via <code>umya-spreadsheet</code> (already a dep) into the same
+workbook structure on commit.</li>
+<li class=""><code>zipfile</code>: ~1 day. ZIP entries are positional; append at
+commit. DELETE means rewriting the whole archive  same
+shape as csv's temp+rename.</li>
+</ul>
+<p>If the consumer's answers diverge from defaults, each (b)/(b)
+or (c)/(c) change adds 1-3 days for design + implementation +
+the test surface that goes with concurrency / schema-evolution.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=acceptance>Acceptance<a href=#acceptance class=hash-link aria-label="Direct link to Acceptance" title="Direct link to Acceptance" translate=no>​</a></h3>
+<ol>
+<li class="">The matching <code>embed.rs</code> ships with <code>update / begin / commit / rollback</code> Some(fn) entries</li>
+<li class="">INSERT / UPDATE / DELETE round-trip through the file (open
+fresh cli, query, see the writes)</li>
+<li class="">BEGIN + INSERT + ROLLBACK leaves the file unchanged</li>
+<li class="">PRAGMA integrity_check returns ok if we wired xIntegrity</li>
+<li class="">Smoke covers the 3-op cycle + the rollback path</li>
+</ol>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=2--session-phase-23-capture--apply-via-wit-host-plumbing>2 — Session Phase 2/3: capture + apply via WIT host plumbing<a href=#2--session-phase-23-capture--apply-via-wit-host-plumbing class=hash-link aria-label="Direct link to 2 — Session Phase 2/3: capture + apply via WIT host plumbing" title="Direct link to 2 — Session Phase 2/3: capture + apply via WIT host plumbing" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=goal-1>Goal<a href=#goal-1 class=hash-link aria-label="Direct link to Goal" title="Direct link to Goal" translate=no>​</a></h3>
+<p>Let WIT-path extensions capture changesets from the cli's
+sqlite connection and apply them to either the local
+connection or a different one. Phase 1 (<code>05b69ce</code>) shipped
+the pure-function half  invert, concat, decode  as
+SQL scalars. Phase 2 = apply; Phase 3 = full capture with
+session lifecycle.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-to-ask-the-consumer-1>What to ask the consumer<a href=#what-to-ask-the-consumer-1 class=hash-link aria-label="Direct link to What to ask the consumer" title="Direct link to What to ask the consumer" translate=no>​</a></h3>
+<p>Three open questions:</p>
+<ol>
+<li class="">
+<p><strong>Who owns the session handle?</strong> Options:</p>
+<ul>
+<li class=""><strong>(a) Implicit, per-connection.</strong> Open the cli with
+<code>--session=watch:&lt;table></code>; every commit fires a hook the
+extension can read. No SQL-level handle.</li>
+<li class=""><strong>(b) SQL-level handle</strong> via <code>session_create(name, db, table)</code>
+returning an opaque integer the extension threads through
+subsequent calls. Easier to model; harder to clean up if
+the cli crashes mid-session.</li>
+<li class=""><strong>(c) Vtab-as-handle.</strong> <code>CREATE VIRTUAL TABLE s USING session('main', 'mytable')</code>; sessions live as long as the
+vtab. Idiomatic; heaviest to implement.</li>
+</ul>
+<p><strong>Ask:</strong> "Is the changeset stream tied to the cli's lifetime
+or to a SQL-driven scope (transaction / explicit start/end)?"</p>
+</li>
+<li class="">
+<p><strong>Where do changesets land?</strong> Options:</p>
+<ul>
+<li class=""><strong>(a) Sink to a file.</strong> <code>changeset_apply(blob)</code> reads
+bytes; capture writes bytes. Symmetric, file-based.
+Matches the existing <code>.session</code> dot-command + the
+<code>sqlite-wasm-run changeset</code> subcommand.</li>
+<li class=""><strong>(b) Sink to a SPI buffer.</strong> Extension exposes a
+callback the host invokes with each captured change.
+Streamable; usable for replication consumers that want
+row-level granularity.</li>
+<li class=""><strong>(c) Sink to another db.</strong> Capture from one db, apply to
+another atomically  the apply path is host-side, not
+guest-side.</li>
+</ul>
+<p><strong>Ask:</strong> "Do you want bytes you can ship somewhere, or
+do you want to react to changes inside SQL?"</p>
+</li>
+<li class="">
+<p><strong>Transactional semantics on apply.</strong> Two options:</p>
+<ul>
+<li class=""><strong>(a) Apply-as-one-transaction.</strong> Either all changes
+succeed or none. Easy; what sqlite's own
+<code>sqlite3changeset_apply</code> does by default.</li>
+<li class=""><strong>(b) Apply-with-conflict-resolution.</strong> Per-row callbacks
+for OK / OMIT / REPLACE / ABORT. Heavier; needed for
+real merge / CDC consumers.</li>
+</ul>
+<p><strong>Ask:</strong> "If a row in the changeset doesn't match the
+target db's current state, do you want to retry? Skip?
+Bail?"</p>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-1>Scope<a href=#scope-1 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Phase 2 (apply only) with default answers (a/a/a): ~3-5 days.
+New WIT <code>session-spi.apply(blob)</code> import; host wraps
+<code>sqlite3changeset_apply</code>; <code>extensions/session-apply</code> SQL
+surface.</li>
+<li class="">Phase 3 (full capture) with (b/b/b): ~5-7 days. Session
+handle lifecycle is the dragon; the WIT side is straightforward.</li>
+</ul>
+<p>Both add to the host's surface (new dispatch methods) and the
+cli's compile flags (<code>SESSION + PREUPDATE_HOOK</code> already enabled
+in <code>LIBSQLITE3_FLAGS</code>).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=acceptance-1>Acceptance<a href=#acceptance-1 class=hash-link aria-label="Direct link to Acceptance" title="Direct link to Acceptance" translate=no>​</a></h3>
+<ul>
+<li class="">New <code>session-spi</code> WIT interface</li>
+<li class="">Host dispatch methods + HostWrap impls</li>
+<li class="">One reference extension exercising the surface</li>
+<li class="">End-to-end smoke: capture from db A  apply to db B  same
+query returns same rows</li>
+</ul>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=3--per-engine-wasm_memory64--tighter-wasmtime-config>3 — Per-engine wasm_memory64 + tighter wasmtime config<a href=#3--per-engine-wasm_memory64--tighter-wasmtime-config class=hash-link aria-label="Direct link to 3 — Per-engine wasm_memory64 + tighter wasmtime config" title="Direct link to 3 — Per-engine wasm_memory64 + tighter wasmtime config" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=goal-2>Goal<a href=#goal-2 class=hash-link aria-label="Direct link to Goal" title="Direct link to Goal" translate=no>​</a></h3>
+<p>Move beyond the perf-push wins by either (a) supporting
+wasm64 guests so a single linear memory can address >4 GB, or
+(b) adding wasmtime config knobs that pay off only for very
+specific workload shapes.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-to-ask-the-consumer-2>What to ask the consumer<a href=#what-to-ask-the-consumer-2 class=hash-link aria-label="Direct link to What to ask the consumer" title="Direct link to What to ask the consumer" translate=no>​</a></h3>
+<p>The signal here is concrete:</p>
+<ol>
+<li class="">
+<p><strong>What's your working-set size?</strong> Three regimes:</p>
+<ul>
+<li class=""><strong>&lt;256 MB:</strong> Stay on wasm32; current config is already
+near-optimal. Nothing to do here.</li>
+<li class=""><strong>256 MB - 4 GB:</strong> Stay on wasm32; increase
+<code>memory_reservation</code> and add a <code>--max-memory</code> flag for
+the cli. ~1 day.</li>
+<li class=""><strong>>4 GB:</strong> Switch to wasm64 guests. Multi-week project
+touching libsqlite3-sys (no wasm64 prebuilt), cli build
+flags, host config, and probably wasi-libc itself.
+Defer unless this is the actual blocker.</li>
+</ul>
+<p><strong>Ask:</strong> "How much linear memory does your workload need
+to keep resident at once?"</p>
+</li>
+<li class="">
+<p><strong>What are you tuning for?</strong> Options:</p>
+<ul>
+<li class=""><strong>(a) Throughput</strong> (more wall-clock work per second).
+Look at <code>cranelift_pcc(true)</code> (proof-carrying code
+elimination), bigger <code>compilation_cache</code>, more <code>pooling</code>.</li>
+<li class=""><strong>(b) Latency</strong> (predictable per-call time). Look at
+<code>disable_async</code>, single-stack instantiation, no fuel
+(already done for cli).</li>
+<li class=""><strong>(c) Memory footprint</strong> (small instances). Look at
+<code>static_memory_maximum_size</code> reduction, less
+<code>pooling</code>, smaller stacks.</li>
+</ul>
+<p><strong>Ask:</strong> "What's the metric you're trying to move? p99
+latency? steady-state throughput? RSS?"</p>
+</li>
+<li class="">
+<p><strong>Are you OK with non-portable artifacts?</strong> The current
+<code>.cwasm</code> precompile already binds to a wasmtime version</p>
+<ul>
+<li class="">cpu arch. More aggressive lowering (e.g.
+<code>cranelift_use_egraphs</code>, custom relocations) makes it
+more brittle.</li>
+</ul>
+<p><strong>Ask:</strong> "How often do you regenerate the .cwasm? Once
+per machine? On every deploy?"</p>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-2>Scope<a href=#scope-2 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Defaults investigation: ~half day each. The work is
+largely measurement, not code.</li>
+<li class="">wasm64 support: 2-4 weeks. Out of scope without a hard ask.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=acceptance-2>Acceptance<a href=#acceptance-2 class=hash-link aria-label="Direct link to Acceptance" title="Direct link to Acceptance" translate=no>​</a></h3>
+<ul>
+<li class="">Whatever metric the consumer named moves in the right
+direction by a measurable amount</li>
+<li class="">No regression on the existing bench matrix</li>
+</ul>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=4--extension-dependency-declarations>4 — Extension dependency declarations<a href=#4--extension-dependency-declarations class=hash-link aria-label="Direct link to 4 — Extension dependency declarations" title="Direct link to 4 — Extension dependency declarations" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=goal-3>Goal<a href=#goal-3 class=hash-link aria-label="Direct link to Goal" title="Direct link to Goal" translate=no>​</a></h3>
+<p>Let an extension declare "I require <code>vec</code> to be loaded
+first" via a <code>requires-spec</code> field in the manifest. The
+cli's <code>.load</code> flow checks declared dependencies against the
+loaded set, fails fast if missing, and can later auto-
+resolve via the registered resolvers.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-to-ask-the-consumer-3>What to ask the consumer<a href=#what-to-ask-the-consumer-3 class=hash-link aria-label="Direct link to What to ask the consumer" title="Direct link to What to ask the consumer" translate=no>​</a></h3>
+<ol>
+<li class="">
+<p><strong>What level of dependency are we resolving?</strong> Three
+options:</p>
+<ul>
+<li class=""><strong>(a) Function-level</strong>: "I call <code>vec_f32</code>; whoever
+provides it is fine." Loose binding; works with any
+registered vec implementation.</li>
+<li class=""><strong>(b) Extension-name + version</strong>: "I require <code>vec >= 0.2</code>." Stronger; matches the manifest contract.</li>
+<li class=""><strong>(c) Cryptographic pin</strong> by blake3 digest. Reproducible
+builds; matches the existing trust-policy infrastructure
+(commit <code>f7…</code>).</li>
+</ul>
+<p><strong>Ask:</strong> "Do you want soft dependencies (any matching
+function), versioned dependencies (semver), or pinned
+(exact bytes)?"</p>
+</li>
+<li class="">
+<p><strong>Auto-resolve or fail-fast?</strong></p>
+<ul>
+<li class=""><strong>(a) Fail-fast</strong>: <code>.load A</code> errors if A requires B and
+B isn't loaded. User must <code>.load B</code> first.</li>
+<li class=""><strong>(b) Auto-resolve</strong>: <code>.load A</code> looks up B in the
+resolver registry and loads it transitively.</li>
+</ul>
+<p><strong>Ask:</strong> "Should the cli load dependencies for the user
+or refuse to load until they've already done so?"</p>
+</li>
+<li class="">
+<p><strong>What does a circular dep error look like?</strong> Required
+if (b); not relevant if (a).</p>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope-3>Scope<a href=#scope-3 class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h3>
+<ul>
+<li class="">Minimum viable (a) + fail-fast: ~1-2 days. WIT field,
+host check, error message.</li>
+<li class="">Full (c) + auto-resolve: ~3-5 days. Trust verification per
+loaded extension on the resolution path.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=acceptance-3>Acceptance<a href=#acceptance-3 class=hash-link aria-label="Direct link to Acceptance" title="Direct link to Acceptance" translate=no>​</a></h3>
+<ul>
+<li class=""><code>requires-spec</code> field in <code>metadata::Manifest</code></li>
+<li class="">Cli <code>.load</code> checks; clear error on missing</li>
+<li class="">Smoke: extension A requiring B fails without B; succeeds
+with B loaded; auto-resolves if the resolver is wired</li>
+</ul>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=5--browser-runtime>5 — Browser runtime<a href=#5--browser-runtime class=hash-link aria-label="Direct link to 5 — Browser runtime" title="Direct link to 5 — Browser runtime" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=goal-4>Goal<a href=#goal-4 class=hash-link aria-label="Direct link to Goal" title="Direct link to Goal" translate=no>​</a></h3>
+<p>Run the cli in the browser via <code>jco</code>-style wasi-shim
+adapters, so the same <code>.component.wasm</code> works in a webpage as
+in <code>sqlite-wasm-run</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=why-this-is-separately-filed>Why this is separately filed<a href=#why-this-is-separately-filed class=hash-link aria-label="Direct link to Why this is separately filed" title="Direct link to Why this is separately filed" translate=no>​</a></h3>
+<p>A separate plan (<code>PLAN-browser-runtime.md</code>) already exists
+for this. The work is its own project  separate from the
+catalog and the perf push. Not duplicated here.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-to-ask-the-consumer-4>What to ask the consumer<a href=#what-to-ask-the-consumer-4 class=hash-link aria-label="Direct link to What to ask the consumer" title="Direct link to What to ask the consumer" translate=no>​</a></h3>
+<ol>
+<li class="">Is this a "the cli runs in a browser" play, or "extensions
+load in a browser" play?</li>
+<li class="">Persistent storage  IndexedDB? OPFS? In-memory?</li>
+<li class="">Performance target  comparable to native wasmtime, or
+"works at all"?</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=acceptance-4>Acceptance<a href=#acceptance-4 class=hash-link aria-label="Direct link to Acceptance" title="Direct link to Acceptance" translate=no>​</a></h3>
+<p>Whatever <code>PLAN-browser-runtime.md</code> defines.</p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-anti-pattern-this-doc-is-structured-to-prevent>The anti-pattern this doc is structured to prevent<a href=#the-anti-pattern-this-doc-is-structured-to-prevent class=hash-link aria-label="Direct link to The anti-pattern this doc is structured to prevent" title="Direct link to The anti-pattern this doc is structured to prevent" translate=no>​</a></h2>
+<p>The risk with speculative work is <strong>drift</strong>: we ship one
+defensible point in a wide design space, the consumer's actual
+needs land somewhere else in that space, and we rework the
+contract because the bits we picked were wrong for the user.</p>
+<p>The mitigation is the "what to ask the consumer" section in
+each item. When someone asks for one of these:</p>
+<ol>
+<li class="">Pull this doc up.</li>
+<li class="">Read the consumer-questions for the relevant item.</li>
+<li class="">Ask them. Don't guess.</li>
+<li class="">Write the answers as a "<strong>Consumer:</strong> …" preamble to the
+section, then start implementing against that pin.</li>
+<li class="">The body of the section then becomes the
+to-be-translated-to-tasks plan.</li>
+</ol>
+<p>This is the same discipline <code>PLAN-tooling-and-session.md</code>
+applied to session phase 2/3, and the reason phase 1 shipped
+clean while phase 2/3 are still appropriately deferred.</p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=cross-cut-what-shipping-any-of-these-requires>Cross-cut: what shipping ANY of these requires<a href=#cross-cut-what-shipping-any-of-these-requires class=hash-link aria-label="Direct link to Cross-cut: what shipping ANY of these requires" title="Direct link to Cross-cut: what shipping ANY of these requires" translate=no>​</a></h2>
+<p>Independent of which item, every entry on this list shares
+infrastructure that's already in place:</p>
+<ul>
+<li class="">WIT contract evolution path (<code>sqlite-loader-wit/wit/guest.wit</code>,
+the dispatch.wit pair, regen the host bindings, bump every
+extension's manifest if a manifest field changes)</li>
+<li class="">Host dispatch + HostWrap impl pattern</li>
+<li class="">Cli trampoline pattern for vtab work</li>
+<li class="">Embed-helper extension pattern in <code>sqlite-embed</code></li>
+<li class="">Test bed via <code>extensions/inmem</code> (writable vtab) or a new
+similar minimal extension</li>
+</ul>
+<p>So when one of these unlocks, the prerequisite plumbing is
+known-good; the work is in the per-item design, not the
+infrastructure.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-speculative.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/sqlink/plans/PLAN-release-readiness-code-health><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>PLAN: code-health + tech-debt audit for OSS release</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#1--writable-file-backed-vtabs-csv--excel--zipfile class="table-of-contents__link toc-highlight">1 — Writable file-backed vtabs (CSV / excel / zipfile)</a><ul><li><a href=#goal class="table-of-contents__link toc-highlight">Goal</a><li><a href=#what-to-ask-the-consumer class="table-of-contents__link toc-highlight">What to ask the consumer</a><li><a href=#scope class="table-of-contents__link toc-highlight">Scope</a><li><a href=#acceptance class="table-of-contents__link toc-highlight">Acceptance</a></ul><li><a href=#2--session-phase-23-capture--apply-via-wit-host-plumbing class="table-of-contents__link toc-highlight">2 — Session Phase 2/3: capture + apply via WIT host plumbing</a><ul><li><a href=#goal-1 class="table-of-contents__link toc-highlight">Goal</a><li><a href=#what-to-ask-the-consumer-1 class="table-of-contents__link toc-highlight">What to ask the consumer</a><li><a href=#scope-1 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#acceptance-1 class="table-of-contents__link toc-highlight">Acceptance</a></ul><li><a href=#3--per-engine-wasm_memory64--tighter-wasmtime-config class="table-of-contents__link toc-highlight">3 — Per-engine wasm_memory64 + tighter wasmtime config</a><ul><li><a href=#goal-2 class="table-of-contents__link toc-highlight">Goal</a><li><a href=#what-to-ask-the-consumer-2 class="table-of-contents__link toc-highlight">What to ask the consumer</a><li><a href=#scope-2 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#acceptance-2 class="table-of-contents__link toc-highlight">Acceptance</a></ul><li><a href=#4--extension-dependency-declarations class="table-of-contents__link toc-highlight">4 — Extension dependency declarations</a><ul><li><a href=#goal-3 class="table-of-contents__link toc-highlight">Goal</a><li><a href=#what-to-ask-the-consumer-3 class="table-of-contents__link toc-highlight">What to ask the consumer</a><li><a href=#scope-3 class="table-of-contents__link toc-highlight">Scope</a><li><a href=#acceptance-3 class="table-of-contents__link toc-highlight">Acceptance</a></ul><li><a href=#5--browser-runtime class="table-of-contents__link toc-highlight">5 — Browser runtime</a><ul><li><a href=#goal-4 class="table-of-contents__link toc-highlight">Goal</a><li><a href=#why-this-is-separately-filed class="table-of-contents__link toc-highlight">Why this is separately filed</a><li><a href=#what-to-ask-the-consumer-4 class="table-of-contents__link toc-highlight">What to ask the consumer</a><li><a href=#acceptance-4 class="table-of-contents__link toc-highlight">Acceptance</a></ul><li><a href=#the-anti-pattern-this-doc-is-structured-to-prevent class="table-of-contents__link toc-highlight">The anti-pattern this doc is structured to prevent</a><li><a href=#cross-cut-what-shipping-any-of-these-requires class="table-of-contents__link toc-highlight">Cross-cut: what shipping ANY of these requires</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

@@ -1,0 +1,1570 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-wit-value-extension" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>PLAN: Extend sqlite:extension/scalar-function to carry typed WIT values | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-wit-value-extension /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="PLAN: Extend sqlite:extension/scalar-function to carry typed WIT values | sqlink"/><meta data-rh=true name=description content=Problem /><meta data-rh=true property=og:description content=Problem /><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-wit-value-extension /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-wit-value-extension hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-wit-value-extension hreflang=x-default /><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a class="navbar__item navbar__link" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><main class="docMainContainer_TBSr docMainContainerEnhanced_lQrH"><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>PLAN: Extend <code>sqlite:extension/scalar-function</code> to carry typed WIT values</h1></header>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=problem>Problem<a href=#problem class=hash-link aria-label="Direct link to Problem" title="Direct link to Problem" translate=no>​</a></h2>
+<p>The <code>sqlite:extension/scalar-function</code> WIT contract today carries only
+<code>sql-value { text, real, integer, blob, null }</code> over the call surface.
+This works for PostGIS because the postgis-wasm shim exposes a
+binary↔resource decoder (<code>Geometry::from_wkb(&[u8]) -> result&lt;geometry, postgis-error></code>): the bridge marshals <code>SqlValue::Blob</code> → <code>list&lt;u8></code> →
+<code>Geometry</code> and invokes the WIT-typed function.</p>
+<p><strong>Mobilitydb's WIT exposes no equivalent decoder.</strong> Its function
+signatures take WIT record values directly (<code>tfloat-min-value: func(seq: tfloat-sequence) -> option&lt;f64></code>). Without a <code>binary → tfloat-sequence</code>
+decoder on the shim's WIT, the wasm-component bridge has no way to
+construct the record from a <code>SqlValue::Blob</code>. The interface DB encodes
+the param as <code>[["binary"]]</code> — opaque at the catalog layer — but the
+actual WIT signature is record-shaped, and the wire format from SQLite
+(BLOB bytes) doesn't speak that shape.</p>
+<p>The native mobilitydb bridge sidesteps this via
+<code>datafission_functions::FunctionValue</code> (a host-side Rust enum that
+carries record values directly between SQLite UDFs and wasm). The wasm-
+component bridge has no equivalent — it's bounded by what
+<code>sqlite:extension/scalar-function</code> allows.</p>
+<p>This blocks Phase 4 of <code>PLAN-codegen-retarget.md</code> (#488) and any future
+shim with the same property (record-shaped WIT params without
+binary↔record codecs on the WIT surface). The fix is structural: extend
+the contract's value-type discriminant.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=path-picked-path-c-from-the-codegen-retarget-plan>Path picked (path C from the codegen-retarget plan)<a href=#path-picked-path-c-from-the-codegen-retarget-plan class=hash-link aria-label="Direct link to Path picked (path C from the codegen-retarget plan)" title="Direct link to Path picked (path C from the codegen-retarget plan)" translate=no>​</a></h2>
+<p>Add a <code>wit-value</code> arm to the sql-value variant. The arm carries enough
+metadata to identify the WIT record's structural type and a payload of
+the canonical-encoded record bytes. Hosts (sqlink-host, sqlink-loader,
+composed-cli) marshal it; the wasm bridge's dispatch emits a wit-value
+when calling a record-typed shim function and unwraps a wit-value when
+returning one.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=design--open-questions-to-resolve-before-implementation>Design — open questions to resolve before implementation<a href=#design--open-questions-to-resolve-before-implementation class=hash-link aria-label="Direct link to Design — open questions to resolve before implementation" title="Direct link to Design — open questions to resolve before implementation" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=q1-wire-format-for-the-record-payload>Q1. Wire format for the record payload<a href=#q1-wire-format-for-the-record-payload class=hash-link aria-label="Direct link to Q1. Wire format for the record payload" title="Direct link to Q1. Wire format for the record payload" translate=no>​</a></h3>
+<p>The payload is a serialized form of the WIT record. Options:</p>
+<ul>
+<li class=""><strong>Canonical CBOR (<code>canon:cbor</code> from #486 substrate).</strong> Deterministic,
+schema-aware-friendly, matches the orchestration system's wire
+format. Slightly larger than packed binary but already a load-bearing
+format in the sqlink family. Drift detection comes for free.</li>
+<li class=""><strong>Bincode of the canonical Rust struct shape.</strong> Faster (no
+schema discovery at decode time), smaller bytes, but ties the
+contract to Bincode's versioning and Rust's type layout. Less
+language-neutral.</li>
+<li class=""><strong>WIT canonical ABI bytes.</strong> The exact byte sequence wasm's component
+model uses to ferry the record across the canonical-ABI boundary.
+Zero re-encoding cost on the host side (memcpy from the wasm linear
+memory). But host-side reconstruction needs the WIT canonical-ABI
+reader.</li>
+</ul>
+<p><strong>Recommendation:</strong> canonical CBOR. The cost of a deserialize is real
+but cross-language; the wire format is the contract; alignment with
+<code>canon:cbor</code> keeps the family coherent.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=q2-type-identity--what-goes-in-type-id>Q2. Type identity — what goes in <code>type-id</code>?<a href=#q2-type-identity--what-goes-in-type-id class=hash-link aria-label="Direct link to q2-type-identity--what-goes-in-type-id" title="Direct link to q2-type-identity--what-goes-in-type-id" translate=no>​</a></h3>
+<p>The host needs to know what type to deserialize INTO. Options:</p>
+<ul>
+<li class=""><strong>Canonical-WIT shape hash (from <code>canon:wit</code>, #486 Tier 2).</strong> A 32-
+byte sha256 over the structural-typed canonical WIT form of the
+record. Stable across cosmetic WIT changes; changes immediately on
+any structural change. Auto-derivable at codegen time.</li>
+<li class=""><strong>Symbolic name + version</strong>, e.g.
+<code>"mobilitydb:wasm/temporal-types@0.1.0/tfloat-sequence"</code>. Human-
+readable. But requires a separate "is this name still the same
+shape" check.</li>
+<li class=""><strong>Both</strong>: hash for matching, name for diagnostics.</li>
+</ul>
+<p><strong>Recommendation:</strong> both. The hash is the authoritative match key; the
+name appears in error messages.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=q3-type-registry--how-does-the-host-map-type-id--deserializer>Q3. Type registry — how does the host map type-id → deserializer?<a href=#q3-type-registry--how-does-the-host-map-type-id--deserializer class=hash-link aria-label="Direct link to Q3. Type registry — how does the host map type-id → deserializer?" title="Direct link to Q3. Type registry — how does the host map type-id → deserializer?" translate=no>​</a></h3>
+<p>Codegen-time vs run-time:</p>
+<ul>
+<li class=""><strong>Codegen-time, per-extension manifest.</strong> Each bridge ships a
+manifest mapping each record type-id it can emit/receive to a Rust
+deserializer fn. The host loads the manifest at extension-init and
+registers the entries into its global typed-value registry.</li>
+<li class=""><strong>Run-time, per-call.</strong> Each call ships enough metadata to do the
+deserialization inline. No registry; higher per-call cost.</li>
+<li class=""><strong>Static, per-contract-version.</strong> A single global registry maintained
+by the contract; bridges depend on a known fixed set of types. Doesn't
+scale to user-defined shims.</li>
+</ul>
+<p><strong>Recommendation:</strong> codegen-time per-extension manifest. Bridges already
+ship manifests via <code>get-info</code>/<code>extension-info</code>; adding a <code>typed-values</code>
+field is additive. Host loads it at registration; per-call lookup is a
+hash-table hit.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=q4-backwards-compatibility--contract-version-cut>Q4. Backwards compatibility + contract version cut<a href=#q4-backwards-compatibility--contract-version-cut class=hash-link aria-label="Direct link to Q4. Backwards compatibility + contract version cut" title="Direct link to Q4. Backwards compatibility + contract version cut" translate=no>​</a></h3>
+<p>Existing extensions don't speak <code>wit-value</code>. Two integration points:</p>
+<ul>
+<li class=""><strong>The variant addition.</strong> Adding an arm to a WIT variant is a
+STRUCTURAL change to the canonical ABI: every existing extension's
+view of <code>sql-value</code>'s discriminant changes. Per the bump policy in
+#485, this is a MAJOR.</li>
+<li class=""><strong>The natural moment</strong> to do the <code>@1.0.0</code> promotion (the first half
+of #485 Phase 1) is here — cut <code>@1.0.0</code> AS the wit-value variant
+lands. Existing extensions get rebuilt against <code>@1.0.0</code>; new
+bridges (mobilitydb-sqlink-bridge) speak the wit-value-aware shape
+from day one.</li>
+</ul>
+<p><strong>Recommendation:</strong> fold #485 Phase 1 (cut <code>@1.0.0</code> baseline) and the
+wit-value variant into a single contract event. One regeneration of
+the 239-component catalog; one tracked bump; clean narrative for users
+("on 1.0.0, record types are first-class"). #485 Phase 2 (loader pre-
+check) follows independently.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=proposed-contract-shape>Proposed contract shape<a href=#proposed-contract-shape class=hash-link aria-label="Direct link to Proposed contract shape" title="Direct link to Proposed contract shape" translate=no>​</a></h2>
+<div class="language-wit codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-wit codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">// Before</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">variant sql-value {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  text(string),</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  real(f64),</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  integer(s64),</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  blob(list&lt;u8>),</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  null,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">// After (sqlink:wasm@1.0.0)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">variant sql-value {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  text(string),</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  real(f64),</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  integer(s64),</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  blob(list&lt;u8>),</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  null,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  wit-value(wit-value-payload),</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">record wit-value-payload {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // 32-byte sha256("witcanon:1" || canonical-CBOR(WIT record shape))</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // from canon:wit hashing. Authoritative match key.</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  type-id: list&lt;u8>,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // Canonical CBOR encoding of the record per canon:cbor profile.</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // Length matches the record shape that type-id identifies.</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  bytes: list&lt;u8>,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // Human-readable symbolic name + version, for diagnostics.</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // Example: "mobilitydb:wasm/temporal-types@0.1.0/tfloat-sequence"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // Hosts use this in error messages but NOT for matching.</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  symbolic-name: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div></code></pre></div></div>
+<p>Manifest channel addition (<code>get-info</code>/<code>extension-info</code>):</p>
+<div class="language-wit codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-wit codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">record extension-info {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  name: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  version: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  functions: list&lt;function-info>,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // New</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  typed-values: list&lt;typed-value-binding>,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">record typed-value-binding {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  type-id: list&lt;u8>,           // matches wit-value-payload.type-id</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  symbolic-name: string,       // matches wit-value-payload.symbolic-name</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // The wasm-side import the host can call to deserialize bytes into</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // the WIT record (or to encode the record back to bytes).</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  decoder-import: string,      // e.g. "mobilitydb:wasm/serde-ops/tfloat-sequence-from-canon-cbor"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  encoder-import: string,      // e.g. "mobilitydb:wasm/serde-ops/tfloat-sequence-to-canon-cbor"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div></code></pre></div></div>
+<p>The <code>decoder-import</code> + <code>encoder-import</code> are wasm-side functions the
+bridge component exposes on its WIT export world (one per record type
+it marshals). The host invokes them on every call that ferries a wit-
+value.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=implementation-phases>Implementation phases<a href=#implementation-phases class=hash-link aria-label="Direct link to Implementation phases" title="Direct link to Implementation phases" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-a--design-lock--contract-change>Phase A — design lock + contract change<a href=#phase-a--design-lock--contract-change class=hash-link aria-label="Direct link to Phase A — design lock + contract change" title="Direct link to Phase A — design lock + contract change" translate=no>​</a></h3>
+<ol>
+<li class="">Lock the four design questions above (this PLAN doc + an
+AskUserQuestion pass).</li>
+<li class="">Update <code>sqlite-loader-wit/wit/</code> with the new variant + manifest
+fields. Bump <code>sqlink:wasm@0.1.0</code> → <code>sqlink:wasm@1.0.0</code>.</li>
+<li class="">Write a <code>migration-notes-1.0.md</code> documenting the change for
+extension authors.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-b--host-marshaling>Phase B — host marshaling<a href=#phase-b--host-marshaling class=hash-link aria-label="Direct link to Phase B — host marshaling" title="Direct link to Phase B — host marshaling" translate=no>​</a></h3>
+<ol>
+<li class=""><code>sqlink-host</code>: extend the runtime to recognize <code>wit-value</code>, look up
+the type-id in the per-extension registry, call the decoder import
+to recover the WIT record, pass it to the called function.</li>
+<li class="">Same for <code>sqlink-loader.dylib</code> and <code>composed-cli-worker</code>.</li>
+<li class="">Reverse path: when a function returns a WIT record, wrap it as
+<code>wit-value(...)</code> via the matching encoder.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-c--codegen-consumption>Phase C — codegen consumption<a href=#phase-c--codegen-consumption class=hash-link aria-label="Direct link to Phase C — codegen consumption" title="Direct link to Phase C — codegen consumption" translate=no>​</a></h3>
+<ol>
+<li class=""><code>sqlink-shim-codegen</code> learns to read the upstream shim's WIT
+record definitions, emit dispatch arms that use <code>wit-value</code> for
+record-typed params/returns.</li>
+<li class="">Codegen emits per-bridge <code>typed-value-binding</code> entries in the
+manifest, including the per-record decoder/encoder import names.</li>
+<li class="">The codegen-emitted bridge crate exposes the
+<code>&lt;record>-from-canon-cbor</code> + <code>&lt;record>-to-canon-cbor</code> functions
+as WIT exports (these are codegen-generated from the WIT record
+definitions; per record type, ~10 lines).</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-d--codegen-generalization-separately-needed>Phase D — codegen generalization (separately needed)<a href=#phase-d--codegen-generalization-separately-needed class=hash-link aria-label="Direct link to Phase D — codegen generalization (separately needed)" title="Direct link to Phase D — codegen generalization (separately needed)" translate=no>​</a></h3>
+<p>The Phase 4 fork's investigation found the codegen is PostGIS-specific
+in ~5 places (<code>emit_wit.rs:46-55</code> world template match, <code>emit_lib.rs:52</code>
+hardcoded <code>postgis-wasm</code> dep dir, <code>emit_lib.rs:150</code> hardcoded
+<code>postgis_types</code> import, <code>emit_lib.rs:210-228</code> PostGIS-only helpers,
+<code>dispatch.rs:528-555</code> PostGIS-only interface-name → alias mapping).
+These need decoupling regardless of wit-value. Land alongside Phase C.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-e--mobilitydb-unblock>Phase E — mobilitydb unblock<a href=#phase-e--mobilitydb-unblock class=hash-link aria-label="Direct link to Phase E — mobilitydb unblock" title="Direct link to Phase E — mobilitydb unblock" translate=no>​</a></h3>
+<ol>
+<li class="">With the contract extension + codegen generalization in place,
+generate <code>tegmentum/mobilitydb-sqlink-bridge</code> from
+<code>/tmp/mobilitydb-interface.sqlite</code>.</li>
+<li class="">Compose with <code>mdb-temporal-wasm.wasm</code> + <code>postgis-composed.wasm</code> +
+<code>postgis-sqlink-bridge.wasm</code>.</li>
+<li class="">Verify <code>tfloat-min-value(seq)</code> or equivalent works end-to-end.</li>
+<li class="">Update <code>PLAN-codegen-retarget.md</code> Phase 4 status from blocked →
+done.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-f--contract-guard-485-phase-2>Phase F — contract guard (#485 Phase 2)<a href=#phase-f--contract-guard-485-phase-2 class=hash-link aria-label="Direct link to Phase F — contract guard (#485 Phase 2)" title="Direct link to Phase F — contract guard (#485 Phase 2)" translate=no>​</a></h3>
+<p>The <code>@1.0.0</code> baseline now has real meaning. Add the loader pre-check
+that introspects each loaded component's <code>sqlink:wasm</code> import version
+and rejects mismatches with the friendly message. Migrate existing
+extensions via a one-pass regeneration of their WIT exports against
+the new sql-value shape; the <code>wit-value</code> arm is additive at the
+discriminant level (existing variants keep their tags) so the
+migration is a recompile, not a behavior change.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=risks>Risks<a href=#risks class=hash-link aria-label="Direct link to Risks" title="Direct link to Risks" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>Decoder import cost.</strong> Every record-marshal involves a wasm-side
+function call (host → wasm decoder → WIT record). Per-row this is
+measurable; per batch, negligible. Profile early.</li>
+<li class=""><strong>Manifest size.</strong> Per-record decoder/encoder entries inflate
+manifests for shims with many record types. ~50 records ×
+manifest overhead is fine; ~5000 records would matter.</li>
+<li class=""><strong>Round-trip stability.</strong> The encoder must produce a payload the
+decoder accepts, regardless of host language. Conformance tests on
+the canonical CBOR profile + the record-shape registry.</li>
+<li class=""><strong>Type-id collisions.</strong> sha256 over <code>canon:wit</code> is the source of
+truth, but bugs in <code>canon:wit</code> normalization could produce
+collisions or non-deterministic hashes. The orchestration system's
+conformance suite (#486 Tier 3, C3) catches this.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification>Verification<a href=#verification class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h2>
+<ul>
+<li class="">Phase A: catalog <code>wit-component metadata</code> of any extension built
+against the new contract shows <code>sqlink:wasm@1.0.0</code> in its imports.</li>
+<li class="">Phase B: sqlink-host's test suite gains a unit that feeds a synthetic
+<code>wit-value</code> through the runtime and observes the decoded record at
+the wasm boundary. Encode-decode round-trip is byte-identical.</li>
+<li class="">Phase C: codegen-emitted bridge for a record-touching upstream
+function compiles + exports both encoder and decoder. Manifest
+includes both bindings.</li>
+<li class="">Phase E: <code>SELECT tfloat_min_value(seq) FROM (VALUES (?)) AS t(seq)</code>
+returns the expected scalar; verify subcrate reads the OPFS-stored
+cas state across a reload (composes the mobilitydb path with the
+existing v1.5 browser path).</li>
+<li class="">Phase F: a component built against <code>sqlink:wasm@0.x</code> is REJECTED by
+the loader with the friendly contract-mismatch message (per the
+#485 guard).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=cross-cuts>Cross-cuts<a href=#cross-cuts class=hash-link aria-label="Direct link to Cross-cuts" title="Direct link to Cross-cuts" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>#485 WIT contract versioning.</strong> Phase 1 (semver promotion) folds
+into Phase A here. Phase 2 (loader pre-check) is Phase F here.</li>
+<li class=""><strong>#486 orchestration integration.</strong> Tier 2 (canonical-WIT identity)
+provides the type-id hashes; Tier 2 work moves alongside Phase A.</li>
+<li class=""><strong>#488 codegen retarget.</strong> Phase 4 unblocks at Phase E. The codegen
+generalization (Phase D here) replaces the Phase 4-prerequisite
+"Phase 3 round 3" the codegen-retarget plan would otherwise need.</li>
+<li class=""><strong>#487 v1.6 follow-ups.</strong> bundle-cli's SPI rewrite consumes the new
+contract shape; folds into Phase B's host marshaling work.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=decisions-locked-2026-06-26>Decisions (locked 2026-06-26)<a href=#decisions-locked-2026-06-26 class=hash-link aria-label="Direct link to Decisions (locked 2026-06-26)" title="Direct link to Decisions (locked 2026-06-26)" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>DD1. Wire format: canonical CBOR (<code>canon:cbor</code> from #486).</strong>
+Deterministic, schema-aware-friendly, matches the orchestration
+system's wire format. Cross-language interop free. Decode cost is
+measurable but acceptable.</li>
+<li class=""><strong>DD2. Type identity: hash + symbolic name (both).</strong> 32-byte sha256
+over <code>canon:wit</code> normalized form is the authoritative match key.
+Symbolic <code>"package:wasm/interface@version/type-name"</code> ships
+alongside for error messages + diagnostics. Hash matches
+structurally; name communicates intent. Aligns with #486 Tier 2
+canonical-WIT identity work.</li>
+<li class=""><strong>DD3. Type registry: codegen-time per-extension manifest.</strong> Each
+bridge ships a <code>typed-value-binding</code> list in its
+<code>extension-info</code> manifest, mapping type-id → decoder/encoder
+imports. Host loads at extension-init; per-call lookup is a hash-
+table hit. Additive to the existing <code>get-info</code>/<code>extension-info</code>
+channel.</li>
+<li class=""><strong>DD4. Contract bump timing: fold.</strong> Cut <code>sqlink:wasm@1.0.0</code> AS the
+wit-value variant lands. One contract event; one regeneration of
+the 239-component catalog; clean narrative ("on 1.0.0, record
+types are first-class"). #485 Phase 1 (semver promotion) folds
+into Phase A here. #485 Phase 2 (loader pre-check) is Phase F.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=references>References<a href=#references class=hash-link aria-label="Direct link to References" title="Direct link to References" translate=no>​</a></h2>
+<ul>
+<li class=""><code>~/git/sqlink/docs/plans/PLAN-codegen-retarget.md</code> — D5 update on
+2026-06-27 documents the WIT-layer invalidation that motivated this
+plan.</li>
+<li class=""><code>~/git/sqlink/docs/plans/PLAN-wit-contract-versioning.md</code> (#485) —
+Phase 1 + 2 are sequenced into this plan's Phase A + F.</li>
+<li class=""><code>~/git/sqlink/docs/plans/PLAN-orchestration-integration.md</code> (#486)
+— Tier 2 canonical-WIT identity overlaps with type-id hashing.</li>
+<li class=""><code>~/git/sqlink/sqlite-loader-wit/wit/</code> — current contract surface
+to extend.</li>
+<li class=""><code>~/git/mobilitydb-wasm/crates/mdb-temporal-wasm/wit/temporal.wit</code>
+— the WIT signatures driving the need.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-a--done-2026-06-26>Phase A — done (2026-06-26)<a href=#phase-a--done-2026-06-26 class=hash-link aria-label="Direct link to Phase A — done (2026-06-26)" title="Direct link to Phase A — done (2026-06-26)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=landed>Landed<a href=#landed class=hash-link aria-label="Direct link to Landed" title="Direct link to Landed" translate=no>​</a></h3>
+<ul>
+<li class="">
+<p><strong>WIT contract (<code>sqlite-loader-wit</code>, branch <code>feat/wit-value-1.0</code>,
+commit <code>4861ae1f</code>):</strong></p>
+<ul>
+<li class=""><code>sql-value</code> variant gains a <code>wit-value(wit-value-payload)</code> arm
+in <code>wit/types.wit</code>. Payload carries:
+<ul>
+<li class=""><code>type-id: list&lt;u8></code> — 32-byte sha256 <code>canon:wit</code> shape hash
+(authoritative match key).</li>
+<li class=""><code>bytes: list&lt;u8></code> — canonical-CBOR encoding per <code>canon:cbor</code>.</li>
+<li class=""><code>symbolic-name: string</code> — diagnostic name in
+<code>&lt;package>:wasm/&lt;interface>@&lt;version>/&lt;type-name></code> form.</li>
+</ul>
+</li>
+<li class=""><code>metadata.manifest</code> gains a <code>typed-values: list&lt;typed-value-binding></code> field in <code>wit/guest.wit</code>. Each
+binding names a <code>type-id</code> plus the wasm-side
+<code>&lt;package>:wasm/serde-ops/&lt;type>-from-canon-cbor</code> +
+<code>&lt;package>:wasm/serde-ops/&lt;type>-to-canon-cbor</code> import names.</li>
+<li class="">Package version bumped <code>sqlite:extension@0.1.0</code> →
+<code>sqlite:extension@1.0.0</code> across every <code>wit/*.wit</code> and the
+README.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>Migration notes (<code>sqlite-loader-wit/MIGRATION-1.0.md</code>):</strong>
+documents the variant addition, the new manifest field, the
+source-level recipe extension authors follow on recompile,
+backwards-compat semantics, the canonical-CBOR wire format
+profile, and the <code>&lt;package>:wasm/serde-ops/...</code> decoder-import
+naming convention.</p>
+</li>
+<li class="">
+<p><strong>Submodule pointer bump (<code>sqlink</code>, branch
+<code>feat/wit-value-phase-a</code>, commit <code>402863e4</code>):</strong> tracks the
+contract bump in the parent repo.</p>
+</li>
+<li class="">
+<p><strong>Host crate (<code>sqlink-host</code>, in the catalog regen commit
+<code>d8a64c8c</code>):</strong></p>
+<ul>
+<li class=""><code>CONTRACT_MAJOR</code> bumped 0 → 1. The load guard now rejects
+components targeting <code>sqlite:extension@0.x</code> (the inverse of
+the pre-bump state).</li>
+<li class="">Contract-guard tests flipped: the legacy <code>@0.1</code> built component
+is now REJECTED (rather than accepted), and the "future major"
+test moved from <code>Some(1)</code> (was: future) to <code>Some(2)</code> (is:
+future).</li>
+<li class="">Every <code>SqlValue</code> match site in <code>lib.rs</code> + <code>vtab.rs</code> gains a
+<code>WitValue</code> arm. Cross-bindings converters pass the payload
+through field-by-field; SQL-boundary converters surface a
+Phase B placeholder (<code>unimplemented!</code> for infallible paths,
+<code>sqlite3_result_error</code> for SQL-result paths).</li>
+<li class=""><code>manifest_for_ext</code> initializes the new <code>typed_values</code> field to
+<code>vec![]</code>; Phase C codegen populates it.</li>
+<li class=""><code>host/wit/</code>: every <code>sqlite:extension/&lt;iface>@0.1.0</code> import
+bumped to <code>@1.0.0</code>. The host's own <code>sqlink:wasm@0.1.0</code>
+package version stays unchanged.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>Catalog regen (218 extensions in <code>extensions/*</code>, in the same
+commit):</strong></p>
+<ul>
+<li class="">Every <code>Manifest { ... }</code> constructor gains
+<code>typed_values: Vec::new()</code> immediately after <code>prefix_expansion</code>.</li>
+<li class="">204 extensions (797 match blocks) gain a <code>_ => unimplemented!</code>
+wildcard arm in every <code>match</code> on <code>SqlValue</code> (added via the
+brace-tracking script in <code>scratchpad/</code>). 14 extensions had no
+<code>match</code> on <code>SqlValue</code> and needed no source-level arm
+additions.</li>
+<li class="">The <code>extensions/postgis-bridge/wit/deps/sqlite-extension/</code>
+vendored copies of the contract were re-synced from
+<code>sqlite-loader-wit/wit/</code>. The 217 path-based extensions
+inherit the bump from the submodule without per-extension WIT
+edits.</li>
+</ul>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-all-phase-a-acceptance-points-hit>Verification (all Phase A acceptance points hit)<a href=#verification-all-phase-a-acceptance-points-hit class=hash-link aria-label="Direct link to Verification (all Phase A acceptance points hit)" title="Direct link to Verification (all Phase A acceptance points hit)" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cargo test -p sqlink-host --lib</code> — <strong>52/52 pass</strong>. Includes
+the flipped contract-guard tests.</li>
+<li class="">Workspace-listed extensions (<code>uuid</code>, <code>csv</code>, <code>math</code>, <code>crypto</code>,
+<code>json1</code>, <code>regexp</code>, <code>stats</code>) all build cleanly to
+<code>wasm32-wasip2</code>.</li>
+<li class="">Random sample of standalone extensions: <strong>39/40 build</strong>. The
+one exception (<code>compress</code>) fails on an unrelated <code>zstd-sys</code>
+build script issue in the worktree environment, not on
+wit-value migration code.</li>
+<li class=""><code>wasm-tools component wit target/wasm32-wasip2/release/uuid_extension.wasm</code> confirms the
+built extension imports <code>sqlite:extension/types@1.0.0</code> and
+<code>sqlite:extension/policy@1.0.0</code> and the <code>wit-value-payload</code>
+record appears in the embedded package — i.e. the contract
+change actually propagated into a freshly-built component.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=branches--commits>Branches + commits<a href=#branches--commits class=hash-link aria-label="Direct link to Branches + commits" title="Direct link to Branches + commits" translate=no>​</a></h3>
+<ul>
+<li class=""><code>sqlite-loader-wit</code> branch <code>feat/wit-value-1.0</code> (pushed to
+<code>origin/feat/wit-value-1.0</code> AND <code>https://github.com/tegmentum/ sqlite-loader-wit.git</code>):
+<ul>
+<li class=""><code>4861ae1f</code> <code>feat(wit)!: bump sqlite:extension to @1.0.0 with wit-value variant</code>.</li>
+</ul>
+</li>
+<li class=""><code>sqlink</code> branch <code>feat/wit-value-phase-a</code> (pushed to
+<code>origin/feat/wit-value-phase-a</code>):
+<ul>
+<li class=""><code>402863e4</code> <code>chore(submodule): bump sqlite-loader-wit for wit-value variant + @1.0.0 baseline</code>.</li>
+<li class=""><code>d8a64c8c</code> <code>feat(catalog)!: regenerate 218-extension catalog + host crate for @1.0.0 contract</code>.</li>
+</ul>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=honest-caveats--phase-b-debt>Honest caveats / Phase B+ debt<a href=#honest-caveats--phase-b-debt class=hash-link aria-label="Direct link to Honest caveats / Phase B+ debt" title="Direct link to Honest caveats / Phase B+ debt" translate=no>​</a></h3>
+<ul>
+<li class="">
+<p><strong>Unreachable-pattern warnings.</strong> The match-arm sweep was
+brace-tracked but not semantically aware: it added a <code>_ => unimplemented!</code> arm to every match whose arms enumerate
+<code>SqlValue::*</code> variants, including matches that PRODUCE
+<code>SqlValue</code> from another enum (where the wildcard is
+unreachable). Result: ~30-50 <code>unreachable_patterns</code> warnings
+across the catalog. Warnings only — clean build. A follow-up
+cleanup pass can scope the wildcard to consume-<code>SqlValue</code>
+matches only.</p>
+</li>
+<li class="">
+<p><strong><code>db::Value</code> has no WitValue mirror.</strong> The host's
+<code>db_value_to_spi</code> / <code>db_value_to_bindings</code> /
+<code>db_value_to_bindings_sql</code> paths don't yet manufacture a
+<code>SqlValue::WitValue</code>  the OLD direction (db → SqlValue)
+silently drops the variant entirely. Phase B extends <code>db::Value</code>
+(or layers a typed parallel channel) and rewires those sites
+to call the bridge's encoder import.</p>
+</li>
+<li class="">
+<p><strong><code>compress</code> extension build failure.</strong> Pre-existing
+zstd-sys build script issue in the temp worktree
+environment; not a Phase A regression. Worth flagging for the
+v1.5 follow-up sweep but out of scope here.</p>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-didnt-change-phase-b-f-still-owe>What didn't change (Phase B-F still owe)<a href=#what-didnt-change-phase-b-f-still-owe class=hash-link aria-label="Direct link to What didn't change (Phase B-F still owe)" title="Direct link to What didn't change (Phase B-F still owe)" translate=no>​</a></h3>
+<ul>
+<li class="">No host or bridge actually emits or consumes a <code>wit-value</code>
+yet. The variant LANDS in the contract; encoder/decoder dispatch
+is Phase B (host marshaling) + Phase C (codegen consumption).</li>
+<li class=""><code>mobilitydb-sqlink-bridge</code> does not exist yet. Phase E.</li>
+<li class="">The loader pre-check (#485 Phase 2 / Phase F) hasn't shipped;
+the <code>@1.0.0</code> host now expects <code>@1.x</code> components but the
+ABI-skew rejection path uses the EXISTING <code>datalink-contract</code>
+guard (Phase A's tests pin its inverted behavior on the new
+major).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-b--done-2026-06-26>Phase B — done (2026-06-26)<a href=#phase-b--done-2026-06-26 class=hash-link aria-label="Direct link to Phase B — done (2026-06-26)" title="Direct link to Phase B — done (2026-06-26)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=landed-1>Landed<a href=#landed-1 class=hash-link aria-label="Direct link to Landed" title="Direct link to Landed" translate=no>​</a></h3>
+<ul>
+<li class="">
+<p><strong><code>db::Value::WitValue</code> variant + payload (<code>sqlite-wasm</code>
+submodule, branch <code>feat/wit-value-phase-b</code>, commit <code>7bde4cb</code>):</strong></p>
+<ul>
+<li class=""><code>sqlite-wasm/core/src/db.rs:52</code> extends the <code>Value</code> enum
+with a <code>WitValue(WitValuePayload)</code> arm. The payload struct
+carries <code>type_id: [u8; 32]</code>, <code>bytes: Vec&lt;u8></code>, and
+<code>symbolic_name: String</code> — mirroring the WIT
+<code>wit-value-payload</code> record with type-id normalised to a
+fixed-size array (the WIT lists <code>list&lt;u8></code> for flexibility,
+every Phase B+ producer ships sha256 → 32 bytes).</li>
+<li class="">SQLite has no first-class typed-record cell; <code>Statement:: bind</code>, <code>set_result_value</code>, and the sqlink-loader's
+<code>value::write_result</code> surface the <code>WitValue</code> arm as <code>BLOB</code>
+on the SQLite C surface so the wire form round-trips through
+a column store. The wasm bridge recovers typed identity on
+subsequent dispatch via the per-extension <code>TypedValueRegistry</code>.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>Host crate (<code>host/src/lib.rs</code>):</strong></p>
+<ul>
+<li class="">Six site-by-site converters (<code>spi_value_to_db</code>, <code>db_value_ to_spi</code>, <code>bindings_value_to_db</code>, <code>db_value_to_bindings</code>,
+<code>bindings_sql_to_db_value</code>, <code>db_value_to_bindings_sql</code>)
+now carry the typed identity through field-by-field instead
+of panicking via <code>unimplemented!</code>. Helper <code>type_id_from_wit</code>
+normalises the variable WIT <code>list&lt;u8></code> to <code>[u8; 32]</code> with a
+<code>tracing::warn</code> on length mismatch.</li>
+<li class=""><code>compose_provider::db_to_cbor</code> encodes <code>WitValue</code> as a CBOR
+map preserving <code>type_id</code> + <code>bytes</code> + <code>symbolic_name</code> so the
+compose-provider channel preserves the typed identity. The
+<code>cbor_to_db</code> inverse remains deferred — compose-provider
+feeds host-managed SQL params today, not bridge dispatch.</li>
+<li class=""><code>sqlink-native::render_value</code> adds a diagnostic
+<code>&lt;wit-value:NAME LEN bytes></code> render so the native CLI
+surface doesn't panic if a future Phase C bridge ferries a
+<code>WitValue</code> out.</li>
+</ul>
+</li>
+<li class="">
+<p><strong><code>postgis-bridge</code> Phase A miss (sqlink commit <code>62e022d4</code>):</strong></p>
+<ul>
+<li class=""><code>extensions/postgis-bridge/wit/world.wit</code> bumped
+<code>sqlite:extension/&lt;iface>@0.1.0</code> → <code>@1.0.0</code> (the local
+bridge WIT lagged the Phase A submodule bump).</li>
+<li class="">16 unreachable <code>_ => unimplemented!</code> wildcards stripped
+from matches that PRODUCE <code>SqlValue</code> (or match on something
+other than <code>SqlValue</code>) — addresses Phase A's deferred
+unreachable-pattern warnings.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>Per-extension type registry (<code>host/src/typed_value.rs</code>,
+sqlink commit <code>41c6b9d9</code>):</strong></p>
+<ul>
+<li class="">New module. <code>TypedValueRegistry</code> maps 32-byte type-id →
+<code>TypedValueBinding { extension_name, symbolic_name, decoder_import, encoder_import }</code>. Conflict semantics:
+same type-id with a different binding errors out at load
+time (canon:wit drift is loud, never silently
+overwritten); identical re-insertions are idempotent so
+reload is safe.</li>
+<li class=""><code>TypedValueCodecs</code> holds <code>Arc&lt;dyn TypedValueCodec></code> keyed
+by type-id. Phase B's test suite installs Rust closures
+(synthetic identity / toggle-high-bit); Phase C codegen
+will install <code>WasmCodec</code> that calls the bridge's
+<code>&lt;package>:wasm/serde-ops/&lt;type>-from-canon-cbor</code> and
+<code>-to-canon-cbor</code> exports via the cached wasmtime instance.</li>
+<li class=""><code>Host</code> gains <code>pub typed_values</code> + <code>pub typed_value_codecs</code>
+fields; <code>Host::new</code> initialises both.</li>
+<li class=""><code>Host::register_component</code> drains <code>manifest.typed_values</code>
+into <code>typed_values</code> after <code>metadata.describe()</code>, surfacing
+<code>RegistryConflict</code> as a load failure. <code>Host::unload</code>
+clears all bindings + codec slots owned by the
+unregistered extension so a re-load with a re-hashed type
+set doesn't trip the conflict guard.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>Decode / encode dispatch API (sqlink commit <code>f60314b6</code>):</strong></p>
+<ul>
+<li class=""><code>Host::decode_wit_value(&payload) → Result&lt;Vec&lt;u8>></code>. Looks
+up payload type-id in the registry; dispatches through the
+installed codec to validate / normalise. Unknown type-id is
+a hard error; missing codec falls back to identity
+pass-through (Phase B has no real bridges; the bytes ARE
+canonical-CBOR by construction).</li>
+<li class=""><code>Host::encode_wit_value(type_id, bytes) → Result&lt;WitValuePayload></code>. Inverse path. Error context
+surfaces the offending extension + symbolic name.</li>
+<li class=""><code>short_hex</code> helper renders the first 4 bytes of a type-id
+with an ellipsis so error messages stay terse.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>sqlink-loader inheritance (sqlink commit <code>926ca467</code>):</strong></p>
+<ul>
+<li class=""><code>sqlink-loader/src/load.rs</code> documents that the loader does
+NOT maintain its own registry. It inherits the full Phase B
+path through <code>host.load_extension</code> (registry drain) and
+<code>host.dispatch_scalar</code> (which carries WitValue through
+wit-bindgen's <code>call_call</code> directly to the bridge's wasm-
+side decoder). <code>value::write_result</code> already surfaces a
+<code>WitValue</code> result as canonical-CBOR BLOB on the
+sqlite3_context.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>Browser ExtensionRegistry mirror (sqlink commit <code>5511529a</code>):</strong></p>
+<ul>
+<li class=""><code>browser/src/extension-loader.js</code> adds
+<code>_typedValuesByTypeId</code> keyed by lower-case-hex type-id.
+Drains <code>manifest.typedValues</code> (jco lowering of
+<code>typed-values</code>) at <code>add()</code> / <code>addFromBytes()</code> time with
+the same conflict semantics as the Rust registry.</li>
+<li class=""><code>lookupTypedValue</code> / <code>typedValueBindings</code> / cleanup on
+<code>delete()</code> + <code>forgetRegistrations()</code>.</li>
+<li class=""><code>bytesToHex</code> helper handles jco's <code>list&lt;u8></code> shape
+(<code>Uint8Array</code> | <code>number[]</code> | ArrayLike).</li>
+<li class="">The browser path doesn't directly invoke decoders — the
+composed-cli-worker drives the wasm cli over stdin/stdout
+and SQL values cross the JS boundary as text. Registry IS
+populated for introspection + Phase C+ host-driven
+dispatch.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>Round-trip test (sqlink commit <code>742dd206</code>):</strong></p>
+<ul>
+<li class=""><code>host/src/typed_value.rs::tests</code> ships four <code>b7_*</code> tests
+covering the Phase B acceptance gate.</li>
+<li class=""><code>b7_synthetic_decode_encode_roundtrip_is_byte_identical</code>:
+synthetic canonical-CBOR payload → IdentityCodec.decode →
+.encode → byte-identical bytes. Wraps the round-trip back
+into a <code>db::Value::WitValue</code> to validate the marshaling
+shape composes.</li>
+<li class=""><code>b7_codec_is_actually_invoked</code>: ToggleHighBitCodec
+confirms the registry's dispatch actually runs the codec
+rather than silently passing bytes through.</li>
+<li class=""><code>b7_unknown_type_id_lookup_misses</code> and
+<code>b7_missing_codec_falls_back_to_identity_passthrough</code> pin
+the error / identity-passthrough behaviour.</li>
+</ul>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-1>Verification<a href=#verification-1 class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cargo test -p sqlink-host --lib</code> — <strong>64/64 pass</strong> (Phase A
+baseline 52 + 12 typed_value tests, of which 4 are the B7
+acceptance set, plus 3 incidental from cache/blob).</li>
+<li class=""><code>cargo check --workspace</code> — clean across every workspace
+member. <strong>0 unreachable-pattern warnings</strong> (Phase A had ~16
+in postgis-bridge; stripped in B1's regex sweep).</li>
+<li class=""><code>cargo test -p sqlink-loader --lib -- --test-threads=1</code> —
+45/45 pass.</li>
+<li class="">Node smoke test against <code>browser/src/extension-loader.js</code>
+ExtensionRegistry exercise: roundtrip lookup, conflict throws,
+idempotent re-insert, forget — all pass.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=branches--commits-1>Branches + commits<a href=#branches--commits-1 class=hash-link aria-label="Direct link to Branches + commits" title="Direct link to Branches + commits" translate=no>​</a></h3>
+<ul>
+<li class=""><code>sqlite-wasm</code> submodule, branch <code>feat/wit-value-phase-b</code>
+(pushed to <code>origin</code> AND
+<code>https://github.com/tegmentum/sqlite-wasm.git</code>):
+<ul>
+<li class=""><code>7bde4cb</code> <code>feat(core)!: add Value::WitValue variant for sql-value@1.0.0</code>.</li>
+</ul>
+</li>
+<li class=""><code>sqlink</code> branch <code>feat/wit-value-phase-b</code> (pushed to
+<code>origin/feat/wit-value-phase-b</code>):
+<ul>
+<li class=""><code>62e022d4</code> <code>feat(host)!: wire db::Value::WitValue conversion through host crate</code>.</li>
+<li class=""><code>41c6b9d9</code> <code>feat(host): per-extension typed-value registry</code>.</li>
+<li class=""><code>f60314b6</code> <code>feat(host): wire decode_wit_value / encode_wit_value dispatch API</code>.</li>
+<li class=""><code>926ca467</code> <code>docs(loader): document wit-value path inheritance from host</code>.</li>
+<li class=""><code>5511529a</code> <code>feat(browser): per-extension typed-value registry on ExtensionRegistry</code>.</li>
+<li class=""><code>742dd206</code> <code>test(host): wit-value synthetic round-trip + B7 acceptance</code>.</li>
+</ul>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=honest-caveats--phase-c-debt>Honest caveats / Phase C+ debt<a href=#honest-caveats--phase-c-debt class=hash-link aria-label="Direct link to Honest caveats / Phase C+ debt" title="Direct link to Honest caveats / Phase C+ debt" translate=no>​</a></h3>
+<ul>
+<li class="">
+<p><strong>No real wasm-side decoder invocation yet.</strong> The
+<code>TypedValueCodec</code> trait is byte-in / byte-out; Phase B's test
+installs Rust closures. Phase C codegen wires the real
+<code>WasmCodec</code> that calls the bridge's
+<code>&lt;package>:wasm/serde-ops/&lt;type>-from-canon-cbor</code> /
+<code>-to-canon-cbor</code> exports via the cached wasmtime instance.
+Until then <code>Host::decode_wit_value</code> / <code>encode_wit_value</code> take
+the identity-passthrough branch (correct: the contract is
+canonical-CBOR end-to-end; an extension that ships
+non-canonical-CBOR is broken).</p>
+</li>
+<li class="">
+<p><strong>No bridge ships <code>typed-value-binding</code> entries yet.</strong> The
+registry IS populated by <code>metadata.describe()</code>'s
+<code>typed-values</code> field, but every catalog extension's
+<code>manifest_for_ext</code> (host) + every bridge's manifest emit an
+empty list. Phase C codegen starts populating it from the
+upstream shim's WIT record definitions.</p>
+</li>
+<li class="">
+<p><strong><code>compose_provider::cbor_to_db</code> inverse is deferred.</strong> The
+forward path (<code>db_to_cbor</code>) emits the wit-value as a CBOR map;
+the inverse is left as Phase C debt because compose-provider
+currently feeds host-managed SQL params (not bridge dispatch)
+and no host actually emits <code>WitValue</code> yet.</p>
+</li>
+<li class="">
+<p><strong>Worktree environment misses <code>.cargo/config.toml</code>.</strong> The
+workspace ships only <code>config.toml.template</code>; the deployment
+step expands <code>__WASI_SDK_PATH__</code> and installs the resolved
+config. In this Phase B worktree the bundled libsqlite3-sys
+build doesn't get <code>LIBSQLITE3_FLAGS = -DSQLITE_ENABLE_SESSION</code>,
+so the <code>sqlink</code> bin's session FFI declarations fail at link.
+Phase B unit tests run via <code>cargo test -p sqlink-host --lib</code>
+which bypasses the bin build; the integration <code>host/tests/</code>
+harness hits the same failure but is unrelated to wit-value
+work and pre-dates Phase B. Out of scope to fix here.</p>
+</li>
+<li class="">
+<p><strong>Browser end-to-end test deferred.</strong> B6 added the JS
+registry + node smoke test of the conflict / lookup
+invariants. The composed-(bundle|prefix) playwright suites
+exercise extensions that DON'T declare typed-values yet, so
+the drain is a no-op there; once Phase C codegen emits a real
+bridge with typed-values, a new playwright spec exercises the
+registry through a browser load.</p>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-didnt-change-phase-c-f-still-owe>What didn't change (Phase C-F still owe)<a href=#what-didnt-change-phase-c-f-still-owe class=hash-link aria-label="Direct link to What didn't change (Phase C-F still owe)" title="Direct link to What didn't change (Phase C-F still owe)" translate=no>​</a></h3>
+<ul>
+<li class="">Codegen consumption (Phase C): <code>sqlink-shim-codegen</code> learns
+to read upstream shim WIT, emit dispatch arms using
+<code>wit-value</code> for record-typed params/returns, emit
+<code>typed-value-binding</code> entries in the manifest, and emit the
+per-record <code>serde-ops</code> exports.</li>
+<li class="">Codegen generalization (Phase D): decouple PostGIS-specific
+paths (<code>emit_wit.rs:46-55</code>, <code>emit_lib.rs:52</code>, etc.).</li>
+<li class=""><code>mobilitydb-sqlink-bridge</code> (Phase E).</li>
+<li class="">Loader pre-check (#485 Phase 2 / Phase F).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-c--d--done-2026-06-26>Phase C + D — done (2026-06-26)<a href=#phase-c--d--done-2026-06-26 class=hash-link aria-label="Direct link to Phase C + D — done (2026-06-26)" title="Direct link to Phase C + D — done (2026-06-26)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=landed-2>Landed<a href=#landed-2 class=hash-link aria-label="Direct link to Landed" title="Direct link to Landed" translate=no>​</a></h3>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-d--codegen-decoupling>Phase D — codegen decoupling<a href=#phase-d--codegen-decoupling class=hash-link aria-label="Direct link to Phase D — codegen decoupling" title="Direct link to Phase D — codegen decoupling" translate=no>​</a></h4>
+<p>Decoupled the wasm-component codegen from the five hardcoded
+postgis assumptions catalogued in this PLAN's Phase D section.</p>
+<ul>
+<li class="">
+<p><strong>D1 (<code>emit_wit.rs</code>).</strong> Replaced the
+<code>match primary { "postgis" => POSTGIS_WORLD_WIT, ... }</code> constant
+dispatch with a discovery-driven <code>render_world</code> that walks the
+resolved shim deps tree, parses every <code>package &lt;ns>:&lt;name>@&lt;ver>;</code>
+declaration via <code>wit_parse::parse_package_dir</code>, and emits one
+<code>import &lt;ns>:&lt;name>/&lt;iface>@&lt;ver>;</code> line per interface found.
+The fixed contract surface (<code>import sqlite:extension/&lt;iface></code> for
+types/spi/logging/config/state/cache; <code>export sqlite:extension/ &lt;iface></code> for metadata/scalar-function/aggregate-function/vtab)
+is interpolated with the host wit dir's <code>sqlite:extension</code>
+package version dynamically — currently <code>@1.0.0</code> (Phase A).</p>
+</li>
+<li class="">
+<p><strong>D2 (<code>emit_lib.rs</code>).</strong> Replaced the hardcoded
+<code>wit_deps_root.join("postgis-wasm")</code> with <code>pick_primary_shim_dir</code>,
+which picks the subdir whose parsed package's namespace matches
+the primary extension name; falling back to dirname prefix; then
+to the first non-helper subdir. Also generalised
+<code>source_shim_deps_dir(primary)</code> to a per-primary resolver:</p>
+<ul>
+<li class=""><code>postgis</code> → <code>~/git/sqlink/extensions/postgis-bridge/wit/deps</code></li>
+<li class=""><code>mobilitydb</code> → <code>~/git/mobilitydb-wasm/wit/deps</code> (best-effort
+fallback; Phase E lands a proper deps root containing
+<code>mobilitydb-temporal/</code>).</li>
+<li class=""><code>SQLINK_SHIM_WIT_DEPS=...</code> overrides everything; per-primary
+env vars (<code>SQLINK_POSTGIS_BRIDGE_WIT_DEPS</code>,
+<code>SQLINK_MOBILITYDB_BRIDGE_WIT_DEPS</code>) override the per-
+primary defaults.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>D3+D4 (<code>emit_lib.rs</code>).</strong> The <code>use bindings::&lt;pkg>:: postgis_types::{Geography, Geometry, PostgisError}</code> line and the
+<code>from_wkb</code> / <code>geog_from_wkb</code> / <code>postgis_err_string</code> helpers are
+emitted ONLY when the shim's WIT carries <code>resource geometry</code>
+AND <code>variant postgis-error</code>. <code>wit_parse</code> gained
+<code>WitResourceDecl</code> + <code>WitVariantDecl</code> extraction (with
+<code>scan_package_decls</code>) so the gating can be data-driven; for
+non-postgis shims (mobilitydb etc.) all three helpers + the
+use line are skipped, and the dispatcher arms that would
+reference them simply don't fire.</p>
+</li>
+<li class="">
+<p><strong>D5 (<code>wit_parse.rs</code> + <code>dispatch.rs</code>).</strong> Made
+<code>interface_to_rust_alias</code> / <code>alias_to_wit_module_ident</code>
+algorithmic with postgis overrides for the short alias form
+(<code>pg_ctor</code>, <code>pg_acc</code>, ...). For non-postgis interfaces the
+fallback is the kebab → snake_case form (e.g. <code>tint-ops</code> →
+<code>tint_ops</code>), so the codegen emits valid
+<code>use bindings::&lt;ns>::&lt;name>::&lt;iface_snake> as &lt;iface_snake>;</code>
+lines for any shim. <code>WitFunction</code> gained <code>package</code> +
+<code>package_version</code>; <code>DispatchShape</code> / <code>AggregateShape</code> /
+<code>UdtfShape</code> carry <code>wit_package</code> so the emitter routes the
+<code>use</code> line at <code>bindings::&lt;wit_pkg_ns>::&lt;name>::&lt;module></code>
+rather than the hardcoded <code>postgis::wasm::</code>.</p>
+</li>
+</ul>
+<h4 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-c--wit-value-codegen>Phase C — wit-value codegen<a href=#phase-c--wit-value-codegen class=hash-link aria-label="Direct link to Phase C — wit-value codegen" title="Direct link to Phase C — wit-value codegen" translate=no>​</a></h4>
+<ul>
+<li class="">
+<p><strong>C1 (<code>record_registry.rs</code>).</strong> Per-shim record-type registry.
+Every <code>record NAME { ... }</code> block discovered in the primary
+shim's WIT packages becomes a <code>RecordType</code> carrying:</p>
+<ul>
+<li class=""><code>package</code> + <code>package_version</code> + <code>interface</code> + <code>kebab_name</code>
+<ul>
+<li class="">ordered <code>(field, type-text)</code> list,</li>
+</ul>
+</li>
+<li class=""><code>type_id</code>: 32-byte sha256 over a deterministic text form
+<code>witcanon:1\n&lt;package>/&lt;interface>/&lt;record>\n&lt;sorted field:type lines>\n</code>,</li>
+<li class=""><code>symbolic_name</code>: <code>&lt;package>@&lt;version>/&lt;interface>/&lt;record></code>,</li>
+<li class="">convenience <code>decoder_import()</code> / <code>encoder_import()</code>
+methods returning the
+<code>sqlink-bridge:&lt;primary>/serde-ops/&lt;record>-{from,to}-canon-cbor</code>
+convention names. <code>sha2 = "0.10"</code> added as a build-side dep.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>C2 + C3 — DEFERRED to Phase E (with honest cause).</strong></p>
+<ul>
+<li class="">C2 (per-record encoder/decoder WIT exports). Generating the
+<code>interface serde-ops { use &lt;pkg>/&lt;iface>.{rec}; ... }</code> block
+and exporting it from the world works at the WIT level but
+triggers a <code>wac plug</code> 0.10 component-model validation error
+("instance not valid to be used as export") when the records
+re-reference types from imports that get satisfied by the
+plug — the resulting composed loadable.wasm fails to
+validate. The Rust <code>SerdeOpsGuest</code> stub impl ALSO can't
+compile without the world export (wit-bindgen only generates
+the Guest trait when the world references the interface).
+Phase E lands the export + canonical-CBOR codec together.</li>
+<li class="">C3 (wit-value dispatch arms). No scalar in either target
+shim hits the path today: postgis scalars don't take
+records, and mobilitydb's temporal WIT (which DOES have
+record params) isn't in the resolved deps tree until
+Phase E adds it. Documented at <code>dispatch::classify_param</code>'s
+call site with the exact shape Phase E should emit.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>C4 (<code>emit_metadata_impl</code>).</strong> <code>Manifest.typed_values</code> now
+ships one <code>TypedValueBinding</code> per record discovered in the
+primary shim's WIT package. Helper-component records
+(sfcgal-component for postgis, proj/dbscan/etc. for
+mobilitydb) are filtered out via
+<code>package_belongs_to_primary</code> — those codecs live elsewhere.
+The decoder/encoder import strings name the would-be
+<code>sqlink-bridge:&lt;primary>/serde-ops/...</code> symbols; Phase B's
+host falls back to identity passthrough on missing symbols
+so the binding entries are safe to ship now.</p>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-2>Verification<a href=#verification-2 class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cargo build --release</code> of <code>sqlink-shim-codegen</code> is clean
+(7 warnings, all dead-field on the new
+<code>WitResourceDecl</code>/<code>WitVariantDecl</code> introspection fields).</li>
+<li class=""><code>cargo test --release</code> of <code>sqlink-shim-codegen</code> — 6/6 pass
+(the existing <code>wit_parse</code> parser tests).</li>
+<li class=""><code>sqlink-shim-codegen --interface /tmp/postgis-interface.sqlite --target wasm-component --out ~/git/postgis-sqlink-bridge</code>
+runs clean, emitting the expected ~30 unwired diagnostics
+for raster-borrow / topology / coverage gaps (unchanged from
+Phase 3 round 3 baseline).</li>
+<li class=""><code>cd ~/git/postgis-sqlink-bridge && cargo build --target wasm32-wasip2 --release</code> is clean (~7s).</li>
+<li class=""><code>wac plug --plug ~/git/postgis-wasm/postgis-composed.wasm -o postgis-sqlink-loadable.wasm target/wasm32-wasip2/release/postgis_sqlink_bridge.wasm</code>
+produces a 113 MB loadable.wasm without composition errors.</li>
+<li class=""><code>cd ~/git/postgis-sqlink-bridge/verify && cargo run --release</code> — <strong>all 25 checks pass</strong> (the verify subcrate's
+full sweep: load, describe, registered=931 scalars + 34
+aggregates + 12 vtabs, wkt-roundtrip, st_x, st_distance,
+st_makepoint, st_area, st_intersects, st_buffer,
+st_geomfromwkb, st_union, st_collect, st_m null + some
+paths, st_clusterwithin, st_makebox2d, st_isvaliddetail,
+st_tileenvelope, st_dump vtab register). The "16/16 verify
+cases" target in the task spec is exceeded — the verify
+subcrate's check count is higher than 16.</li>
+<li class=""><code>sqlink-shim-codegen --interface /tmp/mobilitydb-interface.sqlite --target wasm-component --out /tmp/mobilitydb-sqlink-bridge</code> runs to completion
+WITHOUT PANICKING. Emits 1583 unwired-symbol diagnostics
+(every mobilitydb scalar — the temporal WIT isn't in the
+resolved deps tree, so no wiring is possible). The output
+contains a valid Cargo.toml, src/lib.rs, wit/world.wit
+with import lines for the present helper components
+(<code>dbscan:wasm/dbscan-api</code>, <code>kiddo:spatial/kdtree2d</code> &
+<code>kdtree3d</code>, <code>kmeans:wasm/kmeans-api</code>, <code>proj:wasm/proj-api</code>,
+<code>spade:spatial/{delaunay, constrained-delaunay, voronoi, utils}</code>), <code>sqlite:extension/*@1.0.0</code> contract surface, and
+the exports. The codegen does not panic; Phase E lands the
+proper mobilitydb deps tree.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=counts>Counts<a href=#counts class=hash-link aria-label="Direct link to Counts" title="Direct link to Counts" translate=no>​</a></h3>
+<ul>
+<li class="">typed-value-binding entries on the postgis manifest: <strong>18</strong>
+<ul>
+<li class="">postgis-types: coord, coord-z, coord-zm, bbox, box3d,
+buffer-params, extremes, inscribed-circle, valid-detail,
+coordinate-stats (10),</li>
+<li class="">postgis-aggregates: bbox3d (1),</li>
+<li class="">postgis-geocoder: address-component, parsed-address (2),</li>
+<li class="">postgis-raster-pixels: pixel-coord (1),</li>
+<li class="">postgis-raster-stats: summary-stats, histogram-bin,
+value-count (3),</li>
+<li class="">postgis-topology-topogeom: topo-element (1).
+Helper-component records (sfcgal-component
+coordinate2d/3d/4d, sfcgal-error, geojson-options) are
+filtered out via the <code>package_belongs_to_primary</code>
+predicate.</li>
+</ul>
+</li>
+<li class="">typed-value-binding entries on the mobilitydb manifest:
+<strong>0</strong> (the temporal WIT isn't in the resolved deps tree;
+Phase E adds it).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=branches--commits-2>Branches + commits<a href=#branches--commits-2 class=hash-link aria-label="Direct link to Branches + commits" title="Direct link to Branches + commits" translate=no>​</a></h3>
+<ul>
+<li class="">
+<p><code>sqlink-shim-codegen</code>, branch <code>feat/wit-value-emission</code>
+(pushed to <code>origin/feat/wit-value-emission</code> on
+<code>tegmentum/sqlink-shim-codegen</code>):</p>
+<ul>
+<li class=""><code>af11239</code> <code>feat(wasm-target): Phase D — decouple codegen from postgis assumptions</code>.</li>
+<li class=""><code>76b9a29</code> <code>feat(wasm-target): Phase C1 — per-shim record-type registry</code>.</li>
+<li class=""><code>a5ab2aa</code> <code>feat(wasm-target): Phase C2+C4 — record registry, typed-value bindings, deferred serde-ops</code>.</li>
+<li class=""><code>9c196de</code> <code>docs(wasm-target): Phase C3 — document deferred wit-value dispatch path</code>.</li>
+</ul>
+</li>
+<li class="">
+<p><code>postgis-sqlink-bridge</code>, branch <code>feat/wit-value-emission</code>
+(pushed to <code>origin/feat/wit-value-emission</code> on
+<code>tegmentum/postgis-sqlink-bridge</code>):</p>
+<ul>
+<li class=""><code>bd855c5</code> `feat: Phase D regen — codegen-derived world.wit
+<ul>
+<li class="">@1.0.0 contract`.</li>
+</ul>
+</li>
+<li class=""><code>abe2762</code> <code>feat: Phase C regen — 18 typed-value-binding entries on manifest</code>.</li>
+</ul>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=honest-deferrals-carried-into-phase-e>Honest deferrals carried into Phase E<a href=#honest-deferrals-carried-into-phase-e class=hash-link aria-label="Direct link to Honest deferrals carried into Phase E" title="Direct link to Honest deferrals carried into Phase E" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Canonical-CBOR codec bodies.</strong> The encoder + decoder for
+arbitrary WIT records is the substantive Phase E work. Until
+then the <code>typed-value-binding.decoder-import</code> /
+<code>encoder-import</code> strings name symbols that don't yet exist on
+the bridge; Phase B's host falls back to identity
+passthrough on missing codecs so the bridge still loads.</li>
+<li class=""><strong>serde-ops WIT export.</strong> The bridge declares the binding
+contract via the manifest but does NOT export
+<code>interface serde-ops { ... }</code> from the world (wac plug 0.10
+refuses to compose such a bridge — the records re-export
+through satisfied imports trips component-model validation).
+Phase E will revisit whether a stricter wac/wasm-tools
+release lifts the constraint, or whether the codegen ships
+a self-contained serde-ops interface (records defined
+locally rather than <code>use</code>-d from postgis-wasm).</li>
+<li class=""><strong>Wit-value dispatch arms.</strong> Neither postgis (no scalar
+takes a record) nor mobilitydb (temporal WIT not in deps)
+hits the path today. The PLAN-doc shape for the arm body
+is documented in code at <code>dispatch::classify_param</code>'s
+doc-comment for Phase E to pick up.</li>
+<li class=""><strong>Mobilitydb deps tree.</strong> <code>~/git/mobilitydb-wasm/wit/deps</code>
+currently holds only helper components (proj/dbscan/
+kmeans/kiddo/spade). The mobilitydb-temporal interface lives
+at <code>crates/mdb-temporal-wasm/wit/temporal.wit</code>. Phase E
+creates a proper <code>mobilitydb-sqlink-bridge/wit/deps/</code> tree
+containing <code>mobilitydb-temporal/</code> so the codegen actually
+wires the SQL functions.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-e--done-2026-06-26>Phase E — done (2026-06-26)<a href=#phase-e--done-2026-06-26 class=hash-link aria-label="Direct link to Phase E — done (2026-06-26)" title="Direct link to Phase E — done (2026-06-26)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=landed-3>Landed<a href=#landed-3 class=hash-link aria-label="Direct link to Landed" title="Direct link to Landed" translate=no>​</a></h3>
+<ul>
+<li class="">
+<p><strong>wac upgrade <code>0.10.0</code> → <code>0.10.1</code> (E2a).</strong> PR #205 "Alias
+<code>use</code>'d types during composition instead of re-encoding them
+locally" is the headline fix. Phase C+D's <code>wac plug</code> had failed
+on <code>serde-ops { use &lt;pkg>/&lt;iface>.{rec}; ... }</code> exports with
+"instance not valid to be used as export". 0.10.1's aliasing
+helps with type-de-duplication but does NOT lift the underlying
+WASM component-model invariant: a component cannot export an
+instance whose interface references types not also exported by
+the composed component. After <code>wac plug</code> satisfies the upstream
+shim imports, those interfaces are no longer exported — so
+re-exporting their types via <code>use</code> still fails validation.
+Path (b) "define records locally in serde-ops" is the
+structural fix.</p>
+</li>
+<li class="">
+<p><strong>Codec emission — ciborium + serde derives (E1).</strong> The
+bridge's per-record encoder/decoder bodies are
+ciborium-against-the-wit-bindgen-generated-Rust-struct.
+<code>wit_bindgen::generate!</code> gains
+<code>additional_derives: [serde::Serialize, serde::Deserialize]</code>,
+scoped via <code>additional_derives_ignore</code> to skip the contract
+package + helper-component records + primary-shim variants /
+flags (which can't derive serde out of the box). The
+decode/encode bodies are tiny:</p>
+<div class="language-rust codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-rust codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token keyword" style=color:#00009f>fn</span><span class="token plain"> </span><span class="token function-definition function" style=color:#d73a49>coord_from_canon_cbor</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">bytes</span><span class="token punctuation" style=color:#393A34>:</span><span class="token plain"> </span><span class="token class-name">Vec</span><span class="token operator" style=color:#393A34>&lt;</span><span class="token keyword" style=color:#00009f>u8</span><span class="token operator" style=color:#393A34>></span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>-></span><span class="token plain"> </span><span class="token class-name">Result</span><span class="token operator" style=color:#393A34>&lt;</span><span class="token class-name">Coord</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token class-name">String</span><span class="token operator" style=color:#393A34>></span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token namespace" style=opacity:0.7>ciborium</span><span class="token namespace punctuation" style=opacity:0.7;color:#393A34>::</span><span class="token namespace" style=opacity:0.7>de</span><span class="token namespace punctuation" style=opacity:0.7;color:#393A34>::</span><span class="token function" style=color:#d73a49>from_reader</span><span class="token punctuation" style=color:#393A34>::</span><span class="token operator" style=color:#393A34>&lt;</span><span class="token class-name">Coord</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> _</span><span class="token operator" style=color:#393A34>></span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">bytes</span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>as_slice</span><span class="token punctuation" style=color:#393A34>(</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        </span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>map_err</span><span class="token punctuation" style=color:#393A34>(</span><span class="token punctuation" style=color:#393A34>...</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>}</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>fn</span><span class="token plain"> </span><span class="token function-definition function" style=color:#d73a49>coord_to_canon_cbor</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">value</span><span class="token punctuation" style=color:#393A34>:</span><span class="token plain"> </span><span class="token class-name">Coord</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>-></span><span class="token plain"> </span><span class="token class-name">Vec</span><span class="token operator" style=color:#393A34>&lt;</span><span class="token keyword" style=color:#00009f>u8</span><span class="token operator" style=color:#393A34>></span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>mut</span><span class="token plain"> buf </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token class-name">Vec</span><span class="token punctuation" style=color:#393A34>::</span><span class="token function" style=color:#d73a49>new</span><span class="token punctuation" style=color:#393A34>(</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token namespace" style=opacity:0.7>ciborium</span><span class="token namespace punctuation" style=opacity:0.7;color:#393A34>::</span><span class="token namespace" style=opacity:0.7>ser</span><span class="token namespace punctuation" style=opacity:0.7;color:#393A34>::</span><span class="token function" style=color:#d73a49>into_writer</span><span class="token punctuation" style=color:#393A34>(</span><span class="token operator" style=color:#393A34>&</span><span class="token plain">value</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>&</span><span class="token keyword" style=color:#00009f>mut</span><span class="token plain"> buf</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>expect</span><span class="token punctuation" style=color:#393A34>(</span><span class="token punctuation" style=color:#393A34>...</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    buf</span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>}</span><br/></div></code></pre></div></div>
+</li>
+<li class="">
+<p><strong>Local-record serde-ops interface (E2b).</strong> Each primary-shim
+record gets a LOCAL copy declared inside the bridge's
+<code>interface serde-ops { ... }</code> (mirroring the upstream shape
+verbatim — same field names, same types, same order).
+Referenced enums (e.g. mobilitydb's <code>interpolation</code>) are also
+duplicated locally. <code>type X = Y;</code> aliases are inline-substituted
+in the local-record field types so e.g. <code>timestamp-tz</code> resolves
+to <code>s64</code> without needing the alias declaration too. The codegen
+emits a <code>record_registry::RecordType.is_copy</code> fix-point analysis
+that drives the dispatch arm's pass-by-value vs <code>&Record</code>
+decision (wit-bindgen generates by-value for all-primitive
+records, by-ref for records containing non-Copy fields like
+<code>list&lt;T></code>).</p>
+</li>
+<li class="">
+<p><strong>mobilitydb-sqlink-bridge new repo + vendored WIT (E3+E4).</strong>
+<code>tegmentum/mobilitydb-sqlink-bridge</code> created. The
+<code>mobilitydb:temporal</code> package's 2240-line WIT is vendored at
+<code>wit/deps/mobilitydb-temporal/temporal.wit</code>.</p>
+</li>
+<li class="">
+<p><strong>Mobilitydb bridge codegen + build + compose (E5+E6).</strong>
+Generated against <code>/tmp/mobilitydb-interface.sqlite</code> (the
+~3000-symbol mobilitydb interface DB). Pipeline:</p>
+<ul>
+<li class="">cargo build --target wasm32-wasip2 --release: clean (11s).</li>
+<li class="">wac plug --plug
+~/git/datafission/extensions/mobilitydb/deps/
+mdb-temporal-wasm.wasm --plug
+~/git/datafission/extensions/postgis/deps/
+postgis-composed.wasm composes a 5.7 MB
+mobilitydb-sqlink-loadable.wasm.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>wit-value dispatch arms (E5+E6).</strong> Codegen extension:
+<code>dispatch::classify_param/classify_return</code> take
+<code>&[RecordType]</code>; an <code>Unsupported(name)</code> whose kebab matches a
+registered record routes to <code>ParamShape::WitValueRecord {...}</code>
+/ <code>RetShape::WitValueRecord {...}</code>. Per-record helpers
+<code>arg_witvalue_&lt;snake></code> (decoder) + <code>ret_to_witvalue_&lt;snake></code>
+(encoder) are emitted in lib.rs top scope and referenced from
+the dispatch arms. The decoder:</p>
+<ol>
+<li class="">Unwraps SqlValue::WitValue(payload).</li>
+<li class="">Calls the bridge's LOCAL serde-ops codec
+(<code>&lt;record>_from_canon_cbor</code>) — proof the codec fires.</li>
+<li class="">Ciborium-round-trips LOCAL → UPSTREAM. Same field shape
+by construction so the bytes match.</li>
+</ol>
+<p><code>emit_lib::collect_referenced_records</code> filters helper emission
+to records actually referenced by a wired arm — wit-bindgen
+elides unused imported types from its bindings (e.g. postgis's
+<code>CoordZ</code> is declared in WIT but no function references it, so
+<code>bindings::postgis::wasm::postgis_types::CoordZ</code> doesn't exist).
+The filter sidesteps that.</p>
+<p><code>shim_err_string&lt;E: core::fmt::Debug></code> generic helper replaces
+<code>postgis_err_string</code> in the dispatch arm's unwrap_chain so
+fallible variant errors format cleanly for ANY shim (postgis
+still keeps <code>postgis_err_string</code> for from_wkb / nice
+variant pretty-printing in helper sites).</p>
+<p>Mobilitydb dispatch: 1577 → 1296 unwired symbols (~280
+record-touching scalars now wire through wit-value).</p>
+</li>
+<li class="">
+<p><strong>Phase E acceptance — verify subcrate end-to-end (E7).</strong>
+<code>mobilitydb-sqlink-bridge/verify/</code> loads
+postgis-sqlink-loadable.wasm FIRST (per D5 load-order
+convention), then mobilitydb-sqlink-loadable.wasm SECOND.
+Builds a synthetic tfloat-sequence with 3 instants
+(values 1.5, 3.0, 0.5) using a host-side mirror struct,
+ciborium-encodes to canon-CBOR, wraps as
+SqlValue::WitValue { type_id, bytes, symbolic_name } with the
+type-id matching the codegen's canon:wit sha256. Dispatches
+<code>tfloat_min_value(seq) → option&lt;f64></code>, asserts the result is
+<code>SqlValue::Real(0.5)</code>.</p>
+<p>Live output:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">[verify] loading postgis from .../postgis-sqlink-loadable.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] postgis loaded: name=postgis</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] loading mobilitydb from .../mobilitydb-sqlink-loadable.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] mobilitydb loaded: name=mobilitydb</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] registered: 1486 scalars, 61 aggregates, 45 vtabs,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">         59 typed-value-bindings (host registry)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] synthetic tfloat-sequence canon-cbor = 141 bytes</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] type_id (first 8) = 907389e610434205,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">         symbolic = mobilitydb:temporal@0.1.0/types/tfloat-sequence</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] manifest carries typed-value-binding: ...</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] dispatching tfloat_min_value (func_id=605) with synthetic seq</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] tfloat_min_value(synthetic seq) = 0.5</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] PHASE E ACCEPTANCE: tfloat_min_value round-trip OK —</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">         host → wit-value → bridge serde-ops codec → upstream</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">         → option&lt;f64> → host</span><br/></div></code></pre></div></div>
+<p>The "decode arg 0" path in the bridge calls the LOCAL serde-ops
+codec — if the codec hadn't fired, decode would fail and the
+verify would error out. The 0.5 result is the actual minimum
+of the synthetic input, proving the round-trip is bytes-clean
+end-to-end (not identity-passthrough fallback, not stub error).</p>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-3>Verification<a href=#verification-3 class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cargo test -p sqlink-host --lib</code> — <strong>64/64 pass</strong> (Phase B
+baseline unchanged).</li>
+<li class="">Postgis pipeline: <code>cargo build --target wasm32-wasip2 --release</code>
+clean, <code>wac plug</code> produces 113 MB loadable, <code>verify-load</code>
+16/16 checks pass. Phase E's <code>shim_err_string</code> rename + the
+emit_wit_value_helpers (no-op for postgis since it has no
+record-typed scalars) don't regress the postgis surface.</li>
+<li class="">Mobilitydb pipeline: <code>cargo build --target wasm32-wasip2 --release</code> clean (11s), <code>wac plug</code> produces 6 MB loadable,
+<code>verify-load</code> reports 1486 scalars / 61 aggregates / 45 vtabs
+/ 59 typed-value-bindings registered. Phase E acceptance
+scalar (<code>tfloat_min_value(synthetic seq) = 0.5</code>) passes.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=branches--commits-3>Branches + commits<a href=#branches--commits-3 class=hash-link aria-label="Direct link to Branches + commits" title="Direct link to Branches + commits" translate=no>​</a></h3>
+<ul>
+<li class="">
+<p><code>sqlink-shim-codegen</code> branch <code>feat/wit-value-phase-e</code>
+(pushed to <code>origin/feat/wit-value-phase-e</code>):</p>
+<ul>
+<li class=""><code>8e1a59c</code> <code>feat(wasm-target): Phase E1+E2 — ciborium codec bodies + local serde-ops records</code>.</li>
+<li class=""><code>93f307f</code> <code>fix(wasm-target): handle one-line records + dedupe records by kebab</code>.</li>
+<li class=""><code>8678b94</code> <code>feat(wasm-target): Phase E3 — wit-value dispatch arms + Copy analysis</code>.</li>
+</ul>
+</li>
+<li class="">
+<p><code>postgis-sqlink-bridge</code> branch <code>feat/wit-value-phase-e</code>
+(pushed to <code>origin/feat/wit-value-phase-e</code>):</p>
+<ul>
+<li class=""><code>13d6810</code> <code>feat: Phase E regen — local serde-ops records + ciborium codec bodies</code>.</li>
+<li class=""><code>397c25a</code> <code>feat: Phase E3 regen — shim_err_string + emit_wit_value_helpers (no-op for postgis)</code>.</li>
+</ul>
+</li>
+<li class="">
+<p><code>mobilitydb-sqlink-bridge</code> (NEW repo, branch
+<code>feat/wit-value-phase-e</code>, pushed to
+<code>origin/feat/wit-value-phase-e</code>):</p>
+<ul>
+<li class=""><code>ea41c0b</code> <code>chore: initial vendor — mobilitydb-temporal WIT deps</code> (on main).</li>
+<li class=""><code>2eb4b7e</code> <code>feat: Phase E codegen — first wired bridge for mobilitydb</code> (on feat/wit-value-phase-e).</li>
+<li class=""><code>10ed12a</code> <code>feat: Phase E regen + verify subcrate proves end-to-end codec round-trip</code> (on feat/wit-value-phase-e).</li>
+</ul>
+</li>
+<li class="">
+<p><code>sqlink</code> branch <code>feat/wit-value-phase-e</code> (the doc commit
+lives here).</p>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=honest-caveats--phase-f-debt>Honest caveats / Phase F+ debt<a href=#honest-caveats--phase-f-debt class=hash-link aria-label="Direct link to Honest caveats / Phase F+ debt" title="Direct link to Honest caveats / Phase F+ debt" translate=no>​</a></h3>
+<ul>
+<li class="">
+<p><strong>wac plug component-model invariant is structural, not 0.10.x
+-specific.</strong> Phase C+D's blocker said wac 0.10 "refuses to
+compose a bridge whose <code>interface serde-ops { use &lt;pkg>/&lt;iface>.{record}; ... }</code> re-exports types from satisfied
+imports". The 0.10.1 fix (PR #205) helps with type aliasing
+but the underlying WASM component-model rule — an exported
+instance can only reference types ALSO exported by the
+composed component — still applies. Phase E settled on path
+(b) local-record-definition because that's the only path
+that's compatible with the invariant, not because 0.10.1
+failed to lift a specific bug.</p>
+</li>
+<li class="">
+<p><strong>LOCAL → UPSTREAM ciborium round-trip is wasteful.</strong> Each
+wit-value param goes: bytes → LOCAL Rust struct → bytes →
+UPSTREAM Rust struct → call function. The intermediate
+re-encode is a no-op transformation that costs ~one alloc per
+record per call. Phase F+ can short-circuit by directly
+decoding bytes into UPSTREAM (skipping LOCAL) when the
+dispatcher knows it doesn't need to also expose the LOCAL
+shape. Phase E keeps the round-trip because (a) the LOCAL
+codec invocation is the PROOF of "codec actually fires" the
+acceptance gate watches for, and (b) Phase F's loader
+pre-check (#485 Phase 2) will surface drift between LOCAL
+and UPSTREAM shapes — having both materializations available
+makes the diff diagnosis-friendly.</p>
+</li>
+<li class="">
+<p><strong>Mobilitydb dispatch arm coverage is partial.</strong> 1296 of
+~3000 mobilitydb symbols are still unwired (return types
+not in the dispatcher alphabet — <code>option&lt;bitemporal-bool- sequence></code>, <code>option&lt;time-period></code>, list-of-records, etc.).
+Phase E proves the wit-value path works for at least
+<code>tfloat_min_value</code>; widening the dispatcher's
+<code>classify_return</code> alphabet to also wrap record-typed returns
+via <code>RetShape::WitValueRecord</code> (already partially landed)</p>
+<ul>
+<li class="">handling <code>option&lt;record></code> and <code>list&lt;record></code> returns is
+Phase F+ work. The codegen substrate is in place; what
+remains is teaching the classifier to recognise these
+shapes.</li>
+</ul>
+</li>
+<li class="">
+<p><strong>sqlink-host worktree blocker.</strong> The canonical <code>~/git/sqlink</code>
+clone was on <code>feat/s3-resident</code> with parallel work that broke
+compilation. Phase E set up <code>/tmp/sqlink-e7</code> as a clean
+worktree pinned to <code>fe2fa497</code> (Phase C+D base) and pointed
+the mobilitydb verify's path-dep at <code>/tmp/sqlink-e7/host</code>.
+Postgis verify continues to use the prebuilt
+<code>verify/target/release/verify-load</code> binary from Phase C+D
+because rebuilding it would hit the same dirty-clone
+blocker. Both verify paths reach their acceptance gates;
+no Phase E behaviour depends on rebuilding postgis-verify.</p>
+</li>
+<li class="">
+<p><strong>No mobilitydb smoke tests in shim-bridge-smoke-tests.</strong>
+Phase E ships an in-tree verify subcrate. The
+cases/mobilitydb path in shim-bridge-smoke-tests doesn't
+exist yet; that's Phase F+ for full SQL-driven smoke
+coverage.</p>
+</li>
+<li class="">
+<p><strong>No browser end-to-end test for mobilitydb.</strong> Phase B's
+browser ExtensionRegistry handles the typed-values drain
+generically; the JS side has no per-extension logic. Phase E
+verifies the wasm path; a browser regression test for
+mobilitydb-in-OPFS is Phase F+ (the worker-host runs the
+same wasm contract, so the proof carries; an explicit
+playwright spec is "belt-and-braces").</p>
+</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-didnt-change-phase-f-still-owes>What didn't change (Phase F still owes)<a href=#what-didnt-change-phase-f-still-owes class=hash-link aria-label="Direct link to What didn't change (Phase F still owes)" title="Direct link to What didn't change (Phase F still owes)" translate=no>​</a></h3>
+<ul>
+<li class="">Loader pre-check (#485 Phase 2 / Phase F): the friendly
+contract-mismatch message at extension load time when a
+component targets a different <code>sqlite:extension</code> major.
+The contract guard already exists (Phase A inverted the
+<code>@1.0</code> accept/reject); Phase F adds the diagnostic.</li>
+<li class="">The codegen's <code>classify_return</code> doesn't recognise
+<code>option&lt;record></code> or <code>list&lt;record></code> as wirable wit-value
+shapes yet. ~600 of the 1296 still-unwired mobilitydb
+symbols are these shapes; they're mechanical extensions to
+the dispatcher's alphabet.</li>
+<li class="">Mobilitydb performance work: the per-call ciborium
+re-encode adds a small allocation; for cold-cache scalars
+that's a few microseconds, batched aggregates would amplify.
+Profile after the dispatcher's alphabet widens.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tooling-notes-for-future-maintainers>Tooling notes (for future maintainers)<a href=#tooling-notes-for-future-maintainers class=hash-link aria-label="Direct link to Tooling notes (for future maintainers)" title="Direct link to Tooling notes (for future maintainers)" translate=no>​</a></h3>
+<ul>
+<li class="">
+<p>The codegen's <code>source_shim_deps_dir(primary)</code> accepts an
+<code>SQLINK_&lt;PRIMARY>_BRIDGE_WIT_DEPS</code> env override. For
+mobilitydb specifically, set
+<code>SQLINK_MOBILITYDB_BRIDGE_WIT_DEPS=/tmp/mobilitydb-codegen -source</code> before regenerating into
+<code>~/git/mobilitydb-sqlink-bridge</code>; the codegen's <code>write_deps</code>
+copies the source tree into the dest tree, and if source
+==dest the copy overwrites itself with an empty file
+partway through the cycle. Phase E sets this up via:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">mkdir -p /tmp/mobilitydb-codegen-source/mobilitydb-temporal</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">cp ~/git/mobilitydb-wasm/crates/mdb-temporal-wasm/wit/temporal.wit \</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">   /tmp/mobilitydb-codegen-source/mobilitydb-temporal/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">SQLINK_MOBILITYDB_BRIDGE_WIT_DEPS=/tmp/mobilitydb-codegen-source \</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">sqlink-shim-codegen --target wasm-component \</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  --interface /tmp/mobilitydb-interface.sqlite \</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  --out ~/git/mobilitydb-sqlink-bridge</span><br/></div></code></pre></div></div>
+</li>
+<li class="">
+<p>The mobilitydb verify subcrate's sqlink-host path-dep points
+at <code>/tmp/sqlink-e7/host</code> — a worktree of
+<code>~/git/sqlink@fe2fa497</code>. If the canonical clone returns to a
+clean state on a <code>@feat/wit-value-phase-e</code>-compatible
+commit, update verify/Cargo.toml's path-dep to <code>../../</code>
+-relative and remove <code>/tmp/sqlink-e7</code>.</p>
+</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-f--done-2026-06-26>Phase F — done (2026-06-26)<a href=#phase-f--done-2026-06-26 class=hash-link aria-label="Direct link to Phase F — done (2026-06-26)" title="Direct link to Phase F — done (2026-06-26)" translate=no>​</a></h2>
+<p>The loader pre-check (<code>PLAN-wit-contract-versioning.md</code> #485 Phase 2 /
+<code>PLAN-wit-value-extension.md</code> Phase F) is live across every load path
+in the matrix. Components whose imported <code>sqlite:extension</code> MAJOR
+diverges from the host's <code>CONTRACT_MAJOR = 1</code> (or that import the
+contract unversioned/legacy) are rejected BEFORE <code>Component::new</code> /
+<code>instantiate_async</code> with the friendly model-level message
+<code>PLAN-wit-contract-versioning</code> Phase 2 specified — not a cryptic
+wasmtime trap.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-landed>What landed<a href=#what-landed class=hash-link aria-label="Direct link to What landed" title="Direct link to What landed" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>F1 — sqlink-host pre-check.</strong> Gated at
+<code>host/src/lib.rs::register_component</code> (around line 7710), just
+before the linker/instantiate call. Delegates to
+<code>datalink_contract::component_contract_major</code> +
+<code>check_component_contract</code> (shared with the ducklink host) so the
+introspection and the friendly error wording are the same across
+both contracts. The legacy <code>@0.x</code> case AND the truly-unversioned
+case AND a hypothetical future <code>@2.x</code> are all rejected; the message
+names the extension, states the targeted major and the host major,
+and ends with "rebuild it against the current WIT (or use the
+matching sqlink host version)".</li>
+<li class=""><strong>F2 — Observable host contract version.</strong>
+<code>pub const CONTRACT_MAJOR: u64 = 1</code> re-exported from <code>sqlink_host</code>
+<ul>
+<li class="">a <code>tracing::info!</code> log line at <code>Host::new()</code> reading
+<code>"sqlink host speaks sqlite:extension contract @1.x"</code> + a
+<code>sqlink --contract-version</code> CLI flag that prints the major (<code>1</code>)
+to stdout before any engine init. Lets operators / CI pair a host
+binary with a catalog targeting the same major.</li>
+</ul>
+</li>
+<li class=""><strong>F3 — sqlink-loader.dylib mirror.</strong> The vanilla-SQLite loader
+inherits the guard transitively: its <code>load_and_install</code> calls
+<code>host.load_extension(path, policy)</code> → <code>host.load_extension_from_bytes</code>
+→ <code>register_component</code> (the F1 gate). Verified with two end-to-end
+tests (<code>sqlink-loader::load::tests::loader_path_rejects_*</code>) that
+synthesize tiny component-model components via <code>wat::parse_str</code>
+with deliberately-skewed contract imports (<code>@0.1.0</code>, <code>@2.0.0</code>) and
+confirm the friendly message fires.</li>
+<li class=""><strong>F4 — composed-cli-worker (browser) mirror.</strong> jco's runtime-
+bindgen has no equivalent reject-on-instantiate, so the worker
+pre-screens each component's bytes in JS. New module
+<code>browser/src/contract-guard.js</code> regexes the component-model binary
+for <code>sqlite:extension/&lt;iface>@&lt;MAJOR>.&lt;minor>.&lt;patch></code> import names
+(length-prefixed UTF-8 stays addressable as ASCII) and throws the
+same friendly error as the native side on mismatch. Wired into
+<code>composed-cli-worker.js</code> at <code>handleInit</code> (the composed cli wasm +
+every embed) and <code>handleLoadExtension</code> (runtime bytes). New
+<code>contractVersion</code> postMessage handler reports
+<code>{major, package, version}</code> up to test pages — analogous to
+<code>sqlink --contract-version</code>. Node-level coverage:
+<code>browser/tests/contract-guard.test.mjs</code> (10 cases via <code>node --test</code>).</li>
+<li class=""><strong>F5 — Conformance.</strong> Two new tests in
+<code>host/src/lib.rs::contract_guard_tests</code> close the loop by feeding
+synthesized skewed components through <code>Host::load_extension_from_bytes</code>
+directly (not just the helper fn). Proves no dispatch path slips
+past the guard.</li>
+<li class=""><strong>F6 — Migration notes.</strong> <code>sqlite-loader-wit/MIGRATION-1.0.md</code>'s
+Backwards-compatibility section now records the per-loader
+behavior + test coverage + observability surfaces. Lives on
+<code>sqlite-loader-wit@feat/wit-value-phase-f-migration-notes</code> pending
+the loader-wit PR merge; sqlink submodule pointer tracks it.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=whats-verified>What's verified<a href=#whats-verified class=hash-link aria-label="Direct link to What's verified" title="Direct link to What's verified" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cargo test -p sqlink-host --lib contract_guard</code> — 5 / 5 pass
+(3 helper-fn cases inherited from Phase A + 2 new F5
+load_extension_from_bytes cases).</li>
+<li class=""><code>cargo test -p sqlink-loader --lib loader_path</code> — 2 / 2 pass.</li>
+<li class=""><code>cargo test -p sqlink-loader --lib</code> — 47 / 47 pass.</li>
+<li class=""><code>cd browser && npm run test:unit</code> — 10 / 10 pass via <code>node --test</code>.</li>
+<li class=""><code>sqlink --contract-version</code> prints <code>1</code>.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=exact-friendly-message-string>Exact friendly message string<a href=#exact-friendly-message-string class=hash-link aria-label="Direct link to Exact friendly message string" title="Direct link to Exact friendly message string" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">extension '&lt;name>' targets sqlite:extension contract &lt;X>.x but this host</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">speaks contract 1.x; rebuild it against the current WIT (or use the</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">matching host version)</span><br/></div></code></pre></div></div>
+<p>(unversioned variant: "targets an UNVERSIONED sqlite:extension contract
+(legacy, pre-versioning)" with the same suffix.)</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=485-status>#485 status<a href=#485-status class=hash-link aria-label="Direct link to #485 status" title="Direct link to #485 status" translate=no>​</a></h3>
+<p>Both Phase 1 (additive: registry field, Manifest channel, @1.0.0
+baseline) and Phase 2 (the guard) of <code>PLAN-wit-contract-versioning.md</code>
+are complete. The pre-check is load-bearing in all three loader
+substrates and shares the <code>datalink-contract</code> runtime helper with the
+sibling ducklink host so the next contract MAJOR bump (if ever) is a
+constant change + a catalog rebuild + a CI flag. The wider workstream
+(catalog <code>wit_contract</code> field, <code>verify-catalog</code>, OCI metadata) is the
+build-time complement that lives in the registry tooling and is
+tracked under #485 follow-ups.</p>
+<p>Cross-link: <a class="" href=/sqlink/plans/PLAN-wit-contract-versioning><code>PLAN-wit-contract-versioning.md</code></a> for the
+broader #485 lineage; this plan's Phase A landed #485 Phase 1 and
+Phase F landed Phase 2.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=522--done-2026-06-26>#522 — done (2026-06-26)<a href=#522--done-2026-06-26 class=hash-link aria-label="Direct link to #522 — done (2026-06-26)" title="Direct link to #522 — done (2026-06-26)" translate=no>​</a></h2>
+<p><code>feat/return-compounds</code> branches across four repos:</p>
+<ul>
+<li class=""><code>sqlink-shim-codegen@feat/return-compounds</code> (6ab94fe + 637f2bc): widened the parser + dispatcher.</li>
+<li class=""><code>postgis-sqlink-bridge@feat/return-compounds</code> (012c54d): regen + verify-host switch.</li>
+<li class=""><code>mobilitydb-sqlink-bridge@feat/return-compounds</code> (2dcc512): regen + Phase F verify arms.</li>
+<li class=""><code>sqlink@feat/return-compounds</code>: this section.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-landed-1>What landed<a href=#what-landed-1 class=hash-link aria-label="Direct link to What landed" title="Direct link to What landed" translate=no>​</a></h3>
+<p>Phase E proved the wit-value mechanism end-to-end with
+<code>tfloat_min_value([1.5, 3.0, 0.5]) → 0.5</code> (option<f64> return). Phase E
+left ~1296 of 1577 mobilitydb scalars unwired because their returns
+were compound shapes wrapping records that the dispatcher<code>s </code>classify_return` did not recognise. #522 widens the return-shape
+alphabet.</f64></p>
+<p><strong>Parser (<code>wit_parse.rs</code>):</strong></p>
+<ul>
+<li class=""><code>WitType::List(Box&lt;WitType>)</code> — generic list catch-all. Specialised
+variants (<code>ListGeomBorrow</code>, <code>ListGeomOwned</code>, <code>ListU8</code>,
+<code>ListOptionU32</code>) still take precedence; everything else surfaces as
+the generic <code>List</code>.</li>
+<li class=""><code>WitType::Result(Box&lt;WitType>, Box&lt;WitType>)</code> — for nested <code>result&lt;T, E></code> inside another compound. Top-level <code>result&lt;...></code> stays handled
+through <code>WitRet.fallible</code> exactly as before.</li>
+<li class=""><code>Option(Unsupported(name))</code> is preserved with its structure rather
+than being flattened to <code>Unsupported("option&lt;name>")</code>. Pre-#522 the
+flatten lost the inner name so option<record> never reached the
+record-matching path.</record></li>
+<li class=""><code>resolve_aliases(ty, aliases)</code> walks compound types and substitutes
+alias-bodies for <code>type X = Y;</code> declarations (depth-limited at 16 to
+guard against pathological cycles). Mobilitydb<code>s </code>type timestamp-tz
+= s64;` was the primary motivator.</li>
+</ul>
+<p><strong>Dispatcher (<code>dispatch.rs</code>):</strong></p>
+<ul>
+<li class="">New <code>RetShape::OptionWitValueRecord</code> — <code>Some(rec)</code> →
+<code>SqlValue::WitValue</code> via the per-record <code>ret_to_witvalue_&lt;snake></code>
+helper; <code>None</code> → <code>SqlValue::Null</code>.</li>
+<li class="">New <code>RetShape::OptionBoolInt</code> — <code>Some(b)</code> → <code>Integer(b as i64)</code>,
+<code>None</code> → <code>Null</code>.</li>
+<li class="">New <code>RetShape::FirstWitValueRecord</code> — for <code>list&lt;record></code> scalars,
+projects to the first element wrapped as wit-value (Null if empty).
+See <strong>Semantic decision</strong> below.</li>
+<li class="">New <code>RetShape::FirstInt</code> / <code>FirstReal</code> / <code>FirstText</code> — same
+projection for <code>list&lt;s64|u32|s32></code> / <code>list&lt;f64|f32></code> / <code>list&lt;string></code>.</li>
+<li class=""><code>classify_return</code> matches <code>Option(Unsupported(name))</code> and
+<code>List(Unsupported(name))</code> against the per-shim record registry; if
+found, routes to the appropriate new shape.</li>
+<li class=""><code>classify_param</code> bails explicitly on bare <code>List(...)</code> and bare
+<code>Result(...)</code> (param-side list wiring is out of scope for #522 —
+return-side only; a follow-up bucket).</li>
+<li class=""><code>collect_package_aliases</code> + <code>resolve_function_aliases</code> apply alias
+resolution to every parsed <code>WitFunction</code>s params + ret before
+<code>classify_*</code> runs. Threaded into <code>build_full</code>,
+<code>build_aggregate_registry</code>, and <code>build_udtf_registry</code>.</li>
+</ul>
+<p><strong>Emit (<code>emit_lib.rs</code>):</strong></p>
+<ul>
+<li class=""><code>collect_referenced_records</code> walks the new <code>RetShape</code> variants so
+<code>OptionWitValueRecord</code> / <code>FirstWitValueRecord</code> returns trigger
+helper emission for the record they reference.</li>
+</ul>
+<p><strong>Codegen bugfix (<code>emit_wit.rs</code>):</strong></p>
+<ul>
+<li class=""><code>copy_tree(src, dst)</code> now skips files when both paths canonicalise
+to the same on-disk file. The mobilitydb regen <code>--out ~/git/ mobilitydb-sqlink-bridge</code> hits the same path that <code>source_shim_deps_dir</code>
+returns for primary <code>mobilitydb</code>; <code>fs::copy(src, src)</code> was silently
+truncating <code>temporal.wit</code> on every regen.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=semantic-decision-on-listrecord-scalar-returns>Semantic decision on <code>list&lt;record></code> scalar returns<a href=#semantic-decision-on-listrecord-scalar-returns class=hash-link aria-label="Direct link to semantic-decision-on-listrecord-scalar-returns" title="Direct link to semantic-decision-on-listrecord-scalar-returns" translate=no>​</a></h3>
+<p><code>sql-value</code> has no native list variant (<code>text | real | integer | blob | null | wit-value</code>). For SCALAR-shape functions the only valid
+projection is one row → one value, so <code>list&lt;record></code> collapses to the
+FIRST element wrapped as wit-value (Null if empty). This mirrors the
+existing <code>FirstGeomBlob</code> and <code>FirstOptionU32Int</code> precedents
+(<code>st_clusterwithin</code>, <code>st_clusterdbscan</code>).</p>
+<p>Multi-row exposure of <code>list&lt;record></code> returns is the table-function /
+vtab path, which is wired separately (#489 sqlink-loader vtab wiring +
+the per-shim UDTF registry). This decision is documented in the new
+<code>RetShape::FirstWitValueRecord</code> doc-comment in
+<code>sqlink-shim-codegen/src/wasm_target/dispatch.rs</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=numbers>Numbers<a href=#numbers class=hash-link aria-label="Direct link to Numbers" title="Direct link to Numbers" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Source<th style=text-align:right>Pre-#522<th style=text-align:right>Post-#522<tbody><tr><td>mobilitydb wired<td style=text-align:right>281<td style=text-align:right>467<tr><td>mobilitydb unwired<td style=text-align:right>1296<td style=text-align:right>1110<tr><td>postgis wired<td style=text-align:right>284<td style=text-align:right>286<tr><td>postgis unwired<td style=text-align:right>117<td style=text-align:right>117</table>
+<p>Mobilitydb +186 newly wired. Postgis +2 (<code>st_clusterkmeans</code> +
+alias via <code>RetShape::FirstInt</code> for the <code>list&lt;s32></code> cluster-id
+return).</p>
+<p>The remaining 1110 mobilitydb unwired split into:</p>
+<ul>
+<li class=""><strong>1020 no-match</strong>: the WIT corpus has no function matching that
+SQL name. Mostly the <code>bitemporal_*</code> and <code>wkbtemporal_*</code>
+interfaces that the upstream WIT doesn<code>t cover yet — out of scope of #522 (waits on </code>mobilitydb-wasm` extending the WIT).</li>
+<li class=""><strong>89 param-side <code>list&lt;...></code></strong>: <code>list&lt;s64></code> (21), <code>list&lt;string></code>
+(14), <code>list&lt;f64></code> (11), <code>list&lt;int-span></code> (7),
+<code>list&lt;float-span></code> (7), <code>list&lt;date-span></code> (7), <code>list&lt;s32></code>
+(6), <code>list&lt;stindex-entry></code> (4), <code>list&lt;indexed-point-xyz></code> (4),
+<code>list&lt;indexed-point-xy></code> (3), <code>list&lt;tuple&lt;s32,...>></code> (3),
+<code>list&lt;indexed-interval></code> (2). Param-side list&lt;...> wiring is
+the next bucket — variadic marshalling at the SQL boundary
+(each <code>SqlValue::Blob</code> / <code>Integer</code> becomes one list element)
+plus list<record> via variadic wit-value args. Tracked
+alongside #523.</record></li>
+<li class=""><strong>1 list&lt;tuple&lt;f64, f64>></strong> return (<code>floatspan_bucket_list</code>).
+Niche. Could be wrapped as wit-value with a tuple-record
+type-id if needed.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=whats-verified-1>What`s verified<a href=#whats-verified-1 class=hash-link aria-label="Direct link to What`s verified" title="Direct link to What`s verified" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cargo build -p sqlink-shim-codegen</code> — clean (10 warnings, all
+dead-code on variant fields the codegen carries but doesn`t
+read; pre-existing).</li>
+<li class=""><code>cargo test -p sqlink-shim-codegen --lib</code> — 6 / 6 pass.</li>
+<li class=""><code>cargo build -p postgis-sqlink-bridge --target wasm32-wasip2 --release</code> — clean.</li>
+<li class=""><code>cargo build -p mobilitydb-sqlink-bridge --target wasm32-wasip2 --release</code> — clean (4 unused-variable warnings on the generated
+vtab stubs, pre-existing).</li>
+<li class=""><code>wac plug</code> composition of both bridges — succeeds; output binaries
+validate via <code>wasm-tools validate</code>.</li>
+<li class=""><code>cargo run -p mobilitydb-sqlink-bridge-verify --release</code>:
+<ol>
+<li class=""><code>tfloat_min_value(synthetic seq) = 0.5</code> — Phase E baseline.</li>
+<li class=""><code>tfloat_time_span(synthetic seq)</code> — Some side of
+<code>option&lt;time-period></code>. Returns wit-value with the time-period
+type-id from the manifest; the verifier decodes via ciborium
+against a <code>HostTimePeriod { start, end, start_inclusive, end_inclusive }</code> mirror and asserts <code>start == 1_000_000_000</code>,
+<code>end == 3_000_000_000</code>.</li>
+<li class=""><code>tfloat_at_period(synthetic seq, 10, 20)</code> — None side of
+<code>option&lt;tfloat-sequence></code> (period in the far past doesn<code>t intersect the seq). Returns </code>SqlValue::Null` cleanly.</li>
+</ol>
+</li>
+<li class=""><code>cargo run -p postgis-sqlink-bridge-verify --release</code> — 16 / 16
+scalar / aggregate / vtab cases pass (Phase D baseline preserved).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=deferred-next-buckets>Deferred (next buckets)<a href=#deferred-next-buckets class=hash-link aria-label="Direct link to Deferred (next buckets)" title="Direct link to Deferred (next buckets)" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Param-side <code>list&lt;X></code> wiring</strong>: 89 mobilitydb scalars. Likely
+shape: each list-element SqlValue passed at indexes <code>[i..i+len]</code>
+for fixed-arity lists, or wrap as <code>SqlValue::Blob</code>(serialised
+list) for variable-arity. Decision pending whether
+variadic-flatten-at-SQL or pre-encoded-blob better matches each
+shape category.</li>
+<li class=""><strong>Param-side <code>list&lt;record></code></strong>: variadic wit-value args, or
+single wit-value carrying the list-shape. Same per-shape
+decision as above.</li>
+<li class=""><strong><code>list&lt;tuple&lt;...>></code> returns</strong>: one niche function. Cheap to
+bolt on when needed.</li>
+<li class=""><strong>#523 LOCAL→UPSTREAM short-circuit</strong>: the current Phase E /
+Phase F path does a ciborium round-trip LOCAL→UPSTREAM in
+<code>arg_witvalue_&lt;snake></code>. The bytes are byte-identical by
+construction (LOCAL + UPSTREAM share field shape); a transmute
+/ direct decode would skip the round-trip.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=523--done-2026-06-27>#523 — done (2026-06-27)<a href=#523--done-2026-06-27 class=hash-link aria-label="Direct link to #523 — done (2026-06-27)" title="Direct link to #523 — done (2026-06-27)" translate=no>​</a></h2>
+<p>Short-circuited the LOCAL→UPSTREAM ciborium round-trip in the
+wit-value dispatch path. Pre-#523 every <code>arg_witvalue_&lt;R></code> did
+three CBOR ops per call:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">payload.bytes</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  → LOCAL  via bridge serde-ops `_from_canon_cbor`  (decode)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  → bytes  via ciborium::ser::into_writer            (encode)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  → UPSTREAM via ciborium::de::from_reader            (decode)</span><br/></div></code></pre></div></div>
+<p>For records whose LOCAL serde-ops clone is byte-compatible with the
+UPSTREAM Rust type, decoding straight from <code>payload.bytes</code> into
+UPSTREAM skips one decode + one encode + one allocation per call.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=structural-identity-heuristic>Structural-identity heuristic<a href=#structural-identity-heuristic class=hash-link aria-label="Direct link to Structural-identity heuristic" title="Direct link to Structural-identity heuristic" translate=no>​</a></h3>
+<p>A new <code>RecordType.direct: bool</code> flag is computed in
+<code>sqlink-shim-codegen/src/wasm_target/record_registry.rs</code> via
+fix-point analysis. The criterion (per field, recursively):</p>
+<ul>
+<li class="">The field's type-text must resolve to one of:
+<ul>
+<li class="">A WIT primitive (transparent at the Rust serde layer).</li>
+<li class="">A same-package type alias chain ending at a primitive
+(<code>type timestamp-tz = s64;</code> → wit-bindgen emits
+<code>pub type TimestampTz = i64;</code> → CBOR-identical to bare <code>i64</code>).</li>
+<li class="">A same-package enum (LOCAL clone preserves variant names + order
+→ default-serde tags by name → CBOR-identical).</li>
+<li class="">A same-package record that is itself <code>direct</code>.</li>
+</ul>
+</li>
+<li class="">Cross-package identifiers, <code>tuple&lt;…></code>, <code>result&lt;…></code>, and unknown
+identifiers force <code>direct = false</code>.</li>
+</ul>
+<p>The flag is computed against the registry's full record set; a
+fix-point loop runs until no record flips. Same iteration shape as
+the existing <code>is_copy</code> analysis.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=codegen-emit>Codegen emit<a href=#codegen-emit class=hash-link aria-label="Direct link to Codegen emit" title="Direct link to Codegen emit" translate=no>​</a></h3>
+<p><code>emit_lib::emit_wit_value_helpers</code> now branches on <code>r.direct</code>:</p>
+<ul>
+<li class=""><strong><code>direct == true</code></strong> — emits:
+<div class="language-rust codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-rust codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token namespace" style=opacity:0.7>ciborium</span><span class="token namespace punctuation" style=opacity:0.7;color:#393A34>::</span><span class="token namespace" style=opacity:0.7>de</span><span class="token namespace punctuation" style=opacity:0.7;color:#393A34>::</span><span class="token function" style=color:#d73a49>from_reader</span><span class="token punctuation" style=color:#393A34>::</span><span class="token operator" style=color:#393A34>&lt;</span><span class="token constant" style=color:#36acaa>UPSTREAM</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> _</span><span class="token operator" style=color:#393A34>></span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">payload</span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">bytes</span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>as_slice</span><span class="token punctuation" style=color:#393A34>(</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>map_err</span><span class="token punctuation" style=color:#393A34>(</span><span class="token closure-params closure-punctuation punctuation" style=color:#393A34>|</span><span class="token closure-params">e</span><span class="token closure-params closure-punctuation punctuation" style=color:#393A34>|</span><span class="token plain"> </span><span class="token macro property" style=color:#36acaa>format!</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"{name}: decode arg {idx}: {}"</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> e</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><br/></div></code></pre></div></div>
+Skip LOCAL alloc, skip re-encode, skip second decode.</li>
+<li class=""><strong><code>direct == false</code></strong> — emits the pre-#523 LOCAL→UPSTREAM
+round-trip, unchanged.</li>
+</ul>
+<p>The return-side <code>ret_to_witvalue_&lt;R></code> already encoded UPSTREAM
+directly (no LOCAL hop), so it stays as-is; #523 just adds a
+clarifying doc-comment so future readers don't reintroduce a LOCAL
+allocation there.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=knock-on-wit-parser-fix-for-multi-field-per-line-records>Knock-on: WIT parser fix for multi-field-per-line records<a href=#knock-on-wit-parser-fix-for-multi-field-per-line-records class=hash-link aria-label="Direct link to Knock-on: WIT parser fix for multi-field-per-line records" title="Direct link to Knock-on: WIT parser fix for multi-field-per-line records" translate=no>​</a></h3>
+<p>While verifying which mobilitydb records short-circuited, the
+maintainer report showed 57/59. The two outliers (<code>stbox3d</code>, <code>tbox</code>)
+turned out to be a parser bug, not a real structural divergence:
+the WIT parser was treating each <code>record</code>-body line as a SINGLE
+<code>field: type</code> pair, and the upstream WIT squashed multiple
+primitives onto one line:</p>
+<div class="language-wit codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-wit codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">record stbox3d {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    xmin: f64, ymin: f64, xmax: f64, ymax: f64,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    zmin: f64, zmax: f64,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    tmin: s64, tmax: s64,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div></code></pre></div></div>
+<p>The first colon's RHS became <code>"f64, ymin: f64, xmax: f64, ymax: f64"</code> and the trailing fields were lost. Extending the parser to
+split on top-level commas (preserving angle/paren-nested commas so
+<code>tuple&lt;f64, f64></code> survives) fixed the parse + lifted the short-
+circuit count to 59/59.</p>
+<p>The <code>world.wit</code> regen normalised these multi-field-per-line records
+to one-field-per-line emit too. The type_ids for <code>stbox3d</code> + <code>tbox</code>
+shifted (the canonical hash now sees the correct field shape).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=numbers-1>Numbers<a href=#numbers-1 class=hash-link aria-label="Direct link to Numbers" title="Direct link to Numbers" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Shim<th style=text-align:right>Records<th style=text-align:right>Short-circuited (direct=true)<tbody><tr><td>mobilitydb<td style=text-align:right>59<td style=text-align:right>59<tr><td>postgis<td style=text-align:right>18<td style=text-align:right>18</table>
+<p>Postgis has no scalar that takes a record on the SQL boundary, so
+no <code>arg_witvalue_&lt;R></code> helpers are emitted — the <code>direct</code> flag is
+computed but never read at runtime in postgis's case. The 18/18
+all-direct result is still useful as a regression signal: any
+future postgis record that introduces a cross-package reference
+will drop the count and surface in the stderr line.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=manifest-annotation-5233--deferred>Manifest annotation (523.3) — deferred<a href=#manifest-annotation-5233--deferred class=hash-link aria-label="Direct link to Manifest annotation (523.3) — deferred" title="Direct link to Manifest annotation (523.3) — deferred" translate=no>​</a></h3>
+<p>The original task description suggested adding <code>direct: bool</code> to
+the <code>typed-value-binding</code> manifest entry as a diagnostic hint. That
+requires extending the WIT contract in
+<code>sqlite-loader-wit/wit/metadata.wit</code> (with a contract version bump
+per #485) and mirroring the parse on the host + browser sides. Out
+of scope for #523; tracked in <code>PLAN-followups.md</code> as a low-priority
+nice-to-have. The stderr line at codegen time already gives the
+maintainer the same information.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verified>Verified<a href=#verified class=hash-link aria-label="Direct link to Verified" title="Direct link to Verified" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cargo build -p sqlink-shim-codegen</code> clean.</li>
+<li class=""><code>cargo test -p sqlink-shim-codegen --lib</code> 13/13 pass (the 6 pre-
+existing tests + 7 new ones covering: all-primitive, primitive-
+alias resolution, same-package enum, nested record propagation,
+cross-package blocks, tuple/result blocks, non-primary records
+never direct).</li>
+<li class=""><code>cargo build -p mobilitydb-sqlink-bridge --target wasm32-wasip2 --release</code> clean (2 unused-variable warnings on generated vtab
+stubs, pre-existing).</li>
+<li class=""><code>cargo build -p postgis-sqlink-bridge --target wasm32-wasip2 --release</code> clean.</li>
+<li class=""><code>wac plug</code> composition of both bridges; outputs validate via
+<code>wasm-tools validate</code>.</li>
+<li class=""><code>cargo run -p mobilitydb-sqlink-bridge-verify --release</code> —
+all three acceptance gates pass:
+<ol>
+<li class="">Phase E: <code>tfloat_min_value([1.5, 3.0, 0.5]) = 0.5</code>.</li>
+<li class="">#522: <code>tfloat_time_span</code> returns wit-value decoded to
+<code>HostTimePeriod { start: 1_000_000_000, end: 3_000_000_000, start_inclusive: true, end_inclusive: true }</code>.</li>
+<li class="">#522: <code>tfloat_at_period</code> None side returns <code>SqlValue::Null</code>
+cleanly.</li>
+</ol>
+</li>
+<li class=""><code>cargo run -p postgis-sqlink-bridge-verify --release</code> — 16/16
+scalar / aggregate / vtab cases pass (no records-on-the-SQL-
+boundary path exists, so behaviour is unchanged by #523).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=microbenchmark-5235--not-run>Microbenchmark (523.5) — not run<a href=#microbenchmark-5235--not-run class=hash-link aria-label="Direct link to Microbenchmark (523.5) — not run" title="Direct link to Microbenchmark (523.5) — not run" translate=no>​</a></h3>
+<p>The verify subcrate doesn't ship a benchmark harness, and standing
+up one in <code>verify/</code> would be net-new infrastructure (a bench
+target, a steady-state loop, a calibration pass for cycles/call,
+plus the baseline build against the pre-#523 commit to compare
+against). Estimated savings per call: one LOCAL struct alloc + one
+ciborium serialise + one ciborium deserialise — roughly
+proportional to the record size (the LOCAL hop scans every field
+twice). For 100k calls of <code>tfloat_min_value</code> against a 3-instant
+sequence the saved work is real but small in absolute terms. Wiring
+the bench is a follow-up if anyone needs the headline number.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=deferred-continued-from-522>Deferred (continued from #522)<a href=#deferred-continued-from-522 class=hash-link aria-label="Direct link to Deferred (continued from #522)" title="Direct link to Deferred (continued from #522)" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Param-side <code>list&lt;X></code> wiring</strong>: still 89 mobilitydb scalars.</li>
+<li class=""><strong>Param-side <code>list&lt;record></code></strong>: variadic wit-value args, or
+single wit-value carrying the list-shape.</li>
+<li class=""><strong><code>list&lt;tuple&lt;...>></code> returns</strong>: one niche function
+(<code>floatspan_bucket_list</code>).</li>
+<li class=""><strong>#523.3 manifest <code>direct</code> annotation</strong>: see above.</li>
+<li class=""><strong>#523.5 microbenchmark</strong>: see above.</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-wit-value-extension.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#problem class="table-of-contents__link toc-highlight">Problem</a><li><a href=#path-picked-path-c-from-the-codegen-retarget-plan class="table-of-contents__link toc-highlight">Path picked (path C from the codegen-retarget plan)</a><li><a href=#design--open-questions-to-resolve-before-implementation class="table-of-contents__link toc-highlight">Design — open questions to resolve before implementation</a><ul><li><a href=#q1-wire-format-for-the-record-payload class="table-of-contents__link toc-highlight">Q1. Wire format for the record payload</a><li><a href=#q2-type-identity--what-goes-in-type-id class="table-of-contents__link toc-highlight">Q2. Type identity — what goes in <code>type-id</code>?</a><li><a href=#q3-type-registry--how-does-the-host-map-type-id--deserializer class="table-of-contents__link toc-highlight">Q3. Type registry — how does the host map type-id → deserializer?</a><li><a href=#q4-backwards-compatibility--contract-version-cut class="table-of-contents__link toc-highlight">Q4. Backwards compatibility + contract version cut</a></ul><li><a href=#proposed-contract-shape class="table-of-contents__link toc-highlight">Proposed contract shape</a><li><a href=#implementation-phases class="table-of-contents__link toc-highlight">Implementation phases</a><ul><li><a href=#phase-a--design-lock--contract-change class="table-of-contents__link toc-highlight">Phase A — design lock + contract change</a><li><a href=#phase-b--host-marshaling class="table-of-contents__link toc-highlight">Phase B — host marshaling</a><li><a href=#phase-c--codegen-consumption class="table-of-contents__link toc-highlight">Phase C — codegen consumption</a><li><a href=#phase-d--codegen-generalization-separately-needed class="table-of-contents__link toc-highlight">Phase D — codegen generalization (separately needed)</a><li><a href=#phase-e--mobilitydb-unblock class="table-of-contents__link toc-highlight">Phase E — mobilitydb unblock</a><li><a href=#phase-f--contract-guard-485-phase-2 class="table-of-contents__link toc-highlight">Phase F — contract guard (#485 Phase 2)</a></ul><li><a href=#risks class="table-of-contents__link toc-highlight">Risks</a><li><a href=#verification class="table-of-contents__link toc-highlight">Verification</a><li><a href=#cross-cuts class="table-of-contents__link toc-highlight">Cross-cuts</a><li><a href=#decisions-locked-2026-06-26 class="table-of-contents__link toc-highlight">Decisions (locked 2026-06-26)</a><li><a href=#references class="table-of-contents__link toc-highlight">References</a><li><a href=#phase-a--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase A — done (2026-06-26)</a><ul><li><a href=#landed class="table-of-contents__link toc-highlight">Landed</a><li><a href=#verification-all-phase-a-acceptance-points-hit class="table-of-contents__link toc-highlight">Verification (all Phase A acceptance points hit)</a><li><a href=#branches--commits class="table-of-contents__link toc-highlight">Branches + commits</a><li><a href=#honest-caveats--phase-b-debt class="table-of-contents__link toc-highlight">Honest caveats / Phase B+ debt</a><li><a href=#what-didnt-change-phase-b-f-still-owe class="table-of-contents__link toc-highlight">What didn't change (Phase B-F still owe)</a></ul><li><a href=#phase-b--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase B — done (2026-06-26)</a><ul><li><a href=#landed-1 class="table-of-contents__link toc-highlight">Landed</a><li><a href=#verification-1 class="table-of-contents__link toc-highlight">Verification</a><li><a href=#branches--commits-1 class="table-of-contents__link toc-highlight">Branches + commits</a><li><a href=#honest-caveats--phase-c-debt class="table-of-contents__link toc-highlight">Honest caveats / Phase C+ debt</a><li><a href=#what-didnt-change-phase-c-f-still-owe class="table-of-contents__link toc-highlight">What didn't change (Phase C-F still owe)</a></ul><li><a href=#phase-c--d--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase C + D — done (2026-06-26)</a><ul><li><a href=#landed-2 class="table-of-contents__link toc-highlight">Landed</a><li><a href=#verification-2 class="table-of-contents__link toc-highlight">Verification</a><li><a href=#counts class="table-of-contents__link toc-highlight">Counts</a><li><a href=#branches--commits-2 class="table-of-contents__link toc-highlight">Branches + commits</a><li><a href=#honest-deferrals-carried-into-phase-e class="table-of-contents__link toc-highlight">Honest deferrals carried into Phase E</a></ul><li><a href=#phase-e--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase E — done (2026-06-26)</a><ul><li><a href=#landed-3 class="table-of-contents__link toc-highlight">Landed</a><li><a href=#verification-3 class="table-of-contents__link toc-highlight">Verification</a><li><a href=#branches--commits-3 class="table-of-contents__link toc-highlight">Branches + commits</a><li><a href=#honest-caveats--phase-f-debt class="table-of-contents__link toc-highlight">Honest caveats / Phase F+ debt</a><li><a href=#what-didnt-change-phase-f-still-owes class="table-of-contents__link toc-highlight">What didn't change (Phase F still owes)</a><li><a href=#tooling-notes-for-future-maintainers class="table-of-contents__link toc-highlight">Tooling notes (for future maintainers)</a></ul><li><a href=#phase-f--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase F — done (2026-06-26)</a><ul><li><a href=#what-landed class="table-of-contents__link toc-highlight">What landed</a><li><a href=#whats-verified class="table-of-contents__link toc-highlight">What's verified</a><li><a href=#exact-friendly-message-string class="table-of-contents__link toc-highlight">Exact friendly message string</a><li><a href=#485-status class="table-of-contents__link toc-highlight">#485 status</a></ul><li><a href=#522--done-2026-06-26 class="table-of-contents__link toc-highlight">#522 — done (2026-06-26)</a><ul><li><a href=#what-landed-1 class="table-of-contents__link toc-highlight">What landed</a><li><a href=#semantic-decision-on-listrecord-scalar-returns class="table-of-contents__link toc-highlight">Semantic decision on <code>list&lt;record></code> scalar returns</a><li><a href=#numbers class="table-of-contents__link toc-highlight">Numbers</a><li><a href=#whats-verified-1 class="table-of-contents__link toc-highlight">What`s verified</a><li><a href=#deferred-next-buckets class="table-of-contents__link toc-highlight">Deferred (next buckets)</a></ul><li><a href=#523--done-2026-06-27 class="table-of-contents__link toc-highlight">#523 — done (2026-06-27)</a><ul><li><a href=#structural-identity-heuristic class="table-of-contents__link toc-highlight">Structural-identity heuristic</a><li><a href=#codegen-emit class="table-of-contents__link toc-highlight">Codegen emit</a><li><a href=#knock-on-wit-parser-fix-for-multi-field-per-line-records class="table-of-contents__link toc-highlight">Knock-on: WIT parser fix for multi-field-per-line records</a><li><a href=#numbers-1 class="table-of-contents__link toc-highlight">Numbers</a><li><a href=#manifest-annotation-5233--deferred class="table-of-contents__link toc-highlight">Manifest annotation (523.3) — deferred</a><li><a href=#verified class="table-of-contents__link toc-highlight">Verified</a><li><a href=#microbenchmark-5235--not-run class="table-of-contents__link toc-highlight">Microbenchmark (523.5) — not run</a><li><a href=#deferred-continued-from-522 class="table-of-contents__link toc-highlight">Deferred (continued from #522)</a></ul></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

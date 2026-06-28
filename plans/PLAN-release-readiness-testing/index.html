@@ -1,0 +1,368 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-release-readiness-testing" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>PLAN: release-readiness testing audit | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-testing /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="PLAN: release-readiness testing audit | sqlink"/><meta data-rh=true name=description content="Read-only inventory of test coverage across sqlink, with a"/><meta data-rh=true property=og:description content="Read-only inventory of test coverage across sqlink, with a"/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-testing /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-testing hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-testing hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-testing","name":"PLAN: release-readiness testing audit","position":1}]}</script><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/><span title=Introduction class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/getting-started><span title="Getting Started" class=linkLabel_WmDU>Getting Started</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/sqlink/concepts/extensions><span title=Concepts class=categoryLinkLabel_W154>Concepts</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/extensions><span title=Extensions class=linkLabel_WmDU>Extensions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/bundles><span title=Bundles class=linkLabel_WmDU>Bundles</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/prefixes><span title=Prefixes class=linkLabel_WmDU>Prefixes</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/cas-cache><span title=Cas-cache class=linkLabel_WmDU>Cas-cache</span></a></ul><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/roadmap><span title=Roadmap class=linkLabel_WmDU>Roadmap</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/sqlink/plans/PLAN-bundles><span title="Plans (source of truth)" class=categoryLinkLabel_W154>Plans (source of truth)</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-bundles><span title="Plan: bundles  named extension sets with optional baked binaries" class=linkLabel_WmDU>Plan: bundles  named extension sets with optional baked binaries</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-prefixes><span title="Plan: function prefixes — SPARQL-style namespacing for SQL functions" class=linkLabel_WmDU>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-followups><span title=PLAN-followups class=linkLabel_WmDU>PLAN-followups</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-browser-runtime><span title="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill" class=linkLabel_WmDU>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wal-archive-extension><span title="Plan: wal-archive extension  continuous WAL backup for sqlink" class=linkLabel_WmDU>Plan: wal-archive extension  continuous WAL backup for sqlink</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-tvm-integration><span title="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)" class=linkLabel_WmDU>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wasmmachine><span title="Plan: Register sqlite-cli as a wasmMachine application" class=linkLabel_WmDU>Plan: Register sqlite-cli as a wasmMachine application</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-interactive-capture><span title="Plan: interactive changeset capture (daemon vs WIT-extension)" class=linkLabel_WmDU>Plan: interactive changeset capture (daemon vs WIT-extension)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-benchmarks><span title="Benchmarks: sqlite-wasm-run vs native sqlite3" class=linkLabel_WmDU>Benchmarks: sqlite-wasm-run vs native sqlite3</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-perf-ux><span title="PLAN: release-readiness perf + UX audit" class=linkLabel_WmDU>PLAN: release-readiness perf + UX audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/sqlink/plans/PLAN-release-readiness-testing><span title="PLAN: release-readiness testing audit" class=linkLabel_WmDU>PLAN: release-readiness testing audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-code-health><span title="PLAN: code-health + tech-debt audit for OSS release" class=linkLabel_WmDU>PLAN: code-health + tech-debt audit for OSS release</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-speculative><span title="Plan: speculative items (consumer-driven)" class=linkLabel_WmDU>Plan: speculative items (consumer-driven)</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/sqlink/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Plans (source of truth)</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>PLAN: release-readiness testing audit</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>PLAN: release-readiness testing audit</h1></header>
+<p>Read-only inventory of test coverage across sqlink, with a
+ranked list of the highest-value additions to make before
+flipping the OSS switch. Pure assessment; no code changes.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=tldr--top-5-additions-for-shipping-confidence>TL;DR — top 5 additions for shipping confidence<a href=#tldr--top-5-additions-for-shipping-confidence class=hash-link aria-label="Direct link to TL;DR — top 5 additions for shipping confidence" title="Direct link to TL;DR — top 5 additions for shipping confidence" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#<th>Addition<th>Effort<th>Catches<tbody><tr><td>1<td><strong>End-to-end <code>.load &lt;ext></code> integration test in host/tests/</strong> that builds one real extension component (case or stats), loads it, exercises a scalar / aggregate / vtab, then <code>.unload</code>s. <strong>No such test exists today.</strong><td>M<td>A whole-pipeline regression — wit-bindgen drift, store routing, host trampoline wiring, <code>.load</code> security gate, <code>.unload</code> teardown. Anything that breaks loaded-extension dispatch lands here, not in user reports.<tr><td>2<td><strong><code>tests/cli/sqlite-wasm-wrapper.sh</code> rename + audit pass.</strong> The path still says <code>sqlite-wasm-wrapper.sh</code> post-rebrand; the script tests <code>./sqlink</code>. Same for <code>tests/cli/test_load.sh</code> and <code>test_commands.sh</code> — confirm they execute and still assert correctly against the renamed binary + new dot-command surface.<td>S<td>Stale shell smokes that look green because they're never run.<tr><td>3<td><strong>Property tests on identifier quoting in <code>utils-schema</code> / <code>utils-data</code>.</strong> 35 + 24 quote-helper call sites between them; one unicode/embedded-quote bug = SQL injection or schema corruption. <code>proptest</code> against the helper trio with arbitrary table/column names.<td>M<td>Quoting bugs that escape table-name-with-quote or sqlite-keyword-as-identifier. The most likely class of "embarrassing OSS day-1 bug."<tr><td>4<td><strong>Component cache hit/miss/evict cycle test.</strong> Zero tests cover <code>try_c2_lookup</code> / <code>try_c2_store</code> / <code>evict_to</code> in host/. The cache is on the hot <code>.load</code> path; a regression silently doubles cold-start time.<td>S-M<td>Cache invalidation bugs after L2a's <code>user_conn</code> change; HMAC-rotation edge cases; LRU eviction off-by-one.<tr><td>5<td><strong>Session changeset roundtrip integration test.</strong> Stage 6 shipped the WIT + session-cli extension but <code>host/tests/</code> has zero coverage of <code>session_create</code> → INSERTs → <code>changeset</code> → bytes-non-empty → <code>delete</code>. Smoke exists ad-hoc in the rebrand handoff but isn't a CI gate.<td>S<td>A real-world data-sync bug shipping unnoticed; sqlite3session API has subtle PK-vs-no-PK rules.</table>
+<p><strong>Headline gap:</strong> there is no automated test anywhere that loads a real <code>.wasm</code>
+extension component end-to-end and invokes one of its scalars / aggregates /
+vtabs. The host has 27 integration tests, but every single one mocks or
+sidesteps the actual wit-bindgen dispatch surface. That's the test most
+likely to catch a release-blocker.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=1-test-inventory>1. Test inventory<a href=#1-test-inventory class=hash-link aria-label="Direct link to 1. Test inventory" title="Direct link to 1. Test inventory" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Crate<th style=text-align:right>Unit <code>#[test]</code><th style=text-align:right>Integration <code>tests/</code><th>Notes<tbody><tr><td><code>core/</code><td style=text-align:right>13<td style=text-align:right>0<td>sqlite3 wrapper; covers Connection/Stmt basics<tr><td><code>cli/</code><td style=text-align:right><strong>0</strong><td style=text-align:right><strong>0</strong><td>The cli has zero Rust-level tests. All coverage is the shell smokes in <code>tests/cli/</code><tr><td><code>host/</code><td style=text-align:right>17<td style=text-align:right>27 (12 files)<td>The deepest test surface; covers loader, auth, ed25519 trust, sqlite-lib composition, TVM probes<tr><td><code>sqlink-httpd/</code><td style=text-align:right><strong>0</strong><td style=text-align:right><strong>0</strong><td>One <code>handlers/auth/smoke.sh</code> shell exists; nothing else<tr><td><code>sqlite-lib/</code><td style=text-align:right><strong>0</strong><td style=text-align:right><strong>0</strong><td>Public API; only covered transitively via <code>host/tests/sqlite_lib.rs</code><tr><td><code>sqlite-cas-cache/</code><td style=text-align:right>0<td style=text-align:right>41 (4 files)<td>Best-tested non-host crate — eviction / migration / resolver / store<tr><td><code>sqlite-pcache-tvm/</code><td style=text-align:right>6<td style=text-align:right>3 (1 file)<td>TVM substrate; capacity tests<tr><td><code>sqlite-mem-tvm/</code><td style=text-align:right>5<td style=text-align:right>3 (1 file)<td>Same shape<tr><td><code>sqlite-vfs-tvm/</code><td style=text-align:right>10<td style=text-align:right>3 (1 file)<td>Same shape<tr><td><code>sqlite-embed/</code><td style=text-align:right><strong>0</strong><td style=text-align:right><strong>0</strong><td>Macro/codegen helper for embedded extensions; no tests<tr><td><code>extensions/</code><td style=text-align:right>317 across 52 dirs (of 228 total)<td style=text-align:right>n/a<td>23% of extensions have at least one test</table>
+<p><strong>External smokes:</strong></p>
+<ul>
+<li class=""><code>tooling/smoke.py</code> — extension smoke driver (Python)</li>
+<li class=""><code>tooling/cli-smoke.py</code> — cli smoke driver</li>
+<li class=""><code>tooling/bench.py</code> — benchmark harness, emits markdown for <code>docs/plans/PLAN-benchmarks.md</code></li>
+<li class=""><code>tooling/check-snippets.py</code> — extracts + verifies code snippets</li>
+<li class=""><code>tooling/doc-refs-check.py</code> — verifies doc cross-references</li>
+<li class=""><code>tooling/scaffold.py</code> — extension scaffolder (no tests for it)</li>
+<li class=""><code>examples/sqlite-utils-tour.sql</code> — 30 lines, 29 dot-command invocations, 28 distinct commands</li>
+<li class=""><code>scripts/sqlite-utils-tour.sh</code> — runs the .sql end-to-end against a fresh db</li>
+<li class=""><code>tests/cli/{sqlite-wasm-wrapper,test_commands,test_load,test-cli}.sh</code> — 894 lines total of bash smokes</li>
+<li class=""><code>tests/integration/jco/*.mjs</code> — 1627 lines of JS-side jco tests against the wasm cli</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=2-coverage-gaps-by-crate>2. Coverage gaps by crate<a href=#2-coverage-gaps-by-crate class=hash-link aria-label="Direct link to 2. Coverage gaps by crate" title="Direct link to 2. Coverage gaps by crate" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=host-the-deepest-surface-matters-most>host/ (the deepest surface; matters most)<a href=#host-the-deepest-surface-matters-most class=hash-link aria-label="Direct link to host/ (the deepest surface; matters most)" title="Direct link to host/ (the deepest surface; matters most)" translate=no>​</a></h3>
+<ul>
+<li class=""><code>host/src/lib.rs::Host::dispatch_vtab_update</code> (L6637): zero tests. vtab UPDATE/DELETE path can silently corrupt data without anyone noticing. The 20 <code>dispatch_vtab_*</code> methods (L6164-L6742) are uncovered as a group.</li>
+<li class=""><code>host/src/lib.rs::Host::try_c2_lookup</code> / <code>try_c2_store</code> (post-L2a): no hit/miss/evict cycle test. The cache is the only thing standing between cold-start and 30s component re-parse.</li>
+<li class=""><code>host/src/lib.rs::Host::dispatch_aggregate_value</code> / <code>dispatch_aggregate_inverse</code> (L5391, L5416): window-aggregate path. The <code>stats</code> extension uses these but no test asserts xValue / xInverse fire in order.</li>
+<li class=""><code>host/src/lib.rs::sqlite_code_to_auth_action</code> (L2188): 33-arm match. One mistranslation = a SECURITY-relevant authorizer call routes to the wrong action. No table-driven test.</li>
+<li class=""><code>host/src/lib.rs::Host::session_create</code> and the entire session interface (Stage 6, L8580+): zero tests. Smoke happened in handoff conversation only.</li>
+<li class=""><code>host/src/component_blob_cache.rs::evict_to</code> LRU bound: not tested.</li>
+<li class=""><code>host/src/cache.rs::SqliteCasStore::lookup_by_hash</code>: blake3-only-after-blake3-hits fast path (L2b plan): claims "already true" but no test asserts the second SELECT doesn't fire.</li>
+<li class=""><code>host/src/lib.rs::Host::run_wasm</code> Policy enforcement: deny_all path tested once (runnable_sqlite_demo); per-capability denial (http, dns, http-headers) untested.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=cli-zero-rust-tests>cli/ (zero Rust tests)<a href=#cli-zero-rust-tests class=hash-link aria-label="Direct link to cli/ (zero Rust tests)" title="Direct link to cli/ (zero Rust tests)" translate=no>​</a></h3>
+<ul>
+<li class=""><code>cli/src/lib.rs::is_statement_complete</code> (L292): the 130-LOC SQL completeness parser. Replaced sqlite3_complete in Stage 5f; tests cover only the comment-fix smoke. Edge cases: BEGIN/END trigger bodies, nested block comments, multi-line strings with embedded escapes.</li>
+<li class=""><code>cli/src/lib.rs::skip_leading_trivia</code> (L253): the comment-stripping helper that fixed the sharp-edge bug. Test would be 5-line proptest with arbitrary mix of <code>--</code>, <code>/* */</code>, whitespace, dot-command.</li>
+<li class=""><code>cli/src/lib.rs::do_help</code> (L581): walks the loader registry. No test for "extension owns command X" lookup correctness.</li>
+<li class=""><code>cli/src/lib.rs::eval_input</code> (L409): dispatcher. Routing precedence between dot-command / <code>.session</code> stub / loader-fallthrough has no regression test.</li>
+<li class=""><code>cli/src/lib.rs::try_db_registry_resolve</code> (L656): Phase 4 CAS walk. Fallthrough to sqlink_cas_resolver rows untested.</li>
+<li class="">The 73 dot commands are exercised by <code>examples/sqlite-utils-tour.sql</code> (28 of 73 = 38%). 45 dot commands have no automated invocation anywhere.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=sqlite-lib-zero-tests-covered-only-via-host-transitively>sqlite-lib/ (zero tests; covered only via host transitively)<a href=#sqlite-lib-zero-tests-covered-only-via-host-transitively class=hash-link aria-label="Direct link to sqlite-lib/ (zero tests; covered only via host transitively)" title="Direct link to sqlite-lib/ (zero tests; covered only via host transitively)" translate=no>​</a></h3>
+<ul>
+<li class="">Public API — <code>execute</code> / <code>execute_scalar</code> / <code>execute_batch</code> — has no direct unit tests. host's <code>sqlite_lib.rs</code> exercises it via composed runnable but that's an integration vehicle, not a unit-level guard.</li>
+<li class="">Error mapping <code>core::db::Error</code> → spi <code>SqliteError</code>: no test.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=core-13-unit-tests-thin>core/ (13 unit tests; thin)<a href=#core-13-unit-tests-thin class=hash-link aria-label="Direct link to core/ (13 unit tests; thin)" title="Direct link to core/ (13 unit tests; thin)" translate=no>​</a></h3>
+<ul>
+<li class="">Tests exist for Connection/Stmt happy paths; error paths are 40 <code>Err()</code> constructions in src with 2 error-assertions in tests.</li>
+<li class=""><code>update_hook</code> / <code>commit_hook</code> / <code>rollback_hook</code> callbacks tested only via <code>host/tests/load.rs</code>'s register-then-fire shape.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=sqlink-httpd-zero-tests>sqlink-httpd/ (zero tests)<a href=#sqlink-httpd-zero-tests class=hash-link aria-label="Direct link to sqlink-httpd/ (zero tests)" title="Direct link to sqlink-httpd/ (zero tests)" translate=no>​</a></h3>
+<ul>
+<li class="">Route dispatch (<code>router.rs</code>): zero coverage.</li>
+<li class="">The 5 handler crates (echo, registry, sql, auth, yaml-to-json, markdown): one shell smoke for auth; nothing else.</li>
+<li class="">TLS termination + cert reload: untested.</li>
+<li class=""><code>wasm.rs</code> language-runtime wiring: untested.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=3-error-path-coverage-sample>3. Error path coverage (sample)<a href=#3-error-path-coverage-sample class=hash-link aria-label="Direct link to 3. Error path coverage (sample)" title="Direct link to 3. Error path coverage (sample)" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Crate<th style=text-align:right><code>Err(...)</code> constructions in src<th style=text-align:right>Error-assertions in tests<th>Coverage estimate<tbody><tr><td><code>host/</code><td style=text-align:right>272<td style=text-align:right>4 (across all of host/!)<td><strong>~1-2%</strong><tr><td><code>cli/</code><td style=text-align:right>89<td style=text-align:right>0 (zero tests at all)<td><strong>0%</strong><tr><td><code>core/</code><td style=text-align:right>40<td style=text-align:right>2<td>~5%<tr><td><code>sqlink-httpd/</code><td style=text-align:right>20<td style=text-align:right>0<td><strong>0%</strong><tr><td><code>sqlite-lib/</code><td style=text-align:right>9<td style=text-align:right>0<td>0%</table>
+<p>The <code>host/</code> gap is striking: 272 places that build an <code>Err(...)</code> and 4 tests
+that assert against any of them. Most error variants are "this should be
+impossible if invariants hold" — fair enough — but a clutch of them (Policy
+denials, loader errors, capability violations, session ffi rc-non-zero) are
+real branches a malicious or malformed input takes.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=4-integration-test-gaps>4. Integration test gaps<a href=#4-integration-test-gaps class=hash-link aria-label="Direct link to 4. Integration test gaps" title="Direct link to 4. Integration test gaps" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Flow<th>Status<th>One-line gap<tbody><tr><td><code>.load &lt;ext>.wasm</code> of a real component<td><strong>No automated test</strong><td>Build case+stats+vec0 in CI, load each, assert one scalar/agg/vtab call works<tr><td><code>.unload &lt;ext></code> cleanup<td><strong>No test</strong><td>After unload, re-resolving the function should yield <code>no such function</code><tr><td><code>.session create→insert→changeset→delete</code><td><strong>No test</strong><td>Stage 6 shipped without a CI gate<tr><td>Component cache hit / miss / LRU evict<td><strong>No test</strong><td>Cold + warm load timing assertion; evict cap exercise<tr><td>73 dot commands surface<td>28 of 73 in tour (38%)<td>Either extend the tour or accept the legacy <code>tests/cli/*.sh</code> smokes cover the gap (verify post-rebrand)<tr><td><code>.open</code> swap between dbs<td><strong>No test</strong><td>After <code>.open new.db</code> the host's spi conn + user_conn should both rotate; assert reads from old db's tables fail<tr><td><code>.trace</code> + <code>.auth</code> toggle observation<td><strong>No test</strong><td>Stage 5e.8/5e.9 shipped without CI smoke<tr><td>sqlink-httpd handler dispatch<td><strong>One shell</strong><td>Only <code>handlers/auth/smoke.sh</code> exists; sql/echo/registry/markdown/yaml-to-json paths uncovered<tr><td>TLS cert reload (SIGHUP)<td><strong>No test</strong><td>Documented behavior; not asserted<tr><td><code>--trust=prompt</code> mode (L3a, just shipped)<td><strong>No CI test</strong><td>Manual stdin smokes from the L3a handoff are not automated<tr><td><code>describe_extension_from_uri</code> non-<code>file:</code> schemes (L3b)<td><strong>No test</strong><td>The new resolver-walking path isn't exercised<tr><td>Capability deny enforcement (http allowlist, dns allowlist)<td><strong>No test</strong><td>Policy says X is denied; no test loads an X-using ext under deny<tr><td>HMAC-key rotation / missing-key degrade-to-no-cache<td><strong>No test</strong><td>L3c shipped a diagnostic; no test triggers it</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=5-smoke-harness-audit-post-rebrand>5. Smoke harness audit (post-rebrand)<a href=#5-smoke-harness-audit-post-rebrand class=hash-link aria-label="Direct link to 5. Smoke harness audit (post-rebrand)" title="Direct link to 5. Smoke harness audit (post-rebrand)" translate=no>​</a></h2>
+<ul>
+<li class=""><code>tooling/smoke.py</code>, <code>tooling/cli-smoke.py</code>, <code>tooling/bench.py</code>: <strong>clean</strong> — no remaining <code>sqlite-wasm</code> references. Verified by grep.</li>
+<li class=""><code>tooling/plan-add.py</code>: updated for the <code>docs/plans/</code> move; verified by grep of <code>PLAN-sqlite-plugins.md</code> path.</li>
+<li class=""><code>tests/cli/sqlite-wasm-wrapper.sh</code>: <strong>filename is stale</strong>. The first line says "Integration test for the ./sqlink shell wrapper" — content matches the rebranded binary but the file path still carries the old name. Either rename the file or accept the legacy.</li>
+<li class=""><code>tests/cli/test_load.sh</code>, <code>test_commands.sh</code>, <code>test-cli.sh</code>: content not audited in this pass; line counts non-trivial (114 / 473 / 215). Worth a manual run to confirm they still pass post-rebrand.</li>
+<li class=""><code>tests/integration/jco/*.mjs</code>: 1627 lines of JS-side integration tests. Their <code>package.json</code> hasn't been touched by the rebrand; need a confirmation run.</li>
+<li class=""><code>examples/sqlite-utils-tour.sql</code> + <code>scripts/sqlite-utils-tour.sh</code>: shipped at Stage 5 (1ce7298); should still pass against the post-rebrand cli — verify.</li>
+</ul>
+<p><strong>Action:</strong> one bash session that runs each shell smoke explicitly and reports
+pass/fail. None of these are wired into CI today (see §7).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=6-property--fuzz-test-opportunities>6. Property / fuzz test opportunities<a href=#6-property--fuzz-test-opportunities class=hash-link aria-label="Direct link to 6. Property / fuzz test opportunities" title="Direct link to 6. Property / fuzz test opportunities" translate=no>​</a></h2>
+<ol>
+<li class=""><strong>SQL identifier quoting</strong>: <code>extensions/sqlite-utils-{schema,data,maint}</code> have 74 combined <code>quote_ident</code> / <code>safe_ident</code> / <code>sql_string_lit</code> call sites. <code>proptest</code> with arbitrary unicode strings — including embedded <code>'</code>, <code>"</code>, <code>;</code>, sqlite-keywords — would catch any helper bug that lets a hostile table/column name break out into the surrounding SQL. <strong>Highest ROI by far</strong> — affects every data-ingest path.</li>
+<li class=""><strong><code>is_statement_complete</code></strong> in cli: the 130-LOC Rust replacement for <code>sqlite3_complete</code>. Property test: for any input string, <code>is_statement_complete(s) == sqlite3_complete(s)</code> (if a libsqlite3 reference were available in tests) or against a golden set of statements. Catches misclassified strings/comments/BEGIN-END.</li>
+<li class=""><strong>Auth-action code mapping</strong> (<code>sqlite_code_to_auth_action</code> in host): table-driven test over every <code>SQLITE_*</code> action constant. Not strictly fuzz but the same vibe — catches the 1-in-33 chance someone shuffled the arms.</li>
+<li class=""><strong>Policy / capability deny path</strong>: <code>proptest</code> over Policy struct mutations + a fixed extension, assert that the loader respects each constraint. Currently zero property coverage.</li>
+<li class=""><strong>CAS digest fallback (blake3 → sha256)</strong>: input arbitrary bytes, both algorithms compute the digest, store under blake3, lookup-by-blake3 returns Some, lookup-by-sha256 returns Some, lookup-by-random returns None. Property over the value space. Catches index bugs and the L2b "wasted second SELECT" assertion.</li>
+</ol>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=7-ci-gaps>7. CI gaps<a href=#7-ci-gaps class=hash-link aria-label="Direct link to 7. CI gaps" title="Direct link to 7. CI gaps" translate=no>​</a></h2>
+<p>Current <code>.github/workflows/ci.yml</code> runs:</p>
+<ul>
+<li class=""><code>host-checks</code>: <code>cargo fmt --check</code> + <code>cargo clippy --all-targets --all-features</code> + <code>cargo test --all-features</code> (host crate only)</li>
+<li class=""><code>cache-tests</code>: <code>cargo test --lib cache</code> against host</li>
+<li class=""><code>compose-tests</code>: <code>cargo test --lib compose_provider</code> against host</li>
+</ul>
+<p><strong>Not in CI:</strong></p>
+<ul>
+<li class=""><code>core/</code> <code>cli/</code> <code>sqlink-httpd/</code> <code>sqlite-lib/</code> <code>sqlite-embed/</code> tests — none of these crates are even built in CI</li>
+<li class=""><code>sqlite-cas-cache/</code> integration tests (41 tests across 4 files) — not exercised</li>
+<li class="">The TVM crates' substrate probes (<code>tvm_*_probe.rs</code>)</li>
+<li class="">The wasm32-wasip2 build of the cli — none of the wasm side is built</li>
+<li class=""><code>tests/cli/*.sh</code> (894 lines of bash smokes)</li>
+<li class=""><code>tests/integration/jco/*.mjs</code> (1627 lines of JS smokes)</li>
+<li class=""><code>examples/sqlite-utils-tour.sql</code> (no CI invocation)</li>
+<li class="">Workspace-wide <code>cargo fmt --check</code> / <code>cargo clippy</code> (only host is checked)</li>
+<li class="">Doc build (<code>cargo doc --no-deps</code>) — would catch broken intra-doc links</li>
+<li class=""><code>tooling/doc-refs-check.py</code> — already exists, not wired</li>
+<li class="">Submodule (<code>sqlite-loader-wit/</code>) fmt+clippy+tests</li>
+<li class="">Coverage report — no tarpaulin / llvm-cov</li>
+<li class="">License-header check (LICENSE shipped 6fe4f81; no enforcement of per-file headers)</li>
+</ul>
+<p>The ci.yml itself says "Future jobs (held until the wasm-side build is moved into CI)" — that's the single biggest gap. Cold-start cost is real (~150 MB wasi-sdk install per run + cargo-component install) but cacheable.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=8-recommended-next-moves>8. Recommended next moves<a href=#8-recommended-next-moves class=hash-link aria-label="Direct link to 8. Recommended next moves" title="Direct link to 8. Recommended next moves" translate=no>​</a></h2>
+<ol>
+<li class=""><strong>Fix the ci.yml expansion</strong>: build cli + 3 reference extensions on wasm32-wasip2, run the tour script, run the <code>tests/cli/*.sh</code> smokes. M effort; cache the wasi-sdk.</li>
+<li class=""><strong>Add host/tests/loaded_extension_smoke.rs</strong>: build case + stats + vec0 in the test's build step (via <code>cargo build -p ... --target wasm32-wasip2</code>), <code>host.load_extension_from_path()</code>, exercise one of each kind, assert correctness. This is the #1 headline gap.</li>
+<li class=""><strong>Add proptest to extensions/sqlite-utils-schema</strong>: just the quote_ident + sql_string_lit helpers. ~50 LOC, catches the embarrassing OSS day-1 bug class.</li>
+<li class=""><strong>Wire the existing shell smokes into CI</strong>: <code>tests/cli/*.sh</code> exists; running it adds zero new test code, just a new CI job that probably reveals 2-3 stale assertions to fix.</li>
+<li class=""><strong>Workspace-wide fmt/clippy</strong>: bump the host-only check to <code>cargo fmt --all --check</code> + <code>cargo clippy --workspace --all-targets</code>. Will surface lint debt across the 10+ in-repo crates that have never been linted.</li>
+</ol>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-for-this-audit>Out of scope for this audit<a href=#out-of-scope-for-this-audit class=hash-link aria-label="Direct link to Out of scope for this audit" title="Direct link to Out of scope for this audit" translate=no>​</a></h2>
+<ul>
+<li class="">Refactoring opportunities (the user mentioned them in the same prompt; separate pass)</li>
+<li class="">Performance / optimization (separate pass — <code>tooling/bench.py</code> is the entry point)</li>
+<li class="">Doc completeness audit (<code>tooling/doc-refs-check.py</code> would surface that)</li>
+<li class="">Security review (<code>security-review</code> skill exists for that)</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-release-readiness-testing.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/sqlink/plans/PLAN-release-readiness-perf-ux><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>PLAN: release-readiness perf + UX audit</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/sqlink/plans/PLAN-release-readiness-code-health><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>PLAN: code-health + tech-debt audit for OSS release</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#tldr--top-5-additions-for-shipping-confidence class="table-of-contents__link toc-highlight">TL;DR — top 5 additions for shipping confidence</a><li><a href=#1-test-inventory class="table-of-contents__link toc-highlight">1. Test inventory</a><li><a href=#2-coverage-gaps-by-crate class="table-of-contents__link toc-highlight">2. Coverage gaps by crate</a><ul><li><a href=#host-the-deepest-surface-matters-most class="table-of-contents__link toc-highlight">host/ (the deepest surface; matters most)</a><li><a href=#cli-zero-rust-tests class="table-of-contents__link toc-highlight">cli/ (zero Rust tests)</a><li><a href=#sqlite-lib-zero-tests-covered-only-via-host-transitively class="table-of-contents__link toc-highlight">sqlite-lib/ (zero tests; covered only via host transitively)</a><li><a href=#core-13-unit-tests-thin class="table-of-contents__link toc-highlight">core/ (13 unit tests; thin)</a><li><a href=#sqlink-httpd-zero-tests class="table-of-contents__link toc-highlight">sqlink-httpd/ (zero tests)</a></ul><li><a href=#3-error-path-coverage-sample class="table-of-contents__link toc-highlight">3. Error path coverage (sample)</a><li><a href=#4-integration-test-gaps class="table-of-contents__link toc-highlight">4. Integration test gaps</a><li><a href=#5-smoke-harness-audit-post-rebrand class="table-of-contents__link toc-highlight">5. Smoke harness audit (post-rebrand)</a><li><a href=#6-property--fuzz-test-opportunities class="table-of-contents__link toc-highlight">6. Property / fuzz test opportunities</a><li><a href=#7-ci-gaps class="table-of-contents__link toc-highlight">7. CI gaps</a><li><a href=#8-recommended-next-moves class="table-of-contents__link toc-highlight">8. Recommended next moves</a><li><a href=#out-of-scope-for-this-audit class="table-of-contents__link toc-highlight">Out of scope for this audit</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

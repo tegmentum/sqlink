@@ -1,0 +1,533 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-wal-archive-extension" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>Plan: wal-archive extension continuous WAL backup for sqlink | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-wal-archive-extension /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Plan: wal-archive extension  continuous WAL backup for sqlink | sqlink"/><meta data-rh=true name=description content="Status (2026-06-24)"/><meta data-rh=true property=og:description content="Status (2026-06-24)"/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-wal-archive-extension /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-wal-archive-extension hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-wal-archive-extension hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://tegmentum.github.io/sqlink/plans/PLAN-wal-archive-extension","name":"Plan: wal-archive extension  continuous WAL backup for sqlink","position":1}]}</script><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/><span title=Introduction class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/getting-started><span title="Getting Started" class=linkLabel_WmDU>Getting Started</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/sqlink/concepts/extensions><span title=Concepts class=categoryLinkLabel_W154>Concepts</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/extensions><span title=Extensions class=linkLabel_WmDU>Extensions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/bundles><span title=Bundles class=linkLabel_WmDU>Bundles</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/prefixes><span title=Prefixes class=linkLabel_WmDU>Prefixes</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/cas-cache><span title=Cas-cache class=linkLabel_WmDU>Cas-cache</span></a></ul><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/roadmap><span title=Roadmap class=linkLabel_WmDU>Roadmap</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/sqlink/plans/PLAN-bundles><span title="Plans (source of truth)" class=categoryLinkLabel_W154>Plans (source of truth)</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-bundles><span title="Plan: bundles  named extension sets with optional baked binaries" class=linkLabel_WmDU>Plan: bundles  named extension sets with optional baked binaries</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-prefixes><span title="Plan: function prefixes — SPARQL-style namespacing for SQL functions" class=linkLabel_WmDU>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-followups><span title=PLAN-followups class=linkLabel_WmDU>PLAN-followups</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-browser-runtime><span title="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill" class=linkLabel_WmDU>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/sqlink/plans/PLAN-wal-archive-extension><span title="Plan: wal-archive extension  continuous WAL backup for sqlink" class=linkLabel_WmDU>Plan: wal-archive extension  continuous WAL backup for sqlink</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-tvm-integration><span title="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)" class=linkLabel_WmDU>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wasmmachine><span title="Plan: Register sqlite-cli as a wasmMachine application" class=linkLabel_WmDU>Plan: Register sqlite-cli as a wasmMachine application</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-interactive-capture><span title="Plan: interactive changeset capture (daemon vs WIT-extension)" class=linkLabel_WmDU>Plan: interactive changeset capture (daemon vs WIT-extension)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-benchmarks><span title="Benchmarks: sqlite-wasm-run vs native sqlite3" class=linkLabel_WmDU>Benchmarks: sqlite-wasm-run vs native sqlite3</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-perf-ux><span title="PLAN: release-readiness perf + UX audit" class=linkLabel_WmDU>PLAN: release-readiness perf + UX audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-testing><span title="PLAN: release-readiness testing audit" class=linkLabel_WmDU>PLAN: release-readiness testing audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-code-health><span title="PLAN: code-health + tech-debt audit for OSS release" class=linkLabel_WmDU>PLAN: code-health + tech-debt audit for OSS release</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-speculative><span title="Plan: speculative items (consumer-driven)" class=linkLabel_WmDU>Plan: speculative items (consumer-driven)</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/sqlink/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Plans (source of truth)</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Plan: wal-archive extension  continuous WAL backup for sqlink</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Plan: <code>wal-archive</code> extension  continuous WAL backup for sqlink</h1></header>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-24>Status (2026-06-24)<a href=#status-2026-06-24 class=hash-link aria-label="Direct link to Status (2026-06-24)" title="Direct link to Status (2026-06-24)" translate=no>​</a></h2>
+<p><strong>v1 implementation landed on the <code>wal-archive-extension</code> branch.</strong>
+The consumer extension (<code>extensions/wal-archive/</code>) ships against
+the four substrate landings (#438 native wal-hook wiring, #439
+wal-frames SPI, #440 s3-base SPI, #441 cached hook+scalar Store
+unification). Native end-to-end tests pass under both deployment
+paths (sqlink-native + sqlink+wasm-cli) via a mock S3 server:</p>
+<ul>
+<li class=""><code>wal_archive_start</code> parses opts, pulls sidecar state from S3,
+installs in-Store state.</li>
+<li class="">The wal-hook callback drains frames via wal-frames::read-frames,
+buffers them, and flushes compressed segments to S3 when the
+byte/time threshold fires.</li>
+<li class=""><code>wal_archive_snapshot_now()</code> serializes the db via
+spi.serialize-db, compresses, ships to S3, GCs older WAL
+segments.</li>
+<li class=""><code>wal_archive_restore()</code> pulls latest.snap.lz4 + the sidecar,
+patches the snapshot's journal-mode header bytes from WAL
+(<code>02 02</code>) to legacy (<code>01 01</code>), deserializes into the spi
+connection's main via spi.deserialize-db, and writes the
+deserialized image to <code>target_path</code> via spi.backup-into.
+The new <code>wal_archive_roundtrip_{native,wasm_cli}</code> smoke
+tests exercise the full S3-to-disk path end-to-end and
+verify the target_path file opens cleanly under the system
+sqlite3 with all source rows present. WAL replay past the
+snapshot is deferred to v2 (see below); the v1 loss window
+is &lt; 1 s of writes at the default flush threshold.</li>
+</ul>
+<p><strong>v2 follow-ups</strong> (none of which block v1 shipping):</p>
+<ol>
+<li class=""><strong>WAL replay past the snapshot.</strong> v1 surfaces a count of
+skipped segments but doesn't actually apply them. The
+two earlier wedges that blocked this  (a) wasmtime-wasi
+45.0.1's <code>in_tokio</code> doing <code>block_on</code> without
+<code>block_in_place</code> (which panics when wasi:filesystem ops
+follow async host calls in the same scalar dispatch),
+and (b) <code>spi::backup_into</code> returning SQLITE_CANTOPEN
+after <code>spi::deserialize-db</code> of a WAL-mode snapshot  are
+resolved as of #443: (b) was a journal-mode-byte issue
+in the snapshot payload itself (sqlite3_deserialize on a
+WAL-mode image tried to open the non-existent WAL
+sidecar), fixed by a two-byte patch (offsets 18/19) on
+the decompressed snap bytes before deserialize-db. (a)
+is sidestepped by the same fix because the v1 restore
+path no longer needs any wasi:filesystem ops from the
+guest  spi.backup_into materializes target_path through
+the host's tokio context. WAL replay past the snapshot
+can now build on this same shape.</li>
+<li class=""><strong>Timer-driven snapshots.</strong> v1 ships with on-demand
+<code>snapshot_now()</code> only. The opts JSON's
+<code>snapshot_interval_seconds</code> field is parsed + stored for the
+follow-up.</li>
+<li class=""><strong>zstd compression option.</strong> v1 ships lz4-only. The opts
+JSON should grow a <code>compression</code> field once a zstd alternative
+lands.</li>
+<li class=""><strong><code>sqlink --backup</code> CLI flag</strong> (Stage 7 stretch). v1 requires
+explicit <code>.load wal-archive ... + SELECT wal_archive_start(...)</code>.</li>
+<li class=""><strong>Browser deployment.</strong> #437 (vfs-tvm WAL support) and #444
+(browser-side s3-base / wal-frames / wal-hook / metadata /
+spi-loader stubs) have both landed. The composed runtime's
+in-wasm VFS now honors <code>PRAGMA journal_mode=WAL</code> via the
+iVersion=2 io_methods + xShm* family + per-file lock-level
+bookkeeping, and the browser extension-imports layer stubs
+out the newer <code>sqlite:extension/*</code> interfaces so hookprobe
+and wal-archive can instantiate (full browser playwright
+suite is now 12/12). What's left for a real browser
+deployment of wal-archive: the s3-base stubs return
+<code>SQLITE_ERROR</code> when called, so the wal-archive S3 backend
+needs a fetch+SigV4 browser polyfill before it can actually
+ship frames. And the sqlite-lib wal-frames stub still
+returns None — wiring it through the now-WAL-capable VFS
+is a follow-up too.</li>
+</ol>
+<p>Reframe + rename of <code>PLAN-browser-litestream.md</code>. Two changes from
+that earlier doc:</p>
+<ol>
+<li class=""><strong>Scope widens from browser-only to every sqlink deployment.</strong>
+The original framed this as a browser feature because we anchored
+on a single argument: "in-process matters here, a separate daemon
+works fine elsewhere." On a second look, in-process matters
+everywhere there's no first-class process model OR where
+operational overhead matters  edge runtimes, serverless,
+mobile, embedded, multi-tenant SaaS, CLI ergonomics, distributed
+SQLite, and the browser.</li>
+<li class=""><strong>Renamed from <code>litestream</code> to <code>wal-archive</code>.</strong> The extension's
+design is heavily inspired by Ben Johnson's
+<a href=https://litestream.io/ target=_blank rel="noopener noreferrer" class="">Litestream</a>  same primitive (continuous
+WAL frame shipping + periodic base snapshots) and broadly the
+same restore semantics  but it's a separate implementation in a
+different runtime model, so it gets its own functional name.
+Litestream + Ben Johnson get credited in the project README's
+Acknowledgements section alongside Simon Willison + sqlite-utils.</li>
+</ol>
+<p>This plan covers all deployments with <strong>one <code>.wasm</code> extension</strong> built
+on the dispatch-bridge substrate that already serves scalars,
+aggregates, and collations  one new WAL-hook surface added to
+<code>dispatch-bridge</code>, plus a Rust extension that imports the existing
+<code>~/git/s3-wasm</code> component for storage.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=why-a-sqlink-internal-wal-archive-beats-running-upstream-litestream-alongside>Why a sqlink-internal wal-archive beats running upstream Litestream alongside<a href=#why-a-sqlink-internal-wal-archive-beats-running-upstream-litestream-alongside class=hash-link aria-label="Direct link to Why a sqlink-internal wal-archive beats running upstream Litestream alongside" title="Direct link to Why a sqlink-internal wal-archive beats running upstream Litestream alongside" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Scenario<th>Why in-process wins<tbody><tr><td><strong>Browser</strong><td>No process model. Cloudflare Workers / Vercel Edge / Fastly Compute / Deno Deploy same constraint. Litestream daemon literally cannot run.<tr><td><strong>Serverless</strong> (Lambda, Cloud Functions)<td>Short-lived process; Litestream's "shipping happens between commits" assumes a long-lived daemon. In-process can flush per-commit or at function-exit.<tr><td><strong>Mobile</strong> (iOS/Android via wasm)<td>No background daemon allowed by platform.<tr><td><strong>Embedded / IoT / kiosks</strong><td>One fewer binary to package, configure, restart, monitor. systemd unit on a Raspberry Pi is one more failure mode.<tr><td><strong>Multi-tenant SaaS</strong><td>1000 tenants × 1 daemon each = 1000 processes. One sqlink with 1000 connections each managing its own internal backup = 1 process.<tr><td><strong>CLI ergonomics</strong><td><code>sqlink --backup s3://my-bucket/path/</code> is a flag. Upstream Litestream needs a yaml config + a separate invocation.<tr><td><strong>Distributed SQLite</strong> (Marmot/rqlite shape)<td>The storage sink isn't S3-specific  with the right backend it's another sqlink instance. Peer-to-peer WAL shipping without external infra.<tr><td><strong>Complement to session/changeset</strong><td>Logical replication (changesets, cross-version, cross-schema) and physical replication (WAL segments, byte-identical PITR) are both useful for different things. Having both as sqlink extensions beats running Litestream + a separate changeset tool.</table>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-prerequisites-revised-2026-06-23-after-design-conversation>Substrate prerequisites (revised 2026-06-23 after design conversation)<a href=#substrate-prerequisites-revised-2026-06-23-after-design-conversation class=hash-link aria-label="Direct link to Substrate prerequisites (revised 2026-06-23 after design conversation)" title="Direct link to Substrate prerequisites (revised 2026-06-23 after design conversation)" translate=no>​</a></h2>
+<p>Four substrate pieces land before the extension itself  the
+original plan assumed all four were in place, they weren't. Each
+is ~1-2 days; total ~5 days of substrate before the extension's
+~12 days.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-1-438-native-cli-wal-hook-wiring--resolved>Substrate 1 (#438): native cli wal-hook wiring — RESOLVED<a href=#substrate-1-438-native-cli-wal-hook-wiring--resolved class=hash-link aria-label="Direct link to Substrate 1 (#438): native cli wal-hook wiring — RESOLVED" title="Direct link to Substrate 1 (#438): native cli wal-hook wiring — RESOLVED" translate=no>​</a></h3>
+<p>Landed on branch <code>cli-wal-hook-wiring</code> (sqlink) + sqlite-loader-wit
+<code>main</code> (ab3576f). The native side now mirrors the browser-side
+substrate that <code>#436</code> shipped:</p>
+<ul>
+<li class=""><code>sqlite-loader-wit/wit/guest.wit</code>: <code>manifest.has-wal-hook: bool</code>
+<ul>
+<li class=""><code>manifest.wal-hook-id: u64</code>; <code>hooked</code> world also exports
+<code>wal-hook</code> so a single loader linker dispatches all four hook
+surfaces.</li>
+</ul>
+</li>
+<li class=""><code>host/src/lib.rs</code>: <code>register_wal_hook</code> impl on the spi-loader
+trait + <code>dispatch_on_wal_hook</code> async dispatcher. Clears
+SQLite's default <code>wal_autocheckpoint</code> wal-hook before installing
+the extension's (avoids a UB drop of SQLite's internal pointer).</li>
+<li class=""><code>cli/src/lib.rs</code>: parallel <code>if manifest.has_wal_hook { register_wal_hook(...) }</code>
+block alongside the existing <code>has-authorizer</code> / <code>has-update-hook</code> /
+<code>has-commit-hook</code> walks.</li>
+<li class=""><code>extensions/hookprobe</code>: manifest declares <code>has-wal-hook: true</code> /
+<code>wal-hook-id: 42</code>.</li>
+<li class=""><code>tests/extension-smoke/src/test_wal_hook.rs</code>: native mirror of
+<code>browser/tests/composed-wal-hook.spec.js</code>, asserts a
+<code>wal:42:main:&lt;n></code> event in hookprobe's drain log after a
+<code>PRAGMA journal_mode=WAL</code> + a handful of INSERTs.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-2-439-wal-frames-spi-interface--landed-2026-06-23-option-a>Substrate 2 (#439): wal-frames SPI interface  <strong>LANDED 2026-06-23 (option A)</strong><a href=#substrate-2-439-wal-frames-spi-interface--landed-2026-06-23-option-a class=hash-link aria-label="Direct link to substrate-2-439-wal-frames-spi-interface--landed-2026-06-23-option-a" title="Direct link to substrate-2-439-wal-frames-spi-interface--landed-2026-06-23-option-a" translate=no>​</a></h3>
+<p>Original plan called for TWO new SPI interfaces  <code>wal-frames</code> AND
+<code>backup</code>. The design checkpoint at the head of this work picked
+<strong>option A</strong>: drop the new <code>backup</code> interface and reuse the
+existing <code>spi.serialize-db</code> (which has been there since the
+initial spi cut, gated by <code>capability::spi</code>). Reduces the substrate
+surface by ~30% with no functional loss: wal-archive's snapshot
+cadence (default 24h) is the only <code>serialize-db</code> consumer the
+extension needs.</p>
+<p>What actually landed:</p>
+<div class="language-wit codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-wit codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">// sqlite-loader-wit/wit/host-spi.wit</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">interface wal-frames {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  use types.{sqlite-error};</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  /// 32-byte WAL file header. None when journal_mode  wal or</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  /// the WAL file doesn't exist yet.</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  get-wal-header: func(db-name: string)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    -> result&lt;option&lt;list&lt;u8>>, sqlite-error>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  /// N frames starting at `start-frame` (1-based per SQLite's</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  /// WAL format). Each frame is 24 + page_size bytes. Caller</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  /// uses the WAL header to derive page_size first.</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  read-frames: func(db-name: string, start-frame: u32, n-frames: u32)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    -> result&lt;list&lt;u8>, sqlite-error>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">// sqlite-loader-wit/wit/policy.wit  capability enum gained:</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">//   wal-frames,</span><br/></div></code></pre></div></div>
+<p>Snapshot serialize: just call the existing
+<code>sqlite:extension/spi.serialize-db(db-name)</code>  no separate
+interface needed. The wal-archive snapshot cadence path is
+<code>grant.contains(Capability::Spi) ? spi::serialize_db("main") : err</code>.</p>
+<p>Other landed pieces:</p>
+<ul>
+<li class=""><code>Capability::WalFrames</code> variant on <code>sqlite-loader-wit/src/lib.rs</code>
+(the Rust source of truth shared across host / loader / native).</li>
+<li class=""><code>wal-frames</code> imported into every world (minimal, minimal-http,
+minimal-dns, stateful, lifecycle-aware, resolving, collating,
+authorizing, hooked, tabular, tabular-mutating, dotcmd-aware,
+wal-aware, hookprobe, full)  the per-shape host bindgens
+(<code>Hooked::add_to_linker</code>, <code>Authorizing::add_to_linker</code>, ...) all
+install the same <code>wal_frames::Host</code> impl via <code>with:</code> clauses, so
+the wal-archive-shaped extension can be dispatched against any
+world the host instantiates it as.</li>
+<li class="">Native host dispatcher (<code>host/src/lib.rs</code>): both methods open
+the on-disk <code>&lt;sqlite3_db_filename(db-name)>-wal</code> sidecar with a
+<code>std::fs::read</code>, return the requested bytes. Fail-closed on
+<code>Capability::WalFrames</code> not granted at load time (SQLITE_PERM
+with a "wal-frames capability not granted" message).</li>
+<li class="">Browser-side stub in <code>sqlite-wasm/sqlite-lib</code>: returns the
+documented sentinel (None / SQLITE_NOTFOUND). #437 (vfs-tvm
+WAL support) has now landed, so the VFS underneath this stub
+is WAL-capable; replacing the stub with a real implementation
+that reads the WAL through the now-functional substrate is a
+follow-up. The WIT contract stays honored so a wal-archive-
+shaped extension can compose with sqlite-lib in the browser
+today, even though the live data isn't reachable yet.</li>
+<li class="">New test-bench scalars on hookprobe (<code>hookprobe_wal_header</code>,
+<code>hookprobe_read_frames</code>, <code>hookprobe_serialize_main</code>) and a
+native end-to-end smoke
+(<code>tests/extension-smoke/src/test_wal_frames.rs</code>, scenarios 1+2)
+asserting WAL magic + frame size + "SQLite format 3\0" header
+on the serialized snapshot.</li>
+</ul>
+<p>The <code>backup</code> interface and <code>backup-aware</code> world that briefly
+appeared in <code>sqlite-loader-wit</code> f66bdca were reverted in 522645e
+once the design call landed.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-3-440-host-resident-s3-base-spi-bridge--landed>Substrate 3 (#440): host-resident <code>s3-base</code> SPI bridge  <strong>LANDED</strong><a href=#substrate-3-440-host-resident-s3-base-spi-bridge--landed class=hash-link aria-label="Direct link to substrate-3-440-host-resident-s3-base-spi-bridge--landed" title="Direct link to substrate-3-440-host-resident-s3-base-spi-bridge--landed" translate=no>​</a></h3>
+<p>Defines <code>sqlite:extension/s3-base@0.1.0</code> in <code>sqlite-loader-wit</code>,
+mirroring <code>~/git/s3-wasm</code>'s <code>s3-base</code> interface (get/put/delete/
+head/list/copy-object) record-for-record. Extensions import this
+interface like they import spi/types/policy.</p>
+<p>What landed:</p>
+<ul>
+<li class="">
+<p>WIT contract (<code>sqlite-loader-wit/wit/host-spi.wit</code>): the
+<code>s3-base</code> interface plus the six S3 method signatures + the
+record types (s3-endpoint-config, s3-credentials, options,
+outputs) and the s3-error variant (including the extra
+<code>capability-not-granted</code> variant for the grant gate).</p>
+</li>
+<li class="">
+<p><code>Capability::S3</code> in <code>sqlite-loader-wit/wit/policy.wit</code> + the
+Rust <code>Capability::S3</code> variant. Operator picks it via
+<code>--grant=s3</code> on <code>.load</code>.</p>
+</li>
+<li class="">
+<p>World widening: every world that hosts an extension (minimal,
+minimal-http, minimal-dns, stateful, lifecycle-aware,
+resolving, collating, authorizing, hooked, wal-aware,
+hookprobe, tabular, tabular-mutating, dotcmd-aware, full)
+imports <code>s3-base</code> so the per-shape host bindgens all install
+the same <code>s3_base::Host</code> impl via <code>with:</code> clauses.</p>
+</li>
+<li class="">
+<p>Native host bridge (<code>host/src/lib.rs</code> + <code>host/src/s3.rs</code>):
+<strong>in-host</strong> strategy. Each WIT method is dispatched via
+<code>tokio::spawn_blocking</code> to a synchronous routine that signs
+the request with the <code>aws-sigv4</code> Rust crate and sends it
+through <code>reqwest::blocking</code>. Fail-closed on
+<code>Capability::S3</code> not granted at load time (returns
+<code>S3Error::CapabilityNotGranted</code>).</p>
+<p>Implementation strategy decision: in-host beats composing the
+s3-wasm component into wasmtime because s3-wasm imports
+<code>wasi:http/outgoing-handler</code> + <code>aws:sigv4/{types,signer}</code>;
+satisfying those would require <code>wasmtime-wasi-http</code> + an
+additional aws-sigv4 component instance per loaded-extension
+Store, and the bookkeeping cost dwarfs the payoff for a
+sink-style SPI. The WIT contract is mirrored 1:1 so a future
+iteration can swap implementations without touching extension
+code.</p>
+</li>
+<li class="">
+<p>Browser-side stub in <code>sqlite-wasm/sqlite-lib</code>: each method
+returns <code>S3Error::Internal("not implemented; pending fetch+ SigV4 polyfill bridge follow-up to #437")</code>. The wal-archive
+extension can't even start in the browser without WAL access
+(#437), so the browser-polyfill bridge is a follow-up rather
+than v1 scope.</p>
+</li>
+<li class="">
+<p>New test-bench scalars on hookprobe (<code>hookprobe_s3_put</code>,
+<code>hookprobe_s3_get</code>, <code>hookprobe_s3_list</code>, <code>hookprobe_s3_delete</code>)
+and a native end-to-end smoke (<code>tests/extension-smoke/src/ test_s3_base.rs</code>, scenarios 1+2) that spins up a local mock
+S3 server (s3s + s3s-fs, filesystem-backed) on an ephemeral
+port and asserts a full PUT/GET/LIST/DELETE round-trip with
+byte equality.</p>
+</li>
+</ul>
+<p>Pattern reuses the dispatch-bridge work from #429/#432/#433/#436
+and the wal-frames substrate from #439  one more flavor of
+"host-resident capability surface" where extensions don't bring
+their own credentials.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-4-436-dispatch-bridge-wal-hook>Substrate 4 (#436): dispatch-bridge WAL hook<a href=#substrate-4-436-dispatch-bridge-wal-hook class=hash-link aria-label="Direct link to Substrate 4 (#436): dispatch-bridge WAL hook" title="Direct link to Substrate 4 (#436): dispatch-bridge WAL hook" translate=no>​</a></h3>
+<p>Already done. Browser-side only; #438 completes the native side.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-5-441-cached-hook--scalar-dispatch--landed-2026-06-23>Substrate 5 (#441): cached hook + scalar dispatch  <strong>LANDED 2026-06-23</strong><a href=#substrate-5-441-cached-hook--scalar-dispatch--landed-2026-06-23 class=hash-link aria-label="Direct link to substrate-5-441-cached-hook--scalar-dispatch--landed-2026-06-23" title="Direct link to substrate-5-441-cached-hook--scalar-dispatch--landed-2026-06-23" translate=no>​</a></h3>
+<p>Native-only correctness fix. Pre-#441 the host re-instantiated the
+loaded extension on every hook firing (one fresh wasmtime Store
+per call), so guest-side <code>thread_local!</code> / <code>OnceLock</code> / <code>static AtomicU64</code> state was wiped between callbacks. The browser side
+shares one instance per page and was unaffected.</p>
+<p>Wal-archive's design requires:</p>
+<ul>
+<li class="">a <code>OnceLock&lt;Mutex&lt;RingBuffer>></code> populated by
+<code>wal_archive_start({opts})</code> (a scalar call) and READ by every
+subsequent <code>on_wal_hook</code> firing,</li>
+<li class="">a <code>static AtomicU64</code> segment-id counter incremented per
+wal-hook firing and observed across them,</li>
+<li class="">a cached WAL header derived once and reused.</li>
+</ul>
+<p>None of those can survive across firings unless the wasm Store
+they live in is reused.</p>
+<p>What landed:</p>
+<ul>
+<li class=""><code>CachedHooked</code> (per-extension <code>Arc&lt;TokioMutex&lt;Option&lt;(Store, Hooked)>>></code>) mirroring the existing <code>CachedMinimal</code> /
+<code>CachedTabular</code> / <code>CachedStateful</code> slots on <code>LoadedExtension</code>.
+Built lazily on the first hook firing or the first scalar call
+routed here, dropped when the extension is unloaded.</li>
+<li class=""><code>CachedAuthorizing</code> slot for symmetry (authorize callbacks now
+also share state across firings within the authorize world).</li>
+<li class=""><code>hooked_locked</code> / <code>authorizing_locked</code> helpers mirroring
+<code>minimal_locked</code> (lazy first instantiate, owned mutex guard,
+per-call budget refresh).</li>
+<li class=""><code>dispatch_on_update</code>, <code>dispatch_on_commit</code>,
+<code>dispatch_on_rollback</code>, <code>dispatch_on_wal_hook</code>,
+<code>dispatch_authorize</code> rewired to use the cached stores.</li>
+<li class=""><code>ScalarRoute::Hooked</code> route in <code>dispatch_scalar</code>: when the
+extension declares any hook (<code>has_update_hook || has_commit_hook || has_wal_hook</code>), scalar dispatch routes
+through the SAME <code>cached_hooked</code> Store the hook dispatchers
+use. Cross-world coherence  the <code>wal_archive_start</code> scalar
+and the next <code>on_wal_hook</code> firing share one instance.</li>
+<li class=""><code>tests/extension-smoke/src/test_wal_hook.rs</code> tightened to
+assert <code>wal:42:main:&lt;n></code> events in <code>hookprobe_drain_log()</code>
+output, mirroring <code>composed-wal-hook.spec.js</code> in browser.</li>
+</ul>
+<p>The <code>wal-aware</code> world has an identical export shape to <code>hooked</code>
+(metadata + scalar-function + update-hook + commit-hook +
+wal-hook); the host's <code>loaded_hooked::Hooked</code> bindgen and the
+single <code>cached_hooked</code> slot service both worlds.</p>
+<p>With this, the wal-archive substrate consumer work can proceed:
+the extension can author against <code>wal-aware</code>, set state from
+<code>wal_archive_start({opts})</code> scalar, and observe / mutate it
+from the per-WAL-commit <code>on_wal_hook</code> callbacks  the native
+side now matches the browser semantics.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dispatch-bridge-core-methods-already-done-in-429432433436><code>dispatch-bridge</code> core methods (already done in #429/#432/#433/#436)<a href=#dispatch-bridge-core-methods-already-done-in-429432433436 class=hash-link aria-label="Direct link to dispatch-bridge-core-methods-already-done-in-429432433436" title="Direct link to dispatch-bridge-core-methods-already-done-in-429432433436" translate=no>​</a></h3>
+<div class="language-wit codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-wit codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">// sqlite-wasm/wit/library.wit (dispatch-bridge interface):</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">register-host-wal-hook: func(</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    ext-name: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    hook-id: u64,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">) -> result&lt;_, sqlite-error>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">// sqlite-loader-wit/wit/spi.wit (dispatch interface):</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">wal-hook: func(</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    ext-name: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    hook-id: u64,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    db-name: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    n-frames-in-wal: u32,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">) -> s32;</span><br/></div></code></pre></div></div>
+<p>Rust impl in sqlite-lib mirrors the scalar/aggregate/collation
+pattern (#429, #432). ~30 lines WIT, ~40 lines Rust. <strong>Half a
+day.</strong> Track as <strong>#436 dispatch-bridge: WAL hook</strong>.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=storage-layer-host-resident-s3-base-via-spi-bridge-substrate-440>Storage layer: host-resident <code>s3-base</code> via SPI bridge (substrate #440)<a href=#storage-layer-host-resident-s3-base-via-spi-bridge-substrate-440 class=hash-link aria-label="Direct link to storage-layer-host-resident-s3-base-via-spi-bridge-substrate-440" title="Direct link to storage-layer-host-resident-s3-base-via-spi-bridge-substrate-440" translate=no>​</a></h2>
+<p>After the design conversation on 2026-06-23, the extension does
+NOT import <code>component:s3-wasm/s3-base@0.1.0</code> directly. Instead it
+imports <code>sqlite:extension/s3-base@0.1.0</code> (the host-resident SPI
+bridge). The host's impl bridges to <code>~/git/s3-wasm</code> natively or
+to fetch+SigV4 in browser. See substrate #440 above.</p>
+<p>The underlying capability  any S3-compatible service (AWS, R2,
+Spaces, MinIO, Backblaze B2)  is unchanged from the original
+design. What changed is the wire shape: extensions never see
+S3 credentials; the host injects them at the bridge layer.</p>
+<p>For reference, <code>~/git/s3-wasm</code> exposes:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">interface s3-base {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  get-object(endpoint, credentials, bucket, key, opts) -> result&lt;get-object-output, error>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  put-object(endpoint, credentials, bucket, key, body, opts) -> result&lt;put-object-output, error>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  delete-object(endpoint, credentials, bucket, key) -> result&lt;_, error>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  head-object(endpoint, credentials, bucket, key) -> result&lt;head-object-output, error>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  list-objects(endpoint, credentials, bucket, opts) -> result&lt;list-objects-output, error>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  copy-object(endpoint, credentials, src-bucket, src-key, dst-bucket, dst-key, opts) -> result&lt;copy-object-output, error>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">interface s3-aws {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  // storage-class, presigned-url, glacier-restore, ...</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div></code></pre></div></div>
+<p>Works with <strong>any S3-compatible service</strong> (AWS, Cloudflare R2,
+DigitalOcean Spaces, MinIO, Backblaze B2). HTTP via
+<code>wasi:http/outgoing-handler</code> (polyfill provides in browser, wasmtime
+provides natively). SigV4 signing via the <code>aws:sigv4</code> component
+already wired.</p>
+<p><strong>Design implication</strong>: the original "injectable WIT storage-sink"
+abstraction layer collapses. The extension just imports <code>s3-base</code>
+directly. The composition (or runtime bindgen) wires s3-wasm in.
+The browser doesn't need a separate JS S3 SDK.</p>
+<p>The pluggable-sink WIT contract is still useful for <strong>non-S3
+backends</strong> (in-memory test fake, IPFS, p2p sqlink-to-sqlink WAL
+shipping). Keep as an OPTIONAL second interface, but s3-wasm is
+the default and ships in v1.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=future-transport-gitwireguard-wasm>Future transport: <code>~/git/wireguard-wasm</code><a href=#future-transport-gitwireguard-wasm class=hash-link aria-label="Direct link to future-transport-gitwireguard-wasm" title="Direct link to future-transport-gitwireguard-wasm" translate=no>​</a></h2>
+<p><code>~/git/wireguard-wasm/</code> is the project's WireGuard component
+(x25519-dalek + chacha20poly1305 + blake2, full protocol stack).
+Not needed for v1 (TLS via wasi:http handles transit security to
+S3), but two future patterns benefit from it:</p>
+<ul>
+<li class=""><strong>p2p sqlink-to-sqlink WAL shipping</strong> over an encrypted tunnel
+to a private peer  no need for the destination to expose an
+HTTPS endpoint.</li>
+<li class=""><strong>Shipping to private/internal storage</strong> behind a network boundary
+without TLS termination at the edge.</li>
+</ul>
+<p>Document as a future sink transport; not in v1 scope.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=layout>Layout<a href=#layout class=hash-link aria-label="Direct link to Layout" title="Direct link to Layout" translate=no>​</a></h2>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">extensions/wal-archive/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  Cargo.toml                  # imports s3-wasm via path / component dep</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  wit/wal-archive.wit         # the extension's own surface</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  src/lib.rs                  # WIT export glue</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  src/wal.rs                  # WAL frame capture (uses register-host-wal-hook)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  src/segment.rs              # frame batching + compression</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  src/snapshot.rs             # base snapshot via sqlite3_backup</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  src/state.rs                # sidecar state in sink</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  src/s3_sink.rs              # adapter from extension to s3-wasm imports</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  src/restore.rs              # download + replay</span><br/></div></code></pre></div></div>
+<p><strong>No <code>browser/</code> scaffolding.</strong> The same <code>.component.wasm</code> works in
+every scenario.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=wit-contract>WIT contract<a href=#wit-contract class=hash-link aria-label="Direct link to WIT contract" title="Direct link to WIT contract" translate=no>​</a></h2>
+<div class="language-wit codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-wit codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">package walarchive:replication@0.1.0;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">interface replicator {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  use types.{sqlite-value};   // from sqlite:extension/types</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  record options {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    snapshot-interval-seconds: u64,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    flush-bytes-threshold: u32,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    flush-ms-threshold: u32,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    compression: compression-codec,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    prefix: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    s3-endpoint: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    s3-bucket: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    s3-region: string,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    // s3-credentials sourced from wasi:cli/environment OR explicit opt</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  }</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  variant compression-codec { none, lz4, zstd }</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  start: func(db-name: string, opts: options) -> result&lt;_, string>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  snapshot-now: func() -> result&lt;_, string>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  stop: func() -> result&lt;_, string>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  status: func() -> replication-status;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  restore: func(db-name: string, target-path: string, opts: options) -> result&lt;_, string>;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">world wal-archive-extension {</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  import sqlite:extension/spi@0.1.0;          // serialize-db (snapshots)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  import sqlite:extension/types@0.1.0;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  import sqlite:extension/metadata@0.1.0;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  import sqlite:extension/wal-frames@0.1.0;   // substrate #439 (landed)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  import sqlite:extension/s3-base@0.1.0;      // substrate #440 (host-resident)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  import wasi:clocks/wall-clock@0.2.0;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  export replicator;</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">}</span><br/></div></code></pre></div></div>
+<p>The earlier sketch imported a separate <code>sqlite:extension/backup</code>
+interface here. Per substrate-#439's design checkpoint it was
+dropped: the existing <code>spi.serialize-db</code> covers the one-shot
+serialize the snapshot path needs (it shipped in the initial spi
+cut and is already gated by <code>capability::spi</code>).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=mechanics>Mechanics<a href=#mechanics class=hash-link aria-label="Direct link to Mechanics" title="Direct link to Mechanics" translate=no>​</a></h2>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">on start(db_name, opts):</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - register WAL hook via spi-loader.register-wal-hook</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    (routes through dispatch-bridge.register-host-wal-hook)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - load sidecar state from s3 (s3-base::get-object)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - catch up any WAL frames newer than state.last_uploaded_frame</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">on wal_hook(db, name, n_pages):</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - read frames from &lt;db>-wal via wasi:filesystem</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - append to in-memory ring buffer</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - flush() when buffer crosses threshold OR enough wall-clock elapsed</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">flush():</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - segment_id = next id</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - bytes = compress(buffer)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - s3-base::put-object(endpoint, credentials, bucket,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                        "{prefix}{db}/wal/{segment_id:020}.{ext}", bytes)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - update state.json via s3-base::put-object</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - buffer.clear()</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">snapshot loop (every snapshot_interval_seconds):</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - sqlite3_backup_init  memory db  serialize  compress</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - s3-base::put-object snapshot + update latest pointer</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  - garbage-collect WAL segments older than the snapshot frame</span><br/></div></code></pre></div></div>
+<p>Restore reverses: <code>s3-base::get-object</code> the latest snapshot,
+decompress to OPFS / local file, <code>s3-base::list-objects</code> WAL
+segments past the snapshot frame, append to <code>&lt;target>-wal</code>, open
+the db (SQLite replays the WAL).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=per-scenario-invocation>Per-scenario invocation<a href=#per-scenario-invocation class=hash-link aria-label="Direct link to Per-scenario invocation" title="Direct link to Per-scenario invocation" translate=no>​</a></h2>
+<p><strong>Browser</strong>:</p>
+<div class="language-js codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-js codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token keyword" style=color:#00009f>const</span><span class="token plain"> db </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token keyword control-flow" style=color:#00009f>await</span><span class="token plain"> </span><span class="token function" style=color:#d73a49>openDatabase</span><span class="token punctuation" style=color:#393A34>(</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword control-flow" style=color:#00009f>await</span><span class="token plain"> db</span><span class="token punctuation" style=color:#393A34>.</span><span class="token method function property-access" style=color:#d73a49>loadExtension</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>'wal-archive'</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> walArchiveBytes</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword control-flow" style=color:#00009f>await</span><span class="token plain"> db</span><span class="token punctuation" style=color:#393A34>.</span><span class="token method function property-access" style=color:#d73a49>exec</span><span class="token punctuation" style=color:#393A34>(</span><span class="token template-string template-punctuation string" style=color:#e3116c>`</span><span class="token template-string string" style=color:#e3116c>SELECT wal_archive_start('user-42', json_object(</span><br/></div><div class=token-line style=color:#393A34><span class="token template-string string" style=color:#e3116c>  'snapshot_interval_seconds', 86400,</span><br/></div><div class=token-line style=color:#393A34><span class="token template-string string" style=color:#e3116c>  's3_endpoint', 'https://s3.amazonaws.com',</span><br/></div><div class=token-line style=color:#393A34><span class="token template-string string" style=color:#e3116c>  's3_bucket', 'my-app-backups',</span><br/></div><div class=token-line style=color:#393A34><span class="token template-string string" style=color:#e3116c>  's3_region', 'us-east-1',</span><br/></div><div class=token-line style=color:#393A34><span class="token template-string string" style=color:#e3116c>  'prefix', 'user-42/'</span><br/></div><div class=token-line style=color:#393A34><span class="token template-string string" style=color:#e3116c>))</span><span class="token template-string template-punctuation string" style=color:#e3116c>`</span><span class="token punctuation" style=color:#393A34>)</span><br/></div></code></pre></div></div>
+<p><strong>Native</strong>:</p>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">sqlink </span><span class="token parameter variable" style=color:#36acaa>--db</span><span class="token plain"> user.sqlite </span><span class="token parameter variable" style=color:#36acaa>-c</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"</span><br/></div><div class=token-line style=color:#393A34><span class="token string" style=color:#e3116c>  .load wal_archive.component.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token string" style=color:#e3116c>  SELECT wal_archive_start('user', json_object(</span><br/></div><div class=token-line style=color:#393A34><span class="token string" style=color:#e3116c>    's3_endpoint', 'https://s3.amazonaws.com',</span><br/></div><div class=token-line style=color:#393A34><span class="token string" style=color:#e3116c>    's3_bucket', 'my-app-backups',</span><br/></div><div class=token-line style=color:#393A34><span class="token string" style=color:#e3116c>    's3_region', 'us-east-1',</span><br/></div><div class=token-line style=color:#393A34><span class="token string" style=color:#e3116c>    'prefix', 'user/'));</span><br/></div><div class=token-line style=color:#393A34><span class="token string" style=color:#e3116c>"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic># or as a flag:</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">sqlink </span><span class="token parameter variable" style=color:#36acaa>--db</span><span class="token plain"> user.sqlite </span><span class="token parameter variable" style=color:#36acaa>--backup</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>'s3://my-app-backups/user/'</span><br/></div></code></pre></div></div>
+<p><strong>Edge / serverless</strong>: same <code>.wasm</code>, same SQL.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=compression-lz4_flex-first>Compression: lz4_flex first<a href=#compression-lz4_flex-first class=hash-link aria-label="Direct link to Compression: lz4_flex first" title="Direct link to Compression: lz4_flex first" translate=no>​</a></h2>
+<p>Pure-Rust, no_std-friendly, ~30 KB code size. zstd as a follow-up
+when ratio matters more than size.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-estimate>Effort estimate<a href=#effort-estimate class=hash-link aria-label="Direct link to Effort estimate" title="Direct link to Effort estimate" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Piece<th>Effort<tbody><tr><td><strong>Substrate</strong>: dispatch-bridge WAL hook (#436)<td>½ day<tr><td>WIT contract + bindings<td>½ day<tr><td>WAL frame capture (consume the WAL file via wasi:filesystem)<td>2 days<tr><td>Compression + segment shipping (consume s3-wasm)<td>1 day<tr><td>Sidecar state in sink + crash-recovery catch-up<td>1½ days<tr><td>Snapshot path via <code>sqlite3_backup_*</code><td>2 days<tr><td>Restore path<td>1½ days<tr><td><code>sqlink --backup</code> CLI flag<td>1 day<tr><td>Per-scenario integration tests (browser via Playwright + native via cargo test + MinIO for the s3 backend)<td>3 days</table>
+<p><strong>Total: ~12 days,  2.5 weeks for v1.</strong></p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies>Dependencies<a href=#dependencies class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h2>
+<ul>
+<li class=""><code>dispatch-bridge.register-host-wal-hook</code> (substrate, ~½ day).</li>
+<li class=""><code>~/git/s3-wasm</code> at its current shape (already exists; no
+changes needed for v1).</li>
+<li class="">Composed cli + sqlite-lib browser runtime (done, commit
+<code>f7530b0</code>).</li>
+<li class="">Extension catalog dispatch (done, #429/#432).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-v1>Out of scope (v1)<a href=#out-of-scope-v1 class=hash-link aria-label="Direct link to Out of scope (v1)" title="Direct link to Out of scope (v1)" translate=no>​</a></h2>
+<ul>
+<li class="">Encryption: deferred. Layer either underneath the sink (the S3
+endpoint encrypts in transit + at rest via SSE-S3 / SSE-KMS) or
+above the codec (a future <code>crypted-lz4</code> variant).</li>
+<li class=""><code>wal-archive validate</code> byte-identity check (Litestream has the
+equivalent)  ship later.</li>
+<li class="">Multipart S3 upload  v1 segments are bounded by
+<code>flush-bytes-threshold</code> (default 64 KiB). Bump if needed.</li>
+<li class="">Multi-region replication  v1 ships to one sink; layering N is
+straightforward later.</li>
+<li class="">p2p sqlink-to-sqlink WAL shipping over wireguard-wasm
+documented above; needs a separate sink WIT contract. Pull when
+there's demand.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-changes-vs-the-original-plan-browser-litestreammd>What changes vs the original <code>PLAN-browser-litestream.md</code><a href=#what-changes-vs-the-original-plan-browser-litestreammd class=hash-link aria-label="Direct link to what-changes-vs-the-original-plan-browser-litestreammd" title="Direct link to what-changes-vs-the-original-plan-browser-litestreammd" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>Scope</strong>: browser-only  all scenarios.</li>
+<li class=""><strong>Name</strong>: <code>litestream</code>  <code>wal-archive</code>. Litestream + Ben Johnson
+credited in README.</li>
+<li class=""><strong>Storage</strong>: write our own S3 sink  import <code>~/git/s3-wasm</code>.</li>
+<li class=""><strong>Sink abstraction</strong>: WIT-defined storage-sink as the only path
+s3-wasm as default, optional pluggable sink trait for alternates.</li>
+<li class=""><strong>Layout</strong>: <code>browser/</code> + <code>extensions/</code>  just
+<code>extensions/wal-archive/</code> (one .wasm everywhere).</li>
+<li class=""><strong>Future transport</strong>: wireguard-wasm noted for p2p / private-
+storage variants.</li>
+<li class=""><strong>Estimate</strong>: 2 weeks  ~2.5 weeks (gain s3-wasm dep, lose to
+scenario testing).</li>
+</ul>
+<p>The old <code>PLAN-browser-litestream.md</code> should be deleted on merge
+of this plan.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=sequencing>Sequencing<a href=#sequencing class=hash-link aria-label="Direct link to Sequencing" title="Direct link to Sequencing" translate=no>​</a></h2>
+<ol>
+<li class="">Land <strong>#436 WAL hook</strong> as a small precursor (½ day).</li>
+<li class="">Build the extension end-to-end (per the layout above).</li>
+<li class="">Per-scenario integration tests: Playwright (browser),
+<code>cargo test -p extension-smoke --features wal-archive</code> (native),
+maybe a small Cloudflare Workers reproducer to prove edge.</li>
+<li class="">CLI flag (<code>sqlink --backup </code>) ships as a thin wrapper.</li>
+</ol>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=credits>Credits<a href=#credits class=hash-link aria-label="Direct link to Credits" title="Direct link to Credits" translate=no>​</a></h2>
+<p>Design heavily inspired by <strong><a href=https://litestream.io/ target=_blank rel="noopener noreferrer" class="">Litestream</a></strong>
+by <strong><a href=https://github.com/benbjohnson target=_blank rel="noopener noreferrer" class="">Ben Johnson</a></strong>. WAL-segment
+shipping + base-snapshot + point-in-time recovery semantics all
+come from Litestream; this extension is a separate implementation
+in a different runtime model (in-process inside a WASM component
+rather than as a separate Go daemon). Credit to land in the
+project README's Acknowledgements section alongside Simon Willison</p>
+<ul>
+<li class="">sqlite-utils.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=references>References<a href=#references class=hash-link aria-label="Direct link to References" title="Direct link to References" translate=no>​</a></h2>
+<ul>
+<li class=""><a href=https://litestream.io/ target=_blank rel="noopener noreferrer" class="">Litestream documentation</a></li>
+<li class=""><a href=https://github.com/benbjohnson/litestream/blob/main/wal.go target=_blank rel="noopener noreferrer" class="">Litestream WAL frame format</a></li>
+<li class=""><a href=https://www.sqlite.org/walformat.html target=_blank rel="noopener noreferrer" class="">SQLite WAL format</a></li>
+<li class=""><a href=https://www.sqlite.org/c3ref/wal_hook.html target=_blank rel="noopener noreferrer" class=""><code>sqlite3_wal_hook</code> docs</a></li>
+<li class=""><code>~/git/s3-wasm</code> (the local S3-compatible component we consume)</li>
+<li class=""><code>~/git/wireguard-wasm</code> (future transport option)</li>
+<li class="">Substrate landings: dispatch-bridge for scalars (#429), aggregates
+<ul>
+<li class="">collations (#432); WAL hook will be #436.</li>
+</ul>
+</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-wal-archive-extension.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/sqlink/plans/PLAN-browser-runtime><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/sqlink/plans/PLAN-tvm-integration><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#status-2026-06-24 class="table-of-contents__link toc-highlight">Status (2026-06-24)</a><li><a href=#why-a-sqlink-internal-wal-archive-beats-running-upstream-litestream-alongside class="table-of-contents__link toc-highlight">Why a sqlink-internal wal-archive beats running upstream Litestream alongside</a><li><a href=#substrate-prerequisites-revised-2026-06-23-after-design-conversation class="table-of-contents__link toc-highlight">Substrate prerequisites (revised 2026-06-23 after design conversation)</a><ul><li><a href=#substrate-1-438-native-cli-wal-hook-wiring--resolved class="table-of-contents__link toc-highlight">Substrate 1 (#438): native cli wal-hook wiring — RESOLVED</a><li><a href=#substrate-2-439-wal-frames-spi-interface--landed-2026-06-23-option-a class="table-of-contents__link toc-highlight">Substrate 2 (#439): wal-frames SPI interface  <strong>LANDED 2026-06-23 (option A)</strong></a><li><a href=#substrate-3-440-host-resident-s3-base-spi-bridge--landed class="table-of-contents__link toc-highlight">Substrate 3 (#440): host-resident <code>s3-base</code> SPI bridge  <strong>LANDED</strong></a><li><a href=#substrate-4-436-dispatch-bridge-wal-hook class="table-of-contents__link toc-highlight">Substrate 4 (#436): dispatch-bridge WAL hook</a><li><a href=#substrate-5-441-cached-hook--scalar-dispatch--landed-2026-06-23 class="table-of-contents__link toc-highlight">Substrate 5 (#441): cached hook + scalar dispatch  <strong>LANDED 2026-06-23</strong></a><li><a href=#dispatch-bridge-core-methods-already-done-in-429432433436 class="table-of-contents__link toc-highlight"><code>dispatch-bridge</code> core methods (already done in #429/#432/#433/#436)</a></ul><li><a href=#storage-layer-host-resident-s3-base-via-spi-bridge-substrate-440 class="table-of-contents__link toc-highlight">Storage layer: host-resident <code>s3-base</code> via SPI bridge (substrate #440)</a><li><a href=#future-transport-gitwireguard-wasm class="table-of-contents__link toc-highlight">Future transport: <code>~/git/wireguard-wasm</code></a><li><a href=#layout class="table-of-contents__link toc-highlight">Layout</a><li><a href=#wit-contract class="table-of-contents__link toc-highlight">WIT contract</a><li><a href=#mechanics class="table-of-contents__link toc-highlight">Mechanics</a><li><a href=#per-scenario-invocation class="table-of-contents__link toc-highlight">Per-scenario invocation</a><li><a href=#compression-lz4_flex-first class="table-of-contents__link toc-highlight">Compression: lz4_flex first</a><li><a href=#effort-estimate class="table-of-contents__link toc-highlight">Effort estimate</a><li><a href=#dependencies class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#out-of-scope-v1 class="table-of-contents__link toc-highlight">Out of scope (v1)</a><li><a href=#what-changes-vs-the-original-plan-browser-litestreammd class="table-of-contents__link toc-highlight">What changes vs the original <code>PLAN-browser-litestream.md</code></a><li><a href=#sequencing class="table-of-contents__link toc-highlight">Sequencing</a><li><a href=#credits class="table-of-contents__link toc-highlight">Credits</a><li><a href=#references class="table-of-contents__link toc-highlight">References</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

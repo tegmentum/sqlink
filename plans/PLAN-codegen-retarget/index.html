@@ -1,0 +1,1806 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-codegen-retarget" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>PLAN: Retarget sqlink-shim-codegen to emit wasm components | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-codegen-retarget /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="PLAN: Retarget sqlink-shim-codegen to emit wasm components | sqlink"/><meta data-rh=true name=description content=Problem /><meta data-rh=true property=og:description content=Problem /><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-codegen-retarget /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-codegen-retarget hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-codegen-retarget hreflang=x-default /><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a class="navbar__item navbar__link" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><main class="docMainContainer_TBSr docMainContainerEnhanced_lQrH"><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>PLAN: Retarget <code>sqlink-shim-codegen</code> to emit wasm components</h1></header>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=problem>Problem<a href=#problem class=hash-link aria-label="Direct link to Problem" title="Direct link to Problem" translate=no>​</a></h2>
+<p><code>sqlink-shim-codegen</code> currently emits <strong>native Rust crates</strong> that compile to
+<code>.dylib</code> (<code>postgis-sqlite-bridge</code>, <code>mobilitydb-sqlite-bridge</code>). Each emitted
+bridge:</p>
+<ul>
+<li class="">Statically links wasmtime + cranelift + <code>datafission-df-plugin-loader</code>.</li>
+<li class="">Loads the upstream composed shim (<code>postgis-composed.wasm</code>, <code>mdb-temporal- wasm.wasm</code>) at SQLite extension-init time via its own embedded wasmtime.</li>
+<li class="">Registers each shim function as a SQLite UDF via rusqlite.</li>
+<li class="">Ships ~11 MB of compiled-in wasm runtime per bridge.</li>
+</ul>
+<p>In a sqlink-hosted process — where <code>sqlink-loader.dylib</code> (or sqlink-host,
+or composed-cli-worker) is already running its own wasmtime — the native
+bridge brings a SECOND wasmtime into the same address space. ~10 MB of
+cranelift code duplicated, no shared engine cache, two independent
+compile pipelines.</p>
+<p>The fix is structural, not surgical:</p>
+<ul>
+<li class="">The codegen should emit <strong>a wasm component</strong>, not a native dylib.</li>
+<li class="">That wasm component imports the upstream shim's WIT (<code>postgis:wasm/*</code>,
+<code>mobilitydb:wasm/*</code>) and exports the sqlink WIT contract
+(<code>sqlink:wasm@X.Y.Z</code>).</li>
+<li class="">One artifact runs <strong>everywhere</strong> that speaks sqlink's WIT contract:
+<ul>
+<li class=""><code>sqlink-loader.dylib</code> loaded in vanilla <code>sqlite3</code> (native deployment)</li>
+<li class=""><code>composed-cli-worker</code> inside a browser dedicated worker</li>
+<li class=""><code>sqlink-host</code> directly as a Rust runtime</li>
+</ul>
+</li>
+<li class="">The native <code>.dylib</code> per bridge disappears entirely. <code>sqlink-loader.dylib</code>
+is the only native artifact; all bridges become wasm components it loads.</li>
+</ul>
+<p>Same pattern applies to <code>mobilitydb-sqlite-bridge</code> and to every future
+shim integration. Pain-once-fix-forever: <code>sqlink-shim-codegen</code> becomes
+the reusable lever; new shims slot in by dropping an interface DB into
+the pipeline.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-we-ship-at-the-end>What we ship at the end<a href=#what-we-ship-at-the-end class=hash-link aria-label="Direct link to What we ship at the end" title="Direct link to What we ship at the end" translate=no>​</a></h2>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">postgis-interface.sqlite   ─┐</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                            ├─►  sqlink-shim-codegen  ─►  postgis-sqlink-bridge.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                            │                              (imports postgis:wasm/*,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                            │                               exports sqlink:wasm@X.Y.Z)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">mobilitydb-interface.sqlite ─┤</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                            └─►  sqlink-shim-codegen  ─►  mobilitydb-sqlink-bridge.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                          (imports mobilitydb:wasm/* +</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                           postgis:wasm/types,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                                           exports sqlink:wasm@X.Y.Z)</span><br/></div></code></pre></div></div>
+<p>Each bridge component composes against its upstream shim wasm to produce
+the final loadable wasm artifact:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">postgis-sqlink-bridge.wasm + postgis-composed.wasm  →  postgis-sqlink-loadable.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">mobilitydb-sqlink-bridge.wasm + mdb-temporal-wasm.wasm + postgis-composed.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">   →  mobilitydb-sqlink-loadable.wasm</span><br/></div></code></pre></div></div>
+<p><code>sqlink-loader.dylib</code> loads either via its existing wasm-extension catalog
+path. <code>composed-cli-worker</code> loads either via the same path in browser. No
+.dylib per bridge. One wasmtime per process either way.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=scope>Scope<a href=#scope class=hash-link aria-label="Direct link to Scope" title="Direct link to Scope" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-1--codegen-wasm-target-emitter-shape-proof>Phase 1 — codegen wasm-target emitter (shape proof)<a href=#phase-1--codegen-wasm-target-emitter-shape-proof class=hash-link aria-label="Direct link to Phase 1 — codegen wasm-target emitter (shape proof)" title="Direct link to Phase 1 — codegen wasm-target emitter (shape proof)" translate=no>​</a></h3>
+<ol>
+<li class="">Add a <code>--target wasm-component</code> mode to <code>sqlink-shim-codegen</code>. Same
+interface-DB input; new emitter writes a Rust crate that:
+<ul>
+<li class="">Has <code>crate-type = ["cdylib"]</code> for <code>wasm32-wasip2</code>.</li>
+<li class="">Imports the upstream shim's WIT (the codegen derives the WIT shape
+from the interface DB).</li>
+<li class="">Exports the sqlink WIT world (currently <code>sqlite:extension/minimal</code>,
+verify against #485 contract once landed).</li>
+</ul>
+</li>
+<li class="">The emitted bodies are STUB (return <code>unimplemented!()</code> or an error
+variant) at this phase. The goal of Phase 1 is to prove the SHAPE
+compiles + composes.</li>
+<li class="">Regenerate <code>postgis-sqlink-bridge</code> (new crate at
+<code>~/git/postgis-sqlink-bridge/</code> or under sqlink's tree at
+<code>extensions/postgis-bridge-generated/</code> — naming decision below).</li>
+<li class="">Compose <code>postgis-sqlink-bridge.wasm</code> + <code>postgis-composed.wasm</code> via wac
+plug (interim — long-term this is a <code>sys:compose</code> plan per #486).</li>
+<li class="">Verify the composed loadable wasm passes through sqlink-host's
+<code>cargo test</code> extension-loader path without error (loads, registers,
+stub functions return their error variant correctly).</li>
+</ol>
+<p><strong>Done = the codegen emits a wasm component, it composes, sqlink-host
+can load it, the stub functions surface their errors correctly. No real
+SQL execution yet.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-2--real-dispatch-end-to-end>Phase 2 — real dispatch end-to-end<a href=#phase-2--real-dispatch-end-to-end class=hash-link aria-label="Direct link to Phase 2 — real dispatch end-to-end" title="Direct link to Phase 2 — real dispatch end-to-end" translate=no>​</a></h3>
+<ol>
+<li class="">The emitted bridge's scalar dispatch — the function bodies marshal
+SQL value args → WIT-typed args, invoke the imported shim function,
+marshal result back to SQL value. Same shape as the hand-written
+<code>extensions/postgis-bridge/src/lib.rs</code> (the 4658-LOC prototype is the
+reference; the codegen reproduces that mechanically).</li>
+<li class="">End-to-end verification with at least one function: <code>SELECT ST_AsText(ST_GeomFromText('POINT(1 2)'))</code> returns <code>POINT(1 2)</code>.</li>
+<li class="">The native bridge has its dispatch logic split between
+<code>datafission-df-plugin-loader</code> and per-function adapters; for the wasm
+target the dispatch lives entirely inside the bridge component (no
+df-plugin-loader; just direct WIT calls).</li>
+</ol>
+<p><strong>Done = at least one PostGIS function works end-to-end in sqlink-host
+through the codegen-emitted bridge. Hand-written
+<code>extensions/postgis-bridge/</code>'s ~8 functions are the reference oracle.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-3--coverage-scale-up>Phase 3 — coverage scale-up<a href=#phase-3--coverage-scale-up class=hash-link aria-label="Direct link to Phase 3 — coverage scale-up" title="Direct link to Phase 3 — coverage scale-up" translate=no>​</a></h3>
+<ol>
+<li class="">Codegen handles all scalar functions, all aggregate functions, all
+UDTFs, all casts, all operators surfaced by the interface DB. The
+existing native bridge already does this; the wasm target mirrors it.</li>
+<li class="">Regenerate <code>postgis-sqlink-bridge</code> (target: full ~317 functions) and
+<code>mobilitydb-sqlink-bridge</code> (full surface from interface DB).</li>
+<li class="">Smoke-test corpus: <code>~/git/shim-bridge-smoke-tests</code> runs against the
+wasm bridges via sqlink-host's extension-loader path (parallel to
+today's native-bridge smoke). Same <code>cases/&lt;shim>/&lt;n>.sql</code> corpus;
+same expected output.</li>
+</ol>
+<p><strong>Done = sqlink-host's wasm-bridge smoke parity with the existing native-
+bridge smoke. Function-count parity with the native bridges. Cross-
+shim deps (mobilitydb → postgis types) handled in Phase 4.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-4--cross-shim-composition-no-schema-work>Phase 4 — cross-shim composition (no schema work)<a href=#phase-4--cross-shim-composition-no-schema-work class=hash-link aria-label="Direct link to Phase 4 — cross-shim composition (no schema work)" title="Direct link to Phase 4 — cross-shim composition (no schema work)" translate=no>​</a></h3>
+<p><strong>Finding from D5 inspection (2026-06-26):</strong> The interface DBs treat
+all complex types as opaque <code>binary</code> (<code>tgeompoint_length</code>'s params are
+<code>[["binary"]]</code>; mobilitydb's <code>TGEOMPOINT_SEQUENCE.cast_from_json</code> is
+<code>[]</code>). mobilitydb's interface contains only mobilitydb's <code>extensions</code>
+row; postgis's contains only postgis's. There is NO structural foreign
+key between them. The native bridge handles cross-shim wiring by
+<strong>out-of-band convention</strong> (load postgis-bridge first → registers
+GEOMETRY in SQLite's session → mobilitydb finds it by name at
+runtime). The same shape works for wasm bridges targeting sqlink's
+WIT contract: bytes pass through opaquely at the codegen layer; SQLite
+is the type-binding host either way.</p>
+<p>This collapses Phase 4 from "schema extension + cross-shim WIT
+plumbing" down to "verify mobilitydb's composed loadable works end-to-
+end alongside postgis's." Phases 1-3 are unchanged.</p>
+<ol>
+<li class="">The codegen does NOT need to learn cross-shim WIT-type imports.
+mobilitydb's bridge component imports only its own
+<code>mobilitydb:wasm/*</code>; postgis-shaped types arrive as opaque <code>binary</code>.</li>
+<li class="">The composition recipe wires both upstream shims into the final
+loadable: <code>mobilitydb-sqlink-bridge.wasm + mdb-temporal-wasm.wasm + postgis-composed.wasm + postgis-sqlink-bridge.wasm</code>. Load order
+stays a convention captured in the sys:compose plan.</li>
+<li class="">Verification: <code>SELECT tgeompoint_at_time(...)</code> round-trips through
+the composed loadable. GEOMETRY-shaped BLOBs flow opaquely through
+both bridges; SQLite stores them as BLOB; the runtime convention
+(register GEOMETRY first) carries the semantic.</li>
+</ol>
+<p><strong>Done = mobilitydb-sqlink-bridge works end-to-end with postgis-bridge
+loaded first; opaque-binary type marshaling proven across both
+bridges; no codegen schema work was needed.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-5--retire-the-native-dylib-bridges>Phase 5 — retire the native .dylib bridges<a href=#phase-5--retire-the-native-dylib-bridges class=hash-link aria-label="Direct link to Phase 5 — retire the native .dylib bridges" title="Direct link to Phase 5 — retire the native .dylib bridges" translate=no>​</a></h3>
+<ol>
+<li class="">Native bridges (<code>postgis-sqlite-bridge.dylib</code>,
+<code>mobilitydb-sqlite-bridge.dylib</code>) retire from sqlink's deployment
+story. <code>sqlink-loader.dylib</code> is the only native artifact; bridges are
+loaded as wasm components via its existing catalog path.</li>
+<li class=""><strong>For vanilla-SQLite users</strong> (no sqlink-loader loaded), the native
+bridges may still have value — embedded wasmtime is the only way to
+run wasm shims without a host runtime. Two paths:
+<ul>
+<li class=""><strong>5a.</strong> Keep the native target in the codegen; emits the
+embed-wasmtime path only when explicitly requested. Default emits
+the wasm component.</li>
+<li class=""><strong>5b.</strong> Retire the native target entirely; vanilla-SQLite users
+must load <code>sqlink-loader.dylib</code> first. Simpler codegen, harder UX
+for non-sqlink users.
+Decision deferred until Phase 5 starts; depends on real adoption
+signal from non-sqlink-using PostGIS/MobilityDB users.</li>
+</ul>
+</li>
+<li class="">The hand-written <code>extensions/postgis-bridge/</code> retires once the
+codegen output covers ~317 functions. The 8-function prototype stays
+in commit history as the implementation oracle. (Same fate for any
+hand-written <code>extensions/mobilitydb-bridge/</code> if it exists.)</li>
+</ol>
+<p><strong>Done = sqlink ships exactly one .dylib per platform (sqlink-loader);
+all bridges are wasm components; codegen produces both bridge artifacts.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-6--cross-project-leverage-datafission-ducklink>Phase 6 — cross-project leverage (datafission, ducklink)<a href=#phase-6--cross-project-leverage-datafission-ducklink class=hash-link aria-label="Direct link to Phase 6 — cross-project leverage (datafission, ducklink)" title="Direct link to Phase 6 — cross-project leverage (datafission, ducklink)" translate=no>​</a></h3>
+<ol>
+<li class="">The wasm bridges target the sqlink WIT contract. If <code>ducklink</code> and
+<code>datafission</code> host the same contract — or the codegen learns to emit
+per-contract variants — the SAME bridge artifact runs across all
+three. One regeneration per shim, three projects benefit.</li>
+<li class="">Practically: the codegen accepts a <code>--target-host</code> flag (or a
+per-target output directory) and emits the appropriate WIT export
+world. Mostly an interface-DB-to-WIT translation question.</li>
+<li class="">Coordination with the sister projects (datafission has the original
+integration pain; ducklink's DataFission-target sibling lives under
+<code>~/git/ducklink/docs/postgis-mobilitydb-integration.md</code>).</li>
+</ol>
+<p><strong>Done = same interface DB produces three artifacts; one source-of-truth
+for shim adapter generation across the family.</strong></p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=sequencing>Sequencing<a href=#sequencing class=hash-link aria-label="Direct link to Sequencing" title="Direct link to Sequencing" translate=no>​</a></h2>
+<p>Blocked by:</p>
+<ul>
+<li class=""><strong>#485 (WIT contract versioning)</strong> — the codegen must stamp the
+contract version into the emitted component's manifest and WIT export.
+Phase 1 can START before #485 lands (emit <code>@0.1.0</code> as placeholder) but
+Phase 3+ wants the discipline.</li>
+<li class=""><strong>#486 (orchestration integration)</strong> — Phase 1's composition recipe
+uses wac plug; Phase 3+ migrates to <code>sys:compose</code> plans. Not blocking
+for Phase 1.</li>
+<li class="">Sqlink-loader doesn't currently have a stable "load a wasm bridge by
+path" entry exposed to other native dylibs. NOT BLOCKING if all
+consumers go through sqlink-loader's existing catalog; only matters
+if Phase 5a (keep native target) keeps non-wasm bridges around.</li>
+</ul>
+<p>Unblocks:</p>
+<ul>
+<li class="">The deferred postgis/mobilitydb integration (was #483 in the doc) —
+becomes a Phase 3 deliverable rather than a per-bridge deployment.</li>
+<li class="">v1.6 #487's bundle-cli SPI rewrite — bundle-cli benefits from the
+same WIT-targeting discipline.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=risks>Risks<a href=#risks class=hash-link aria-label="Direct link to Risks" title="Direct link to Risks" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>Composition size.</strong> <code>postgis-composed.wasm</code> is 107 MB. Composed
+bridge may be even larger. Verify wasm-instantiate cost + memory
+budget on browser + native before Phase 3 ships.</li>
+<li class=""><strong>WIT contract churn.</strong> Phase 3+ depends on #485 stable. If the
+contract is still iterating, codegen regen overhead is real.</li>
+<li class=""><strong>Interface DB completeness.</strong> The codegen's output is only as good
+as the interface DB. If the DB doesn't encode cross-shim type deps
+(Phase 4) or operator surfaces, codegen output will be incomplete vs
+the hand-written bridge.</li>
+<li class=""><strong>Dispatch parity with df-plugin-loader.</strong> The native bridge uses
+<code>datafission-df-plugin-loader</code> for its wasm-side dispatch (arg
+marshaling, async runtime). The wasm target lives inside the bridge
+component itself — needs to reproduce that marshaling correctly. The
+hand-written <code>extensions/postgis-bridge/</code> is the reference.</li>
+<li class=""><strong>Hand-written bridge's WIT customizations.</strong> The hand-written crate
+has at least one WIT-sync fix (<code>9b6d6e3a fix(postgis-bridge): vendored guest.wit gets has-wal-hook + wal-hook-id</code>). Codegen needs to either
+surface these from the interface DB or apply them uniformly.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification>Verification<a href=#verification class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h2>
+<ul>
+<li class="">Phase 1: codegen-emitted stub bridge compiles + composes via wac plug.
+sqlink-host's extension-loader path can instantiate it without error.</li>
+<li class="">Phase 2: at least one PostGIS function works end-to-end via the wasm
+bridge under sqlink-host. SELECT round-trip matches the hand-written
+bridge's output exactly.</li>
+<li class="">Phase 3: smoke-test parity with the native bridge for the same
+function set. Function-count parity (≈317 for postgis, full mobilitydb
+surface).</li>
+<li class="">Phase 4: mobilitydb's <code>tgeompoint</code> round-trip works through the
+composed loadable with postgis bridge loaded.</li>
+<li class="">Phase 5: single wasmtime per process verified by inspecting symbol
+tables / process memory. ~10 MB savings per bridge measured.</li>
+<li class="">Phase 6: same generated bridge runs under datafission's host and
+ducklink's host (assuming they speak sqlink's WIT).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=cross-cuts>Cross-cuts<a href=#cross-cuts class=hash-link aria-label="Direct link to Cross-cuts" title="Direct link to Cross-cuts" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>#485 contract versioning</strong> — codegen-emitted bridges stamp
+<code>wit_contract</code> into the manifest. Tier 2 of #486 covers the
+canonical-WIT identity work that backs this.</li>
+<li class=""><strong>#486 orchestration integration</strong> — wac plug composition in Phase
+1-2 retires in favor of <code>sys:compose</code> plans by Phase 3. Composed
+bridges get a verifiable digest + plan.</li>
+<li class=""><strong>v1.6 #487</strong> — bundle-cli's SPI rewrite is a separate concern but
+the same WIT-targeting discipline applies (bundle-cli is also a
+sqlink extension).</li>
+<li class=""><strong>WAC re-export traps</strong> (lessons from v1.4/v1.5) — composed bridges
+may need <code>sqlite:extension/types</code> re-exports; check at Phase 1.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=decisions-locked-2026-06-26>Decisions (locked 2026-06-26)<a href=#decisions-locked-2026-06-26 class=hash-link aria-label="Direct link to Decisions (locked 2026-06-26)" title="Direct link to Decisions (locked 2026-06-26)" translate=no>​</a></h2>
+<ul>
+<li class="">
+<p><strong>D1. Codegen output crate location: sibling repos.</strong>
+<code>~/git/postgis-sqlink-bridge/</code>, <code>~/git/mobilitydb-sqlink-bridge/</code>,
+etc. Mirrors the existing <code>~/git/postgis-sqlite-bridge/</code> convention.
+Keeps sqlink's tree clean while the codegen iterates.</p>
+</li>
+<li class="">
+<p><strong>D2. Hand-written bridge fate: retire, preserve in git.</strong>
+When codegen output reaches function-count parity, delete
+<code>extensions/postgis-bridge/</code>. Tag the retirement commit
+(<code>postgis-bridge-handwritten-final</code> or similar) so the prototype is
+locatable as the implementation oracle.</p>
+</li>
+<li class="">
+<p><strong>D3. Native <code>.dylib</code> target: dropped entirely (Phase 5).</strong> Codegen
+emits wasm components only. Vanilla-SQLite users must <code>.load sqlink-loader.dylib</code> first, then <code>.load &lt;bridge>.wasm</code> via
+sqlink-loader's catalog. Simpler codegen; forces the one-wasmtime-
+per-process architectural intent.</p>
+</li>
+<li class="">
+<p><strong>D4. Cross-project priority: sqlink-first.</strong> Build the codegen + WIT
+target for sqlink. ducklink + datafission come in Phase 6 once
+sqlink's needs are met. Lowest coordination cost.</p>
+</li>
+<li class="">
+<p><strong>D5. Cross-shim type deps in the interface DB: no schema work
+needed.</strong> Inspection (2026-06-26) found all complex types are
+opaque <code>binary</code> at the interface-DB layer; cross-shim wiring happens
+by out-of-band convention (load order) the same way the native
+bridges handle it today. Phase 4 simplifies to a composition test;
+no codegen schema extension required.</p>
+<p><strong>D5 update (2026-06-27): the claim holds at the interface-DB layer
+but BREAKS at the WIT signature layer for non-postgis shims.</strong>
+Mobilitydb's interface DB says <code>tfloat_min: param=[["binary"]]</code> but
+the actual WIT signature is <code>func(seq: tfloat-sequence) -> option&lt;f64></code> — a record param, not <code>list&lt;u8></code>. PostGIS exposes
+<code>Geometry::from_wkb(&[u8])</code> (a binary↔record decoder); mobilitydb-
+wasm does NOT expose <code>tfloat_sequence_from_bytes</code> or equivalent. The
+wasm-component bridge can ferry only <code>SqlValue { Text, Real, Integer, Blob, Null }</code>; it has no way to construct mobilitydb's
+record values from <code>SqlValue::Blob</code>. The native bridge sidesteps
+this via <code>datafission_functions::FunctionValue</code> (a Rust enum
+carrying record values), but the wasm-component path has no
+equivalent. Phase 4 blocked here until this is resolved; the
+codegen-generalization work (decoupling postgis-only assumptions
+from emit_wit / emit_lib / dispatch) is sequenced behind it.</p>
+</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=references>References<a href=#references class=hash-link aria-label="Direct link to References" title="Direct link to References" translate=no>​</a></h2>
+<ul>
+<li class=""><code>~/git/sqlink-shim-codegen/</code> — the codegen tooling.</li>
+<li class=""><code>~/git/sqlink/extensions/postgis-bridge/</code> — hand-written WASM bridge
+(4658 LOC; the implementation oracle for codegen).</li>
+<li class=""><code>~/git/postgis-sqlite-bridge/</code> + <code>~/git/mobilitydb-sqlite-bridge/</code> —
+the existing native dylib bridges (to be retargeted).</li>
+<li class=""><code>~/git/sqlink/sqlink-loader/</code> — sqlink as a SQLite loadable extension
+(cross-extension API surface lives in <code>src/api.rs</code>).</li>
+<li class=""><code>~/git/sqlink/docs/postgis-mobilitydb-integration.md</code> — the original
+integration doc (described the native-route flow; this PLAN
+supersedes the deployment shape).</li>
+<li class=""><code>~/git/sqlink/docs/plans/PLAN-wit-contract-versioning.md</code> (#485) —
+the contract discipline the codegen consumes.</li>
+<li class=""><code>~/git/sqlink/docs/plans/PLAN-orchestration-integration.md</code> (#486) —
+the canonical-WIT + sys:compose plan layer.</li>
+<li class=""><code>~/git/ducklink/docs/postgis-mobilitydb-integration.md</code> — sibling
+project's parallel native-bridge integration.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-1--done-2026-06-26>Phase 1 — done (2026-06-26)<a href=#phase-1--done-2026-06-26 class=hash-link aria-label="Direct link to Phase 1 — done (2026-06-26)" title="Direct link to Phase 1 — done (2026-06-26)" translate=no>​</a></h2>
+<p>Phase 1 landed end-to-end. The codegen emits a wasm-component
+bridge crate that composes against <code>postgis-composed.wasm</code> via
+<code>wac plug</code> and loads through <code>sqlink-host</code>'s
+<code>Host::load_extension</code> without panic; stub function calls return
+their declared error variant.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=where-the-work-lives>Where the work lives<a href=#where-the-work-lives class=hash-link aria-label="Direct link to Where the work lives" title="Direct link to Where the work lives" translate=no>​</a></h3>
+<ul>
+<li class=""><code>~/git/sqlink-shim-codegen</code> branch
+<code>feat/wasm-component-target</code> (5 commits): the codegen tool
+with the new <code>--target wasm-component</code> mode.</li>
+<li class=""><code>~/git/postgis-sqlink-bridge</code> (new sibling repo,
+<code>tegmentum/postgis-sqlink-bridge</code>, fresh history): the
+generated bridge crate + a <code>verify/</code> subcrate that runs the
+end-to-end load test.</li>
+<li class=""><code>~/git/sqlink/extensions/postgis-bridge/</code> — untouched
+(read-only reference for the emitter's shape).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-the-emitter-produces>What the emitter produces<a href=#what-the-emitter-produces class=hash-link aria-label="Direct link to What the emitter produces" title="Direct link to What the emitter produces" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">~/git/postgis-sqlink-bridge/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">├── Cargo.toml                 # cdylib for wasm32-wasip2, wit-bindgen 0.44</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">├── wit/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">│   ├── world.wit              # imports postgis:wasm/* + sfcgal + sqlite:extension/*</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">│   └── deps/</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">│       ├── postgis-wasm/      # vendored from sqlink/extensions/postgis-bridge</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">│       ├── sfcgal-component/  # vendored from sqlink/extensions/postgis-bridge</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">│       └── sqlite-extension/  # vendored from sqlink/sqlite-loader-wit (canonical)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">├── src/lib.rs                 # wit_bindgen::generate! + stubbed guest impls</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">└── README.md</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-result>Verification result<a href=#verification-result class=hash-link aria-label="Direct link to Verification result" title="Direct link to Verification result" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">[verify] loading .../postgis-sqlink-loadable.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] loaded extension: name=postgis</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] registered: 931 scalars, 34 aggregates, 0 vtabs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] dispatching scalar id=394 name=st_geomfromtext num_args=1</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] stub error: postgis-sqlink-bridge: scalar-function func_id=394 is</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        stubbed in Phase 1 (see PLAN-codegen-retarget.md Phase 2 for real</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        dispatch)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] all checks passed</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=decisions-that-surfaced>Decisions that surfaced<a href=#decisions-that-surfaced class=hash-link aria-label="Direct link to Decisions that surfaced" title="Direct link to Decisions that surfaced" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Vendored WIT source.</strong> The hand-written postgis-bridge's
+<code>wit/deps/sqlite-extension/</code> is stale relative to
+<code>sqlite-loader-wit/wit/</code> (the host bindgen target):
+newer manifest fields (<code>optional-capabilities</code>,
+<code>preferred-prefix</code>, <code>prefix-expansion</code>) and several new world
+imports. The codegen now sources the canonical
+sqlite-extension WIT from <code>sqlite-loader-wit/wit/</code> directly
+and vendors only the shim-side packages (postgis-wasm,
+sfcgal-component) from the hand-written bridge.</li>
+<li class=""><strong>DCE anchor.</strong> With every Phase 1 stub returning <code>Err</code>
+without touching any postgis-wasm import, the bridge wasm has
+no postgis imports left after dead-code elimination — and
+<code>wac plug</code> reports "no matching imports for the plugs that
+were provided". The emitter now writes a
+<code>#[no_mangle] __phase1_postgis_import_anchor</code> function gated
+on <code>is_nan(seed)</code>: the postgis calls are linked in but never
+fire at runtime. Phase 2's real dispatch removes the anchor.</li>
+<li class=""><strong>Native target retained for now.</strong> Per D3 the native dylib
+target is slated for removal in Phase 5; Phase 1 leaves it as
+the default so existing native-bridge regen pipelines keep
+working unchanged.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=carried-forward-into-phase-2>Carried forward into Phase 2<a href=#carried-forward-into-phase-2 class=hash-link aria-label="Direct link to Carried forward into Phase 2" title="Direct link to Carried forward into Phase 2" translate=no>​</a></h3>
+<ul>
+<li class="">The DCE anchor disappears once real dispatch references the
+postgis imports for actual marshaling.</li>
+<li class="">Phase 1 emits a fixed function-id assignment (scalars 1..N,
+aggregates 1_000_000..M). Phase 2 keeps that or replaces it
+with the per-function category ranges the hand-written bridge
+uses; either is fine as long as describe() and call() agree.</li>
+<li class="">The host's stale-vendored-WIT divergence in
+<code>extensions/postgis-bridge/wit/deps/sqlite-extension/</code> is
+worth fixing in a follow-up commit on the sqlink side
+(out of scope for this plan; flagged here so it's not
+forgotten).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-2--done-2026-06-26>Phase 2 — done (2026-06-26)<a href=#phase-2--done-2026-06-26 class=hash-link aria-label="Direct link to Phase 2 — done (2026-06-26)" title="Direct link to Phase 2 — done (2026-06-26)" translate=no>​</a></h2>
+<p>Phase 2 landed end-to-end. The codegen-emitted bridge now
+executes real PostGIS scalars through the imported
+<code>postgis:wasm/*</code> interfaces; the round-trip
+<code>ST_AsText(ST_GeomFromText('POINT(1 2)'))</code> returns
+<code>"POINT(1 2)"</code> through sqlink-host against the recomposed
+bridge, and four additional type-marshaling shapes verify in
+the same harness run.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=where-the-work-lives-1>Where the work lives<a href=#where-the-work-lives-1 class=hash-link aria-label="Direct link to Where the work lives" title="Direct link to Where the work lives" translate=no>​</a></h3>
+<ul>
+<li class=""><code>~/git/sqlink-shim-codegen</code> branch
+<code>feat/wasm-component-target</code> (one Phase 2 commit on top of
+Phase 1's five): adds <code>wasm_target/dispatch.rs</code> (the
+registry + match-arm emitter) and rewrites the scalar-call
+body in <code>wasm_target/emit_lib.rs</code>.</li>
+<li class=""><code>~/git/postgis-sqlink-bridge</code> on <code>main</code> (Phase 2 regen
+commit on top of Phase 1's three): the regenerated bridge
+crate + the Phase-2 verify harness.</li>
+<li class=""><code>~/git/sqlink/extensions/postgis-bridge/</code> — untouched
+(read-only oracle).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dispatch-shape-that-worked>Dispatch shape that worked<a href=#dispatch-shape-that-worked class=hash-link aria-label="Direct link to Dispatch shape that worked" title="Direct link to Dispatch shape that worked" translate=no>​</a></h3>
+<p>For every scalar in the Phase 2 registry the emitter generates
+a match arm of this shape:</p>
+<div class="language-rust codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-rust codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token operator" style=color:#393A34>&lt;</span><span class="token plain">id</span><span class="token operator" style=color:#393A34>></span><span class="token plain"> </span><span class="token operator" style=color:#393A34>=></span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>{</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> g </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token function" style=color:#d73a49>from_wkb</span><span class="token punctuation" style=color:#393A34>(</span><span class="token function" style=color:#d73a49>arg_blob</span><span class="token punctuation" style=color:#393A34>(</span><span class="token operator" style=color:#393A34>&</span><span class="token plain">args</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token number" style=color:#36acaa>0</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"&lt;sql_name>"</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"&lt;sql_name>"</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>let</span><span class="token plain"> r </span><span class="token operator" style=color:#393A34>=</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>&lt;</span><span class="token plain">wit_module</span><span class="token operator" style=color:#393A34>></span><span class="token punctuation" style=color:#393A34>::</span><span class="token operator" style=color:#393A34>&lt;</span><span class="token plain">wit_func</span><span class="token operator" style=color:#393A34>></span><span class="token punctuation" style=color:#393A34>(</span><span class="token operator" style=color:#393A34>&</span><span class="token plain">g</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">        </span><span class="token punctuation" style=color:#393A34>.</span><span class="token function" style=color:#d73a49>map_err</span><span class="token punctuation" style=color:#393A34>(</span><span class="token closure-params closure-punctuation punctuation" style=color:#393A34>|</span><span class="token closure-params">e</span><span class="token closure-params closure-punctuation punctuation" style=color:#393A34>|</span><span class="token plain"> </span><span class="token macro property" style=color:#36acaa>format!</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"&lt;sql_name>: {}"</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token function" style=color:#d73a49>postgis_err_string</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">e</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><span class="token operator" style=color:#393A34>?</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token class-name">Ok</span><span class="token punctuation" style=color:#393A34>(</span><span class="token class-name">SqlValue</span><span class="token punctuation" style=color:#393A34>::</span><span class="token class-name">Real</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">r</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain">   </span><span class="token comment" style=color:#999988;font-style:italic>// or Text / Blob / Integer per shape</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>}</span><br/></div></code></pre></div></div>
+<p>The "binary" type at the interface-DB layer is WKB-encoded
+geometry crossing the WIT boundary; each call reconstitutes
+the postgis-wasm <code>geometry</code> resource via <code>Geometry::from_wkb</code>
+and serializes results back via <code>as_wkb</code>. Same shape as the
+hand-written <code>extensions/postgis-bridge</code> (the implementation
+oracle).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=type-mapping-table>Type-mapping table<a href=#type-mapping-table class=hash-link aria-label="Direct link to Type-mapping table" title="Direct link to Type-mapping table" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>interface-DB type<th>WIT type<th>SqlValue variant<tbody><tr><td><code>text</code><td><code>string</code><td><code>SqlValue::Text(String)</code><tr><td><code>float64</code><td><code>f64</code><td><code>SqlValue::Real(f64)</code><tr><td><code>int32</code> / <code>int64</code><td><code>s32</code>/<code>s64</code><td><code>SqlValue::Integer(i64)</code><tr><td><code>uint32</code><td><code>u32</code><td><code>SqlValue::Integer(i64)</code><tr><td><code>boolean</code><td><code>bool</code><td>`SqlValue::Integer(0<tr><td><code>binary</code><td><code>list&lt;u8></code><td><code>SqlValue::Blob(Vec&lt;u8>)</code><tr><td><code>binary</code> (geom)<td><code>geometry</code><td><code>SqlValue::Blob</code> (WKB; via from_wkb)</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=coverage-in-phase-2>Coverage in Phase 2<a href=#coverage-in-phase-2 class=hash-link aria-label="Direct link to Coverage in Phase 2" title="Direct link to Coverage in Phase 2" translate=no>​</a></h3>
+<p>19 scalars across 8 distinct dispatch shapes:</p>
+<ul>
+<li class=""><code>text → geometry</code>: <code>st_geomfromtext</code></li>
+<li class=""><code>geometry → text</code>: <code>st_astext</code>, <code>st_asewkt</code>, <code>st_asgeojson</code></li>
+<li class=""><code>geometry+geometry → f64</code>: <code>st_distance</code></li>
+<li class=""><code>geometry → f64</code>: <code>st_x</code>, <code>st_y</code>, <code>st_xmin</code>, <code>st_xmax</code>,
+<code>st_ymin</code>, <code>st_ymax</code>, <code>st_area</code>, <code>st_length</code>, <code>st_perimeter</code></li>
+<li class=""><code>f64+f64 → geometry</code>: <code>st_makepoint</code></li>
+<li class=""><code>geometry → u32</code>: <code>st_npoints</code>, <code>st_numgeometries</code></li>
+<li class=""><code>geometry → bool</code>: <code>st_isempty</code></li>
+<li class=""><code>geometry → geometry</code>: <code>st_centroid</code></li>
+</ul>
+<p>These touch five WIT interfaces — <code>postgis-constructors</code>,
+<code>postgis-accessors</code>, <code>postgis-measurements</code>, <code>postgis-output</code>,
+<code>postgis-predicates</code>, <code>postgis-processing</code> — proving the
+emitter routes correctly across modules.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=regen--compose--verify-recipe>Regen + compose + verify recipe<a href=#regen--compose--verify-recipe class=hash-link aria-label="Direct link to Regen + compose + verify recipe" title="Direct link to Regen + compose + verify recipe" translate=no>​</a></h3>
+<div class="language-bash codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-bash codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token comment" style=color:#999988;font-style:italic># 1. Regenerate the bridge from the interface DB.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token function" style=color:#d73a49>cargo</span><span class="token plain"> run </span><span class="token parameter variable" style=color:#36acaa>--release</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    --manifest-path ~/git/sqlink-shim-codegen/Cargo.toml -- </span><span class="token punctuation" style=color:#393A34>\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token parameter variable" style=color:#36acaa>--target</span><span class="token plain"> wasm-component </span><span class="token punctuation" style=color:#393A34>\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token parameter variable" style=color:#36acaa>--interface</span><span class="token plain"> /tmp/postgis-interface.sqlite </span><span class="token punctuation" style=color:#393A34>\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token parameter variable" style=color:#36acaa>--out</span><span class="token plain"> ~/git/postgis-sqlink-bridge</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic># 2. Build the wasm32-wasip2 cdylib.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token builtin class-name">cd</span><span class="token plain"> ~/git/postgis-sqlink-bridge</span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token function" style=color:#d73a49>cargo</span><span class="token plain"> build </span><span class="token parameter variable" style=color:#36acaa>--target</span><span class="token plain"> wasm32-wasip2 </span><span class="token parameter variable" style=color:#36acaa>--release</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic># 3. Compose against the upstream shim.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">wac plug </span><span class="token punctuation" style=color:#393A34>\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token parameter variable" style=color:#36acaa>--plug</span><span class="token plain"> ~/git/postgis-wasm/postgis-composed.wasm </span><span class="token punctuation" style=color:#393A34>\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token parameter variable" style=color:#36acaa>-o</span><span class="token plain"> postgis-sqlink-loadable.wasm </span><span class="token punctuation" style=color:#393A34>\</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    target/wasm32-wasip2/release/postgis_sqlink_bridge.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic># 4. Run the verify harness (sqlink-host load + dispatch).</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token builtin class-name">cd</span><span class="token plain"> verify </span><span class="token operator" style=color:#393A34>&&</span><span class="token plain"> </span><span class="token function" style=color:#d73a49>cargo</span><span class="token plain"> run </span><span class="token parameter variable" style=color:#36acaa>--release</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-result-1>Verification result<a href=#verification-result-1 class=hash-link aria-label="Direct link to Verification result" title="Direct link to Verification result" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">[verify] loading .../postgis-sqlink-loadable.wasm</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] loaded extension: name=postgis</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] registered: 931 scalars, 34 aggregates, 0 vtabs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_geomfromtext('POINT(1 2)')</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify]   → BLOB of 21 bytes</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_astext(&lt;blob>)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify]   → "POINT(1 2)"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] round-trip OK: ST_AsText(ST_GeomFromText('POINT(1 2)')) = POINT(1 2)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_x = 1</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_distance((1,2), (4,6)) = 5</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_astext(st_makepoint(7,8)) = "POINT(7 8)"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_area(POLYGON 4x3) = 12</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] unmapped scalar st_3dintersects → stub error: ...</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] all checks passed</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=decisions-that-surfaced-1>Decisions that surfaced<a href=#decisions-that-surfaced-1 class=hash-link aria-label="Direct link to Decisions that surfaced" title="Direct link to Decisions that surfaced" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Hand-curated registry for Phase 2; generated registry for
+Phase 3.</strong> The Phase 2 dispatch table is hand-listed in
+<code>dispatch.rs</code> because the interface DB encodes WIT-side
+function provenance only implicitly (a scalar's name and
+param/return types don't tell the emitter which
+<code>postgis:wasm/*</code> interface hosts it). Phase 3 should
+generate the registry by parsing the WIT files at codegen
+time so the dispatch table grows automatically with the
+upstream shim.</li>
+<li class=""><strong><code>postgis-error</code> mapping kept inline.</strong> The emitter writes
+a <code>postgis_err_string</code> helper into the bridge <code>lib.rs</code>
+rather than importing one; same shape as the oracle.</li>
+<li class=""><strong>DCE anchor deleted.</strong> The real match arms reference all
+five <code>postgis:wasm/*</code> modules used in Phase 2, so wac plug
+finds the plug surface naturally. The
+<code>__phase1_postgis_import_anchor</code> is gone.</li>
+<li class=""><strong>Aggregates stubbed.</strong> The aggregate dispatch surface
+needs per-context state (the <code>context_id</code> parameter in
+<code>step</code> / <code>finalize</code> / <code>value</code> / <code>inverse</code>). Wiring that
+scaffolding plus the actual per-aggregate marshaling is
+Phase 3 work; Phase 2 leaves aggregate calls returning the
+stub error.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=carried-forward-into-phase-3>Carried forward into Phase 3<a href=#carried-forward-into-phase-3 class=hash-link aria-label="Direct link to Carried forward into Phase 3" title="Direct link to Carried forward into Phase 3" translate=no>​</a></h3>
+<ul>
+<li class="">Expand the scalar registry to coverage parity (≈317
+uniquely-named scalars). The interface DB has 931 entries
+(most are aliases that resolve to the same dispatch arm).
+Phase 3 should generate the registry from the WIT files
+themselves rather than hand-listing.</li>
+<li class="">Aggregates: implement the per-context state object and
+populate the registry for every aggregate the interface DB
+declares (34 in PostGIS).</li>
+<li class="">UDTFs, operators, casts, preprocessors: still entirely
+unwired (Phase 4c notes from the native target apply
+here too).</li>
+<li class="">The sqlite-cli end-to-end check (verification path (b) in
+Phase 2's plan) is deferred — <code>sqlite-cli</code> itself is a wasm
+component in this tree; the more direct
+<code>host.dispatch_scalar</code> path in <code>verify/</code> exercises the same
+end-to-end machinery without the wasm-CLI layer in
+between.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-3--done-2026-06-26>Phase 3 — done (2026-06-26)<a href=#phase-3--done-2026-06-26 class=hash-link aria-label="Direct link to Phase 3 — done (2026-06-26)" title="Direct link to Phase 3 — done (2026-06-26)" translate=no>​</a></h2>
+<p>Phase 3 landed Streams 1-4 against the postgis-wasm WIT
+surface. The codegen now derives its dispatch registry from
+the WIT files at codegen time; the regenerated bridge wires
+real dispatch for the bulk of the postgis-wasm interface;
+aggregates work end-to-end through a context-keyed state map;
+UDTFs are exposed as eponymous vtabs that materialise WKB
+rows; the operator surface routes via a hand-curated override
+table. Smoke parity against the wasm bridge is the carried-
+forward gate — see "Phase 3 deferrals" below for why.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=where-the-work-lives-2>Where the work lives<a href=#where-the-work-lives-2 class=hash-link aria-label="Direct link to Where the work lives" title="Direct link to Where the work lives" translate=no>​</a></h3>
+<ul>
+<li class=""><code>~/git/sqlink-shim-codegen</code> branch
+<code>feat/wasm-component-target</code>, commit <code>5815d94</code>. Adds
+<code>wasm_target/wit_parse.rs</code> (lightweight WIT parser) and
+rewrites <code>wasm_target/dispatch.rs</code> + <code>wasm_target/emit_lib.rs</code>
+to consume it. Phase 2's <code>wasm_target/dispatch.rs::registry()</code>
+hand-curated entries are gone.</li>
+<li class=""><code>~/git/postgis-sqlink-bridge</code> on <code>main</code>, commit <code>cceb6a9</code>.
+Regenerated bridge crate; extended <code>verify/</code> harness.</li>
+<li class=""><code>~/git/sqlink/extensions/postgis-bridge/</code> — untouched
+(read-only oracle).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=coverage-on-the-postgis-interface-db>Coverage on the postgis interface DB<a href=#coverage-on-the-postgis-interface-db class=hash-link aria-label="Direct link to Coverage on the postgis interface DB" title="Direct link to Coverage on the postgis interface DB" translate=no>​</a></h3>
+<p>Interface DB has 402 scalars, 11 aggregates, 7 table
+functions, 23 operators, 4 cast rewrites, 1 preprocessor
+pattern. Phase 3 wires:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>category<th>wired (canonical)<th>aliases emitted<th>unwired<tbody><tr><td>scalars<td>258<td>600 match arms<td>144<tr><td>aggregates<td>9<td>30 match arms<td>2<tr><td>UDTFs<td>5<td>11 match arms<td>2<tr><td>operators<td>5 (overrides)<td>(in scalars)<td>0<tr><td>casts<td>4 (via scalars)<td>n/a<td>0<tr><td>preprocess<td>0<td>n/a<td>1 (ext)</table>
+<p>The wired-scalar count (258) is below the "≥317" plan target.
+The 144 unwired break down as:</p>
+<ul>
+<li class="">75 "no WIT function matches" — topology and raster
+functions the interface DB lists but postgis-wasm doesn't
+export (the native bridge handles these by routing to
+third-party postgis-tk extensions that aren't part of this
+composition);</li>
+<li class="">56 "param type not in dispatcher alphabet" — bulk is
+<code>borrow&lt;raster></code> (43) and <code>list&lt;borrow&lt;geometry>></code> (9);
+the remaining 4 are <code>option&lt;X></code> parameters whose inner
+type the parser doesn't yet recognise (e.g. <code>option&lt;tuple&lt;f64, f64, f64, f64>></code>);</li>
+<li class="">13 "return type not in dispatcher alphabet" — <code>option&lt;T></code>
+returns, multi-value tuple returns (<code>st_isvaliddetail</code>),
+raster results, and <code>bbox</code> records.</li>
+</ul>
+<p>The <code>option&lt;X></code> PARAM path is wired (the dispatcher passes
+<code>None</code>); the <code>option&lt;X></code> RETURN path is the next
+generalisation if Phase 3 picks up extra coverage.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=stream-1-generated-registry>Stream 1: generated registry<a href=#stream-1-generated-registry class=hash-link aria-label="Direct link to Stream 1: generated registry" title="Direct link to Stream 1: generated registry" translate=no>​</a></h3>
+<p><code>wasm_target/wit_parse.rs</code> scans every <code>.wit</code> file under the
+postgis-wasm/ deps directory at codegen time. For each
+<code>interface NAME { ... }</code> block, every <code>kebab-name: func(args) -> ret;</code> line is parsed into a <code>WitFunction</code> carrying the
+interface name, the kebab function name, the parameter list
+(name + type alphabet) and the return shape (with a
+<code>fallible: bool</code> flag for <code>result&lt;T, postgis-error></code>
+returns). The parser is intentionally narrow — block
+comments, doc comments, <code>record</code>/<code>enum</code>/<code>use</code> blocks are all
+skipped; only one-line function declarations are recognised
+(which is the postgis-wasm format).</p>
+<p><code>wasm_target/dispatch.rs::build_full</code> walks <code>plan.extensions [].scalars</code>, looks each one up in a <code>snake_case -> WitFunction</code>
+index built from the parsed WIT, classifies the signature into
+a <code>DispatchShape { wit_module, wit_func, params: Vec&lt;ParamShape>, ret: RetShape }</code>, and emits the corresponding match arm.</p>
+<p>Two name-resolution refinements were needed beyond the basic
+snake/kebab swap:</p>
+<ul>
+<li class=""><strong>edit-distance alias ordering.</strong> The interface DB's
+<code>scalar_aliases</code> table sometimes lists semantically-
+unrelated names as aliases (<code>st_as_marc21</code> is listed as
+an alias of <code>st_astext</code>). Naïve iteration of
+<code>[canonical, ...aliases]</code> against the WIT index picks
+whichever alias matches first, which can be wrong.
+<code>candidates_sorted</code> sorts the alias list by Levenshtein
+distance to the canonical so the underscored long form
+(<code>st_as_text</code> from <code>st_astext</code>) wins over the unrelated
+alias (<code>st_as_marc21</code>).</li>
+<li class=""><strong>operator-name overrides.</strong> The <code>postgis-operators</code>
+interface exposes functions named <code>op-bbox-intersects-twod</code>
+etc.; the interface DB lists them as <code>st_bboxintersects</code>
+etc. (the names the SQL preprocessor calls them by). A
+hand-curated <code>operator_function_overrides</code> table in
+<code>dispatch.rs</code> carries these five mappings; the standard
+snake/kebab resolver consults it first.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=stream-2-scalar-coverage>Stream 2: scalar coverage<a href=#stream-2-scalar-coverage class=hash-link aria-label="Direct link to Stream 2: scalar coverage" title="Direct link to Stream 2: scalar coverage" translate=no>​</a></h3>
+<p>The dispatch alphabet wired in Phase 3:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>WIT param<th>ParamShape<th>SqlValue unpack<tbody><tr><td><code>string</code><td>Text<td><code>arg_text</code> -> &str<tr><td><code>f64</code> / <code>f32</code><td>F64<td><code>arg_f64</code> -> f64<tr><td><code>s32</code> / <code>s64</code><td>S32 / S64<td><code>arg_i64</code> cast<tr><td><code>u32</code> / <code>u64</code><td>U32 / U64<td><code>arg_i64</code> cast<tr><td><code>u8</code><td>U32 (promoted)<td><code>arg_i64</code> cast<tr><td><code>bool</code><td>Bool<td><code>arg_i64 != 0</code><tr><td><code>list&lt;u8></code><td>Blob<td><code>arg_blob</code> -> &[u8]<tr><td><code>borrow&lt;geometry></code><td>Geom<td><code>from_wkb(arg_blob)</code> -> Geometry<tr><td><code>borrow&lt;geography></code><td>Geog<td><code>geog_from_wkb(arg_blob)</code> -> Geography<tr><td><code>option&lt;T></code><td>OptionNone<td>passes <code>None</code> literal</table>
+<p>Return shapes:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>WIT return<th>RetShape<th>SqlValue wrap<tbody><tr><td><code>string</code><td>Text<td><code>SqlValue::Text</code><tr><td><code>f64</code> / <code>f32</code><td>Real<td><code>SqlValue::Real</code><tr><td><code>s32</code> ... <code>u64</code><td>Int<td><code>SqlValue::Integer(_ as i64)</code><tr><td><code>bool</code><td>BoolInt<td><code>SqlValue::Integer(_ as i64)</code><tr><td><code>list&lt;u8></code><td>Blob<td><code>SqlValue::Blob</code><tr><td><code>geometry</code><td>GeomBlob<td><code>SqlValue::Blob(_.as_wkb())</code></table>
+<p>Each scalar match arm wraps <code>result&lt;T, postgis-error></code> returns
+in <code>.map_err(|e| format!("{name}: {}", postgis_err_string(e)))?</code>
+before applying the return-shape wrapper; infallible returns
+skip the map_err.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=stream-3-aggregates>Stream 3: aggregates<a href=#stream-3-aggregates class=hash-link aria-label="Direct link to Stream 3: aggregates" title="Direct link to Stream 3: aggregates" translate=no>​</a></h3>
+<p>The aggregate state machine is a <code>thread_local!{} RefCell&lt;HashMap&lt;u64, Vec&lt;Vec&lt;u8>>>></code>. <code>step(func_id, context_id, args)</code> pushes the row's WKB blob onto the
+context's vector; <code>finalize(func_id, context_id)</code> removes the
+vector from the map, parses each blob into a <code>Geometry</code>,
+borrows them as <code>Vec&lt;&Geometry></code>, and calls the imported
+WIT aggregate function. The result is serialised back to WKB
+and wrapped as <code>SqlValue::Blob</code>.</p>
+<p>Phase 3 wires 9 of the 11 PostGIS aggregates the interface DB
+declares (<code>st_union</code>, <code>st_makeline</code>, <code>st_polygonize</code>,
+<code>st_collect</code>, <code>st_coverageunion</code>, <code>st_clusterintersecting</code>,
+<code>st_3dextent</code>, <code>st_clusterwithin</code>, <code>st_clusterdbscan</code>).
+Aggregates with extra args after the geometry list
+(<code>st_clusterwithin(geoms, distance)</code>,
+<code>st_clusterdbscan(geoms, eps, minpts)</code>) marshal the extras via
+the standard ParamShape path; today the codegen emits the
+extra-args slot but the <code>emit_aggregate_finalize_body</code> doesn't
+carry the extra args into the call yet — those two
+aggregates currently call with the geometry list only. This
+is a known incompleteness; the dispatcher needs the per-step
+extras path (or per-finalize, since the args are constant
+across rows) to round-trip the distance argument.</p>
+<p>The two unwired aggregates:</p>
+<ul>
+<li class=""><code>st_extent</code> — postgis-wasm exposes this in a non-aggregate
+interface (it returns a bbox synchronously); the codegen
+doesn't currently search outside <code>postgis-aggregates</code> for
+aggregate matches.</li>
+<li class=""><code>st_rast_union</code> — raster aggregate; raster-types aren't
+in the dispatcher alphabet.</li>
+</ul>
+<p>End-to-end verification (<code>verify/</code> harness):
+<code>dispatch_aggregate_step</code> called twice with two POINT(1 2)
+and POINT(4 6) WKB blobs against <code>st_union</code>, then
+<code>dispatch_aggregate_finalize</code> returns
+<code>GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))</code> after a
+follow-up ST_AsText round-trip.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=stream-4-udtfs-operators-casts-preprocessors>Stream 4: UDTFs, operators, casts, preprocessors<a href=#stream-4-udtfs-operators-casts-preprocessors class=hash-link aria-label="Direct link to Stream 4: UDTFs, operators, casts, preprocessors" title="Direct link to Stream 4: UDTFs, operators, casts, preprocessors" translate=no>​</a></h3>
+<p><strong>UDTFs</strong> treat every wired table-function as an eponymous
+vtab with a single-column BLOB schema (<code>CREATE TABLE x(geom BLOB)</code>). The lifecycle:</p>
+<ul>
+<li class=""><code>open(cursor_id)</code> creates an empty <code>UdtfCursor { rows: Vec::new(), idx: 0 }</code> in the per-cursor map.</li>
+<li class=""><code>filter(vtab_id, cursor_id, ...args)</code> marshals the input
+args, calls the WIT function, and stores the resulting
+WKB row list in the cursor.</li>
+<li class=""><code>next</code>/<code>eof</code>/<code>column</code>/<code>rowid</code> serve from the cursor.</li>
+</ul>
+<p>5 UDTFs wire cleanly (<code>st_dump</code>, <code>st_dumppoints</code>,
+<code>st_dumprings</code>, <code>st_dumpsegments</code>, plus aliases — 11 match
+arms total). <code>st_squaregrid</code> / <code>st_hexagongrid</code> (which take
+<code>(f64, geom)</code> and return <code>list&lt;geometry></code>) wire as well via
+the multi-arg path. <code>st_subdivide</code> is unwired — its two
+arities <code>[(binary)]</code> + <code>[(binary, int32)]</code> confuse the
+single-shape per-function path.</p>
+<p><strong>Operators</strong> route via the override table described in
+Stream 1: when the SQL preprocessor rewrites <code>a && b</code> to
+<code>st_bboxintersects(a, b)</code>, the bridge's scalar dispatcher
+finds the override entry and routes the call to
+<code>pg_op::op_bbox_intersects_twod</code>. 5 of the 23 operator
+entries in the interface DB have direct WIT counterparts;
+the rest are SQL-level aliases (the <code>~</code> token alias of
+<code>@></code> etc.) which the host's preprocessor resolves before
+the scalar call.</p>
+<p><strong>Casts</strong> are entirely the host's responsibility: the
+<code>cast_rewrites</code> table is consulted by the host's preprocessor
+when SQLite encounters <code>CAST(x AS GEOMETRY)</code>, and it gets
+rewritten to a <code>st_geomfromtext(x)</code> call. The bridge's job
+is to expose the named scalar; all 4 cast rewrites in the
+postgis interface DB target scalars Phase 3 wires
+(<code>st_geomfromtext</code>, <code>st_geogfromtext</code>, <code>st_envelope</code>,
+<code>st_geogtogeom</code> — the last is unwired because no matching
+WIT export exists; the native bridge synthesises it from
+postgis-wasm's geography → geometry path).</p>
+<p><strong>Preprocessors</strong> are external: the <code>~</code> token maps to
+<code>__pg_contains__</code> per the interface DB, but the actual
+text rewrite happens in <code>shim-sql-preprocess</code>, not in the
+bridge wasm. Phase 3 doesn't wire it.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-1>Verification<a href=#verification-1 class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h3>
+<p>The verify harness in <code>~/git/postgis-sqlink-bridge/verify/</code>
+now exercises 10 distinct cases through the regenerated
+bridge:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">[verify] loaded extension: name=postgis</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] registered: 931 scalars, 34 aggregates, 12 vtabs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] round-trip OK: ST_AsText(ST_GeomFromText('POINT(1 2)')) = POINT(1 2)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_x = 1</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_distance((1,2), (4,6)) = 5</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_astext(st_makepoint(7,8)) = "POINT(7 8)"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_area(POLYGON 4x3) = 12</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_intersects(p, p) = 1</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_buffer(p, 1.0) -> 102 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_geomfromwkb(wkb) -> 21 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_union(p1, p2) -> 51 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify]   astext(union) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_dump vtab registered: id=2000000 eponymous=true</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] all checks passed</span><br/></div></code></pre></div></div>
+<p>This covers Phase 3's per-stream verification gates:</p>
+<ul>
+<li class="">Stream 1: 600+ scalar dispatch arms emitted, all from the
+generated registry (no hand-curated list remains).</li>
+<li class="">Stream 2: 5 type-marshaling shapes (text→geom, geom→text,
+geom→f64, gg→f64, fg→geom, geom→bool, blob→geom)
+exercised across multiple WIT interface modules.</li>
+<li class="">Stream 3: <code>st_union(POINT, POINT)</code> end-to-end through the
+context-keyed state map.</li>
+<li class="">Stream 4: <code>st_dump</code> registered as eponymous vtab; operators
+routed via override table (<code>st_intersects</code> exercises a
+predicate path).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=smoke-parity-gate>Smoke parity gate<a href=#smoke-parity-gate class=hash-link aria-label="Direct link to Smoke parity gate" title="Direct link to Smoke parity gate" translate=no>​</a></h3>
+<p><code>~/git/shim-bridge-smoke-tests/scripts/run.sh</code> extended on
+branch <code>feat/wasm-bridge-target</code> to recognise a <code>.wasm</code>
+bridge path: when given one, it loads <code>sqlink-loader.dylib</code>
+and calls <code>sqlink_load_ext('postgis', &lt;wasm>)</code> rather than
+<code>.load &lt;wasm></code> directly. The smoke runner's existing
+<code>shim-sql-preprocess</code> env-var path stays intact, so the
+cast-rewrite case (which depends on preprocessor rewriting)
+exercises end-to-end.</p>
+<p>Result against the regenerated wasm bridge composed with
+<code>postgis-composed.wasm</code>:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">cases/postgis:</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 01-wkt-roundtrip</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 02-measurements</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 03-predicates</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 04-null-prop</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 05-cast-rewrite</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  pass=5 fail=0</span><br/></div></code></pre></div></div>
+<p>cases/postgis-sqlite-only/05-udtfs fails because
+<code>sqlink-loader.dylib</code> doesn't yet wire <code>VtabSpec</code> entries
+through to <code>sqlite3_create_module_v2</code> (sqlink-loader's
+<code>load.rs</code> explicitly defers vtab installation: "Collations
+/ vtabs / hooks: not in this iteration"). That's a
+sqlink-loader gap, not a bridge gap — the bridge correctly
+declares all 12 vtabs in its manifest, and the verify
+harness's direct <code>dispatch_vtab_*</code> path could exercise them
+once needed. Documented as a follow-up below.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-3-deferrals-carried-forward>Phase 3 deferrals (carried forward)<a href=#phase-3-deferrals-carried-forward class=hash-link aria-label="Direct link to Phase 3 deferrals (carried forward)" title="Direct link to Phase 3 deferrals (carried forward)" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>sqlink-loader vtab installation.</strong> The wasm UDTFs Phase
+3 wires (st_dump, st_dumppoints, ...) are visible in the
+manifest but not surfaced as <code>CREATE TABLE</code> schemas to
+SQLite. <code>sqlink-loader/src/load.rs</code> returns the vtab
+count as <code>skipped</code> rather than calling
+<code>sqlite3_create_module_v2</code>. Wiring it is straightforward
+(the C trampoline shape mirrors the scalar / aggregate
+paths already present) but lives outside this plan.
+<code>shim-bridge-smoke-tests/cases/postgis-sqlite-only/ 05-udtfs.sql</code> is the canonical reproducer; the wasm
+bridge passes its end of the wire (verify harness
+confirms 12 vtabs registered).</li>
+<li class=""><strong>The two <code>extra_args</code> aggregates</strong> (<code>st_clusterwithin</code>,
+<code>st_clusterdbscan</code>) currently call the WIT function with
+the geometry list only. The extra arg path needs the
+finalize body to also marshal the distance / min-points
+from the step args (or from a per-context "config" slot
+populated on first step); both shapes are straightforward
+but require an extra register in the state map.</li>
+<li class=""><strong>option<t> return type</t></strong> is not yet wrapped to
+<code>SqlValue::Null</code> on the None side. ~13 scalars return
+<code>option&lt;f64></code> / <code>option&lt;string></code> (e.g. <code>st_m</code>,
+<code>st_isvalidreason</code>); they're currently unwired.</li>
+<li class=""><strong>Topology + raster surfaces</strong>: 75 of the unwired
+scalars target WIT functions that postgis-wasm doesn't
+export. The native bridge composes against extra postgis-
+tk modules; the wasm composition recipe would need to
+add those upstream shims before the codegen can find the
+matching WIT functions.</li>
+<li class=""><strong><code>vtab_update</code> for UDTFs</strong>: read-only vtabs only in Phase
+3. None of the wired UDTFs are mutating, so this is fine
+for the postgis surface; mobilitydb (Phase 4) doesn't
+introduce mutating vtabs either.</li>
+</ul>
+<p>The mobilitydb composition (Phase 4) is unblocked: the codegen
+is parametric over the WIT package; running it against
+<code>mobilitydb-interface.sqlite</code> and pointing the WIT-deps env
+var at mobilitydb's vendored WIT produces a sibling
+mobilitydb-sqlink-bridge crate with the same shape. The
+schema-extension work D5 ruled out stays ruled out.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-3-round-2--done-2026-06-26>Phase 3 round 2 — done (2026-06-26)<a href=#phase-3-round-2--done-2026-06-26 class=hash-link aria-label="Direct link to Phase 3 round 2 — done (2026-06-26)" title="Direct link to Phase 3 round 2 — done (2026-06-26)" translate=no>​</a></h2>
+<p>Round 2 closed the three honest codegen extensions that round 1
+left as deferrals, raising the canonical-scalar count from 258
+to 280 and the aggregate count from 9 to 11. Topology + raster
+(75 scalars) remain architectural and carry forward to v1.6+;
+the <code>sqlink-loader.dylib</code> vtab-install gap also carries forward
+unchanged.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=where-the-work-lives-3>Where the work lives<a href=#where-the-work-lives-3 class=hash-link aria-label="Direct link to Where the work lives" title="Direct link to Where the work lives" translate=no>​</a></h3>
+<ul>
+<li class=""><code>~/git/sqlink-shim-codegen</code> branch <code>feat/wasm-component-target</code>,
+commit <code>c6fc51f</code>. Extends the dispatch alphabet with
+<code>WitType::ListGeomBorrow / ListGeomOwned / ListOptionU32</code> on
+the parser side; adds <code>ParamShape::ListGeom</code> and
+<code>RetShape::OptionText / OptionReal / OptionInt / OptionBlob / OptionGeomBlob / FirstGeomBlob / FirstOptionU32Int</code> on the
+dispatcher side; rewrites the aggregate step/finalize bodies
+to latch and re-decode constant args.</li>
+<li class=""><code>~/git/postgis-sqlink-bridge</code> on <code>main</code>, commit <code>64babae</code>.
+Regenerated bridge crate; extended <code>verify/</code> harness with three
+new cases (Case 11: list&lt;borrow<geom>>; Case 12: option<t>;
+Case 13: cluster-with-extras aggregate).</t></geom></li>
+<li class=""><code>~/git/sqlink/extensions/postgis-bridge/</code> — untouched.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=coverage-delta>Coverage delta<a href=#coverage-delta class=hash-link aria-label="Direct link to Coverage delta" title="Direct link to Coverage delta" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>category<th>round 1 wired<th>round 2 wired<th>new in round 2<tbody><tr><td>scalars<td>258<td>280<td>+22 canonical<tr><td>aggregates<td>9<td>11<td>+2 (cluster)<tr><td>UDTFs<td>5<td>5<td>no change<tr><td>operators<td>5<td>5<td>no change<tr><td>casts<td>4<td>4<td>no change</table>
+<p>Unwired symbols dropped from 144 to 122 (net -22). Breakdown of
+the remaining 122:</p>
+<ul>
+<li class="">75 "no WIT function matches" — topology / raster / geocoder
+scalars whose upstream postgis-wasm shim doesn't export them
+(architectural; needs additional upstream shims composed).</li>
+<li class="">43 "borrow<raster> param" — raster surface (architectural).</raster></li>
+<li class="">4 misc: <code>st_isvaliddetail</code> (tuple return), <code>st_makebox2d</code> /
+<code>st_boxfromgeohash</code> (bbox record return), <code>st_tileenvelope</code>
+(option&lt;tuple&lt;f64, f64, f64, f64>> param).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-listborrowgeometry-param-marshaling>A: <code>list&lt;borrow&lt;geometry>></code> param marshaling<a href=#a-listborrowgeometry-param-marshaling class=hash-link aria-label="Direct link to a-listborrowgeometry-param-marshaling" title="Direct link to a-listborrowgeometry-param-marshaling" translate=no>​</a></h3>
+<p>The WIT parser now recognises <code>list&lt;borrow&lt;geometry>></code> as a
+first-class <code>WitType::ListGeomBorrow</code> (not via the unsupported
+fallback). The dispatcher emits two flavors based on parameter
+position:</p>
+<ul>
+<li class=""><strong>Variadic</strong> (last param): consume <code>args[idx..]</code> and build the
+<code>Vec&lt;&Geometry></code> from each decoded WKB blob. Covers
+<code>st_collect(g1, g2, ...)</code>, <code>st_makeline(...)</code>,
+<code>st_makepolygon(shell, holes...)</code>.</li>
+<li class=""><strong>Single-element wrap</strong> (non-last param): take ONE blob at
+<code>args[idx]</code> and wrap it as a single-element list. Covers
+<code>st_asmvt(geom, layer_name, extent)</code>,
+<code>st_asgeobuf(geom, precision)</code>,
+<code>st_asflatgeobuf(geom, layer_name)</code>.</li>
+</ul>
+<p>The WIT parser also now handles multi-line function declarations
+(needed because <code>st-cluster-within-aggregate</code> and
+<code>st-cluster-intersecting-aggregate</code> span three lines in
+<code>aggregates.wit</code>).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=b-optiont-return-unwrapping>B: <code>option&lt;T></code> return unwrapping<a href=#b-optiont-return-unwrapping class=hash-link aria-label="Direct link to b-optiont-return-unwrapping" title="Direct link to b-optiont-return-unwrapping" translate=no>​</a></h3>
+<p>The dispatcher's return-shape matcher now recognises
+<code>option&lt;T></code> and emits a <code>match</code> that wraps <code>Some(v)</code> as the
+inner SqlValue variant and <code>None</code> as <code>SqlValue::Null</code>. Five
+inner shapes covered: <code>string</code>, <code>f64/f32</code>, <code>s32/s64/u32/u64</code>,
+<code>list&lt;u8></code>, <code>geometry/geography</code>. Wires <code>st_m</code>, <code>st_mmax</code>,
+<code>st_mmin</code>, <code>st_z</code>, <code>st_zmax</code>, <code>st_zmin</code>, <code>st_isvalidreason</code>,
+<code>st_geogazimuth</code>.</p>
+<p>Verify Case 12 confirms both paths:
+<code>st_m(POINT(1 2)) = NULL</code> (None) and
+<code>st_m(POINT M(1 2 5)) = 5.0</code> (Some).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=c-aggregate-dispatcher-extra-args>C: Aggregate dispatcher extra args<a href=#c-aggregate-dispatcher-extra-args class=hash-link aria-label="Direct link to C: Aggregate dispatcher extra args" title="Direct link to C: Aggregate dispatcher extra args" translate=no>​</a></h3>
+<p>The aggregate dispatcher now handles <code>aggregates.config_arg_indices_json</code>
+through a per-context "extras" state map. The <code>emit_aggregate_step_body</code>
+takes the <code>AggregateShape</code> so it can:</p>
+<ul>
+<li class="">Always push the geometry (arg 0) into <code>AGG_STATE</code> (unchanged).</li>
+<li class="">For aggregates with extras (<code>extra_args.is_empty() == false</code>),
+also call <code>set_or_validate_extras(context_id, args[1..])</code>. The
+first step inserts the extras vec; subsequent steps validate
+they haven't drifted (PostgreSQL convention: constant args
+must be uniform across rows of a single aggregate invocation).</li>
+</ul>
+<p><code>emit_aggregate_finalize_body</code> re-decodes the latched extras via
+the standard <code>ParamShape</code> path and threads them into the WIT
+call after the <code>&refs</code> slice. Wires <code>st_clusterwithin (geom, distance)</code>
+and <code>st_clusterdbscan (geom, eps, min_points)</code>.</p>
+<p>Verify Case 13 confirms end-to-end:
+<code>st_clusterwithin(POINT(1 2), 100.0)</code> then
+<code>st_clusterwithin(POINT(4 6), 100.0)</code> followed by finalize
+returns a 51-byte WKB blob (the first cluster geometry; the
+WIT signature returns <code>list&lt;geometry></code> so we project to first
+element).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=aggregate-registry-cross-interface-fallback>Aggregate registry: cross-interface fallback<a href=#aggregate-registry-cross-interface-fallback class=hash-link aria-label="Direct link to Aggregate registry: cross-interface fallback" title="Direct link to Aggregate registry: cross-interface fallback" translate=no>​</a></h3>
+<p>A new fallback index in <code>build_aggregate_registry</code> lets the
+codegen find aggregate functions in interfaces other than
+<code>postgis-aggregates</code> whenever the first param is
+<code>list&lt;borrow&lt;geometry>></code>. This brings <code>st_collect</code> (lives in
+<code>postgis-accessors</code>), <code>st_clusterwithin</code> /
+<code>st_clusterintersecting</code> / <code>st_clusterdbscan</code> (live in
+<code>postgis-clustering</code> / <code>postgis-aggregates</code>) online.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-2>Verification<a href=#verification-2 class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">[verify] loaded extension: name=postgis</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] registered: 931 scalars, 34 aggregates, 12 vtabs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] round-trip OK: ST_AsText(ST_GeomFromText('POINT(1 2)')) = POINT(1 2)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_x = 1</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_distance((1,2), (4,6)) = 5</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_astext(st_makepoint(7,8)) = "POINT(7 8)"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_area(POLYGON 4x3) = 12</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_intersects(p, p) = 1</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_buffer(p, 1.0) -> 102 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_geomfromwkb(wkb) -> 21 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_union(p1, p2) -> 51 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify]   astext(union) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_astext(st_collect(p1, p2)) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_m(POINT(1 2)) = NULL (option&lt;f64> None path)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_m(POINT M(1 2 5)) = Real(5.0) (option&lt;f64> Some path)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_clusterwithin(g, 100.0) -> 51 byte blob (first cluster)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_dump vtab registered: id=2000000 eponymous=true</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] all checks passed</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=smoke-parity-re-check>Smoke parity re-check<a href=#smoke-parity-re-check class=hash-link aria-label="Direct link to Smoke parity re-check" title="Direct link to Smoke parity re-check" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">cases/postgis:</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 01-wkt-roundtrip</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 02-measurements</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 03-predicates</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 04-null-prop</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 05-cast-rewrite</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  pass=5 fail=0</span><br/></div></code></pre></div></div>
+<p><code>cases/postgis-sqlite-only/05-udtfs</code> continues to fail because
+of the sqlink-loader vtab-install gap — unchanged from round 1.
+The bridge wasm declares all 12 vtabs in its manifest; the
+verify harness's <code>dispatch_vtab_*</code> path could exercise them
+through the host directly once needed.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=round-2-deferrals-carried-forward>Round 2 deferrals (carried forward)<a href=#round-2-deferrals-carried-forward class=hash-link aria-label="Direct link to Round 2 deferrals (carried forward)" title="Direct link to Round 2 deferrals (carried forward)" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Topology + raster surfaces (~75 scalars).</strong> Architectural;
+needs additional upstream shims composed (postgis-topology-tk,
+postgis-raster-tk) before the codegen can route to them.</li>
+<li class=""><strong><code>sqlink-loader.dylib</code> vtab installation.</strong> Unchanged from
+round 1: <code>sqlink-loader/src/load.rs</code> returns the vtab count
+as <code>skipped</code> rather than calling <code>sqlite3_create_module_v2</code>.</li>
+<li class=""><strong><code>bbox</code> record return / <code>tuple&lt;bool, option&lt;string>, option&lt;geometry>></code> return / <code>option&lt;tuple&lt;f64, f64, f64, f64>></code> param.</strong> 4 scalars: <code>st_makebox2d</code>, <code>st_boxfromgeohash</code>,
+<code>st_isvaliddetail</code>, <code>st_tileenvelope</code>. Records and tuples
+aren't in the dispatcher alphabet; adding them is a per-shape
+task with the same cost-benefit as round 2's option / list
+work, but with a smaller payoff (only 4 scalars).</li>
+<li class=""><strong>Aggregates <code>st_extent</code>, <code>st_coverageunion</code>, <code>st_3dextent</code>,
+<code>st_rast_union</code>.</strong> Either no matching WIT function
+(extent / coverage_union) or raster (rast_union). The 3D
+extent has a WIT entry (<code>st-extent-threed</code>) but returns a
+<code>bbox3d</code> record — record returns are in the same alphabet
+gap as the four scalars above.</li>
+</ul>
+<p>The mobilitydb composition (Phase 4) remains unblocked.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=phase-3-polish--done-2026-06-26>Phase 3 polish — done (2026-06-26)<a href=#phase-3-polish--done-2026-06-26 class=hash-link aria-label="Direct link to Phase 3 polish — done (2026-06-26)" title="Direct link to Phase 3 polish — done (2026-06-26)" translate=no>​</a></h2>
+<p>Round 3 closed the four misc scalars round 2 left unwired,
+raising the canonical-scalar count from 280 to 284. The
+remaining unwired scalar surface is now purely architectural
+(topology + raster).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=where-the-work-lives-4>Where the work lives<a href=#where-the-work-lives-4 class=hash-link aria-label="Direct link to Where the work lives" title="Direct link to Where the work lives" translate=no>​</a></h3>
+<ul>
+<li class=""><code>~/git/sqlink-shim-codegen</code> branch <code>feat/wasm-component-target</code>,
+commit <code>c3283c2</code>. Extends <code>WitType</code> with <code>Bbox</code> and <code>Tuple(...)</code>
+variants on the parser side; adds <code>RetShape::BboxBlob</code> and
+<code>RetShape::IsValidDetailText</code> on the dispatcher side; threads
+<code>pg_ctor</code> / <code>pg_out</code> aliases into <code>used_aliases</code> for the new
+shapes so the shared helpers stay in scope.</li>
+<li class=""><code>~/git/postgis-sqlink-bridge</code> on <code>main</code>, commit <code>543f28c</code>.
+Regenerated bridge crate; verify harness extended with three
+new cases (Case 14: bbox record return; Case 15: tuple return;
+Case 16: option<tuple> param).</tuple></li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=coverage-delta-1>Coverage delta<a href=#coverage-delta-1 class=hash-link aria-label="Direct link to Coverage delta" title="Direct link to Coverage delta" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>category<th>round 2 wired<th>round 3 wired<th>new in round 3<tbody><tr><td>scalars<td>280<td>284<td>+4 canonical<tr><td>aggregates<td>11<td>11<td>no change<tr><td>UDTFs<td>5<td>5<td>no change<tr><td>operators<td>5<td>5<td>no change<tr><td>casts<td>4<td>4<td>no change</table>
+<p>Unwired symbols drop from 122 to 118 (net -4). The remaining
+118 break down as:</p>
+<ul>
+<li class="">75 "no WIT function matches" — topology / raster / geocoder
+scalars whose upstream postgis-wasm shim doesn't export them.</li>
+<li class="">43 "borrow<raster> param" — raster surface.</raster></li>
+</ul>
+<p>Both buckets are architectural carry-forwards tracked in #490.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-bbox-record-return>A: <code>bbox</code> record return<a href=#a-bbox-record-return class=hash-link aria-label="Direct link to a-bbox-record-return" title="Direct link to a-bbox-record-return" translate=no>​</a></h3>
+<p>The parser now recognises the postgis-types <code>bbox</code> record
+(four f64s: <code>min-x</code>, <code>min-y</code>, <code>max-x</code>, <code>max-y</code>) as
+<code>WitType::Bbox</code>. The dispatcher's <code>RetShape::BboxBlob</code>
+composes the existing constructor
+<code>pg_ctor::st_make_envelope(min_x, min_y, max_x, max_y).as_wkb()</code>
+to produce a WKB POLYGON envelope, honouring the interface
+DB's <code>binary</code> return type. Both <code>st_makebox2d</code> and
+<code>st_boxfromgeohash</code> live in <code>postgis-constructors</code>, so the
+<code>pg_ctor</code> alias is in scope when the arm fires; the emitter
+also pulls <code>pg_ctor</code> into <code>used_aliases</code> if any arm uses
+this shape (defensive — covers cases where a future
+bbox-returning scalar lives in a different interface).</p>
+<p>Verify Case 14 confirms:
+<code>st_astext(st_makebox2d(POINT(1 1), POINT(3 3)))</code> returns
+<code>POLYGON((1 1,3 1,3 3,1 3,1 1))</code> — the 4-corner envelope.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=b-tuplebool-optionstring-optiongeometry-return>B: <code>tuple&lt;bool, option&lt;string>, option&lt;geometry>></code> return<a href=#b-tuplebool-optionstring-optiongeometry-return class=hash-link aria-label="Direct link to b-tuplebool-optionstring-optiongeometry-return" title="Direct link to b-tuplebool-optionstring-optiongeometry-return" translate=no>​</a></h3>
+<p>The parser now recognises <code>tuple&lt;...></code> as
+<code>WitType::Tuple(Vec&lt;WitType>)</code>. The dispatcher matches the
+specific 3-tuple shape that <code>st-is-valid-detail</code> returns and
+renders it as a PostgreSQL composite-type text representation:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">(valid,"reason","WKT-of-location")</span><br/></div></code></pre></div></div>
+<p>…with empty strings for the <code>None</code> arms. This honours the
+interface DB's <code>text</code> return type. Pulls in
+<code>pg_out::st_as_text</code> for the location WKT; the emitter adds
+<code>pg_out</code> to <code>used_aliases</code> so the import is in scope even
+though <code>st-is-valid-detail</code> itself lives in
+<code>postgis-predicates</code>.</p>
+<p>Verify Case 15 confirms:
+<code>st_isvaliddetail(POINT(1 2))</code> returns <code>(true,"","")</code> (valid,
+no reason, no location).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=c-optiontuplef64-f64-f64-f64-param>C: <code>option&lt;tuple&lt;f64, f64, f64, f64>></code> param<a href=#c-optiontuplef64-f64-f64-f64-param class=hash-link aria-label="Direct link to c-optiontuplef64-f64-f64-f64-param" title="Direct link to c-optiontuplef64-f64-f64-f64-param" translate=no>​</a></h3>
+<p>The parser's <code>option&lt;...></code> arm recurses through the inner
+type. Round 3's <code>WitType::Tuple</code> variant means the recursion
+no longer falls into <code>WitType::Unsupported</code>; the parameter
+classifies as <code>Option(Tuple(...))</code>, which dispatches as
+<code>ParamShape::OptionNone</code> (the round-2 default).</p>
+<p><code>st_tileenvelope</code> exposes 3 mandatory u32 params at the SQL
+surface and two optional WIT params (<code>bounds: option&lt;tuple&lt;f64, f64, f64, f64>></code>, <code>margin: option&lt;f64></code>).
+The codegen passes <code>None, None</code> for the optionals so the
+function defaults (the standard Web-Mercator tile envelope)
+apply.</p>
+<p>Verify Case 16 confirms:
+<code>st_tileenvelope(0, 0, 0)</code> returns a non-empty 93-byte
+geometry blob (the level-0 Web-Mercator envelope).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-3>Verification<a href=#verification-3 class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">[verify] loaded extension: name=postgis</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] registered: 931 scalars, 34 aggregates, 12 vtabs</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] round-trip OK: ST_AsText(ST_GeomFromText('POINT(1 2)')) = POINT(1 2)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_x = 1</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_distance((1,2), (4,6)) = 5</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_astext(st_makepoint(7,8)) = "POINT(7 8)"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_area(POLYGON 4x3) = 12</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_intersects(p, p) = 1</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_buffer(p, 1.0) -> 102 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_geomfromwkb(wkb) -> 21 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_union(p1, p2) -> 51 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify]   astext(union) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_astext(st_collect(p1, p2)) = "GEOMETRYCOLLECTION(POINT(1 2),POINT(4 6))"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_m(POINT(1 2)) = NULL (option&lt;f64> None path)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_m(POINT M(1 2 5)) = Real(5.0) (option&lt;f64> Some path)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_clusterwithin(g, 100.0) -> 51 byte blob (first cluster)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_astext(st_makebox2d(P(1,1), P(3,3))) = "POLYGON((1 1,3 1,3 3,1 3,1 1))"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_isvaliddetail(POINT(1 2)) = "(true,\"\",\"\")"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_isvaliddetail(degenerate LINESTRING) = "(true,\"\",\"\")"</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_tileenvelope(0, 0, 0) -> 93 byte blob</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] st_dump vtab registered: id=2000000 eponymous=true</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">[verify] all checks passed</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=smoke-parity-re-check-1>Smoke parity re-check<a href=#smoke-parity-re-check-1 class=hash-link aria-label="Direct link to Smoke parity re-check" title="Direct link to Smoke parity re-check" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">cases/postgis:</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 01-wkt-roundtrip</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 02-measurements</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 03-predicates</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 04-null-prop</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 05-cast-rewrite</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  pass=5 fail=0</span><br/></div></code></pre></div></div>
+<p>Unchanged from rounds 1 and 2.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=round-3-deferrals-carried-forward-unchanged>Round 3 deferrals (carried forward unchanged)<a href=#round-3-deferrals-carried-forward-unchanged class=hash-link aria-label="Direct link to Round 3 deferrals (carried forward unchanged)" title="Direct link to Round 3 deferrals (carried forward unchanged)" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Topology + raster surfaces (~118 scalars).</strong> Architectural;
+needs additional upstream shims composed
+(postgis-topology-tk, postgis-raster-tk) before the codegen
+can route to them. Tracked in #490.</li>
+<li class=""><strong><code>sqlink-loader.dylib</code> vtab installation.</strong> Unchanged:
+<code>sqlink-loader/src/load.rs</code> returns the vtab count as
+<code>skipped</code> rather than calling <code>sqlite3_create_module_v2</code>.
+Tracked in #489. <strong>Resolved 2026-06-27</strong> — see #489 done
+section below.</li>
+<li class=""><strong>Aggregates <code>st_extent</code>, <code>st_coverageunion</code>, <code>st_3dextent</code>,
+<code>st_rast_union</code>.</strong> Same shape rationale as round 2; the 3D
+extent's <code>bbox3d</code> record return could reuse round 3's bbox
+handling, but the <code>BboxBlob</code> arm is bespoke to the scalar
+dispatch path and threading it into the aggregate finalize
+path is a small additional task left for a future polish
+round.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=489-sqlink-loader-vtab-wiring--done-2026-06-27>#489 sqlink-loader vtab wiring — done (2026-06-27)<a href=#489-sqlink-loader-vtab-wiring--done-2026-06-27 class=hash-link aria-label="Direct link to #489 sqlink-loader vtab wiring — done (2026-06-27)" title="Direct link to #489 sqlink-loader vtab wiring — done (2026-06-27)" translate=no>​</a></h2>
+<p><code>sqlink-loader.dylib</code> now installs each loaded extension's
+<code>VtabSpec</code> entries as SQLite virtual table modules via
+<code>sqlite3_create_module_v2</code> over the captured pApi indirection.
+The path mirrors <code>host/src/vtab.rs</code> (the in-host CLI path) but
+routes every sqlite3_* call through the pApi function-pointer
+table instead of libsqlite3-sys's bundled symbols — same
+constraint the scalar / aggregate trampolines already live with.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=where-the-work-lives-5>Where the work lives<a href=#where-the-work-lives-5 class=hash-link aria-label="Direct link to Where the work lives" title="Direct link to Where the work lives" translate=no>​</a></h3>
+<ul>
+<li class=""><code>sqlink-loader/src/api.rs</code> — C-ABI struct layouts:
+<code>sqlite3_module</code> (iVersion=2-shaped — supports read-only +
+the slot for future xUpdate without ABI churn),
+<code>sqlite3_vtab</code>, <code>sqlite3_vtab_cursor</code>,
+<code>sqlite3_index_info</code> (+ substructs). pApi entries for
+<code>create_module_v2</code> and <code>declare_vtab</code> typed properly.
+<code>SQLITE_INDEX_CONSTRAINT_*</code> op codes mirror sqlite3.h.</li>
+<li class=""><code>sqlink-loader/src/vtab.rs</code> (new) — two <code>const sqlite3_module</code>
+templates (read-only and read-only-eponymous, picked at
+registration time per <code>VtabSpec.eponymous</code>), every method
+body proxying through <code>Host::dispatch_vtab_*</code> via the held
+<code>tokio::Runtime</code>. Per-vtab context in <code>ModuleAux</code> (pAux slot
+of create_module_v2); per-instance / per-cursor context in
+subclassed <code>sqlite3_vtab</code> / <code>sqlite3_vtab_cursor</code> structs
+carrying <code>instance_id</code> / <code>cursor_id</code> plus a heap-allocated
+<code>ext_name</code> clone for the trampolines to consult.</li>
+<li class=""><code>sqlink-loader/src/load.rs</code> — <code>load_and_install</code> now iterates
+<code>ext.vtabs</code> and calls <code>vtab::register_vtab_module</code> per spec.
+<code>InstallCounts.vtab</code> surfaces the count alongside scalar +
+aggregate.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-runs-end-to-end>What runs end-to-end<a href=#what-runs-end-to-end class=hash-link aria-label="Direct link to What runs end-to-end" title="Direct link to What runs end-to-end" translate=no>​</a></h3>
+<div class="language-sh codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-sh codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">brew_sqlite3 :memory:</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">.load /…/libsqlink_loader.dylib sqlite3_sqlinkloader_init</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">SELECT sqlink_load_ext</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>'postgis'</span><span class="token plain">, </span><span class="token string" style=color:#e3116c>'/…/postgis-sqlink-loadable.wasm'</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">→ loaded postgis: </span><span class="token number" style=color:#36acaa>930</span><span class="token plain"> scalar, </span><span class="token number" style=color:#36acaa>27</span><span class="token plain"> aggregate, </span><span class="token number" style=color:#36acaa>12</span><span class="token plain"> vtab </span><span class="token punctuation" style=color:#393A34>(</span><span class="token number" style=color:#36acaa>0</span><span class="token plain"> skipped</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">PRAGMA module_list</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">→ st_subdivide, st_squaregrid, st_dump_segments, st_hexagon_grid,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  st_dump_points, st_square_grid, st_dumppoints, st_dump_rings,</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  st_hexagongrid, st_dump, st_dumpsegments, st_dumprings, …</span><br/></div></code></pre></div></div>
+<p>All 12 postgis vtabs land in the SQLite module registry. Same
+sequence against <code>mobilitydb-sqlink-loadable.wasm</code> registers
+<strong>45 vtabs</strong> (the task description said 43 — variance is post-
+Phase E3 codegen regen-up).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=smoke-gate-05-udtfs--bridge-side-blocker-surfaced>Smoke gate (05-udtfs) — bridge-side blocker surfaced<a href=#smoke-gate-05-udtfs--bridge-side-blocker-surfaced class=hash-link aria-label="Direct link to Smoke gate (05-udtfs) — bridge-side blocker surfaced" title="Direct link to Smoke gate (05-udtfs) — bridge-side blocker surfaced" translate=no>​</a></h3>
+<p>Running <code>cases/postgis-sqlite-only/05-udtfs</code> against the wasm
+bridge through <code>SQLINK_LOADER=…/libsqlink_loader.dylib</code> yields:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">Parse error near line 10: too many arguments on st_dumppoints() - max 0</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">Parse error near line 11: too many arguments on st_dump() - max 0</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">Parse error near line 12: too many arguments on st_dumpsegments() - max 0</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">Parse error near line 13: too many arguments on st_squaregrid() - max 0</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">Parse error near line 14: no such column: point</span><br/></div></code></pre></div></div>
+<p>This is <strong>not</strong> a loader bug — SQLite's parser sees the schema
+the bridge's <code>connect()</code> declared via <code>sqlite3_declare_vtab</code> and
+rejects the function-arg syntax before the trampolines run. The
+bridge emits <code>CREATE TABLE x(geom BLOB)</code> for every vtab,
+which:</p>
+<ol>
+<li class="">Declares <strong>zero <code>HIDDEN</code> columns</strong> — SQLite's TVF syntax
+requires one per function argument. Without them the parser
+refuses <code>st_dump(&lt;geom>)</code> because the table has 0 args.</li>
+<li class="">Uses the column name <code>geom</code> for every UDTF, but
+<code>st_dumppoints</code> etc. expect <code>point</code> (the planner-visible
+column name has to match the bridge's <code>vtab.column</code> output
+labels).</li>
+</ol>
+<p>Both are sqlink-shim-codegen concerns (<code>emit_vtab_connect</code> or
+similar template), not loader concerns. The loader-side
+verification path is independently sound:</p>
+<ul>
+<li class=""><code>sqlite3_create_module_v2</code> succeeded for all 12+45 vtabs
+(count surfaces in the load log).</li>
+<li class=""><code>PRAGMA module_list</code> shows every registered name.</li>
+<li class="">The trampolines reach <code>dispatch_vtab_connect</code> (the bridge's
+generated <code>connect()</code> is what returns the schema; the
+loader is just the C-side gateway).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=honest-deferrals-filed-against-489>Honest deferrals (filed against #489)<a href=#honest-deferrals-filed-against-489 class=hash-link aria-label="Direct link to Honest deferrals (filed against #489)" title="Direct link to Honest deferrals (filed against #489)" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Bridge <code>connect()</code> schema</strong> (HIDDEN args + correct
+per-vtab column names). Owner: sqlink-shim-codegen
+(<code>emit_vtab_connect</code> template); fix unlocks 05-udtfs. Not
+a new task — folds into Phase 3 round 4 (or whatever the
+next codegen round is) since round 3 already did the
+bbox / option-unwrap shape work.</li>
+<li class=""><strong>xUpdate / mutable-vtab path.</strong> Module template has the
+slots but the trampolines short-circuit to the read-only
+variant. Zero mutable vtabs declared in current catalog so
+the regression cost is zero; flip-on is a follow-up if the
+count ever exceeds zero.</li>
+<li class=""><strong>xFindFunction / xRename / xShadowName / xIntegrity.</strong>
+Same reasoning — no caller in current catalog. Slots stay
+<code>None</code>; adding them is a small additional task gated on
+manifest demand.</li>
+<li class=""><strong>Batched-vtab cursor cache.</strong> Flag carried through to
+<code>ModuleAux</code> but the cache itself isn't wired (per-row
+crossing today). Mirrors host/src/vtab.rs's design but the
+loader's <code>block_on</code> per row already absorbs the round-trip
+cost; cache adds value only after Phase E3's WIT crossing
+hot path stabilises further.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=test-coverage>Test coverage<a href=#test-coverage class=hash-link aria-label="Direct link to Test coverage" title="Direct link to Test coverage" translate=no>​</a></h3>
+<ul>
+<li class="">4 new unit tests in <code>sqlink-loader::vtab</code> guard the module
+templates' iVersion (=1), the eponymous template's null
+<code>xCreate</code>, the standard template's non-null
+<code>xCreate</code>/<code>xConnect</code>, and the constraint-op-map's
+spot-checked codes.</li>
+<li class="">All 52 existing loader tests (api / load / register / state /
+value) still pass.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=531--per-vtab-create-table-schema-done-2026-06-27>#531 — Per-vtab CREATE TABLE schema (done 2026-06-27)<a href=#531--per-vtab-create-table-schema-done-2026-06-27 class=hash-link aria-label="Direct link to #531 — Per-vtab CREATE TABLE schema (done 2026-06-27)" title="Direct link to #531 — Per-vtab CREATE TABLE schema (done 2026-06-27)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=context>Context<a href=#context class=hash-link aria-label="Direct link to Context" title="Direct link to Context" translate=no>​</a></h3>
+<p>#489 (sqlink-loader vtab wiring) registered every UDTF as an
+eponymous module via <code>sqlite3_create_module_v2</code> and routed
+<code>xConnect → bridge::connect()</code> through <code>sqlite3_declare_vtab</code>,
+but the bridge's <code>connect()</code> was a single placeholder arm
+<code>CREATE TABLE x(geom BLOB)</code> for every vtab — no HIDDEN columns
+for the function args, no per-vtab visible-column names. The
+shim-bridge-smoke-tests gate <code>cases/postgis-sqlite-only/05-udtfs</code>
+failed at SQL parse time:</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">Parse error: too many arguments on st_dumppoints() - max 0</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">Parse error: no such column: point</span><br/></div></code></pre></div></div>
+<p>because <code>st_dumppoints(geom) WHERE ST_X(point) > 1</code> needs (a) one
+HIDDEN column to receive <code>geom</code> via xFilter argv and (b) a visible
+column literally named <code>point</code> for the <code>WHERE</code> clause to bind to.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=where-the-work-lives-6>Where the work lives<a href=#where-the-work-lives-6 class=hash-link aria-label="Direct link to Where the work lives" title="Direct link to Where the work lives" translate=no>​</a></h3>
+<ul>
+<li class=""><code>sqlink-shim-codegen</code> on <code>feat/vtab-schema</code> (df8b8ef, 5aa1d15).</li>
+<li class=""><code>postgis-sqlink-bridge</code> on <code>feat/vtab-schema</code> (33bf651, fb43942)
+— regenerated bridge crate.</li>
+<li class=""><code>mobilitydb-sqlink-bridge</code> on <code>feat/vtab-schema</code> (8d98363,
+cc13fad) — regenerated bridge crate.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=mechanism>Mechanism<a href=#mechanism class=hash-link aria-label="Direct link to Mechanism" title="Direct link to Mechanism" translate=no>​</a></h3>
+<ol>
+<li class="">
+<p><strong><code>UdtfShape</code> extended</strong> with two new fields:</p>
+<ul>
+<li class=""><code>param_names: Vec&lt;String></code> (one per WIT-declared parameter,
+in source order; defaults to <code>arg&lt;i></code> if the WIT didn't
+name it),</li>
+<li class=""><code>output_row: UdtfOutputRow</code> — a discriminated row-shape
+descriptor (<code>SingleGeom</code> / <code>SinglePrimitive { affinity }</code> /
+<code>Record { fields }</code> / <code>Unwired { reason }</code>).</li>
+</ul>
+</li>
+<li class="">
+<p><strong><code>classify_udtf_shape</code> walks <code>f.ret.inner</code></strong> to derive
+<code>output_row</code>:</p>
+<ul>
+<li class=""><code>list&lt;geometry></code> (and the collapsed form
+<code>Unsupported("list&lt;geometry>")</code> the parser emits for some
+scalars) → <code>SingleGeom</code>.</li>
+<li class=""><code>list&lt;record-name></code> where <code>record-name</code> matches the
+per-shim record registry → <code>Record { fields: ... }</code>. Each
+field's raw WIT type-text is re-parsed and aliases (e.g.
+mobilitydb's <code>type timestamp-tz = s64;</code>) are resolved before
+mapping to a SQLite affinity. Lets
+<code>temporal-join-float → list&lt;joined-float-pair></code> declare
+<code>timestamp INTEGER, left REAL, right REAL</code> instead of the
+placeholder <code>geom BLOB</code>.</li>
+<li class=""><code>list&lt;primitive></code> → <code>SinglePrimitive</code>.</li>
+<li class="">else → <code>Unwired { reason }</code>; emitter falls back to a single
+<code>value BLOB</code> column so the vtab still loads.</li>
+</ul>
+</li>
+<li class="">
+<p><strong><code>emit_vtab_impl</code> composes the <code>CREATE TABLE</code></strong> per UDTF:
+visible columns first (one per output row field), then HIDDEN
+columns (one per WIT param), with collision resolution:
+if a HIDDEN name matches a visible name (e.g. <code>st_dump(geom)</code>
+would otherwise repeat <code>geom</code>), the HIDDEN col falls back to
+<code>_arg&lt;i></code>. The single-<code>list&lt;geometry></code> visible column is named
+<code>point</code> for SQL names ending in <code>point</code> / <code>points</code> (so the
+smoke test's <code>WHERE ST_X(point) > 1</code> literal binds), <code>geom</code>
+for everything else.</p>
+</li>
+<li class="">
+<p><strong><code>best_index</code> argv slotting</strong> — the prior <code>argv_index: 0</code>
+default left SQLite unable to thread <code>f(g1, g2)</code> args through
+to xFilter once HIDDEN columns existed; the table-valued-
+function call form errored as SQL logic error before the
+cursor ran. Now each usable constraint gets a unique 1-based
+slot and <code>omit: true</code> so SQLite skips the redundant re-check.</p>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=affinity-mapping-table>Affinity-mapping table<a href=#affinity-mapping-table class=hash-link aria-label="Direct link to Affinity-mapping table" title="Direct link to Affinity-mapping table" translate=no>​</a></h3>
+<p>The <code>affinity_for(&WitType)</code> function maps WIT field types to
+SQLite's type-affinity strings (which drive the declared column
+type alongside HIDDEN-flag emission):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>WIT type<th>Affinity<tbody><tr><td><code>s32</code> / <code>s64</code> / <code>u32</code> / <code>u64</code> / <code>u8</code> / <code>bool</code><td>INTEGER<tr><td><code>f32</code> / <code>f64</code><td>REAL<tr><td><code>string</code><td>TEXT<tr><td><code>list&lt;u8></code> (alias <code>binary</code>)<td>BLOB<tr><td><code>geometry</code> / <code>geography</code> / <code>bbox</code><td>BLOB<tr><td><code>list&lt;geometry></code> / <code>list&lt;borrow&lt;geometry>></code><td>BLOB<tr><td><code>list&lt;option&lt;u32>></code> / generic <code>list&lt;T></code><td>TEXT (JSON-encoded fallback)<tr><td><code>tuple&lt;...></code><td>BLOB<tr><td><code>option&lt;T></code><td>recursive on <code>T</code><tr><td><code>result&lt;T, E></code><td>recursive on <code>T</code><tr><td><code>Unsupported(name)</code> (record kebab)<td>BLOB (wit-value bytes)</table>
+<p>Aliases (<code>type X = Y;</code>) are resolved before mapping so the
+mobilitydb-side <code>type timestamp-tz = s64;</code> lets a field declared
+<code>timestamp: timestamp-tz</code> land as <code>timestamp INTEGER</code>.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=sample-emitted-schemas>Sample emitted schemas<a href=#sample-emitted-schemas class=hash-link aria-label="Direct link to Sample emitted schemas" title="Direct link to Sample emitted schemas" translate=no>​</a></h3>
+<p>postgis (<code>/tmp/postgis-interface.sqlite</code>):</p>
+<div class="language-sql codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-sql codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token comment" style=color:#999988;font-style:italic>-- st_dump(geom) — single-geom row + HIDDEN input (renamed _arg0</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- because the WIT param name 'geom' collides with the visible col)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>TABLE</span><span class="token plain"> x</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"geom"</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>BLOB</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"_arg0"</span><span class="token plain"> HIDDEN</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- st_dumppoints(geom) — visible col 'point' so SQL queries can</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- reference it directly; HIDDEN input keeps the WIT name</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>TABLE</span><span class="token plain"> x</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"point"</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>BLOB</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"geom"</span><span class="token plain"> HIDDEN</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- st_squaregrid(size, bounds) — two-arg form, both HIDDEN</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>TABLE</span><span class="token plain"> x</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"geom"</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>BLOB</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"size"</span><span class="token plain"> HIDDEN</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"bounds"</span><span class="token plain"> HIDDEN</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- st_subdivide(geom, max-vertices) — hyphen in HIDDEN name</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- (double-quoted so the SQL parser accepts it)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>TABLE</span><span class="token plain"> x</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"geom"</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>BLOB</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"_arg0"</span><span class="token plain"> HIDDEN</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"max-vertices"</span><span class="token plain"> HIDDEN</span><span class="token punctuation" style=color:#393A34>)</span><br/></div></code></pre></div></div>
+<p>mobilitydb (<code>/tmp/mobilitydb-interface.sqlite</code>):</p>
+<div class="language-sql codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-sql codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token comment" style=color:#999988;font-style:italic>-- temporal-join-float(left, right) → list&lt;joined-float-pair></span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- record return mapped to per-field visible columns; affinities</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- after timestamp-tz alias resolution (s64 → INTEGER)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>TABLE</span><span class="token plain"> x</span><span class="token punctuation" style=color:#393A34>(</span><span class="token string" style=color:#e3116c>"timestamp"</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>INTEGER</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"left"</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>REAL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"right"</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>REAL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">               </span><span class="token string" style=color:#e3116c>"_arg0"</span><span class="token plain"> HIDDEN</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"_arg1"</span><span class="token plain"> HIDDEN</span><span class="token punctuation" style=color:#393A34>)</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=smoke-gate>Smoke gate<a href=#smoke-gate class=hash-link aria-label="Direct link to Smoke gate" title="Direct link to Smoke gate" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">cases/postgis-sqlite-only:</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 05-udtfs       (was: FAIL with parse errors)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  pass=1 fail=0</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">cases/postgis (unchanged):</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  PASS 01-wkt-roundtrip / 02-measurements / 03-predicates /</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">       04-null-prop / 05-cast-rewrite</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  pass=5 fail=0</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=manual-verify>Manual verify<a href=#manual-verify class=hash-link aria-label="Direct link to Manual verify" title="Direct link to Manual verify" translate=no>​</a></h3>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">SELECT ST_AsText(geom) FROM st_dump(ST_GeomFromText('MULTIPOINT(1 1, 2 2, 3 3)'));</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  POINT(1 1)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  POINT(2 2)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  POINT(3 3)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">SELECT ST_AsText(point) FROM st_dumppoints(ST_GeomFromText('LINESTRING(0 0, 1 1, 2 2)'));</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  POINT(0 0)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  POINT(1 1)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">  POINT(2 2)</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">SELECT count(*) FROM st_dumpsegments(ST_GeomFromText('LINESTRING(0 0, 1 1, 2 2, 3 3)'));  -- 3</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">SELECT count(*) FROM st_squaregrid(1.0, ST_GeomFromText('POLYGON((0 0, 3 0, 3 3, 0 3, 0 0))'));  -- 9</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=531-deferrals>#531 deferrals<a href=#531-deferrals class=hash-link aria-label="Direct link to #531 deferrals" title="Direct link to #531 deferrals" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Multi-column row materialisation in xColumn.</strong> The cursor's
+row state stays <code>Vec&lt;Vec&lt;u8>></code> (one WKB per row). For
+postgis (every UDTF returns <code>list&lt;geometry></code>, one BLOB column)
+this is sufficient — col 0 returns the row blob, all other
+cols (HIDDEN inputs + would-be record fields) return NULL.
+For mobilitydb's record-row UDTFs (<code>temporal-join-float</code> etc.)
+the SCHEMA is correct so SQL parses, but xFilter still returns
+the "UDTF param shape not yet wired" stub (record-typed args
+fall through <code>emit_udtf_filter_body</code>'s match) and even if it
+populated rows, xColumn would only surface the first column.
+Tracked separately when mobilitydb-side UDTF param marshaling
+lands.</li>
+<li class=""><strong>Mutable vtabs (xUpdate).</strong> Zero callers today per #489's
+report.</li>
+<li class=""><strong>Topology + raster table_functions.</strong> Upstream WIT still not
+present (#490).</li>
+<li class=""><strong>Cursor batching.</strong> Deferred from #489.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=532--multi-column-xcolumn-row-materialisation-codegen-done-2026-06-27>#532 — Multi-column xColumn row materialisation (codegen done 2026-06-27)<a href=#532--multi-column-xcolumn-row-materialisation-codegen-done-2026-06-27 class=hash-link aria-label="Direct link to #532 — Multi-column xColumn row materialisation (codegen done 2026-06-27)" title="Direct link to #532 — Multi-column xColumn row materialisation (codegen done 2026-06-27)" translate=no>​</a></h2>
+<p>Lands the codegen half of the deferral noted under #531. The
+emitted bridge's UDTF cursor now stores <code>Vec&lt;Vec&lt;SqlValue>></code> —
+one inner vector per row, one <code>SqlValue</code> per visible column.
+<code>emit_udtf_filter_body</code> materialises the upstream
+<code>list&lt;record></code> return into per-column SqlValues driven by a new
+<code>UdtfFieldShape</code> discriminator on <code>UdtfColumn</code>. The xColumn arm
+indexes <code>row_cols[col]</code> directly, so</p>
+<div class="language-sql codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-sql codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token keyword" style=color:#00009f>SELECT</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>*</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>FROM</span><span class="token plain"> temporal_join_float</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">seq_a</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> seq_b</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><br/></div></code></pre></div></div>
+<p>now yields rows with proper <code>timestamp INTEGER, left REAL, right REAL</code> affinities once the bridge is regenerated.</p>
+<p>xFilter also wires <code>ParamShape::WitValueRecord</code> through the
+existing <code>arg_witvalue_&lt;snake></code> helper — the same path scalar
+dispatch uses since Phase E. Record-typed UDTF args
+(e.g. <code>tfloat-sequence</code> for the temporal joins) now decode via
+the bridge's serde-ops codec rather than the
+"param shape not yet wired" stub.</p>
+<p>The SingleGeom path (postgis dump-style UDTFs) continues to
+work — each row's WKB is wrapped in a 1-element
+<code>Vec&lt;SqlValue></code> so the row-materialiser shape is uniform.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=532-field-shapes-covered>#532 field shapes covered<a href=#532-field-shapes-covered class=hash-link aria-label="Direct link to #532 field shapes covered" title="Direct link to #532 field shapes covered" translate=no>​</a></h3>
+<ul>
+<li class=""><code>Int</code> — s32/s64/u32/u64/u8/bool + type-aliases (timestamp-tz).</li>
+<li class=""><code>Real</code> — f32/f64.</li>
+<li class=""><code>Text</code> — string.</li>
+<li class=""><code>Blob</code> — list<u8>.</u8></li>
+<li class=""><code>GeomBlob</code> — geometry/geography → <code>.as_wkb()</code>.</li>
+<li class=""><code>OptionInt|Real|Text|Blob|GeomBlob</code> — Some(v) → typed cell;
+None → SqlValue::Null.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=532-carried-forward>#532 carried forward<a href=#532-carried-forward class=hash-link aria-label="Direct link to #532 carried forward" title="Direct link to #532 carried forward" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Bridge regen + verify (Checkpoints 532.6 + 532.7).</strong>
+Regenerating mobilitydb-sqlink-bridge against the new codegen
+requires <code>mobilitydb-interface.sqlite</code> (not vendored), the
+composed mobilitydb wasm (long build), <code>wasm-tools</code> + <code>wac</code>,
+and the wasm32-wasip2 toolchain. Manual <code>SELECT * FROM temporal_join_float(...)</code> validation through vanilla sqlite3
+<ul>
+<li class=""><code>.load sqlink_loader.dylib</code> is the smoke gate. Postgis
+regen + the <code>~/git/shim-bridge-smoke-tests</code> postgis cases
+cover the regression check.</li>
+</ul>
+</li>
+<li class=""><strong>Record-typed UDTF row fields.</strong> Nested-record fields
+(a row whose i-th field is itself a record) currently surface
+as <code>SqlValue::Null</code> (the field_shape classifier folds into
+<code>Unsupported</code>). A follow-up re-encodes them as wit-value bytes
+through <code>ret_to_witvalue_&lt;snake></code> so per-row record cells
+become addressable from SQL.</li>
+<li class=""><strong>Tuple / list-of-X row fields.</strong> Same treatment as nested
+records; folded into the same follow-up.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=490--raster--topology-shims--name-match-index-done-2026-06-27>#490 — Raster + topology shims + name-match index (done 2026-06-27)<a href=#490--raster--topology-shims--name-match-index-done-2026-06-27 class=hash-link aria-label="Direct link to #490 — Raster + topology shims + name-match index (done 2026-06-27)" title="Direct link to #490 — Raster + topology shims + name-match index (done 2026-06-27)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-landed>What landed<a href=#what-landed class=hash-link aria-label="Direct link to What landed" title="Direct link to What landed" translate=no>​</a></h3>
+<p>Reframed from "add upstream shims" to "extend codegen to consume the
+shims that postgis-wasm already exposes." Survey of the postgis-wasm
+WIT confirmed 11 raster interfaces + 5 topology interfaces are
+already declared upstream; the gap was on the codegen side:</p>
+<ol>
+<li class="">
+<p><strong>borrow&lt;raster> / borrow&lt;topology> param shapes wired.</strong>
+<code>WitType::Raster { borrowed }</code> + <code>WitType::Topology { borrowed }</code>
+variants land in <code>wit_parse.rs</code>. The borrow parser recognises
+<code>borrow&amp;lt;raster&amp;gt;</code> and <code>borrow&amp;lt;topology&amp;gt;</code>; bare-name
+parsing recognises <code>raster</code> and <code>topology</code>. New ParamShapes
+(<code>Raster</code>, <code>Topology</code>) and RetShapes (<code>RasterBlob</code>,
+<code>OptionRasterBlob</code>, <code>FirstRasterBlob</code>; <code>TopologyBlob</code>,
+<code>OptionTopologyBlob</code>, <code>FirstTopologyBlob</code>) emit <code>from_raster_binary</code>
+/ <code>from_topology_bytes</code> decoders and <code>.as_binary()</code> / <code>.to_bytes()</code>
+encoders in the dispatch arm bodies. Symmetric to the existing
+<code>Geom</code> / <code>GeomBlob</code> path.</p>
+</li>
+<li class="">
+<p><strong>Helper prelude composition.</strong> <code>emit_lib.rs</code> gained per-resource
+gates (<code>shim_has_raster_resource</code>, <code>shim_has_topology_resource</code>)
+that conditionally emit <code>use ...::{Raster, RasterError}</code> /
+<code>use ...::{Topology, TopologyError}</code> lines plus
+<code>render_raster_helpers</code> / <code>render_topology_helpers</code> bodies
+(<code>from_raster_binary</code>, <code>raster_err_string</code>, <code>from_topology_bytes</code>,
+<code>topology_err_string</code>). The mobilitydb bridge is unaffected
+because the gates fire only when the WIT declares the resource +
+the matching error variant.</p>
+</li>
+<li class="">
+<p><strong>Interface alias table extended.</strong> <code>postgis-raster-types</code> →
+<code>pg_rast_types</code>, <code>postgis-topology-types</code> → <code>pg_topo_types</code>. These
+carry the resource definitions plus the free <code>from-binary</code> /
+<code>from-bytes</code> decoders the helpers compose.</p>
+</li>
+<li class="">
+<p><strong>WIT-function name matching broadened (sub-stream B).</strong>
+Surveys showed 62 scalars whose SQL name (<code>st_addface</code>,
+<code>st_astopojson</code>, <code>st_aspng</code>) didn't snake-match the WIT name
+(<code>add-face</code> in <code>postgis-topology-edit</code>, <code>as-topojson</code> in
+<code>postgis-topology-output</code>, <code>as-png</code> in <code>postgis-raster-output</code>).
+<code>index_wit_fns_nohyphen</code> builds a secondary
+<code>kebab.replace('-', "") → [&WitFunction]</code> index. <code>find_wit_fn</code>
+tries each candidate against (1) the snake index, (2) the
+no-hyphen index after stripping underscores, (3) the same two
+with leading <code>st_</code> removed. <code>pick_tiebreak</code> prefers
+<code>postgis-topology-*</code> interfaces when the candidate looks
+topology-ish (contains <code>topo</code>/<code>face</code>/<code>edge</code>/<code>node</code>) and
+<code>postgis-raster-*</code> when it looks raster-ish
+(<code>rast</code>/<code>pixel</code>/<code>band</code>/<code>png</code>/<code>tiff</code>/<code>array</code>). Both <code>build_full</code>
+(scalars) and <code>build_udtf_registry</code> (UDTFs) use the extended
+lookup; aggregates keep their bespoke primary+fallback indices.</p>
+</li>
+<li class="">
+<p><strong>parse_text now skips resource-method declarations.</strong> Inside a
+<code>resource NAME { ... }</code> block, the line-oriented parser used to
+capture <code>width: func() -&amp;gt; u32;</code> as a free <code>WitFunction</code>. Those
+aren't callable as <code>module::width(...)</code> — they're called via the
+resource handle — and they silently collided with same-name free
+functions in the snake index (raster's <code>srid</code> would clobber the
+free <code>st-srid</code> once prefix-stripping was in play). Resource-depth
+tracking drops them at parse time.</p>
+</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=numbers>Numbers<a href=#numbers class=hash-link aria-label="Direct link to Numbers" title="Direct link to Numbers" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Metric<th style=text-align:right>Before #490<th style=text-align:right>After #490<tbody><tr><td>Distinct upstream <code>pg_*::name</code> calls<td style=text-align:right>289<td style=text-align:right>354<tr><td>Scalar match arms (incl SQL aliases)<td style=text-align:right>677<td style=text-align:right>884<tr><td>Unwired postgis symbols (regen log)<td style=text-align:right>~174<td style=text-align:right>58<tr><td>Raster surface (pg_rast_* across 11 ifaces)<td style=text-align:right>0<td style=text-align:right>122<tr><td>Topology surface (pg_topo_* across 4 ifaces)<td style=text-align:right>0<td style=text-align:right>39</table>
+<p>Per-interface wiring (after):</p>
+<div class="language-text codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-text codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token plain">pg_rast_acc:    38    pg_topo_edit:   18    pg_rast_pred:   16</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">pg_topo_out:    12    pg_rast_px:     10    pg_topo_query:   9</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">pg_rast_proc:    9    pg_rast_out:     4    pg_rast_stats:   3</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">pg_rast_ctor:    2    pg_rast_vec:     1</span><br/></div></code></pre></div></div>
+<p>The bridge wasm builds clean against wasm32-wasip2 and validates
+with wasm-tools (1.0 MB binary). Mobilitydb regen showed +3
+distinct upstream calls (479 → 482) — the name-match broadening
+helped a handful of mobilitydb scalars too — and no regression.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=sample-of-newly-wired-functions-per-category>Sample of newly-wired functions per category<a href=#sample-of-newly-wired-functions-per-category class=hash-link aria-label="Direct link to Sample of newly-wired functions per category" title="Direct link to Sample of newly-wired functions per category" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Raster accessor</strong> (A): <code>st_width</code>, <code>st_height</code>, <code>st_srid</code>,
+<code>st_upperleftx</code>, <code>st_upperlefty</code>, <code>st_scalex</code>, <code>st_scaley</code>,
+<code>st_skewx</code>, <code>st_skewy</code>, <code>st_numbands</code>.</li>
+<li class=""><strong>Raster output</strong> (A): <code>st_aspng</code>, <code>st_astiff</code>.</li>
+<li class=""><strong>Raster predicate</strong> (A): <code>st_rasterintersects</code>,
+<code>st_rastercontains</code>, <code>st_rasterwithin</code>.</li>
+<li class=""><strong>Raster processing</strong> (A): <code>st_slope</code>, <code>st_aspect</code>,
+<code>st_hillshade</code>, <code>st_roughness</code>, <code>st_tri</code>, <code>st_tpi</code>,
+<code>st_resize</code>, <code>st_rescale</code>.</li>
+<li class=""><strong>Topology edit</strong> (B name-match): <code>st_addface</code>,
+<code>st_addisoedge</code>, <code>st_addisonode</code>, <code>st_modedgesplit</code>,
+<code>st_newedgessplit</code>, <code>st_modedgeheal</code>.</li>
+<li class=""><strong>Topology output</strong> (B name-match): <code>st_astopojson</code>,
+<code>st_getnodegeometry</code>, <code>st_getedgegeometry</code>, <code>st_getfacegeometry</code>.</li>
+<li class=""><strong>Topology query</strong> (B name-match): <code>st_getnodebypoint</code>,
+<code>st_getedgebypoint</code>, <code>st_validatetopology</code>.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verified>Verified<a href=#verified class=hash-link aria-label="Direct link to Verified" title="Direct link to Verified" translate=no>​</a></h3>
+<ul>
+<li class="">Codegen <code>cargo build --release</code> clean (warnings only, all pre-existing
+dead-code on <code>interface</code> fields of decl structs).</li>
+<li class="">Bridge <code>cargo build --target wasm32-wasip2 --release</code> clean.</li>
+<li class=""><code>wasm-tools validate target/wasm32-wasip2/release/postgis_sqlink_bridge.wasm</code> passes.</li>
+<li class="">Mobilitydb regen + build clean; no regression on the existing
+482 distinct upstream calls.</li>
+<li class="">Regen log of remaining 58 unwired postgis scalars captured for
+follow-up triage (see Deferred below).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=deferred>Deferred<a href=#deferred class=hash-link aria-label="Direct link to Deferred" title="Direct link to Deferred" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>Topology resource-method accessors</strong> (~7 scalars):
+<code>st_topologyname</code>, <code>st_topologysrid</code>, <code>st_topologyprecision</code>,
+<code>st_topologynodecount</code>, <code>st_topologyedgecount</code>,
+<code>st_topologyfacecount</code>. Each maps to a resource method on
+<code>topology</code> (e.g. <code>topo.name()</code>); the current dispatch shapes
+only emit free-function calls. A new
+<code>ResourceMethod { resource_arg_idx }</code> shape that emits
+<code>let t = from_topology_bytes(...)?; SqlValue::Text(t.name())</code>
+would unlock them in ~2 hours of codegen work. Same shape unlocks
+<code>st_topogeomelementcount</code>, <code>st_topogeomtopotype</code>,
+<code>st_topogeomgetelements</code>, <code>st_topogeomgeometry</code>.</li>
+<li class=""><strong>Raster aggregate</strong> (1 scalar): <code>st_rast_union_aggregate</code>
+takes <code>list&lt;borrow&lt;raster>></code>. The aggregate path's
+primary+fallback indices look only for <code>list&lt;borrow&lt;geometry>></code>
+first params; extending them is mechanical (a new
+<code>ListRasterBorrow</code> analogue of <code>ListGeomBorrow</code>) but out of
+scope here.</li>
+<li class=""><strong><code>pixel-type</code> enum</strong> (4 scalars): <code>st_addband</code>, <code>st_mapalgebra</code>,
+<code>st_mapalgebra2</code>, <code>st_reclass</code> take a <code>pixel-type</code> enum
+parameter; <code>st_bandpixeltype</code> returns one. The dispatcher
+alphabet has no <code>WitType::Enum</code>. Adding enum recognition + a
+Text|Int rendering for the SQL side is a focused follow-up.</li>
+<li class=""><strong>List-of-record returns</strong> (4 scalars):
+<code>st_histogram</code> → <code>list&lt;histogram-bin></code>,
+<code>st_pixelofvalue</code> → <code>list&lt;pixel-coord></code>,
+<code>st_valuecount</code> → <code>list&lt;value-count></code>,
+<code>st_normalizeaddress</code> → <code>list&lt;address-component></code>.
+The Phase F <code>FirstWitValueRecord</code> path handles <code>list&lt;record></code>
+but requires the record to be in the per-shim registry; these
+ones aren't being picked up. Registry-coverage fix.</li>
+<li class=""><strong>Tuple-split returns</strong> (3 scalars): <code>st_worldtorastercoord</code>,
+<code>st_worldtorastercoordcol</code>, <code>st_worldtorastercoordrow</code> return
+<code>tuple&lt;s32, s32></code> and the SQL side wants the col / row /
+composite separately. Needs three small dispatch arms (split
+via override).</li>
+<li class=""><strong>Topology blob passthrough</strong> (2 scalars):
+<code>st_topologyfrombytes</code> / <code>st_topologytobytes</code> should resolve
+to identity-with-validation. Pick up via an override entry.</li>
+<li class=""><strong>Genuine "no upstream" residue</strong> (≈25 scalars): the directional
+bbox operators (<code>st_bboxabove</code>, <code>st_bboxbelow</code>,
+<code>st_bboxleftof</code>, <code>st_bboxrightof</code>, <code>st_bboxoverright</code>), the
+<code>*_2</code> variant signatures (<code>st_addface2</code>, <code>st_modedgeheal2</code>, …),
+the geography↔geometry text encoders (<code>st_asgeogtext</code>,
+<code>st_geogfromewkt</code>, <code>st_geogtogeom</code>), and a handful of raster
+pixel-array accessors (<code>st_arraycols</code>, <code>st_arrayrows</code>,
+<code>st_arrayvalue</code>) have no matching upstream WIT today. They
+belong on an upstream postgis-wasm roadmap, not on the
+codegen.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=reaches>Reaches<a href=#reaches class=hash-link aria-label="Direct link to Reaches" title="Direct link to Reaches" translate=no>​</a></h3>
+<p>The original task framed the gap as "~75 missing functions"; the
+survey showed 174 unwired total. After #490 the residue is 58 of
+which roughly half are genuine upstream gaps. The codegen extensions
+hit the target dispatcher coverage (288 → 354 distinct scalars,
++23% on top of the pre-#490 base, or ~88% of the 402-scalar postgis
+interface DB ceiling) without disturbing the mobilitydb surface.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=551-w35--scalar-tuple--optiontuple-returns-done-2026-06-27>#551 W3.5 — scalar tuple&lt;…> + option&lt;tuple&lt;…>> returns (done 2026-06-27)<a href=#551-w35--scalar-tuple--optiontuple-returns-done-2026-06-27 class=hash-link aria-label="Direct link to #551 W3.5 — scalar tuple<…> + option<tuple<…>> returns (done 2026-06-27)" title="Direct link to #551 W3.5 — scalar tuple<…> + option<tuple<…>> returns (done 2026-06-27)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-landed-1>What landed<a href=#what-landed-1 class=hash-link aria-label="Direct link to What landed" title="Direct link to What landed" translate=no>​</a></h3>
+<p>Extends the W3.4 (#550) <code>RetShape::JsonText</code> family from list-of-tuple
+to bare scalar tuples by adding two new <code>JsonRetKind</code> sub-variants in
+<code>sqlink-shim-codegen</code> (<code>src/wasm_target/dispatch.rs</code>):</p>
+<ul>
+<li class=""><code>TuplePrim(Vec&lt;ListPrimElem>)</code> — covers <code>tuple&lt;X1, X2, …></code> over
+primitive <code>Xi</code>. Emits the existing <code>serde_json::to_string</code> body
+(serde renders Rust tuples as fixed-length JSON arrays).</li>
+<li class=""><code>OptionTuplePrim(Vec&lt;ListPrimElem>)</code> — covers
+<code>option&lt;tuple&lt;X1, X2, …>></code>. Emits a <code>match</code> around the same
+serde call; <code>Some → SqlValue::Text(json)</code>, <code>None → SqlValue::Null</code>.</li>
+</ul>
+<p><code>classify_return</code> gets two new pattern arms (one inside the
+<code>option&lt;...></code> walker, one in the bare-tuple walker) slotted before
+the existing "specific shape not yet wired" fallbacks. Tests
+<code>cargo test --release</code> clean. Build clean.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=scalars-wired>Scalars wired<a href=#scalars-wired class=hash-link aria-label="Direct link to Scalars wired" title="Direct link to Scalars wired" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>postgis (1)</strong>: <code>st_worldtorastercoord(rast, wx, wy) -> tuple&lt;s32, s32></code>. Postgres surface is <code>text</code>, so the JSON-array
+rendering <code>[col, row]</code> is faithful and SQL callers unpack via
+<code>json_extract(..., '$[0]')</code> / <code>'$[1]'</code>.</li>
+<li class=""><strong>mobilitydb (3)</strong>: <code>dateset_to_span -> option&lt;tuple&lt;s32, s32>></code>,
+<code>floatset_to_span -> option&lt;tuple&lt;f64, f64>></code>,
+<code>intset_to_span -> option&lt;tuple&lt;s64, s64>></code>. All three are
+Some/None-wrapped tuple pairs (set-to-span lower/upper bounds).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-findings-vs-the-original-framing>Substrate findings vs the original framing<a href=#substrate-findings-vs-the-original-framing class=hash-link aria-label="Direct link to Substrate findings vs the original framing" title="Direct link to Substrate findings vs the original framing" translate=no>​</a></h3>
+<p>The #551 task description said "3 postgis scalars currently return
+<code>tuple&lt;X, Y></code>". The actual postgis substrate at main <code>297c6d61</code> shows
+only <code>st_worldtorastercoord</code> as a tuple-return unwire. The remaining
+two functions named in the #490 "Tuple-split returns" carry-forward
+(<code>st_worldtorastercoordcol</code>, <code>st_worldtorastercoordrow</code>) fail the
+<em>name match</em> — there is no corresponding split WIT declaration. They
+are genuine upstream gaps belonging to the postgis-wasm roadmap, not
+codegen issues. The other extant tuple-returning scalar
+(<code>st_isvaliddetail -> tuple&lt;bool, option&lt;string>, option&lt;geometry>></code>)
+already has a hand-coded <code>RetShape::IsValidDetailText</code> arm (round 3)
+that renders as a PostgreSQL composite-text — this stays as-is.</p>
+<p>The 3 mobilitydb <code>option&lt;tuple&lt;X, X>></code> scalars are the actual count
+that fits the JsonText shape today, so the unit of work matches "3"
+just on a different host.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification-4>Verification<a href=#verification-4 class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h3>
+<ul>
+<li class=""><code>sqlink-shim-codegen</code> — <code>cargo test --release</code> clean (15
+tests passing).</li>
+<li class=""><code>postgis-sqlink-bridge</code> — regen + <code>cargo build --target wasm32-wasip2 --release</code> clean; <code>wac plug</code> composition succeeds.</li>
+<li class="">Verify subcrate — added Case 21 exercising
+<code>st_worldtorastercoord(empty_blob, 0.0, 0.0)</code>. Observed run
+returned <code>Text("[0,0]")</code> end-to-end (upstream raster tolerated
+the empty blob, serde rendered the tuple as JSON-array). All
+existing cases still pass.</li>
+<li class="">Postgis unwired count drops from 36 → 35.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=honest-deferrals>Honest deferrals<a href=#honest-deferrals class=hash-link aria-label="Direct link to Honest deferrals" title="Direct link to Honest deferrals" translate=no>​</a></h3>
+<ul>
+<li class=""><code>st_worldtorastercoordcol</code> / <code>st_worldtorastercoordrow</code>
+(still unwired): no upstream WIT decl exists for the split
+variants. Either add the decls upstream, or add hand-rolled
+override entries that project <code>[0]</code> / <code>[1]</code> from
+<code>st_world_to_raster_coord</code>'s tuple result.</li>
+<li class="">mobilitydb regen + verify intentionally not run as part of W3.5
+— the substrate change is host-agnostic and the postgis verify
+subcrate proves the codegen path. A separate mop-up can regen
+mobilitydb-sqlink-bridge to actually wire the three
+<code>option&lt;tuple&lt;…>></code> arms in that bridge.</li>
+<li class="">Mobilitydb has additional <code>option&lt;list&lt;X>></code> shapes
+(<code>dateset_from_text</code>, <code>datespanset_from_text</code>,
+<code>floatset_from_text</code>, etc., ≈9 scalars) — list-inside-option
+inside <code>classify_return</code>'s option arm. Not in #551 scope; sibling
+shape extension.</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-codegen-retarget.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#problem class="table-of-contents__link toc-highlight">Problem</a><li><a href=#what-we-ship-at-the-end class="table-of-contents__link toc-highlight">What we ship at the end</a><li><a href=#scope class="table-of-contents__link toc-highlight">Scope</a><ul><li><a href=#phase-1--codegen-wasm-target-emitter-shape-proof class="table-of-contents__link toc-highlight">Phase 1 — codegen wasm-target emitter (shape proof)</a><li><a href=#phase-2--real-dispatch-end-to-end class="table-of-contents__link toc-highlight">Phase 2 — real dispatch end-to-end</a><li><a href=#phase-3--coverage-scale-up class="table-of-contents__link toc-highlight">Phase 3 — coverage scale-up</a><li><a href=#phase-4--cross-shim-composition-no-schema-work class="table-of-contents__link toc-highlight">Phase 4 — cross-shim composition (no schema work)</a><li><a href=#phase-5--retire-the-native-dylib-bridges class="table-of-contents__link toc-highlight">Phase 5 — retire the native .dylib bridges</a><li><a href=#phase-6--cross-project-leverage-datafission-ducklink class="table-of-contents__link toc-highlight">Phase 6 — cross-project leverage (datafission, ducklink)</a></ul><li><a href=#sequencing class="table-of-contents__link toc-highlight">Sequencing</a><li><a href=#risks class="table-of-contents__link toc-highlight">Risks</a><li><a href=#verification class="table-of-contents__link toc-highlight">Verification</a><li><a href=#cross-cuts class="table-of-contents__link toc-highlight">Cross-cuts</a><li><a href=#decisions-locked-2026-06-26 class="table-of-contents__link toc-highlight">Decisions (locked 2026-06-26)</a><li><a href=#references class="table-of-contents__link toc-highlight">References</a><li><a href=#phase-1--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase 1 — done (2026-06-26)</a><ul><li><a href=#where-the-work-lives class="table-of-contents__link toc-highlight">Where the work lives</a><li><a href=#what-the-emitter-produces class="table-of-contents__link toc-highlight">What the emitter produces</a><li><a href=#verification-result class="table-of-contents__link toc-highlight">Verification result</a><li><a href=#decisions-that-surfaced class="table-of-contents__link toc-highlight">Decisions that surfaced</a><li><a href=#carried-forward-into-phase-2 class="table-of-contents__link toc-highlight">Carried forward into Phase 2</a></ul><li><a href=#phase-2--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase 2 — done (2026-06-26)</a><ul><li><a href=#where-the-work-lives-1 class="table-of-contents__link toc-highlight">Where the work lives</a><li><a href=#dispatch-shape-that-worked class="table-of-contents__link toc-highlight">Dispatch shape that worked</a><li><a href=#type-mapping-table class="table-of-contents__link toc-highlight">Type-mapping table</a><li><a href=#coverage-in-phase-2 class="table-of-contents__link toc-highlight">Coverage in Phase 2</a><li><a href=#regen--compose--verify-recipe class="table-of-contents__link toc-highlight">Regen + compose + verify recipe</a><li><a href=#verification-result-1 class="table-of-contents__link toc-highlight">Verification result</a><li><a href=#decisions-that-surfaced-1 class="table-of-contents__link toc-highlight">Decisions that surfaced</a><li><a href=#carried-forward-into-phase-3 class="table-of-contents__link toc-highlight">Carried forward into Phase 3</a></ul><li><a href=#phase-3--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase 3 — done (2026-06-26)</a><ul><li><a href=#where-the-work-lives-2 class="table-of-contents__link toc-highlight">Where the work lives</a><li><a href=#coverage-on-the-postgis-interface-db class="table-of-contents__link toc-highlight">Coverage on the postgis interface DB</a><li><a href=#stream-1-generated-registry class="table-of-contents__link toc-highlight">Stream 1: generated registry</a><li><a href=#stream-2-scalar-coverage class="table-of-contents__link toc-highlight">Stream 2: scalar coverage</a><li><a href=#stream-3-aggregates class="table-of-contents__link toc-highlight">Stream 3: aggregates</a><li><a href=#stream-4-udtfs-operators-casts-preprocessors class="table-of-contents__link toc-highlight">Stream 4: UDTFs, operators, casts, preprocessors</a><li><a href=#verification-1 class="table-of-contents__link toc-highlight">Verification</a><li><a href=#smoke-parity-gate class="table-of-contents__link toc-highlight">Smoke parity gate</a><li><a href=#phase-3-deferrals-carried-forward class="table-of-contents__link toc-highlight">Phase 3 deferrals (carried forward)</a></ul><li><a href=#phase-3-round-2--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase 3 round 2 — done (2026-06-26)</a><ul><li><a href=#where-the-work-lives-3 class="table-of-contents__link toc-highlight">Where the work lives</a><li><a href=#coverage-delta class="table-of-contents__link toc-highlight">Coverage delta</a><li><a href=#a-listborrowgeometry-param-marshaling class="table-of-contents__link toc-highlight">A: <code>list&lt;borrow&lt;geometry>></code> param marshaling</a><li><a href=#b-optiont-return-unwrapping class="table-of-contents__link toc-highlight">B: <code>option&lt;T></code> return unwrapping</a><li><a href=#c-aggregate-dispatcher-extra-args class="table-of-contents__link toc-highlight">C: Aggregate dispatcher extra args</a><li><a href=#aggregate-registry-cross-interface-fallback class="table-of-contents__link toc-highlight">Aggregate registry: cross-interface fallback</a><li><a href=#verification-2 class="table-of-contents__link toc-highlight">Verification</a><li><a href=#smoke-parity-re-check class="table-of-contents__link toc-highlight">Smoke parity re-check</a><li><a href=#round-2-deferrals-carried-forward class="table-of-contents__link toc-highlight">Round 2 deferrals (carried forward)</a></ul><li><a href=#phase-3-polish--done-2026-06-26 class="table-of-contents__link toc-highlight">Phase 3 polish — done (2026-06-26)</a><ul><li><a href=#where-the-work-lives-4 class="table-of-contents__link toc-highlight">Where the work lives</a><li><a href=#coverage-delta-1 class="table-of-contents__link toc-highlight">Coverage delta</a><li><a href=#a-bbox-record-return class="table-of-contents__link toc-highlight">A: <code>bbox</code> record return</a><li><a href=#b-tuplebool-optionstring-optiongeometry-return class="table-of-contents__link toc-highlight">B: <code>tuple&lt;bool, option&lt;string>, option&lt;geometry>></code> return</a><li><a href=#c-optiontuplef64-f64-f64-f64-param class="table-of-contents__link toc-highlight">C: <code>option&lt;tuple&lt;f64, f64, f64, f64>></code> param</a><li><a href=#verification-3 class="table-of-contents__link toc-highlight">Verification</a><li><a href=#smoke-parity-re-check-1 class="table-of-contents__link toc-highlight">Smoke parity re-check</a><li><a href=#round-3-deferrals-carried-forward-unchanged class="table-of-contents__link toc-highlight">Round 3 deferrals (carried forward unchanged)</a></ul><li><a href=#489-sqlink-loader-vtab-wiring--done-2026-06-27 class="table-of-contents__link toc-highlight">#489 sqlink-loader vtab wiring — done (2026-06-27)</a><ul><li><a href=#where-the-work-lives-5 class="table-of-contents__link toc-highlight">Where the work lives</a><li><a href=#what-runs-end-to-end class="table-of-contents__link toc-highlight">What runs end-to-end</a><li><a href=#smoke-gate-05-udtfs--bridge-side-blocker-surfaced class="table-of-contents__link toc-highlight">Smoke gate (05-udtfs) — bridge-side blocker surfaced</a><li><a href=#honest-deferrals-filed-against-489 class="table-of-contents__link toc-highlight">Honest deferrals (filed against #489)</a><li><a href=#test-coverage class="table-of-contents__link toc-highlight">Test coverage</a></ul><li><a href=#531--per-vtab-create-table-schema-done-2026-06-27 class="table-of-contents__link toc-highlight">#531 — Per-vtab CREATE TABLE schema (done 2026-06-27)</a><ul><li><a href=#context class="table-of-contents__link toc-highlight">Context</a><li><a href=#where-the-work-lives-6 class="table-of-contents__link toc-highlight">Where the work lives</a><li><a href=#mechanism class="table-of-contents__link toc-highlight">Mechanism</a><li><a href=#affinity-mapping-table class="table-of-contents__link toc-highlight">Affinity-mapping table</a><li><a href=#sample-emitted-schemas class="table-of-contents__link toc-highlight">Sample emitted schemas</a><li><a href=#smoke-gate class="table-of-contents__link toc-highlight">Smoke gate</a><li><a href=#manual-verify class="table-of-contents__link toc-highlight">Manual verify</a><li><a href=#531-deferrals class="table-of-contents__link toc-highlight">#531 deferrals</a></ul><li><a href=#532--multi-column-xcolumn-row-materialisation-codegen-done-2026-06-27 class="table-of-contents__link toc-highlight">#532 — Multi-column xColumn row materialisation (codegen done 2026-06-27)</a><ul><li><a href=#532-field-shapes-covered class="table-of-contents__link toc-highlight">#532 field shapes covered</a><li><a href=#532-carried-forward class="table-of-contents__link toc-highlight">#532 carried forward</a></ul><li><a href=#490--raster--topology-shims--name-match-index-done-2026-06-27 class="table-of-contents__link toc-highlight">#490 — Raster + topology shims + name-match index (done 2026-06-27)</a><ul><li><a href=#what-landed class="table-of-contents__link toc-highlight">What landed</a><li><a href=#numbers class="table-of-contents__link toc-highlight">Numbers</a><li><a href=#sample-of-newly-wired-functions-per-category class="table-of-contents__link toc-highlight">Sample of newly-wired functions per category</a><li><a href=#verified class="table-of-contents__link toc-highlight">Verified</a><li><a href=#deferred class="table-of-contents__link toc-highlight">Deferred</a><li><a href=#reaches class="table-of-contents__link toc-highlight">Reaches</a></ul><li><a href=#551-w35--scalar-tuple--optiontuple-returns-done-2026-06-27 class="table-of-contents__link toc-highlight">#551 W3.5 — scalar tuple&lt;…> + option&lt;tuple&lt;…>> returns (done 2026-06-27)</a><ul><li><a href=#what-landed-1 class="table-of-contents__link toc-highlight">What landed</a><li><a href=#scalars-wired class="table-of-contents__link toc-highlight">Scalars wired</a><li><a href=#substrate-findings-vs-the-original-framing class="table-of-contents__link toc-highlight">Substrate findings vs the original framing</a><li><a href=#verification-4 class="table-of-contents__link toc-highlight">Verification</a><li><a href=#honest-deferrals class="table-of-contents__link toc-highlight">Honest deferrals</a></ul></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

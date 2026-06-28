@@ -1,0 +1,474 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-prefixes" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>Plan: function prefixes — SPARQL-style namespacing for SQL functions | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-prefixes /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="Plan: function prefixes — SPARQL-style namespacing for SQL functions | sqlink"/><meta data-rh=true name=description content="Status (2026-06-25)"/><meta data-rh=true property=og:description content="Status (2026-06-25)"/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-prefixes /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-prefixes hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-prefixes hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://tegmentum.github.io/sqlink/plans/PLAN-prefixes","name":"Plan: function prefixes — SPARQL-style namespacing for SQL functions","position":1}]}</script><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/><span title=Introduction class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/getting-started><span title="Getting Started" class=linkLabel_WmDU>Getting Started</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/sqlink/concepts/extensions><span title=Concepts class=categoryLinkLabel_W154>Concepts</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/extensions><span title=Extensions class=linkLabel_WmDU>Extensions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/bundles><span title=Bundles class=linkLabel_WmDU>Bundles</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/prefixes><span title=Prefixes class=linkLabel_WmDU>Prefixes</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/cas-cache><span title=Cas-cache class=linkLabel_WmDU>Cas-cache</span></a></ul><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/roadmap><span title=Roadmap class=linkLabel_WmDU>Roadmap</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/sqlink/plans/PLAN-bundles><span title="Plans (source of truth)" class=categoryLinkLabel_W154>Plans (source of truth)</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-bundles><span title="Plan: bundles  named extension sets with optional baked binaries" class=linkLabel_WmDU>Plan: bundles  named extension sets with optional baked binaries</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/sqlink/plans/PLAN-prefixes><span title="Plan: function prefixes — SPARQL-style namespacing for SQL functions" class=linkLabel_WmDU>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-followups><span title=PLAN-followups class=linkLabel_WmDU>PLAN-followups</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-browser-runtime><span title="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill" class=linkLabel_WmDU>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wal-archive-extension><span title="Plan: wal-archive extension  continuous WAL backup for sqlink" class=linkLabel_WmDU>Plan: wal-archive extension  continuous WAL backup for sqlink</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-tvm-integration><span title="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)" class=linkLabel_WmDU>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wasmmachine><span title="Plan: Register sqlite-cli as a wasmMachine application" class=linkLabel_WmDU>Plan: Register sqlite-cli as a wasmMachine application</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-interactive-capture><span title="Plan: interactive changeset capture (daemon vs WIT-extension)" class=linkLabel_WmDU>Plan: interactive changeset capture (daemon vs WIT-extension)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-benchmarks><span title="Benchmarks: sqlite-wasm-run vs native sqlite3" class=linkLabel_WmDU>Benchmarks: sqlite-wasm-run vs native sqlite3</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-perf-ux><span title="PLAN: release-readiness perf + UX audit" class=linkLabel_WmDU>PLAN: release-readiness perf + UX audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-testing><span title="PLAN: release-readiness testing audit" class=linkLabel_WmDU>PLAN: release-readiness testing audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-code-health><span title="PLAN: code-health + tech-debt audit for OSS release" class=linkLabel_WmDU>PLAN: code-health + tech-debt audit for OSS release</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-speculative><span title="Plan: speculative items (consumer-driven)" class=linkLabel_WmDU>Plan: speculative items (consumer-driven)</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/sqlink/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Plans (source of truth)</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>Plan: function prefixes — SPARQL-style namespacing for SQL functions</h1></header>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=status-2026-06-25>Status (2026-06-25)<a href=#status-2026-06-25 class=hash-link aria-label="Direct link to Status (2026-06-25)" title="Direct link to Status (2026-06-25)" translate=no>​</a></h2>
+<p>Design conversation captured. Not yet started. No substrate prereqs;
+the loader-bridge already mediates function registration, so the
+wrapper layer goes there. New <code>prefix-cli</code> extension joins the
+cli-family.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=motivation>Motivation<a href=#motivation class=hash-link aria-label="Direct link to Motivation" title="Direct link to Motivation" translate=no>​</a></h2>
+<p>As sqlink ranges across hundreds of extensions, naming collisions
+between SQL functions are inevitable. Today SQLite's
+<code>sqlite3_create_function</code> performs silent last-wins shadowing: if
+two extensions both register <code>concat</code>, the second one transparently
+replaces the first. Callers can't tell which implementation they
+hit; the operator can't tell which extensions collide.</p>
+<p>SPARQL solves the same problem for RDF identifiers with prefixed
+names: a query declares <code>PREFIX foaf: &lt;http://xmlns.com/foaf/0.1/></code>
+and then <code>foaf:name</code> is shorthand for the full URI. Two
+independently-developed ontologies can both use the short <code>name</code>
+inside their own namespace without colliding on the wire.</p>
+<p>Sqlink prefixes adapt the same shape to SQL functions:</p>
+<ul>
+<li class="">Each extension declares a <strong>short prefix</strong> + a globally-unique
+<strong>expansion</strong> string.</li>
+<li class="">Functions are registered under their prefix; the SQL surface
+exposes both <code>name(...)</code> (bare) and <code>prefix__name(...)</code> (qualified)
+when the bare name is unambiguous, and only the qualified forms
+when two extensions collide.</li>
+<li class="">Calls to bare collided names error with a helpful "ambiguous;
+try <code>prefix__name</code> or <code>otherprefix__name</code>" message.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=naming>Naming<a href=#naming class=hash-link aria-label="Direct link to Naming" title="Direct link to Naming" translate=no>​</a></h2>
+<p>The feature is called <strong>prefixes</strong>, not <strong>namespaces</strong>.
+"Namespace" in SQLite already means an attached database schema
+(<code>main</code>, <code>temp</code>, named attachments); reusing it would confuse two
+unrelated concepts. SPARQL uses "prefix" and the metaphor maps
+cleanly.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=separator-__-double-underscore>Separator: <code>__</code> (double underscore)<a href=#separator-__-double-underscore class=hash-link aria-label="Direct link to separator-__-double-underscore" title="Direct link to separator-__-double-underscore" translate=no>​</a></h3>
+<p><code>:</code> is the SPARQL-canonical separator but requires identifier
+quoting in SQLite (<code>"foaf:name"(...)</code>) on every call. That's
+high-friction.</p>
+<p><code>__</code> (double underscore) is the chosen separator. It is:</p>
+<ul>
+<li class="">Legal in unquoted SQLite identifiers (just <code>[A-Za-z_][A-Za-z0-9_]*</code>).</li>
+<li class="">Visually distinct from natural single-underscore names like
+<code>uuid_v4</code> or <code>json_extract</code>.</li>
+<li class="">ASCII-only — no encoding considerations.</li>
+</ul>
+<p>Rejected alternatives:</p>
+<ul>
+<li class=""><code>:</code> — requires quoting everywhere; ergonomically poor.</li>
+<li class=""><code>.</code> — conflicts with SQL's <code>schema.function</code> syntax; parser
+ambiguity.</li>
+<li class=""><code>_</code> (single) — collides with naturally-named functions; ambiguous
+what's the prefix.</li>
+<li class=""><code>$</code> — works in some SQL dialects but tokenizes as one identifier
+in SQLite; less standard.</li>
+<li class=""><code>#</code> — non-identifier character; requires quoting.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=architecture>Architecture<a href=#architecture class=hash-link aria-label="Direct link to Architecture" title="Direct link to Architecture" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=the-expansion-is-required-the-format-is-opaque>The expansion is required; the format is opaque<a href=#the-expansion-is-required-the-format-is-opaque class=hash-link aria-label="Direct link to The expansion is required; the format is opaque" title="Direct link to The expansion is required; the format is opaque" translate=no>​</a></h3>
+<p>Each prefix has TWO required fields:</p>
+<ul>
+<li class=""><code>name</code> — the short prefix used in SQL (<code>foaf</code>, <code>tegmentum</code>).</li>
+<li class=""><code>expansion</code> — an opaque string that gives the prefix its global
+identity.</li>
+</ul>
+<p>The expansion is unconstrained:</p>
+<ul>
+<li class="">A URL (<code>http://xmlns.com/foaf/0.1/</code>) — common, matches SPARQL.</li>
+<li class="">A Java-style namespace (<code>com.tegmentum.sqlink</code>).</li>
+<li class="">A UUID (<code>urn:uuid:...</code>).</li>
+<li class="">Any opaque string the extension author picks.</li>
+</ul>
+<p>Sqlink does NOT validate the expansion's format. It is treated as
+an opaque identity token.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=function-identity-is-expansion-function_name>Function identity is (expansion, function_name)<a href=#function-identity-is-expansion-function_name class=hash-link aria-label="Direct link to Function identity is (expansion, function_name)" title="Direct link to Function identity is (expansion, function_name)" translate=no>​</a></h3>
+<p>The expansion — not the short prefix — is the canonical identity:</p>
+<ul>
+<li class="">The short prefix <code>foaf</code> is a per-database alias for the expansion
+<code>http://xmlns.com/foaf/0.1/</code>.</li>
+<li class="">Two databases can disagree on what <code>foaf</code> resolves to short-wise;
+<code>http://xmlns.com/foaf/0.1/name</code> is the same function everywhere.</li>
+<li class="">Renaming a prefix (<code>.prefix rename foaf bar</code>) is a SQL-syntax
+convenience that doesn't touch function identity in the registry.</li>
+<li class="">An extension's manifest declares both the preferred prefix and
+its expansion; if the prefix is already taken by a different
+expansion, the cli falls back to a numbered alternative (<code>foaf2</code>)
+or errors per operator policy.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=storage-user-database-sqlite_sqlink_-tables>Storage (user database, <code>sqlite_sqlink_*</code> tables)<a href=#storage-user-database-sqlite_sqlink_-tables class=hash-link aria-label="Direct link to storage-user-database-sqlite_sqlink_-tables" title="Direct link to storage-user-database-sqlite_sqlink_-tables" translate=no>​</a></h3>
+<p>Two new tables, lived in the user database (the one the cli is
+attached to). Per-db storage is the right choice because:</p>
+<ul>
+<li class="">Prefix mappings are configuration that should travel with the
+database (copying <code>db.sqlite</code> carries its prefix registrations).</li>
+<li class="">Different databases can have different prefix mappings without
+cross-talk.</li>
+</ul>
+<p>The tables use the <code>__sqlink_*</code> double-underscore prefix
+convention (matching the cas-cache's <code>__cas_*</code> tables). SQLite
+itself reserves names starting with <code>sqlite_</code> for internal use
+and rejects user-CREATE of such tables; the <code>__</code> prefix is the
+project's analog for hiding internal bookkeeping from casual
+<code>.tables</code> output:</p>
+<div class="language-sql codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-sql codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>TABLE</span><span class="token plain"> __sqlink_prefix </span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    name        </span><span class="token keyword" style=color:#00009f>TEXT</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>PRIMARY</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>KEY</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>-- short prefix: 'foaf', 'tegmentum'</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    expansion   </span><span class="token keyword" style=color:#00009f>TEXT</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">       </span><span class="token comment" style=color:#999988;font-style:italic>-- opaque expanded form</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    description </span><span class="token keyword" style=color:#00009f>TEXT</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">                </span><span class="token comment" style=color:#999988;font-style:italic>-- optional human label</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    created_at  </span><span class="token keyword" style=color:#00009f>INTEGER</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    last_used_at </span><span class="token keyword" style=color:#00009f>INTEGER</span><span class="token plain">             </span><span class="token comment" style=color:#999988;font-style:italic>-- updated on function dispatch + .prefix touch</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>INDEX</span><span class="token plain"> __sqlink_prefix_expansion</span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>ON</span><span class="token plain"> __sqlink_prefix</span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">expansion</span><span class="token punctuation" style=color:#393A34>)</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>TABLE</span><span class="token plain"> __sqlink_prefix_function </span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    expansion      </span><span class="token keyword" style=color:#00009f>TEXT</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>-- joins on expansion, NOT short name</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    function_name  </span><span class="token keyword" style=color:#00009f>TEXT</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">    </span><span class="token comment" style=color:#999988;font-style:italic>-- the bare name, e.g. 'name'</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    extension_name </span><span class="token keyword" style=color:#00009f>TEXT</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">             </span><span class="token comment" style=color:#999988;font-style:italic>-- which extension registered it (audit)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    n_args         </span><span class="token keyword" style=color:#00009f>INTEGER</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">          </span><span class="token comment" style=color:#999988;font-style:italic>-- arity (or -1 for variadic)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    registered_at  </span><span class="token keyword" style=color:#00009f>INTEGER</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>PRIMARY</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>KEY</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">expansion</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> function_name</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> n_args</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"> WITHOUT ROWID</span><span class="token punctuation" style=color:#393A34>;</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- Optional operator-set pin: when multiple extensions register the</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- same bare name + arity, this row says which one wins the bare</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- name dispatch. NULL pin means "follow SQLite default" (last-</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- registered wins).</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token keyword" style=color:#00009f>CREATE</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>TABLE</span><span class="token plain"> __sqlink_prefix_pin </span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    function_name </span><span class="token keyword" style=color:#00009f>TEXT</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    n_args        </span><span class="token keyword" style=color:#00009f>INTEGER</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    expansion     </span><span class="token keyword" style=color:#00009f>TEXT</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain">     </span><span class="token comment" style=color:#999988;font-style:italic>-- which expansion's impl wins bare-name</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    set_at        </span><span class="token keyword" style=color:#00009f>INTEGER</span><span class="token plain"> </span><span class="token operator" style=color:#393A34>NOT</span><span class="token plain"> </span><span class="token boolean" style=color:#36acaa>NULL</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">    </span><span class="token keyword" style=color:#00009f>PRIMARY</span><span class="token plain"> </span><span class="token keyword" style=color:#00009f>KEY</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>(</span><span class="token plain">function_name</span><span class="token punctuation" style=color:#393A34>,</span><span class="token plain"> n_args</span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>)</span><span class="token plain"> WITHOUT ROWID</span><span class="token punctuation" style=color:#393A34>;</span><br/></div></code></pre></div></div>
+<p>Multiple prefixes can share an expansion (alias semantics). A
+single <code>expansion</code> row in <code>_prefix_function</code> is canonical; multiple
+short-name aliases in <code>_prefix</code> may reference it.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=conflict-resolution-bare-name-preserves-existing-behavior-qualified-forms-are-purely-additive>Conflict resolution: bare name preserves existing behavior; qualified forms are purely additive<a href=#conflict-resolution-bare-name-preserves-existing-behavior-qualified-forms-are-purely-additive class=hash-link aria-label="Direct link to Conflict resolution: bare name preserves existing behavior; qualified forms are purely additive" title="Direct link to Conflict resolution: bare name preserves existing behavior; qualified forms are purely additive" translate=no>​</a></h3>
+<p><strong>Hard constraint</strong>: existing user SQL must not break. Users today
+write <code>SELECT uuid_v4()</code> without any prefix; that has to keep working
+exactly the same way after this feature lands, regardless of how
+many extensions are loaded or whether any of them collide on the
+bare name.</p>
+<p>Three cases:</p>
+<p><strong>Case 1 — no collision.</strong> Extension A registers <code>uuid_v4</code>; no
+other extension has that name at the same arity:</p>
+<ol>
+<li class=""><code>uuid_v4(...)</code> is registered as the bare name (visible to all
+existing SQL).</li>
+<li class=""><code>exta__uuid_v4(...)</code> is ALSO registered (always-available
+qualified form, for operators who want explicit dispatch).</li>
+</ol>
+<p><strong>Case 2 — collision, bare name preserved.</strong> Extension A's <code>concat</code>
+(expansion <code>com.exta.tools</code>) is registered first. Extension B's
+<code>concat</code> (expansion <code>org.extb.lib</code>) loads later:</p>
+<ol>
+<li class="">The bare name <code>concat(...)</code> continues to follow SQLite's
+default behavior — whichever extension's registration is current
+in SQLite's function table wins. By default this is the
+<strong>last-registered</strong> (B in this example), matching SQLite's
+existing semantics. Existing SQL that calls <code>concat(...)</code> keeps
+working; the IMPL it gets is whatever it would have gotten
+without this feature.</li>
+<li class="">Both qualified forms are added: <code>exta__concat(...)</code> AND
+<code>extb__concat(...)</code>. Always callable; always unambiguous.</li>
+<li class="">The cli logs a load-time warning: "function <code>concat/N</code> registered
+by both <code>exta</code> (expansion=com.exta.tools) and <code>extb</code>
+(expansion=org.extb.lib); bare call dispatches to <code>extb</code>. Use
+<code>.prefix conflicts</code> to inspect; <code>exta__concat</code> and
+<code>extb__concat</code> are available for explicit dispatch."</li>
+<li class="">Operator can <code>.prefix prefer concat exta</code> to pin the bare name
+to a specific extension. This writes a row to
+<code>__sqlink_prefix_pin</code> and re-registers the bare name
+against the pinned extension's implementation.</li>
+</ol>
+<p><strong>Case 3 — extension unloaded.</strong> Extension B unloads (releasing its
+<code>concat</code> registration). The bare name reverts to extension A's
+implementation (the remaining registration). Qualified
+<code>exta__concat</code> continues to work; <code>extb__concat</code> is no longer
+callable (extension B is gone).</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-this-feature-is-not>What this feature is NOT<a href=#what-this-feature-is-not class=hash-link aria-label="Direct link to What this feature is NOT" title="Direct link to What this feature is NOT" translate=no>​</a></h3>
+<ul>
+<li class="">It does NOT change which implementation <code>concat()</code> dispatches to
+when called bare. SQLite's default semantics + the operator's
+optional <code>.prefix prefer</code> decide that.</li>
+<li class="">It does NOT error on ambiguity at call time. Bare-name calls
+always work as long as ANY extension has registered that name.</li>
+<li class="">It does NOT require users to update existing SQL. The only new
+syntax (<code>prefix__name</code>) is opt-in for callers who want explicit
+dispatch.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-this-feature-is>What this feature IS<a href=#what-this-feature-is class=hash-link aria-label="Direct link to What this feature IS" title="Direct link to What this feature IS" translate=no>​</a></h3>
+<ul>
+<li class="">Always-available qualified forms (<code>prefix__name</code>) so a SQL
+caller CAN unambiguously target a specific implementation when
+they need to.</li>
+<li class="">Load-time warnings + a <code>.prefix conflicts</code> view so operators
+can SEE collisions that would otherwise be silent.</li>
+<li class="">An optional <code>.prefix prefer</code> pin so operators can control which
+implementation wins the bare name without changing extension
+load order.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=registration-flow-in-the-loader-bridge-wrapper>Registration flow (in the loader-bridge wrapper)<a href=#registration-flow-in-the-loader-bridge-wrapper class=hash-link aria-label="Direct link to Registration flow (in the loader-bridge wrapper)" title="Direct link to Registration flow (in the loader-bridge wrapper)" translate=no>​</a></h3>
+<p>When an extension registers a scalar/aggregate/vtab/hook function
+through <code>spi-loader.register-*</code>, the host's loader-bridge wrapper:</p>
+<ol>
+<li class="">Reads the extension's manifest for <code>(preferred-prefix, expansion)</code>.
+If absent, falls back to the deprecation-window synthetic
+expansion <code>sqlink-internal://&lt;crate-name></code> + warns. After
+v1.1 this becomes a hard error.</li>
+<li class="">Looks up the prefix in <code>__sqlink_prefix</code>:
+<ul>
+<li class="">If exists with matching expansion → use it.</li>
+<li class="">If exists with different expansion → fall back to numbered
+alternative (<code>foaf2</code>, <code>foaf3</code>, ...) per Q1 resolution + warn.
+Operator can <code>.prefix rename</code> after.</li>
+<li class="">If absent → insert it.</li>
+</ul>
+</li>
+<li class="">Inserts the function into <code>__sqlink_prefix_function</code> keyed
+by <code>(expansion, function_name, n_args)</code>.</li>
+<li class=""><strong>Always</strong> registers the function with SQLite under
+<code>prefix__function_name</code> (the qualified form). This is unconditional;
+qualified forms are always available regardless of bare-name state.</li>
+<li class=""><strong>Bare-name registration</strong>: registers the function with SQLite
+under <code>function_name</code> too. This may shadow an earlier registration
+(per SQLite's last-wins semantics) — that's intentional, it
+preserves current behavior.</li>
+<li class=""><strong>Pin override</strong>: if <code>__sqlink_prefix_pin</code> has a row for
+<code>(function_name, n_args)</code> pinning a different expansion, after
+the registration the wrapper re-registers the bare name pointing
+at the PINNED expansion's implementation (so the pin survives
+load-order changes).</li>
+<li class=""><strong>Collision logging</strong>: if step 3 detected ANY existing
+<code>_prefix_function</code> row for the same <code>(function_name, n_args)</code>
+from a different expansion, emit a load-time warning naming all
+colliding extensions + which one currently owns the bare name +
+the available qualified forms.</li>
+</ol>
+<p>The bare name dispatches per SQLite's normal function-table rules;
+the wrapper does NOT intercept call-time dispatch. The only call-
+time SQLite sees is whatever was last registered (or the pinned
+form if a pin is set). This keeps existing SQL working
+identically.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=surface>Surface<a href=#surface class=hash-link aria-label="Direct link to Surface" title="Direct link to Surface" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=dot-commands-in-prefix-cli-extension>Dot commands (in <code>prefix-cli</code> extension)<a href=#dot-commands-in-prefix-cli-extension class=hash-link aria-label="Direct link to dot-commands-in-prefix-cli-extension" title="Direct link to dot-commands-in-prefix-cli-extension" translate=no>​</a></h3>
+<div class="language-sql codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-sql codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token comment" style=color:#999988;font-style:italic>-- register a prefix; expansion required</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix </span><span class="token keyword" style=color:#00009f>add</span><span class="token plain"> foaf http:</span><span class="token comment" style=color:#999988;font-style:italic>//xmlns.com/foaf/0.1/ "Friend of a friend ontology"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix </span><span class="token keyword" style=color:#00009f>add</span><span class="token plain"> tegmentum com</span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">tegmentum</span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">sqlink</span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix </span><span class="token keyword" style=color:#00009f>add</span><span class="token plain"> my opaque</span><span class="token operator" style=color:#393A34>-</span><span class="token plain">token</span><span class="token operator" style=color:#393A34>-</span><span class="token plain">i</span><span class="token operator" style=color:#393A34>-</span><span class="token plain">want</span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- inspect</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix list                       </span><span class="token comment" style=color:#999988;font-style:italic>-- name | expansion | description | last_used</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix functions foaf             </span><span class="token comment" style=color:#999988;font-style:italic>-- functions registered under foaf's expansion</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix expansion foaf             </span><span class="token comment" style=color:#999988;font-style:italic>-- print just the expansion string</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- modify</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix </span><span class="token keyword" style=color:#00009f>rename</span><span class="token plain"> foaf bar            </span><span class="token comment" style=color:#999988;font-style:italic>-- change the short alias; expansion + functions unchanged</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix </span><span class="token keyword" style=color:#00009f>modify</span><span class="token plain"> foaf </span><span class="token string" style=color:#e3116c>"Updated description"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- prune</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix </span><span class="token keyword" style=color:#00009f>delete</span><span class="token plain"> foaf                </span><span class="token comment" style=color:#999988;font-style:italic>-- removes the alias row; expansion-based</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                   </span><span class="token comment" style=color:#999988;font-style:italic>-- _prefix_function entries persist (other</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                   </span><span class="token comment" style=color:#999988;font-style:italic>-- aliases for the same expansion still work)</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- pin operator-controlled bare-name dispatch on collision</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix prefer concat exta         </span><span class="token comment" style=color:#999988;font-style:italic>-- bare `concat()` dispatches to exta's</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                   </span><span class="token comment" style=color:#999988;font-style:italic>-- implementation regardless of load</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                   </span><span class="token comment" style=color:#999988;font-style:italic>-- order. Writes _prefix_pin row.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix unprefer concat            </span><span class="token comment" style=color:#999988;font-style:italic>-- removes the pin; bare-name reverts to</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                   </span><span class="token comment" style=color:#999988;font-style:italic>-- SQLite-default last-registered-wins.</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain" style=display:inline-block></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token comment" style=color:#999988;font-style:italic>-- diagnostics</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix conflicts                  </span><span class="token comment" style=color:#999988;font-style:italic>-- bare-name ambiguities currently in</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                   </span><span class="token comment" style=color:#999988;font-style:italic>-- effect: function | n_args | bare owner</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                   </span><span class="token comment" style=color:#999988;font-style:italic>-- | other callable qualified forms | pin</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token punctuation" style=color:#393A34>.</span><span class="token plain">prefix verify                     </span><span class="token comment" style=color:#999988;font-style:italic>-- check that every _prefix_function row</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                   </span><span class="token comment" style=color:#999988;font-style:italic>-- has an extension still loaded; warn on</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain">                                   </span><span class="token comment" style=color:#999988;font-style:italic>-- stale entries</span><br/></div></code></pre></div></div>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=extension-manifest-declaration>Extension manifest declaration<a href=#extension-manifest-declaration class=hash-link aria-label="Direct link to Extension manifest declaration" title="Direct link to Extension manifest declaration" translate=no>​</a></h3>
+<div class="language-toml codeBlockContainer_Ckt0 theme-code-block" style=--prism-color:#393A34;--prism-background-color:#f6f8fa><div class=codeBlockContent_QJqH><pre tabindex=0 class="prism-code language-toml codeBlock_bY9V thin-scrollbar" style=color:#393A34;background-color:#f6f8fa><code class=codeBlockLines_e6Vv><div class=token-line style=color:#393A34><span class="token punctuation" style=color:#393A34>[</span><span class="token table class-name">package.metadata.extension</span><span class="token punctuation" style=color:#393A34>]</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token key property" style=color:#36acaa>preferred-prefix</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>=</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"foaf"</span><span class="token plain"></span><br/></div><div class=token-line style=color:#393A34><span class="token plain"></span><span class="token key property" style=color:#36acaa>prefix-expansion</span><span class="token plain"> </span><span class="token punctuation" style=color:#393A34>=</span><span class="token plain"> </span><span class="token string" style=color:#e3116c>"http://xmlns.com/foaf/0.1/"</span><br/></div></code></pre></div></div>
+<p>Both fields required. Loader rejects extensions without both.</p>
+<p>For existing extensions that don't yet declare a prefix, v1 ships a
+short migration window: the loader emits a deprecation warning +
+auto-assigns the extension's crate name as the prefix and a
+synthetic expansion (<code>sqlink-internal://crate-name</code>). The migration
+ends in v1.1; the synthetic-expansion path becomes an error.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=function-call-resolution>Function call resolution<a href=#function-call-resolution class=hash-link aria-label="Direct link to Function call resolution" title="Direct link to Function call resolution" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Call<th>Behavior<tbody><tr><td><code>foaf__name(...)</code><td>Always works if <code>(foaf's expansion, "name")</code> is registered.<tr><td><code>name(...)</code> (unique)<td>Works — dispatches to the one registered extension.<tr><td><code>name(...)</code> (collision, no pin)<td>Works — dispatches per SQLite default (last-registered wins). Load-time warning logged. Qualified forms available for explicit dispatch.<tr><td><code>name(...)</code> (collision, pinned via <code>.prefix prefer</code>)<td>Works — dispatches to the pinned extension regardless of load order.<tr><td><code>unknown__name(...)</code><td><code>no such function: unknown__name</code> — short prefix unknown. (SQLite-default error message.)</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=capability-requirements>Capability requirements<a href=#capability-requirements class=hash-link aria-label="Direct link to Capability requirements" title="Direct link to Capability requirements" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Surface<th>Capability needed<tbody><tr><td><code>.prefix add</code> / <code>delete</code> / <code>rename</code> / <code>modify</code><td><code>Spi</code> (writes user db)<tr><td><code>.prefix list</code> / <code>functions</code> / <code>expansion</code> / <code>conflicts</code> / <code>verify</code><td><code>Spi</code> (read-only)<tr><td>Extension's own prefix registration on load<td>None new; happens host-side during the loader's existing capability check</table>
+<p>A new <code>Capability::PrefixRegistry</code> was considered but rejected for
+v1: the prefix tables live in the user db and read/write goes
+through <code>spi.execute</code>. The existing Spi capability gate suffices.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=v1-scope>v1 scope<a href=#v1-scope class=hash-link aria-label="Direct link to v1 scope" title="Direct link to v1 scope" translate=no>​</a></h2>
+<ul>
+<li class="">The two tables + their migration into existing dbs.</li>
+<li class="">Loader-bridge wrapper around scalar / aggregate / vtab
+registration.</li>
+<li class=""><code>prefix-cli</code> extension with the six dot-commands above.</li>
+<li class="">Both-explicit collision resolution.</li>
+<li class="">Manifest-driven prefix declaration with deprecation-period
+fallback for un-declared extensions.</li>
+<li class="">Tests covering: bare-name happy path, ambiguity path, qualified-
+form fallback, rename semantics, delete-with-shared-expansion,
+manifest-missing-deprecation-warning, registration of all 4
+function shapes (scalar / aggregate / vtab / hook).</li>
+<li class="">Docs + README section.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=out-of-scope-v2>Out of scope (v2+)<a href=#out-of-scope-v2 class=hash-link aria-label="Direct link to Out of scope (v2+)" title="Direct link to Out of scope (v2+)" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>Per-query prefix overrides</strong>: a syntax like <code>SELECT prefix foaf=other; foaf__name(...)</code> to use a different expansion for
+one query. SPARQL has this; SQL doesn't natively. Could land as
+a session pragma later.</li>
+<li class=""><strong>Prefix lock-in</strong>: a policy bit per prefix that prevents
+renaming once functions are registered. Operator hygiene; not
+urgent.</li>
+<li class=""><strong>Prefix-scoped permissions</strong>: gate per-prefix at the capability
+layer ("only operator can use <code>system__*</code>"). Useful for trusted
+vs untrusted extension separation; needs more design.</li>
+<li class=""><strong>Bulk import/export</strong>: <code>.prefix export foaf > foaf.toml</code> /
+<code>.prefix import foaf.toml</code> for sharing prefix sets across dbs.
+Easy to add; not v1.</li>
+<li class=""><strong>Auto-suggestion on typos</strong>: <code>concat(...)</code> errors could suggest
+<code>levenshtein-closest</code> qualified forms. Nice UX; not v1.</li>
+<li class=""><strong>Cross-database prefix sync</strong>: replicate prefix registrations
+across multiple attached dbs. v2.</li>
+<li class=""><strong>Prefix registry hosting</strong>: a tegmentum-org-level (or wider)
+registry where extensions publish their <code>(prefix, expansion)</code>
+pair so the loader can verify globally-unique expansions. Way
+out of scope.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=effort-estimate>Effort estimate<a href=#effort-estimate class=hash-link aria-label="Direct link to Effort estimate" title="Direct link to Effort estimate" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Piece<th>Effort<tbody><tr><td>Schema additions + migration into existing dbs<td>0.5 day<tr><td>Loader-bridge wrapper: registration with disambiguation (scalar + aggregate)<td>1 day<tr><td>Loader-bridge wrapper: vtab + hook shapes (Q4 broader scope)<td>1.5 days<tr><td>Manifest field parsing + deprecation-window fallback<td>0.5 day<tr><td><code>prefix-cli</code> extension scaffold + six dot-commands<td>1 day<tr><td>Function dispatch + bare-name shadowing on collision<td>1 day<tr><td>Native integration tests (round-trip + collision + rename, all 4 shapes)<td>1.5 days<tr><td>Browser smoke + docs<td>0.5 day</table>
+<p><strong>Total: ~7.5 days for v1.</strong> (Up from 5.5 days; Q4's "all four shapes
+uniformly" adds vtab + hook coverage to the wrapper + tests.)</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependencies>Dependencies<a href=#dependencies class=hash-link aria-label="Direct link to Dependencies" title="Direct link to Dependencies" translate=no>​</a></h2>
+<ul>
+<li class=""><code>spi.execute</code> against the user db (already exists).</li>
+<li class=""><code>spi-loader.register-scalar</code>/<code>register-aggregate</code>/<code>register-vtab</code>/
+<code>register-hook</code> — already exists; this plan wraps them.</li>
+<li class="">The loader-bridge's manifest-reading code (already exists).</li>
+</ul>
+<p>No new substrate / capability variants required.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=sequencing>Sequencing<a href=#sequencing class=hash-link aria-label="Direct link to Sequencing" title="Direct link to Sequencing" translate=no>​</a></h2>
+<ol>
+<li class="">Land <strong>schema + migration</strong> (<code>__sqlink_prefix</code> +
+<code>__sqlink_prefix_function</code>). Small standalone commit.</li>
+<li class="">Land <strong>manifest parsing</strong> for <code>preferred-prefix</code> +
+<code>prefix-expansion</code>. Touches loader's manifest types.</li>
+<li class="">Land <strong>registration wrapper</strong> in the loader-bridge that
+inserts/queries the new tables + decides bare-vs-qualified
+registration.</li>
+<li class="">Land <strong>prefix-cli extension</strong> with the six dot-commands.</li>
+<li class=""><strong>Native integration tests</strong> covering happy path + collision +
+rename.</li>
+<li class=""><strong>Browser smoke</strong> (metadata-only commands; registration happens
+at extension-load time in browser too).</li>
+<li class=""><strong>Deprecation-period extension audit</strong>: scan all built-in
+extensions, emit warnings for those missing the manifest
+declaration, propose <code>(prefix, expansion)</code> pairs for each.</li>
+</ol>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=resolved-design-decisions>Resolved design decisions<a href=#resolved-design-decisions class=hash-link aria-label="Direct link to Resolved design decisions" title="Direct link to Resolved design decisions" translate=no>​</a></h2>
+<ol>
+<li class="">
+<p><strong>Prefix-collision auto-fallback (Q1).</strong> Auto-assign a numbered
+alternative + warn. When extension B claims <code>foaf</code> but the prefix
+is already bound to extension A's expansion, the loader binds
+extension B to <code>foaf2</code> (or the next free <code>foafN</code>), logs both
+expansions, and continues. Operator can <code>.prefix rename foaf2 &lt;better></code> after load. Always allows progress; surfaces the
+collision in operator-visible warnings; works in non-interactive
+contexts (scripts, browser, daemons) where prompting is impossible.</p>
+</li>
+<li class="">
+<p><strong><code>last_used_at</code> update policy (Q2).</strong> Updated only on
+operator-initiated CLI commands (<code>.prefix list / functions / expansion / verify</code>). Function-dispatch events do NOT write.
+Zero per-call overhead — important for tight query loops + WAL
+contention avoidance. Tradeoff: a prefix used heavily in queries
+but never explicitly inspected reads as "cold" to <code>.prefix gc</code>,
+but pruning is operator-driven so the operator can adjust the
+policy or <code>.prefix verify</code> periodically to refresh.</p>
+</li>
+<li class="">
+<p><strong>Deprecation window (Q3).</strong> Tied to the v1.1 release, NOT to
+calendar time. v1 ships the synthetic-expansion fallback +
+warning; v1.1 makes missing <code>preferred-prefix</code> /
+<code>prefix-expansion</code> a hard load-rejection error. Operators get a
+full release cycle of warnings to update out-of-tree extensions.
+In-tree extension audit (per the sequencing list below) ensures
+every workspace extension is migrated before the v1.1 cutover.</p>
+</li>
+<li class="">
+<p><strong>Backwards compatibility for existing SQL (Q5, hard
+constraint).</strong> Users today call <code>uuid_v4()</code>, <code>json_extract()</code>,
+etc. without any prefix. That must keep working exactly the
+same way after this feature lands, regardless of how many
+extensions are loaded or whether any of them collide on the
+bare name. The conflict-resolution policy was REVISED from
+the original "both-explicit" (which errored on bare-name
+collision) to "<strong>bare name preserves SQLite's existing
+semantics; qualified forms are purely additive</strong>":</p>
+<ul>
+<li class="">When no collision: bare name + qualified form both registered.</li>
+<li class="">When collision: bare name follows SQLite's last-registered-
+wins default (existing behavior); qualified forms ALWAYS
+available; load-time warning so the operator can see the
+collision; operator can <code>.prefix prefer</code> to pin the bare
+name to a specific extension.</li>
+<li class="">The feature is <strong>strictly additive</strong> — it never breaks an
+existing SQL call, only adds new expressive capabilities
+(qualified dispatch, visibility into collisions, operator
+pin).</li>
+</ul>
+<p>New <code>__sqlink_prefix_pin</code> table introduced to back the
+operator-pin functionality.</p>
+</li>
+<li class="">
+<p><strong>Function-shape coverage (Q4).</strong> All four shapes — scalar,
+aggregate, vtab, hook — get prefix-namespaced uniformly in v1.
+Bigger scope than my recommended "scalar + aggregate only", but
+the user picked uniform treatment so the system is consistent
+across the SQL surface from day one. Two edge cases this introduces:</p>
+<ul>
+<li class=""><strong>Vtab USING syntax</strong>: <code>CREATE VIRTUAL TABLE foo USING foaf__myvtab(...)</code> — the prefix appears in the USING module
+name. Operator picks the table name <code>foo</code> separately so no
+implicit collision at the table-name layer, but the USING
+module name shows the prefix.</li>
+<li class=""><strong>Hook namespace</strong>: collations / commit-hook / window-functions
+each have their own SQLite dispatch surface. The wrapper needs
+per-shape implementations of the bare-vs-qualified logic. v1.1+
+can refine if specific hook shapes turn out to need different
+semantics.</li>
+</ul>
+</li>
+</ol>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=references>References<a href=#references class=hash-link aria-label="Direct link to References" title="Direct link to References" translate=no>​</a></h2>
+<ul>
+<li class="">SPARQL 1.1 Query Language, §4 "RDF Term Syntax" (prefixed names).</li>
+<li class="">SQLite identifier syntax (<code>https://sqlite.org/lang_keywords.html</code>).</li>
+<li class="">PLAN-bundles.md (sibling plan; same dispatch-bridge + manifest
+pattern this plan extends).</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-prefixes.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/sqlink/plans/PLAN-bundles><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>Plan: bundles  named extension sets with optional baked binaries</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/sqlink/plans/PLAN-followups><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>PLAN-followups</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#status-2026-06-25 class="table-of-contents__link toc-highlight">Status (2026-06-25)</a><li><a href=#motivation class="table-of-contents__link toc-highlight">Motivation</a><li><a href=#naming class="table-of-contents__link toc-highlight">Naming</a><ul><li><a href=#separator-__-double-underscore class="table-of-contents__link toc-highlight">Separator: <code>__</code> (double underscore)</a></ul><li><a href=#architecture class="table-of-contents__link toc-highlight">Architecture</a><ul><li><a href=#the-expansion-is-required-the-format-is-opaque class="table-of-contents__link toc-highlight">The expansion is required; the format is opaque</a><li><a href=#function-identity-is-expansion-function_name class="table-of-contents__link toc-highlight">Function identity is (expansion, function_name)</a><li><a href=#storage-user-database-sqlite_sqlink_-tables class="table-of-contents__link toc-highlight">Storage (user database, <code>sqlite_sqlink_*</code> tables)</a><li><a href=#conflict-resolution-bare-name-preserves-existing-behavior-qualified-forms-are-purely-additive class="table-of-contents__link toc-highlight">Conflict resolution: bare name preserves existing behavior; qualified forms are purely additive</a><li><a href=#what-this-feature-is-not class="table-of-contents__link toc-highlight">What this feature is NOT</a><li><a href=#what-this-feature-is class="table-of-contents__link toc-highlight">What this feature IS</a><li><a href=#registration-flow-in-the-loader-bridge-wrapper class="table-of-contents__link toc-highlight">Registration flow (in the loader-bridge wrapper)</a></ul><li><a href=#surface class="table-of-contents__link toc-highlight">Surface</a><ul><li><a href=#dot-commands-in-prefix-cli-extension class="table-of-contents__link toc-highlight">Dot commands (in <code>prefix-cli</code> extension)</a><li><a href=#extension-manifest-declaration class="table-of-contents__link toc-highlight">Extension manifest declaration</a><li><a href=#function-call-resolution class="table-of-contents__link toc-highlight">Function call resolution</a><li><a href=#capability-requirements class="table-of-contents__link toc-highlight">Capability requirements</a></ul><li><a href=#v1-scope class="table-of-contents__link toc-highlight">v1 scope</a><li><a href=#out-of-scope-v2 class="table-of-contents__link toc-highlight">Out of scope (v2+)</a><li><a href=#effort-estimate class="table-of-contents__link toc-highlight">Effort estimate</a><li><a href=#dependencies class="table-of-contents__link toc-highlight">Dependencies</a><li><a href=#sequencing class="table-of-contents__link toc-highlight">Sequencing</a><li><a href=#resolved-design-decisions class="table-of-contents__link toc-highlight">Resolved design decisions</a><li><a href=#references class="table-of-contents__link toc-highlight">References</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

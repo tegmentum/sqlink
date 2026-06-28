@@ -1,0 +1,343 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-orchestration-integration" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>PLAN: Compositional WebAssembly orchestration integration | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-orchestration-integration /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="PLAN: Compositional WebAssembly orchestration integration | sqlink"/><meta data-rh=true name=description content=Problem /><meta data-rh=true property=og:description content=Problem /><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-orchestration-integration /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-orchestration-integration hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-orchestration-integration hreflang=x-default /><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a class="navbar__item navbar__link" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><main class="docMainContainer_TBSr docMainContainerEnhanced_lQrH"><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>PLAN: Compositional WebAssembly orchestration integration</h1></header>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=problem>Problem<a href=#problem class=hash-link aria-label="Direct link to Problem" title="Direct link to Problem" translate=no>​</a></h2>
+<p>sqlink ships ~239 wasm component extensions and a composed cli+sqlite-lib
+runtime. Composition today uses <code>wac</code> scripts (<code>composition-cli-sqlite-lib.wac</code>,
+the shim-side <code>wac plug</code> recipes in datafission, ad-hoc bundle-cli build
+paths). That works but leaves the composed artifacts as opaque bytes — no
+canonical identity beyond a blake3 of the output, no verifiable plan, no
+attestation chain, no trust/secrets channel.</p>
+<p><code>~/git/webassembly-component-orchestration</code> (<code>sys:compose@1.0.0</code>) provides
+the missing layer: declarative plans, canonical WIT + CBOR for deterministic
+identity, plan/emit/exec/reflect lifecycle, pluggable trust (PKI / SigStore /
+custom) and secrets (PKCS#11 / Vault / HSM), optional audit + attestation +
+metrics, and content-addressed emit/exec caches.</p>
+<p>Since we're taking the dependency, this plan inventories <em>every</em> sqlink
+surface where it pays off and tiers the rollout so each step ships independent
+value.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=where-it-fits-in-sqlink>Where it fits in sqlink<a href=#where-it-fits-in-sqlink class=hash-link aria-label="Direct link to Where it fits in sqlink" title="Direct link to Where it fits in sqlink" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=a-composition-surfaces-replace-wac>A. Composition surfaces (replace wac)<a href=#a-composition-surfaces-replace-wac class=hash-link aria-label="Direct link to A. Composition surfaces (replace wac)" title="Direct link to A. Composition surfaces (replace wac)" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>A1. sqlink composed runtime.</strong> <code>composition-cli-sqlite-lib.wac</code> becomes
+a <code>composectl plan</code>. The build script's <code>wac compose</code> step becomes
+<code>composectl emit</code>. Gains: a reproducible plan digest per release, a
+content-addressed emit cache (<code>H(plan + digests + "emit:v1")</code>), and any
+future re-export-required changes (cf. v1.4 lesson — adding
+<code>sqlite:extension/types@0.1.0</code> was load-bearing) are caught at plan
+validate, not at wac compose time with the cryptic
+"instance not valid to be used as export" error.</li>
+<li class=""><strong>A2. postgis / mobilitydb shim composition.</strong> Currently
+<code>wac plug postgis-wasm + 14 deps</code> in <code>~/git/datafission</code> produces the
+<code>postgis-composed.wasm</code> artifact whose blake3 is pinned in
+<code>postgis-composed-pin.txt</code>. Migrate to a plan; the pin becomes the plan
+digest plus the emit digest. Same applies to <code>mdb-temporal-wasm</code> and any
+future shim. Cross-project leverage: the sibling <code>ducklink</code> repo also
+composes these shims (per <code>~/git/ducklink/docs/postgis-mobilitydb- integration.md</code>) — a shared plan ships once and emits both targets.</li>
+<li class=""><strong>A3. bundle-cli compose path.</strong> bundle-cli today saves bundles as a set
+of components keyed by name + content-addressed digest. The save/build
+pipeline could use <code>composectl emit</code> directly, eliminating the bespoke
+build orchestration in <code>extensions/bundle-cli</code>.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=b-identity-surfaces-canonical-wit>B. Identity surfaces (canonical WIT)<a href=#b-identity-surfaces-canonical-wit class=hash-link aria-label="Direct link to B. Identity surfaces (canonical WIT)" title="Direct link to B. Identity surfaces (canonical WIT)" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>B1. Strengthen <code>PLAN-wit-contract-versioning.md</code> (#485).</strong> The plan's
+per-component <code>wit_contract</code> field is currently the semver string from
+<code>package sqlink:wasm@X.Y.Z</code>. Layer the canonical-WIT shape hash
+(<code>canon:wit</code> → <code>iface-id</code> / <code>world-id</code> / <code>package-id</code>) alongside the
+semver — semver remains the human-facing major-bump channel; the shape
+hash is the actual structural identity. Drift detection becomes cheaper
+and stronger: <code>verify-catalog</code> compares hashes, not just version strings.</li>
+<li class=""><strong>B2. Extension registry hashing.</strong> <code>registry/index.json</code> entries gain
+a canonical-WIT shape hash for each component's imported <code>sqlink:wasm</code>
+shape AND its own exported shape. Two components claiming the same
+contract version but disagreeing on shape get flagged immediately.</li>
+<li class=""><strong>B3. Manifest channel.</strong> <code>get-info</code>'s <code>extension-info</code> record gains
+an optional <code>wit_shape_id</code> field (the canonical-WIT digest of the
+component's imported <code>sqlink:wasm</code> slice). The loader pre-check (#485
+Phase 2) compares it against the host's known shape ID and rejects
+with a clean message before instantiation. Belt-and-suspenders on top
+of the semver guard.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=c-reproducibility--attestation-surfaces>C. Reproducibility + attestation surfaces<a href=#c-reproducibility--attestation-surfaces class=hash-link aria-label="Direct link to C. Reproducibility + attestation surfaces" title="Direct link to C. Reproducibility + attestation surfaces" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>C1. CI plan digests.</strong> Every release composed runtime (the cli +
+sqlite-lib binary) ships with its plan digest. Anyone can re-emit from
+the plan + component digests and confirm bit-identical output.</li>
+<li class=""><strong>C2. OCI artifact signing.</strong> sqlink already publishes to OCI registries
+(<code>oci_artifact</code> field per registry entry). The orchestration system's
+SigStore integration signs plans + artifacts; the registry entry gains
+a <code>attestation</code> field. Foundation for downstream "did Tegmentum publish
+this exact extension?" verification.</li>
+<li class=""><strong>C3. Conformance vectors as CI.</strong> sqlink maintains a corpus of plan
+vectors (sqlink-runtime, postgis-composed, mobilitydb-composed,
+a bundle-cli example, the dispatch-bridge family) and runs the
+orchestration repo's conformance runner against them in CI. Catches
+semantics regressions in either the orchestration system or our plan
+authoring.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=d-new-capability-surfaces>D. New capability surfaces<a href=#d-new-capability-surfaces class=hash-link aria-label="Direct link to D. New capability surfaces" title="Direct link to D. New capability surfaces" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>D1. Trust on bundle-cli.</strong> <code>.bundle save</code> could pull from a private
+bundle registry that requires SigStore-verified plans. bundle-cli today
+has no auth/trust model; this is genuine new product surface.</li>
+<li class=""><strong>D2. Secrets at extension load.</strong> Extensions could declare required
+secrets in their plan (e.g. an API-key extension wants a token).
+<code>std:secrets</code> token indirection means the extension never sees the raw
+secret — it gets a tenant-scoped token, host resolves via PKCS#11 / Vault
+/HSM. Lets sqlink ship extensions that talk to authenticated services
+without leaking creds through SQL.</li>
+<li class=""><strong>D3. Audit + metrics.</strong> Optional <code>std:audit</code> worlds give us a built-in
+trail for sensitive ops (bundle install, extension load). <code>std:metrics</code>
+collects extension exec timing without bespoke instrumentation.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=e-bundles-surface>E. Bundles surface<a href=#e-bundles-surface class=hash-link aria-label="Direct link to E. Bundles surface" title="Direct link to E. Bundles surface" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>E1. Bundles ARE plans.</strong> Today a bundle is a manifest + a set of
+components addressed by digest. A plan is a manifest + a set of
+components addressed by digest + their wiring + their policy. Bundles
+become a thin wrapper over plans (the wiring is "no wiring; load each
+independently into the sqlink host"), gaining trust/policy/reproducibility
+for free. Existing bundle artifacts stay readable via a v1 → v2 adapter.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=f-side-cleanups-enabled-by-the-migration>F. Side cleanups enabled by the migration<a href=#f-side-cleanups-enabled-by-the-migration class=hash-link aria-label="Direct link to F. Side cleanups enabled by the migration" title="Direct link to F. Side cleanups enabled by the migration" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>F1. <code>wasm-tools component new</code> step.</strong> v1.5 round 1 found this is no-
+op on wasm32-wasip2 (the target emits components directly). When we drop
+wac, we also drop incidental <code>wasm-tools</code> version coupling in build
+scripts.</li>
+<li class=""><strong>F2. WAL archive header format.</strong> <code>PLAN-wal-archive.md</code> (referenced
+elsewhere) defines an archive header. If we adopt canonical CBOR
+(<code>cborcanon:1</code>) for the header, archives become structurally hashable
+and the existing <code>wal-archive</code> integrity-check tooling gets stronger
+semantics for free.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=dependency-model--open>Dependency model — open<a href=#dependency-model--open class=hash-link aria-label="Direct link to Dependency model — open" title="Direct link to Dependency model — open" translate=no>​</a></h2>
+<p>How sqlink takes the dependency is a real choice with consequences:</p>
+<ol>
+<li class=""><strong>Workspace path dep</strong> (<code>compose-core</code>, <code>composectl</code> as path = "../webassembly-component-orchestration/...").
+Tightest coupling, immediate iteration, but requires the sibling repo
+present in every dev clone + CI checkout. Same model sqlink already has
+for <code>sqlite-cas-cache</code>, <code>sqlink-shim-codegen</code>, etc.</li>
+<li class=""><strong>Vendor as submodule</strong> (orchestration repo as a sqlink submodule like
+sqlite-wasm). Pins to a specific revision; bumps are explicit. Avoids
+side-by-side checkout requirements.</li>
+<li class=""><strong>Published crate</strong> (<code>sys-compose</code> on crates.io / private registry).
+Cleanest semantically but requires the orchestration repo to commit to
+semver + publish cadence. Premature if either project is still at 0.x
+iteration.</li>
+<li class=""><strong>Standalone binary</strong> (<code>composectl</code> in PATH or pinned in <code>tools/</code>).
+Loose coupling; only the CLI surface area matters. Right model if the
+orchestration system stabilises its plan format and we want sqlink to
+be insulated from internal churn.</li>
+</ol>
+<p>Recommendation: start with (1) for the iteration phase, move to (3) once
+both projects are at 1.0 and the orchestration repo commits to a public API
+surface. (2) is a fallback if side-by-side checkouts become friction.</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=tiered-rollout>Tiered rollout<a href=#tiered-rollout class=hash-link aria-label="Direct link to Tiered rollout" title="Direct link to Tiered rollout" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tier-0--bring-the-dependency-in>Tier 0 — bring the dependency in<a href=#tier-0--bring-the-dependency-in class=hash-link aria-label="Direct link to Tier 0 — bring the dependency in" title="Direct link to Tier 0 — bring the dependency in" translate=no>​</a></h3>
+<ul>
+<li class="">Pick the dependency model (see above; default to workspace path dep).</li>
+<li class="">Build <code>composectl</code> locally; confirm conformance vectors pass on this
+machine.</li>
+<li class="">Add a smoke test that calls into <code>compose-core</code> for a trivial plan
+(validates the linkage).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tier-1--direct-wac-replacements>Tier 1 — direct wac replacements<a href=#tier-1--direct-wac-replacements class=hash-link aria-label="Direct link to Tier 1 — direct wac replacements" title="Direct link to Tier 1 — direct wac replacements" translate=no>​</a></h3>
+<ul>
+<li class="">A1: sqlink composed runtime. Author a plan for cli+sqlite-lib;
+<code>composectl emit</code> runs in the build script alongside the existing
+<code>wac compose</code> for one release as a parallel-cross-check; then wac retires.</li>
+<li class="">A2: postgis/mobilitydb shim composition. Coordinate with datafission
+(sibling repo). Same parallel-cross-check pattern. Ducklink benefits
+immediately if it picks up the same plan.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tier-2--canonical-wit-identity-folds-into-485>Tier 2 — canonical-WIT identity (folds into #485)<a href=#tier-2--canonical-wit-identity-folds-into-485 class=hash-link aria-label="Direct link to Tier 2 — canonical-WIT identity (folds into #485)" title="Direct link to Tier 2 — canonical-WIT identity (folds into #485)" translate=no>​</a></h3>
+<ul>
+<li class="">B1: add canonical-WIT shape hash to <code>wit_contract</code> discipline. Update
+<code>verify-catalog</code> (or write it if #485 hasn't shipped yet) to use the
+hash.</li>
+<li class="">B2: registry entries gain <code>wit_shape_id</code> for both imports and exports.</li>
+<li class="">B3: <code>extension-info.wit_shape_id</code> field; loader pre-check uses it.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tier-3--reproducibility--attestation-in-ci>Tier 3 — reproducibility + attestation in CI<a href=#tier-3--reproducibility--attestation-in-ci class=hash-link aria-label="Direct link to Tier 3 — reproducibility + attestation in CI" title="Direct link to Tier 3 — reproducibility + attestation in CI" translate=no>​</a></h3>
+<ul>
+<li class="">C1: every release artifact ships with its plan digest in metadata.</li>
+<li class="">C3: conformance vectors run on every PR.</li>
+<li class="">C2: SigStore signing — gated on a real key-management story (separate
+decision: who controls the signing key; SigStore Fulcio integration
+vs. cosign with a Vault-backed key).</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tier-4--new-capabilities>Tier 4 — new capabilities<a href=#tier-4--new-capabilities class=hash-link aria-label="Direct link to Tier 4 — new capabilities" title="Direct link to Tier 4 — new capabilities" translate=no>​</a></h3>
+<ul>
+<li class="">D1, D2, D3 are net-new product surfaces, not migrations. Each gets its
+own user-facing decision (do we ship private bundles? do we want
+secrets-aware extensions? what's the audit surface?). Scope per item;
+none is required to call the integration "done".</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tier-5--bundles-as-plans>Tier 5 — bundles as plans<a href=#tier-5--bundles-as-plans class=hash-link aria-label="Direct link to Tier 5 — bundles as plans" title="Direct link to Tier 5 — bundles as plans" translate=no>​</a></h3>
+<ul>
+<li class="">E1: bundle-cli bundle save/load becomes a plan emit/exec under the
+hood. Old bundles read via v1→v2 adapter. Captures trust/policy/repro
+for bundles without a separate bundles spec.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=sequencing>Sequencing<a href=#sequencing class=hash-link aria-label="Direct link to Sequencing" title="Direct link to Sequencing" translate=no>​</a></h2>
+<p>Blocked by:</p>
+<ul>
+<li class="">#484 (v1.5 round 2 — actively editing <code>composition-cli-sqlite-lib.wac</code>
+and the build script; would race Tier 1 A1).</li>
+<li class="">#485 (WIT contract versioning — Tier 2 folds into its Phase 1 + Phase 2
+surface; landing both at once avoids touching the same <code>verify-catalog</code>
+and <code>registry/index.json</code> twice).</li>
+</ul>
+<p>Tier 0 + Tier 1 can start as soon as both #484 and #485 are merged. Tier
+2 is part of #485's execution (do it in the same fork). Tier 3 follows
+Tier 1 (need real plans before attestation matters). Tier 4 is decoupled
+— start any of D1/D2/D3 whenever a user-facing need surfaces. Tier 5
+follows everything (largest behavior change).</p>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=risks>Risks<a href=#risks class=hash-link aria-label="Direct link to Risks" title="Direct link to Risks" translate=no>​</a></h2>
+<ul>
+<li class=""><strong>Plan format churn.</strong> orchestration repo is at <code>@1.0.0</code> for the spec
+but <code>composectl</code>'s CLI surface may iterate. Tier 0 commits us to
+upstream-tracking discipline.</li>
+<li class=""><strong>Build-time cost.</strong> <code>composectl emit</code> does canonicalization +
+validation that wac doesn't; for the 239-component case the extra work
+may dominate. Benchmark before mass adoption.</li>
+<li class=""><strong>Cross-project coordination.</strong> datafission and ducklink need to agree
+on plans (A2) before we get cross-project leverage. Without that
+agreement, Tier 1 A2 is still a win for sqlink but not for the
+ecosystem.</li>
+<li class=""><strong>Trust/secrets blast radius.</strong> Tier 4 changes the security model. Each
+D-item gets a separate review before shipping; default off, opt-in via
+capability declaration in the plan.</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=verification>Verification<a href=#verification class=hash-link aria-label="Direct link to Verification" title="Direct link to Verification" translate=no>​</a></h2>
+<ul>
+<li class="">Tier 1: composed runtime artifact has byte-identical (or at least
+semantically-identical: same exports, same imports, same instance-of
+every interface) output from <code>composectl emit</code> vs <code>wac compose</code>. Smoke
+tests (composed-prefix, composed-bundle, native cli) all pass against
+the new artifact. Plan digest is reproducible across two independent
+emits.</li>
+<li class="">Tier 2: <code>verify-catalog</code> flags a deliberately-mismatched canonical-WIT
+shape; the friendly contract-mismatch message from #485's Phase 2
+loader pre-check fires on shape disagreement, not just semver.</li>
+<li class="">Tier 3: conformance runner output appears in CI; a deliberately-tampered
+artifact fails signature verification.</li>
+<li class="">Tier 4/5: per-item user-facing acceptance (separate plans/specs).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=references>References<a href=#references class=hash-link aria-label="Direct link to References" title="Direct link to References" translate=no>​</a></h2>
+<ul>
+<li class=""><code>~/git/webassembly-component-orchestration/README.md</code>,
+<code>~/git/webassembly-component-orchestration/SPEC.md</code>,
+<code>~/git/webassembly-component-orchestration/COMPOSITION_INTEGRATION.md</code>.</li>
+<li class=""><code>~/git/sqlink/docs/plans/PLAN-wit-contract-versioning.md</code> (#485 — Tier
+2 overlaps).</li>
+<li class=""><code>~/git/sqlink/docs/plans/PLAN-followups.md</code> (#484 v1.5 in flight; Tier
+1 A1 blocked).</li>
+<li class=""><code>~/git/sqlink/docs/postgis-mobilitydb-integration.md</code> (Tier 1 A2
+context).</li>
+<li class="">Sibling <code>~/git/ducklink/docs/postgis-mobilitydb-integration.md</code> (cross-
+project leverage).</li>
+</ul>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=tier-0--1--done-task-486>Tier 0 + 1 — done (task #486)<a href=#tier-0--1--done-task-486 class=hash-link aria-label="Direct link to Tier 0 + 1 — done (task #486)" title="Direct link to Tier 0 + 1 — done (task #486)" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tier-0-bring-the-dep-in>Tier 0 (bring the dep in)<a href=#tier-0-bring-the-dep-in class=hash-link aria-label="Direct link to Tier 0 (bring the dep in)" title="Direct link to Tier 0 (bring the dep in)" translate=no>​</a></h3>
+<ul>
+<li class=""><strong>0.1 dep model — DONE.</strong> Workspace path-dep variant chosen:
+sibling checkout at <code>$HOME/git/webassembly-component-orchestration</code>
+with no Cargo workspace coupling. composectl consumed as a
+binary tool. Rationale + migration paths to full Cargo path-dep,
+submodule, and crates.io variants documented in
+<code>docs/notes/orchestration-dependency.md</code>.</li>
+<li class=""><strong>0.2 composectl built locally — DONE.</strong>
+<code>cargo build --release --bin composectl</code> from a clean state:
+~3.5 min wall-clock. <code>cargo test -p conformance-runner</code> passes.
+<code>conformance run</code> reports 4/4 conformance vectors against the
+wasmtime host.</li>
+<li class=""><strong>0.3 smoke test — DONE.</strong> <code>scripts/smoke-test-composectl.sh</code>
+runs composectl against the orchestration repo's six canonical
+CBOR fixtures: 6/6 pass (four positive, two negative). Honors
+<code>SQLINK_ORCH_ROOT</code> + <code>COMPOSECTL_BIN</code> env-var overrides.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=tier-1-direct-wac-replacements>Tier 1 (direct wac replacements)<a href=#tier-1-direct-wac-replacements class=hash-link aria-label="Direct link to Tier 1 (direct wac replacements)" title="Direct link to Tier 1 (direct wac replacements)" translate=no>​</a></h3>
+<p>Status: <strong>PLAN FILES SHIPPED, EMIT-SIDE CUTOVER BLOCKED ON
+UPSTREAM SUBSTRATE GAPS.</strong> Per the standing constraint, we
+surface gaps rather than patch upstream.</p>
+<ul>
+<li class=""><strong>1.1.a sqlink composed-runtime plan — DONE (file).</strong>
+<code>composition-plans/sqlink-runtime.plan.json</code> declares
+sqlite-cli + sqlite-lib + the spi-instance binding. Validates
+against the schema. The emit-side cross-check is gated on
+upstream gaps (see below).</li>
+<li class=""><strong>1.1.b build-script integration — STAGED, DISABLED.</strong>
+<code>scripts/build-composed-runtime.sh</code> + the single-memory
+variant gained a <code>[4/3] orchestration cross-check</code> block.
+Plan-validate runs today; emit + WIT-diff is gated on
+<code>ORCHESTRATION_CROSS_CHECK=1</code> AND the substrate gaps closing
+upstream. Until then both build scripts continue to invoke
+<code>wac compose</code> exactly as before.</li>
+<li class=""><strong>1.2.a postgis-shim plan — DONE (file).</strong>
+<code>composition-plans/postgis-shim.plan.json</code> — 2 components,
+35 bindings (33 postgis:wasm/* + 2 sfcgal:component/*).
+Validates.</li>
+<li class=""><strong>1.2.b mobilitydb-shim plan — DONE (file).</strong>
+<code>composition-plans/mobilitydb-shim.plan.json</code> — 2 components,
+54 mobilitydb:temporal/* bindings. Validates. Survey finding:
+although wac plug is invoked with <code>--plug postgis-composed.wasm</code>
+too, the bridge's world.wit declares zero postgis:wasm/*
+imports, so the plan doesn't include postgis-composed. (Likely
+a historical carry-over from earlier mobilitydb codegen.)</li>
+<li class=""><strong>1.3 datafission coordination — DEFERRED.</strong> Per task #486
+scope: "Out of scope for THIS task unless coordinating with
+datafission is mechanical." The plan files we land would
+apply identically to datafission with a sibling checkout; the
+coordination is then a configuration choice, not a code
+change.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=substrate-gaps-block-emit-side-cutover-documented-in>Substrate gaps (block emit-side cutover; documented in<a href=#substrate-gaps-block-emit-side-cutover-documented-in class=hash-link aria-label="Direct link to Substrate gaps (block emit-side cutover; documented in" title="Direct link to Substrate gaps (block emit-side cutover; documented in" translate=no>​</a></h3>
+<p><code>docs/notes/orchestration-substrate-gaps.md</code>)</p>
+<p>Surfaced by a parallel-cross-check build with real sqlink inputs
+(sqlite-cli 2.6 MiB + sqlite-lib 2.3 MiB):</p>
+<ol>
+<li class=""><strong>Re-export from non-root component.</strong> composectl emit
+(built on wasm-compose) can only surface the root component's
+exports in the composed outer world. wac compose with an
+explicit recipe surfaces non-root exports (sqlite-lib's
+<code>dispatch-bridge</code> + <code>types</code>). The composed runtime needs
+this. Without it, JS host's <code>spi-loader.register-scalar</code>
+has nothing to call.</li>
+<li class=""><strong>Versioned-WASI unification.</strong> sqlite-lib targets WASI
+0.2.4; sqlite-cli targets 0.2.6. wac collapses to 0.2.6;
+composectl surfaces both, forcing the host to provide both.</li>
+<li class=""><strong>Blob-store 100 MiB ceiling.</strong> Hardcoded in
+<code>SystemLimits::default()</code>; no CLI override.
+<code>postgis-composed.wasm</code> is 112 MiB. Blocks A2's emit-side
+cross-check entirely.</li>
+</ol>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=what-lands>What lands<a href=#what-lands class=hash-link aria-label="Direct link to What lands" title="Direct link to What lands" translate=no>​</a></h3>
+<ul>
+<li class=""><code>composition-plans/sqlink-runtime.plan.json</code></li>
+<li class=""><code>composition-plans/postgis-shim.plan.json</code></li>
+<li class=""><code>composition-plans/mobilitydb-shim.plan.json</code></li>
+<li class=""><code>composition-plans/README.md</code></li>
+<li class=""><code>docs/notes/orchestration-dependency.md</code></li>
+<li class=""><code>docs/notes/orchestration-substrate-gaps.md</code></li>
+<li class=""><code>scripts/smoke-test-composectl.sh</code></li>
+<li class="">Build-script <code>[4/3]</code> cross-check stub in
+<code>scripts/build-composed-runtime.sh</code> +
+<code>scripts/build-composed-runtime-single-memory.sh</code></li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=whats-next-when-upstream-gaps-close>What's next when upstream gaps close<a href=#whats-next-when-upstream-gaps-close class=hash-link aria-label="Direct link to What's next when upstream gaps close" title="Direct link to What's next when upstream gaps close" translate=no>​</a></h3>
+<ul>
+<li class="">Flip <code>ORCHESTRATION_CROSS_CHECK=1</code> in CI; build scripts then
+emit BOTH wac and composectl artifacts and diff their WIT
+surfaces.</li>
+<li class="">After one release of soak with the cross-check green, retire
+<code>wac compose</code> (drop the wac steps; keep composectl-only).</li>
+<li class="">Migrate the dep model from sibling-checkout to the
+full-Cargo-path-dep variant (or vendor-as-submodule) once
+CI hermeticity demands it.</li>
+<li class="">Tier 2 (canonical-WIT identity) folds into #485 next.</li>
+<li class="">Tier 3 (CI plan digests + SigStore) follows.</li>
+</ul></div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-orchestration-integration.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#problem class="table-of-contents__link toc-highlight">Problem</a><li><a href=#where-it-fits-in-sqlink class="table-of-contents__link toc-highlight">Where it fits in sqlink</a><ul><li><a href=#a-composition-surfaces-replace-wac class="table-of-contents__link toc-highlight">A. Composition surfaces (replace wac)</a><li><a href=#b-identity-surfaces-canonical-wit class="table-of-contents__link toc-highlight">B. Identity surfaces (canonical WIT)</a><li><a href=#c-reproducibility--attestation-surfaces class="table-of-contents__link toc-highlight">C. Reproducibility + attestation surfaces</a><li><a href=#d-new-capability-surfaces class="table-of-contents__link toc-highlight">D. New capability surfaces</a><li><a href=#e-bundles-surface class="table-of-contents__link toc-highlight">E. Bundles surface</a><li><a href=#f-side-cleanups-enabled-by-the-migration class="table-of-contents__link toc-highlight">F. Side cleanups enabled by the migration</a></ul><li><a href=#dependency-model--open class="table-of-contents__link toc-highlight">Dependency model — open</a><li><a href=#tiered-rollout class="table-of-contents__link toc-highlight">Tiered rollout</a><ul><li><a href=#tier-0--bring-the-dependency-in class="table-of-contents__link toc-highlight">Tier 0 — bring the dependency in</a><li><a href=#tier-1--direct-wac-replacements class="table-of-contents__link toc-highlight">Tier 1 — direct wac replacements</a><li><a href=#tier-2--canonical-wit-identity-folds-into-485 class="table-of-contents__link toc-highlight">Tier 2 — canonical-WIT identity (folds into #485)</a><li><a href=#tier-3--reproducibility--attestation-in-ci class="table-of-contents__link toc-highlight">Tier 3 — reproducibility + attestation in CI</a><li><a href=#tier-4--new-capabilities class="table-of-contents__link toc-highlight">Tier 4 — new capabilities</a><li><a href=#tier-5--bundles-as-plans class="table-of-contents__link toc-highlight">Tier 5 — bundles as plans</a></ul><li><a href=#sequencing class="table-of-contents__link toc-highlight">Sequencing</a><li><a href=#risks class="table-of-contents__link toc-highlight">Risks</a><li><a href=#verification class="table-of-contents__link toc-highlight">Verification</a><li><a href=#references class="table-of-contents__link toc-highlight">References</a><li><a href=#tier-0--1--done-task-486 class="table-of-contents__link toc-highlight">Tier 0 + 1 — done (task #486)</a><ul><li><a href=#tier-0-bring-the-dep-in class="table-of-contents__link toc-highlight">Tier 0 (bring the dep in)</a><li><a href=#tier-1-direct-wac-replacements class="table-of-contents__link toc-highlight">Tier 1 (direct wac replacements)</a><li><a href=#substrate-gaps-block-emit-side-cutover-documented-in class="table-of-contents__link toc-highlight">Substrate gaps (block emit-side cutover; documented in</a><li><a href=#what-lands class="table-of-contents__link toc-highlight">What lands</a><li><a href=#whats-next-when-upstream-gaps-close class="table-of-contents__link toc-highlight">What's next when upstream gaps close</a></ul></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>

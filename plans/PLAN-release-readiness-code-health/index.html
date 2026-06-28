@@ -1,0 +1,768 @@
+<!doctype html><html lang=en dir=ltr class="docs-wrapper plugin-docs plugin-id-default docs-version-current docs-doc-page docs-doc-id-plans/PLAN-release-readiness-code-health" data-has-hydrated=false><head><meta charset=UTF-8><meta name=generator content="Docusaurus v3.10.1"><title data-rh=true>PLAN: code-health + tech-debt audit for OSS release | sqlink</title><meta data-rh=true name=viewport content="width=device-width, initial-scale=1.0"/><meta data-rh=true name=twitter:card content=summary_large_image /><meta data-rh=true property=og:url content=https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-code-health /><meta data-rh=true property=og:locale content=en /><meta data-rh=true name=docusaurus_locale content=en /><meta data-rh=true name=docsearch:language content=en /><meta data-rh=true name=docusaurus_version content=current /><meta data-rh=true name=docusaurus_tag content=docs-default-current /><meta data-rh=true name=docsearch:version content=current /><meta data-rh=true name=docsearch:docusaurus_tag content=docs-default-current /><meta data-rh=true property=og:title content="PLAN: code-health + tech-debt audit for OSS release | sqlink"/><meta data-rh=true name=description content="Read-only inventory of the sqlink codebase before public release."/><meta data-rh=true property=og:description content="Read-only inventory of the sqlink codebase before public release."/><link data-rh=true rel=icon href=/sqlink/img/favicon.ico /><link data-rh=true rel=canonical href=https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-code-health /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-code-health hreflang=en /><link data-rh=true rel=alternate href=https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-code-health hreflang=x-default /><script data-rh=true type=application/ld+json>{"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","item":"https://tegmentum.github.io/sqlink/plans/PLAN-release-readiness-code-health","name":"PLAN: code-health + tech-debt audit for OSS release","position":1}]}</script><link rel=stylesheet href=/sqlink/assets/css/styles.30a01cbc.css /><script src=/sqlink/assets/js/runtime~main.5dec48cf.js defer></script><script src=/sqlink/assets/js/main.a370d2a0.js defer></script></head><body><svg style="display: none;"><defs>
+<symbol id=theme-svg-external-link viewBox="0 0 24 24"><path fill=currentColor d="M21 13v10h-21v-19h12v2h-10v15h17v-8h2zm3-12h-10.988l4.035 4-6.977 7.07 2.828 2.828 6.977-7.07 4.125 4.172v-11z"/></symbol>
+</defs></svg>
+<script>!function(){var t=function(){try{return new URLSearchParams(window.location.search).get("docusaurus-theme")}catch(t){}}()||function(){try{return window.localStorage.getItem("theme-6b4")}catch(t){}}();document.documentElement.setAttribute("data-theme",t||(window.matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light")),document.documentElement.setAttribute("data-theme-choice",t||"system")}(),function(){try{for(var[t,e]of new URLSearchParams(window.location.search).entries())if(t.startsWith("docusaurus-data-")){var a=t.replace("docusaurus-data-","data-");document.documentElement.setAttribute(a,e)}}catch(t){}}()</script><div id=__docusaurus><link rel=preload as=image href=/sqlink/img/sqlink_logo.png /><div role=region aria-label="Skip to main content"><a class=skipToContent_fXgn href=#__docusaurus_skipToContent_fallback>Skip to main content</a></div><nav aria-label=Main class="theme-layout-navbar navbar navbar--fixed-top"><div class=navbar__inner><div class="theme-layout-navbar-left navbar__items"><button aria-label="Toggle navigation bar" aria-expanded=false class="navbar__toggle clean-btn" type=button><svg width=30 height=30 viewBox="0 0 30 30" aria-hidden=true><path stroke=currentColor stroke-linecap=round stroke-miterlimit=10 stroke-width=2 d="M4 7h22M4 15h22M4 23h22"/></svg></button><a class=navbar__brand href=/sqlink/><div class=navbar__logo><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--light_NVdE"/><img src=/sqlink/img/sqlink_logo.png alt=SQLink class="themedComponent_mlkZ themedComponent--dark_xIcU"/></div><b class="navbar__title text--truncate">sqlink</b></a><a aria-current=page class="navbar__item navbar__link navbar__link--active" href=/sqlink/>Docs</a></div><div class="theme-layout-navbar-right navbar__items navbar__items--right"><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class="navbar__item navbar__link">GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a><div class="toggle_vylO colorModeToggle_DEke"><button class="clean-btn toggleButton_gllP toggleButtonDisabled_aARS" type=button disabled title="system mode" aria-label="Switch between dark and light mode (currently system mode)"><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP lightToggleIcon_pyhR"><path fill=currentColor d="M12,9c1.65,0,3,1.35,3,3s-1.35,3-3,3s-3-1.35-3-3S10.35,9,12,9 M12,7c-2.76,0-5,2.24-5,5s2.24,5,5,5s5-2.24,5-5 S14.76,7,12,7L12,7z M2,13l2,0c0.55,0,1-0.45,1-1s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S1.45,13,2,13z M20,13l2,0c0.55,0,1-0.45,1-1 s-0.45-1-1-1l-2,0c-0.55,0-1,0.45-1,1S19.45,13,20,13z M11,2v2c0,0.55,0.45,1,1,1s1-0.45,1-1V2c0-0.55-0.45-1-1-1S11,1.45,11,2z M11,20v2c0,0.55,0.45,1,1,1s1-0.45,1-1v-2c0-0.55-0.45-1-1-1C11.45,19,11,19.45,11,20z M5.99,4.58c-0.39-0.39-1.03-0.39-1.41,0 c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0s0.39-1.03,0-1.41L5.99,4.58z M18.36,16.95 c-0.39-0.39-1.03-0.39-1.41,0c-0.39,0.39-0.39,1.03,0,1.41l1.06,1.06c0.39,0.39,1.03,0.39,1.41,0c0.39-0.39,0.39-1.03,0-1.41 L18.36,16.95z M19.42,5.99c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06c-0.39,0.39-0.39,1.03,0,1.41 s1.03,0.39,1.41,0L19.42,5.99z M7.05,18.36c0.39-0.39,0.39-1.03,0-1.41c-0.39-0.39-1.03-0.39-1.41,0l-1.06,1.06 c-0.39,0.39-0.39,1.03,0,1.41s1.03,0.39,1.41,0L7.05,18.36z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP darkToggleIcon_wfgR"><path fill=currentColor d="M9.37,5.51C9.19,6.15,9.1,6.82,9.1,7.5c0,4.08,3.32,7.4,7.4,7.4c0.68,0,1.35-0.09,1.99-0.27C17.45,17.19,14.93,19,12,19 c-3.86,0-7-3.14-7-7C5,9.07,6.81,6.55,9.37,5.51z M12,3c-4.97,0-9,4.03-9,9s4.03,9,9,9s9-4.03,9-9c0-0.46-0.04-0.92-0.1-1.36 c-0.98,1.37-2.58,2.26-4.4,2.26c-2.98,0-5.4-2.42-5.4-5.4c0-1.81,0.89-3.42,2.26-4.4C12.92,3.04,12.46,3,12,3L12,3z"/></svg><svg viewBox="0 0 24 24" width=24 height=24 aria-hidden=true class="toggleIcon_g3eP systemToggleIcon_QzmC"><path fill=currentColor d="m12 21c4.971 0 9-4.029 9-9s-4.029-9-9-9-9 4.029-9 9 4.029 9 9 9zm4.95-13.95c1.313 1.313 2.05 3.093 2.05 4.95s-0.738 3.637-2.05 4.95c-1.313 1.313-3.093 2.05-4.95 2.05v-14c1.857 0 3.637 0.737 4.95 2.05z"/></svg></button></div><div class=navbarSearchContainer_Bca1><div class="navbar__search searchBarContainer_NW3z" dir=ltr><input placeholder=Search aria-label=Search class="navbar__search-input searchInput_YFbd" value="" /><div class="loadingRing_RJI3 searchBarLoadingRing_YnHq"><div></div><div></div><div></div><div></div></div></div></div></div></div><div role=presentation class=navbar-sidebar__backdrop></div></nav><div id=__docusaurus_skipToContent_fallback class="theme-layout-main main-wrapper mainWrapper_z2l0"><div class=docsWrapper_hBAB><button aria-label="Scroll back to top" class="clean-btn theme-back-to-top-button backToTopButton_sjWU" type=button></button><div class=docRoot_UBD9><aside class="theme-doc-sidebar-container docSidebarContainer_YfHR"><div class=sidebarViewport_aRkj><div class=sidebar_njMd><nav aria-label="Docs sidebar" class="menu thin-scrollbar menu_SIkG"><ul class="theme-doc-sidebar-menu menu__list"><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/><span title=Introduction class=linkLabel_WmDU>Introduction</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/getting-started><span title="Getting Started" class=linkLabel_WmDU>Getting Started</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret" role=button aria-expanded=true href=/sqlink/concepts/extensions><span title=Concepts class=categoryLinkLabel_W154>Concepts</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/extensions><span title=Extensions class=linkLabel_WmDU>Extensions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/bundles><span title=Bundles class=linkLabel_WmDU>Bundles</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/prefixes><span title=Prefixes class=linkLabel_WmDU>Prefixes</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/concepts/cas-cache><span title=Cas-cache class=linkLabel_WmDU>Cas-cache</span></a></ul><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-1 menu__list-item"><a class=menu__link href=/sqlink/roadmap><span title=Roadmap class=linkLabel_WmDU>Roadmap</span></a><li class="theme-doc-sidebar-item-category theme-doc-sidebar-item-category-level-1 menu__list-item"><div class=menu__list-item-collapsible><a class="categoryLink_byQd menu__link menu__link--sublist menu__link--sublist-caret menu__link--active" role=button aria-expanded=true href=/sqlink/plans/PLAN-bundles><span title="Plans (source of truth)" class=categoryLinkLabel_W154>Plans (source of truth)</span></a></div><ul class=menu__list><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-bundles><span title="Plan: bundles  named extension sets with optional baked binaries" class=linkLabel_WmDU>Plan: bundles  named extension sets with optional baked binaries</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-prefixes><span title="Plan: function prefixes — SPARQL-style namespacing for SQL functions" class=linkLabel_WmDU>Plan: function prefixes — SPARQL-style namespacing for SQL functions</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-followups><span title=PLAN-followups class=linkLabel_WmDU>PLAN-followups</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-browser-runtime><span title="Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill" class=linkLabel_WmDU>Plan: Run the composed cli+sqlite-lib component in the browser via wasi-polyfill</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wal-archive-extension><span title="Plan: wal-archive extension  continuous WAL backup for sqlink" class=linkLabel_WmDU>Plan: wal-archive extension  continuous WAL backup for sqlink</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-tvm-integration><span title="Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)" class=linkLabel_WmDU>Plan: TVM integration + optional wasm64 builds (lifting the 4 GB wall)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-wasmmachine><span title="Plan: Register sqlite-cli as a wasmMachine application" class=linkLabel_WmDU>Plan: Register sqlite-cli as a wasmMachine application</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-interactive-capture><span title="Plan: interactive changeset capture (daemon vs WIT-extension)" class=linkLabel_WmDU>Plan: interactive changeset capture (daemon vs WIT-extension)</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-benchmarks><span title="Benchmarks: sqlite-wasm-run vs native sqlite3" class=linkLabel_WmDU>Benchmarks: sqlite-wasm-run vs native sqlite3</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-perf-ux><span title="PLAN: release-readiness perf + UX audit" class=linkLabel_WmDU>PLAN: release-readiness perf + UX audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-release-readiness-testing><span title="PLAN: release-readiness testing audit" class=linkLabel_WmDU>PLAN: release-readiness testing audit</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class="menu__link menu__link--active" aria-current=page tabindex=0 href=/sqlink/plans/PLAN-release-readiness-code-health><span title="PLAN: code-health + tech-debt audit for OSS release" class=linkLabel_WmDU>PLAN: code-health + tech-debt audit for OSS release</span></a><li class="theme-doc-sidebar-item-link theme-doc-sidebar-item-link-level-2 menu__list-item"><a class=menu__link tabindex=0 href=/sqlink/plans/PLAN-speculative><span title="Plan: speculative items (consumer-driven)" class=linkLabel_WmDU>Plan: speculative items (consumer-driven)</span></a></ul></ul></nav></div></div></aside><main class=docMainContainer_TBSr><div class="container padding-top--md padding-bottom--lg"><div class=row><div class="col docItemCol_VOVn"><div class=docItemContainer_Djhp><article><nav class="theme-doc-breadcrumbs breadcrumbsContainer_Z_bl" aria-label=Breadcrumbs><ul class=breadcrumbs><li class=breadcrumbs__item><a aria-label="Home page" class=breadcrumbs__link href=/sqlink/><svg viewBox="0 0 24 24" class=breadcrumbHomeIcon_YNFT><path d="M10 19v-5h4v5c0 .55.45 1 1 1h3c.55 0 1-.45 1-1v-7h1.7c.46 0 .68-.57.33-.87L12.67 3.6c-.38-.34-.96-.34-1.34 0l-8.36 7.53c-.34.3-.13.87.33.87H5v7c0 .55.45 1 1 1h3c.55 0 1-.45 1-1z" fill=currentColor /></svg></a><li class=breadcrumbs__item><span class=breadcrumbs__link>Plans (source of truth)</span><li class="breadcrumbs__item breadcrumbs__item--active"><span class=breadcrumbs__link>PLAN: code-health + tech-debt audit for OSS release</span></ul></nav><div class="tocCollapsible_ETCw theme-doc-toc-mobile tocMobile_ITEo"><button type=button class="clean-btn tocCollapsibleButton_TO0P">On this page</button></div><div class="theme-doc-markdown markdown"><header><h1>PLAN: code-health + tech-debt audit for OSS release</h1></header>
+<p>Read-only inventory of the sqlink codebase before public release.
+Scope: <code>core/ cli/ host/ sqlink-httpd/ sqlite-lib/ sqlite-cas-cache/ sqlite-pcache-tvm/ sqlite-mem-tvm/ sqlite-vfs-tvm/ sqlite-embed/</code>
+plus top-level <code>extensions/</code> Rust. Excludes <code>target/</code>, generated WIT
+bindings, and <code>extensions/_shared-target/</code>.</p>
+<p>Audit date: 2026-06-22, branch <code>main</code> at cc6924f (PLAN reorg). All
+findings are file:line citations — no code changes proposed inline.</p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=headline-finding-the-one-thing>Headline finding (the one thing)<a href=#headline-finding-the-one-thing class=hash-link aria-label="Direct link to Headline finding (the one thing)" title="Direct link to Headline finding (the one thing)" translate=no>​</a></h2>
+<p><strong><code>host/src/lib.rs</code> is 10,189 lines.</strong> It owns ~32% of all Rust LOC
+in the project, holds 91 of the 252 <code>.unwrap()/.expect()/panic!()</code>
+sites (36%), 125 of 271 <code>.clone()</code>s (46%), and contains 5 of the 10
+longest functions in the codebase. Every other quality finding in
+this report is dominated by this one file. <strong>Splitting it into ~8
+sub-modules</strong> (the WIT-world <code>impl</code> blocks already form natural
+seams — see §5) is the single highest-leverage change in this
+audit. Size <strong>L (3-5 days)</strong>. Impact: makes every subsequent
+refactor in this file ~3x cheaper; opens the door to extracting
+<code>vtab.rs</code>-style siblings for sessions / spi / dispatch / blob-cache.</p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=one-page-summary--top-refactors-by-leverage>One-page summary — top refactors by leverage<a href=#one-page-summary--top-refactors-by-leverage class=hash-link aria-label="Direct link to One-page summary — top refactors by leverage" title="Direct link to One-page summary — top refactors by leverage" translate=no>​</a></h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>#<th>Refactor<th>Size<th>Impact<tbody><tr><td>1<td>Split <code>host/src/lib.rs</code> (10k LOC) into per-world <code>impl</code> files<td>L<td>Opens the path to every other host refactor; internal but unblocks reviewers<tr><td>2<td>Add CI jobs for <code>cli</code>, <code>sqlink-httpd</code>, <code>sqlite-lib</code>, and the wasm32-wasip2 build<td>M<td>Every user — currently CI only tests host + cache + compose<tr><td>3<td>Replace 32× <code>expect("ensured open")</code> with a <code>with_spi_conn(|c| ...)</code> helper (like the L2a <code>with_user_conn</code> shape we just shipped)<td>S<td>Eliminates an entire class of panic-on-invariant in host's hot path; internal cleanup<tr><td>4<td>Sweep top 10 longest functions in <code>host/src/lib.rs</code> + <code>cli/src/lib.rs</code> — they range 90-630 lines; most have clean internal seams<td>M<td>Internal; review-quality boost<tr><td>5<td>Audit + consolidate the 303 <code>.map_err(|e|...)</code> boilerplate sites with a <code>From&lt;E></code> impl or thiserror crate-wide error types<td>M<td>Internal; cleanup<tr><td>6<td><code>extensions/</code>: 229 crates × ~3 file Cargo.toml — feature audit + Cargo.lock cleanup pass<td>M<td>OSS users see crate count; relevant for crates.io publish story<tr><td>7<td>Cli's <code>do_load</code> (378 lines) + <code>do_cache</code> (248) + <code>do_compose</code> (212) need extraction — each is a state machine masquerading as a fn<td>M<td>Internal review-quality<tr><td>8<td><code>sqlink-httpd</code>, <code>sqlite-lib</code>, <code>sqlite-embed</code>, <code>cli</code>, <code>core</code>: zero CI test coverage today (see §9)<td>M<td>Every user<tr><td>9<td>Workspace dep deduplication — <code>serde</code>, <code>serde_json</code>, <code>tokio</code> declared 4-5× with subtly-different version strings (<code>"1"</code> vs <code>"1.0"</code>)<td>S<td>Build hygiene<tr><td>10<td>Top-level <code>host/Cargo.toml</code> is 121 lines with 89 <code>embed-*</code> features — extract feature wiring into a generated file from the survey DB<td>S<td>Build hygiene</table>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=1--todofixmexxxhack-census>§1 — TODO/FIXME/XXX/HACK census<a href=#1--todofixmexxxhack-census class=hash-link aria-label="Direct link to §1 — TODO/FIXME/XXX/HACK census" title="Direct link to §1 — TODO/FIXME/XXX/HACK census" translate=no>​</a></h2>
+<p><strong>Real action items (the only one):</strong></p>
+<ul>
+<li class=""><code>host/src/lib.rs:4128</code> — <code>// TODO: gate by policy.fs once a filesystem capability lands</code> — relevant for OSS. Should be dispositioned: ship the filesystem capability OR drop the path that this comment guards. Needs a one-paragraph plan; track as a follow-up.</li>
+</ul>
+<p><strong>False positives</strong> (<code>XXX</code> appearing as a literal in extension data strings, not markers):</p>
+<ul>
+<li class=""><code>extensions/ssn/src/lib.rs:89</code> + <code>src/embed.rs:69</code> — <code>XXX-XX-{last4}</code> is the literal SSN-mask format string.</li>
+<li class=""><code>extensions/bic/src/embed.rs:30,87,92</code>, <code>extensions/bic/src/lib.rs:53,169,174</code> — <code>"XXX"</code> is the BIC code for "primary office" per ISO 9362.</li>
+<li class=""><code>extensions/core-dotcmd/src/lib.rs:156</code> — <code>"Run Time: real X.XXX"</code> is a <code>.timer</code> output format string.</li>
+<li class=""><code>cli/src/settings.rs:61</code> — same <code>Run Time: real X.XXX</code> string in <code>.timer</code> docs.</li>
+</ul>
+<p><strong>Verdict:</strong> the codebase is remarkably clean on this front — 1 real
+TODO, 9 false-positive grep hits.</p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=2--panic-audit>§2 — Panic audit<a href=#2--panic-audit class=hash-link aria-label="Direct link to §2 — Panic audit" title="Direct link to §2 — Panic audit" translate=no>​</a></h2>
+<p>Distribution of <code>.unwrap() / .expect(...) / panic!()</code> (excluding
+test files, excluding <code>target/</code>):</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Crate<th style=text-align:right>Count<th>Note<tbody><tr><td>host<td style=text-align:right>160<td>by far the worst; 91 in <code>lib.rs</code> alone<tr><td>core<td style=text-align:right>64<td>mostly test-helper paths inside <code>db.rs</code>; 4 real <code>panic!()</code><tr><td>sqlite-vfs-tvm<td style=text-align:right>12<td>almost entirely test-only<tr><td>sqlite-pcache-tvm<td style=text-align:right>9<td>mostly test-only<tr><td>sqlite-lib<td style=text-align:right>4<td>needs inspection<tr><td>sqlink-httpd<td style=text-align:right>3<td>low<tr><td>cli<td style=text-align:right><strong>0</strong><td>clean (already returns Strings from every dot-cmd)<tr><td>sqlite-cas-cache, sqlite-mem-tvm, sqlite-embed<td style=text-align:right>0<td>clean</table>
+<p><strong>Worst offenders — top 20 in <code>host/src/lib.rs</code>:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th style=text-align:right>Line<th>Pattern<th>Verdict<tbody><tr><td style=text-align:right>2907, 2937, 2961, 2977, 2988, 3026, 3049, 3060, 3080, 3096, 3111, 3277<td><code>r.as_ref().expect("ensured open")</code><td><strong>(a) invariant</strong> — <code>shared_spi_ensure_open(self.host)?</code> is called immediately before. Safe but verbose. Worth a closure helper (see §summary #3).<tr><td style=text-align:right>4474<td><code>self.entries.remove(pos).unwrap()</code><td><strong>(a) invariant</strong> — <code>pos</code> came from a same-thread <code>iter().position()</code> 4 lines up. Safe.<tr><td style=text-align:right>4814<td><code>g.as_ref().map(|(_, c)| c).expect("just-opened")</code><td><strong>(a) invariant</strong> — the L2a <code>with_user_conn</code> just-opened the connection. Safe.<tr><td style=text-align:right>5811, 5921, 5937, 5946, 5958, 5968<td><code>guard.as_mut().unwrap()</code><td><strong>(a) invariant</strong> — <code>stateful_locked</code> returns Result on miss; the Option-unwrap inside is post-<code>?</code>. Worth <code>.as_mut().ok_or_else(...)</code> for clarity.</table>
+<p><strong><code>panic!()</code> sites — 10 total across non-test code:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>File:Line<th>Comment<th>Verdict<tbody><tr><td>core/src/db.rs:1903<td><code>_ => panic!("expected row")</code><td>inside <code>#[test]</code> — safe<tr><td>core/src/db.rs:2075,2093,2129<td><code>let Value::Integer(n) = ... else { panic!() }</code><td>inside <code>#[test]</code> — safe<tr><td>host/src/compose_provider.rs:487,511,528<td><code>_ => panic!()</code> inside <code>convert_*</code> value variants<td><strong>(b) potential bug</strong> — these should be <code>Err(InvalidVariant)</code> rather than panic. Reachable via malformed WIT input. <strong>Needs deeper look.</strong><tr><td>host/src/cache.rs:338<td><code>StepResult::Done => panic!("no row")</code><td>inside <code>#[cfg(test)]</code> — safe<tr><td>sqlite-pcache-tvm/src/cache.rs:621,625<td><code>panic!("page 1 should be in shadow ...")</code><td>inside <code>#[test]</code> — safe</table>
+<p><strong>Bottom line:</strong> ~95% of panic-sites in this codebase are
+invariant-driven and not real bugs. The 3 <code>compose_provider.rs</code>
+sites are the only real flags; the rest of the cleanup is
+ergonomic (shorter, intention-revealing helpers vs raw <code>expect</code>).</p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=3--dead-code>§3 — Dead code<a href=#3--dead-code class=hash-link aria-label="Direct link to §3 — Dead code" title="Direct link to §3 — Dead code" translate=no>​</a></h2>
+<p><strong>Native build (<code>cargo build --release</code>):</strong> 0 dead-code warnings.</p>
+<p><strong>Wasm build (<code>cargo build -p sqlite-cli --target wasm32-wasip2 --release</code>):</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Symbol<th>Location<th>Verdict<tbody><tr><td><code>use bindings::sqlite::extension::types::SqlValue</code><td><code>cli/src/lib.rs:783</code><td><strong>delete</strong> — local import, never referenced. Likely a leftover from the Stage 5 cleanup.<tr><td><code>fn log_event</code><td><code>cli/src/lib.rs:910</code><td><strong>delete</strong> — function defined, never called. Likely a leftover from <code>.log</code> migration.<tr><td><code>Err(String)</code> variant<td><code>cli/src/dot.rs:39</code> (<code>FetchResult</code>)<td><strong>needs deeper look</strong> — possibly used only via <code>Display</code> formatting; check before deleting.<tr><td><code>priority: i64</code><td><code>cli/src/sqlink_registry.rs:41</code> (<code>ResolverRow</code>)<td><strong>needs deeper look</strong> — could be a column we read from SQL but never bind in code. If so, swap for <code>_priority</code> or drop the field.</table>
+<p><strong><code>#[allow(dead_code)]</code> annotations — 3 sites:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Location<th>Verdict<tbody><tr><td><code>host/src/lib.rs:5248</code><td>needs inspection (single line, no surrounding fn shown in summary)<tr><td><code>sqlite-lib/src/lib.rs:790</code> (<code>pub fn _touch</code>)<td><strong>intentional</strong> — leading underscore marks it as a type-checker pin<tr><td><code>sqlite-pcache-tvm/src/cache.rs:143</code><td>needs inspection</table>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=4--code-smell-patterns>§4 — Code-smell patterns<a href=#4--code-smell-patterns class=hash-link aria-label="Direct link to §4 — Code-smell patterns" title="Direct link to §4 — Code-smell patterns" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=functions--100-lines>Functions > 100 lines<a href=#functions--100-lines class=hash-link aria-label="Direct link to Functions > 100 lines" title="Direct link to Functions > 100 lines" translate=no>​</a></h3>
+<p><strong><code>host/src/lib.rs</code> top 10:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th style=text-align:right>Lines<th style=text-align:right>Start<th>Function<tbody><tr><td style=text-align:right>630<td style=text-align:right>2228<td><code>unsafe fn register_host_embedded_extensions</code> — auto-generated dispatch over 89 <code>embed-*</code> features; <strong>leave alone</strong> (mechanical, code-genny shape)<tr><td style=text-align:right>326<td style=text-align:right>747<td><code>fn manifest_for_ext</code> — 4-deep nested transform of WIT manifests into bindings. <strong>Split candidate.</strong><tr><td style=text-align:right>258<td style=text-align:right>4173<td><code>fn refresh_call_budget</code> — needs deeper look<tr><td style=text-align:right>191<td style=text-align:right>5580<td><code>async fn register_component</code> — split into validate / instantiate / store phases<tr><td style=text-align:right>132<td style=text-align:right>5865<td><code>pub async fn dispatch_scalar</code> — already has 3-engine Store routing; manageable<tr><td style=text-align:right>132<td style=text-align:right>4640<td><code>pub fn new</code> (<code>Host::new</code>) — long constructor, split candidate<tr><td style=text-align:right>97<td style=text-align:right>1232<td><code>async fn resolve</code> — fine<tr><td style=text-align:right>94<td style=text-align:right>5771<td><code>pub async fn dispatch_dot_command</code> — fine<tr><td style=text-align:right>90<td style=text-align:right>1124<td><code>async fn handle</code> (http) — fine<tr><td style=text-align:right>88<td style=text-align:right>1558<td><code>unsafe fn register_host_dot_command_function</code> — fine (FFI shape)</table>
+<p><strong><code>cli/src/lib.rs</code> top 10:</strong></p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th style=text-align:right>Lines<th>Function<tbody><tr><td style=text-align:right>378<td><code>do_load</code> — state-machine; pre-flight / trust gate / TOFU / register-N-things / format. <strong>Split into stages.</strong><tr><td style=text-align:right>248<td><code>do_cache</code> — multi-subcommand dispatch (<code>stats</code> / <code>gc</code> / <code>verify</code>); each subcommand is a function in disguise<tr><td style=text-align:right>212<td><code>embed_core_dotcmd</code> — startup auto-embed; mostly include_bytes! glue, fine as-is<tr><td style=text-align:right>172<td><code>eval_input</code> — main dispatch loop; touching this is risky. Leave for last.<tr><td style=text-align:right>146<td><code>build_cli_state_snapshot</code> — splits cleanly by namespace (general / params / conn)<tr><td style=text-align:right>135<td><code>run</code> — the main loop; split candidate<tr><td style=text-align:right>104<td><code>do_compose</code> — manageable<tr><td style=text-align:right>90<td><code>is_statement_complete</code> — sqlite3_complete replacement; intentional shape</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=files--1500-lines>Files > 1500 lines<a href=#files--1500-lines class=hash-link aria-label="Direct link to Files > 1500 lines" title="Direct link to Files > 1500 lines" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th style=text-align:right>LOC<th>File<th>Verdict<tbody><tr><td style=text-align:right><strong>10,189</strong><td><code>host/src/lib.rs</code><td>Split — <strong>the headline finding</strong><tr><td style=text-align:right>2,833<td><code>cli/src/lib.rs</code><td>Extract dot-cmd <code>fn do_*</code> helpers into <code>cli/src/dotcmds/*.rs</code><tr><td style=text-align:right>2,201<td><code>core/src/db.rs</code><td>Could split into <code>connection.rs</code> / <code>stmt.rs</code> / <code>vfs.rs</code> / <code>aggregate.rs</code><tr><td style=text-align:right>1,544<td><code>host/src/vtab.rs</code><td>Already a sub-module of host; could split sqlite3_module trampolines from registry<tr><td style=text-align:right>1,445<td><code>sqlite-embed/src/lib.rs</code><td>Tight, mostly typed wrappers; leave</table>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=boxed-closures>Boxed closures<a href=#boxed-closures class=hash-link aria-label="Direct link to Boxed closures" title="Direct link to Boxed closures" translate=no>​</a></h3>
+<p>Only 2 sites total — <code>core/src/db.rs:287,551</code> for the <code>set_stmt_trace</code>
+trampoline. Not hot paths. <strong>Leave alone.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=stringfromformat><code>String::from(format!())</code><a href=#stringfromformat class=hash-link aria-label="Direct link to stringfromformat" title="Direct link to stringfromformat" translate=no>​</a></h3>
+<p>Zero occurrences in scope. <strong>Clean.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=map_erre--boilerplate><code>.map_err(|e| ...)</code> boilerplate<a href=#map_erre--boilerplate class=hash-link aria-label="Direct link to map_erre--boilerplate" title="Direct link to map_erre--boilerplate" translate=no>​</a></h3>
+<p><strong>303 occurrences across the codebase.</strong> Top files:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th style=text-align:right>Count<th>File<tbody><tr><td style=text-align:right>132<td><code>host/src/lib.rs</code> (anyhow conversion mostly)<tr><td style=text-align:right>22<td><code>host/src/main.rs</code><tr><td style=text-align:right>19<td><code>host/src/component_blob_cache.rs</code><tr><td style=text-align:right>6<td><code>sqlink-httpd/src/tls.rs</code><tr><td style=text-align:right>3<td><code>sqlink-httpd/src/main.rs</code><tr><td style=text-align:right>2<td><code>sqlink-httpd/src/wasm.rs</code><tr><td style=text-align:right>1<td><code>host/src/cache.rs</code></table>
+<p>Most are <code>.map_err(|e| anyhow!("...: {e}"))</code>. A crate-level
+<code>thiserror</code>-style error type with <code>#[from]</code> impls would eliminate
+~80% of these mechanically. <strong>Size M (1-3 days).</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=clone-heatmap><code>.clone()</code> heatmap<a href=#clone-heatmap class=hash-link aria-label="Direct link to clone-heatmap" title="Direct link to clone-heatmap" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th style=text-align:right>Count<th>File<tbody><tr><td style=text-align:right><strong>125</strong><td><code>host/src/lib.rs</code><tr><td style=text-align:right>18<td><code>cli/src/lib.rs</code><tr><td style=text-align:right>12<td><code>sqlite-lib/src/lib.rs</code><tr><td style=text-align:right>12<td><code>sqlink-httpd/src/main.rs</code><tr><td style=text-align:right>11<td><code>host/tests/load.rs</code> (test code)<tr><td style=text-align:right>10<td><code>host/src/main.rs</code><tr><td style=text-align:right>7<td><code>sqlink-httpd/src/router.rs</code><tr><td style=text-align:right>7<td><code>host/src/compose_provider.rs</code><tr><td style=text-align:right>6<td><code>cli/src/orchestration.rs</code><tr><td style=text-align:right>5<td><code>sqlink-httpd/src/wasm.rs</code></table>
+<p>The 125 in <code>host/src/lib.rs</code> are mostly <code>name.clone()</code>,
+<code>ext_name.clone()</code>, <code>path.clone()</code> — strings cloned to pass into
+<code>tokio::spawn</code> or to use after a borrow. Could be reduced ~30% with
+<code>Arc&lt;str></code> for the most-cloned identifiers (extension name,
+db_path). <strong>Size M; perf gain is small (these aren't hot paths) but
+the readability gain is real.</strong></p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=5--module-bloat--where-hostsrclibrs-could-split>§5 — Module bloat — where <code>host/src/lib.rs</code> could split<a href=#5--module-bloat--where-hostsrclibrs-could-split class=hash-link aria-label="Direct link to 5--module-bloat--where-hostsrclibrs-could-split" title="Direct link to 5--module-bloat--where-hostsrclibrs-could-split" translate=no>​</a></h2>
+<p>The file already has natural seams via <code>impl</code> blocks. Suggested split:</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Proposed file<th>Contains<th style=text-align:right>LOC estimate<tbody><tr><td><code>host/src/policy.rs</code> (exists, expand)<td><code>LoadedState::http</code>, <code>dns</code> impls<td style=text-align:right>~300<tr><td><code>host/src/spi_impl.rs</code><td><code>loaded::sqlite::extension::spi::Host</code>, <code>bindings::...::spi::Host</code>, <code>with_user_conn</code> + helpers, the 32 <code>expect("ensured open")</code> sites<td style=text-align:right>~1500<tr><td><code>host/src/aggregate.rs</code><td><code>HostLoadedAggregate</code> + <code>dispatch_aggregate_*</code> impls<td style=text-align:right>~600<tr><td><code>host/src/dot_dispatch.rs</code><td><code>dispatch_dot_command</code> + <code>sync_dispatch_dot_command</code> + the <code>dot_command()</code> SQL fn registration<td style=text-align:right>~400<tr><td><code>host/src/session_impl.rs</code><td><code>session::Host</code> impl<td style=text-align:right>~250<tr><td><code>host/src/component_load.rs</code><td><code>register_component</code>, <code>load_extension_from_*</code>, <code>resolve_uri_to_bytes</code><td style=text-align:right>~1200<tr><td><code>host/src/manifest.rs</code><td><code>manifest_for_ext</code> + WIT manifest conversions<td style=text-align:right>~500<tr><td><code>host/src/dispatch.rs</code><td><code>dispatch_scalar / aggregate_* / collation / authorize / on_update / on_commit / on_rollback / vtab_*</code><td style=text-align:right>~2500<tr><td><code>host/src/lib.rs</code> (residue)<td><code>Host</code> struct, <code>Host::new</code>, <code>bindings!</code> macro, world declarations, top-level entry points<td style=text-align:right>~1500</table>
+<p>That's a <strong>deliberate ~5-day refactor</strong> that the existing test suite
+should cover, but it touches every line in the file. Best done as
+one PR with reviewer pre-approval; don't sprinkle across many small
+commits.</p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=6--cargotoml-audit>§6 — Cargo.toml audit<a href=#6--cargotoml-audit class=hash-link aria-label="Direct link to §6 — Cargo.toml audit" title="Direct link to §6 — Cargo.toml audit" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=workspace-declared-deps-with-subtle-drift>Workspace declared deps with subtle drift<a href=#workspace-declared-deps-with-subtle-drift class=hash-link aria-label="Direct link to Workspace declared deps with subtle drift" title="Direct link to Workspace declared deps with subtle drift" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Dep<th>Variants seen<tbody><tr><td><code>tokio</code><td><code>tokio = { version = "1", features = [...] }</code> (2 different feature lists, host vs httpd)<tr><td><code>serde</code><td><code>version = "1.0"</code> (host) vs <code>version = "1"</code> (httpd, handlers)<tr><td><code>serde_json</code><td><code>"1.0"</code> (host) vs <code>"1"</code> (4 other places)</table>
+<p><strong>Fix:</strong> workspace.dependencies = { ... } at root, all members
+<code>{ workspace = true }</code>. <strong>Size S.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=hostcargotoml-is-121-lines-89-embed--features><code>host/Cargo.toml</code> is 121 lines, 89 <code>embed-*</code> features<a href=#hostcargotoml-is-121-lines-89-embed--features class=hash-link aria-label="Direct link to hostcargotoml-is-121-lines-89-embed--features" title="Direct link to hostcargotoml-is-121-lines-89-embed--features" translate=no>​</a></h3>
+<p>All 89 are wired into <code>register_host_embedded_extensions</code> (verified
+by grep — 0 unused). The feature list could be auto-generated from
+the survey DB (<code>provenance/extensions.db</code>) instead of hand-maintained,
+but that's a chore not a blocker. <strong>Size S, low priority.</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=workspace-member-list>Workspace member list<a href=#workspace-member-list class=hash-link aria-label="Direct link to Workspace member list" title="Direct link to Workspace member list" translate=no>​</a></h3>
+<p><code>Cargo.toml</code> lists 20 workspace members. 9 extensions are
+workspace members; the other 220 are standalone with their own
+<code>[workspace]</code> block. Mixing both modes works but means
+<code>cargo build --workspace</code> from the root only builds the listed
+ones. Probably right (the 220 standalone are released individually)
+but worth documenting in CONTRIBUTING.</p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=per-crate-dep-audit-would-each-crate-compile-if-i-removed-deps-not-used-by-use>Per-crate dep audit (would each crate compile if I removed deps not used by <code>use</code>)?<a href=#per-crate-dep-audit-would-each-crate-compile-if-i-removed-deps-not-used-by-use class=hash-link aria-label="Direct link to per-crate-dep-audit-would-each-crate-compile-if-i-removed-deps-not-used-by-use" title="Direct link to per-crate-dep-audit-would-each-crate-compile-if-i-removed-deps-not-used-by-use" translate=no>​</a></h3>
+<p><strong>Not done in this pass — needs <code>cargo machete</code> or <code>cargo-udeps</code>.</strong>
+Note as a follow-up; estimate ~1-2 unused deps per crate × 10
+crates = 10-20 trims, <strong>size S total</strong>.</p>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=7--bonus-findings>§7 — Bonus findings<a href=#7--bonus-findings class=hash-link aria-label="Direct link to §7 — Bonus findings" title="Direct link to §7 — Bonus findings" translate=no>​</a></h2>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=test-coverage-gap>Test coverage gap<a href=#test-coverage-gap class=hash-link aria-label="Direct link to Test coverage gap" title="Direct link to Test coverage gap" translate=no>​</a></h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<table><thead><tr><th>Crate<th style=text-align:right>Integration tests<th style=text-align:right>Inline <code>#[test]</code> files<th>Tested in CI?<tbody><tr><td>host<td style=text-align:right>12<td style=text-align:right>3<td>✓<tr><td>sqlite-cas-cache<td style=text-align:right>4<td style=text-align:right>0<td>✓ (cache-tests job)<tr><td>sqlite-pcache-tvm<td style=text-align:right>1<td style=text-align:right>1<td>✗<tr><td>sqlite-mem-tvm<td style=text-align:right>1<td style=text-align:right>1<td>✗<tr><td>sqlite-vfs-tvm<td style=text-align:right>1<td style=text-align:right>2<td>✗<tr><td>core<td style=text-align:right>0<td style=text-align:right>1<td>✗<tr><td>cli<td style=text-align:right>0<td style=text-align:right>0<td>✗<tr><td>sqlink-httpd<td style=text-align:right>0<td style=text-align:right>0<td>✗<tr><td>sqlite-lib<td style=text-align:right>0<td style=text-align:right>0<td>✗<tr><td>sqlite-embed<td style=text-align:right>0<td style=text-align:right>0<td>✗</table>
+<p><strong>CI runs only 3 jobs</strong> (host-checks, cache-tests, compose-tests).
+<strong>No CI job builds the wasm32-wasip2 cli or any extension.</strong> Adding:</p>
+<ul>
+<li class="">A <code>wasm32-wasip2-build</code> job that does <code>cargo build -p sqlite-cli --target wasm32-wasip2 --release</code> and verifies the component-encoding step (<code>wasm-tools component new</code>)</li>
+<li class="">A <code>cli-smokes</code> job that runs the existing <code>examples/sqlite-utils-tour.sql</code> through the built cli</li>
+<li class="">A <code>sqlite-lib-tests</code> job (lib smoke + compose test)</li>
+</ul>
+<p>…would cover the major surface gaps. <strong>Size M (1-2 days).</strong></p>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=recently-surfaced-issues-from-this-session-worth-re-checking>Recently surfaced issues from this session worth re-checking<a href=#recently-surfaced-issues-from-this-session-worth-re-checking class=hash-link aria-label="Direct link to Recently surfaced issues from this session worth re-checking" title="Direct link to Recently surfaced issues from this session worth re-checking" translate=no>​</a></h3>
+<ul>
+<li class=""><code>host/src/lib.rs</code> line 4128 TODO about filesystem capability gating.</li>
+<li class="">3 <code>panic!()</code> sites in <code>host/src/compose_provider.rs</code> (lines 487, 511, 528) — see §2.</li>
+<li class=""><code>Err(String)</code> variant in <code>cli/src/dot.rs:39</code> and <code>priority: i64</code> in <code>cli/src/sqlink_registry.rs:41</code> — see §3.</li>
+</ul>
+<h3 class="anchor anchorTargetStickyNavbar_Vzrq" id=not-investigated-this-pass-would-each-take-30min>Not investigated this pass (would each take >30min)<a href=#not-investigated-this-pass-would-each-take-30min class=hash-link aria-label="Direct link to Not investigated this pass (would each take >30min)" title="Direct link to Not investigated this pass (would each take >30min)" translate=no>​</a></h3>
+<ul>
+<li class="">Cargo <code>[features]</code> cross-graph audit (which features force which deps, and are any cycles introduced)</li>
+<li class="">Async borrow patterns (<code>Arc&lt;RwLock></code> vs <code>Arc&lt;Mutex></code> vs <code>parking_lot</code> choices) in host — there are at least 3 styles co-existing</li>
+<li class=""><code>core::db::Connection</code> lifetime / <code>Sync+Send</code> story — the <code>ReentrantMutex&lt;RefCell&lt;Option&lt;Connection>>></code> is novel; deserves a design-note callout in <code>host/SPI.md</code></li>
+<li class="">License/attribution audit for embedded SQLite code under <code>deps/</code></li>
+<li class="">Auditing the 229 extensions for anything sensitive (URLs to private services, etc.) — sister forks have touched this for tegmentum but a fresh pass is worth it</li>
+</ul>
+<hr/>
+<h2 class="anchor anchorTargetStickyNavbar_Vzrq" id=sequencing-recommendation>Sequencing recommendation<a href=#sequencing-recommendation class=hash-link aria-label="Direct link to Sequencing recommendation" title="Direct link to Sequencing recommendation" translate=no>​</a></h2>
+<p>A reasonable order to ship these (each step independently
+verifiable, each lands as its own PR):</p>
+<ol>
+<li class=""><strong>§3 dead-code cleanup</strong> (a few minutes; just delete the 2-4 unused things, gives a clean baseline)</li>
+<li class=""><strong>§9 workspace dep deduplication</strong> (size S)</li>
+<li class=""><strong>CI expansion: add 3 missing jobs from §7</strong> (size M, foundational — lets every subsequent change get tested)</li>
+<li class=""><strong>§1 — disposition the L4128 TODO</strong> (decide ship-vs-drop)</li>
+<li class=""><strong>§2 — the 3 <code>compose_provider.rs</code> panics → Result</strong> (size S, real bug fix)</li>
+<li class=""><strong>§3 / <code>with_spi_conn</code> helper</strong> (size S, eliminates 32 expects)</li>
+<li class=""><strong><code>host/src/lib.rs</code> split</strong> (size L, the headline finding)</li>
+<li class=""><strong>§4 — top 5 long functions in cli + host</strong> (size M)</li>
+<li class=""><strong>§5 — <code>.map_err</code> consolidation via thiserror</strong> (size M, ergonomic)</li>
+<li class=""><em><em>§6 — host embed-</em> feature generator</em>* (size S, optional)</li>
+</ol>
+<p>Items 1-3 are the launch blockers; everything else is post-OSS-launch
+polish.</div><footer class="theme-doc-footer docusaurus-mt-lg"><div class="row margin-top--sm theme-doc-footer-edit-meta-row"><div class="col noPrint_WFHX"><a href=https://github.com/tegmentum/sqlink/edit/main/website/docs/plans/PLAN-release-readiness-code-health.md target=_blank rel="noopener noreferrer" class=theme-edit-this-page><svg fill=currentColor height=20 width=20 viewBox="0 0 40 40" class=iconEdit_Z9Sw aria-hidden=true><g><path d="m34.5 11.7l-3 3.1-6.3-6.3 3.1-3q0.5-0.5 1.2-0.5t1.1 0.5l3.9 3.9q0.5 0.4 0.5 1.1t-0.5 1.2z m-29.5 17.1l18.4-18.5 6.3 6.3-18.4 18.4h-6.3v-6.2z"/></g></svg>Edit this page</a></div><div class="col lastUpdated_JAkA"></div></div></footer></article><nav class="docusaurus-mt-lg pagination-nav" aria-label="Docs pages"><a class="pagination-nav__link pagination-nav__link--prev" href=/sqlink/plans/PLAN-release-readiness-testing><div class=pagination-nav__sublabel>Previous</div><div class=pagination-nav__label>PLAN: release-readiness testing audit</div></a><a class="pagination-nav__link pagination-nav__link--next" href=/sqlink/plans/PLAN-speculative><div class=pagination-nav__sublabel>Next</div><div class=pagination-nav__label>Plan: speculative items (consumer-driven)</div></a></nav></div></div><div class="col col--3"><div class="tableOfContents_bqdL thin-scrollbar theme-doc-toc-desktop"><ul class="table-of-contents table-of-contents__left-border"><li><a href=#headline-finding-the-one-thing class="table-of-contents__link toc-highlight">Headline finding (the one thing)</a><li><a href=#one-page-summary--top-refactors-by-leverage class="table-of-contents__link toc-highlight">One-page summary — top refactors by leverage</a><li><a href=#1--todofixmexxxhack-census class="table-of-contents__link toc-highlight">§1 — TODO/FIXME/XXX/HACK census</a><li><a href=#2--panic-audit class="table-of-contents__link toc-highlight">§2 — Panic audit</a><li><a href=#3--dead-code class="table-of-contents__link toc-highlight">§3 — Dead code</a><li><a href=#4--code-smell-patterns class="table-of-contents__link toc-highlight">§4 — Code-smell patterns</a><ul><li><a href=#functions--100-lines class="table-of-contents__link toc-highlight">Functions > 100 lines</a><li><a href=#files--1500-lines class="table-of-contents__link toc-highlight">Files > 1500 lines</a><li><a href=#boxed-closures class="table-of-contents__link toc-highlight">Boxed closures</a><li><a href=#stringfromformat class="table-of-contents__link toc-highlight"><code>String::from(format!())</code></a><li><a href=#map_erre--boilerplate class="table-of-contents__link toc-highlight"><code>.map_err(|e| ...)</code> boilerplate</a><li><a href=#clone-heatmap class="table-of-contents__link toc-highlight"><code>.clone()</code> heatmap</a></ul><li><a href=#5--module-bloat--where-hostsrclibrs-could-split class="table-of-contents__link toc-highlight">§5 — Module bloat — where <code>host/src/lib.rs</code> could split</a><li><a href=#6--cargotoml-audit class="table-of-contents__link toc-highlight">§6 — Cargo.toml audit</a><ul><li><a href=#workspace-declared-deps-with-subtle-drift class="table-of-contents__link toc-highlight">Workspace declared deps with subtle drift</a><li><a href=#hostcargotoml-is-121-lines-89-embed--features class="table-of-contents__link toc-highlight"><code>host/Cargo.toml</code> is 121 lines, 89 <code>embed-*</code> features</a><li><a href=#workspace-member-list class="table-of-contents__link toc-highlight">Workspace member list</a><li><a href=#per-crate-dep-audit-would-each-crate-compile-if-i-removed-deps-not-used-by-use class="table-of-contents__link toc-highlight">Per-crate dep audit (would each crate compile if I removed deps not used by <code>use</code>)?</a></ul><li><a href=#7--bonus-findings class="table-of-contents__link toc-highlight">§7 — Bonus findings</a><ul><li><a href=#test-coverage-gap class="table-of-contents__link toc-highlight">Test coverage gap</a><li><a href=#recently-surfaced-issues-from-this-session-worth-re-checking class="table-of-contents__link toc-highlight">Recently surfaced issues from this session worth re-checking</a><li><a href=#not-investigated-this-pass-would-each-take-30min class="table-of-contents__link toc-highlight">Not investigated this pass (would each take >30min)</a></ul><li><a href=#sequencing-recommendation class="table-of-contents__link toc-highlight">Sequencing recommendation</a></ul></div></div></div></div></main></div></div></div><footer class="theme-layout-footer footer"><div class="container container-fluid"><div class="row footer__links"><div class="theme-layout-footer-column col footer__col"><div class=footer__title>Source</div><ul class="footer__items clean-list"><li class=footer__item><a href=https://github.com/tegmentum/sqlink target=_blank rel="noopener noreferrer" class=footer__link-item>GitHub<svg width=13.5 height=13.5 aria-label="(opens in new tab)" class=iconExternalLink_nPIU><use href=#theme-svg-external-link /></svg></a></ul></div></div><div class="footer__bottom text--center"><div class=footer__copyright>Copyright © 2026 Tegmentum  Built with Docusaurus.</div></div></div></footer></div></body>
