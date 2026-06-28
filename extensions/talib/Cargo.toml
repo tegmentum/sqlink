@@ -1,0 +1,33 @@
+# Standalone [workspace] (like extensions/color, extensions/formats): this
+# extension resolves its datalink path deps against the `datalink-talib-wt`
+# worktree (talib-core + the window template), independent of the sqlink
+# root workspace which pins `~/git/datalink` (main). `make ext NAME=talib`
+# detects the `[workspace]` table and builds it through the shared target.
+[workspace]
+
+[package]
+name = "talib-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+TA-Lib style technical indicators as SQLite WINDOW functions
+(sma / ema / rsi), computed over the current frame.
+
+Targets the `sqlite:extension/stateful` world. The host's loader
+registers each aggregate via create_window_function (is-window=true)
+and drives step / inverse / value / finalize. All logic + the
+capability surface live ONCE in datalink `talib-core`; this shim is
+GENERATED from the core by datalink-extcore::sqlite_agg_shim!.
+"""
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Shared, DB-agnostic logic + capability declaration (datalink pull-up).
+talib-core = { path = "../../../datalink-talib-wt/extensions/talib-core" }
+datalink-extcore = { path = "../../../datalink-talib-wt/crates/datalink-extcore" }
