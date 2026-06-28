@@ -37,6 +37,7 @@ fn render(v: &Value, s: &Settings) -> String {
                 format!("<blob:{} bytes>", b.len())
             }
         }
+        Value::WitValue(p) => format!("<wit-value:{}>", p.symbolic_name),
     }
 }
 
@@ -232,6 +233,7 @@ fn fmt_json(columns: &[String], rows: &[Vec<Value>], _s: &Settings) -> String {
             Value::Real(r) => r.to_string(),
             Value::Text(t) => esc_str(t),
             Value::Blob(b) => esc_str(&format!("<blob:{} bytes>", b.len())),
+            Value::WitValue(p) => esc_str(&format!("<wit-value:{}>", p.symbolic_name)),
         }
     }
     let mut o = String::from("[");

@@ -2481,6 +2481,7 @@ fn sql_literal(v: &bindings::sqlite::extension::types::SqlValue) -> String {
             o.push('\'');
             o
         }
+        V::WitValue(p) => format!("/* wit-value {} */ NULL", p.symbolic_name),
     }
 }
 
@@ -2661,6 +2662,7 @@ fn build_cli_state_snapshot() -> Vec<(String, String)> {
                     let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
                     str_v(&format!("X'{hex}'"))
                 }
+                V::WitValue(p) => str_v(&format!("<wit-value:{}>", p.symbolic_name)),
             };
             out.push((key, encoded));
         }
