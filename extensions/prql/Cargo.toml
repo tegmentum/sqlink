@@ -1,0 +1,35 @@
+[package]
+name = "prql-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+prql TRANSPARENT parser extension (sqlite:extension port).
+
+SQLite's amalgamation parser is not extensible, so prql rides the host
+shell's parse-failure intercept: it declares the reserved scalar
+`__sqlink_parse(query) -> text` (the parser entrypoint). On a built-in
+syntax error the host offers the failed statement to this scalar; a bare
+`from x | filter .. | select ..` PRQL pipeline is compiled (prqlc, SQLite
+dialect) to ordinary SQL so it runs directly — the transparent upgrade of
+the explicit prql_to_sql scalar. Anything else returns NULL (declined).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace (like the other scaffolded extensions): kept OUT
+# of the sqlink root workspace so `make ext NAME=prql` builds just this
+# component. The datalink core path-deps resolve fine.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Shared, DB-agnostic transparent PRQL->SQL transpiler (wraps prqlc) + the
+# parser-entry capability declaration (datalink pull-up). This shim is
+# GENERATED from the core by datalink-extcore's sqlite_shim! — the same
+# scalar codegen the rest of the catalog uses; no bespoke parser glue.
+prql-core = { path = "../../../datalink/extensions/prql-core" }
+datalink-extcore = { path = "../../../datalink/crates/datalink-extcore" }
