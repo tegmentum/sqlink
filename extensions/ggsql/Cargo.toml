@@ -1,0 +1,34 @@
+[package]
+name = "ggsql-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+ggsql / VISUALIZE parser extension (sqlite:extension port).
+
+SQLite's amalgamation parser is not extensible, so ggsql rides the host
+shell's parse-failure intercept: it declares the reserved scalar
+`__sqlink_parse(query) -> text` (the parser entrypoint). On a built-in
+syntax error the host offers the failed statement to this scalar; a
+`VISUALIZE <select>` statement is rewritten to ordinary SQL (a grouped
+(label, n, bar) rollup), anything else returns NULL (declined).
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace (like the other scaffolded extensions): kept OUT
+# of the sqlink root workspace so `make ext NAME=ggsql` builds just this
+# component. The datalink core path-deps resolve fine.
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+# Shared, DB-agnostic VISUALIZE parse/rewrite logic + the parser-entry
+# capability declaration (datalink pull-up). This shim is GENERATED from
+# the core by datalink-extcore's sqlite_shim! — the same scalar codegen
+# the rest of the catalog uses; no bespoke parser glue.
+ggsql-core = { path = "../../../datalink/extensions/ggsql-core" }
+datalink-extcore = { path = "../../../datalink/crates/datalink-extcore" }

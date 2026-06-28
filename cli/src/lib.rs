@@ -824,7 +824,37 @@ fn eval_sql_inner(sql: &str) -> String {
             }
         }
         Err(e) => {
-            out.push_str(&format!("Error: {}\n", e.message));
+            // Parser-extension intercept (the SQLite-side equivalent of
+            // DuckDB's ParserExtension). SQLite's parser isn't
+            // extensible, so on a built-in syntax error we offer the
+            // raw statement to loaded parser extensions
+            // (extension-loader.dispatch-parse). A parser that claims
+            // the statement returns a SQL REWRITE we run in its place;
+            // otherwise we surface the original parse error. e.g.
+            // `VISUALIZE SELECT ...` (ggsql) desugars to a grouped
+            // (label, n, bar) rollup.
+            if e.message.contains("syntax error") {
+                match bindings::sqlink::wasm::extension_loader::dispatch_parse(sql) {
+                    // A parser claimed + rewrote the statement; run it.
+                    Ok(Some(rewrite)) => {
+                        let settings = settings::SETTINGS.with(|s| s.borrow().clone());
+                        match spi::execute_multi(&rewrite, &named) {
+                            Ok(results) => {
+                                for r in &results {
+                                    out.push_str(&format::format(&r.columns, &r.rows, &settings));
+                                }
+                            }
+                            Err(re) => out.push_str(&format!("Error: {}\n", re.message)),
+                        }
+                    }
+                    // A parser reported the statement malformed.
+                    Err(pe) => out.push_str(&format!("Error: {}\n", pe.message)),
+                    // No parser recognized it: original parse error.
+                    Ok(None) => out.push_str(&format!("Error: {}\n", e.message)),
+                }
+            } else {
+                out.push_str(&format!("Error: {}\n", e.message));
+            }
         }
     }
     // Drain any trace lines captured by .trace's callback while
