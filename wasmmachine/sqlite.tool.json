@@ -1,0 +1,39 @@
+{
+  "name": "sqlite3",
+  "version": "3.53.1",
+  "kind": "cli-tool",
+  "digest": "sha256:956a0824ab2bbdb830c7e00f983089a33cd8bcc028684d1dd30653774b9acea1",
+  "entrypoint": {
+    "component": "sha256:956a0824ab2bbdb830c7e00f983089a33cd8bcc028684d1dd30653774b9acea1",
+    "command": "sqlite3"
+  },
+  "capabilities": {
+    "filesystem_read": true,
+    "filesystem_write": true,
+    "network_fetch": false,
+    "stdout_write": true,
+    "stderr_write": true,
+    "stdin_read": true
+  },
+  "console": {
+    "interactive": true,
+    "comment": "The sqlite3 shell is a REPL: when launched through v86 execd it wants an interactive pty (cooked-mode line editing) so typed SQL reaches the shell and box/table results stream back. The runtime gate is execd's `interactive = true` (wasmmachine/execd-sqlite.toml). No termios/linenoise on wasip2 -> the shell's built-in local_getline line reader (cooked-mode echo + backspace via the pty line discipline; no in-app arrow-key history)."
+  },
+  "projection": {
+    "path": "/bin/sqlite3",
+    "agent_visible": true,
+    "shell_visible": true
+  },
+  "policy": {
+    "default": "sandboxed",
+    "requires_grant": []
+  },
+  "docs": {
+    "summary": "The real sqlite3 shell (v3.53.1) compiled to wasm as a wasi:cli/run component (scripts/build-shell-wasm.sh). Native CLI behaviour: box output, dot commands (.mode/.tables/.schema/.help/...), -box/-csv/-json/-line/-markdown, -readonly, -init. sqlite3 is linked statically so the component runs under plain `wasmtime`; runtime = \"sqlink\" runs it through `sqlink run-tool` with the host-import surface for a future `.load <name>` (PLAN-real-shell-tool.md P2).",
+    "examples": [
+      "sqlite3 -box \"SELECT 42 AS answer;\"",
+      "sqlite3 -csv \"SELECT * FROM generate_series(1,3);\"",
+      "sqlite3 mydata.db -readonly"
+    ]
+  }
+}

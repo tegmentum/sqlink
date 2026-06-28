@@ -34,6 +34,36 @@ make wasmmachine-run    # instantiate locally
 `wasmmachine` binary expected at `~/git/v86/target/release/`
 (or on PATH some other way).
 
+## Interactive console through v86 execd (PLAN-real-shell-tool.md P4)
+
+The real sqlite3 shell runs as a FULLY INTERACTIVE console through the
+v86 WasmMachine execd, at parity with ducklink's duckdb console. The
+generic interactive-pty machinery lives in v86
+(`crates/wasmmachine-execd`: `pty.rs` / `cell.rs` / `config.rs`); the
+sqlite wiring is two config files + the `"sqlink"` runtime branch in
+v86's `cell.rs`.
+
+- `sqlite.tool.json` — the cli-tool manifest (`console.interactive`,
+  `/bin/sqlite3`), mirroring ducklink's `duckdb.tool.json`.
+- `execd-sqlite.toml` — the execd config (`interactive = true`,
+  `runtime = "sqlink"` -> `sqlink run-tool`), mirroring
+  `execd-duckdb.toml`. `runtime = "wasmtime"` runs the
+  statically-linked shell directly (no sqlink host); both give the same
+  interactive pty console.
+
+```sh
+# build the shell component + the sqlink host, then run interactively:
+scripts/build-shell-wasm.sh                # -> wasmmachine/sqlite_cli.component.wasm
+cargo build -p sqlink-host --release       # -> target/release/sqlink (sqlink run-tool)
+wasmmachine-execd --config wasmmachine/execd-sqlite.toml
+#   POST /v1/cells/{id}/input         typed SQL -> the pty master
+#   GET  /v1/cells/{id}/output?from=N box rows the shell wrote
+```
+
+Verified through the execd cell layer: `sqlite>` prompt (isatty over the
+pty), `SELECT 42 AS answer;` -> box result, `.mode box`, cooked-mode
+line editing (`.tablex<bs><bs>es` -> `.tables`), `.quit` -> exit 0.
+
 ## What's NOT yet wired
 
 The plan flagged 7 open v86-internals questions that block

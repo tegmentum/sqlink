@@ -133,12 +133,58 @@ trampoline on the shell's conn -> `dispatch.scalar-call` -> the wasm
 component. Use an existing scalar `sqlite:extension` from the catalog
 (e.g. `extensions/sha1` / `extensions/case` / `extensions/roman`).
 
-## P3 / P4 — follow-ons (not in this run)
+## P4 — v86 execd runtime-selection + interactive PTY  (LANDED, verified)
+
+The real sqlite3 shell now runs as a FULLY INTERACTIVE console through the
+v86 WasmMachine, at parity with ducklink's duckdb console.
+
+### Generic vs sqlink-specific (no re-port needed)
+
+ducklink's interactive-pty work is GENERIC and already lives in v86
+(`crates/wasmmachine-execd`): `pty.rs` (openpty + slave-as-stdio,
+cooked-mode line discipline), the interactive cell path in `cell.rs`
+(master <-> cell stream protocol), `ExecConfig.interactive`, and the
+`POST /v1/cells/{id}/input` + `GET /v1/cells/{id}/output` API. That
+machinery runs ANY `wasi:cli/run` tool over a pty — so P4 was WIRING,
+not a re-port of `pty.rs`.
+
+The sqlink-specific bits (all in v86 branch `feat/execd-pty-sqlite`):
+
+- `cell.rs`: a `"sqlink"` runtime branch alongside `"ducklink"` ->
+  spawns `sqlink run-tool <component> [--db PATH]` (the P1 entry point,
+  which inherits stdio = a real TTY and wires the full host-import
+  surface for the future `.load`, P2). The shell links sqlite3
+  statically, so `runtime = "wasmtime"` runs it directly too.
+- `config.rs`: document the `"sqlink"` runtime + `SQLINK_PATH` + the
+  `extensions_dir` (`--db`) reuse.
+- `examples/tools/sqlite.tool.json`: cli-tool manifest
+  (`console.interactive`, `/bin/sqlite3`) mirroring `duckdb.tool.json`.
+- `examples/tools/execd-sqlite.toml`: interactive execd config
+  (`interactive = true`, `runtime = "sqlink"`) mirroring
+  `execd-duckdb.toml`.
+- `cell.rs` test `pty_interactive_repl_sqlite` (ignored, opt-in).
+
+sqlink ships its own copies for discoverability next to the shell build:
+`wasmmachine/sqlite.tool.json` + `wasmmachine/execd-sqlite.toml`.
+
+### P4 verification
+
+Through the v86 execd cell layer (pty, `runtime = "sqlink"` ->
+`sqlink run-tool`): `sqlite>` prompt (isatty over the pty), a live
+`SELECT 42 AS answer;` -> box result, `.mode box`, cooked-mode line
+editing (`.tablex<bs><bs>es` -> `.tables`), `.quit` -> exit 0. Drive it
+with `cargo test -p wasmmachine-execd pty_interactive_repl_sqlite --
+--ignored --nocapture` (set `EXECD_PTY_SQLITE_SHELL` +
+`EXECD_PTY_SQLINK`).
+
+Caveat (same as the duckdb console): no termios/linenoise on wasip2, so
+line editing is the pty cooked-mode line discipline (echo + backspace);
+no in-app arrow-key history. `.load` extension dispatch is P2, not P4.
+
+## P3 — follow-on (not in this run)
 
 - P3: generalize the CLI resolver into the multi-provider resolver +
   native passthrough via `sqlink-native`.
-- P4: the v86 `execd` runtime-selection + interactive PTY (port
-  ducklink's `pty.rs` + `ExecConfig.runtime`).
 
 ## Reuse leveraged
 

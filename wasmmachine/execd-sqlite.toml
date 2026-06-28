@@ -1,0 +1,55 @@
+# wasmmachine-execd config that runs the real sqlite3 shell cli-tool
+# (wasmmachine/sqlite.tool.json -> /bin/sqlite3) as a fully interactive console
+# through the v86 WasmMachine, under the sqlink runtime. This is the sqlink
+# mirror of ducklink's examples/tools/execd-duckdb.toml (PLAN-real-shell-tool.md
+# P4). The generic execd pty bridge lives in v86 (crates/wasmmachine-execd:
+# cell.rs / pty.rs / config.rs); the sqlite-specific wiring is just this config
+# + the "sqlink" runtime branch in cell.rs.
+#
+# Interactive round-trip (a live REPL over a pty):
+#   SELECT 42 AS answer;        ->  box-rendered result
+#   .mode box / .tables / .help ->  native sqlite3 dot-commands
+#   .tablex<bs><bs>es           ->  cooked-mode line editing -> .tables
+#
+# Build the inputs first:
+#   - the real sqlite3 shell component:
+#       scripts/build-shell-wasm.sh   -> wasmmachine/sqlite_cli.component.wasm
+#       (build-spec.sh / `make wasmmachine-build` also produces it)
+#   - the sqlink host binary (provides `sqlink run-tool`):
+#       cargo build -p sqlink-host --release   -> target/release/sqlink
+#
+# Run (with v86 execd on PATH or built):
+#   wasmmachine-execd --config wasmmachine/execd-sqlite.toml
+#   # then drive the cell stream protocol:
+#   #   POST /v1/cells/{id}/input         typed SQL -> the pty master
+#   #   GET  /v1/cells/{id}/output?from=N box rows the shell wrote
+#
+# NOTE: the sqlite3 shell links sqlite3 statically (imports only the standard
+# WASI surface), so it ALSO runs under `runtime = "wasmtime"` when the sqlink
+# host-import surface (the future `.load` extension dispatch, P2) is unneeded —
+# the interactive pty console behaves identically either way.
+
+id = "exec-sqlite"
+listen = "127.0.0.1:9092"
+
+# Allocate a pty and hand the slave to the shell as stdin/stdout/stderr
+# (cooked-mode echo + backspace); bridge the master to the cell stream protocol.
+# Plain batch tools leave this false and keep the unchanged piped-capture path.
+interactive = true
+
+# The cli-tool component execd launches (the real sqlite3 shell built as a
+# wasi:cli/run command). Relative to the sqlink repo root.
+component_path = "wasmmachine/sqlite_cli.component.wasm"
+
+# Select the sqlink runtime: execd spawns `sqlink run-tool <component>`
+# (see v86 crates/wasmmachine-execd/src/cell.rs). Use "wasmtime" to run the
+# statically-linked shell directly with no sqlink host.
+runtime = "sqlink"
+
+# Optional: explicit path to the sqlink binary (else SQLINK_PATH env, else
+# `sqlink` on PATH).
+runtime_path = "target/release/sqlink"
+
+# Optional: persistent database file the shell opens (`sqlink run-tool --db`);
+# in-memory when omitted.
+# extensions_dir = "mydata.db"
