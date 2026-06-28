@@ -1,19 +1,26 @@
-//! base32 / base58 / base62 codec scalars.
+//! `baseN` — THIN, GENERATED sqlink (`sqlite:extension`) shim.
+//!
+//! A `wit_bindgen::generate!` block plus one
+//! `datalink_extcore::sqlite_shim!` (the dynamically-loaded component
+//! path) and one `datalink_extcore::embed_shim!` (the static embed path
+//! the CLI / host link in). All logic + the capability surface live ONCE
+//! in datalink `baseN-core`; the registration ABI, func-id dispatch, and
+//! the `SqlValue` / `SqlValueOwned` marshalling are derived from the
+//! core's `declare!` table. Replaces the previously hand-maintained
+//! `lib.rs` + `embed.rs` copies (write-once dedup).
 
 extern crate alloc;
 
 #[cfg(feature = "embed")]
-pub mod embed;
+pub mod embed {
+    datalink_extcore::embed_shim! {
+        core = baseN_core::Core;
+        sqlite_embed = sqlite_embed;
+    }
+}
 
-// wasm_export is gated off in embed builds  the WIT export
-// symbols would collide with any other embedded extension's.
-// See PLAN-embed-extensions.md.
 #[cfg(all(target_arch = "wasm32", not(feature = "embed")))]
 mod wasm_export {
-    use alloc::format;
-    use alloc::string::{String, ToString};
-    use alloc::vec::Vec;
-
     mod bindings {
         wit_bindgen::generate!({
             path: "../../sqlite-loader-wit/wit",
@@ -22,134 +29,12 @@ mod wasm_export {
         });
     }
 
-    use bindings::exports::sqlite::extension::metadata::{
-        Guest as MetadataGuest, Manifest, ScalarFunctionSpec,
-    };
-    use bindings::exports::sqlite::extension::scalar_function::Guest as ScalarFunctionGuest;
-    use bindings::sqlite::extension::types::{FunctionFlags, SqlValue};
-
-    const FID_B32_ENC: u64 = 1;
-    const FID_B32_DEC: u64 = 2;
-    const FID_B58_ENC: u64 = 3;
-    const FID_B58_DEC: u64 = 4;
-    // Cross-DB Base64 aliases (PG / DuckDB / Snowflake / BigQuery).
-    const FID_TO_BASE64: u64 = 5;
-    const FID_FROM_BASE64: u64 = 6;
-
-    struct Ext;
-
-    fn arg_text(args: &[SqlValue], i: usize, fname: &str) -> Result<String, String> {
-        match args.get(i) {
-            Some(SqlValue::Text(s)) => Ok(s.clone()),
-            _ => Err(format!("{fname}: TEXT arg at {i}")),
-        }
+    datalink_extcore::sqlite_shim! {
+        core = baseN_core::Core;
+        bindings = bindings;
+        types = bindings::sqlite::extension::types;
+        metadata = bindings::exports::sqlite::extension::metadata;
+        scalar_function = bindings::exports::sqlite::extension::scalar_function;
+        prefix_expansion = "com.tegmentum.sqlink.ext.baseN";
     }
-
-    fn arg_blob(args: &[SqlValue], i: usize, fname: &str) -> Result<Vec<u8>, String> {
-        match args.get(i) {
-            Some(SqlValue::Blob(b)) => Ok(b.clone()),
-            Some(SqlValue::Text(s)) => Ok(s.as_bytes().to_vec()),
-            _ => Err(format!("{fname}: BLOB arg at {i}")),
-        }
-    }
-
-    impl MetadataGuest for Ext {
-        fn describe() -> Manifest {
-            let det = FunctionFlags::DETERMINISTIC;
-            let s = |id, name: &str, n: i32| ScalarFunctionSpec {
-                id,
-                name: name.into(),
-                num_args: n,
-                func_flags: det,
-            };
-            Manifest {
-                name: "baseN".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                scalar_functions: alloc::vec![
-                    s(FID_B32_ENC, "base32_encode", 1),
-                    s(FID_B32_DEC, "base32_decode", 1),
-                    s(FID_B58_ENC, "base58_encode", 1),
-                    s(FID_B58_DEC, "base58_decode", 1),
-                    s(FID_TO_BASE64, "to_base64", 1),
-                    s(FID_FROM_BASE64, "from_base64", 1),
-                ],
-                aggregate_functions: alloc::vec![],
-                collations: alloc::vec![],
-                vtabs: alloc::vec![],
-                has_authorizer: false,
-                has_update_hook: false,
-                has_commit_hook: false,
-                has_wal_hook: false,
-                wal_hook_id: 0,
-                dot_commands: alloc::vec![],
-                declared_capabilities: alloc::vec![],
-                optional_capabilities: alloc::vec![],
-                preferred_prefix: Some("baseN".into()),
-                prefix_expansion: Some("com.tegmentum.sqlink.ext.baseN".into()),
-                typed_values: Vec::new(),
-            }
-        }
-    }
-
-    impl ScalarFunctionGuest for Ext {
-        fn call(func_id: u64, args: Vec<SqlValue>) -> Result<SqlValue, String> {
-            match func_id {
-                FID_B32_ENC => {
-                    let b = arg_blob(&args, 0, "base32_encode")?;
-                    Ok(SqlValue::Text(base32::encode(
-                        base32::Alphabet::Rfc4648 { padding: false },
-                        &b,
-                    )))
-                }
-                FID_B32_DEC => {
-                    let t = arg_text(&args, 0, "base32_decode")?;
-                    match base32::decode(base32::Alphabet::Rfc4648 { padding: false }, &t) {
-                        Some(b) => Ok(SqlValue::Blob(b)),
-                        None => Ok(SqlValue::Null),
-                    }
-                }
-                FID_B58_ENC => {
-                    let b = arg_blob(&args, 0, "base58_encode")?;
-                    Ok(SqlValue::Text(bs58::encode(&b).into_string()))
-                }
-                FID_B58_DEC => {
-                    let t = arg_text(&args, 0, "base58_decode")?;
-                    match bs58::decode(t.as_bytes()).into_vec() {
-                        Ok(b) => Ok(SqlValue::Blob(b)),
-                        Err(_) => Ok(SqlValue::Null),
-                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                        // gained a wit-value arm; Phase B will replace this wildcard
-                        // with extension-specific decode/encode logic.
-                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
-                    }
-                }
-                FID_TO_BASE64 => {
-                    use base64::Engine;
-                    let b = arg_blob(&args, 0, "to_base64")?;
-                    Ok(SqlValue::Text(
-                        base64::engine::general_purpose::STANDARD.encode(&b),
-                    ))
-                }
-                FID_FROM_BASE64 => {
-                    use base64::Engine;
-                    let t = arg_text(&args, 0, "from_base64")?;
-                    match base64::engine::general_purpose::STANDARD.decode(t.as_bytes()) {
-                        Ok(b) => Ok(SqlValue::Blob(b)),
-                        Err(_) => Ok(SqlValue::Null),
-                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                        // gained a wit-value arm; Phase B will replace this wildcard
-                        // with extension-specific decode/encode logic.
-                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
-                    }
-                }
-                other => Err(format!("baseN: unknown func id {other}")),
-                // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                // gained a wit-value arm; Phase B will replace this wildcard
-                // with extension-specific decode/encode logic.
-                _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
-            }
-        }
-    }
-
-    bindings::export!(Ext with_types_in bindings);
 }

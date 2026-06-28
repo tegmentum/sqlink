@@ -21,3 +21,7 @@ SELECT cc_mask('4111-1111-1111-1111');
 SELECT cc_last4('4111-1111-1111-1111');
 SELECT cc_bin('4111-1111-1111-1111');
 SELECT cc_normalize('4111 1111 1111 1111');
+/* cc_network: title-case network name (gained via the datalink core
+ * superset; cc_type stays lowercase). */
+SELECT cc_network('4111111111111111');
+SELECT cc_network('5500000000000004');

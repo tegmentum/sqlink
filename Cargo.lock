@@ -3,9 +3,18 @@
 version = 4
 
 [[package]]
+name = "aba-core"
+version = "0.1.0"
+dependencies = [
+ "datalink-extcore",
+]
+
+[[package]]
 name = "aba-extension"
 version = "0.1.0"
 dependencies = [
+ "aba-core",
+ "datalink-extcore",
  "libsqlite3-sys",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
@@ -413,12 +422,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
 
 [[package]]
-name = "baseN-extension"
+name = "baseN-core"
 version = "0.1.0"
 dependencies = [
  "base32",
  "base64",
  "bs58",
+ "datalink-extcore",
+]
+
+[[package]]
+name = "baseN-extension"
+version = "0.1.0"
+dependencies = [
+ "baseN-core",
+ "datalink-extcore",
  "libsqlite3-sys",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
@@ -1321,9 +1339,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "creditcard-core"
+version = "0.1.0"
+dependencies = [
+ "datalink-extcore",
+]
+
+[[package]]
 name = "creditcard-extension"
 version = "0.1.0"
 dependencies = [
+ "creditcard-core",
+ "datalink-extcore",
  "libsqlite3-sys",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
@@ -1601,6 +1628,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "datalink-extcore"
+version = "0.1.0"
+dependencies = [
+ "datalink-valuemodel",
+]
+
+[[package]]
 name = "datalink-policy"
 version = "0.1.0"
 source = "git+https://github.com/tegmentum/datalink.git#2a93d510059e840164da4b9bf70b9a76290795b3"
@@ -1609,6 +1643,10 @@ source = "git+https://github.com/tegmentum/datalink.git#2a93d510059e840164da4b9b
 name = "datalink-prefix"
 version = "0.1.0"
 source = "git+https://github.com/tegmentum/datalink.git#2a93d510059e840164da4b9bf70b9a76290795b3"
+
+[[package]]
+name = "datalink-valuemodel"
+version = "0.1.0"
 
 [[package]]
 name = "db-utils-extension"
@@ -1821,9 +1859,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fdab65db9274e0168143841eb8f864a0a21f8b1b8d2ba6812bbe6024346e99e"
 
 [[package]]
+name = "ean-core"
+version = "0.1.0"
+dependencies = [
+ "datalink-extcore",
+]
+
+[[package]]
 name = "ean-extension"
 version = "0.1.0"
 dependencies = [
+ "datalink-extcore",
+ "ean-core",
  "libsqlite3-sys",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
@@ -3138,9 +3185,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
+name = "isin-core"
+version = "0.1.0"
+dependencies = [
+ "datalink-extcore",
+]
+
+[[package]]
 name = "isin-extension"
 version = "0.1.0"
 dependencies = [
+ "datalink-extcore",
+ "isin-core",
  "libsqlite3-sys",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
@@ -3655,10 +3711,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "morse-core"
+version = "0.1.0"
+dependencies = [
+ "datalink-extcore",
+]
+
+[[package]]
 name = "morse-extension"
 version = "0.1.0"
 dependencies = [
+ "datalink-extcore",
  "libsqlite3-sys",
+ "morse-core",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",
@@ -4324,7 +4389,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.10.5",
+ "itertools 0.14.0",
  "proc-macro2",
  "quote",
  "syn",
@@ -4838,10 +4903,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "roman"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2c543f0c827ae24df93159810fd4bce2d0abe3785bb4c4d68fae3c467d58d9b"
+
+[[package]]
+name = "roman-core"
+version = "0.1.0"
+dependencies = [
+ "datalink-extcore",
+ "roman",
+]
+
+[[package]]
 name = "roman-extension"
 version = "0.1.0"
 dependencies = [
+ "datalink-extcore",
  "libsqlite3-sys",
+ "roman-core",
  "sqlite-embed",
  "wit-bindgen 0.44.0",
  "wit-bindgen-rt",

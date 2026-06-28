@@ -31,3 +31,8 @@ wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
 sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }
+# Shared, DB-agnostic logic + capability declaration (datalink pull-up).
+# This shim is GENERATED from the core by datalink-extcore's
+# sqlite_shim! / embed_shim! macros.
+roman-core = { path = "../../../datalink/extensions/roman-core" }
+datalink-extcore = { path = "../../../datalink/crates/datalink-extcore" }

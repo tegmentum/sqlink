@@ -45,8 +45,10 @@ embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
 [dependencies]
 wit-bindgen = { version = "0.44", features = ["macros"] }
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
-base32 = { version = "0.5", default-features = false }
-bs58 = { version = "0.5", default-features = false, features = ["alloc"] }
-base64 = { version = "0.22", default-features = false, features = ["alloc"] }
 libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
 sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }
+# Shared, DB-agnostic logic + capability declaration (datalink pull-up).
+# This shim is GENERATED from the core by datalink-extcore's
+# sqlite_shim! / embed_shim! macros.
+baseN-core = { path = "../../../datalink/extensions/baseN-core" }
+datalink-extcore = { path = "../../../datalink/crates/datalink-extcore" }
