@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="extensions-site/sqlink_logo.png" alt="SQLink" width="320">
+  <img src="sqlink_logo.png" alt="SQLink" width="320">
 </p>
 
 # SQLink

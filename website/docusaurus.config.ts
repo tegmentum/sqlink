@@ -74,6 +74,10 @@ const config: Config = {
     },
     navbar: {
       title: 'sqlink',
+      logo: {
+        alt: 'SQLink',
+        src: 'img/sqlink_logo.png',
+      },
       items: [
         {
           type: 'docSidebar',
