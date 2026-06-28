@@ -914,6 +914,16 @@ pub fn contract_version_string() -> String {
     format!("{CONTRACT_PACKAGE}@{CONTRACT_MAJOR}.x")
 }
 
+/// The reserved scalar name that marks an extension as a PARSER
+/// extension for the host-shell parse-failure intercept
+/// ([`Host::dispatch_parse`]). Any loaded extension declaring a scalar
+/// with this name is offered statements the built-in parser rejected;
+/// a non-empty `Text` return is run as a SQL rewrite. This is the
+/// sqlite-side analog of ducklink's `parser.register-parser-extension`
+/// (SQLite has no extensible parser, so the entrypoint rides the
+/// existing scalar surface). Must match `ggsql_core::PARSE_FN`.
+pub const PARSER_ENTRY_FN: &str = "__sqlink_parse";
+
 /// Per-extension key/value backing for the `state` + `cache`
 /// imports. Both are stored as `Arc<Mutex<HashMap<…>>>` on the
 /// `LoadedExtension` so they survive across the per-call Stores
@@ -8995,6 +9005,65 @@ impl Host {
         }
     }
 
+    /// Parser-extension dispatch — the SQLite-side equivalent of
+    /// DuckDB's `ParserExtension` hook.
+    ///
+    /// SQLite's amalgamation parser is NOT extensible (unlike DuckDB's
+    /// pluggable `ParserExtension`), so there is no in-engine hook a
+    /// component can register against. The cleanest viable equivalent
+    /// is a host-shell parse-failure INTERCEPT: the cli offers any
+    /// statement the built-in parser rejected to this method. The host
+    /// walks loaded extensions for a declared parser entrypoint — a
+    /// scalar named [`PARSER_ENTRY_FN`], mirroring ducklink's
+    /// `parser.register-parser-extension` — calls it with the failed
+    /// statement text, and treats a non-empty `Text` result as a SQL
+    /// REWRITE the cli runs in place of the original. No bound parse
+    /// tree crosses the boundary (text in, SQL text out) — the same
+    /// by-value-safe form ducklink's parser-dispatch uses.
+    ///
+    /// Routing reuses [`Self::dispatch_scalar`] verbatim (the parser
+    /// entrypoint IS an ordinary scalar), so a parser extension needs
+    /// no bespoke host world / bindgen — it loads as a plain
+    /// `minimal`-world scalar extension.
+    ///
+    ///   * `Ok(Some(sql))` — a parser claimed the statement; run `sql`.
+    ///   * `Ok(None)`      — no loaded parser recognized it (the
+    ///     entrypoint returned NULL / empty for every candidate).
+    ///   * `Err(_)`        — a parser claimed the statement but
+    ///     reported it malformed (a clean parse error to surface).
+    pub async fn dispatch_parse(&self, query: &str) -> Result<Option<String>> {
+        use bindings::sqlite::extension::types::SqlValue;
+        // Snapshot the (ext-name, func-id) of every loaded extension
+        // that declares the parser entrypoint scalar. Done under a
+        // short read lock so the async dispatch below doesn't hold it.
+        let candidates: Vec<(String, u64)> = {
+            let components = self.components.read();
+            components
+                .values()
+                .filter_map(|ext| {
+                    ext.scalar_functions
+                        .iter()
+                        .find(|f| f.name == PARSER_ENTRY_FN)
+                        .map(|f| (ext.name.clone(), f.id))
+                })
+                .collect()
+        };
+        for (ext_name, func_id) in candidates {
+            let args = vec![SqlValue::Text(query.to_string())];
+            match self.dispatch_scalar(&ext_name, func_id, args).await? {
+                // A rewrite: the parser claimed + desugared the stmt.
+                Ok(SqlValue::Text(sql)) if !sql.trim().is_empty() => {
+                    return Ok(Some(sql));
+                }
+                // Declined (NULL / empty / non-text): try the next.
+                Ok(_) => continue,
+                // The parser claimed the stmt but it's malformed.
+                Err(msg) => return Err(anyhow!("{msg}")),
+            }
+        }
+        Ok(None)
+    }
+
     /// Invoke a scalar function on a previously-loaded extension.
     /// Builds a fresh per-call Store, instantiates the loaded
     /// component, calls `scalar-function.call(func_id, args)`,
@@ -10785,6 +10854,13 @@ impl bindings::sqlink::wasm::extension_loader::Host for RunLoaderStub {
     ) -> std::result::Result<bindings::sqlink::wasm::extension_loader::DotCommandResult, LoaderError>
     {
         Err(loader_stub_err("dispatch-dot-command"))
+    }
+
+    async fn dispatch_parse(
+        &mut self,
+        _query: String,
+    ) -> std::result::Result<Option<String>, LoaderError> {
+        Err(loader_stub_err("dispatch-parse"))
     }
 
     async fn load_extension_from_bytes(
@@ -13139,6 +13215,19 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             state_deltas,
             exit_code: outcome.exit_code,
         })
+    }
+
+    async fn dispatch_parse(
+        &mut self,
+        query: String,
+    ) -> std::result::Result<Option<String>, LoaderError> {
+        self.host
+            .dispatch_parse(&query)
+            .await
+            .map_err(|e| LoaderError {
+                code: 500,
+                message: e.to_string(),
+            })
     }
 
     async fn describe_extension(

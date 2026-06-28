@@ -113,6 +113,31 @@ interface extension-loader {
         exit-code: s32,
     }
 
+    /// Parser-extension dispatch — the SQLite-side equivalent of
+    /// DuckDB's `ParserExtension` hook. SQLite's amalgamation parser
+    /// is NOT extensible (unlike DuckDB's), so there is no in-engine
+    /// parser hook to register against. The cleanest viable
+    /// equivalent is a host-shell parse-failure INTERCEPT: when the
+    /// cli runs a statement the built-in parser rejects (a syntax
+    /// error), it offers the raw statement text here. The host walks
+    /// loaded extensions for a declared parser entrypoint (a scalar
+    /// named `__sqlink_parse`, mirroring ducklink's
+    /// `parser.register-parser-extension`), calls it with the failed
+    /// statement, and returns the first non-empty result as a SQL
+    /// REWRITE the cli runs in place of the original. No bound parse
+    /// tree crosses the boundary (text in, SQL text out) — the same
+    /// by-value-safe form ducklink's parser-dispatch uses.
+    ///
+    /// Returns:
+    ///   - `some(sql)` — a parser extension claimed the statement and
+    ///     rewrote it to `sql`; the cli runs `sql` instead.
+    ///   - `none` — no loaded parser extension recognized the
+    ///     statement; the cli surfaces the original parse error.
+    /// A `loader-error` is returned only when a parser extension
+    /// itself reports the statement as malformed (a clean parse
+    /// error the cli shows the user).
+    dispatch-parse: func(query: string) -> result<option<string>, loader-error>;
+
     /// Phase 4 http-CAS support. The cli's `.sqlink` registry
     /// stores `sqlink_cas_resolver` rows; on a session-miss for a
     /// row whose digest isn't in `sqlink_artifact`, the cli walks
