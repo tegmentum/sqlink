@@ -1,0 +1,10 @@
+# Outputs for extensions/duckdbcompat/smoke.sql.
+# Derived from duckdbcompat-core's native unit tests; the sqlink host CLI
+# smoke could not be executed in-tree (sqlite-cli on main fails to build
+# pending the user's unmerged wit-value handling -- see #153 report).
+█████
+1
+1
+1
+1
+1

@@ -1,0 +1,33 @@
+[package]
+name = "duckdbcompat-extension"
+version = "0.1.0"
+edition = "2021"
+description = """
+DuckDB-native scalars SQLite lacks (cross-compat #153): bar, even, gamma, lgamma, nextafter
+"""
+license = "MIT"
+publish = false
+
+# Standalone workspace per project rules; does not affect `make ext`.
+# (Mirrors the other pulled-up extensions: iban / list / color / stats.)
+[workspace]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+# Enables the static embed path (src embed_shim!) for the cli, mirroring
+# the other pulled-up extensions. WIT component build is unaffected.
+embed = ["dep:libsqlite3-sys", "dep:sqlite-embed"]
+
+[dependencies]
+wit-bindgen = { version = "0.44", features = ["macros"] }
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+libsqlite3-sys = { version = "0.38", optional = true, default-features = false }
+sqlite-embed = { path = "../../sqlite-wasm/sqlite-embed", optional = true }
+# Shared, DB-agnostic logic + capability declaration (datalink pull-up).
+# This shim is GENERATED from the core by datalink-extcore's
+# sqlite_shim! / embed_shim! macros. Single-direction (#153):
+# DuckDB-native functions, exposed to SQLite.
+duckdbcompat-core = { path = "../../../datalink/extensions/duckdbcompat-core" }
+datalink-extcore = { path = "../../../datalink/crates/datalink-extcore" }
