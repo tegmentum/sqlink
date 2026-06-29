@@ -914,6 +914,122 @@ pub fn contract_version_string() -> String {
     format!("{CONTRACT_PACKAGE}@{CONTRACT_MAJOR}.x")
 }
 
+/// #142 resolver spine: map a bare extension NAME (the argument the
+/// user gave `.load <name>`) to an on-disk component artifact.
+///
+/// This is the SQLite mirror of ducklink's
+/// `ExtensionManager::resolve_provider_artifact` / `resolver::resolve`
+/// (in `crates/ducklink-host/src/resolver.rs`): there, `LOAD <name>`
+/// becomes `request-load(name)`, the host reads `registry/index.json`
+/// for the entry, and joins the chosen artifact basename onto the
+/// extension dir. Here `.load <name>` arrives over the
+/// `sqlink:wasm/extension-loader` WIT import as a string; when that
+/// string is not already an existing file (and not a URI — those go
+/// through `load_extension_from_uri`), we consult the sqlink catalog
+/// and the on-disk artifact dir using the `<name>_extension.component.wasm`
+/// naming convention.
+///
+/// Catalog membership is advisory (logged with the declared exports
+/// when present); a name absent from the catalog still resolves by
+/// filename, matching ducklink's `read_manifest_entry` -> backward-
+/// compat filename fallback. Returns `None` when nothing resolves so
+/// the caller can keep the original "not found" error shape.
+///
+/// Search order for the artifact dir:
+///   1. `SQLINK_EXT_DIR` (OS path-list; e.g. `dir1:dir2`)
+///   2. `<root>/extensions/_shared-target/wasm32-wasip2/release`
+///   3. `<root>/target/wasm32-wasip2/release`
+///   4. `<root>/extensions/<name>/target/wasm32-wasip2/release`
+/// where `<root>` is `SQLINK_REPO_ROOT` or the current working dir.
+/// The catalog file is `SQLINK_REGISTRY` or `<root>/registry/index.json`.
+fn resolve_catalog_artifact(name: &str) -> Option<PathBuf> {
+    // Only bare identifiers are catalog names. Anything carrying a
+    // path separator, a drive/scheme colon, or a file extension is a
+    // real path/URI the caller has already attempted.
+    if name.is_empty()
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains(':')
+        || name.contains('.')
+    {
+        return None;
+    }
+
+    let root: PathBuf = std::env::var_os("SQLINK_REPO_ROOT")
+        .map(PathBuf::from)
+        .or_else(|| std::env::current_dir().ok())
+        .unwrap_or_default();
+
+    // Consult the catalog (registry/index.json) — the resolver spine.
+    // Best-effort: a missing/unparseable catalog just disables the
+    // membership log, never blocks an on-disk resolve.
+    let registry_path = std::env::var_os("SQLINK_REGISTRY")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("registry/index.json"));
+    let catalog_exports: Option<Vec<String>> = std::fs::read(&registry_path)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
+        .and_then(|v| {
+            v.get("extensions")?
+                .as_array()?
+                .iter()
+                .find(|e| e.get("name").and_then(|n| n.as_str()) == Some(name))
+                .map(|e| {
+                    e.get("exports")
+                        .and_then(|x| x.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|s| s.as_str().map(str::to_string))
+                                .collect::<Vec<_>>()
+                        })
+                        .unwrap_or_default()
+                })
+        });
+
+    let norm = name.replace('-', "_");
+    let filenames = [
+        format!("{norm}_extension.component.wasm"),
+        format!("{norm}.component.wasm"),
+        format!("{norm}_extension.wasm"),
+        format!("{norm}.wasm"),
+    ];
+
+    let mut dirs: Vec<PathBuf> = Vec::new();
+    if let Some(v) = std::env::var_os("SQLINK_EXT_DIR") {
+        for d in std::env::split_paths(&v) {
+            if !d.as_os_str().is_empty() {
+                dirs.push(d);
+            }
+        }
+    }
+    dirs.push(root.join("extensions/_shared-target/wasm32-wasip2/release"));
+    dirs.push(root.join("target/wasm32-wasip2/release"));
+    dirs.push(root.join(format!("extensions/{name}/target/wasm32-wasip2/release")));
+
+    for d in &dirs {
+        for f in &filenames {
+            let candidate = d.join(f);
+            if candidate.is_file() {
+                match &catalog_exports {
+                    Some(exports) => tracing::info!(
+                        name,
+                        artifact = %candidate.display(),
+                        exports = ?exports,
+                        "resolve_catalog_artifact: catalog-resolved extension"
+                    ),
+                    None => tracing::info!(
+                        name,
+                        artifact = %candidate.display(),
+                        "resolve_catalog_artifact: resolved by filename (not in catalog)"
+                    ),
+                }
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
 /// The reserved scalar name that marks an extension as a PARSER
 /// extension for the host-shell parse-failure intercept
 /// ([`Host::dispatch_parse`]). Any loaded extension declaring a scalar
@@ -7861,25 +7977,53 @@ impl Host {
     /// added by a wasmtime::component::Linker — sketched in the
     /// README, planned as the natural next iteration).
     pub async fn load_extension(&self, path: PathBuf, policy: Policy) -> Result<String> {
-        let bytes = std::fs::read(&path).map_err(|e| anyhow!("read {}: {e}", path.display()))?;
-        let hint = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("extension")
-            .to_string();
+        // #142 resolver spine: `.load <name>` where the argument is a
+        // bare catalog name (e.g. `sha1`) rather than an existing file
+        // or a URI resolves against the sqlink extension catalog plus
+        // the on-disk artifact dir. This is the SQLite mirror of
+        // ducklink's `ExtensionManager::resolve_provider_artifact`
+        // (name -> registry/index.json -> artifact). An argument that
+        // already names a real file keeps the original verbatim
+        // behaviour; URI loads go through `load_extension_from_uri`.
+        let (resolved, hint) = if path.exists() {
+            let h = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("extension")
+                .to_string();
+            (path.clone(), h)
+        } else {
+            let requested = path.to_string_lossy().to_string();
+            match resolve_catalog_artifact(&requested) {
+                Some(p) => (p, requested),
+                None => {
+                    return Err(anyhow!(
+                        "extension '{}' not found: it is not an existing file and no \
+                         catalog artifact resolved. The resolver consults \
+                         registry/index.json and the on-disk extension dir for a \
+                         `<name>_extension.component.wasm` artifact; point \
+                         SQLINK_EXT_DIR / SQLINK_REPO_ROOT at your built artifacts, \
+                         or pass an explicit path/URI.",
+                        path.display()
+                    ));
+                }
+            }
+        };
+        let bytes =
+            std::fs::read(&resolved).map_err(|e| anyhow!("read {}: {e}", resolved.display()))?;
         // PLAN-followups.md P2: auto-cache .load'd extension bytes
         // by content-hash so a later `.bundle save` + restart can
         // reach the extension via `sqlink --bundle-load` without
         // the operator having to manually prime the cas-cache.
         // Best-effort: a failure here just means the cas-cache
         // priming didn't happen; the extension still loads. The
-        // URI is the path's file:// form  good enough for the
-        // .cache list / cli observability surface.
+        // URI is the resolved artifact's file:// form  good enough
+        // for the .cache list / cli observability surface.
         if let Some(cache) = self.cache.read().as_ref() {
-            let uri = format!("file://{}", path.display());
+            let uri = format!("file://{}", resolved.display());
             if let Err(e) = cache.put(&uri, &bytes) {
                 tracing::warn!(
-                    path = %path.display(),
+                    path = %resolved.display(),
                     err = %e,
                     "load_extension: cas-cache put failed; .bundle-load round-trip may need manual priming"
                 );
