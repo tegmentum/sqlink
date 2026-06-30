@@ -956,6 +956,36 @@ pub mod provider_envelope {
             .collect()
     }
 
+    /// `DotInvokeReq { func_id, args, interactive, display_mode,
+    /// bail_on_error }` (streaming dot-command invoke).
+    pub fn encode_dot_invoke(
+        func_id: u64,
+        args: &str,
+        interactive: bool,
+        display_mode: &str,
+        bail_on_error: bool,
+    ) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("func_id", Cbor::Integer(func_id.into())),
+            ("args", Cbor::Text(args.into())),
+            ("interactive", Cbor::Bool(interactive)),
+            ("display_mode", Cbor::Text(display_mode.into())),
+            ("bail_on_error", Cbor::Bool(bail_on_error)),
+        ]))
+    }
+
+    /// Decode a `DotInvokeResp` into (text, ok, exit_code, stdout, stderr).
+    pub fn decode_dot_invoke(bytes: &[u8]) -> Result<(String, bool, i32, String, String), String> {
+        let v = de(bytes)?;
+        Ok((
+            field(&v, "text").map(text).unwrap_or_default(),
+            field(&v, "ok").map(is_true).unwrap_or(false),
+            field(&v, "exit_code").map(|x| int(x) as i32).unwrap_or(0),
+            field(&v, "stdout").map(text).unwrap_or_default(),
+            field(&v, "stderr").map(text).unwrap_or_default(),
+        ))
+    }
+
     pub fn decode_bool(bytes: &[u8]) -> Result<bool, String> {
         Ok(is_true(&de(bytes)?))
     }
@@ -7678,6 +7708,10 @@ pub struct ProviderBacking {
     pub vtabs: std::collections::HashSet<u64>,
     /// True when any hook tier (update/commit/wal) is resident-backed.
     pub has_hook: bool,
+    /// Task #227: dot-command name -> woco func_id. Driven via the
+    /// streaming cli-aware path (`invoke_cli`) so the provider can emit
+    /// rows mid-`handle` through the captured cli-stdout.
+    pub dotcmds: HashMap<String, u64>,
     /// True when this provider was registered as a WARM-ONCE RESIDENT
     /// provider (the precondition for moving coherence-sensitive tiers).
     /// A non-resident (fresh-store) backing only carries scalar/collation.
@@ -9820,6 +9854,70 @@ impl Host {
         args: &str,
         cli_state: Vec<(String, String)>,
     ) -> Result<DotCommandOutcome> {
+        // Task #227: if `name` is a provider-backed dot-command, drive it
+        // through the resident provider's STREAMING cli-aware path
+        // (`invoke_cli` -> dotcmd.invoke). The provider emits its rows mid-
+        // `handle` via the captured cli-stdout, which we fold into the
+        // outcome text. This is the do_load wiring of the streaming-dotcmd
+        // path proven in isolation in #224/#226.
+        let provider_dot = {
+            let g = self.provider_backed.read();
+            g.values()
+                .find_map(|b| b.dotcmds.get(name).map(|id| (b.provider_id.clone(), *id)))
+        };
+        if let Some((provider_id, func_id)) = provider_dot {
+            let handle = {
+                let g = self.compose_providers.read();
+                g.get(DEFAULT_TENANT)
+                    .and_then(|m| m.get(&provider_id))
+                    .map(|p| compose_provider::ProviderHandle {
+                        kind: p.kind.clone(),
+                    })
+            };
+            let handle = handle
+                .ok_or_else(|| anyhow!("provider {provider_id} for dotcmd {name} vanished"))?;
+            let snapshot: HashMap<String, String> = cli_state.into_iter().collect();
+            let display_mode = snapshot
+                .get("display/mode")
+                .and_then(|j| parse_json_text(j))
+                .unwrap_or_else(|| "list".to_string());
+            let bail_on_error = snapshot
+                .get("bail/on-error")
+                .map(|j| matches!(j.trim(), "true" | "1"))
+                .unwrap_or(false);
+            let payload = provider_envelope::encode_dot_invoke(
+                func_id,
+                args,
+                true,
+                &display_mode,
+                bail_on_error,
+            )
+            .map_err(|e| anyhow!("encode dotcmd.invoke: {e}"))?;
+            let (resp, cli) = handle
+                .invoke_cli("dotcmd.invoke", &payload, snapshot)
+                .await
+                .map_err(|e| anyhow!("provider dotcmd.invoke: {e}"))?;
+            let (text, ok, exit_code, stdout, _stderr) =
+                provider_envelope::decode_dot_invoke(&resp)
+                    .map_err(|e| anyhow!("decode dotcmd resp: {e}"))?;
+            // Fold the streamed stdout into the outcome text (the cli
+            // renders the returned text). Prefer the captured stream
+            // (greet streams) but keep the trailing `text` too.
+            let streamed = if !cli.stdout.is_empty() { cli.stdout } else { stdout };
+            let combined = if streamed.is_empty() {
+                text
+            } else if text.is_empty() {
+                streamed
+            } else {
+                format!("{streamed}{text}")
+            };
+            return Ok(DotCommandOutcome {
+                text: combined,
+                state_deltas: vec![],
+                exit_code: if ok { exit_code } else { exit_code.max(1) },
+            });
+        }
+
         // Find the extension whose manifest registers `name`.
         let (ext_arc, func_id) = {
             let components = self.components.read();
@@ -10027,6 +10125,11 @@ impl Host {
                 || manifest.has_update_hook
                 || manifest.has_commit_hook
                 || manifest.has_wal_hook,
+            dotcmds: manifest
+                .dotcmd_specs
+                .iter()
+                .map(|d| (d.name.clone(), d.id))
+                .collect(),
             resident,
         };
         self.provider_backed
