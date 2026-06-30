@@ -171,6 +171,13 @@ impl ProviderHandle {
         }
     }
 
+    /// Task #227: true if this provider is a WARM-ONCE RESIDENT provider
+    /// (its store persists across invokes). Only resident providers may
+    /// back the coherence-sensitive tiers (vtab/hook/aggregate).
+    pub fn is_resident(&self) -> bool {
+        matches!(self.kind, ProviderKind::ResidentWasmComponent { .. })
+    }
+
     /// True if this is a streaming dotcmd provider (imports `cli-stdout`)
     /// and must be driven via `invoke_cli` rather than `invoke`.
     pub fn is_streaming_cli(&self) -> bool {
