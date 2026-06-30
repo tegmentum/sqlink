@@ -136,11 +136,11 @@ ciborium = "0.2"
 # and (b) the host's TVM probe tests (host/tests/tvm_*) instantiate
 # small components that exercise the tvm:memory contract directly.
 # The host's make_run_linker + the main.rs cli runner both wire
-# tvm_wasmtime::add_to_linker so those imports resolve. Path dep
-# against the tvm-wasm submodule (sqlink/tvm-wasm/), formerly the
-# sibling checkout at <sqlink-parent>/tvm-wasm/ which didn't
-# resolve on CI runners.
-tvm-wasmtime = { path = "../tvm-wasm/crates/tvm-wasmtime" }
+# tvm_wasmtime::add_to_linker so those imports resolve. Sourced via a
+# pinned git rev of tvm-wasm (not the submodule path) so that ChimeraDB's
+# in-process build can link sqlink-host + ducklink-host against a SINGLE
+# tvm-core source (both pin the same rev). See chimeradb/PLAN-inprocess.md PR1.
+tvm-wasmtime = { git = "https://github.com/tegmentum/tvm-wasm.git", rev = "6f3bae38fad4addd4de1837ab151f4ac871d1dd4" }
 
 # PLAN-cli-stages-5-6.md Stage 5c: embedded SQL function extensions
 # moved from cli/Cargo.toml. Each is an optional dep + a feature
