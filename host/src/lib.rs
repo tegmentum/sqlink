@@ -14466,3 +14466,142 @@ mod contract_guard_tests {
         assert!(msg.contains("contract 1.x"), "states the host major: {msg}");
     }
 }
+
+// ── In-process CLI capture (ChimeraDB mode B / PR2) ─────────────────────────
+//
+// Run the sqlite CLI component in-process with in-memory stdio and return its
+// captured stdout. Mirrors the run path in the `sqlink` binary's `main()`, but
+// feeds stdin from `stdin_script` and captures stdout via a MemoryOutputPipe
+// instead of inheriting the TTY — so a host process (e.g. ChimeraDB) can run
+// SQL and read results without spawning a subprocess. Host-side log lines still
+// go to the real stderr via `eprintln`. See chimeradb/PLAN-inprocess.md PR2.
+
+/// Wasmtime store state for the full CLI run path (SPI + dispatch +
+/// extension-loader + tvm). Mirrors the `sqlink` binary's private `State`.
+struct CliRunState {
+    wasi: wasmtime_wasi::WasiCtx,
+    resources: wasmtime_wasi::ResourceTable,
+    host: Host,
+    tvm: tvm_wasmtime::TvmHost,
+}
+
+impl AsMut<tvm_wasmtime::TvmHost> for CliRunState {
+    fn as_mut(&mut self) -> &mut tvm_wasmtime::TvmHost {
+        &mut self.tvm
+    }
+}
+
+impl wasmtime_wasi::WasiView for CliRunState {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.resources,
+        }
+    }
+}
+
+/// Run the sqlite CLI `component_path` against `db_path` in-process, feeding
+/// `stdin_script` (SQL + dot-commands) to the REPL on stdin and returning the
+/// captured stdout. `db_path` may be empty or `:memory:` for an in-memory db.
+pub async fn run_cli_capture(
+    db_path: &str,
+    component_path: &std::path::Path,
+    stdin_script: &str,
+) -> Result<String> {
+    let host = Host::new()?;
+    host.set_db_path(db_path);
+    let cache = crate::cache::Cache::open(crate::cache::Cache::default_root(None)?)?;
+    host.set_cache(cache);
+
+    // Match the binary: register the sqlite-runtime compose provider against the
+    // db so SPI-backed paths reach the same connection.
+    if !db_path.is_empty() && db_path != ":memory:" {
+        use sqlite_component_core::db;
+        let conn = db::Connection::open(db_path, db::OpenFlags::DEFAULT)
+            .map_err(|e| anyhow!("open {db_path}: {}", e.message))?;
+        let conn_arc = std::sync::Arc::new(parking_lot::Mutex::new(Some(conn)));
+        host.register_compose_provider(
+            "sqlite-runtime",
+            crate::compose_provider::ProviderHandle::new_sqlite_runtime(conn_arc),
+        );
+    }
+
+    let engine = host.engine_run().clone();
+    let bytes = std::fs::read(component_path)
+        .map_err(|e| anyhow!("read {}: {e}", component_path.display()))?;
+    let component =
+        Component::from_binary(&engine, &bytes).map_err(|e| anyhow!("compile component: {e}"))?;
+
+    let mut linker: Linker<CliRunState> = Linker::new(&engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker).map_err(|e| anyhow!("wire WASI: {e}"))?;
+    bindings::sqlink::wasm::extension_loader::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
+        HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
+    })
+    .map_err(|e| anyhow!("wire extension-loader: {e}"))?;
+    bindings::sqlink::wasm::dispatch::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
+        HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
+    })
+    .map_err(|e| anyhow!("wire dispatch: {e}"))?;
+    bindings::sqlite::extension::spi::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
+        HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
+    })
+    .map_err(|e| anyhow!("wire spi: {e}"))?;
+    bindings::sqlite::extension::spi_loader::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
+        HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
+    })
+    .map_err(|e| anyhow!("wire spi-loader: {e}"))?;
+    tvm_wasmtime::add_to_linker(&mut linker).map_err(|e| anyhow!("wire tvm:memory: {e}"))?;
+
+    let stdin = wasmtime_wasi::p2::pipe::MemoryInputPipe::new(stdin_script.as_bytes().to_vec());
+    let stdout = wasmtime_wasi::p2::pipe::MemoryOutputPipe::new(usize::MAX);
+    let mut wasi_builder = wasmtime_wasi::WasiCtxBuilder::new();
+    wasi_builder.stdin(stdin);
+    wasi_builder.stdout(stdout.clone());
+    wasi_builder.stderr(wasmtime_wasi::p2::pipe::MemoryOutputPipe::new(usize::MAX));
+    wasi_builder.inherit_env();
+    if !db_path.is_empty() && db_path != ":memory:" {
+        let p = std::path::Path::new(db_path);
+        let parent = p
+            .parent()
+            .filter(|x| !x.as_os_str().is_empty())
+            .unwrap_or_else(|| std::path::Path::new("."));
+        let parent_str = parent.to_string_lossy().to_string();
+        wasi_builder
+            .preopened_dir(
+                parent,
+                &parent_str,
+                wasmtime_wasi::DirPerms::all(),
+                wasmtime_wasi::FilePerms::all(),
+            )
+            .map_err(|e| anyhow!("preopen {}: {e}", parent.display()))?;
+    }
+    let argv0 = component_path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("component");
+    wasi_builder.arg(argv0);
+    if !db_path.is_empty() {
+        wasi_builder.arg(db_path);
+    }
+
+    let state = CliRunState {
+        wasi: wasi_builder.build(),
+        resources: wasmtime_wasi::ResourceTable::new(),
+        host,
+        tvm: tvm_wasmtime::TvmHost::new(),
+    };
+    let mut store = wasmtime::Store::new(&engine, state);
+    store.set_epoch_deadline(1_000_000_000_000);
+    let command =
+        wasmtime_wasi::p2::bindings::Command::instantiate_async(&mut store, &component, &linker)
+            .await
+            .map_err(|e| anyhow!("instantiate: {e}"))?;
+    // The CLI's own exit Result is irrelevant; we want its captured output.
+    let _ = command
+        .wasi_cli_run()
+        .call_run(&mut store)
+        .await
+        .map_err(|e| anyhow!("wasi:cli/run.run: {e}"))?;
+    drop(store);
+    Ok(String::from_utf8_lossy(&stdout.contents()).into_owned())
+}
