@@ -60,6 +60,16 @@ wasmtime = { version = "46.0.1", features = [
     "cache",
 ] }
 wasmtime-wasi = "46.0.1"
+# Standard wasi:http surface for loaded extensions that compose with
+# upstream wasi:http components (e.g. tiger-geocoder-sqlink-bridge,
+# which inlines the Census REST geocoder via wasi:http/outgoing-handler).
+# Distinct from the host's custom `sqlite:extension/http` interface —
+# that one is reqwest-backed and gated by `Capability::Http` + the
+# per-extension http-policy; this surface satisfies the standardised
+# `wasi:http/{types,outgoing-handler}` imports a guest may inherit
+# transitively from a composed upstream component. Version must match
+# the `wasmtime` crate version exactly. (#683)
+wasmtime-wasi-http = "46.0.1"
 parking_lot = "0.12"
 tracing = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util", "fs", "time"] }
