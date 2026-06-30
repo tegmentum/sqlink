@@ -1372,15 +1372,19 @@ pub struct LoadedState {
     /// tiger-geocoder-sqlink-bridge → tiger-geocoder-wasm).
     /// `WasiHttpCtx` itself is a thin config struct (field-size
     /// limit + a `Default` of `wasmtime_wasi_http::DEFAULT_FIELD_SIZE_LIMIT`);
-    /// the actual request-dispatch hooks come from the default
-    /// `&'static mut dyn WasiHttpHooks` exposed via
-    /// `wasmtime_wasi_http::p2::default_hooks()` (the `default-send-request`
-    /// feature on `wasmtime-wasi-http` is on by default). Unlike the
-    /// custom `sqlite:extension/http` surface, this one is NOT gated
-    /// by `http_policy` — extensions that compose `wasi:http`
-    /// upstream get the default proxy behaviour. Per-host network
-    /// gating for this surface is a follow-up (#683 deferral).
+    /// the actual request-dispatch hooks live in `http_hooks` below.
+    /// The `Capability::Http` bit (#685) controls whether the
+    /// `wasi:http` surface is wired into the linker at all; the
+    /// hooks add per-domain gating on top of that (#688).
     http_ctx: wasmtime_wasi_http::WasiHttpCtx,
+    /// Per-Store `wasi:http` hooks that gate outgoing requests
+    /// against the loaded extension's `HttpPolicy`. Mirrors the
+    /// per-call gate that `check_http_policy` enforces on the
+    /// custom `sqlite:extension/http` surface so an extension
+    /// composing `wasi:http` upstream is held to the same
+    /// per-domain allowlist (#688). `Capability::Http` controls
+    /// surface availability; this controls per-call shape.
+    http_hooks: SqlinkWasiHttpHooks,
 }
 
 impl wasmtime_wasi::WasiView for LoadedState {
@@ -1397,12 +1401,70 @@ impl wasmtime_wasi_http::p2::WasiHttpView for LoadedState {
         wasmtime_wasi_http::p2::WasiHttpCtxView {
             ctx: &mut self.http_ctx,
             table: &mut self.table,
-            // Default hooks ride on `wasmtime-wasi-http`'s
-            // `default-send-request` feature and dispatch via
-            // tokio-rustls / webpki-roots. Same async runtime the
-            // host already drives WASI on, so no extra wiring.
-            hooks: Default::default(),
+            // Per-Store hooks that gate outgoing requests against
+            // the loaded extension's `HttpPolicy.allowed_hosts` /
+            // `allowed_methods`. Falls through to `default_send_request`
+            // (tokio-rustls / webpki-roots) on the same async runtime
+            // the host already drives WASI on once the gate clears.
+            hooks: &mut self.http_hooks,
         }
+    }
+}
+
+/// Per-Store `WasiHttpHooks` impl that mirrors `check_http_policy`'s
+/// per-domain / per-method gate onto the standard `wasi:http` surface
+/// (#688).
+///
+/// `Capability::Http` (#685) controls whether the surface is wired
+/// into the linker at all; this hook controls per-call shape. The
+/// policy field is cloned from the loaded extension's `policy.http`
+/// at Store-build time so the hook can be inspected without reaching
+/// back into the rest of `LoadedState` (the trait gives us only
+/// `&mut self`).
+///
+/// Fail-closed default: `None` policy means the extension wasn't
+/// granted any HTTP policy at load time, which we treat as a hard
+/// deny on outbound HTTP. Same shape as `check_http_policy` for the
+/// custom surface — an extension with `Capability::Http` granted but
+/// no `HttpPolicy` block in its manifest is in a misconfigured state,
+/// and silent open-internet access is the wrong default.
+#[derive(Default)]
+struct SqlinkWasiHttpHooks {
+    policy: Option<HttpPolicy>,
+}
+
+impl wasmtime_wasi_http::p2::WasiHttpHooks for SqlinkWasiHttpHooks {
+    fn send_request(
+        &mut self,
+        request: hyper::Request<wasmtime_wasi_http::p2::body::HyperOutgoingBody>,
+        config: wasmtime_wasi_http::p2::types::OutgoingRequestConfig,
+    ) -> wasmtime_wasi_http::p2::HttpResult<
+        wasmtime_wasi_http::p2::types::HostFutureIncomingResponse,
+    > {
+        use wasmtime_wasi_http::p2::bindings::http::types::ErrorCode;
+        // `Uri::authority()` returns Option<&Authority>; the `host()`
+        // accessor strips port + userinfo for us, so the value we feed
+        // `HttpPolicy::allows` matches the shape that `check_http_policy`
+        // uses for the custom `sqlite:extension/http` surface.
+        let host = request
+            .uri()
+            .authority()
+            .map(|a| a.host().to_string())
+            .unwrap_or_default();
+        let method = request.method().as_str().to_string();
+        let policy = self
+            .policy
+            .as_ref()
+            .ok_or(ErrorCode::HttpRequestDenied)?;
+        if !policy.allows(&host) {
+            return Err(ErrorCode::HttpRequestDenied.into());
+        }
+        if policy.check_method(&method).is_err() {
+            return Err(ErrorCode::HttpRequestDenied.into());
+        }
+        Ok(wasmtime_wasi_http::p2::default_send_request(
+            request, config,
+        ))
     }
 }
 
@@ -6629,6 +6691,15 @@ fn build_loaded_store(
         // for typical REST/JSON payloads; tighter limits would need to
         // travel via per-extension policy. See #683.
         http_ctx: wasmtime_wasi_http::WasiHttpCtx::new(),
+        // Per-Store wasi:http hooks. Clone the same `HttpPolicy` the
+        // custom `sqlite:extension/http` surface uses so both surfaces
+        // are held to the same per-domain allowlist (#688). `None`
+        // policy = the extension wasn't granted any HTTP policy at
+        // load time = fail-closed deny on outbound HTTP, matching
+        // `check_http_policy` for the custom surface.
+        http_hooks: SqlinkWasiHttpHooks {
+            policy: ext.policy.http.clone(),
+        },
     };
     let mut store = wasmtime::Store::new(engine, state);
     let fuel = ext.policy.fuel_per_call.unwrap_or(u64::MAX / 2);

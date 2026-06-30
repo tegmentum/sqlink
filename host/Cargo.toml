@@ -70,6 +70,11 @@ wasmtime-wasi = "46.0.1"
 # transitively from a composed upstream component. Version must match
 # the `wasmtime` crate version exactly. (#683)
 wasmtime-wasi-http = "46.0.1"
+# Pulled in for the `hyper::Request` type used in the
+# `WasiHttpHooks::send_request` signature (#688). The version is
+# pinned to whatever `wasmtime-wasi-http` already resolves; this
+# stays in lock-step automatically via Cargo's resolver.
+hyper = "1"
 parking_lot = "0.12"
 tracing = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "io-std", "io-util", "fs", "time"] }
