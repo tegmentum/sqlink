@@ -7270,6 +7270,35 @@ pub struct RecordedFunction {
     pub want_bare: bool,
 }
 
+/// True when `err` carries a wasmtime trap in its downcast chain.
+///
+/// A wasmtime `Store` cannot be reused after any trap (the runtime
+/// intentionally locks subsequent component-instance entry so future
+/// calls fail with `cannot enter component instance`). Dispatch sites
+/// use this to detect a poisoning trap and drop the cached
+/// `Store` + `Instance` so the next call lazily re-instantiates a
+/// fresh one — turning a single bad call from a load-killing event
+/// into a per-call error that leaves the extension usable. (#693)
+#[inline]
+pub fn is_wasmtime_trap(err: &wasmtime::Error) -> bool {
+    err.downcast_ref::<wasmtime::Trap>().is_some()
+}
+
+impl TabularGuard {
+    /// Drop the cached `tabular`-world Store + Instance if `err`
+    /// is a wasmtime trap. Next `tabular_guard` acquire will
+    /// re-instantiate the component. See `is_wasmtime_trap`. (#693)
+    fn poison_if_trap(&mut self, err: &wasmtime::Error) {
+        if !is_wasmtime_trap(err) {
+            return;
+        }
+        match self {
+            TabularGuard::ReadOnly(g) => **g = None,
+            TabularGuard::Mutating(g) => **g = None,
+        }
+    }
+}
+
 impl Host {
     /// Build a Host with sensible default Engine config (fuel, epoch,
     /// component-model, pooling). Spawns the epoch-bumper thread.
@@ -9346,12 +9375,19 @@ impl Host {
             display_mode,
             bail_on_error,
         };
-        let result = cached
+        let invoke_result = cached
             .instance
             .sqlite_extension_dot_command()
             .call_invoke(&mut cached.store, func_id, &ctx)
-            .await
-            .map_err(|e| anyhow!("dot-command.invoke trap: {e}"))?;
+            .await;
+        if let Err(ref e) = invoke_result {
+            if is_wasmtime_trap(e) {
+                // Drop the cached dotcmd-aware Store; next
+                // dispatch will re-instantiate. (#693)
+                *guard = None;
+            }
+        }
+        let result = invoke_result.map_err(|e| anyhow!("dot-command.invoke trap: {e}"))?;
         match result {
             Ok(r) => {
                 let deltas = r
@@ -9510,13 +9546,20 @@ impl Host {
         let result = match route {
             ScalarRoute::Minimal => {
                 let mut guard = self.minimal_locked(ext_name).await?;
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_scalar_function()
-                    .call_call(&mut cached.store, func_id, &loaded_args)
-                    .await
-                    .map_err(|e| anyhow!("call_call: {e}"))?
+                let r = {
+                    let cached = guard.as_mut().unwrap();
+                    cached
+                        .instance
+                        .sqlite_extension_scalar_function()
+                        .call_call(&mut cached.store, func_id, &loaded_args)
+                        .await
+                };
+                if let Err(ref e) = r {
+                    if is_wasmtime_trap(e) {
+                        *guard = None;
+                    }
+                }
+                r.map_err(|e| anyhow!("call_call: {e}"))?
             }
             ScalarRoute::Tabular => {
                 // Match the Store the read-side vtab dispatch will
@@ -9524,7 +9567,7 @@ impl Host {
                 // scalar fns sharing thread_local state with vtab
                 // dispatches stay inside one wasm instance.
                 let mut g = self.tabular_guard(ext_name).await?;
-                match &mut g {
+                let r = match &mut g {
                     TabularGuard::ReadOnly(guard) => {
                         let cached = guard.as_mut().unwrap();
                         cached
@@ -9532,7 +9575,6 @@ impl Host {
                             .sqlite_extension_scalar_function()
                             .call_call(&mut cached.store, func_id, &loaded_args)
                             .await
-                            .map_err(|e| anyhow!("call_call: {e}"))?
                     }
                     TabularGuard::Mutating(guard) => {
                         let cached = guard.as_mut().unwrap();
@@ -9541,39 +9583,63 @@ impl Host {
                             .sqlite_extension_scalar_function()
                             .call_call(&mut cached.store, func_id, &loaded_args)
                             .await
-                            .map_err(|e| anyhow!("call_call: {e}"))?
                     }
+                };
+                if let Err(ref e) = r {
+                    g.poison_if_trap(e);
                 }
+                r.map_err(|e| anyhow!("call_call: {e}"))?
             }
             ScalarRoute::Stateful => {
                 let mut guard = self.stateful_locked(ext_name).await?;
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_scalar_function()
-                    .call_call(&mut cached.store, func_id, &loaded_args)
-                    .await
-                    .map_err(|e| anyhow!("call_call: {e}"))?
+                let r = {
+                    let cached = guard.as_mut().unwrap();
+                    cached
+                        .instance
+                        .sqlite_extension_scalar_function()
+                        .call_call(&mut cached.store, func_id, &loaded_args)
+                        .await
+                };
+                if let Err(ref e) = r {
+                    if is_wasmtime_trap(e) {
+                        *guard = None;
+                    }
+                }
+                r.map_err(|e| anyhow!("call_call: {e}"))?
             }
             ScalarRoute::MinimalHttp => {
                 let mut guard = self.minimal_http_locked(ext_name).await?;
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_scalar_function()
-                    .call_call(&mut cached.store, func_id, &loaded_args)
-                    .await
-                    .map_err(|e| anyhow!("call_call: {e}"))?
+                let r = {
+                    let cached = guard.as_mut().unwrap();
+                    cached
+                        .instance
+                        .sqlite_extension_scalar_function()
+                        .call_call(&mut cached.store, func_id, &loaded_args)
+                        .await
+                };
+                if let Err(ref e) = r {
+                    if is_wasmtime_trap(e) {
+                        *guard = None;
+                    }
+                }
+                r.map_err(|e| anyhow!("call_call: {e}"))?
             }
             ScalarRoute::MinimalDns => {
                 let mut guard = self.minimal_dns_locked(ext_name).await?;
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_scalar_function()
-                    .call_call(&mut cached.store, func_id, &loaded_args)
-                    .await
-                    .map_err(|e| anyhow!("call_call: {e}"))?
+                let r = {
+                    let cached = guard.as_mut().unwrap();
+                    cached
+                        .instance
+                        .sqlite_extension_scalar_function()
+                        .call_call(&mut cached.store, func_id, &loaded_args)
+                        .await
+                };
+                if let Err(ref e) = r {
+                    if is_wasmtime_trap(e) {
+                        *guard = None;
+                    }
+                }
+                r.map_err(|e| anyhow!("call_call: {e}"))?
             }
             ScalarRoute::Hooked => {
                 // Shared Store with the hook dispatchers — set
@@ -9581,13 +9647,20 @@ impl Host {
                 // exports `scalar-function`, so we call the same
                 // export proxy through the wider instance.
                 let mut guard = self.hooked_locked(ext_name).await?;
-                let cached = guard.as_mut().unwrap();
-                cached
-                    .instance
-                    .sqlite_extension_scalar_function()
-                    .call_call(&mut cached.store, func_id, &loaded_args)
-                    .await
-                    .map_err(|e| anyhow!("call_call: {e}"))?
+                let r = {
+                    let cached = guard.as_mut().unwrap();
+                    cached
+                        .instance
+                        .sqlite_extension_scalar_function()
+                        .call_call(&mut cached.store, func_id, &loaded_args)
+                        .await
+                };
+                if let Err(ref e) = r {
+                    if is_wasmtime_trap(e) {
+                        *guard = None;
+                    }
+                }
+                r.map_err(|e| anyhow!("call_call: {e}"))?
             }
         };
         match result {
@@ -9608,14 +9681,21 @@ impl Host {
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.stateful_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let result = cached
-            .instance
-            .sqlite_extension_aggregate_function()
-            .call_step(&mut cached.store, func_id, context_id, &loaded_args)
-            .await
-            .map_err(|e| anyhow!("call_step: {e}"))?;
+        let r = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_aggregate_function()
+                .call_step(&mut cached.store, func_id, context_id, &loaded_args)
+                .await
+        };
+        if let Err(ref e) = r {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let result = r.map_err(|e| anyhow!("call_step: {e}"))?;
         Ok(result)
     }
 
@@ -9628,13 +9708,20 @@ impl Host {
         context_id: u64,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
         let mut guard = self.stateful_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let result = cached
-            .instance
-            .sqlite_extension_aggregate_function()
-            .call_finalize(&mut cached.store, func_id, context_id)
-            .await
-            .map_err(|e| anyhow!("call_finalize: {e}"))?;
+        let r = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_aggregate_function()
+                .call_finalize(&mut cached.store, func_id, context_id)
+                .await
+        };
+        if let Err(ref e) = r {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let result = r.map_err(|e| anyhow!("call_finalize: {e}"))?;
         match result {
             Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
             Err(s) => Ok(Err(s)),
@@ -9655,13 +9742,20 @@ impl Host {
         context_id: u64,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
         let mut guard = self.stateful_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let result = cached
-            .instance
-            .sqlite_extension_aggregate_function()
-            .call_value(&mut cached.store, func_id, context_id)
-            .await
-            .map_err(|e| anyhow!("call_value: {e}"))?;
+        let r = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_aggregate_function()
+                .call_value(&mut cached.store, func_id, context_id)
+                .await
+        };
+        if let Err(ref e) = r {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let result = r.map_err(|e| anyhow!("call_value: {e}"))?;
         match result {
             Ok(v) => Ok(Ok(convert_sql_value_from_loaded(v))),
             Err(s) => Ok(Err(s)),
@@ -9681,14 +9775,21 @@ impl Host {
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.stateful_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let result = cached
-            .instance
-            .sqlite_extension_aggregate_function()
-            .call_inverse(&mut cached.store, func_id, context_id, &loaded_args)
-            .await
-            .map_err(|e| anyhow!("call_inverse: {e}"))?;
+        let r = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_aggregate_function()
+                .call_inverse(&mut cached.store, func_id, context_id, &loaded_args)
+                .await
+        };
+        if let Err(ref e) = r {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let result = r.map_err(|e| anyhow!("call_inverse: {e}"))?;
         Ok(result)
     }
 
@@ -9805,8 +9906,11 @@ impl Host {
                     )
                     .await
             }
+        };
+        if let Err(ref e) = r {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.create: {e}"))?;
+        let r = r.map_err(|e| anyhow!("vtab.create: {e}"))?;
         Ok(r)
     }
 
@@ -9851,8 +9955,11 @@ impl Host {
                     )
                     .await
             }
+        };
+        if let Err(ref e) = r {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.connect: {e}"))?;
+        let r = r.map_err(|e| anyhow!("vtab.connect: {e}"))?;
         Ok(r)
     }
 
@@ -9880,8 +9987,11 @@ impl Host {
                     .call_destroy(&mut cached.store, vtab_id, instance_id)
                     .await
             }
+        };
+        if let Err(ref e) = r {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.destroy: {e}"))?;
+        let r = r.map_err(|e| anyhow!("vtab.destroy: {e}"))?;
         Ok(r)
     }
 
@@ -9909,8 +10019,11 @@ impl Host {
                     .call_disconnect(&mut cached.store, vtab_id, instance_id)
                     .await
             }
+        };
+        if let Err(ref e) = r {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.disconnect: {e}"))?;
+        let r = r.map_err(|e| anyhow!("vtab.disconnect: {e}"))?;
         Ok(r)
     }
 
@@ -9925,7 +10038,7 @@ impl Host {
         // its own bindgen — converted to the wire-side IndexPlan
         // inside the arm so the outer types line up.
         let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
+        let raw: wasmtime::Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>> = match &mut g {
             TabularGuard::ReadOnly(guard) => {
                 let cached = guard.as_mut().unwrap();
                 let info_loaded = convert_vtab_index_info_to_loaded(info);
@@ -9934,8 +10047,7 @@ impl Host {
                     .sqlite_extension_vtab()
                     .call_best_index(&mut cached.store, vtab_id, instance_id, &info_loaded)
                     .await
-                    .map_err(|e| anyhow!("vtab.best_index: {e}"))?
-                    .map(convert_vtab_index_plan_from_loaded)
+                    .map(|r| r.map(convert_vtab_index_plan_from_loaded))
             }
             TabularGuard::Mutating(guard) => {
                 let cached = guard.as_mut().unwrap();
@@ -9945,10 +10057,13 @@ impl Host {
                     .sqlite_extension_vtab()
                     .call_best_index(&mut cached.store, vtab_id, instance_id, &info_loaded)
                     .await
-                    .map_err(|e| anyhow!("vtab.best_index: {e}"))?
-                    .map(convert_vtab_index_plan_from_loaded_mut)
+                    .map(|r| r.map(convert_vtab_index_plan_from_loaded_mut))
             }
         };
+        if let Err(ref e) = raw {
+            g.poison_if_trap(e);
+        }
+        let r = raw.map_err(|e| anyhow!("vtab.best_index: {e}"))?;
         Ok(r)
     }
 
@@ -9977,8 +10092,11 @@ impl Host {
                     .call_open(&mut cached.store, vtab_id, instance_id, cursor_id)
                     .await
             }
+        };
+        if let Err(ref e) = r {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.open: {e}"))?;
+        let r = r.map_err(|e| anyhow!("vtab.open: {e}"))?;
         Ok(r)
     }
 
@@ -10006,8 +10124,11 @@ impl Host {
                     .call_close(&mut cached.store, vtab_id, cursor_id)
                     .await
             }
+        };
+        if let Err(ref e) = r {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.close: {e}"))?;
+        let r = r.map_err(|e| anyhow!("vtab.close: {e}"))?;
         Ok(r)
     }
 
@@ -10053,8 +10174,11 @@ impl Host {
                     )
                     .await
             }
+        };
+        if let Err(ref e) = r {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.filter: {e}"))?;
+        let r = r.map_err(|e| anyhow!("vtab.filter: {e}"))?;
         Ok(r)
     }
 
@@ -10082,8 +10206,11 @@ impl Host {
                     .call_next(&mut cached.store, vtab_id, cursor_id)
                     .await
             }
+        };
+        if let Err(ref e) = r {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.next: {e}"))?;
+        let r = r.map_err(|e| anyhow!("vtab.next: {e}"))?;
         Ok(r)
     }
 
@@ -10094,7 +10221,7 @@ impl Host {
         cursor_id: u64,
     ) -> Result<bool> {
         let mut g = self.tabular_guard(ext_name).await?;
-        match &mut g {
+        let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
                 let cached = guard.as_mut().unwrap();
                 cached
@@ -10111,8 +10238,11 @@ impl Host {
                     .call_eof(&mut cached.store, vtab_id, cursor_id)
                     .await
             }
+        };
+        if let Err(ref e) = r {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.eof: {e}"))
+        r.map_err(|e| anyhow!("vtab.eof: {e}"))
     }
 
     pub async fn dispatch_vtab_column(
@@ -10123,7 +10253,7 @@ impl Host {
         col: i32,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
         let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
+        let raw = match &mut g {
             TabularGuard::ReadOnly(guard) => {
                 let cached = guard.as_mut().unwrap();
                 cached
@@ -10140,8 +10270,11 @@ impl Host {
                     .call_column(&mut cached.store, vtab_id, cursor_id, col)
                     .await
             }
+        };
+        if let Err(ref e) = raw {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.column: {e}"))?;
+        let r = raw.map_err(|e| anyhow!("vtab.column: {e}"))?;
         Ok(r.map(convert_sql_value_from_loaded))
     }
 
@@ -10152,7 +10285,7 @@ impl Host {
         cursor_id: u64,
     ) -> Result<std::result::Result<i64, String>> {
         let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
+        let raw = match &mut g {
             TabularGuard::ReadOnly(guard) => {
                 let cached = guard.as_mut().unwrap();
                 cached
@@ -10169,8 +10302,11 @@ impl Host {
                     .call_rowid(&mut cached.store, vtab_id, cursor_id)
                     .await
             }
+        };
+        if let Err(ref e) = raw {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.rowid: {e}"))?;
+        let r = raw.map_err(|e| anyhow!("vtab.rowid: {e}"))?;
         Ok(r)
     }
 
@@ -10189,7 +10325,7 @@ impl Host {
         std::result::Result<Vec<loaded_tabular::exports::sqlite::extension::vtab::VtabRow>, String>,
     > {
         let mut g = self.tabular_guard(ext_name).await?;
-        let r = match &mut g {
+        let raw = match &mut g {
             TabularGuard::ReadOnly(guard) => {
                 let cached = guard.as_mut().unwrap();
                 cached
@@ -10222,8 +10358,11 @@ impl Host {
                     })
                 })
             }
+        };
+        if let Err(ref e) = raw {
+            g.poison_if_trap(e);
         }
-        .map_err(|e| anyhow!("vtab.fetch_batch: {e}"))?;
+        let r = raw.map_err(|e| anyhow!("vtab.fetch_batch: {e}"))?;
         Ok(r)
     }
 
@@ -10242,14 +10381,21 @@ impl Host {
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<i64, String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_update(&mut cached.store, vtab_id, instance_id, &loaded_args)
-            .await
-            .map_err(|e| anyhow!("vtab-update.update: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_update(&mut cached.store, vtab_id, instance_id, &loaded_args)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.update: {e}"))?;
         Ok(r)
     }
 
@@ -10260,13 +10406,20 @@ impl Host {
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_begin(&mut cached.store, vtab_id, instance_id)
-            .await
-            .map_err(|e| anyhow!("vtab-update.begin: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_begin(&mut cached.store, vtab_id, instance_id)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.begin: {e}"))?;
         Ok(r)
     }
 
@@ -10277,13 +10430,20 @@ impl Host {
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_sync(&mut cached.store, vtab_id, instance_id)
-            .await
-            .map_err(|e| anyhow!("vtab-update.sync: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_sync(&mut cached.store, vtab_id, instance_id)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.sync: {e}"))?;
         Ok(r)
     }
 
@@ -10294,13 +10454,20 @@ impl Host {
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_commit(&mut cached.store, vtab_id, instance_id)
-            .await
-            .map_err(|e| anyhow!("vtab-update.commit: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_commit(&mut cached.store, vtab_id, instance_id)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.commit: {e}"))?;
         Ok(r)
     }
 
@@ -10311,13 +10478,20 @@ impl Host {
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_rollback(&mut cached.store, vtab_id, instance_id)
-            .await
-            .map_err(|e| anyhow!("vtab-update.rollback: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_rollback(&mut cached.store, vtab_id, instance_id)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.rollback: {e}"))?;
         Ok(r)
     }
 
@@ -10329,13 +10503,20 @@ impl Host {
         new_name: String,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_rename(&mut cached.store, vtab_id, instance_id, &new_name)
-            .await
-            .map_err(|e| anyhow!("vtab-update.rename: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_rename(&mut cached.store, vtab_id, instance_id, &new_name)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.rename: {e}"))?;
         Ok(r)
     }
 
@@ -10347,13 +10528,20 @@ impl Host {
         savepoint: i32,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_savepoint(&mut cached.store, vtab_id, instance_id, savepoint)
-            .await
-            .map_err(|e| anyhow!("vtab-update.savepoint: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_savepoint(&mut cached.store, vtab_id, instance_id, savepoint)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.savepoint: {e}"))?;
         Ok(r)
     }
 
@@ -10365,13 +10553,20 @@ impl Host {
         savepoint: i32,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_release(&mut cached.store, vtab_id, instance_id, savepoint)
-            .await
-            .map_err(|e| anyhow!("vtab-update.release: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_release(&mut cached.store, vtab_id, instance_id, savepoint)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.release: {e}"))?;
         Ok(r)
     }
 
@@ -10383,13 +10578,20 @@ impl Host {
         savepoint: i32,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_rollback_to(&mut cached.store, vtab_id, instance_id, savepoint)
-            .await
-            .map_err(|e| anyhow!("vtab-update.rollback_to: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_rollback_to(&mut cached.store, vtab_id, instance_id, savepoint)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.rollback_to: {e}"))?;
         Ok(r)
     }
 
@@ -10400,13 +10602,20 @@ impl Host {
         name: &str,
     ) -> Result<bool> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_is_shadow_name(&mut cached.store, vtab_id, name)
-            .await
-            .map_err(|e| anyhow!("vtab-update.is_shadow_name: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_is_shadow_name(&mut cached.store, vtab_id, name)
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.is_shadow_name: {e}"))?;
         Ok(r)
     }
 
@@ -10420,20 +10629,27 @@ impl Host {
         mode_flags: u32,
     ) -> Result<std::result::Result<(), String>> {
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        let r = cached
-            .instance
-            .sqlite_extension_vtab_update()
-            .call_integrity(
-                &mut cached.store,
-                vtab_id,
-                instance_id,
-                schema,
-                table_name,
-                mode_flags,
-            )
-            .await
-            .map_err(|e| anyhow!("vtab-update.integrity: {e}"))?;
+        let raw = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_vtab_update()
+                .call_integrity(
+                    &mut cached.store,
+                    vtab_id,
+                    instance_id,
+                    schema,
+                    table_name,
+                    mode_flags,
+                )
+                .await
+        };
+        if let Err(ref e) = raw {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let r = raw.map_err(|e| anyhow!("vtab-update.integrity: {e}"))?;
         Ok(r)
     }
 
@@ -10724,21 +10940,28 @@ impl Host {
         trigger: Option<String>,
     ) -> Result<bindings::sqlite::extension::types::AuthResult> {
         let mut guard = self.authorizing_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
         let action_w = convert_auth_action_to_loaded(action);
-        let result = cached
-            .instance
-            .sqlite_extension_authorizer()
-            .call_authorize(
-                &mut cached.store,
-                action_w,
-                arg1.as_deref(),
-                arg2.as_deref(),
-                database.as_deref(),
-                trigger.as_deref(),
-            )
-            .await
-            .map_err(|e| anyhow!("call_authorize: {e}"))?;
+        let r = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_authorizer()
+                .call_authorize(
+                    &mut cached.store,
+                    action_w,
+                    arg1.as_deref(),
+                    arg2.as_deref(),
+                    database.as_deref(),
+                    trigger.as_deref(),
+                )
+                .await
+        };
+        if let Err(ref e) = r {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        let result = r.map_err(|e| anyhow!("call_authorize: {e}"))?;
         Ok(convert_auth_result_from_loaded(result))
     }
 
@@ -10753,44 +10976,65 @@ impl Host {
         rowid: i64,
     ) -> Result<()> {
         let mut guard = self.hooked_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        cached
-            .instance
-            .sqlite_extension_update_hook()
-            .call_on_update(
-                &mut cached.store,
-                convert_update_op_to_loaded(operation),
-                database,
-                table,
-                rowid,
-            )
-            .await
-            .map_err(|e| anyhow!("call_on_update: {e}"))
+        let r = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_update_hook()
+                .call_on_update(
+                    &mut cached.store,
+                    convert_update_op_to_loaded(operation),
+                    database,
+                    table,
+                    rowid,
+                )
+                .await
+        };
+        if let Err(ref e) = r {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        r.map_err(|e| anyhow!("call_on_update: {e}"))
     }
 
     /// Route a pre-commit hook. `true` lets the commit proceed; `false`
     /// converts it to a rollback (SQLite's standard semantics).
     pub async fn dispatch_on_commit(&self, ext_name: &str) -> Result<bool> {
         let mut guard = self.hooked_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        cached
-            .instance
-            .sqlite_extension_commit_hook()
-            .call_on_commit(&mut cached.store)
-            .await
-            .map_err(|e| anyhow!("call_on_commit: {e}"))
+        let r = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_commit_hook()
+                .call_on_commit(&mut cached.store)
+                .await
+        };
+        if let Err(ref e) = r {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        r.map_err(|e| anyhow!("call_on_commit: {e}"))
     }
 
     /// Route a post-rollback notification.
     pub async fn dispatch_on_rollback(&self, ext_name: &str) -> Result<()> {
         let mut guard = self.hooked_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        cached
-            .instance
-            .sqlite_extension_commit_hook()
-            .call_on_rollback(&mut cached.store)
-            .await
-            .map_err(|e| anyhow!("call_on_rollback: {e}"))
+        let r = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_commit_hook()
+                .call_on_rollback(&mut cached.store)
+                .await
+        };
+        if let Err(ref e) = r {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        r.map_err(|e| anyhow!("call_on_rollback: {e}"))
     }
 
     /// Route a WAL-commit callback. SQLite fires the wal-hook after
@@ -10806,13 +11050,20 @@ impl Host {
         n_frames: u32,
     ) -> Result<i32> {
         let mut guard = self.hooked_locked(ext_name).await?;
-        let cached = guard.as_mut().unwrap();
-        cached
-            .instance
-            .sqlite_extension_wal_hook()
-            .call_on_wal_hook(&mut cached.store, hook_id, db_name, n_frames)
-            .await
-            .map_err(|e| anyhow!("call_on_wal_hook: {e}"))
+        let r = {
+            let cached = guard.as_mut().unwrap();
+            cached
+                .instance
+                .sqlite_extension_wal_hook()
+                .call_on_wal_hook(&mut cached.store, hook_id, db_name, n_frames)
+                .await
+        };
+        if let Err(ref e) = r {
+            if is_wasmtime_trap(e) {
+                *guard = None;
+            }
+        }
+        r.map_err(|e| anyhow!("call_on_wal_hook: {e}"))
     }
 
     /// Load + run a runnable component. Instantiates the component
