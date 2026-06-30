@@ -14307,7 +14307,7 @@ mod contract_guard_tests {
 
     #[test]
     fn legacy_v0_1_component_introspects_to_major_0_and_is_rejected_by_v1_host() {
-        // After the `sqlite:extension@0.1.0` → `@1.0.0` bump
+        // After the legacy 0.x → `sqlite:extension@1.0.0` bump
         // (PLAN-wit-value-extension.md Phase A), any pre-existing built
         // component still targets major 0 and the new host's guard (major
         // 1) must reject it. The mechanical recompile against the new
