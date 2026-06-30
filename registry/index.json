@@ -398,81 +398,6 @@
    "wit_contract_version": "0.1.0"
   },
   {
-   "name": "beaufort",
-   "version": "0.1.0",
-   "description": "Beaufort wind scale m/s named force",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/beaufort",
-   "keywords": [
-    "beaufort",
-    "wind",
-    "scale",
-    "named",
-    "force"
-   ],
-   "categories": [
-    "geo"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/beaufort",
-   "checksum": "sha256:e0ac7c8a61300474a8a4984a557454c26d9b5fbd99882a5ba4ed65f52e004376",
-   "size_bytes": 78966,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "beaufort_force",
-    "beaufort_from_kmh",
-    "beaufort_from_mph",
-    "beaufort_min_ms",
-    "beaufort_name"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "beaufort-scale",
-   "version": "0.1.0",
-   "description": "Beaufort wind scale m/s named force",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/beaufort-scale",
-   "keywords": [
-    "beaufort-scale",
-    "beaufort",
-    "wind",
-    "scale",
-    "named",
-    "force"
-   ],
-   "categories": [
-    "geo"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/beaufort-scale",
-   "checksum": "sha256:43a1841c85c1cab9bda6418c0025c2d6bc044b035ff76116adb8ab096cb28154",
-   "size_bytes": 79056,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "beaufort_force",
-    "beaufort_from_kmh",
-    "beaufort_from_mph",
-    "beaufort_min_ms",
-    "beaufort_name"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
    "name": "bencode",
    "version": "0.1.0",
    "description": "Bencode (BEP 0003) encode/decode scalars. Bencode is the wire format used by BitTorrent for .torrent files and DHT traffic.",
@@ -1048,84 +973,6 @@
    "wit_contract_version": "0.1.0"
   },
   {
-   "name": "cipher",
-   "version": "0.1.0",
-   "description": "classical ciphers (Caesar, ROT13, Vigenere)",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/cipher",
-   "keywords": [
-    "cipher",
-    "classical",
-    "ciphers",
-    "caesar",
-    "rot",
-    "vigenere"
-   ],
-   "categories": [
-    "utility"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/cipher",
-   "checksum": "sha256:57df50058249c8b3f8023f06eee3effe59b8af2029a473725f913d4190de52c4",
-   "size_bytes": 81567,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "atbash",
-    "caesar_decode",
-    "caesar_encode",
-    "rot13",
-    "vigenere_decode",
-    "vigenere_encode"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "classic-cipher",
-   "version": "0.1.0",
-   "description": "classical ciphers (Caesar, ROT13, Vigenere)",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/classic-cipher",
-   "keywords": [
-    "classic-cipher",
-    "classical",
-    "ciphers",
-    "caesar",
-    "rot",
-    "vigenere"
-   ],
-   "categories": [
-    "utility"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/classic-cipher",
-   "checksum": "sha256:e01527c41ca450b99c755fd4c36821fd994a80f2b577747ee5ba5504ccd3b400",
-   "size_bytes": 81658,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "atbash",
-    "caesar_decode",
-    "caesar_encode",
-    "rot13",
-    "vigenere_decode",
-    "vigenere_encode"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
    "name": "closure",
    "version": "0.1.0",
    "description": "Recursive graph closure vtab. Port of SQLite's `ext/misc/closure.c`. Walks a parent/child relationship across N hops and emits `(id, depth)` tuples.",
@@ -1289,80 +1136,6 @@
     "kmeans_colors@0.6",
     "palette@0.7"
    ],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "compass",
-   "version": "0.1.0",
-   "description": "heading degrees cardinal direction",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/compass",
-   "keywords": [
-    "compass",
-    "heading",
-    "degrees",
-    "cardinal",
-    "direction"
-   ],
-   "categories": [
-    "geo"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/compass",
-   "checksum": "sha256:32b2804f567a3e79500a45b63fb1400332fd5bb60f0a8b6ea5ebe9a32799fa5e",
-   "size_bytes": 79422,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "compass_cardinal",
-    "compass_cardinal16",
-    "compass_degrees",
-    "compass_distance",
-    "compass_normalize"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "compass-bearing",
-   "version": "0.1.0",
-   "description": "heading degrees cardinal direction",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/compass-bearing",
-   "keywords": [
-    "compass-bearing",
-    "heading",
-    "degrees",
-    "cardinal",
-    "direction"
-   ],
-   "categories": [
-    "geo"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/compass-bearing",
-   "checksum": "sha256:fb76fed58870bd9b557e9b72f72a39e853e808c043884af24c8361a4f7c2962f",
-   "size_bytes": 79487,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "compass_cardinal",
-    "compass_cardinal16",
-    "compass_degrees",
-    "compass_distance",
-    "compass_normalize"
-   ],
-   "dependencies": [],
    "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
    "wit_contract_version": "0.1.0"
   },
@@ -2431,75 +2204,6 @@
    "wit_contract_version": "0.1.0"
   },
   {
-   "name": "easter",
-   "version": "0.1.0",
-   "description": "Easter date (Western + Orthodox)",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/easter",
-   "keywords": [
-    "easter",
-    "date",
-    "western",
-    "orthodox"
-   ],
-   "categories": [
-    "geo"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/easter",
-   "checksum": "sha256:a5837e1dd58c6d326503968621b15da2b5788279f299657649d4af7bc558d27a",
-   "size_bytes": 78107,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "easter_offset",
-    "easter_orthodox",
-    "easter_western"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "easter-date",
-   "version": "0.1.0",
-   "description": "Easter date (Western + Orthodox)",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/easter-date",
-   "keywords": [
-    "easter-date",
-    "easter",
-    "date",
-    "western",
-    "orthodox"
-   ],
-   "categories": [
-    "geo"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/easter-date",
-   "checksum": "sha256:b80af1cc3f1c38962676986996d13a847872adf0f862c04eb0e594955eecea93",
-   "size_bytes": 78147,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "easter_offset",
-    "easter_orthodox",
-    "easter_western"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
    "name": "ed25519",
    "version": "0.1.0",
    "description": "Standalone Ed25519 sign/verify scalars (RFC 8032 / 8410). The `jwt` extension already has Ed25519 internally for the EdDSA JWS alg, but exposing the raw primitive as plain SQL scalars is its own surface: SSH key handling, Tor onion-service descriptors, Signal/Matrix identity keys",
@@ -3265,43 +2969,6 @@
    "min_sqlite_version": "3.39.0",
    "exports": [],
    "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "google-polyline",
-   "version": "0.1.0",
-   "description": "Google polyline coord encoding",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/google-polyline",
-   "keywords": [
-    "google-polyline",
-    "google",
-    "polyline",
-    "coord",
-    "encoding"
-   ],
-   "categories": [
-    "geo"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/google-polyline",
-   "checksum": "sha256:c3f3e801e312b84fd2440e0ce16e544cdc33f34d86cf1b3abed2a684806d5908",
-   "size_bytes": 139279,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "polyline_decode",
-    "polyline_encode",
-    "polyline_length"
-   ],
-   "dependencies": [
-    "serde_json@1"
-   ],
    "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
    "wit_contract_version": "0.1.0"
   },
@@ -4283,46 +3950,6 @@
    "wit_contract_version": "0.1.0"
   },
   {
-   "name": "isbn",
-   "version": "0.1.0",
-   "description": "ISBN-10 / ISBN-13 validation + canonicalization via the `isbn` crate.",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/isbn",
-   "keywords": [
-    "isbn",
-    "validation",
-    "canonicalization",
-    "crate"
-   ],
-   "categories": [
-    "utility"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/isbn",
-   "checksum": "sha256:4613527bcfd66bc8bceee3829ed2e94b1b537cf2745fa53633bb5c0fb9d0e990",
-   "size_bytes": 121717,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "isbn_hyphenate",
-    "isbn_is_isbn10",
-    "isbn_is_isbn13",
-    "isbn_registration_group",
-    "isbn_to_isbn10",
-    "isbn_to_isbn13",
-    "isbn_validate"
-   ],
-   "dependencies": [
-    "isbn@0.8"
-   ],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
    "name": "isin",
    "version": "0.1.0",
    "description": "ISIN (International Securities Identification Number) ISO 6166 validation",
@@ -4356,55 +3983,6 @@
     "isin_validate"
    ],
    "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "iso",
-   "version": "0.1.0",
-   "description": "ISO code lookups: 3166-1 (country), 4217 (currency), 639 (language). All static tables; no network access.",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/iso",
-   "keywords": [
-    "iso",
-    "code",
-    "lookups",
-    "country",
-    "currency",
-    "language"
-   ],
-   "categories": [
-    "utility"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/iso",
-   "checksum": "sha256:f373f5608b0e3f3bfd625e151b0bcd0f01012b37d2c284257e8eb8f3ac36289b",
-   "size_bytes": 446188,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "iso_country_alpha2",
-    "iso_country_alpha3",
-    "iso_country_name",
-    "iso_country_numeric",
-    "iso_currency_exponent",
-    "iso_currency_from_numeric",
-    "iso_currency_name",
-    "iso_currency_numeric",
-    "iso_currency_symbol",
-    "iso_language_639_1",
-    "iso_language_639_3",
-    "iso_language_name"
-   ],
-   "dependencies": [
-    "iso_currency@0.5",
-    "isolang@2",
-    "rust_iso3166@0.1"
-   ],
    "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
    "wit_contract_version": "0.1.0"
   },
@@ -5590,77 +5168,6 @@
    "wit_contract_version": "0.1.0"
   },
   {
-   "name": "nato",
-   "version": "0.1.0",
-   "description": "NATO phonetic alphabet (A->Alpha, B->Bravo)",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/nato",
-   "keywords": [
-    "nato",
-    "phonetic",
-    "alphabet",
-    "aalpha",
-    "bbravo"
-   ],
-   "categories": [
-    "text-processing"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/nato",
-   "checksum": "sha256:054764de07e0c42bebd369376c2effa6a7039eb58696a4186de810311125fc0e",
-   "size_bytes": 82992,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "nato_decode",
-    "nato_encode",
-    "nato_word"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "nato-phonetic",
-   "version": "0.1.0",
-   "description": "NATO phonetic alphabet (A->Alpha, B->Bravo)",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/nato-phonetic",
-   "keywords": [
-    "nato-phonetic",
-    "nato",
-    "phonetic",
-    "alphabet",
-    "aalpha",
-    "bbravo"
-   ],
-   "categories": [
-    "network"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/nato-phonetic",
-   "checksum": "sha256:a093e071db47a07eca8c0ba4f13241edd1d9baa0faa88becd5347fa475732553",
-   "size_bytes": 83108,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "nato_decode",
-    "nato_encode",
-    "nato_word"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
    "name": "natsort",
    "version": "0.1.0",
    "description": "Natural sort comparison (file2 < file10)",
@@ -6359,42 +5866,6 @@
    ],
    "dependencies": [
     "oxigdal-pmtiles@0.1"
-   ],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "polyline",
-   "version": "0.1.0",
-   "description": "Google polyline coord encoding",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/polyline",
-   "keywords": [
-    "polyline",
-    "google",
-    "coord",
-    "encoding"
-   ],
-   "categories": [
-    "geo"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/polyline",
-   "checksum": "sha256:126ad6c91947aecc100c410c02997b5a2209b2dfb38aad59127bf2ae7558f97a",
-   "size_bytes": 139164,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "polyline_decode",
-    "polyline_encode",
-    "polyline_length"
-   ],
-   "dependencies": [
-    "serde_json@1"
    ],
    "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
    "wit_contract_version": "0.1.0"
@@ -8816,46 +8287,6 @@
    "wit_contract_version": "0.1.0"
   },
   {
-   "name": "tile",
-   "version": "0.1.0",
-   "description": "Web Mercator tile coords (xyz, quadkey)",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/tile",
-   "keywords": [
-    "tile",
-    "web",
-    "mercator",
-    "coords",
-    "xyz",
-    "quadkey"
-   ],
-   "categories": [
-    "utility"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/tile",
-   "checksum": "sha256:417866fad8bf874d353a55943605005833165af0f2870507b39c7da510f120ba",
-   "size_bytes": 128091,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "tile_bbox",
-    "tile_from_quadkey",
-    "tile_lat",
-    "tile_lon",
-    "tile_quadkey",
-    "tile_x",
-    "tile_y"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
    "name": "time",
    "version": "0.1.0",
    "description": "Date / time helpers that fill gaps in SQLite's built-in `date()`/`datetime()`/`strftime()` family. All scalars accept ISO-8601 strings (or any SQLite-recognised timestamp format) and return either strings or integers.",
@@ -9926,46 +9357,6 @@
    "wit_contract_version": "0.1.0"
   },
   {
-   "name": "web-mercator-tile",
-   "version": "0.1.0",
-   "description": "Web Mercator tile coords (xyz, quadkey)",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/web-mercator-tile",
-   "keywords": [
-    "web-mercator-tile",
-    "web",
-    "mercator",
-    "tile",
-    "coords",
-    "xyz"
-   ],
-   "categories": [
-    "geo"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/web-mercator-tile",
-   "checksum": "sha256:4cdf3940046ed153b0e791be18d88bb6299adfa3afc79799327caacda5e1e4eb",
-   "size_bytes": 128285,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "tile_bbox",
-    "tile_from_quadkey",
-    "tile_lat",
-    "tile_lon",
-    "tile_quadkey",
-    "tile_x",
-    "tile_y"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
    "name": "web-parsers",
    "version": "0.1.0",
    "description": "Web-data parsers JSONPath + HTML CSS selection. Bundled into one extension because the SQL surface is parallel (extract a value from a structured-text BLOB / TEXT).",
@@ -10139,78 +9530,6 @@
     "getrandom@0.2",
     "x25519-dalek@2"
    ],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "xor",
-   "version": "0.1.0",
-   "description": "XOR cipher hex codec with repeating key",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/xor",
-   "keywords": [
-    "xor",
-    "cipher",
-    "hex",
-    "codec",
-    "repeating",
-    "key"
-   ],
-   "categories": [
-    "utility"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/xor",
-   "checksum": "sha256:d9dd6dd6924612e7c63213e42624612f273b444dc1d0252d9a6fd8f2377ef177",
-   "size_bytes": 82979,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "xor_decode",
-    "xor_encode",
-    "xor_raw"
-   ],
-   "dependencies": [],
-   "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
-   "wit_contract_version": "0.1.0"
-  },
-  {
-   "name": "xor-cipher",
-   "version": "0.1.0",
-   "description": "XOR cipher hex codec with repeating key",
-   "license": "MIT",
-   "authors": [
-    "sqlink contributors"
-   ],
-   "repository": "https://github.com/tegmentum/sqlink",
-   "homepage": "https://github.com/tegmentum/sqlink/tree/main/extensions/xor-cipher",
-   "keywords": [
-    "xor-cipher",
-    "xor",
-    "cipher",
-    "hex",
-    "codec",
-    "repeating"
-   ],
-   "categories": [
-    "utility"
-   ],
-   "source": "builtin",
-   "upstream_url": "",
-   "artifact_url": "/asset/xor-cipher",
-   "checksum": "sha256:a01634a28460bb86d8efc134288f66f8ebf1cb1a122d7ae9fffbf628579b6e15",
-   "size_bytes": 83062,
-   "min_sqlite_version": "3.39.0",
-   "exports": [
-    "xor_decode",
-    "xor_encode",
-    "xor_raw"
-   ],
-   "dependencies": [],
    "wit_contract": "b5c6e1fc9cb679b1b63685a558c2331d1a64dc3772e875f152fe34c065a74119",
    "wit_contract_version": "0.1.0"
   },
