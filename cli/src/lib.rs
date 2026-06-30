@@ -1102,8 +1102,20 @@ fn do_load(input: &str) -> String {
     let mut epoch: Option<u64> = None;
     let mut mem: Option<u64> = None;
     let mut trust = TrustMode::Manifest;
+    // Task #226: drive the extension through a compose:dynlink
+    // <ext>-provider.wasm instead of the bespoke extension-loader.
+    // Auto-detected for paths ending in `-provider.wasm`; forceable
+    // via `--provider`. Only the stateless scalar/collation tiers are
+    // accepted as provider-backed; the host refuses (and we fall back
+    // to the bespoke loader) for any coherence-sensitive extension.
+    let mut as_provider = false;
 
     for arg in parts {
+        // bare flags (no `=value`)
+        if arg == "--provider" {
+            as_provider = true;
+            continue;
+        }
         let (k, v) = match arg.split_once('=') {
             Some(p) => p,
             None => return format!("Bad flag: {arg} (expected --key=value)\n"),
@@ -1204,6 +1216,8 @@ fn do_load(input: &str) -> String {
     };
     let path = &path;
     let is_uri = looks_like_uri(path);
+    // Auto-detect the provider convention unless explicitly overridden.
+    let as_provider = as_provider || path.ends_with("-provider.wasm");
 
     // E2: only describe-before-load when the trust mode
     // requires PRE-load enforcement (trust=stored). The default
@@ -1305,7 +1319,39 @@ fn do_load(input: &str) -> String {
         ));
     }
 
-    let manifest = if is_uri {
+    // Task #226: provider path. Derive the extension name from the
+    // filename (`<name>-provider.wasm` -> `<name>`) and drive the
+    // extension through the compose:dynlink provider. If the host
+    // refuses (coherence-sensitive tiers) fall back to the bespoke
+    // loader so `.load <ext>-provider.wasm` still works for any shape.
+    let mut provider_note = String::new();
+    let manifest = if as_provider && !is_uri {
+        let fname = path.rsplit('/').next().unwrap_or(path);
+        let ext_name = fname
+            .strip_suffix("-provider.wasm")
+            .or_else(|| fname.strip_suffix(".wasm"))
+            .unwrap_or(fname);
+        match extension_loader::load_extension_as_provider(ext_name, path) {
+            Ok(m) => {
+                provider_note = format!("[sqlink] {ext_name} loaded as compose:dynlink provider\n");
+                m
+            }
+            Err(e) => {
+                // Fall back to the bespoke loader (e.g. the host refused
+                // provider-backing for a vtab/hook/aggregate extension).
+                provider_note = format!(
+                    "[sqlink] provider-backing declined ({}); using bespoke loader\n",
+                    e.message
+                );
+                match extension_loader::load_extension(path, &opts) {
+                    Ok(m) => m,
+                    Err(e) => {
+                        return format!("Error loading {path}: {} (code {})\n", e.message, e.code)
+                    }
+                }
+            }
+        }
+    } else if is_uri {
         match extension_loader::load_extension_from_uri(path, &opts) {
             Ok(m) => m,
             Err(e) => return format!("Error loading {path}: {} (code {})\n", e.message, e.code),
@@ -1471,7 +1517,7 @@ fn do_load(input: &str) -> String {
         "Loaded extension: {} {} from {} ({total} registered: {detail})\n",
         manifest.name, manifest.version, path
     );
-    let prefix = format!("{preload_msg}{grants_msg}");
+    let prefix = format!("{provider_note}{preload_msg}{grants_msg}");
     if prefix.is_empty() {
         main
     } else {

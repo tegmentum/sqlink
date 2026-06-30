@@ -407,14 +407,28 @@ pub mod provider_envelope {
     use crate::bindings::sqlite::extension::types::SqlValue;
 
     /// The provider manifest, reduced to what the host's safety gate +
-    /// provider-backing registry need.
+    /// provider-backing registry + the WIT-manifest rebuild need.
+    #[derive(Debug, Clone)]
     pub struct Manifest {
         pub name: String,
-        pub scalars: Vec<(String, u64)>,
+        pub version: String,
+        /// (name, id, num_args) for each scalar.
+        pub scalar_specs: Vec<(String, u64, i32)>,
+        /// (name, id) for each collation.
         pub collations: Vec<(String, u64)>,
         pub aggregates: Vec<(String, u64)>,
         pub has_vtab: bool,
         pub has_any_hook: bool,
+    }
+
+    impl Manifest {
+        /// (name, id) for each scalar — what ProviderBacking records.
+        pub fn scalars(&self) -> Vec<(String, u64)> {
+            self.scalar_specs
+                .iter()
+                .map(|(n, id, _)| (n.clone(), *id))
+                .collect()
+        }
     }
 
     fn cbor(v: &Cbor) -> Result<Vec<u8>, String> {
@@ -524,11 +538,24 @@ pub mod provider_envelope {
         })
     }
 
+    fn scalar_specs(v: &Cbor) -> Vec<(String, u64, i32)> {
+        arr(v)
+            .iter()
+            .filter_map(|e| {
+                let name = field(e, "name").map(text)?;
+                let id = field(e, "id").map(|x| int(x) as u64)?;
+                let num_args = field(e, "num_args").map(|x| int(x) as i32).unwrap_or(-1);
+                Some((name, id, num_args))
+            })
+            .collect()
+    }
+
     pub fn decode_manifest(bytes: &[u8]) -> Result<Manifest, String> {
         let v = de(bytes)?;
         Ok(Manifest {
             name: field(&v, "name").map(text).unwrap_or_default(),
-            scalars: field(&v, "scalars").map(id_name_pairs).unwrap_or_default(),
+            version: field(&v, "version").map(text).unwrap_or_default(),
+            scalar_specs: field(&v, "scalars").map(scalar_specs).unwrap_or_default(),
             collations: field(&v, "collations")
                 .map(id_name_pairs)
                 .unwrap_or_default(),
@@ -1074,6 +1101,51 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
         // (the manifest pass-through from describe() into the
         // extension-loader's bridged manifest carries the bridge's
         // own typed-values separately if/when it ever has any).
+        typed_values: vec![],
+    }
+}
+
+/// Task #226: build the WIT extension-loader `Manifest` from a provider
+/// (woco) manifest so the cli registers a provider-backed extension's
+/// scalar/collation tiers exactly as for a bespoke-loaded one. Only
+/// scalar + collation are populated — the safety gate guarantees a
+/// provider-backed extension has no other tiers.
+fn manifest_for_provider(m: &provider_envelope::Manifest) -> Manifest {
+    use bindings::sqlite::extension::metadata::{CollationSpec, ScalarFunctionSpec};
+    use bindings::sqlite::extension::types::FunctionFlags;
+    Manifest {
+        name: m.name.clone(),
+        version: m.version.clone(),
+        scalar_functions: m
+            .scalar_specs
+            .iter()
+            .map(|(name, id, num_args)| ScalarFunctionSpec {
+                id: *id,
+                name: name.clone(),
+                num_args: *num_args,
+                func_flags: FunctionFlags::empty(),
+            })
+            .collect(),
+        aggregate_functions: vec![],
+        collations: m
+            .collations
+            .iter()
+            .map(|(name, id)| CollationSpec {
+                id: *id,
+                name: name.clone(),
+            })
+            .collect(),
+        vtabs: vec![],
+        dot_commands: vec![],
+        has_authorizer: false,
+        has_update_hook: false,
+        has_commit_hook: false,
+        has_wal_hook: false,
+        wal_hook_id: 0,
+        declared_capabilities: vec![],
+        optional_capabilities: vec![],
+        preferred_prefix: None,
+        prefix_expansion: None,
         typed_values: vec![],
     }
 }
@@ -9488,7 +9560,7 @@ impl Host {
         &self,
         ext_name: &str,
         provider: compose_provider::ProviderHandle,
-    ) -> Result<String> {
+    ) -> Result<provider_envelope::Manifest> {
         // describe the provider (handles the cli-aware linker too).
         let (mbytes, _) = provider
             .invoke_cli("describe", &[], HashMap::new())
@@ -9513,21 +9585,13 @@ impl Host {
 
         let backing = ProviderBacking {
             provider_id,
-            scalars: manifest
-                .scalars
-                .iter()
-                .map(|(n, id)| (n.clone(), *id))
-                .collect(),
-            collations: manifest
-                .collations
-                .iter()
-                .map(|(n, id)| (n.clone(), *id))
-                .collect(),
+            scalars: manifest.scalars().into_iter().collect(),
+            collations: manifest.collations.iter().cloned().collect(),
         };
         self.provider_backed
             .write()
             .insert(ext_name.to_string(), backing);
-        Ok(manifest.name)
+        Ok(manifest)
     }
 
     /// If `ext_name` is provider-backed, dispatch the scalar `func_id`
@@ -11590,6 +11654,14 @@ impl bindings::sqlink::wasm::extension_loader::Host for RunLoaderStub {
         _path: String,
     ) -> std::result::Result<(), LoaderError> {
         Err(loader_stub_err("register-wasm-provider"))
+    }
+
+    async fn load_extension_as_provider(
+        &mut self,
+        _ext_name: String,
+        _path: String,
+    ) -> std::result::Result<Manifest, LoaderError> {
+        Err(loader_stub_err("load-extension-as-provider"))
     }
 
     async fn register_runtime(
@@ -14305,6 +14377,42 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     ) -> std::result::Result<(), LoaderError> {
         match self.host.register_wasm_provider(&id, PathBuf::from(&path)) {
             Ok(()) => Ok(()),
+            Err(e) => Err(LoaderError {
+                code: 1,
+                message: e.to_string(),
+            }),
+        }
+    }
+
+    async fn load_extension_as_provider(
+        &mut self,
+        ext_name: String,
+        path: String,
+    ) -> std::result::Result<Manifest, LoaderError> {
+        // Compile the <ext>-provider.wasm and hand it to the host's
+        // provider-backing path (which describes it, applies the
+        // fail-closed safety gate, and records the backing so
+        // dispatch_scalar/dispatch_collation route through it). Return a
+        // WIT manifest so the cli registers the scalar/collation tiers
+        // exactly as for a bespoke-loaded extension.
+        let provider = match compose_provider::ProviderHandle::new_wasm_component(
+            self.host.engine().clone(),
+            PathBuf::from(&path),
+        ) {
+            Ok(p) => p,
+            Err(e) => {
+                return Err(LoaderError {
+                    code: 1,
+                    message: format!("compile provider {path}: {e}"),
+                })
+            }
+        };
+        match self
+            .host
+            .load_extension_as_provider(&ext_name, provider)
+            .await
+        {
+            Ok(m) => Ok(manifest_for_provider(&m)),
             Err(e) => Err(LoaderError {
                 code: 1,
                 message: e.to_string(),

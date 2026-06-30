@@ -330,6 +330,26 @@ interface extension-loader {
         path: string,
     ) -> result<_, loader-error>;
 
+    /// Task #226: load `<ext>-provider.wasm` (a `compose:dynlink`
+    /// provider that wac-plugs a real extension into one of the
+    /// declarative provider world-shapes) and back the extension's
+    /// dispatch with it instead of the bespoke per-world cached Stores.
+    /// Returns the extension's manifest name on success. The host
+    /// applies a fail-closed safety gate: only pure scalar/collation
+    /// extensions are accepted; an extension that exports a vtab/hook or
+    /// registers an aggregate is REFUSED (loader-error) because those
+    /// tiers need the resident-store guest-thread-local coherence the
+    /// bespoke loader gives over the fresh-store provider boundary — the
+    /// caller then falls back to `load-extension`. Returns the verified
+    /// manifest (same shape as `load-extension`) so the cli registers
+    /// the extension's scalar/collation tiers on the shared connection
+    /// exactly as for a bespoke-loaded extension — the host then routes
+    /// each dispatch through the provider via the recorded backing.
+    load-extension-as-provider: func(
+        ext-name: string,
+        path: string,
+    ) -> result<manifest, loader-error>;
+
     /// Register a wasm component as the language runtime for files
     /// with extension `ext` (no leading dot — e.g. "py", "java",
     /// "r"). `variant` distinguishes multiple runtimes for the same

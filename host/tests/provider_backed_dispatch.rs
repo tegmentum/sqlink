@@ -59,10 +59,10 @@ fn backed_host(ext: &str, file: &str) -> Option<Host> {
     let host = Host::new().unwrap();
     let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path)
         .unwrap_or_else(|e| panic!("compile {file}: {e}"));
-    let name = tokio::runtime::Handle::current()
+    let manifest = tokio::runtime::Handle::current()
         .block_on(host.load_extension_as_provider(ext, provider))
         .unwrap_or_else(|e| panic!("provider-back {ext}: {e}"));
-    eprintln!("[{ext}] provider-backed (manifest name={name})");
+    eprintln!("[{ext}] provider-backed (manifest name={})", manifest.name);
     Some(host)
 }
 
@@ -78,11 +78,11 @@ async fn dispatch_scalar_via_provider() {
     let host = Host::new().unwrap();
     let provider = ProviderHandle::new_wasm_component(host.engine().clone(), path).unwrap();
     let func_id = first_id(&provider, "scalars").await;
-    let name = host
+    let manifest = host
         .load_extension_as_provider("aba", provider)
         .await
         .expect("provider-back aba");
-    assert_eq!(name, "aba");
+    assert_eq!(manifest.name, "aba");
 
     // dispatch_scalar must route through the provider and return a value.
     let out = host
