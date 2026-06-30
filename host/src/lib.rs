@@ -7828,6 +7828,9 @@ impl Host {
                 let kind = match p.kind {
                     compose_provider::ProviderKind::SqliteRuntime { .. } => "sqlite-runtime",
                     compose_provider::ProviderKind::WasmComponent { .. } => "wasm-component",
+                    compose_provider::ProviderKind::ResidentWasmComponent { .. } => {
+                        "resident-wasm-component"
+                    }
                 };
                 out.push((tenant.clone(), id.clone(), kind));
             }

@@ -21,8 +21,9 @@ use datalink_dynlink::{
 };
 use parking_lot::{Mutex, RwLock};
 use sqlite_component_core::db;
+use tokio::sync::Mutex as AsyncMutex;
 use wasmtime::component::{Component, Linker};
-use wasmtime::Engine;
+use wasmtime::{Engine, Store};
 
 use crate::{cache, TenantedProviders, TrustPolicy};
 
@@ -53,6 +54,33 @@ pub enum ProviderKind {
         component: Component,
         path: PathBuf,
     },
+    /// Task #227: a WARM-ONCE RESIDENT `dynlink-provider`-world wasm
+    /// component. Unlike `WasmComponent` (fresh Store per invoke), this
+    /// instantiates the component ONCE into a single resident
+    /// `Store + Instance` and reuses it across EVERY `endpoint.handle`
+    /// call. That persisted store is the per-extension coherence the
+    /// bespoke loader's cached-Store worlds gave: guest `thread_local!` /
+    /// `OnceLock` / `static AtomicU64` / accumulator state (keyed by the
+    /// envelope's `context_id`/`cursor_id`/`instance_id`) survives across
+    /// vtab/hook/aggregate/scalar calls within ONE extension. Per-extension
+    /// resident store = the cross-world coherence, now scoped to the
+    /// extension. Serialized by the async mutex so concurrent dispatches
+    /// against the same extension don't race the shared store.
+    ResidentWasmComponent {
+        engine: Engine,
+        component: Component,
+        path: PathBuf,
+        /// The warm store + instance, materialized lazily on first
+        /// invoke and reused thereafter. `Arc` so cloning the kind (the
+        /// host clones it when resolving a handle) shares ONE store.
+        resident: Arc<AsyncMutex<Option<ResidentProvider>>>,
+    },
+}
+
+/// The persisted store + instance for a [`ProviderKind::ResidentWasmComponent`].
+pub struct ResidentProvider {
+    pub store: Store<ProviderState>,
+    pub instance: crate::dynlink_provider::DynlinkProvider,
 }
 
 /// One prepared statement stashed by the sqlite-runtime provider for
@@ -87,6 +115,24 @@ impl ProviderHandle {
         Self::new_wasm_component_from_bytes(engine, &bytes, path)
     }
 
+    /// Task #227: build a WARM-ONCE RESIDENT wasm-component provider.
+    /// Compiles the component now; the resident store is materialized on
+    /// the first invoke and reused for every subsequent call so guest
+    /// state persists across tiers (vtab/hook/aggregate coherence).
+    pub fn new_resident_wasm_component(engine: Engine, path: PathBuf) -> Result<Self, String> {
+        let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+        let component = Component::from_binary(&engine, &bytes)
+            .map_err(|e| format!("compile {}: {e}", path.display()))?;
+        Ok(Self {
+            kind: ProviderKind::ResidentWasmComponent {
+                engine,
+                component,
+                path,
+                resident: Arc::new(AsyncMutex::new(None)),
+            },
+        })
+    }
+
     /// Same as `new_wasm_component` but takes the bytes pre-loaded.
     /// `Host::register_wasm_provider` uses this to run a digest /
     /// trust check on the bytes before paying for compilation.
@@ -116,6 +162,12 @@ impl ProviderHandle {
             ProviderKind::WasmComponent {
                 engine, component, ..
             } => wasm_component_invoke(method, payload, engine, component).await,
+            ProviderKind::ResidentWasmComponent {
+                engine,
+                component,
+                resident,
+                ..
+            } => resident_wasm_component_invoke(method, payload, engine, component, resident).await,
         }
     }
 
@@ -124,6 +176,9 @@ impl ProviderHandle {
     pub fn is_streaming_cli(&self) -> bool {
         match &self.kind {
             ProviderKind::WasmComponent {
+                engine, component, ..
+            }
+            | ProviderKind::ResidentWasmComponent {
                 engine, component, ..
             } => imports_cli_stdout(component, engine),
             _ => false,
@@ -144,7 +199,17 @@ impl ProviderHandle {
         match &self.kind {
             ProviderKind::WasmComponent {
                 engine, component, ..
+            }
+            | ProviderKind::ResidentWasmComponent {
+                engine, component, ..
             } if imports_cli_stdout(component, engine) => {
+                // The cli-aware (streaming) path needs the cli-stdout/stderr/
+                // state host imports satisfied with a per-invoke capture, which
+                // a plain resident store can't carry. A streaming dotcmd
+                // (greet/dotret) holds no cross-call guest state, so driving it
+                // through the fresh cli-aware store is sound — the resident
+                // store coherence matters only for vtab/hook/aggregate, none of
+                // which import cli-stdout.
                 wasm_component_invoke_cli(method, payload, engine, component, state).await
             }
             _ => self.invoke(method, payload).await.map(|b| (b, CliCapture::default())),
@@ -311,7 +376,7 @@ impl AsyncProviderBackend for RunBackend {
 
 // --- wasm-component provider dispatcher ---
 
-struct ProviderState {
+pub struct ProviderState {
     wasi: wasmtime_wasi::WasiCtx,
     resources: wasmtime_wasi::ResourceTable,
 }
@@ -351,6 +416,60 @@ async fn wasm_component_invoke(
     let result = instance
         .compose_dynlink_endpoint()
         .call_handle(&mut store, method, payload)
+        .await
+        .map_err(|e| format!("call_handle: {e}"))?;
+    result.map_err(|e| format!("provider {method}: {}", e.message))
+}
+
+/// Task #227: drive a WARM-ONCE RESIDENT wasm-component provider. The
+/// store + instance are materialized once (on first invoke) into the
+/// shared `resident` slot and reused for every subsequent call, so the
+/// guest's `thread_local!` / `OnceLock` / accumulator state persists
+/// across vtab/hook/aggregate/scalar dispatches within ONE extension.
+/// This is the cross-call coherence the fresh-store `wasm_component_invoke`
+/// could not give. The async mutex serializes calls against the one store.
+async fn resident_wasm_component_invoke(
+    method: &str,
+    payload: &[u8],
+    engine: &Engine,
+    component: &Component,
+    resident: &Arc<AsyncMutex<Option<ResidentProvider>>>,
+) -> Result<Vec<u8>, String> {
+    let mut guard = resident.lock().await;
+    if guard.is_none() {
+        let mut linker: Linker<ProviderState> = Linker::new(engine);
+        wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+            .map_err(|e| format!("wasi linker: {e}"))?;
+        let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
+        wasi.inherit_stdio();
+        let state = ProviderState {
+            wasi: wasi.build(),
+            resources: wasmtime_wasi::ResourceTable::new(),
+        };
+        let mut store = wasmtime::Store::new(engine, state);
+        store
+            .set_fuel(u64::MAX / 2)
+            .map_err(|e| format!("set_fuel: {e}"))?;
+        store.set_epoch_deadline(1_000_000_000_000);
+        let instance = crate::dynlink_provider::DynlinkProvider::instantiate_async(
+            &mut store, component, &linker,
+        )
+        .await
+        .map_err(|e| format!("instantiate resident provider: {e}"))?;
+        *guard = Some(ResidentProvider { store, instance });
+    }
+    let resident = guard.as_mut().unwrap();
+    // Refresh the per-call budget so a long-lived resident store does not
+    // exhaust fuel across many invokes (the store persists, fuel does not
+    // auto-refill).
+    resident
+        .store
+        .set_fuel(u64::MAX / 2)
+        .map_err(|e| format!("refresh fuel: {e}"))?;
+    let ResidentProvider { store, instance } = resident;
+    let result = instance
+        .compose_dynlink_endpoint()
+        .call_handle(&mut *store, method, payload)
         .await
         .map_err(|e| format!("call_handle: {e}"))?;
     result.map_err(|e| format!("provider {method}: {}", e.message))
