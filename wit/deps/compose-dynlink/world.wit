@@ -25,3 +25,17 @@ world dynlink-provider {
 world endpoint-consumer {
   import endpoint;
 }
+
+/// A streaming dynlink provider: exports the uniform `endpoint` AND
+/// imports the cli streaming surface (`cli-stdout`/`cli-stderr`/
+/// `cli-state`). The host satisfies those imports with a per-invoke
+/// capture buffer so a streaming dot-command provider (e.g. greet) can
+/// emit rows mid-`handle`; the host folds the captured text into the
+/// dot-command response. Task #226: the streaming-dotcmd tier of the
+/// production sqlite-extension-endpoint provider family.
+world dynlink-provider-cli {
+  export endpoint;
+  import sqlite:extension/cli-stdout@1.0.0;
+  import sqlite:extension/cli-stderr@1.0.0;
+  import sqlite:extension/cli-state@1.0.0;
+}

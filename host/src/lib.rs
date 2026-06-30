@@ -376,6 +376,24 @@ pub mod dynlink_provider {
     });
 }
 
+/// Bindgen for the STREAMING dynlink provider world (task #226). Same
+/// `endpoint` export as `dynlink-provider`, plus the cli streaming
+/// imports (`cli-stdout`/`cli-stderr`/`cli-state`) that a streaming
+/// dot-command provider calls back into. The host satisfies those in
+/// `compose_provider::wasm_component_invoke_cli` with a per-invoke
+/// capture buffer.
+pub mod dynlink_provider_cli {
+    wasmtime::component::bindgen!({
+        path: "../wit",
+        world: "compose:dynlink/dynlink-provider-cli@0.1.0",
+        imports: { default: async },
+        exports: { default: async },
+        with: {
+            "sys:compose/types": super::compose::sys::compose::types,
+        },
+    });
+}
+
 /// Bindgen for runnable wasm components — components targeting
 /// our `runnable` world. The host uses this to instantiate and
 /// invoke run() when `.run /path/to/foo.wasm` is called.

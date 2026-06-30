@@ -118,6 +118,38 @@ impl ProviderHandle {
             } => wasm_component_invoke(method, payload, engine, component).await,
         }
     }
+
+    /// True if this is a streaming dotcmd provider (imports `cli-stdout`)
+    /// and must be driven via `invoke_cli` rather than `invoke`.
+    pub fn is_streaming_cli(&self) -> bool {
+        match &self.kind {
+            ProviderKind::WasmComponent {
+                engine, component, ..
+            } => imports_cli_stdout(component, engine),
+            _ => false,
+        }
+    }
+
+    /// Drive a streaming dotcmd provider: satisfies the cli-stdout/stderr/
+    /// state imports with a per-invoke capture buffer (seeded from the
+    /// live cli session `state`) and returns the provider's response plus
+    /// anything it streamed. For a non-streaming provider this falls back
+    /// to `invoke` with an empty capture.
+    pub async fn invoke_cli(
+        &self,
+        method: &str,
+        payload: &[u8],
+        state: CliStateSnapshot,
+    ) -> Result<(Vec<u8>, CliCapture), String> {
+        match &self.kind {
+            ProviderKind::WasmComponent {
+                engine, component, ..
+            } if imports_cli_stdout(component, engine) => {
+                wasm_component_invoke_cli(method, payload, engine, component, state).await
+            }
+            _ => self.invoke(method, payload).await.map(|b| (b, CliCapture::default())),
+        }
+    }
 }
 
 // ===========================================================================
@@ -322,6 +354,166 @@ async fn wasm_component_invoke(
         .await
         .map_err(|e| format!("call_handle: {e}"))?;
     result.map_err(|e| format!("provider {method}: {}", e.message))
+}
+
+// --- streaming-dotcmd provider dispatcher (task #226) -----------------------
+//
+// A streaming dot-command provider (e.g. greet) imports the cli surface
+// (`cli-stdout`/`cli-stderr`/`cli-state`) and emits rows mid-`handle`
+// rather than returning them in the `DotInvokeResp.text` field. The
+// plain `wasm_component_invoke` linker only adds WASI, so instantiating
+// such a provider fails with "cli-stdout not found in the linker". This
+// variant adds a per-invoke `CliCapture` buffer (mirroring the
+// datalink-dynlink `reentrant::CliCapture`) that satisfies those imports
+// and collects the streamed text; the caller folds it into the response.
+
+/// Per-invoke streamed-output capture for a streaming dotcmd provider.
+#[derive(Default)]
+pub struct CliCapture {
+    pub stdout: String,
+    pub stderr: String,
+}
+
+/// Read-only cli-state snapshot the provider may query at dispatch time
+/// (display/mode, db/path, parameter/*, ...). Empty by default; the
+/// caller seeds it from the live cli session when driving `.load`.
+pub type CliStateSnapshot = HashMap<String, String>;
+
+pub struct ProviderCliState {
+    wasi: wasmtime_wasi::WasiCtx,
+    resources: wasmtime_wasi::ResourceTable,
+    cli: CliCapture,
+    state: CliStateSnapshot,
+}
+
+impl wasmtime_wasi::WasiView for ProviderCliState {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
+        wasmtime_wasi::WasiCtxView {
+            ctx: &mut self.wasi,
+            table: &mut self.resources,
+        }
+    }
+}
+
+use crate::dynlink_provider_cli::sqlite::extension as cli_ext;
+use crate::dynlink_provider_cli::sqlite::extension::types::SqlValue as CliSqlValue;
+
+/// `HasData` marker so the generated `add_to_linker` can thread a
+/// `&mut ProviderCliState` accessor (mirrors `LoadedHostData`).
+pub struct ProviderCliHostData;
+impl wasmtime::component::HasData for ProviderCliHostData {
+    type Data<'a> = &'a mut ProviderCliState;
+}
+
+impl cli_ext::cli_stdout::Host for ProviderCliState {
+    async fn write(&mut self, text: String) {
+        self.cli.stdout.push_str(&text);
+    }
+    async fn flush(&mut self) {}
+    async fn row_end(&mut self) {
+        // `.load`-driven dotcmds default to list mode: newline per row.
+        self.cli.stdout.push('\n');
+    }
+}
+
+impl cli_ext::cli_stderr::Host for ProviderCliState {
+    async fn write(&mut self, text: String) {
+        self.cli.stderr.push_str(&text);
+    }
+}
+
+impl cli_ext::cli_state::Host for ProviderCliState {
+    async fn get_text(&mut self, key: String) -> String {
+        self.state.get(&key).cloned().unwrap_or_default()
+    }
+    async fn get_int(&mut self, key: String) -> i64 {
+        self.state
+            .get(&key)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0)
+    }
+    async fn get_bool(&mut self, key: String) -> bool {
+        matches!(self.state.get(&key).map(|s| s.as_str()), Some("1" | "true"))
+    }
+    async fn get_real(&mut self, key: String) -> f64 {
+        self.state
+            .get(&key)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0.0)
+    }
+    async fn get_value(&mut self, key: String) -> CliSqlValue {
+        match self.state.get(&key) {
+            Some(s) => CliSqlValue::Text(s.clone()),
+            None => CliSqlValue::Null,
+        }
+    }
+    async fn list_keys(&mut self, prefix: String) -> Vec<String> {
+        let mut keys: Vec<String> = self
+            .state
+            .keys()
+            .filter(|k| k.starts_with(&prefix))
+            .cloned()
+            .collect();
+        keys.sort();
+        keys
+    }
+}
+
+/// True if `component` imports the streaming cli surface — i.e. it's a
+/// streaming dotcmd provider that needs `wasm_component_invoke_cli`.
+pub fn imports_cli_stdout(component: &Component, engine: &Engine) -> bool {
+    let ct = component.component_type();
+    let found = ct
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/cli-stdout"));
+    found
+}
+
+/// Like `wasm_component_invoke`, but for a streaming dotcmd provider:
+/// adds the cli host imports, runs `handle`, and returns the provider's
+/// response together with anything it streamed via `cli-stdout`.
+async fn wasm_component_invoke_cli(
+    method: &str,
+    payload: &[u8],
+    engine: &Engine,
+    component: &Component,
+    state: CliStateSnapshot,
+) -> Result<(Vec<u8>, CliCapture), String> {
+    let mut linker: Linker<ProviderCliState> = Linker::new(engine);
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+        .map_err(|e| format!("wasi linker: {e}"))?;
+    cli_ext::cli_stdout::add_to_linker::<_, ProviderCliHostData>(&mut linker, |s| s)
+        .map_err(|e| format!("cli-stdout linker: {e}"))?;
+    cli_ext::cli_stderr::add_to_linker::<_, ProviderCliHostData>(&mut linker, |s| s)
+        .map_err(|e| format!("cli-stderr linker: {e}"))?;
+    cli_ext::cli_state::add_to_linker::<_, ProviderCliHostData>(&mut linker, |s| s)
+        .map_err(|e| format!("cli-state linker: {e}"))?;
+    let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
+    wasi.inherit_stdio();
+    let st = ProviderCliState {
+        wasi: wasi.build(),
+        resources: wasmtime_wasi::ResourceTable::new(),
+        cli: CliCapture::default(),
+        state,
+    };
+    let mut store = wasmtime::Store::new(engine, st);
+    store
+        .set_fuel(u64::MAX / 2)
+        .map_err(|e| format!("set_fuel: {e}"))?;
+    store.set_epoch_deadline(1_000_000_000_000);
+    let instance = crate::dynlink_provider_cli::DynlinkProviderCli::instantiate_async(
+        &mut store, component, &linker,
+    )
+    .await
+    .map_err(|e| format!("instantiate cli provider: {e}"))?;
+    let result = instance
+        .compose_dynlink_endpoint()
+        .call_handle(&mut store, method, payload)
+        .await
+        .map_err(|e| format!("call_handle: {e}"))?;
+    let bytes = result.map_err(|e| format!("provider {method}: {}", e.message))?;
+    let cli = std::mem::take(&mut store.data_mut().cli);
+    Ok((bytes, cli))
 }
 
 // --- sqlite-runtime dispatcher --- per host/COMPOSE-PROTOCOL.md ---
