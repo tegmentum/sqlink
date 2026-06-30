@@ -6323,7 +6323,7 @@ fn make_run_linker(engine: &Engine) -> Result<Linker<RunState>> {
     Ok(linker)
 }
 
-fn make_loaded_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+fn make_loaded_linker(engine: &Engine, http_granted: bool) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     // Async WASI for the same reason as tabular: heavy loaded
     // extensions (postgis-bridge -> gdal-wasm -> wasivfs) need
@@ -6332,15 +6332,20 @@ fn make_loaded_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Uses
+    // upstream `wasi:http`-using components (#683). Gated by
+    // `Capability::Http` (#685) — without the grant, components
+    // composing wasi:http fail at instantiation with an unmet-import
+    // error rather than getting silent open-internet access. Uses
     // `add_only_http_to_linker_async` rather than `add_to_linker_async`
     // because the wasi proxy interfaces are already wired by the
     // `wasmtime_wasi::p2::add_to_linker_async` call above; this
     // adds just the two http interfaces (`wasi:http/types`,
     // `wasi:http/outgoing-handler`). Adding here is a no-op for
     // worlds that don't import wasi:http.
-    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    if http_granted {
+        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
+            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    }
     loaded::Minimal::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
         .map_err(|e| anyhow!("loaded-ext minimal: {e}"))?;
     Ok(linker)
@@ -6349,20 +6354,21 @@ fn make_loaded_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
 /// Build a Linker pre-wired for a `minimal-http`-world loaded
 /// extension. Same imports as minimal, plus the http interface
 /// (gated by manifest http-policy at the per-call boundary).
-fn make_loaded_minimal_http_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+fn make_loaded_minimal_http_linker(
+    engine: &Engine,
+    http_granted: bool,
+) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Uses
-    // `add_only_http_to_linker_async` rather than `add_to_linker_async`
-    // because the wasi proxy interfaces are already wired by the
-    // `wasmtime_wasi::p2::add_to_linker_async` call above; this
-    // adds just the two http interfaces (`wasi:http/types`,
-    // `wasi:http/outgoing-handler`). Adding here is a no-op for
-    // worlds that don't import wasi:http.
-    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    // upstream `wasi:http`-using components (#683). Gated by
+    // `Capability::Http` (#685); see `make_loaded_linker` for the
+    // full rationale on why `add_only_http_to_linker_async` is used.
+    if http_granted {
+        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
+            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    }
     loaded_minimal_http::MinimalHttp::add_to_linker::<_, LoadedHostData>(&mut linker, |state| {
         state
     })
@@ -6373,20 +6379,21 @@ fn make_loaded_minimal_http_linker(engine: &Engine) -> Result<Linker<LoadedState
 /// Build a Linker pre-wired for a `minimal-dns`-world loaded
 /// extension: WASI + the minimal imports + dns. Used when an
 /// extension declares `Capability::Dns`.
-fn make_loaded_minimal_dns_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+fn make_loaded_minimal_dns_linker(
+    engine: &Engine,
+    http_granted: bool,
+) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Uses
-    // `add_only_http_to_linker_async` rather than `add_to_linker_async`
-    // because the wasi proxy interfaces are already wired by the
-    // `wasmtime_wasi::p2::add_to_linker_async` call above; this
-    // adds just the two http interfaces (`wasi:http/types`,
-    // `wasi:http/outgoing-handler`). Adding here is a no-op for
-    // worlds that don't import wasi:http.
-    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    // upstream `wasi:http`-using components (#683). Gated by
+    // `Capability::Http` (#685); see `make_loaded_linker` for the
+    // full rationale on why `add_only_http_to_linker_async` is used.
+    if http_granted {
+        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
+            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    }
     loaded_minimal_dns::MinimalDns::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
         .map_err(|e| anyhow!("loaded-ext minimal-dns: {e}"))?;
     Ok(linker)
@@ -6395,7 +6402,10 @@ fn make_loaded_minimal_dns_linker(engine: &Engine) -> Result<Linker<LoadedState>
 /// Build a Linker pre-wired for a `stateful`-world loaded extension:
 /// WASI + the minimal imports + state + cache. Used when dispatching
 /// aggregate calls.
-fn make_loaded_stateful_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+fn make_loaded_stateful_linker(
+    engine: &Engine,
+    http_granted: bool,
+) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     // Async WASI — see make_loaded_linker. The raster aggregate
     // st_rast_union_agg routes through gdal-wasm, which is what
@@ -6403,15 +6413,13 @@ fn make_loaded_stateful_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Uses
-    // `add_only_http_to_linker_async` rather than `add_to_linker_async`
-    // because the wasi proxy interfaces are already wired by the
-    // `wasmtime_wasi::p2::add_to_linker_async` call above; this
-    // adds just the two http interfaces (`wasi:http/types`,
-    // `wasi:http/outgoing-handler`). Adding here is a no-op for
-    // worlds that don't import wasi:http.
-    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    // upstream `wasi:http`-using components (#683). Gated by
+    // `Capability::Http` (#685); see `make_loaded_linker` for the
+    // full rationale on why `add_only_http_to_linker_async` is used.
+    if http_granted {
+        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
+            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    }
     loaded_stateful::Stateful::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
         .map_err(|e| anyhow!("loaded-ext stateful: {e}"))?;
     // Stateful world doesn't import dns directly, but the
@@ -6451,20 +6459,21 @@ fn make_loaded_stateful_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
 /// Build a Linker pre-wired for a `dotcmd-aware`-world loaded
 /// extension: minimal + cli-stdout/stderr/state imports. Used
 /// when the manifest carries non-empty `dot_commands`.
-fn make_loaded_dotcmd_aware_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+fn make_loaded_dotcmd_aware_linker(
+    engine: &Engine,
+    http_granted: bool,
+) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Uses
-    // `add_only_http_to_linker_async` rather than `add_to_linker_async`
-    // because the wasi proxy interfaces are already wired by the
-    // `wasmtime_wasi::p2::add_to_linker_async` call above; this
-    // adds just the two http interfaces (`wasi:http/types`,
-    // `wasi:http/outgoing-handler`). Adding here is a no-op for
-    // worlds that don't import wasi:http.
-    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    // upstream `wasi:http`-using components (#683). Gated by
+    // `Capability::Http` (#685); see `make_loaded_linker` for the
+    // full rationale on why `add_only_http_to_linker_async` is used.
+    if http_granted {
+        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
+            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    }
     loaded_dotcmd_aware::DotcmdAware::add_to_linker::<_, LoadedHostData>(&mut linker, |state| {
         state
     })
@@ -6490,20 +6499,21 @@ fn make_loaded_collating_linker(engine: &Engine) -> Result<Linker<LoadedState>> 
 /// filesystem and the cli already runs under an async runtime —
 /// sync WASI would `block_on` and trip the "runtime within a
 /// runtime" panic.
-fn make_loaded_tabular_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+fn make_loaded_tabular_linker(
+    engine: &Engine,
+    http_granted: bool,
+) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Uses
-    // `add_only_http_to_linker_async` rather than `add_to_linker_async`
-    // because the wasi proxy interfaces are already wired by the
-    // `wasmtime_wasi::p2::add_to_linker_async` call above; this
-    // adds just the two http interfaces (`wasi:http/types`,
-    // `wasi:http/outgoing-handler`). Adding here is a no-op for
-    // worlds that don't import wasi:http.
-    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    // upstream `wasi:http`-using components (#683). Gated by
+    // `Capability::Http` (#685); see `make_loaded_linker` for the
+    // full rationale on why `add_only_http_to_linker_async` is used.
+    if http_granted {
+        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
+            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    }
     loaded_tabular::Tabular::add_to_linker::<_, LoadedHostData>(&mut linker, |state| state)
         .map_err(|e| anyhow!("loaded-ext tabular: {e}"))?;
     Ok(linker)
@@ -6513,20 +6523,21 @@ fn make_loaded_tabular_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
 /// extension. Same imports as `tabular`; the additional `vtab-update`
 /// export needs nothing on the import side beyond what `tabular`
 /// already wires.
-fn make_loaded_tabular_mutating_linker(engine: &Engine) -> Result<Linker<LoadedState>> {
+fn make_loaded_tabular_mutating_linker(
+    engine: &Engine,
+    http_granted: bool,
+) -> Result<Linker<LoadedState>> {
     let mut linker: Linker<LoadedState> = Linker::new(engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)
         .map_err(|e| anyhow!("loaded-ext WASI: {e}"))?;
     // Standard wasi:http surface for extensions composed with
-    // upstream `wasi:http`-using components (#683). Uses
-    // `add_only_http_to_linker_async` rather than `add_to_linker_async`
-    // because the wasi proxy interfaces are already wired by the
-    // `wasmtime_wasi::p2::add_to_linker_async` call above; this
-    // adds just the two http interfaces (`wasi:http/types`,
-    // `wasi:http/outgoing-handler`). Adding here is a no-op for
-    // worlds that don't import wasi:http.
-    wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
-        .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    // upstream `wasi:http`-using components (#683). Gated by
+    // `Capability::Http` (#685); see `make_loaded_linker` for the
+    // full rationale on why `add_only_http_to_linker_async` is used.
+    if http_granted {
+        wasmtime_wasi_http::p2::add_only_http_to_linker_async(&mut linker)
+            .map_err(|e| anyhow!("loaded-ext wasi:http: {e}"))?;
+    }
     loaded_tabular_mutating::TabularMutating::add_to_linker::<_, LoadedHostData>(
         &mut linker,
         |state| state,
@@ -8193,7 +8204,10 @@ impl Host {
         // C2 row on first run; later processes hit C2 from cold
         // start and skip the from_binary parse entirely.
         let component = self.component_for_digest(&bytes, &digest, name_hint)?;
-        let linker = make_loaded_stateful_linker(&self.engine)?;
+        // describe() runs with a default (empty) policy, so wasi:http
+        // stays unwired here regardless of what the extension
+        // eventually requests at load time.
+        let linker = make_loaded_stateful_linker(&self.engine, false)?;
         let tmp_ext = LoadedExtension {
             name: String::new(),
             version: String::new(),
@@ -8446,7 +8460,8 @@ impl Host {
         // instantiate`, so any component exporting at least
         // `metadata` + `scalar-function` loads — minimal AND stateful
         // and wider worlds.
-        let linker = make_loaded_stateful_linker(&self.engine)?;
+        let linker =
+            make_loaded_stateful_linker(&self.engine, policy.is_granted(Capability::Http))?;
         let tmp_ext = LoadedExtension {
             name: String::new(),
             version: String::new(),
@@ -9213,7 +9228,10 @@ impl Host {
         let cached_arc = ext_arc.cached_dotcmd_aware.clone();
         let mut guard = cached_arc.lock_owned().await;
         if guard.is_none() {
-            let linker = make_loaded_dotcmd_aware_linker(&self.engine)?;
+            let linker = make_loaded_dotcmd_aware_linker(
+                &self.engine,
+                ext_arc.policy.is_granted(Capability::Http),
+            )?;
             let mut store = build_loaded_store(&self.engine, &ext_arc, self.db_path())?;
             // Hand the Store data a back-reference to Self so the
             // loader-bridge imports route to the right registry.
@@ -9624,7 +9642,8 @@ impl Host {
         let cached_arc = ext.cached_stateful.clone();
         let mut guard = cached_arc.lock_owned().await;
         if guard.is_none() {
-            let linker = make_loaded_stateful_linker(&self.engine)?;
+            let linker =
+                make_loaded_stateful_linker(&self.engine, ext.policy.is_granted(Capability::Http))?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
             let instance =
                 loaded_stateful::Stateful::instantiate_async(&mut store, &ext.component, &linker)
@@ -10367,7 +10386,8 @@ impl Host {
         let cached_arc = ext.cached_minimal.clone();
         let mut guard = cached_arc.lock_owned().await;
         if guard.is_none() {
-            let linker = make_loaded_linker(&self.engine)?;
+            let linker =
+                make_loaded_linker(&self.engine, ext.policy.is_granted(Capability::Http))?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
             let instance = loaded::Minimal::instantiate_async(&mut store, &ext.component, &linker)
                 .await
@@ -10395,7 +10415,10 @@ impl Host {
         let cached_arc = ext.cached_minimal_http.clone();
         let mut guard = cached_arc.lock_owned().await;
         if guard.is_none() {
-            let linker = make_loaded_minimal_http_linker(&self.engine)?;
+            let linker = make_loaded_minimal_http_linker(
+                &self.engine,
+                ext.policy.is_granted(Capability::Http),
+            )?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
             let instance = loaded_minimal_http::MinimalHttp::instantiate_async(
                 &mut store,
@@ -10496,7 +10519,10 @@ impl Host {
         let cached_arc = ext.cached_minimal_dns.clone();
         let mut guard = cached_arc.lock_owned().await;
         if guard.is_none() {
-            let linker = make_loaded_minimal_dns_linker(&self.engine)?;
+            let linker = make_loaded_minimal_dns_linker(
+                &self.engine,
+                ext.policy.is_granted(Capability::Http),
+            )?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
             let instance = loaded_minimal_dns::MinimalDns::instantiate_async(
                 &mut store,
@@ -10530,7 +10556,10 @@ impl Host {
         let cached_arc = ext.cached_tabular.clone();
         let mut guard = cached_arc.lock_owned().await;
         if guard.is_none() {
-            let linker = make_loaded_tabular_linker(&self.engine)?;
+            let linker = make_loaded_tabular_linker(
+                &self.engine,
+                ext.policy.is_granted(Capability::Http),
+            )?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
             let instance =
                 loaded_tabular::Tabular::instantiate_async(&mut store, &ext.component, &linker)
@@ -10563,7 +10592,10 @@ impl Host {
         let cached_arc = ext.cached_tabular_mutating.clone();
         let mut guard = cached_arc.lock_owned().await;
         if guard.is_none() {
-            let linker = make_loaded_tabular_mutating_linker(&self.engine)?;
+            let linker = make_loaded_tabular_mutating_linker(
+                &self.engine,
+                ext.policy.is_granted(Capability::Http),
+            )?;
             let mut store = build_loaded_store(&self.engine, &ext, self.db_path())?;
             let instance = loaded_tabular_mutating::TabularMutating::instantiate_async(
                 &mut store,
