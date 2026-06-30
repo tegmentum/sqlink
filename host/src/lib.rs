@@ -7532,6 +7532,15 @@ pub struct Host {
     /// (vtab / hook) and aggregates still fall through to the bespoke
     /// loader — see ProviderBacking docs.
     provider_backed: Arc<RwLock<HashMap<String, ProviderBacking>>>,
+    /// Task #228: the full provider manifest captured at
+    /// `load_extension_as_provider` time, keyed by ext name. The cli
+    /// `.load` path's loader handler returns this (converted to the
+    /// bindings `Manifest` via `manifest_for_provider`) so a
+    /// provider-backed extension reports its scalar/aggregate/vtab/hook/
+    /// dotcmd surface exactly like a bespoke one — the in-WASM cli then
+    /// registers the right trampolines, which dispatch through the
+    /// resident provider.
+    provider_manifests: Arc<RwLock<HashMap<String, provider_envelope::Manifest>>>,
     /// Trust policy applied to wasm-component provider registration.
     /// Default `TrustPolicy::AllowAll` preserves the original
     /// behavior (any file path can be registered). Operators that
@@ -8057,6 +8066,7 @@ impl Host {
             cache,
             compose_providers,
             provider_backed: Arc::new(RwLock::new(HashMap::new())),
+            provider_manifests: Arc::new(RwLock::new(HashMap::new())),
             trust_policy,
             dynlink_bridge,
             signature_verifier,
@@ -8843,6 +8853,40 @@ impl Host {
                     "load_extension: cas-cache put failed; .bundle-load round-trip may need manual priming"
                 );
             }
+        }
+        // Task #228: `.load <ext>-provider.wasm` — a `dynlink-provider`-world
+        // component (exports `compose:dynlink/endpoint`) is NOT a bespoke
+        // `sqlite:extension`-world extension. Route it onto the WARM-ONCE
+        // RESIDENT compose:dynlink path so its scalar/collation/aggregate/
+        // vtab/hook/dotcmd tiers all dispatch through the provider with
+        // cross-call store coherence (the retirement target). The bespoke
+        // loader only sees plain extension components.
+        let is_provider = self
+            .component_for_digest(&bytes, &blake3::hash(&bytes).to_hex().to_string(), &hint)
+            .ok()
+            .map(|c| compose_provider::exports_endpoint(&c, &self.engine))
+            .unwrap_or(false);
+        if is_provider {
+            let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
+                self.engine.clone(),
+                resolved.clone(),
+            )
+            .map_err(|e| anyhow!("compile resident provider {}: {e}", resolved.display()))?;
+            // The provider's own manifest names the extension; describe it
+            // first so the catalog name (not the file stem) keys dispatch.
+            let (mbytes, _) = provider
+                .invoke_cli("describe", &[], std::collections::HashMap::new())
+                .await
+                .map_err(|e| anyhow!("provider describe: {e}"))?;
+            let manifest = provider_envelope::decode_manifest(&mbytes)
+                .map_err(|e| anyhow!("decode manifest: {e}"))?;
+            let ext_name = if manifest.name.is_empty() {
+                hint.clone()
+            } else {
+                manifest.name.clone()
+            };
+            self.load_extension_as_provider(&ext_name, provider).await?;
+            return Ok(ext_name);
         }
         self.load_extension_from_bytes(bytes, &hint, policy).await
     }
@@ -10188,7 +10232,23 @@ impl Host {
         self.provider_backed
             .write()
             .insert(ext_name.to_string(), backing);
+        // Task #228: stash the full manifest so the cli `.load` loader
+        // handler can report the provider-backed extension's surface.
+        self.provider_manifests
+            .write()
+            .insert(ext_name.to_string(), manifest.clone());
         Ok(manifest)
+    }
+
+    /// Task #228: the bindings `Manifest` for a provider-backed extension
+    /// loaded via `.load <ext>-provider.wasm`, or `None` if `name` is not
+    /// provider-backed. The cli `.load` loader handler returns this when
+    /// the ext is absent from the bespoke `components` map.
+    pub fn provider_backed_bindings_manifest(&self, name: &str) -> Option<Manifest> {
+        self.provider_manifests
+            .read()
+            .get(name)
+            .map(manifest_for_provider)
     }
 
     /// If `ext_name` is provider-backed, dispatch the scalar `func_id`
@@ -14964,17 +15024,23 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         let policy = policy_from_load_options(&options);
         match self.host.load_extension(PathBuf::from(&path), policy).await {
             Ok(name) => {
-                let components = self.host.components.read();
-                if let Some(ext) = components.get(&name) {
-                    Ok(manifest_for_ext(ext))
-                } else {
-                    // Should not happen — we just inserted it under
-                    // this name.
-                    Err(LoaderError {
-                        code: 1,
-                        message: format!("internal: extension {name} vanished after load"),
-                    })
+                {
+                    let components = self.host.components.read();
+                    if let Some(ext) = components.get(&name) {
+                        return Ok(manifest_for_ext(ext));
+                    }
                 }
+                // Task #228: a `.load`'d `<ext>-provider.wasm` lives in the
+                // provider-backed map, not `components`. Return its manifest
+                // so the cli registers the provider-backed trampolines.
+                if let Some(m) = self.host.provider_backed_bindings_manifest(&name) {
+                    return Ok(m);
+                }
+                // Should not happen — we just inserted it under this name.
+                Err(LoaderError {
+                    code: 1,
+                    message: format!("internal: extension {name} vanished after load"),
+                })
             }
             Err(e) => Err(LoaderError {
                 code: 1,

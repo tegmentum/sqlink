@@ -595,6 +595,19 @@ pub fn imports_cli_stdout(component: &Component, engine: &Engine) -> bool {
     found
 }
 
+/// True if `component` exports `compose:dynlink/endpoint` — i.e. it's a
+/// `dynlink-provider`-world component (an `<ext>-provider.wasm`), not a
+/// bespoke `sqlite:extension`-world extension. Task #228: the real
+/// composed CLI's `.load` uses this to route a provider component onto
+/// the resident compose:dynlink path instead of the bespoke loader.
+pub fn exports_endpoint(component: &Component, engine: &Engine) -> bool {
+    let ct = component.component_type();
+    let found = ct
+        .exports(engine)
+        .any(|(name, _)| name.starts_with("compose:dynlink/endpoint"));
+    found
+}
+
 /// Like `wasm_component_invoke`, but for a streaming dotcmd provider:
 /// adds the cli host imports, runs `handle`, and returns the provider's
 /// response together with anything it streamed via `cli-stdout`.
