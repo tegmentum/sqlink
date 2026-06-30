@@ -1610,7 +1610,7 @@ checksum = "a4ae5f15dda3c708c0ade84bfee31ccab44a3da4f88015ed22f63732abe300c8"
 [[package]]
 name = "datalink-contract"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git#2a93d510059e840164da4b9bf70b9a76290795b3"
+source = "git+https://github.com/tegmentum/datalink.git?rev=d1e5984b51dba1d6f40d6173c7ab26af4a905cf2#d1e5984b51dba1d6f40d6173c7ab26af4a905cf2"
 dependencies = [
  "anyhow",
  "wasmtime",
@@ -1619,8 +1619,9 @@ dependencies = [
 [[package]]
 name = "datalink-dynlink"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git#2a93d510059e840164da4b9bf70b9a76290795b3"
+source = "git+https://github.com/tegmentum/datalink.git?rev=d1e5984b51dba1d6f40d6173c7ab26af4a905cf2#d1e5984b51dba1d6f40d6173c7ab26af4a905cf2"
 dependencies = [
+ "anyhow",
  "async-trait",
  "tokio",
  "wasmtime",
@@ -1637,12 +1638,12 @@ dependencies = [
 [[package]]
 name = "datalink-policy"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git#2a93d510059e840164da4b9bf70b9a76290795b3"
+source = "git+https://github.com/tegmentum/datalink.git?rev=d1e5984b51dba1d6f40d6173c7ab26af4a905cf2#d1e5984b51dba1d6f40d6173c7ab26af4a905cf2"
 
 [[package]]
 name = "datalink-prefix"
 version = "0.1.0"
-source = "git+https://github.com/tegmentum/datalink.git#2a93d510059e840164da4b9bf70b9a76290795b3"
+source = "git+https://github.com/tegmentum/datalink.git?rev=d1e5984b51dba1d6f40d6173c7ab26af4a905cf2#d1e5984b51dba1d6f40d6173c7ab26af4a905cf2"
 
 [[package]]
 name = "datalink-valuemodel"
@@ -4389,7 +4390,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b570b25f7617e43d59005d0990ccb79e950a423952cea19671b7a876da390adf"
 dependencies = [
  "anyhow",
- "itertools 0.14.0",
+ "itertools 0.10.5",
  "proc-macro2",
  "quote",
  "syn",

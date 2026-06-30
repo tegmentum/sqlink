@@ -27,7 +27,7 @@ sqlink-parsers = { path = "../sqlink-parsers" }
 # ducklink host). Introspects a loaded component's imported sqlite:extension
 # @MAJOR and rejects a contract-major mismatch (or unversioned/legacy)
 # before instantiation -- silent-corruption protection. datalink is PUBLIC.
-datalink-contract = { git = "https://github.com/tegmentum/datalink.git" }
+datalink-contract = { git = "https://github.com/tegmentum/datalink.git", rev = "d1e5984b51dba1d6f40d6173c7ab26af4a905cf2" }
 
 # Shared compose:dynlink linker host (also consumed by the ducklink host).
 # We use its ADDITIVE async flavor: AsyncProviderBackend + AsyncDynLinkBridge
@@ -36,13 +36,13 @@ datalink-contract = { git = "https://github.com/tegmentum/datalink.git" }
 # resolution, multi-tenancy, the fresh-store WasmComponent path, and the
 # built-in SqliteRuntime shim live in our AsyncProviderBackend impls; the
 # bridge routes resolve/invoke/drop to them. datalink is PUBLIC.
-datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git" }
+datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git", rev = "d1e5984b51dba1d6f40d6173c7ab26af4a905cf2" }
 
 # Shared, db-agnostic function-prefix namespacing (also consumed by the
 # ducklink host). The prefix__name resolution algorithm + the collision/pin
 # model behind a PrefixStore trait; this host backs that trait with its
 # __sqlink_prefix* SQLite tables (see prefix_registry.rs). datalink is PUBLIC.
-datalink-prefix = { git = "https://github.com/tegmentum/datalink.git" }
+datalink-prefix = { git = "https://github.com/tegmentum/datalink.git", rev = "d1e5984b51dba1d6f40d6173c7ab26af4a905cf2" }
 
 anyhow = "1.0"
 wasmtime = { version = "46.0.1", features = [
