@@ -42,7 +42,7 @@ let cli = new sqlite:cli {
     // unwired in our setup. Spell out the spi handoff explicitly
     // so the composed binary internally satisfies it from sqlite-
     // lib's export rather than re-importing from the host.
-    "sqlite:extension/spi@0.1.0": lib["sqlite:extension/spi@0.1.0"],
+    "sqlite:extension/spi@1.0.0": lib["sqlite:extension/spi@1.0.0"],
     ...
 };
 
@@ -62,5 +62,5 @@ export cli["wasi:cli/run@0.2.6"];
 // alias-export with "instance not valid to be used as export"
 // because the referenced types aren't reachable through the
 // exported component's type space.
-export lib["sqlite:extension/types@0.1.0"];
+export lib["sqlite:extension/types@1.0.0"];
 export lib["sqlink:wasm/dispatch-bridge@0.1.0"];
