@@ -15,6 +15,14 @@ package sqlink:wasm@0.1.0;
 world extension-loader-host {
     import extension-loader;
     import dispatch;
+    /// Task #228: the multi-memory composed `cli + sqlite-lib` runnable
+    /// imports `opfs-host` (the browser OPFS file-handle primitives
+    /// backing the `opfs` VFS in sqlite-vfs-tvm). The NATIVE wasmtime
+    /// host uses the wasi:filesystem VFS, never the opfs VFS, so these
+    /// functions are never called at runtime — but the import must be
+    /// satisfiable for the component to instantiate. The host's
+    /// `add_to_linker` wires a trapping stub.
+    import opfs-host;
     /// PLAN-cli-shared-conn.md Stage 3: the host's bindgen now
     /// also generates spi + prepared Host traits + add_to_linker
     /// helpers so the cli component (whose sqlite-cli-command

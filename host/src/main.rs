@@ -943,6 +943,19 @@ async fn main() -> Result<()> {
     )
     .map_err(|e| anyhow!("wire dispatch: {e}"))?;
 
+    // Task #228: the multi-memory composed `cli + sqlite-lib` runnable
+    // imports `opfs-host` (browser OPFS primitives). The native runtime
+    // never selects the opfs VFS, so a trapping stub satisfies the
+    // import without ever firing.
+    bindings::sqlink::wasm::opfs_host::add_to_linker::<_, LoaderData>(
+        &mut linker,
+        |state: &mut State| HostWrap {
+            host: &mut state.host,
+            resources: Some(&mut state.resources),
+        },
+    )
+    .map_err(|e| anyhow!("wire opfs-host: {e}"))?;
+
     // PLAN-cli-shared-conn.md Stage 3: the cli component's
     // sqlite-cli-command world now declares it can import spi,
     // so the linker provides it via HostWrap's impl. The

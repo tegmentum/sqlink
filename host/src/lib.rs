@@ -15015,6 +15015,79 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
     }
 }
 
+/// Task #228: trapping `opfs-host` impl. The multi-memory composed
+/// `cli + sqlite-lib` runnable imports the browser OPFS file-handle
+/// primitives. Natively we use the wasi:filesystem VFS, so these are
+/// never invoked at runtime — but the import must be satisfiable for the
+/// component to instantiate. Every call returns an error (it would only
+/// fire if a guest explicitly selected the `opfs` VFS, which the native
+/// runtime never does).
+impl<'a> bindings::sqlink::wasm::opfs_host::Host for HostWrap<'a> {
+    async fn open(
+        &mut self,
+        _path: String,
+        _create: bool,
+    ) -> std::result::Result<u64, bindings::sqlink::wasm::opfs_host::OpfsError> {
+        Err(opfs_unsupported())
+    }
+    async fn read(
+        &mut self,
+        _handle: u64,
+        _offset: u64,
+        _len: u32,
+    ) -> std::result::Result<Vec<u8>, bindings::sqlink::wasm::opfs_host::OpfsError> {
+        Err(opfs_unsupported())
+    }
+    async fn write(
+        &mut self,
+        _handle: u64,
+        _offset: u64,
+        _data: Vec<u8>,
+    ) -> std::result::Result<u32, bindings::sqlink::wasm::opfs_host::OpfsError> {
+        Err(opfs_unsupported())
+    }
+    async fn truncate(
+        &mut self,
+        _handle: u64,
+        _size: u64,
+    ) -> std::result::Result<(), bindings::sqlink::wasm::opfs_host::OpfsError> {
+        Err(opfs_unsupported())
+    }
+    async fn sync(
+        &mut self,
+        _handle: u64,
+    ) -> std::result::Result<(), bindings::sqlink::wasm::opfs_host::OpfsError> {
+        Err(opfs_unsupported())
+    }
+    async fn size(
+        &mut self,
+        _handle: u64,
+    ) -> std::result::Result<u64, bindings::sqlink::wasm::opfs_host::OpfsError> {
+        Err(opfs_unsupported())
+    }
+    async fn close(
+        &mut self,
+        _handle: u64,
+    ) -> std::result::Result<(), bindings::sqlink::wasm::opfs_host::OpfsError> {
+        Err(opfs_unsupported())
+    }
+    async fn delete(
+        &mut self,
+        _path: String,
+    ) -> std::result::Result<(), bindings::sqlink::wasm::opfs_host::OpfsError> {
+        Err(opfs_unsupported())
+    }
+}
+
+fn opfs_unsupported() -> bindings::sqlink::wasm::opfs_host::OpfsError {
+    bindings::sqlink::wasm::opfs_host::OpfsError {
+        message: "opfs-host is browser-only; the native runtime uses the \
+                  wasi:filesystem VFS (the opfs VFS is never selected natively)"
+            .to_string(),
+        code: bindings::sqlink::wasm::opfs_host::OpfsErrorCode::Invalid,
+    }
+}
+
 impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
     async fn load_extension(
         &mut self,
