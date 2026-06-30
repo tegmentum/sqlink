@@ -11821,6 +11821,20 @@ impl Host {
         table: &str,
         rowid: i64,
     ) -> Result<()> {
+        // Task #227: resident provider — fire the update hook against the
+        // warm store, where the extension's hook state (set by a prior
+        // scalar/hook call) coheres.
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_hook_update(
+                update_op_name(operation),
+                database,
+                table,
+                rowid,
+            );
+            if let Some(r) = self.try_provider_invoke(ext_name, "hook.update", payload).await {
+                return r.map(|_| ()).map_err(|e| anyhow!("hook.update: {e}"));
+            }
+        }
         let mut guard = self.hooked_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         cached
@@ -11840,6 +11854,19 @@ impl Host {
     /// Route a pre-commit hook. `true` lets the commit proceed; `false`
     /// converts it to a rollback (SQLite's standard semantics).
     pub async fn dispatch_on_commit(&self, ext_name: &str) -> Result<bool> {
+        // Task #227: resident provider — on-commit decision over the warm
+        // store. The WIT `on-commit` bool is the proceed flag (same export
+        // the bespoke path calls), so no inversion here.
+        if let Some(r) = self
+            .try_provider_invoke(ext_name, "hook.commit", Ok(Vec::new()))
+            .await
+        {
+            return match r {
+                Ok(bytes) => provider_envelope::decode_bool(&bytes)
+                    .map_err(|e| anyhow!("decode on-commit: {e}")),
+                Err(e) => Err(anyhow!("hook.commit: {e}")),
+            };
+        }
         let mut guard = self.hooked_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         cached
@@ -11852,6 +11879,13 @@ impl Host {
 
     /// Route a post-rollback notification.
     pub async fn dispatch_on_rollback(&self, ext_name: &str) -> Result<()> {
+        // Task #227: resident provider — rollback notification.
+        if let Some(r) = self
+            .try_provider_invoke(ext_name, "hook.rollback", Ok(Vec::new()))
+            .await
+        {
+            return r.map(|_| ()).map_err(|e| anyhow!("hook.rollback: {e}"));
+        }
         let mut guard = self.hooked_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         cached
@@ -11874,6 +11908,23 @@ impl Host {
         db_name: &str,
         n_frames: u32,
     ) -> Result<i32> {
+        // Task #227: resident provider — wal hook fires against the warm
+        // store (wal-archive-style ring-buffer state persists there).
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "hook.wal",
+                provider_envelope::encode_hook_wal(hook_id, db_name, n_frames),
+            )
+            .await
+        {
+            return match r {
+                Ok(bytes) => {
+                    provider_envelope::decode_i32(&bytes).map_err(|e| anyhow!("decode wal hook: {e}"))
+                }
+                Err(e) => Err(anyhow!("hook.wal: {e}")),
+            };
+        }
         let mut guard = self.hooked_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         cached
@@ -12642,6 +12693,17 @@ fn constraint_op_name(op: bindings::sqlite::extension::vtab::ConstraintOp) -> &'
         Op::Limit => "limit",
         Op::Offset => "offset",
         Op::Function => "function",
+    }
+}
+
+/// Task #227: the update-operation WIT discriminant name for the woco
+/// `UpdateHookReq.operation` field (insert/update/delete).
+fn update_op_name(op: bindings::sqlite::extension::types::UpdateOperation) -> &'static str {
+    use bindings::sqlite::extension::types::UpdateOperation as Op;
+    match op {
+        Op::Insert => "insert",
+        Op::Update => "update",
+        Op::Delete => "delete",
     }
 }
 
