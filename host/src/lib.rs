@@ -419,6 +419,54 @@ pub mod provider_envelope {
         pub aggregates: Vec<(String, u64)>,
         pub has_vtab: bool,
         pub has_any_hook: bool,
+        /// Task #227: full aggregate specs (id, name, num_args, is_window)
+        /// so the cli can `register_aggregate` provider-backed extensions.
+        pub aggregate_specs: Vec<AggSpec>,
+        /// Full vtab specs so the cli can `register_vtab` provider-backed
+        /// extensions (and the host knows mutable/eponymous/batched).
+        pub vtab_specs: Vec<VtabSpecE>,
+        /// Full dot-command specs so the cli can surface provider dotcmds.
+        pub dotcmd_specs: Vec<DotSpecE>,
+        /// Individual hook flags + wal-hook id, so `register_*_hook` can be
+        /// driven precisely (not just via the `has_any_hook` summary).
+        pub has_authorizer: bool,
+        pub has_update_hook: bool,
+        pub has_commit_hook: bool,
+        pub has_wal_hook: bool,
+        pub wal_hook_id: u64,
+        /// Capabilities the extension declares (for the policy reconcile).
+        pub declared_capabilities: Vec<String>,
+    }
+
+    /// Aggregate spec mirrored from the woco manifest.
+    #[derive(Debug, Clone)]
+    pub struct AggSpec {
+        pub id: u64,
+        pub name: String,
+        pub num_args: i32,
+        pub is_window: bool,
+    }
+
+    /// Vtab spec mirrored from the woco manifest.
+    #[derive(Debug, Clone)]
+    pub struct VtabSpecE {
+        pub id: u64,
+        pub name: String,
+        pub eponymous: bool,
+        pub mutable: bool,
+        pub batched: bool,
+    }
+
+    /// Dot-command spec mirrored from the woco manifest.
+    #[derive(Debug, Clone)]
+    pub struct DotSpecE {
+        pub id: u64,
+        pub name: String,
+        pub version: String,
+        pub summary: String,
+        pub usage: String,
+        pub requires_write: bool,
+        pub no_args: bool,
     }
 
     impl Manifest {
@@ -567,7 +615,64 @@ pub mod provider_envelope {
                 || field(&v, "has_update_hook").map(is_true).unwrap_or(false)
                 || field(&v, "has_commit_hook").map(is_true).unwrap_or(false)
                 || field(&v, "has_wal_hook").map(is_true).unwrap_or(false),
+            aggregate_specs: field(&v, "aggregates").map(agg_specs).unwrap_or_default(),
+            vtab_specs: field(&v, "vtabs").map(vtab_specs).unwrap_or_default(),
+            dotcmd_specs: field(&v, "dot_commands").map(dot_specs).unwrap_or_default(),
+            has_authorizer: field(&v, "has_authorizer").map(is_true).unwrap_or(false),
+            has_update_hook: field(&v, "has_update_hook").map(is_true).unwrap_or(false),
+            has_commit_hook: field(&v, "has_commit_hook").map(is_true).unwrap_or(false),
+            has_wal_hook: field(&v, "has_wal_hook").map(is_true).unwrap_or(false),
+            wal_hook_id: field(&v, "wal_hook_id").map(|x| int(x) as u64).unwrap_or(0),
+            declared_capabilities: field(&v, "declared_capabilities")
+                .map(|c| arr(c).iter().map(text).collect())
+                .unwrap_or_default(),
         })
+    }
+
+    fn agg_specs(v: &Cbor) -> Vec<AggSpec> {
+        arr(v)
+            .iter()
+            .filter_map(|e| {
+                Some(AggSpec {
+                    id: field(e, "id").map(|x| int(x) as u64)?,
+                    name: field(e, "name").map(text)?,
+                    num_args: field(e, "num_args").map(|x| int(x) as i32).unwrap_or(-1),
+                    is_window: field(e, "is_window").map(is_true).unwrap_or(false),
+                })
+            })
+            .collect()
+    }
+
+    fn vtab_specs(v: &Cbor) -> Vec<VtabSpecE> {
+        arr(v)
+            .iter()
+            .filter_map(|e| {
+                Some(VtabSpecE {
+                    id: field(e, "id").map(|x| int(x) as u64)?,
+                    name: field(e, "name").map(text)?,
+                    eponymous: field(e, "eponymous").map(is_true).unwrap_or(false),
+                    mutable: field(e, "mutable").map(is_true).unwrap_or(false),
+                    batched: field(e, "batched").map(is_true).unwrap_or(false),
+                })
+            })
+            .collect()
+    }
+
+    fn dot_specs(v: &Cbor) -> Vec<DotSpecE> {
+        arr(v)
+            .iter()
+            .filter_map(|e| {
+                Some(DotSpecE {
+                    id: field(e, "id").map(|x| int(x) as u64)?,
+                    name: field(e, "name").map(text)?,
+                    version: field(e, "version").map(text).unwrap_or_default(),
+                    summary: field(e, "summary").map(text).unwrap_or_default(),
+                    usage: field(e, "usage").map(text).unwrap_or_default(),
+                    requires_write: field(e, "requires_write").map(is_true).unwrap_or(false),
+                    no_args: field(e, "no_args").map(is_true).unwrap_or(false),
+                })
+            })
+            .collect()
     }
 
     /// Encode a `CallReq { func_id, args }`.
@@ -601,6 +706,163 @@ pub mod provider_envelope {
 
     pub fn decode_i32(bytes: &[u8]) -> Result<i32, String> {
         Ok(int(&de(bytes)?) as i32)
+    }
+
+    // ── Task #227: aggregate / vtab / hook envelope (de)coders ──────────
+    // The resident provider answers these over `endpoint.handle`; the
+    // shapes mirror woco `provider/src/envelope.rs` verbatim.
+
+    fn map(entries: Vec<(&str, Cbor)>) -> Cbor {
+        Cbor::Map(
+            entries
+                .into_iter()
+                .map(|(k, v)| (Cbor::Text(k.into()), v))
+                .collect(),
+        )
+    }
+
+    fn args_cbor(args: &[SqlValue]) -> Cbor {
+        Cbor::Array(args.iter().map(sqlval_to_cbor).collect())
+    }
+
+    /// `AggStepReq { func_id, context_id, args }` (also used for inverse).
+    pub fn encode_agg_step(func_id: u64, context_id: u64, args: &[SqlValue]) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("func_id", Cbor::Integer(func_id.into())),
+            ("context_id", Cbor::Integer(context_id.into())),
+            ("args", args_cbor(args)),
+        ]))
+    }
+
+    /// `AggCtxReq { func_id, context_id }` (finalize / value).
+    pub fn encode_agg_ctx(func_id: u64, context_id: u64) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("func_id", Cbor::Integer(func_id.into())),
+            ("context_id", Cbor::Integer(context_id.into())),
+        ]))
+    }
+
+    /// `VtabConnectReq { vtab_id, instance_id, db_name, table_name, args }`.
+    pub fn encode_vtab_connect(
+        vtab_id: u64,
+        instance_id: u64,
+        db_name: &str,
+        table_name: &str,
+        args: &[String],
+    ) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("instance_id", Cbor::Integer(instance_id.into())),
+            ("db_name", Cbor::Text(db_name.into())),
+            ("table_name", Cbor::Text(table_name.into())),
+            (
+                "args",
+                Cbor::Array(args.iter().map(|s| Cbor::Text(s.clone())).collect()),
+            ),
+        ]))
+    }
+
+    /// `VtabInstanceReq { vtab_id, instance_id }` (disconnect / destroy).
+    pub fn encode_vtab_instance(vtab_id: u64, instance_id: u64) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("instance_id", Cbor::Integer(instance_id.into())),
+        ]))
+    }
+
+    /// `VtabOpenReq { vtab_id, instance_id, cursor_id }`.
+    pub fn encode_vtab_open(vtab_id: u64, instance_id: u64, cursor_id: u64) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("instance_id", Cbor::Integer(instance_id.into())),
+            ("cursor_id", Cbor::Integer(cursor_id.into())),
+        ]))
+    }
+
+    /// `VtabCursorReq { vtab_id, cursor_id }` (next / eof / close / rowid).
+    pub fn encode_vtab_cursor(vtab_id: u64, cursor_id: u64) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("cursor_id", Cbor::Integer(cursor_id.into())),
+        ]))
+    }
+
+    /// `VtabFilterReq { vtab_id, cursor_id, idx_num, idx_str, args }`.
+    pub fn encode_vtab_filter(
+        vtab_id: u64,
+        cursor_id: u64,
+        idx_num: i32,
+        idx_str: Option<&str>,
+        args: &[SqlValue],
+    ) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("cursor_id", Cbor::Integer(cursor_id.into())),
+            ("idx_num", Cbor::Integer((idx_num as i64).into())),
+            (
+                "idx_str",
+                idx_str.map(|s| Cbor::Text(s.into())).unwrap_or(Cbor::Null),
+            ),
+            ("args", args_cbor(args)),
+        ]))
+    }
+
+    /// `VtabColumnReq { vtab_id, cursor_id, col }`.
+    pub fn encode_vtab_column(vtab_id: u64, cursor_id: u64, col: i32) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("cursor_id", Cbor::Integer(cursor_id.into())),
+            ("col", Cbor::Integer((col as i64).into())),
+        ]))
+    }
+
+    /// `VtabUpdateReq { vtab_id, instance_id, args }` (xUpdate).
+    pub fn encode_vtab_update(
+        vtab_id: u64,
+        instance_id: u64,
+        args: &[SqlValue],
+    ) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("instance_id", Cbor::Integer(instance_id.into())),
+            ("args", args_cbor(args)),
+        ]))
+    }
+
+    /// `UpdateHookReq { operation, database, table, rowid }`.
+    pub fn encode_hook_update(
+        operation: &str,
+        database: &str,
+        table: &str,
+        rowid: i64,
+    ) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("operation", Cbor::Text(operation.into())),
+            ("database", Cbor::Text(database.into())),
+            ("table", Cbor::Text(table.into())),
+            ("rowid", Cbor::Integer(rowid.into())),
+        ]))
+    }
+
+    /// `WalHookReq { hook_id, db_name, n_frames_in_wal }`.
+    pub fn encode_hook_wal(hook_id: u64, db_name: &str, n_frames: u32) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("hook_id", Cbor::Integer(hook_id.into())),
+            ("db_name", Cbor::Text(db_name.into())),
+            ("n_frames_in_wal", Cbor::Integer((n_frames as i64).into())),
+        ]))
+    }
+
+    pub fn decode_bool(bytes: &[u8]) -> Result<bool, String> {
+        Ok(is_true(&de(bytes)?))
+    }
+
+    pub fn decode_i64(bytes: &[u8]) -> Result<i64, String> {
+        Ok(int(&de(bytes)?) as i64)
+    }
+
+    pub fn decode_string(bytes: &[u8]) -> Result<String, String> {
+        Ok(text(&de(bytes)?))
     }
 }
 
@@ -1111,7 +1373,9 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
 /// scalar + collation are populated — the safety gate guarantees a
 /// provider-backed extension has no other tiers.
 fn manifest_for_provider(m: &provider_envelope::Manifest) -> Manifest {
-    use bindings::sqlite::extension::metadata::{CollationSpec, ScalarFunctionSpec};
+    use bindings::sqlite::extension::metadata::{
+        AggregateFunctionSpec, CollationSpec, DotCommandSpec, ScalarFunctionSpec, VtabSpec,
+    };
     use bindings::sqlite::extension::types::FunctionFlags;
     Manifest {
         name: m.name.clone(),
@@ -1126,7 +1390,21 @@ fn manifest_for_provider(m: &provider_envelope::Manifest) -> Manifest {
                 func_flags: FunctionFlags::empty(),
             })
             .collect(),
-        aggregate_functions: vec![],
+        // Task #227: populate every tier so the cli's do_load registers
+        // aggregate/vtab/hook/dotcmd provider-backed extensions exactly as
+        // it does bespoke ones — the registration trampolines then dispatch
+        // through the warm resident provider store.
+        aggregate_functions: m
+            .aggregate_specs
+            .iter()
+            .map(|a| AggregateFunctionSpec {
+                id: a.id,
+                name: a.name.clone(),
+                num_args: a.num_args,
+                func_flags: FunctionFlags::empty(),
+                is_window: a.is_window,
+            })
+            .collect(),
         collations: m
             .collations
             .iter()
@@ -1135,13 +1413,37 @@ fn manifest_for_provider(m: &provider_envelope::Manifest) -> Manifest {
                 name: name.clone(),
             })
             .collect(),
-        vtabs: vec![],
-        dot_commands: vec![],
-        has_authorizer: false,
-        has_update_hook: false,
-        has_commit_hook: false,
-        has_wal_hook: false,
-        wal_hook_id: 0,
+        vtabs: m
+            .vtab_specs
+            .iter()
+            .map(|v| VtabSpec {
+                id: v.id,
+                name: v.name.clone(),
+                eponymous: v.eponymous,
+                mutable: v.mutable,
+                batched: v.batched,
+            })
+            .collect(),
+        dot_commands: m
+            .dotcmd_specs
+            .iter()
+            .map(|d| DotCommandSpec {
+                id: d.id,
+                name: d.name.clone(),
+                version: d.version.clone(),
+                summary: d.summary.clone(),
+                usage: d.usage.clone(),
+                requires_write: d.requires_write,
+                no_args: d.no_args,
+                examples: vec![],
+                help: String::new(),
+            })
+            .collect(),
+        has_authorizer: m.has_authorizer,
+        has_update_hook: m.has_update_hook,
+        has_commit_hook: m.has_commit_hook,
+        has_wal_hook: m.has_wal_hook,
+        wal_hook_id: m.wal_hook_id,
         declared_capabilities: vec![],
         optional_capabilities: vec![],
         preferred_prefix: None,
@@ -7264,6 +7566,19 @@ pub struct ProviderBacking {
     pub scalars: HashMap<String, u64>,
     /// collation name -> woco collation id.
     pub collations: HashMap<String, u64>,
+    /// Task #227: aggregate name -> woco func_id. Non-empty means the
+    /// aggregate tier dispatches through the RESIDENT provider store
+    /// (step/value/inverse/finalize accumulation persists in one store).
+    pub aggregates: HashMap<String, u64>,
+    /// Set of vtab ids this provider backs (non-empty => vtab tier is
+    /// resident-backed; cursor/instance state persists across calls).
+    pub vtabs: std::collections::HashSet<u64>,
+    /// True when any hook tier (update/commit/wal) is resident-backed.
+    pub has_hook: bool,
+    /// True when this provider was registered as a WARM-ONCE RESIDENT
+    /// provider (the precondition for moving coherence-sensitive tiers).
+    /// A non-resident (fresh-store) backing only carries scalar/collation.
+    pub resident: bool,
 }
 
 /// Decision the host applies before accepting a wasm-component
@@ -9572,14 +9887,23 @@ impl Host {
         let manifest = provider_envelope::decode_manifest(&mbytes)
             .map_err(|e| anyhow!("decode manifest: {e}"))?;
 
-        // Fail-closed safety gate: only pure scalar/collation extensions
-        // are safe over the fresh-store-per-invoke provider boundary.
-        if manifest.has_vtab || manifest.has_any_hook || !manifest.aggregates.is_empty() {
+        // Task #227: WARM-ONCE RESIDENT providers persist guest state
+        // across calls, so vtab/hook/aggregate (the coherence-sensitive
+        // tiers) are now resident-backed and move onto the provider too.
+        // The gate is REDUCED to: a coherence-sensitive tier requires a
+        // RESIDENT provider. A non-resident (fresh-store) provider only
+        // ever carried scalar/collation; if it declares anything else it
+        // still falls back to the bespoke loader (no split-brain across
+        // fresh stores).
+        let resident = provider.is_resident();
+        let coherence_sensitive =
+            manifest.has_vtab || manifest.has_any_hook || !manifest.aggregates.is_empty();
+        if coherence_sensitive && !resident {
             return Err(anyhow!(
                 "extension {ext_name} declares vtab/hook/aggregate tiers \
-                 that need cross-Store coherence; not yet supported over \
-                 the compose:dynlink provider boundary — use the bespoke \
-                 loader"
+                 that need cross-call coherence, but its provider is not \
+                 resident (fresh-store-per-invoke); use the bespoke loader \
+                 or load it as a resident provider"
             ));
         }
 
@@ -9590,6 +9914,17 @@ impl Host {
             provider_id,
             scalars: manifest.scalars().into_iter().collect(),
             collations: manifest.collations.iter().cloned().collect(),
+            aggregates: manifest
+                .aggregate_specs
+                .iter()
+                .map(|a| (a.name.clone(), a.id))
+                .collect(),
+            vtabs: manifest.vtab_specs.iter().map(|v| v.id).collect(),
+            has_hook: manifest.has_authorizer
+                || manifest.has_update_hook
+                || manifest.has_commit_hook
+                || manifest.has_wal_hook,
+            resident,
         };
         self.provider_backed
             .write()
@@ -9641,6 +9976,116 @@ impl Host {
             // as the inner Err so callers treat it like any scalar error.
             Err(e) => Some(Ok(Err(e))),
         }
+    }
+
+    // ── Task #227: resident-provider tier routing ──────────────────────
+    //
+    // Each `dispatch_aggregate_*` / `dispatch_vtab_*` / `dispatch_on_*`
+    // checks `provider_backed` first. If the extension is backed by a
+    // WARM-ONCE RESIDENT provider, the call goes through that provider's
+    // `endpoint.handle` against its persisted store (so accumulator /
+    // cursor / hook state coheres across calls). Otherwise the dispatch
+    // falls through to the bespoke cached-Store path unchanged.
+
+    /// Return the resident provider handle for `ext_name` iff it is
+    /// provider-backed AND the backing is resident. A cheap clone of the
+    /// `ProviderKind` (for resident, the warm store is `Arc`-shared, so
+    /// the clone targets the SAME persisted store). `None` => not
+    /// resident-backed => caller uses the bespoke path.
+    fn resident_provider_handle(&self, ext_name: &str) -> Option<compose_provider::ProviderHandle> {
+        let provider_id = {
+            let g = self.provider_backed.read();
+            let b = g.get(ext_name)?;
+            if !b.resident {
+                return None;
+            }
+            b.provider_id.clone()
+        };
+        let g = self.compose_providers.read();
+        g.get(DEFAULT_TENANT)
+            .and_then(|m| m.get(&provider_id))
+            .map(|p| compose_provider::ProviderHandle {
+                kind: p.kind.clone(),
+            })
+    }
+
+    /// Aggregate step through the resident provider. `Some` when handled.
+    async fn try_provider_aggregate_step(
+        &self,
+        ext_name: &str,
+        func_id: u64,
+        context_id: u64,
+        args: &[bindings::sqlite::extension::types::SqlValue],
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let handle = self.resident_provider_handle(ext_name)?;
+        let payload = match provider_envelope::encode_agg_step(func_id, context_id, args) {
+            Ok(p) => p,
+            Err(e) => return Some(Err(anyhow!("encode agg.step: {e}"))),
+        };
+        Some(match handle.invoke("agg.step", &payload).await {
+            Ok(_) => Ok(Ok(())),
+            Err(e) => Ok(Err(e)),
+        })
+    }
+
+    /// Aggregate inverse (window) through the resident provider.
+    async fn try_provider_aggregate_inverse(
+        &self,
+        ext_name: &str,
+        func_id: u64,
+        context_id: u64,
+        args: &[bindings::sqlite::extension::types::SqlValue],
+    ) -> Option<Result<std::result::Result<(), String>>> {
+        let handle = self.resident_provider_handle(ext_name)?;
+        let payload = match provider_envelope::encode_agg_step(func_id, context_id, args) {
+            Ok(p) => p,
+            Err(e) => return Some(Err(anyhow!("encode agg.inverse: {e}"))),
+        };
+        Some(match handle.invoke("agg.inverse", &payload).await {
+            Ok(_) => Ok(Ok(())),
+            Err(e) => Ok(Err(e)),
+        })
+    }
+
+    /// Aggregate finalize/value (a ctx-only method that returns a value)
+    /// through the resident provider. `method` is `"agg.finalize"` or
+    /// `"agg.value"`.
+    async fn try_provider_aggregate_ctx(
+        &self,
+        ext_name: &str,
+        method: &str,
+        func_id: u64,
+        context_id: u64,
+    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
+    {
+        let handle = self.resident_provider_handle(ext_name)?;
+        let payload = match provider_envelope::encode_agg_ctx(func_id, context_id) {
+            Ok(p) => p,
+            Err(e) => return Some(Err(anyhow!("encode {method}: {e}"))),
+        };
+        Some(match handle.invoke(method, &payload).await {
+            Ok(bytes) => match provider_envelope::decode_sql_value(&bytes) {
+                Ok(v) => Ok(Ok(v)),
+                Err(e) => Ok(Err(format!("decode {method} result: {e}"))),
+            },
+            Err(e) => Ok(Err(e)),
+        })
+    }
+
+    /// Raw resident-provider invoke for a vtab/hook method that returns
+    /// CBOR bytes (the caller decodes). `Some` when resident-backed.
+    async fn try_provider_invoke(
+        &self,
+        ext_name: &str,
+        method: &str,
+        payload: Result<Vec<u8>, String>,
+    ) -> Option<Result<Vec<u8>, String>> {
+        let handle = self.resident_provider_handle(ext_name)?;
+        let payload = match payload {
+            Ok(p) => p,
+            Err(e) => return Some(Err(format!("encode {method}: {e}"))),
+        };
+        Some(handle.invoke(method, &payload).await)
     }
 
     /// Invoke a scalar function on a previously-loaded extension.
@@ -9830,6 +10275,15 @@ impl Host {
         context_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
+        // Task #227: resident-provider aggregate accumulation. The
+        // provider's per-context_id accumulator lives in its warm store, so
+        // step×N coheres there. Falls through to the bespoke stateful Store.
+        if let Some(r) = self
+            .try_provider_aggregate_step(ext_name, func_id, context_id, &args)
+            .await
+        {
+            return r;
+        }
         let mut guard = self.stateful_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
@@ -9850,6 +10304,14 @@ impl Host {
         func_id: u64,
         context_id: u64,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+        // Task #227: resident provider — finalize over the warm store's
+        // accumulator and release the context_id-keyed state.
+        if let Some(r) = self
+            .try_provider_aggregate_ctx(ext_name, "agg.finalize", func_id, context_id)
+            .await
+        {
+            return r;
+        }
         let mut guard = self.stateful_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let result = cached
@@ -9877,6 +10339,14 @@ impl Host {
         func_id: u64,
         context_id: u64,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+        // Task #227: window xValue — produce the intermediate aggregate
+        // WITHOUT releasing the context (the resident store keeps it).
+        if let Some(r) = self
+            .try_provider_aggregate_ctx(ext_name, "agg.value", func_id, context_id)
+            .await
+        {
+            return r;
+        }
         let mut guard = self.stateful_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let result = cached
@@ -9903,6 +10373,14 @@ impl Host {
         context_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
+        // Task #227: window xInverse — undo one row's contribution against
+        // the resident store's context_id-keyed accumulator.
+        if let Some(r) = self
+            .try_provider_aggregate_inverse(ext_name, func_id, context_id, &args)
+            .await
+        {
+            return r;
+        }
         let mut guard = self.stateful_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
@@ -14392,13 +14870,15 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         ext_name: String,
         path: String,
     ) -> std::result::Result<Manifest, LoaderError> {
-        // Compile the <ext>-provider.wasm and hand it to the host's
-        // provider-backing path (which describes it, applies the
-        // fail-closed safety gate, and records the backing so
-        // dispatch_scalar/dispatch_collation route through it). Return a
-        // WIT manifest so the cli registers the scalar/collation tiers
-        // exactly as for a bespoke-loaded extension.
-        let provider = match compose_provider::ProviderHandle::new_wasm_component(
+        // Task #227: compile the <ext>-provider.wasm as a WARM-ONCE
+        // RESIDENT provider and hand it to the host's provider-backing
+        // path (which describes it, records the backing for every
+        // resident-backed tier, and returns the manifest). The resident
+        // store's persisted guest state is what lets vtab/hook/aggregate
+        // move onto the provider. Return a WIT manifest so the cli
+        // registers ALL tiers exactly as for a bespoke-loaded extension —
+        // the registration trampolines then dispatch through the warm store.
+        let provider = match compose_provider::ProviderHandle::new_resident_wasm_component(
             self.host.engine().clone(),
             PathBuf::from(&path),
         ) {
