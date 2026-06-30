@@ -838,6 +838,59 @@ pub mod provider_envelope {
         ]))
     }
 
+    /// `VtabRenameReq { vtab_id, instance_id, new_name }` (xRename).
+    pub fn encode_vtab_rename(
+        vtab_id: u64,
+        instance_id: u64,
+        new_name: &str,
+    ) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("instance_id", Cbor::Integer(instance_id.into())),
+            ("new_name", Cbor::Text(new_name.into())),
+        ]))
+    }
+
+    /// `VtabSavepointReq { vtab_id, instance_id, savepoint }` — shared by
+    /// xSavepoint / xRelease / xRollbackTo.
+    pub fn encode_vtab_savepoint(
+        vtab_id: u64,
+        instance_id: u64,
+        savepoint: i32,
+    ) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("instance_id", Cbor::Integer(instance_id.into())),
+            ("savepoint", Cbor::Integer((savepoint as i64).into())),
+        ]))
+    }
+
+    /// `VtabShadowNameReq { vtab_id, name }` (xShadowName).
+    pub fn encode_vtab_shadow_name(vtab_id: u64, name: &str) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("name", Cbor::Text(name.into())),
+        ]))
+    }
+
+    /// `VtabIntegrityReq { vtab_id, instance_id, schema, table_name, mode_flags }`
+    /// (xIntegrity).
+    pub fn encode_vtab_integrity(
+        vtab_id: u64,
+        instance_id: u64,
+        schema: &str,
+        table_name: &str,
+        mode_flags: u32,
+    ) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("instance_id", Cbor::Integer(instance_id.into())),
+            ("schema", Cbor::Text(schema.into())),
+            ("table_name", Cbor::Text(table_name.into())),
+            ("mode_flags", Cbor::Integer((mode_flags as i64).into())),
+        ]))
+    }
+
     /// `UpdateHookReq { operation, database, table, rowid }`.
     pub fn encode_hook_update(
         operation: &str,
@@ -11513,6 +11566,17 @@ impl Host {
         instance_id: u64,
         new_name: String,
     ) -> Result<std::result::Result<(), String>> {
+        // Task #228: resident provider — cold vtab xRename routes through
+        // the warm store so the rename lands on the same instance state.
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_vtab_rename(vtab_id, instance_id, &new_name);
+            if let Some(r) = self
+                .try_provider_invoke(ext_name, "vtab-update.rename", payload)
+                .await
+            {
+                return Ok(r.map(|_| ()));
+            }
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -11531,6 +11595,16 @@ impl Host {
         instance_id: u64,
         savepoint: i32,
     ) -> Result<std::result::Result<(), String>> {
+        // Task #228: resident provider — cold vtab xSavepoint.
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_vtab_savepoint(vtab_id, instance_id, savepoint);
+            if let Some(r) = self
+                .try_provider_invoke(ext_name, "vtab-update.savepoint", payload)
+                .await
+            {
+                return Ok(r.map(|_| ()));
+            }
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -11549,6 +11623,16 @@ impl Host {
         instance_id: u64,
         savepoint: i32,
     ) -> Result<std::result::Result<(), String>> {
+        // Task #228: resident provider — cold vtab xRelease.
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_vtab_savepoint(vtab_id, instance_id, savepoint);
+            if let Some(r) = self
+                .try_provider_invoke(ext_name, "vtab-update.release", payload)
+                .await
+            {
+                return Ok(r.map(|_| ()));
+            }
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -11567,6 +11651,16 @@ impl Host {
         instance_id: u64,
         savepoint: i32,
     ) -> Result<std::result::Result<(), String>> {
+        // Task #228: resident provider — cold vtab xRollbackTo.
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_vtab_savepoint(vtab_id, instance_id, savepoint);
+            if let Some(r) = self
+                .try_provider_invoke(ext_name, "vtab-update.rollback-to", payload)
+                .await
+            {
+                return Ok(r.map(|_| ()));
+            }
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -11584,6 +11678,20 @@ impl Host {
         vtab_id: u64,
         name: &str,
     ) -> Result<bool> {
+        // Task #228: resident provider — cold vtab xShadowName.
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_vtab_shadow_name(vtab_id, name);
+            if let Some(r) = self
+                .try_provider_invoke(ext_name, "vtab-update.is-shadow-name", payload)
+                .await
+            {
+                return match r {
+                    Ok(bytes) => provider_envelope::decode_bool(&bytes)
+                        .map_err(|e| anyhow!("decode is-shadow-name: {e}")),
+                    Err(e) => Err(anyhow!("vtab-update.is-shadow-name: {e}")),
+                };
+            }
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -11604,6 +11712,22 @@ impl Host {
         table_name: &str,
         mode_flags: u32,
     ) -> Result<std::result::Result<(), String>> {
+        // Task #228: resident provider — cold vtab xIntegrity.
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_vtab_integrity(
+                vtab_id,
+                instance_id,
+                schema,
+                table_name,
+                mode_flags,
+            );
+            if let Some(r) = self
+                .try_provider_invoke(ext_name, "vtab-update.integrity", payload)
+                .await
+            {
+                return Ok(r.map(|_| ()));
+            }
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -14381,6 +14505,27 @@ impl<'a> bindings::sqlink::wasm::dispatch::Host for HostWrap<'a> {
     async fn on_rollback(&mut self, ext_name: String) {
         if let Err(e) = self.host.dispatch_on_rollback(&ext_name).await {
             tracing::error!("on_rollback {ext_name}: {e}");
+        }
+    }
+
+    async fn wal_hook(
+        &mut self,
+        ext_name: String,
+        hook_id: u64,
+        db_name: String,
+        n_frames_in_wal: u32,
+    ) -> i32 {
+        match self
+            .host
+            .dispatch_on_wal_hook(&ext_name, hook_id, &db_name, n_frames_in_wal)
+            .await
+        {
+            Ok(rc) => rc,
+            Err(e) => {
+                tracing::error!("wal_hook {ext_name}: {e}");
+                // SQLITE_ERROR — propagate failure to the calling statement.
+                1
+            }
         }
     }
 
