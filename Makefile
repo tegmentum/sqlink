@@ -895,4 +895,71 @@ ext-ship:
 	@echo "=== regression check: smoke --all -j 0 ==="
 	@python3 tooling/smoke.py --all -j 0
 
-.PHONY: ext ext-list-broken ext-smoke-all cli-smoke-all bench precompile-cli ext-check-snippets ext-ship
+# ───────────────────────────────────────────────────────────────────
+# Task #227: ext-provider — build a compose:dynlink RESIDENT provider
+# (`<ext>-provider.wasm`) for an extension by `wac plug`-ing it into the
+# right woco provider world-shape, and drop it into the host fixtures dir
+# so `.load <ext>-provider.wasm` and the host matrix tests use an in-tree
+# artifact instead of a prebuilt fixture.
+#
+# Reuses woco-sqlite-ext-endpoint's build recipe (one provider SHAPE per
+# tier, same source, `wac plug` with the extension component). The shape
+# is picked from a fixed NAME->tier map (extend it as new providers land).
+#
+#   make ext-provider NAME=aba        # scalar
+#   make ext-provider NAME=count_min  # aggregate
+#   make ext-provider NAME=series     # vtab
+#   make ext-provider NAME=inmem      # vtab-mut
+#
+# Vars:
+#   WOCO_ROOT   woco-sqlite-ext-endpoint checkout (default ~/git/...)
+#   PROVIDER_OUT  where the <ext>-provider.wasm lands
+#                 (default host/tests/fixtures/providers)
+WOCO_ROOT ?= $(HOME)/git/woco-sqlite-ext-endpoint
+PROVIDER_OUT ?= $(PROJECT_ROOT)/host/tests/fixtures/providers
+
+ext-provider:
+	@test -n "$(NAME)" || (echo "usage: make ext-provider NAME=<extension>"; exit 1)
+	@test -d "$(WOCO_ROOT)/sqlite-extension-endpoint" || \
+		(echo "woco-sqlite-ext-endpoint not found at $(WOCO_ROOT); set WOCO_ROOT="; exit 1)
+	@command -v wac >/dev/null 2>&1 || (echo "wac not found: cargo install wac-cli"; exit 1)
+	@command -v wasm-tools >/dev/null 2>&1 || (echo "wasm-tools not found"; exit 1)
+	@# NAME -> woco provider shape (Cargo feature on the provider crate).
+	@case "$(NAME)" in \
+		aba) SHAPE=scalar ;; \
+		count_min) SHAPE=aggregate ;; \
+		uint) SHAPE=collation ;; \
+		series) SHAPE=vtab ;; \
+		inmem) SHAPE=vtab-mut ;; \
+		hookcb) SHAPE=hooks ;; \
+		dotret|greet) SHAPE=dotcmd ;; \
+		*) echo "no known provider shape for '$(NAME)' (edit the NAME->SHAPE map in Makefile)"; exit 1 ;; \
+	esac; \
+	echo "==> [ext-provider] $(NAME) shape=$$SHAPE"; \
+	PROV_DIR="$(WOCO_ROOT)/sqlite-extension-endpoint"; \
+	PROV_WASM="$$PROV_DIR/provider/target/wasm32-wasip2/release/sqlite_extension_endpoint.wasm"; \
+	NAME_UNDERSCORE=$$(echo "$(NAME)" | tr - _); \
+	echo "==> building provider shape '$$SHAPE'"; \
+	( cd "$$PROV_DIR/provider" && cargo build --release --target wasm32-wasip2 \
+		--no-default-features --features "$$SHAPE" >/dev/null ); \
+	echo "==> building + componentizing extension $(NAME)"; \
+	$(MAKE) ext NAME=$(NAME) >/dev/null 2>&1 || true; \
+	EXT_COMP=""; \
+	for D in $(EXT_SHARED_TARGET)/wasm32-wasip2/release \
+	         extensions/$(NAME)/target/wasm32-wasip2/release \
+	         target/wasm32-wasip2/release; do \
+		C=$$D/$${NAME_UNDERSCORE}_extension.component.wasm; \
+		[ -f "$$C" ] && EXT_COMP=$$C && break; \
+		C=$$D/$${NAME_UNDERSCORE}_extension.wasm; \
+		[ -f "$$C" ] && EXT_COMP=$$C && break; \
+	done; \
+	test -n "$$EXT_COMP" || (echo "no built extension component for $(NAME)"; exit 1); \
+	mkdir -p "$(PROVIDER_OUT)"; \
+	OUT="$(PROVIDER_OUT)/$(NAME)-provider.wasm"; \
+	echo "==> wac plug $$EXT_COMP + provider -> $$OUT"; \
+	wac plug --plug "$$EXT_COMP" "$$PROV_WASM" -o "$$OUT"; \
+	LEFT=$$(wasm-tools component wit "$$OUT" 2>/dev/null \
+		| grep -E '^  import sqlite:extension/[a-z-]+@' | grep -vE 'types|policy|cli-' || true); \
+	echo "    -> $$(basename $$OUT) (leftover host imports: $${LEFT:-none})"
+
+.PHONY: ext ext-list-broken ext-smoke-all cli-smoke-all bench precompile-cli ext-check-snippets ext-ship ext-provider
