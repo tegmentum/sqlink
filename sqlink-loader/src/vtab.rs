@@ -182,6 +182,45 @@ unsafe fn set_err(pz_err_msg: *mut *mut c_char, msg: &str) {
     *pz_err_msg = buf;
 }
 
+/// Stash an error message on the vtab's zErrMsg field via pApi
+/// malloc. SQLite checks pVtab->zErrMsg after a callback returns
+/// SQLITE_ERROR and surfaces it to the user. Without this, every
+/// xFilter / xColumn / xNext failure collapses to the generic
+/// "SQL logic error" message — useless for debugging substrate
+/// gaps. With it the user sees the actual dispatch error from
+/// `Host::dispatch_vtab_*`. Free any prior zErrMsg first; sqlite3
+/// owns it after we hand it over.
+unsafe fn set_vtab_err(p_vtab: *mut sqlite3_vtab, msg: &str) {
+    if p_vtab.is_null() {
+        return;
+    }
+    let api = match crate::state::api_routines() {
+        Some(a) => a,
+        None => return,
+    };
+    let malloc = match api.as_ref().malloc {
+        Some(f) => f,
+        None => return,
+    };
+    let free = api.as_ref().free;
+    let vtab = &mut *p_vtab;
+    if !vtab.z_err_msg.is_null() {
+        if let Some(free_fn) = free {
+            free_fn(vtab.z_err_msg as *mut c_void);
+        }
+        vtab.z_err_msg = ptr::null_mut();
+    }
+    let bytes = msg.as_bytes();
+    let n = bytes.len() + 1;
+    let buf = malloc(n as c_int) as *mut c_char;
+    if buf.is_null() {
+        return;
+    }
+    ptr::copy_nonoverlapping(bytes.as_ptr() as *const c_char, buf, bytes.len());
+    *buf.add(bytes.len()) = 0;
+    vtab.z_err_msg = buf;
+}
+
 fn map_constraint_op(op: u8) -> wv::ConstraintOp {
     match op as c_int {
         SQLITE_INDEX_CONSTRAINT_EQ => wv::ConstraintOp::Eq,
@@ -393,7 +432,14 @@ unsafe extern "C" fn x_best_index(
         wit_info,
     )) {
         Ok(Ok(p)) => p,
-        Ok(Err(_)) | Err(_) => return SQLITE_ERROR,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.best_index: {e}"));
+            return SQLITE_ERROR;
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.best_index dispatch: {e}"));
+            return SQLITE_ERROR;
+        }
     };
 
     for (i, usage) in plan.constraint_usage.iter().enumerate() {
@@ -434,13 +480,21 @@ unsafe extern "C" fn x_open(
     let ext_name = (*lv.ext_name_owned).clone();
     let cursor_id = alloc_cursor_id();
     let g = globals();
-    if let Err(_) = g.rt.block_on(g.host.dispatch_vtab_open(
+    match g.rt.block_on(g.host.dispatch_vtab_open(
         &ext_name,
         lv.vtab_id,
         lv.instance_id,
         cursor_id,
     )) {
-        return SQLITE_ERROR;
+        Ok(Ok(())) => {}
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.open: {e}"));
+            return SQLITE_ERROR;
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.open dispatch: {e}"));
+            return SQLITE_ERROR;
+        }
     }
     let ext_name_owned = Box::into_raw(Box::new(ext_name));
     let cursor = Box::new(LoaderCursor {
@@ -486,6 +540,7 @@ unsafe extern "C" fn x_filter(
     for i in 0..argc as usize {
         args.push(sqlite3_value_to_wit(&g.api, *argv.add(i)));
     }
+    let p_vtab = (*p_cursor).p_vtab;
     match g.rt.block_on(g.host.dispatch_vtab_filter(
         &ext_name,
         c.vtab_id,
@@ -495,7 +550,14 @@ unsafe extern "C" fn x_filter(
         args,
     )) {
         Ok(Ok(())) => SQLITE_OK,
-        _ => SQLITE_ERROR,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.filter: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.filter dispatch: {e}"));
+            SQLITE_ERROR
+        }
     }
 }
 
@@ -503,12 +565,20 @@ unsafe extern "C" fn x_next(p_cursor: *mut sqlite3_vtab_cursor) -> c_int {
     let c = &*(p_cursor as *const LoaderCursor);
     let ext_name = (*c.ext_name_owned).clone();
     let g = globals();
+    let p_vtab = (*p_cursor).p_vtab;
     match g
         .rt
         .block_on(g.host.dispatch_vtab_next(&ext_name, c.vtab_id, c.cursor_id))
     {
         Ok(Ok(())) => SQLITE_OK,
-        _ => SQLITE_ERROR,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.next: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.next dispatch: {e}"));
+            SQLITE_ERROR
+        }
     }
 }
 
@@ -534,6 +604,7 @@ unsafe extern "C" fn x_column(
     let c = &*(p_cursor as *const LoaderCursor);
     let ext_name = (*c.ext_name_owned).clone();
     let g = globals();
+    let p_vtab = (*p_cursor).p_vtab;
     match g
         .rt
         .block_on(g.host.dispatch_vtab_column(&ext_name, c.vtab_id, c.cursor_id, col))
@@ -542,7 +613,14 @@ unsafe extern "C" fn x_column(
             wit_to_sqlite3_result(&g.api, ctx, v);
             SQLITE_OK
         }
-        _ => SQLITE_ERROR,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.column: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.column dispatch: {e}"));
+            SQLITE_ERROR
+        }
     }
 }
 
@@ -553,6 +631,7 @@ unsafe extern "C" fn x_rowid(
     let c = &*(p_cursor as *const LoaderCursor);
     let ext_name = (*c.ext_name_owned).clone();
     let g = globals();
+    let p_vtab = (*p_cursor).p_vtab;
     match g
         .rt
         .block_on(g.host.dispatch_vtab_rowid(&ext_name, c.vtab_id, c.cursor_id))
@@ -561,7 +640,14 @@ unsafe extern "C" fn x_rowid(
             *p_rowid = r;
             SQLITE_OK
         }
-        _ => SQLITE_ERROR,
+        Ok(Err(e)) => {
+            set_vtab_err(p_vtab, &format!("vtab.rowid: {e}"));
+            SQLITE_ERROR
+        }
+        Err(e) => {
+            set_vtab_err(p_vtab, &format!("vtab.rowid dispatch: {e}"));
+            SQLITE_ERROR
+        }
     }
 }
 
@@ -614,9 +700,17 @@ const MODULE: sqlite3_module = sqlite3_module {
     x_rollback_to: None,
 };
 
+// Per the SQLite eponymous-vtab rule, xCreate == xConnect (same
+// pointer) makes the module BOTH eponymous (SELECT FROM module())
+// AND creatable (CREATE VIRTUAL TABLE ... USING module()). xCreate
+// == NULL would limit it to eponymous-only. The bridge's xConnect
+// already handles instance setup the same way xCreate would
+// (postgis UDTFs like st_dump need the same per-instance row
+// materialization regardless of which surface created them), so
+// the two pointers can safely alias.
 const MODULE_EPONYMOUS: sqlite3_module = sqlite3_module {
     i_version: 1,
-    x_create: None,
+    x_create: Some(x_connect),
     x_connect: Some(x_connect),
     x_best_index: Some(x_best_index),
     x_disconnect: Some(x_disconnect),
@@ -743,12 +837,20 @@ mod tests {
     }
 
     #[test]
-    fn eponymous_template_has_null_x_create() {
-        // Per SQLite's eponymous-vtab rule, xCreate=NULL is what
-        // makes the module name usable directly in a SELECT
-        // without a prior CREATE VIRTUAL TABLE. Regression guard.
-        assert!(MODULE_EPONYMOUS.x_create.is_none());
+    fn eponymous_template_aliases_x_create_to_x_connect() {
+        // Per SQLite's eponymous-vtab rule, xCreate == xConnect
+        // (same pointer) makes the module both eponymous AND
+        // creatable. xCreate == NULL would restrict to eponymous-
+        // only — the loader needs both paths to support
+        // `CREATE VIRTUAL TABLE t USING st_dump(...)` alongside
+        // `SELECT * FROM st_dump(...)`.
+        assert!(MODULE_EPONYMOUS.x_create.is_some());
         assert!(MODULE_EPONYMOUS.x_connect.is_some());
+        // Cheap pointer-equality check via fn-ptr cast — both
+        // slots must reference the same trampoline.
+        let a = MODULE_EPONYMOUS.x_create.unwrap() as usize;
+        let b = MODULE_EPONYMOUS.x_connect.unwrap() as usize;
+        assert_eq!(a, b, "x_create must alias x_connect");
     }
 
     #[test]
