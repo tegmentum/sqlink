@@ -371,10 +371,6 @@ mod wasm_export {
             // Arrays / objects: encode as JSON text so users can
             // round-trip via json_extract.
             other => SqlValue::Text(other.to_string()),
-            // PLAN-wit-value-extension.md Phase A: the sql-value variant
-            // gained a wit-value arm; Phase B will replace this wildcard
-            // with extension-specific decode/encode logic.
-            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         }
     }
 
@@ -394,10 +390,11 @@ mod wasm_export {
             SqlValue::Real(r) => r.to_string(),
             SqlValue::Text(s) => s.clone(),
             SqlValue::Blob(b) => format!("<blob:{} bytes>", b.len()),
-            // PLAN-wit-value-extension.md Phase A: the sql-value variant
-            // gained a wit-value arm; Phase B will replace this wildcard
-            // with extension-specific decode/encode logic.
-            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
+            // sql-value::wit-value (canonical-CBOR WIT record, new in
+            // types @1.0.0): display the opaque payload by byte length
+            // rather than panicking, so data commands keep working when
+            // a typed value flows through.
+            SqlValue::WitValue(p) => format!("<wit-value {}:{} bytes>", p.symbolic_name, p.bytes.len()),
         }
     }
 
@@ -514,11 +511,8 @@ mod wasm_export {
             ) {
                 Ok(r) => r.rows.into_iter().filter_map(|row| {
                     row.into_iter().next().and_then(|v| match v {
-                        SqlValue::Text(s) => Some(s), _ => None
-                        // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                        // gained a wit-value arm; Phase B will replace this wildcard
-                        // with extension-specific decode/encode logic.
-                        _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
+                        SqlValue::Text(s) => Some(s),
+                        _ => None,
                     })
                 }).collect(),
                 Err(e) => return err(format!(".analyze_tables: {}", e.message)),
@@ -778,11 +772,8 @@ mod wasm_export {
         let existing_cols: Vec<String> = info.as_ref().map(|r| {
             r.rows.iter().filter_map(|row| {
                 row.get(1).and_then(|v| match v {
-                    SqlValue::Text(s) => Some(s.clone()), _ => None,
-                    // PLAN-wit-value-extension.md Phase A: the sql-value variant
-                    // gained a wit-value arm; Phase B will replace this wildcard
-                    // with extension-specific decode/encode logic.
-                    _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
+                    SqlValue::Text(s) => Some(s.clone()),
+                    _ => None,
                 })
             }).collect()
         }).unwrap_or_default();
@@ -1022,10 +1013,6 @@ mod wasm_export {
                 matches!(row.get(1), Some(SqlValue::Text(s)) if s == "mem")
             }),
             Err(_) => false,
-            // PLAN-wit-value-extension.md Phase A: the sql-value variant
-            // gained a wit-value arm; Phase B will replace this wildcard
-            // with extension-specific decode/encode logic.
-            _ => unimplemented!("sql-value::wit-value not handled in this extension; see PLAN-wit-value-extension.md Phase B"),
         };
         if !attached {
             if let Err(e) = spi::execute("ATTACH DATABASE ':memory:' AS mem", &[]) {

@@ -7655,8 +7655,8 @@
    "source": "builtin",
    "upstream_url": "",
    "artifact_url": "/asset/sqlite-utils-data",
-   "checksum": "sha256:e983fccb1fb8a438c33fc7e22bd6d81b27b035b9327e0500d46b331a07b5f673",
-   "size_bytes": 352077,
+   "checksum": "sha256:bc161805a8a1c74d67181b39fe6126ca6b8d3d23a37579e1b7f8cfe22e218cba",
+   "size_bytes": 303185,
    "min_sqlite_version": "3.39.0",
    "exports": [],
    "dependencies": [
