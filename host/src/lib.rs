@@ -891,6 +891,26 @@ pub mod provider_envelope {
         ]))
     }
 
+    /// `AuthorizeReq { action, arg1, arg2, database, trigger }`. `action`
+    /// is the auth-action WIT discriminant name (the same spelling the
+    /// provider's `parse_action` expects).
+    pub fn encode_authorize(
+        action: &str,
+        arg1: Option<&str>,
+        arg2: Option<&str>,
+        database: Option<&str>,
+        trigger: Option<&str>,
+    ) -> Result<Vec<u8>, String> {
+        let opt = |o: Option<&str>| o.map(|s| Cbor::Text(s.into())).unwrap_or(Cbor::Null);
+        cbor(&map(vec![
+            ("action", Cbor::Text(action.into())),
+            ("arg1", opt(arg1)),
+            ("arg2", opt(arg2)),
+            ("database", opt(database)),
+            ("trigger", opt(trigger)),
+        ]))
+    }
+
     /// `UpdateHookReq { operation, database, table, rowid }`.
     pub fn encode_hook_update(
         operation: &str,
@@ -12079,6 +12099,30 @@ impl Host {
         database: Option<String>,
         trigger: Option<String>,
     ) -> Result<bindings::sqlite::extension::types::AuthResult> {
+        // Task #228: resident provider — route the authorizer hook through
+        // the warm store (the hook tier's #227 routing missed this one;
+        // without it a provider-backed authorizer fell through to the
+        // bespoke `authorizing_locked` path and denied everything).
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_authorize(
+                auth_action_name(action),
+                arg1.as_deref(),
+                arg2.as_deref(),
+                database.as_deref(),
+                trigger.as_deref(),
+            );
+            if let Some(r) = self
+                .try_provider_invoke(ext_name, "authorizer.authorize", payload)
+                .await
+            {
+                return match r {
+                    Ok(bytes) => provider_envelope::decode_string(&bytes)
+                        .map(|s| auth_result_from_name(&s))
+                        .map_err(|e| anyhow!("decode authorize result: {e}")),
+                    Err(e) => Err(anyhow!("authorizer.authorize: {e}")),
+                };
+            }
+        }
         let mut guard = self.authorizing_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let action_w = convert_auth_action_to_loaded(action);
@@ -12991,6 +13035,60 @@ fn update_op_name(op: bindings::sqlite::extension::types::UpdateOperation) -> &'
         Op::Insert => "insert",
         Op::Update => "update",
         Op::Delete => "delete",
+    }
+}
+
+/// Auth-action WIT discriminant name, matching the provider's
+/// `parse_action` spelling (kebab-case). Used to route the authorizer
+/// hook through the resident provider envelope.
+fn auth_action_name(a: bindings::sqlite::extension::types::AuthAction) -> &'static str {
+    use bindings::sqlite::extension::types::AuthAction as A;
+    match a {
+        A::CreateIndex => "create-index",
+        A::CreateTable => "create-table",
+        A::CreateTempIndex => "create-temp-index",
+        A::CreateTempTable => "create-temp-table",
+        A::CreateTempTrigger => "create-temp-trigger",
+        A::CreateTempView => "create-temp-view",
+        A::CreateTrigger => "create-trigger",
+        A::CreateView => "create-view",
+        A::Delete => "delete",
+        A::DropIndex => "drop-index",
+        A::DropTable => "drop-table",
+        A::DropTempIndex => "drop-temp-index",
+        A::DropTempTable => "drop-temp-table",
+        A::DropTempTrigger => "drop-temp-trigger",
+        A::DropTempView => "drop-temp-view",
+        A::DropTrigger => "drop-trigger",
+        A::DropView => "drop-view",
+        A::Insert => "insert",
+        A::Pragma => "pragma",
+        A::Read => "read",
+        A::Select => "select",
+        A::Transaction => "transaction",
+        A::Update => "update",
+        A::Attach => "attach",
+        A::Detach => "detach",
+        A::AlterTable => "alter-table",
+        A::Reindex => "reindex",
+        A::Analyze => "analyze",
+        A::CreateVtable => "create-vtable",
+        A::DropVtable => "drop-vtable",
+        A::Function => "function",
+        A::Savepoint => "savepoint",
+        A::Recursive => "recursive",
+    }
+}
+
+/// Parse the provider's auth-result name back to the bindings enum.
+fn auth_result_from_name(s: &str) -> bindings::sqlite::extension::types::AuthResult {
+    use bindings::sqlite::extension::types::AuthResult as R;
+    match s {
+        "deny" => R::Deny,
+        "ignore" => R::Ignore,
+        // "ok" and anything unrecognised default to Ok (fail-open is the
+        // SQLite default for an authorizer that returns SQLITE_OK).
+        _ => R::Ok,
     }
 }
 
