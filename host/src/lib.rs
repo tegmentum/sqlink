@@ -807,6 +807,15 @@ pub mod provider_envelope {
         ]))
     }
 
+    /// `VtabFetchBatchReq { vtab_id, cursor_id, max_rows }`.
+    pub fn encode_vtab_fetch_batch(vtab_id: u64, cursor_id: u64, max_rows: u32) -> Result<Vec<u8>, String> {
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("cursor_id", Cbor::Integer(cursor_id.into())),
+            ("max_rows", Cbor::Integer((max_rows as i64).into())),
+        ]))
+    }
+
     /// `VtabColumnReq { vtab_id, cursor_id, col }`.
     pub fn encode_vtab_column(vtab_id: u64, cursor_id: u64, col: i32) -> Result<Vec<u8>, String> {
         cbor(&map(vec![
@@ -851,6 +860,100 @@ pub mod provider_envelope {
             ("db_name", Cbor::Text(db_name.into())),
             ("n_frames_in_wal", Cbor::Integer((n_frames as i64).into())),
         ]))
+    }
+
+    /// `VtabBestIndexReq { vtab_id, instance_id, constraints, orderbys,
+    /// col_used }`. Constraints are `(column, op-name, usable)`; orderbys
+    /// are `(column, desc)`. The op-name is the constraint-op WIT
+    /// discriminant (eq/gt/le/...).
+    #[allow(clippy::type_complexity)]
+    pub fn encode_vtab_best_index(
+        vtab_id: u64,
+        instance_id: u64,
+        constraints: &[(i32, String, bool)],
+        orderbys: &[(i32, bool)],
+        col_used: u64,
+    ) -> Result<Vec<u8>, String> {
+        let cs = Cbor::Array(
+            constraints
+                .iter()
+                .map(|(col, op, usable)| {
+                    map(vec![
+                        ("column", Cbor::Integer((*col as i64).into())),
+                        ("op", Cbor::Text(op.clone())),
+                        ("usable", Cbor::Bool(*usable)),
+                    ])
+                })
+                .collect(),
+        );
+        let obs = Cbor::Array(
+            orderbys
+                .iter()
+                .map(|(col, desc)| {
+                    map(vec![
+                        ("column", Cbor::Integer((*col as i64).into())),
+                        ("desc", Cbor::Bool(*desc)),
+                    ])
+                })
+                .collect(),
+        );
+        cbor(&map(vec![
+            ("vtab_id", Cbor::Integer(vtab_id.into())),
+            ("instance_id", Cbor::Integer(instance_id.into())),
+            ("constraints", cs),
+            ("orderbys", obs),
+            ("col_used", Cbor::Integer(col_used.into())),
+        ]))
+    }
+
+    /// Decode a `VtabIndexPlan` into its parts:
+    /// (constraint_usage as (argv_index, omit), idx_num, idx_str,
+    /// estimated_cost, estimated_rows, orderby_consumed).
+    #[allow(clippy::type_complexity)]
+    pub fn decode_vtab_index_plan(
+        bytes: &[u8],
+    ) -> Result<(Vec<(i32, bool)>, i32, Option<String>, f64, i64, bool), String> {
+        let v = de(bytes)?;
+        let usage = field(&v, "constraint_usage")
+            .map(|cu| {
+                arr(cu)
+                    .iter()
+                    .map(|u| {
+                        (
+                            field(u, "argv_index").map(|x| int(x) as i32).unwrap_or(0),
+                            field(u, "omit").map(is_true).unwrap_or(false),
+                        )
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        let idx_num = field(&v, "idx_num").map(|x| int(x) as i32).unwrap_or(0);
+        let idx_str = match field(&v, "idx_str") {
+            Some(Cbor::Text(s)) => Some(s.clone()),
+            _ => None,
+        };
+        let cost = match field(&v, "estimated_cost") {
+            Some(Cbor::Float(f)) => *f,
+            _ => 0.0,
+        };
+        let rows = field(&v, "estimated_rows").map(|x| int(x) as i64).unwrap_or(0);
+        let consumed = field(&v, "orderby_consumed").map(is_true).unwrap_or(false);
+        Ok((usage, idx_num, idx_str, cost, rows, consumed))
+    }
+
+    /// Decode a `Vec<VtabRow>` (fetch-batch) into (rowid, columns) pairs.
+    pub fn decode_vtab_rows(bytes: &[u8]) -> Result<Vec<(i64, Vec<SqlValue>)>, String> {
+        let v = de(bytes)?;
+        arr(&v)
+            .iter()
+            .map(|row| {
+                let rowid = field(row, "rowid").map(|x| int(x) as i64).unwrap_or(0);
+                let cols = field(row, "columns")
+                    .map(|c| arr(c).iter().map(cbor_to_sqlval).collect::<Result<Vec<_>, _>>())
+                    .unwrap_or_else(|| Ok(Vec::new()))?;
+                Ok((rowid, cols))
+            })
+            .collect()
     }
 
     pub fn decode_bool(bytes: &[u8]) -> Result<bool, String> {
@@ -10505,6 +10608,23 @@ impl Host {
         table_name: String,
         args: Vec<String>,
     ) -> Result<std::result::Result<String, String>> {
+        // Task #227: resident provider — vtab.create on the warm store
+        // (the provider keeps per-instance_id state for the read path).
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.create",
+                provider_envelope::encode_vtab_connect(
+                    vtab_id, instance_id, &db_name, &table_name, &args,
+                ),
+            )
+            .await
+        {
+            return Ok(match r {
+                Ok(bytes) => provider_envelope::decode_string(&bytes),
+                Err(e) => Err(e),
+            });
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10551,6 +10671,22 @@ impl Host {
         table_name: String,
         args: Vec<String>,
     ) -> Result<std::result::Result<String, String>> {
+        // Task #227: resident provider — vtab.connect on the warm store.
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.connect",
+                provider_envelope::encode_vtab_connect(
+                    vtab_id, instance_id, &db_name, &table_name, &args,
+                ),
+            )
+            .await
+        {
+            return Ok(match r {
+                Ok(bytes) => provider_envelope::decode_string(&bytes),
+                Err(e) => Err(e),
+            });
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10594,6 +10730,16 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.destroy",
+                provider_envelope::encode_vtab_instance(vtab_id, instance_id),
+            )
+            .await
+        {
+            return Ok(r.map(|_| ()));
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10623,6 +10769,16 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.disconnect",
+                provider_envelope::encode_vtab_instance(vtab_id, instance_id),
+            )
+            .await
+        {
+            return Ok(r.map(|_| ()));
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10653,6 +10809,32 @@ impl Host {
         instance_id: u64,
         info: bindings::sqlite::extension::vtab::IndexInfo,
     ) -> Result<std::result::Result<bindings::sqlite::extension::vtab::IndexPlan, String>> {
+        // Task #227: resident provider — best_index on the warm store. Map
+        // the WIT IndexInfo to the woco request and the response back.
+        if self.resident_provider_handle(ext_name).is_some() {
+            let constraints: Vec<(i32, String, bool)> = info
+                .constraints
+                .iter()
+                .map(|c| (c.column, constraint_op_name(c.op).to_string(), c.usable))
+                .collect();
+            let orderbys: Vec<(i32, bool)> =
+                info.orderbys.iter().map(|o| (o.column, o.desc)).collect();
+            let payload = provider_envelope::encode_vtab_best_index(
+                vtab_id,
+                instance_id,
+                &constraints,
+                &orderbys,
+                info.col_used,
+            );
+            if let Some(r) = self.try_provider_invoke(ext_name, "vtab.best-index", payload).await {
+                return Ok(match r {
+                    Ok(bytes) => provider_envelope::decode_vtab_index_plan(&bytes)
+                        .map(index_plan_from_parts)
+                        .map_err(|e| format!("decode index plan: {e}")),
+                    Err(e) => Err(e),
+                });
+            }
+        }
         // Each arm's `call_best_index` returns the IndexPlan from
         // its own bindgen — converted to the wire-side IndexPlan
         // inside the arm so the outer types line up.
@@ -10691,6 +10873,16 @@ impl Host {
         instance_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.open",
+                provider_envelope::encode_vtab_open(vtab_id, instance_id, cursor_id),
+            )
+            .await
+        {
+            return Ok(r.map(|_| ()));
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10720,6 +10912,16 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.close",
+                provider_envelope::encode_vtab_cursor(vtab_id, cursor_id),
+            )
+            .await
+        {
+            return Ok(r.map(|_| ()));
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10752,6 +10954,18 @@ impl Host {
         idx_str: Option<String>,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<(), String>> {
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_vtab_filter(
+                vtab_id,
+                cursor_id,
+                idx_num,
+                idx_str.as_deref(),
+                &args,
+            );
+            if let Some(r) = self.try_provider_invoke(ext_name, "vtab.filter", payload).await {
+                return Ok(r.map(|_| ()));
+            }
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
         let r = match &mut g {
@@ -10796,6 +11010,16 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.next",
+                provider_envelope::encode_vtab_cursor(vtab_id, cursor_id),
+            )
+            .await
+        {
+            return Ok(r.map(|_| ()));
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10825,6 +11049,21 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<bool> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.eof",
+                provider_envelope::encode_vtab_cursor(vtab_id, cursor_id),
+            )
+            .await
+        {
+            return match r {
+                Ok(bytes) => {
+                    provider_envelope::decode_bool(&bytes).map_err(|e| anyhow!("decode eof: {e}"))
+                }
+                Err(e) => Err(anyhow!("vtab.eof: {e}")),
+            };
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10854,6 +11093,20 @@ impl Host {
         cursor_id: u64,
         col: i32,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.column",
+                provider_envelope::encode_vtab_column(vtab_id, cursor_id, col),
+            )
+            .await
+        {
+            return Ok(match r {
+                Ok(bytes) => provider_envelope::decode_sql_value(&bytes)
+                    .map_err(|e| format!("decode column: {e}")),
+                Err(e) => Err(e),
+            });
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10883,6 +11136,21 @@ impl Host {
         vtab_id: u64,
         cursor_id: u64,
     ) -> Result<std::result::Result<i64, String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.rowid",
+                provider_envelope::encode_vtab_cursor(vtab_id, cursor_id),
+            )
+            .await
+        {
+            return Ok(match r {
+                Ok(bytes) => {
+                    provider_envelope::decode_i64(&bytes).map_err(|e| format!("decode rowid: {e}"))
+                }
+                Err(e) => Err(e),
+            });
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10920,6 +11188,33 @@ impl Host {
     ) -> Result<
         std::result::Result<Vec<loaded_tabular::exports::sqlite::extension::vtab::VtabRow>, String>,
     > {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab.fetch-batch",
+                provider_envelope::encode_vtab_fetch_batch(vtab_id, cursor_id, max_rows),
+            )
+            .await
+        {
+            return Ok(match r {
+                Ok(bytes) => match provider_envelope::decode_vtab_rows(&bytes) {
+                    Ok(rows) => Ok(rows
+                        .into_iter()
+                        .map(|(rowid, cols)| {
+                            loaded_tabular::exports::sqlite::extension::vtab::VtabRow {
+                                rowid,
+                                columns: cols
+                                    .into_iter()
+                                    .map(convert_sql_value_to_loaded)
+                                    .collect(),
+                            }
+                        })
+                        .collect()),
+                    Err(e) => Err(format!("decode fetch-batch: {e}")),
+                },
+                Err(e) => Err(e),
+            });
+        }
         let mut g = self.tabular_guard(ext_name).await?;
         let r = match &mut g {
             TabularGuard::ReadOnly(guard) => {
@@ -10973,6 +11268,21 @@ impl Host {
         instance_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<i64, String>> {
+        // Task #227: resident provider — xUpdate mutates the warm store's
+        // in-memory table; the subsequent read cursor sees it (one store).
+        if self.resident_provider_handle(ext_name).is_some() {
+            let payload = provider_envelope::encode_vtab_update(vtab_id, instance_id, &args);
+            if let Some(r) = self
+                .try_provider_invoke(ext_name, "vtab-update.update", payload)
+                .await
+            {
+                return Ok(match r {
+                    Ok(bytes) => provider_envelope::decode_i64(&bytes)
+                        .map_err(|e| format!("decode xUpdate rowid: {e}")),
+                    Err(e) => Err(e),
+                });
+            }
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let loaded_args: Vec<_> = args.into_iter().map(convert_sql_value_to_loaded).collect();
@@ -10991,6 +11301,16 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab-update.begin",
+                provider_envelope::encode_vtab_instance(vtab_id, instance_id),
+            )
+            .await
+        {
+            return Ok(r.map(|_| ()));
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -11008,6 +11328,16 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab-update.sync",
+                provider_envelope::encode_vtab_instance(vtab_id, instance_id),
+            )
+            .await
+        {
+            return Ok(r.map(|_| ()));
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -11025,6 +11355,16 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab-update.commit",
+                provider_envelope::encode_vtab_instance(vtab_id, instance_id),
+            )
+            .await
+        {
+            return Ok(r.map(|_| ()));
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -11042,6 +11382,16 @@ impl Host {
         vtab_id: u64,
         instance_id: u64,
     ) -> Result<std::result::Result<(), String>> {
+        if let Some(r) = self
+            .try_provider_invoke(
+                ext_name,
+                "vtab-update.rollback",
+                provider_envelope::encode_vtab_instance(vtab_id, instance_id),
+            )
+            .await
+        {
+            return Ok(r.map(|_| ()));
+        }
         let mut guard = self.tabular_mutating_locked(ext_name).await?;
         let cached = guard.as_mut().unwrap();
         let r = cached
@@ -12270,6 +12620,49 @@ fn convert_sql_value_from_loaded(
 // `tabular`-world bindgen (`loaded_tabular::exports::sqlite::extension::vtab`).
 // Same shape on both sides — these converters exist to bridge
 // distinct-but-equivalent Rust types the two bindgen calls emit.
+
+/// Task #227: the constraint-op WIT discriminant name, for the woco
+/// `VtabBestIndexReq.constraints[].op` field (the resident provider parses
+/// it back with the inverse mapping).
+fn constraint_op_name(op: bindings::sqlite::extension::vtab::ConstraintOp) -> &'static str {
+    use bindings::sqlite::extension::vtab::ConstraintOp as Op;
+    match op {
+        Op::Eq => "eq",
+        Op::Gt => "gt",
+        Op::Le => "le",
+        Op::Lt => "lt",
+        Op::Ge => "ge",
+        Op::Ne => "ne",
+        Op::Match => "match",
+        Op::Like => "like",
+        Op::Regexp => "regexp",
+        Op::Glob => "glob",
+        Op::IsNull => "is-null",
+        Op::IsNotNull => "is-not-null",
+        Op::Limit => "limit",
+        Op::Offset => "offset",
+        Op::Function => "function",
+    }
+}
+
+/// Task #227: build a wire-side `IndexPlan` from decoded woco parts.
+fn index_plan_from_parts(
+    parts: (Vec<(i32, bool)>, i32, Option<String>, f64, i64, bool),
+) -> bindings::sqlite::extension::vtab::IndexPlan {
+    use bindings::sqlite::extension::vtab::{ConstraintUsage, IndexPlan};
+    let (usage, idx_num, idx_str, estimated_cost, estimated_rows, orderby_consumed) = parts;
+    IndexPlan {
+        constraint_usage: usage
+            .into_iter()
+            .map(|(argv_index, omit)| ConstraintUsage { argv_index, omit })
+            .collect(),
+        idx_num,
+        idx_str,
+        estimated_cost,
+        estimated_rows,
+        orderby_consumed,
+    }
+}
 
 fn convert_vtab_constraint_op_to_loaded(
     op: bindings::sqlite::extension::vtab::ConstraintOp,
