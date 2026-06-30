@@ -394,6 +394,189 @@ pub mod dynlink_provider_cli {
     });
 }
 
+/// Task #226: the CBOR envelope spoken by the production
+/// `sqlite-extension-endpoint` provider family (mirror of woco
+/// `provider/src/envelope.rs`). The host encodes per-tier requests and
+/// decodes the manifest + `SqlValue` responses so it can drive an
+/// `<ext>-provider.wasm` over `endpoint.handle`. Only the subset needed
+/// for the moved tiers (describe / scalar `call` / collation compare)
+/// is implemented here; the rest stay on the bespoke loader.
+pub mod provider_envelope {
+    use ciborium::value::Value as Cbor;
+
+    use crate::bindings::sqlite::extension::types::SqlValue;
+
+    /// The provider manifest, reduced to what the host's safety gate +
+    /// provider-backing registry need.
+    pub struct Manifest {
+        pub name: String,
+        pub scalars: Vec<(String, u64)>,
+        pub collations: Vec<(String, u64)>,
+        pub aggregates: Vec<(String, u64)>,
+        pub has_vtab: bool,
+        pub has_any_hook: bool,
+    }
+
+    fn cbor(v: &Cbor) -> Result<Vec<u8>, String> {
+        let mut out = Vec::new();
+        ciborium::ser::into_writer(v, &mut out).map_err(|e| e.to_string())?;
+        Ok(out)
+    }
+
+    fn de(bytes: &[u8]) -> Result<Cbor, String> {
+        ciborium::de::from_reader(bytes).map_err(|e| e.to_string())
+    }
+
+    fn field<'a>(v: &'a Cbor, key: &str) -> Option<&'a Cbor> {
+        match v {
+            Cbor::Map(m) => m
+                .iter()
+                .find(|(k, _)| matches!(k, Cbor::Text(s) if s == key))
+                .map(|(_, val)| val),
+            _ => None,
+        }
+    }
+
+    fn arr(v: &Cbor) -> &[Cbor] {
+        match v {
+            Cbor::Array(a) => a,
+            _ => &[],
+        }
+    }
+
+    fn text(v: &Cbor) -> String {
+        match v {
+            Cbor::Text(s) => s.clone(),
+            _ => String::new(),
+        }
+    }
+
+    fn int(v: &Cbor) -> i128 {
+        match v {
+            Cbor::Integer(i) => (*i).into(),
+            _ => 0,
+        }
+    }
+
+    fn is_true(v: &Cbor) -> bool {
+        matches!(v, Cbor::Bool(true))
+    }
+
+    fn id_name_pairs(v: &Cbor) -> Vec<(String, u64)> {
+        arr(v)
+            .iter()
+            .filter_map(|e| {
+                let name = field(e, "name").map(text)?;
+                let id = field(e, "id").map(|x| int(x) as u64)?;
+                Some((name, id))
+            })
+            .collect()
+    }
+
+    /// Encode the woco `SqlValue` tagged form (`{t, v}`).
+    fn sqlval_to_cbor(v: &SqlValue) -> Cbor {
+        fn tagged(tag: &str, val: Cbor) -> Cbor {
+            Cbor::Map(vec![
+                (Cbor::Text("t".into()), Cbor::Text(tag.into())),
+                (Cbor::Text("v".into()), val),
+            ])
+        }
+        match v {
+            SqlValue::Null => Cbor::Map(vec![(Cbor::Text("t".into()), Cbor::Text("null".into()))]),
+            SqlValue::Integer(i) => tagged("integer", Cbor::Integer((*i).into())),
+            SqlValue::Real(f) => tagged("real", Cbor::Float(*f)),
+            SqlValue::Text(s) => tagged("text", Cbor::Text(s.clone())),
+            SqlValue::Blob(b) => tagged("blob", Cbor::Bytes(b.clone())),
+            SqlValue::WitValue(p) => tagged(
+                "witvalue",
+                Cbor::Map(vec![
+                    (
+                        Cbor::Text("type_id".into()),
+                        Cbor::Bytes(p.type_id.clone()),
+                    ),
+                    (Cbor::Text("bytes".into()), Cbor::Bytes(p.bytes.clone())),
+                    (
+                        Cbor::Text("symbolic_name".into()),
+                        Cbor::Text(p.symbolic_name.clone()),
+                    ),
+                ]),
+            ),
+        }
+    }
+
+    /// Decode the woco `SqlValue` tagged form back to the host type.
+    fn cbor_to_sqlval(v: &Cbor) -> Result<SqlValue, String> {
+        let tag = field(v, "t").map(text).ok_or("SqlValue missing tag")?;
+        let inner = field(v, "v");
+        Ok(match tag.as_str() {
+            "null" => SqlValue::Null,
+            "integer" => SqlValue::Integer(inner.map(int).unwrap_or(0) as i64),
+            "real" => SqlValue::Real(match inner {
+                Some(Cbor::Float(f)) => *f,
+                _ => 0.0,
+            }),
+            "text" => SqlValue::Text(inner.map(text).unwrap_or_default()),
+            "blob" => SqlValue::Blob(match inner {
+                Some(Cbor::Bytes(b)) => b.clone(),
+                _ => Vec::new(),
+            }),
+            other => return Err(format!("unsupported SqlValue tag {other}")),
+        })
+    }
+
+    pub fn decode_manifest(bytes: &[u8]) -> Result<Manifest, String> {
+        let v = de(bytes)?;
+        Ok(Manifest {
+            name: field(&v, "name").map(text).unwrap_or_default(),
+            scalars: field(&v, "scalars").map(id_name_pairs).unwrap_or_default(),
+            collations: field(&v, "collations")
+                .map(id_name_pairs)
+                .unwrap_or_default(),
+            aggregates: field(&v, "aggregates")
+                .map(id_name_pairs)
+                .unwrap_or_default(),
+            has_vtab: field(&v, "vtabs").map(|a| !arr(a).is_empty()).unwrap_or(false),
+            has_any_hook: field(&v, "has_authorizer").map(is_true).unwrap_or(false)
+                || field(&v, "has_update_hook").map(is_true).unwrap_or(false)
+                || field(&v, "has_commit_hook").map(is_true).unwrap_or(false)
+                || field(&v, "has_wal_hook").map(is_true).unwrap_or(false),
+        })
+    }
+
+    /// Encode a `CallReq { func_id, args }`.
+    pub fn encode_call(func_id: u64, args: &[SqlValue]) -> Result<Vec<u8>, String> {
+        let req = Cbor::Map(vec![
+            (Cbor::Text("func_id".into()), Cbor::Integer(func_id.into())),
+            (
+                Cbor::Text("args".into()),
+                Cbor::Array(args.iter().map(sqlval_to_cbor).collect()),
+            ),
+        ]);
+        cbor(&req)
+    }
+
+    /// Encode a `CollationCompareReq { collation_id, a, b }`.
+    pub fn encode_collation_compare(collation_id: u64, a: &str, b: &str) -> Result<Vec<u8>, String> {
+        let req = Cbor::Map(vec![
+            (
+                Cbor::Text("collation_id".into()),
+                Cbor::Integer(collation_id.into()),
+            ),
+            (Cbor::Text("a".into()), Cbor::Text(a.into())),
+            (Cbor::Text("b".into()), Cbor::Text(b.into())),
+        ]);
+        cbor(&req)
+    }
+
+    pub fn decode_sql_value(bytes: &[u8]) -> Result<SqlValue, String> {
+        cbor_to_sqlval(&de(bytes)?)
+    }
+
+    pub fn decode_i32(bytes: &[u8]) -> Result<i32, String> {
+        Ok(int(&de(bytes)?) as i32)
+    }
+}
+
 /// Bindgen for runnable wasm components — components targeting
 /// our `runnable` world. The host uses this to instantiate and
 /// invoke run() when `.run /path/to/foo.wasm` is called.
@@ -6779,6 +6962,16 @@ pub struct Host {
     /// resolution would route through `cache` once CP7 lands the
     /// CAS bridge.
     compose_providers: Arc<RwLock<TenantedProviders>>,
+    /// Task #226: extensions loaded as a compose:dynlink provider
+    /// (`<ext>-provider.wasm`) rather than via the bespoke
+    /// extension-loader. Maps `ext_name -> ProviderBacking`; the
+    /// `dispatch_*` entry points consult this FIRST and, for the safe
+    /// stateless tiers (scalar / collation), drive the provider via
+    /// `ProviderHandle::invoke` over the woco endpoint envelope instead
+    /// of the per-world cached Stores. Coherence-sensitive tiers
+    /// (vtab / hook) and aggregates still fall through to the bespoke
+    /// loader — see ProviderBacking docs.
+    provider_backed: Arc<RwLock<HashMap<String, ProviderBacking>>>,
     /// Trust policy applied to wasm-component provider registration.
     /// Default `TrustPolicy::AllowAll` preserves the original
     /// behavior (any file path can be registered). Operators that
@@ -6977,6 +7170,29 @@ pub const DEFAULT_TENANT: &str = "default";
 /// `Host` and `RunState`; callers go through the tenant-aware
 /// methods on `Host` rather than touching this directly.
 pub type TenantedProviders = HashMap<String, HashMap<String, compose_provider::ProviderHandle>>;
+
+/// Task #226: a `.load`'d extension that is backed by a compose:dynlink
+/// `<ext>-provider.wasm` instead of the bespoke per-world cached Stores.
+///
+/// Records which tiers were safely moved onto the provider. Today only
+/// the stateless tiers (scalar, collation) are routed through the
+/// provider — they carry no cross-Store guest-thread-local coherence
+/// dependency, so the provider's fresh-store-per-invoke model is sound.
+/// `vtab`/`hook` and `aggregate` (which need the resident-store
+/// coherence the bespoke loader gives) are deliberately NOT moved and
+/// continue to dispatch through the cached-Store path; an extension that
+/// declares any of those is rejected for provider-backing so it falls
+/// back to the bespoke loader wholesale (no split-brain dispatch).
+#[derive(Clone)]
+pub struct ProviderBacking {
+    /// The compose-provider id this extension is registered under
+    /// (in `compose_providers`, DEFAULT_TENANT).
+    pub provider_id: String,
+    /// scalar name -> woco func_id (from the provider manifest).
+    pub scalars: HashMap<String, u64>,
+    /// collation name -> woco collation id.
+    pub collations: HashMap<String, u64>,
+}
 
 /// Decision the host applies before accepting a wasm-component
 /// provider via `Host::register_wasm_provider`. The blake3 digest
@@ -7263,6 +7479,7 @@ impl Host {
             resolvers: Arc::new(RwLock::new(HashMap::new())),
             cache,
             compose_providers,
+            provider_backed: Arc::new(RwLock::new(HashMap::new())),
             trust_policy,
             dynlink_bridge,
             signature_verifier,
@@ -9257,6 +9474,108 @@ impl Host {
         Ok(None)
     }
 
+    /// Task #226: register a `.load`'d extension as provider-backed.
+    /// Registers `provider` under `<ext_name>` in `compose_providers`,
+    /// queries its manifest via the woco `describe` envelope, and — only
+    /// if the extension is a SAFE candidate (exports no vtab/hook and no
+    /// aggregate, so no cross-Store coherence dependency) — records a
+    /// `ProviderBacking` so `dispatch_scalar`/`dispatch_collation` route
+    /// through the provider. Returns the manifest name on success, or an
+    /// `Err` describing why the extension must stay on the bespoke loader
+    /// (the caller then falls back). The bespoke loader remains the path
+    /// for every tier this declines.
+    pub async fn load_extension_as_provider(
+        &self,
+        ext_name: &str,
+        provider: compose_provider::ProviderHandle,
+    ) -> Result<String> {
+        // describe the provider (handles the cli-aware linker too).
+        let (mbytes, _) = provider
+            .invoke_cli("describe", &[], HashMap::new())
+            .await
+            .map_err(|e| anyhow!("provider describe: {e}"))?;
+        let manifest = provider_envelope::decode_manifest(&mbytes)
+            .map_err(|e| anyhow!("decode manifest: {e}"))?;
+
+        // Fail-closed safety gate: only pure scalar/collation extensions
+        // are safe over the fresh-store-per-invoke provider boundary.
+        if manifest.has_vtab || manifest.has_any_hook || !manifest.aggregates.is_empty() {
+            return Err(anyhow!(
+                "extension {ext_name} declares vtab/hook/aggregate tiers \
+                 that need cross-Store coherence; not yet supported over \
+                 the compose:dynlink provider boundary — use the bespoke \
+                 loader"
+            ));
+        }
+
+        let provider_id = format!("ext:{ext_name}");
+        self.register_compose_provider(&provider_id, provider);
+
+        let backing = ProviderBacking {
+            provider_id,
+            scalars: manifest
+                .scalars
+                .iter()
+                .map(|(n, id)| (n.clone(), *id))
+                .collect(),
+            collations: manifest
+                .collations
+                .iter()
+                .map(|(n, id)| (n.clone(), *id))
+                .collect(),
+        };
+        self.provider_backed
+            .write()
+            .insert(ext_name.to_string(), backing);
+        Ok(manifest.name)
+    }
+
+    /// If `ext_name` is provider-backed, dispatch the scalar `func_id`
+    /// through the provider's woco `call` envelope. Returns `Some(...)`
+    /// when handled, `None` when the extension is not provider-backed
+    /// (caller falls through to the bespoke cached-Store path).
+    async fn try_provider_scalar(
+        &self,
+        ext_name: &str,
+        func_id: u64,
+        args: &[bindings::sqlite::extension::types::SqlValue],
+    ) -> Option<Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>>>
+    {
+        let provider_id = {
+            let g = self.provider_backed.read();
+            g.get(ext_name).map(|b| b.provider_id.clone())?
+        };
+        let handle = {
+            let g = self.compose_providers.read();
+            g.get(DEFAULT_TENANT)
+                .and_then(|m| m.get(&provider_id))
+                .map(|p| compose_provider::ProviderHandle {
+                    kind: p.kind.clone(),
+                })
+        };
+        let Some(handle) = handle else {
+            return Some(Err(anyhow!(
+                "provider {provider_id} for {ext_name} vanished"
+            )));
+        };
+        let payload = match provider_envelope::encode_call(func_id, args) {
+            Ok(p) => p,
+            Err(e) => return Some(Err(anyhow!("encode call: {e}"))),
+        };
+        // Outer Result = host plumbing error; inner Result = the
+        // extension's own success/failure (mirrors dispatch_scalar's
+        // `Result<Result<SqlValue, String>>` shape).
+        match handle.invoke("call", &payload).await {
+            Ok(bytes) => match provider_envelope::decode_sql_value(&bytes) {
+                Ok(v) => Some(Ok(Ok(v))),
+                Err(e) => Some(Ok(Err(format!("decode call result: {e}")))),
+            },
+            // A provider invoke error is the extension's failure, surfaced
+            // as the inner Err so callers treat it like any scalar error.
+            Err(e) => Some(Ok(Err(e))),
+        }
+    }
+
     /// Invoke a scalar function on a previously-loaded extension.
     /// Builds a fresh per-call Store, instantiates the loaded
     /// component, calls `scalar-function.call(func_id, args)`,
@@ -9267,6 +9586,17 @@ impl Host {
         func_id: u64,
         args: Vec<bindings::sqlite::extension::types::SqlValue>,
     ) -> Result<std::result::Result<bindings::sqlite::extension::types::SqlValue, String>> {
+        // Task #226: if this extension was loaded as a compose:dynlink
+        // provider, drive the scalar through the provider's `call`
+        // envelope. Provider-backing is only granted to pure
+        // scalar/collation extensions (see load_extension_as_provider),
+        // so there is no cross-Store coherence concern here. A non-
+        // provider-backed extension returns None and falls through to
+        // the bespoke cached-Store path below.
+        if let Some(r) = self.try_provider_scalar(ext_name, func_id, &args).await {
+            return r;
+        }
+
         // The two bindgens (extension-loader-host's and loaded's)
         // produce structurally-identical but distinctly-typed
         // SqlValue variants. Hand-translate to bridge the boundary.
@@ -9561,6 +9891,38 @@ impl Host {
         a: &str,
         b: &str,
     ) -> Result<i32> {
+        // Task #226: provider-backed extensions compare via the woco
+        // `collation.compare` envelope. Collation is stateless (no
+        // cross-Store coherence), so the fresh-store provider model is
+        // safe. Falls through to the bespoke path for non-provider exts.
+        // Resolve the handle in a tight scope so no lock guard is held
+        // across the await (the future must stay Send).
+        let provider_handle = {
+            let provider_id = self
+                .provider_backed
+                .read()
+                .get(ext_name)
+                .map(|b| b.provider_id.clone());
+            provider_id.and_then(|id| {
+                let g = self.compose_providers.read();
+                g.get(DEFAULT_TENANT)
+                    .and_then(|m| m.get(&id))
+                    .map(|p| compose_provider::ProviderHandle {
+                        kind: p.kind.clone(),
+                    })
+            })
+        };
+        if let Some(handle) = provider_handle {
+            let payload = provider_envelope::encode_collation_compare(collation_id, a, b)
+                .map_err(|e| anyhow!("encode collation compare: {e}"))?;
+            let bytes = handle
+                .invoke("collation.compare", &payload)
+                .await
+                .map_err(|e| anyhow!("provider collation.compare: {e}"))?;
+            return provider_envelope::decode_i32(&bytes)
+                .map_err(|e| anyhow!("decode collation result: {e}"));
+        }
+
         let ext = {
             let components = self.components.read();
             components
