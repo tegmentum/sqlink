@@ -314,6 +314,102 @@ pub fn should_register_bare(
     SqliteStore(conn).should_register_bare(function_name, n_args, my_expansion)
 }
 
+/// Max numbered-suffix attempts when even `<ext>_<name>` collides
+/// (`<ext>_<name>_2`, `_3`, ...). Kept generous; in practice one is
+/// almost always enough.
+pub const NAME_COLLISION_FALLBACK_LIMIT: u32 = 999;
+
+/// Does a function named `name` with arity `n_args` already exist on
+/// this connection?
+///
+/// Unlike `__sqlink_prefix_function` (which only records sqlink-loaded
+/// extension functions), `PRAGMA function_list` enumerates EVERY
+/// function visible to the connection — SQLite builtins (`upper`,
+/// `abs`, `length`, ...) AND any previously-registered extension
+/// functions. That makes it the authoritative source for "would
+/// registering bare `name` clobber something?".
+///
+/// Arity match: a row collides if its `narg` equals `n_args` OR is `-1`
+/// (SQLite's sentinel for a variadic/any-arity function — e.g. `max`,
+/// `min`, `printf` — which would shadow any arity).
+pub fn function_exists(conn: &Connection, name: &str, n_args: i32) -> Result<bool> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT 1 FROM pragma_function_list \
+             WHERE name = ?1 AND (narg = ?2 OR narg = -1) LIMIT 1",
+        )
+        .map_err(|e| anyhow!("prepare function_exists: {}", e.message))?;
+    stmt.bind_all(&[
+        Value::Text(name.to_string()),
+        Value::Integer(n_args as i64),
+    ])
+    .map_err(|e| anyhow!("bind function_exists: {}", e.message))?;
+    match stmt
+        .step()
+        .map_err(|e| anyhow!("step function_exists: {}", e.message))?
+    {
+        StepResult::Row => Ok(true),
+        StepResult::Done => Ok(false),
+    }
+}
+
+/// Outcome of [`resolve_collision_free_name`].
+pub struct ResolvedName {
+    /// The name the function should actually be registered under.
+    pub name: String,
+    /// True if `name` differs from the requested bare name because a
+    /// builtin or prior extension already occupied it.
+    pub remapped: bool,
+}
+
+/// Pick a collision-free SQLite name for a loaded component's function,
+/// implementing Task #216's policy (matches DuckDB's underscore
+/// namespacing convention):
+///
+///   * If bare `name`/`n_args` is FREE on the connection → register the
+///     bare name (first loader keeps the short name).
+///   * If TAKEN (a SQLite builtin or a previously-loaded extension) →
+///     `<ext>_<name>`. If THAT also collides, append `_2`, `_3`, ...
+///     until unique. Never clobber.
+///
+/// `ext_name` is the loaded extension's name (the `.load <ext>`
+/// argument / component name). Returns the chosen name + whether a
+/// remap happened (callers log the remap and record the applied name).
+pub fn resolve_collision_free_name(
+    conn: &Connection,
+    ext_name: &str,
+    name: &str,
+    n_args: i32,
+) -> Result<ResolvedName> {
+    if !function_exists(conn, name, n_args)? {
+        return Ok(ResolvedName {
+            name: name.to_string(),
+            remapped: false,
+        });
+    }
+    // Bare name is taken. Try `<ext>_<name>`, then numbered suffixes.
+    let base = format!("{ext_name}_{name}");
+    if !function_exists(conn, &base, n_args)? {
+        return Ok(ResolvedName {
+            name: base,
+            remapped: true,
+        });
+    }
+    for n in 2..=NAME_COLLISION_FALLBACK_LIMIT {
+        let candidate = format!("{base}_{n}");
+        if !function_exists(conn, &candidate, n_args)? {
+            return Ok(ResolvedName {
+                name: candidate,
+                remapped: true,
+            });
+        }
+    }
+    Err(anyhow!(
+        "function name collision: `{name}/{n_args}` and `{base}` plus its \
+         {NAME_COLLISION_FALLBACK_LIMIT} numbered alternatives are all taken"
+    ))
+}
+
 /// SQLite-backed [`PrefixStore`]: the sqlink host's durable backing for the
 /// shared prefix collision/pin model, over the `__sqlink_prefix*` tables.
 /// Wraps the module's free functions so the loader's existing call sites are
@@ -612,5 +708,96 @@ mod tests {
     fn qualify_uses_double_underscore() {
         assert_eq!(qualify("foaf", "name"), "foaf__name");
         assert_eq!(qualify("uuid", "v4"), "uuid__v4");
+    }
+
+    // --- Task #216: live-connection function-name collision policy ---
+
+    #[test]
+    fn function_exists_detects_sqlite_builtins() {
+        let conn = fresh();
+        // `upper(x)` is a 1-arg SQLite builtin.
+        assert!(function_exists(&conn, "upper", 1).unwrap());
+        // `abs(x)` is a 1-arg builtin.
+        assert!(function_exists(&conn, "abs", 1).unwrap());
+        // A name nobody registers must be free.
+        assert!(!function_exists(&conn, "definitely_not_a_function_zzz", 1).unwrap());
+    }
+
+    #[test]
+    fn function_exists_matches_variadic_any_arity() {
+        let conn = fresh();
+        // Register a real variadic (narg = -1) scalar; it must be
+        // reported as existing for ANY requested arity, since narg = -1
+        // is SQLite's any-arity sentinel.
+        register_test_scalar_narg(&conn, "myvariadic", -1);
+        assert!(function_exists(&conn, "myvariadic", 0).unwrap());
+        assert!(function_exists(&conn, "myvariadic", 1).unwrap());
+        assert!(function_exists(&conn, "myvariadic", 7).unwrap());
+        // `max` aggregate is always present at narg = 1.
+        assert!(function_exists(&conn, "max", 1).unwrap());
+    }
+
+    #[test]
+    fn resolve_keeps_bare_when_free() {
+        let conn = fresh();
+        let r = resolve_collision_free_name(&conn, "myext", "totally_unique_fn", 2).unwrap();
+        assert_eq!(r.name, "totally_unique_fn");
+        assert!(!r.remapped);
+    }
+
+    #[test]
+    fn resolve_remaps_when_builtin_collides() {
+        let conn = fresh();
+        // `upper/1` is a builtin → must be remapped to `<ext>_upper`.
+        let r = resolve_collision_free_name(&conn, "myext", "upper", 1).unwrap();
+        assert_eq!(r.name, "myext_upper");
+        assert!(r.remapped);
+    }
+
+    #[test]
+    fn resolve_appends_numbered_suffix_when_prefixed_also_collides() {
+        let conn = fresh();
+        // `upper/1` is a builtin (first fallback target is `myext_upper`);
+        // register a real `myext_upper/1` so that fallback collides too,
+        // forcing the `_2` suffix.
+        register_test_scalar(&conn, "myext_upper");
+        let r = resolve_collision_free_name(&conn, "myext", "upper", 1).unwrap();
+        assert_eq!(r.name, "myext_upper_2");
+        assert!(r.remapped);
+    }
+
+    /// Register a trivial no-op scalar at arity 1 so `PRAGMA
+    /// function_list` reports it — exercises the "prior extension
+    /// already took the name" branch.
+    fn register_test_scalar(conn: &Connection, name: &str) {
+        register_test_scalar_narg(conn, name, 1);
+    }
+
+    /// Register a trivial no-op scalar at the given arity (`-1` =
+    /// variadic). The component-core Connection doesn't expose
+    /// create_function in tests directly, so go through the raw handle.
+    fn register_test_scalar_narg(conn: &Connection, name: &str, narg: i32) {
+        use std::ffi::CString;
+        let cname = CString::new(name).unwrap();
+        unsafe {
+            extern "C" fn noop(
+                _ctx: *mut libsqlite3_sys::sqlite3_context,
+                _argc: i32,
+                _argv: *mut *mut libsqlite3_sys::sqlite3_value,
+            ) {
+            }
+            let rc = libsqlite3_sys::sqlite3_create_function_v2(
+                conn.raw_handle(),
+                cname.as_ptr(),
+                narg,
+                libsqlite3_sys::SQLITE_UTF8,
+                std::ptr::null_mut(),
+                Some(noop),
+                None,
+                None,
+                None,
+            );
+            assert_eq!(rc, libsqlite3_sys::SQLITE_OK);
+        }
     }
 }

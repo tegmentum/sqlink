@@ -8624,23 +8624,54 @@ impl Host {
                 continue;
             };
 
-            // Bare-name registration  pin-aware.
-            let r_bare = if rec.want_bare {
+            // Bare-name registration  pin-aware + collision-safe
+            // (Task #216). Before registering the short name, ask the
+            // LIVE connection (PRAGMA function_list) whether `(name,
+            // arity)` is already taken by a SQLite builtin or a
+            // previously-loaded extension. If free, keep the bare name;
+            // if taken, register under `<ext>_<name>` (never clobber).
+            let (bare_name, r_bare) = if rec.want_bare {
                 let g = self.shared_spi_conn.lock();
                 let r = g.borrow();
                 let conn = r.as_ref().expect("shared_spi_conn open");
-                unsafe {
+                let resolved = prefix_registry::resolve_collision_free_name(
+                    conn,
+                    ext_name,
+                    &spec.name,
+                    spec.num_args,
+                )
+                .unwrap_or_else(|e| {
+                    tracing::warn!(
+                        extension = ext_name,
+                        func = %spec.name,
+                        arity = spec.num_args,
+                        err = %e,
+                        "collision-free name resolution failed; falling back to bare name"
+                    );
+                    prefix_registry::ResolvedName {
+                        name: spec.name.clone(),
+                        remapped: false,
+                    }
+                });
+                if resolved.remapped {
+                    eprintln!(
+                        "[sqlink] {}.{}/{} collides with an existing function; registered as {}",
+                        ext_name, spec.name, spec.num_args, resolved.name
+                    );
+                }
+                let rc = unsafe {
                     register_host_loaded_scalar(
                         conn.raw_handle(),
                         self.clone(),
                         ext_name.to_string(),
-                        &spec.name,
+                        &resolved.name,
                         spec.num_args,
                         spec.id,
                     )
-                }
+                };
+                (resolved.name, rc)
             } else {
-                libsqlite3_sys::SQLITE_OK
+                (spec.name.clone(), libsqlite3_sys::SQLITE_OK)
             };
 
             if r_bare == libsqlite3_sys::SQLITE_OK && rec.want_bare {
@@ -8649,11 +8680,11 @@ impl Host {
                     .lock()
                     .entry(ext_name.to_string())
                     .or_default()
-                    .push((spec.name.clone(), spec.num_args));
+                    .push((bare_name.clone(), spec.num_args));
             } else if rec.want_bare {
                 tracing::warn!(
                     extension = ext_name,
-                    func = %spec.name,
+                    func = %bare_name,
                     arity = spec.num_args,
                     rc = r_bare,
                     "register_scalar (bare) failed"
@@ -11852,26 +11883,53 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
         func_id: u64,
     ) -> std::result::Result<(), bindings::sqlite::extension::types::SqliteError> {
         shared_spi_ensure_open(self.host)?;
-        let rc = {
+        // Task #216: collision-safe bare registration. Resolve the
+        // effective name against the LIVE connection (PRAGMA
+        // function_list) so a loaded component never silently clobbers a
+        // SQLite builtin or a previously-loaded extension function.
+        let (bare_name, rc) = {
             let g = self.host.shared_spi_conn.lock();
             let r = g.borrow();
             let conn = r.as_ref().expect("ensured open");
-            unsafe {
+            let resolved = prefix_registry::resolve_collision_free_name(
+                conn, &ext_name, &name, num_args,
+            )
+            .unwrap_or_else(|e| {
+                tracing::warn!(
+                    extension = %ext_name,
+                    func = %name,
+                    arity = num_args,
+                    err = %e,
+                    "collision-free name resolution failed; falling back to bare name"
+                );
+                prefix_registry::ResolvedName {
+                    name: name.clone(),
+                    remapped: false,
+                }
+            });
+            if resolved.remapped {
+                eprintln!(
+                    "[sqlink] {}.{}/{} collides with an existing function; registered as {}",
+                    ext_name, name, num_args, resolved.name
+                );
+            }
+            let rc = unsafe {
                 register_host_loaded_scalar(
                     conn.raw_handle(),
                     self.host.clone(),
                     ext_name.clone(),
-                    &name,
+                    &resolved.name,
                     num_args,
                     func_id,
                 )
-            }
+            };
+            (resolved.name, rc)
         };
         if rc != libsqlite3_sys::SQLITE_OK {
             return Err(bindings::sqlite::extension::types::SqliteError {
                 code: rc,
                 extended_code: rc,
-                message: format!("register scalar {name}/{num_args}: rc={rc}"),
+                message: format!("register scalar {bare_name}/{num_args}: rc={rc}"),
             });
         }
         self.host
@@ -11879,7 +11937,7 @@ impl<'a> bindings::sqlite::extension::spi_loader::Host for HostWrap<'a> {
             .lock()
             .entry(ext_name.clone())
             .or_default()
-            .push((name.clone(), num_args));
+            .push((bare_name.clone(), num_args));
         // PLAN-followups.md P1 live-prefer cache: needed by
         // loader-bridge.apply-prefix-pin to re-register the bare-name
         // SQLite trampoline against the pinned extension's impl in the
