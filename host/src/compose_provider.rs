@@ -74,6 +74,17 @@ pub enum ProviderKind {
         /// invoke and reused thereafter. `Arc` so cloning the kind (the
         /// host clones it when resolving a handle) shares ONE store.
         resident: Arc<AsyncMutex<Option<ResidentProvider>>>,
+        /// Task #228: the shared `datalink-dynlink` async bridge, threaded
+        /// in so the resident store's linker can satisfy a resident
+        /// extension that imports `compose:dynlink/linker` — the proven
+        /// (#221/#225) engine-as-provider role-inversion for REENTRANT
+        /// SPI. A reentrant extension resolves the engine provider and
+        /// `invoke`s it for each `spi.*` call, rather than the host
+        /// hand-implementing the full spi surface on the resident store.
+        /// `None` when the host has no bridge (e.g. the resident coherence
+        /// tests that drive `Host` directly) — the linker then falls back
+        /// to WASI-only, so a non-reentrant provider still instantiates.
+        dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
     },
 }
 
@@ -119,7 +130,11 @@ impl ProviderHandle {
     /// Compiles the component now; the resident store is materialized on
     /// the first invoke and reused for every subsequent call so guest
     /// state persists across tiers (vtab/hook/aggregate coherence).
-    pub fn new_resident_wasm_component(engine: Engine, path: PathBuf) -> Result<Self, String> {
+    pub fn new_resident_wasm_component(
+        engine: Engine,
+        path: PathBuf,
+        dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
+    ) -> Result<Self, String> {
         let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
         let component = Component::from_binary(&engine, &bytes)
             .map_err(|e| format!("compile {}: {e}", path.display()))?;
@@ -129,6 +144,7 @@ impl ProviderHandle {
                 component,
                 path,
                 resident: Arc::new(AsyncMutex::new(None)),
+                dynlink_bridge,
             },
         })
     }
@@ -166,8 +182,19 @@ impl ProviderHandle {
                 engine,
                 component,
                 resident,
+                dynlink_bridge,
                 ..
-            } => resident_wasm_component_invoke(method, payload, engine, component, resident).await,
+            } => {
+                resident_wasm_component_invoke(
+                    method,
+                    payload,
+                    engine,
+                    component,
+                    resident,
+                    dynlink_bridge.as_ref(),
+                )
+                .await
+            }
         }
     }
 
@@ -386,6 +413,13 @@ impl AsyncProviderBackend for RunBackend {
 pub struct ProviderState {
     wasi: wasmtime_wasi::WasiCtx,
     resources: wasmtime_wasi::ResourceTable,
+    /// Task #228: the resident store's copy of the shared dynlink bridge.
+    /// Present when the resident provider imports `compose:dynlink/linker`
+    /// (reentrant-SPI via engine-as-provider role-inversion); `None`
+    /// otherwise. The `ProviderStateHostWrap` view borrows this + the
+    /// resource table for each `linker.resolve-by-id` / `instance.invoke`
+    /// the resident guest makes.
+    dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
 }
 
 impl wasmtime_wasi::WasiView for ProviderState {
@@ -395,6 +429,53 @@ impl wasmtime_wasi::WasiView for ProviderState {
             table: &mut self.resources,
         }
     }
+}
+
+/// Task #228: the per-call view the `datalink-dynlink` async macro
+/// consumes to drive `compose:dynlink/linker` on the RESIDENT store —
+/// mirrors `RunHostWrap` (host/src/lib.rs). Splits the (immutable) bridge
+/// and the (mutable) resource table as two non-aliasing borrows so a
+/// resident provider importing `linker` can resolve + invoke the engine
+/// provider (the reentrant-SPI role inversion). Only constructed when the
+/// resident provider carries a bridge; guarded by `imports_dynlink_linker`.
+pub struct ProviderStateHostWrap<'a> {
+    bridge: &'a datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>,
+    resources: &'a mut wasmtime_wasi::ResourceTable,
+}
+
+impl<'a> ProviderStateHostWrap<'a> {
+    fn split(
+        &mut self,
+    ) -> (
+        &datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>,
+        &mut wasmtime_wasi::ResourceTable,
+    ) {
+        (self.bridge, self.resources)
+    }
+}
+
+datalink_dynlink::impl_datalink_dynlink_async_host!(
+    'a; ProviderStateHostWrap<'a>,
+    HostWrapBackend,
+    split
+);
+
+/// HasData tag for the resident store's compose:dynlink linker wiring.
+pub struct ProviderStateHostData;
+impl wasmtime::component::HasData for ProviderStateHostData {
+    type Data<'a> = ProviderStateHostWrap<'a>;
+}
+
+/// True if `component` imports `compose:dynlink/linker` — i.e. it's a
+/// REENTRANT provider that calls back into the engine (or further
+/// providers) via the dynlink bridge. Task #228: the resident store adds
+/// the linker bridge to its linker only for these, so a plain (non-
+/// reentrant) resident provider still instantiates against WASI-only.
+pub fn imports_dynlink_linker(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("compose:dynlink/linker"))
 }
 
 async fn wasm_component_invoke(
@@ -410,6 +491,10 @@ async fn wasm_component_invoke(
     let state = ProviderState {
         wasi: wasi.build(),
         resources: wasmtime_wasi::ResourceTable::new(),
+        // Fresh-store (non-resident) path: no reentrancy bridge — a
+        // fresh-store provider is used only for the stateless declarative
+        // tiers; reentrant SPI is a resident-only concern (task #228).
+        dynlink_bridge: None,
     };
     let mut store = wasmtime::Store::new(engine, state);
     store
@@ -441,17 +526,49 @@ async fn resident_wasm_component_invoke(
     engine: &Engine,
     component: &Component,
     resident: &Arc<AsyncMutex<Option<ResidentProvider>>>,
+    dynlink_bridge: Option<&datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
 ) -> Result<Vec<u8>, String> {
     let mut guard = resident.lock().await;
     if guard.is_none() {
+        // Task #228: a resident provider that imports `compose:dynlink/
+        // linker` (reentrant SPI via engine-as-provider role inversion)
+        // needs the dynlink bridge in its linker so its `resolve-by-id` /
+        // `invoke` calls reach the engine provider. Use async WASI on that
+        // path (the shared bridge is async, matching make_run_linker).
+        // Non-reentrant residents keep the plain sync WASI-only linker.
+        let reentrant = dynlink_bridge
+            .as_ref()
+            .map(|_| imports_dynlink_linker(component, engine))
+            .unwrap_or(false);
         let mut linker: Linker<ProviderState> = Linker::new(engine);
-        wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
-            .map_err(|e| format!("wasi linker: {e}"))?;
+        if reentrant {
+            wasmtime_wasi::p2::add_to_linker_async(&mut linker)
+                .map_err(|e| format!("wasi (async) linker: {e}"))?;
+            crate::compose::compose::dynlink::linker::add_to_linker::<_, ProviderStateHostData>(
+                &mut linker,
+                |state: &mut ProviderState| ProviderStateHostWrap {
+                    bridge: state
+                        .dynlink_bridge
+                        .as_ref()
+                        .expect("reentrant resident carries a bridge"),
+                    resources: &mut state.resources,
+                },
+            )
+            .map_err(|e| format!("resident compose:dynlink linker: {e}"))?;
+        } else {
+            wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
+                .map_err(|e| format!("wasi linker: {e}"))?;
+        }
         let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
         wasi.inherit_stdio();
         let state = ProviderState {
             wasi: wasi.build(),
             resources: wasmtime_wasi::ResourceTable::new(),
+            dynlink_bridge: if reentrant {
+                dynlink_bridge.cloned()
+            } else {
+                None
+            },
         };
         let mut store = wasmtime::Store::new(engine, state);
         store

@@ -8890,6 +8890,10 @@ impl Host {
             let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
                 self.engine.clone(),
                 resolved.clone(),
+                // Task #228: thread the shared dynlink bridge so a resident
+                // provider importing `compose:dynlink/linker` (reentrant SPI)
+                // can re-enter the engine provider from its warm store.
+                Some(self.dynlink_bridge.clone()),
             )
             .map_err(|e| anyhow!("compile resident provider {}: {e}", resolved.display()))?;
             // The provider's own manifest names the extension; describe it
@@ -15821,6 +15825,10 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
         let provider = match compose_provider::ProviderHandle::new_resident_wasm_component(
             self.host.engine().clone(),
             PathBuf::from(&path),
+            // Task #228: thread the shared dynlink bridge so a resident
+            // provider importing `compose:dynlink/linker` (reentrant SPI)
+            // can re-enter the engine provider from its warm store.
+            Some(self.host.dynlink_bridge.clone()),
         ) {
             Ok(p) => p,
             Err(e) => {
