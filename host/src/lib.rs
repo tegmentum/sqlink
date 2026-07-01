@@ -16461,6 +16461,15 @@ pub async fn run_cli_capture(
         HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
     })
     .map_err(|e| anyhow!("wire dispatch: {e}"))?;
+    // Task #228: the multi-memory composed `cli + sqlite-lib` binary
+    // imports `opfs-host` (browser OPFS primitives). The native runtime
+    // never selects the opfs VFS, so a trapping stub satisfies the
+    // import without ever firing — mirrors the `sqlink` binary path in
+    // main.rs so `run_cli_capture` can instantiate the composed cli.
+    bindings::sqlink::wasm::opfs_host::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
+        HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
+    })
+    .map_err(|e| anyhow!("wire opfs-host: {e}"))?;
     bindings::sqlite::extension::spi::add_to_linker::<_, LoaderData>(&mut linker, |s: &mut CliRunState| {
         HostWrap { host: &mut s.host, resources: Some(&mut s.resources) }
     })
