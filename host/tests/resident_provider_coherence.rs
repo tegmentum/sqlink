@@ -31,7 +31,9 @@ fn provider_path(name: &str) -> Option<PathBuf> {
 fn resident(host: &Host, file: &str) -> Option<ProviderHandle> {
     let path = provider_path(file)?;
     Some(
-        ProviderHandle::new_resident_wasm_component(host.engine().clone(), path)
+        // These fixtures are the declarative (non-reentrant) tiers driven
+        // directly through `Host`; no dynlink bridge needed (task #228).
+        ProviderHandle::new_resident_wasm_component(host.engine().clone(), path, None)
             .unwrap_or_else(|e| panic!("compile resident {file}: {e}")),
     )
 }
@@ -289,4 +291,76 @@ async fn inmem_mutation_visible_to_later_resident_read() {
         .await
         .expect("eof");
     eprintln!("[inmem] post-update read eof={eof} (cursor reached the warm store)");
+}
+
+/// Task #228: the 6 COLD vtab methods (rename / savepoint / release /
+/// rollback-to / is-shadow-name / integrity) each route through the
+/// resident provider's warm store and round-trip. inmem implements all
+/// six (as no-op / trivial-answer stubs), so the point under test is the
+/// full envelope path host -> `endpoint.handle` (`vtab-update.<op>`) ->
+/// resident store -> extension, not inmem's specific semantics.
+#[tokio::test(flavor = "multi_thread")]
+async fn inmem_cold_vtab_methods_route_through_resident() {
+    let host = Host::new().unwrap();
+    let Some(provider) = resident(&host, "inmem-provider.wasm") else {
+        eprintln!("skip: inmem-provider.wasm absent");
+        return;
+    };
+    let manifest = host
+        .load_extension_as_provider("inmem", provider)
+        .await
+        .expect("resident-back inmem");
+    let vtab_id = manifest
+        .vtab_specs
+        .first()
+        .expect("inmem exports a vtab")
+        .id;
+    let instance_id: u64 = 1;
+
+    host.dispatch_vtab_connect(
+        "inmem",
+        vtab_id,
+        instance_id,
+        "main".into(),
+        "inmem".into(),
+        vec![],
+    )
+    .await
+    .expect("connect plumbing")
+    .expect("connect ok");
+
+    // xRename
+    host.dispatch_vtab_rename("inmem", vtab_id, instance_id, "inmem_renamed".into())
+        .await
+        .expect("rename plumbing")
+        .expect("rename ok");
+
+    // xSavepoint / xRelease / xRollbackTo — all savepoint-id-scoped.
+    host.dispatch_vtab_savepoint("inmem", vtab_id, instance_id, 0)
+        .await
+        .expect("savepoint plumbing")
+        .expect("savepoint ok");
+    host.dispatch_vtab_release("inmem", vtab_id, instance_id, 0)
+        .await
+        .expect("release plumbing")
+        .expect("release ok");
+    host.dispatch_vtab_rollback_to("inmem", vtab_id, instance_id, 0)
+        .await
+        .expect("rollback-to plumbing")
+        .expect("rollback-to ok");
+
+    // xShadowName — inmem answers false for a non-shadow name.
+    let is_shadow = host
+        .dispatch_vtab_is_shadow_name("inmem", vtab_id, "not_a_shadow")
+        .await
+        .expect("is-shadow-name plumbing");
+    eprintln!("[inmem] is_shadow_name('not_a_shadow') = {is_shadow}");
+
+    // xIntegrity — per-instance check; inmem returns ok.
+    host.dispatch_vtab_integrity("inmem", vtab_id, instance_id, "main", "inmem", 0)
+        .await
+        .expect("integrity plumbing")
+        .expect("integrity ok");
+
+    eprintln!("[inmem] all 6 cold vtab methods round-tripped through the resident store");
 }
