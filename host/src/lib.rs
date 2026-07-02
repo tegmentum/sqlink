@@ -1578,7 +1578,10 @@ fn manifest_for_ext(ext: &LoadedExtension) -> Manifest {
 /// scalar/collation tiers exactly as for a bespoke-loaded one. Only
 /// scalar + collation are populated — the safety gate guarantees a
 /// provider-backed extension has no other tiers.
-fn manifest_for_provider(m: &provider_envelope::Manifest) -> Manifest {
+fn manifest_for_provider(
+    m: &provider_envelope::Manifest,
+    conn: Option<&sqlite_component_core::db::Connection>,
+) -> Manifest {
     use bindings::sqlite::extension::metadata::{
         AggregateFunctionSpec, CollationSpec, DotCommandSpec, ScalarFunctionSpec, VtabSpec,
     };
@@ -1586,14 +1589,31 @@ fn manifest_for_provider(m: &provider_envelope::Manifest) -> Manifest {
     Manifest {
         name: m.name.clone(),
         version: m.version.clone(),
+        // #220 collision-prefix on the provider path: the cli registers the
+        // SQL name from this manifest, so resolve each scalar name against the
+        // connection here — a scalar that would clobber a builtin (or a
+        // prior extension's function) is exposed as `<ext>_<name>`, exactly
+        // as the bespoke `register_scalar` path does via the same helper.
+        // Dispatch is keyed by func_id, not name, so only the registered SQL
+        // name changes. `conn == None` (e.g. shared_spi_conn not open) keeps
+        // the bare name — no worse than the pre-#220 behavior.
         scalar_functions: m
             .scalar_specs
             .iter()
-            .map(|(name, id, num_args)| ScalarFunctionSpec {
-                id: *id,
-                name: name.clone(),
-                num_args: *num_args,
-                func_flags: FunctionFlags::empty(),
+            .map(|(name, id, num_args)| {
+                let sql_name = conn
+                    .and_then(|c| {
+                        prefix_registry::resolve_collision_free_name(c, &m.name, name, *num_args)
+                            .ok()
+                    })
+                    .map(|res| res.name)
+                    .unwrap_or_else(|| name.clone());
+                ScalarFunctionSpec {
+                    id: *id,
+                    name: sql_name,
+                    num_args: *num_args,
+                    func_flags: FunctionFlags::empty(),
+                }
             })
             .collect(),
         // Task #227: populate every tier so the cli's do_load registers
@@ -11059,10 +11079,13 @@ impl Host {
     /// provider-backed. The cli `.load` loader handler returns this when
     /// the ext is absent from the bespoke `components` map.
     pub fn provider_backed_bindings_manifest(&self, name: &str) -> Option<Manifest> {
-        self.provider_manifests
-            .read()
-            .get(name)
-            .map(manifest_for_provider)
+        let m = self.provider_manifests.read().get(name).cloned()?;
+        // #220: resolve scalar collisions against the shared spi conn (builtins
+        // are identical across sqlite conns) so the cli registers `<ext>_<name>`
+        // for a scalar that would clobber a builtin. Bare names if not open.
+        let g = self.shared_spi_conn.lock();
+        let r = g.borrow();
+        Some(manifest_for_provider(&m, r.as_ref()))
     }
 
     /// If `ext_name` is provider-backed, dispatch the scalar `func_id`
@@ -16867,7 +16890,14 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             .load_extension_as_provider(&ext_name, provider)
             .await
         {
-            Ok(m) => Ok(manifest_for_provider(&m)),
+            Ok(m) => {
+                // #220: resolve scalar collisions so the cli registers
+                // `<ext>_<name>` for a builtin-clobbering scalar (see
+                // manifest_for_provider). Builtins are identical across conns.
+                let g = self.host.shared_spi_conn.lock();
+                let r = g.borrow();
+                Ok(manifest_for_provider(&m, r.as_ref()))
+            }
             Err(e) => Err(LoaderError {
                 code: 1,
                 message: e.to_string(),
