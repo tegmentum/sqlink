@@ -1768,7 +1768,19 @@ fn resolve_catalog_artifact(name: &str) -> Option<PathBuf> {
         });
 
     let norm = name.replace('-', "_");
+    // Task #227/#220 (loader retirement): PREFER the `<ext>-provider.wasm`
+    // compose:dynlink provider artifact when one is present. `.load`
+    // (see `load_extension`) detects the `endpoint` export and routes such
+    // an artifact onto the WARM-ONCE RESIDENT provider path — every tier
+    // (scalar/collation/aggregate/vtab/hook/dotcmd) then dispatches through
+    // the provider, with spi/http/dns imports satisfied host-side. This is
+    // the default-resolution flip that lets the bespoke `loaded::*` loader
+    // eventually retire. Fully backward-compatible: absent a provider
+    // artifact the resolver falls through to the plain extension component
+    // below (bespoke path), so nothing regresses until artifacts ship.
     let filenames = [
+        format!("{name}-provider.wasm"),
+        format!("{norm}_provider.wasm"),
         format!("{norm}_extension.component.wasm"),
         format!("{norm}.component.wasm"),
         format!("{norm}_extension.wasm"),
