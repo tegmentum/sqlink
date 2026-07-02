@@ -117,7 +117,7 @@ unsafe fn init_inner(db: *mut sqlite3, p_api: *const sqlite3_api_routines) -> Re
             if entry.is_empty() {
                 continue;
             }
-            let policy = load::default_policy();
+            let policy = load::policy_from_env();
             match load::load_and_install(api, db, host.clone(), rt.clone(), entry, policy) {
                 Ok(counts) => {
                     tracing::info!(
@@ -223,7 +223,7 @@ unsafe extern "C" fn sqlink_load_ext_xfunc(
         name.clone()
     };
 
-    let policy = load::default_policy();
+    let policy = load::policy_from_env();
     let result = load::load_and_install(
         lc.api,
         lc.db,

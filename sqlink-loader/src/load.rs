@@ -28,7 +28,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use sqlink_host::{Capability, Host, Policy};
+use sqlink_host::{Capability, DnsPolicy, Host, HttpPolicy, Policy};
 use tokio::runtime::Runtime;
 
 use crate::api::{sqlite3, ApiRoutines, SQLITE_OK};
@@ -144,6 +144,97 @@ pub fn default_policy() -> Policy {
         Capability::Schema,
         Capability::Transaction,
     ])
+}
+
+/// Parse one capability name (case-insensitive) from the
+/// `SQLINK_LOADER_EXT_CAPS` env var. Returns `None` for unknown
+/// names; the caller logs and skips so a typo doesn't abort init.
+fn parse_capability(name: &str) -> Option<Capability> {
+    match name.trim().to_ascii_lowercase().as_str() {
+        "spi" => Some(Capability::Spi),
+        "prepared" => Some(Capability::Prepared),
+        "transaction" => Some(Capability::Transaction),
+        "schema" => Some(Capability::Schema),
+        "state" => Some(Capability::State),
+        "cache" => Some(Capability::Cache),
+        "random" => Some(Capability::Random),
+        "text" => Some(Capability::Text),
+        "hashing" => Some(Capability::Hashing),
+        "encoding" => Some(Capability::Encoding),
+        "http" => Some(Capability::Http),
+        "dns" => Some(Capability::Dns),
+        "walframes" | "wal-frames" | "wal_frames" => Some(Capability::WalFrames),
+        "s3" => Some(Capability::S3),
+        "spawnbuild" | "spawn-build" | "spawn_build" => Some(Capability::SpawnBuild),
+        "bundles" => Some(Capability::Bundles),
+        _ => None,
+    }
+}
+
+/// Build a [`Policy`] from [`default_policy`] augmented with any
+/// capabilities granted via the `SQLINK_LOADER_EXT_CAPS` env var
+/// (comma-separated list of capability names, case-insensitive,
+/// e.g. `Http,Dns`).
+///
+/// If `Http` or `Dns` is granted, an open allowlist (`*.` wildcard,
+/// matching the canonical `Policy::allow_all` shape) is attached so
+/// the resulting policy passes [`Policy::validate`]. Finer-grained
+/// host allowlists can be layered later via a per-extension SQL
+/// `sqlink_load_ext(name, path, policy_json)` variant (TBD).
+///
+/// Unknown capability names are logged and skipped rather than
+/// failing the load — a single typo shouldn't take down all eager
+/// loads in `SQLINK_LOADER_EXTS`.
+pub fn policy_from_env() -> Policy {
+    let mut policy = default_policy();
+    let raw = match std::env::var("SQLINK_LOADER_EXT_CAPS") {
+        Ok(s) => s,
+        Err(_) => return policy,
+    };
+
+    let mut extra: Vec<Capability> = Vec::new();
+    for entry in raw.split(',') {
+        let trimmed = entry.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match parse_capability(trimmed) {
+            Some(cap) => extra.push(cap),
+            None => {
+                tracing::warn!(
+                    cap = %trimmed,
+                    "sqlink-loader: SQLINK_LOADER_EXT_CAPS contains unknown capability; skipping"
+                );
+            }
+        }
+    }
+
+    if extra.is_empty() {
+        return policy;
+    }
+
+    let grants_http = extra.contains(&Capability::Http);
+    let grants_dns = extra.contains(&Capability::Dns);
+    policy = policy.with_grants(extra);
+
+    // Validate() requires HttpPolicy/DnsPolicy sub-policies when the
+    // matching capability is granted. Mirror `Policy::allow_all`'s
+    // open `*.` wildcard so eager loads succeed; operators wanting a
+    // tighter allowlist should drive load via SQL not env vars.
+    if grants_http {
+        policy = policy.with_http(HttpPolicy {
+            allowed_hosts: vec!["*.".to_string()],
+            ..Default::default()
+        });
+    }
+    if grants_dns {
+        policy = policy.with_dns(DnsPolicy {
+            allowed_domains: vec!["*.".to_string()],
+            ..Default::default()
+        });
+    }
+
+    policy
 }
 
 /// Load one extension via the host, then install its scalars +
@@ -369,6 +460,49 @@ mod tests {
         let declared = vec![Capability::Http];
         let r = p.check_manifest(&declared);
         assert!(r.is_err(), "Http isn't granted; expected rejection");
+    }
+
+    // ─── policy_from_env() ────────────────────────────────────────
+
+    #[test]
+    fn policy_from_env_unset_matches_default() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_CAPS"]);
+        let p = policy_from_env();
+        assert!(!p.is_granted(Capability::Http));
+        assert!(!p.is_granted(Capability::Dns));
+        // Baseline grants from default_policy() still present.
+        assert!(p.is_granted(Capability::Spi));
+        p.validate().expect("env-unset policy must validate");
+    }
+
+    #[test]
+    fn policy_from_env_grants_http_and_attaches_http_policy() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_CAPS"]);
+        std::env::set_var("SQLINK_LOADER_EXT_CAPS", "Http");
+        let p = policy_from_env();
+        assert!(p.is_granted(Capability::Http));
+        p.validate()
+            .expect("policy granting Http must attach an HttpPolicy so validate() passes");
+    }
+
+    #[test]
+    fn policy_from_env_case_insensitive_and_multivalued() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_CAPS"]);
+        std::env::set_var("SQLINK_LOADER_EXT_CAPS", "http, DNS , s3");
+        let p = policy_from_env();
+        assert!(p.is_granted(Capability::Http));
+        assert!(p.is_granted(Capability::Dns));
+        assert!(p.is_granted(Capability::S3));
+        p.validate().expect("multi-cap env policy must validate");
+    }
+
+    #[test]
+    fn policy_from_env_unknown_cap_is_skipped() {
+        let _g = EnvGuard::capture(&["SQLINK_LOADER_EXT_CAPS"]);
+        std::env::set_var("SQLINK_LOADER_EXT_CAPS", "Http,NotARealCapability");
+        // Must not panic; unknown names get logged + skipped.
+        let p = policy_from_env();
+        assert!(p.is_granted(Capability::Http));
     }
 
     // ─── InstallCounts ────────────────────────────────────────────
