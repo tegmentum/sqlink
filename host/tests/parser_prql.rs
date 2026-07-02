@@ -1,10 +1,10 @@
 //! End-to-end test for the `prql` TRANSPARENT parser extension in sqlink
-//! — the same host parse-failure intercept ggsql rides (see `parser.rs`),
-//! driven from the shared datalink `prql-core` (wraps prqlc) the ducklink
-//! port also consumes.
+//! — the same host parse-failure intercept ggsql rides (see
+//! `parser_provider.rs`), driven from the shared datalink `prql-core`
+//! (wraps prqlc) the ducklink port also consumes.
 //!
-//!   1. load the prql extension (a `minimal`-world scalar component
-//!      generated from prql-core by `sqlite_shim!`);
+//!   1. load the prql extension PROVIDER artifact (compose:dynlink
+//!      `prql-provider.wasm`; #220 retired the bespoke loader);
 //!   2. `dispatch_parse("from mtcars | filter .. | select ..")` returns a
 //!      SQLite-dialect SQL rewrite (no explicit prql_to_sql call — the
 //!      transparent upgrade);
@@ -12,24 +12,21 @@
 //!      rows;
 //!   4. a non-PRQL statement DECLINES (`None`).
 //!
-//! Silently skips if the prql component isn't built (build it with
-//! `make ext NAME=prql`).
+//! Silently skips if the prql provider artifact isn't staged (build the
+//! ext + `wac plug` it into the scalar shape → tests/fixtures/providers/
+//! prql-provider.wasm).
 
 use std::path::PathBuf;
 
 use sqlink_host::{Host, Policy};
 use sqlite_component_core::db::{self, StepResult, Value};
 
-fn prql_component_path() -> Option<PathBuf> {
+fn prql_provider_path() -> Option<PathBuf> {
+    // #220: the bespoke `load_extension_from_bytes` path is retired; load the
+    // compose:dynlink provider artifact through the resolver/router instead.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let base = manifest_dir.join("../extensions/prql/target/wasm32-wasip2/release");
-    for n in ["prql_extension.component.wasm", "prql_extension.wasm"] {
-        let p = base.join(n);
-        if p.exists() {
-            return Some(p);
-        }
-    }
-    None
+    let p = manifest_dir.join("tests/fixtures/providers/prql-provider.wasm");
+    p.exists().then_some(p)
 }
 
 const MTCARS: &str = "CREATE TABLE mtcars(model TEXT, mpg REAL, cyl INTEGER, hp INTEGER); \
@@ -41,15 +38,14 @@ const PRQL: &str = "from mtcars | filter cyl == 6 | select {mpg, hp} | sort {-hp
 
 #[tokio::test]
 async fn prql_pipeline_parses_and_executes_in_sqlink() {
-    let Some(path) = prql_component_path() else {
-        eprintln!("skipping: prql component not built (run `make ext NAME=prql`)");
+    let Some(path) = prql_provider_path() else {
+        eprintln!("skipping: prql-provider.wasm not staged");
         return;
     };
 
     let host = Host::new().expect("engine");
-    let bytes = std::fs::read(&path).expect("read prql component");
     let name = host
-        .load_extension_from_bytes(bytes, "prql", Policy::deny_all())
+        .load_extension(path, Policy::deny_all())
         .await
         .expect("load prql");
     assert_eq!(name, "prql");
@@ -80,13 +76,12 @@ async fn prql_pipeline_parses_and_executes_in_sqlink() {
 
 #[tokio::test]
 async fn non_prql_declines() {
-    let Some(path) = prql_component_path() else {
-        eprintln!("skipping: prql component not built");
+    let Some(path) = prql_provider_path() else {
+        eprintln!("skipping: prql-provider.wasm not staged");
         return;
     };
     let host = Host::new().expect("engine");
-    let bytes = std::fs::read(&path).expect("read");
-    host.load_extension_from_bytes(bytes, "prql", Policy::deny_all())
+    host.load_extension(path, Policy::deny_all())
         .await
         .expect("load");
     // Plain SQL the engine should keep for itself -> declined.

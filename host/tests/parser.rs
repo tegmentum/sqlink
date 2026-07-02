@@ -7,10 +7,10 @@
 //! scalar `__sqlink_parse` is offered statements the built-in parser
 //! rejected, and a non-empty `Text` return is run as a SQL rewrite.
 //!
-//! This proves the ggsql VISUALIZE flow in sqlink, from the SAME datalink
-//! `ggsql-core` the ducklink port consumes:
-//!   1. load the ggsql extension (a plain `minimal`-world scalar
-//!      component generated from ggsql-core by `sqlite_shim!`);
+//! This proves the ggsql VISUALIZE flow in sqlink through the
+//! compose:dynlink PROVIDER path (#220 retired the bespoke loader; the
+//! `dispatch_parse` snapshot now includes provider-backed exts):
+//!   1. load the ggsql extension PROVIDER artifact (`ggsql-provider.wasm`);
 //!   2. `dispatch_parse("VISUALIZE SELECT ...")` returns a SQLite-dialect
 //!      SQL rewrite;
 //!   3. running that rewrite produces the (label, n, bar) rollup
@@ -19,20 +19,21 @@
 //!   4. a non-VISUALIZE statement DECLINES (`None`); a malformed
 //!      VISUALIZE is a clean parse error (`Err`).
 //!
-//! Silently skips if the ggsql component isn't built (build it with
-//! `make ext NAME=ggsql`) so the suite stays green without the wasm
-//! toolchain.
+//! Silently skips if the ggsql provider artifact isn't staged (build the
+//! ext + `wac plug` it into the scalar shape → tests/fixtures/providers/
+//! ggsql-provider.wasm) so the suite stays green without the wasm toolchain.
 
 use std::path::PathBuf;
 
 use sqlink_host::{Host, Policy};
 use sqlite_component_core::db::{self, StepResult, Value};
 
-/// Path to the built ggsql sqlite:extension component.
-fn ggsql_component_path() -> Option<PathBuf> {
+/// Path to the staged ggsql compose:dynlink provider artifact.
+fn ggsql_provider_path() -> Option<PathBuf> {
+    // #220: the bespoke `load_extension_from_bytes` path is retired; load the
+    // provider artifact through the resolver/router instead.
     let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let p = manifest_dir
-        .join("../extensions/ggsql/target/wasm32-wasip2/release/ggsql_extension.component.wasm");
+    let p = manifest_dir.join("tests/fixtures/providers/ggsql-provider.wasm");
     p.exists().then_some(p)
 }
 
@@ -42,15 +43,14 @@ const VISUALIZE: &str =
 
 #[tokio::test]
 async fn ggsql_visualize_parses_and_executes_in_sqlink() {
-    let Some(path) = ggsql_component_path() else {
-        eprintln!("skipping: ggsql component not built (run `make ext NAME=ggsql`)");
+    let Some(path) = ggsql_provider_path() else {
+        eprintln!("skipping: ggsql-provider.wasm not staged");
         return;
     };
 
     let host = Host::new().expect("engine");
-    let bytes = std::fs::read(&path).expect("read ggsql component");
     let name = host
-        .load_extension_from_bytes(bytes, "ggsql", Policy::deny_all())
+        .load_extension(path, Policy::deny_all())
         .await
         .expect("load ggsql");
     assert_eq!(name, "ggsql");
@@ -101,13 +101,12 @@ async fn ggsql_visualize_parses_and_executes_in_sqlink() {
 
 #[tokio::test]
 async fn non_visualize_declines() {
-    let Some(path) = ggsql_component_path() else {
-        eprintln!("skipping: ggsql component not built");
+    let Some(path) = ggsql_provider_path() else {
+        eprintln!("skipping: ggsql-provider.wasm not staged");
         return;
     };
     let host = Host::new().expect("engine");
-    let bytes = std::fs::read(&path).expect("read ggsql component");
-    host.load_extension_from_bytes(bytes, "ggsql", Policy::deny_all())
+    host.load_extension(path, Policy::deny_all())
         .await
         .expect("load ggsql");
 
@@ -119,13 +118,12 @@ async fn non_visualize_declines() {
 
 #[tokio::test]
 async fn malformed_visualize_is_clean_error() {
-    let Some(path) = ggsql_component_path() else {
-        eprintln!("skipping: ggsql component not built");
+    let Some(path) = ggsql_provider_path() else {
+        eprintln!("skipping: ggsql-provider.wasm not staged");
         return;
     };
     let host = Host::new().expect("engine");
-    let bytes = std::fs::read(&path).expect("read ggsql component");
-    host.load_extension_from_bytes(bytes, "ggsql", Policy::deny_all())
+    host.load_extension(path, Policy::deny_all())
         .await
         .expect("load ggsql");
 
