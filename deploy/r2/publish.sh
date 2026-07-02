@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Publish the sqlink extension catalog to the datalink-ext R2 bucket.
+# Publish the sqlink extension catalog to the sqlink-ext R2 bucket.
 #
 # Reusable, idempotent, additive:
 #   0. (optional, --build) Rebuild every registry extension DETERMINISTICALLY
@@ -28,12 +28,12 @@
 #   Net effect: build-twice-into-different-dirs is byte-identical, and the
 #   digest is stable across machines/checkouts. See build_ext() below.
 #
-# Credentials come from ~/git/datalink/r2.env (R2_* -> AWS_*). Secrets are
+# Credentials come from ~/git/sqlink/r2.env (R2_* -> AWS_*). Secrets are
 # never printed. The blob layout + public host are:
-#   bucket   datalink-ext
+#   bucket   sqlink-ext
 #   blob     wasm/sha256/<digest>/<name>.wasm   (application/wasm, immutable)
-#   catalog  sqlink/catalog.json                (application/json, max-age=300)
-#   public   https://datalink-ext.tegmentum.ai/sqlink/catalog.json
+#   catalog  catalog.json                (application/json, max-age=300)
+#   public   https://ext.sqlink.dev/catalog.json
 #
 # Usage:
 #   deploy/r2/publish.sh [--build] [--dry-run]
@@ -61,7 +61,7 @@ CATALOG="registry/catalog.json"
 EXT_SHARED_TARGET="$ROOT/extensions/_shared-target/wasm32-wasip2/release"
 WASI_ADAPTER="${WASI_ADAPTER:-$HOME/.cache/xtran/wasi_snapshot_preview1.reactor.wasm}"
 AWS="${AWS:-$(command -v aws)}"
-ENVFILE="${R2_ENV:-$HOME/git/datalink/r2.env}"
+ENVFILE="${R2_ENV:-$HOME/git/sqlink/r2.env}"
 
 # Pinned epoch for any timestamp-derived bytes (2020-01-01T00:00:00Z).
 export SOURCE_DATE_EPOCH="${SOURCE_DATE_EPOCH:-1577836800}"
@@ -109,7 +109,7 @@ export AWS_ACCESS_KEY_ID="${R2_ACCESS_KEY_ID:?}"
 export AWS_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:?}"
 export AWS_DEFAULT_REGION=auto
 EP="https://${R2_ACCOUNT_ID:?}.r2.cloudflarestorage.com"
-BUCKET=datalink-ext
+BUCKET=sqlink-ext
 
 # --- 0. (optional) deterministic rebuild of every registry extension ------
 if [ "$DO_BUILD" = 1 ]; then
@@ -219,9 +219,9 @@ PY
 
 if [ "$DRY_RUN" = 1 ]; then echo "dry-run: catalog written to $CATALOG, not uploaded"; rm -f "$MANIFEST" "$VALID"; exit 0; fi
 
-"$AWS" s3api put-object --bucket "$BUCKET" --endpoint-url "$EP" --key "sqlink/catalog.json" \
+"$AWS" s3api put-object --bucket "$BUCKET" --endpoint-url "$EP" --key "catalog.json" \
   --body "$CATALOG" --content-type application/json --cache-control "public, max-age=300" >/dev/null \
-  && echo "catalog uploaded: sqlink/catalog.json" || { echo "catalog upload FAIL" >&2; exit 1; }
+  && echo "catalog uploaded: catalog.json" || { echo "catalog upload FAIL" >&2; exit 1; }
 
 rm -f "$MANIFEST" "$VALID"
 echo "done"
