@@ -2647,6 +2647,109 @@ impl loaded_minimal_dns::sqlite::extension::dns::Host for crate::compose_provide
     }
 }
 
+// Task #220: `sqlite:extension/{wal-frames,s3-base}` on the RESIDENT provider
+// store, so the WAL-introspection / s3 exts (`hookprobe`, `wal-archive`)
+// instantiate provider-only. Both are CAPABILITY-gated: a resident provider
+// gets them DENY-BY-DEFAULT (exactly as a `.load`ed ext gets them ungranted —
+// `LoadedState::{wal_frames_granted,s3_granted}` default false). The provider
+// instantiates; every call is refused until the capability is granted.
+// Threading manifest-granted capabilities into resident registration (to make
+// the calls actually succeed) is the documented follow-up — same posture as
+// the http/dns policies above.
+impl loaded::sqlite::extension::wal_frames::Host for crate::compose_provider::ProviderState {
+    async fn get_wal_header(
+        &mut self,
+        _db_name: String,
+    ) -> std::result::Result<Option<Vec<u8>>, loaded::sqlite::extension::types::SqliteError> {
+        Err(wal_perm_err("get-wal-header"))
+    }
+    async fn read_frames(
+        &mut self,
+        _db_name: String,
+        _start_frame: u32,
+        _n_frames: u32,
+    ) -> std::result::Result<Vec<u8>, loaded::sqlite::extension::types::SqliteError> {
+        Err(wal_perm_err("read-frames"))
+    }
+}
+
+impl loaded::sqlite::extension::s3_base::Host for crate::compose_provider::ProviderState {
+    async fn get_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _key: String,
+        _options: Option<loaded::sqlite::extension::s3_base::S3GetObjectOptions>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3GetObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn put_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _key: String,
+        _body: Vec<u8>,
+        _options: Option<loaded::sqlite::extension::s3_base::S3PutObjectOptions>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3PutObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn delete_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _key: String,
+    ) -> std::result::Result<(), loaded::sqlite::extension::s3_base::S3Error> {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn head_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _key: String,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3HeadObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn list_objects(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _bucket: String,
+        _options: Option<loaded::sqlite::extension::s3_base::S3ListObjectsOptions>,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3ListObjectsOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+    async fn copy_object(
+        &mut self,
+        _endpoint: loaded::sqlite::extension::s3_base::S3EndpointConfig,
+        _credentials: loaded::sqlite::extension::s3_base::S3Credentials,
+        _source_bucket: String,
+        _source_key: String,
+        _dest_bucket: String,
+        _dest_key: String,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::s3_base::S3PutObjectOutput,
+        loaded::sqlite::extension::s3_base::S3Error,
+    > {
+        Err(loaded::sqlite::extension::s3_base::S3Error::CapabilityNotGranted)
+    }
+}
+
 impl loaded_minimal_dns::sqlite::extension::dns::Host for LoadedState {
     async fn resolve(
         &mut self,

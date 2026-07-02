@@ -451,6 +451,14 @@ pub struct ProviderState {
     /// default is the safe first cut.
     pub(crate) http_policy: Option<crate::HttpPolicy>,
     pub(crate) dns_policy: Option<crate::DnsPolicy>,
+    /// #220: streamed-output capture for a resident provider that imports
+    /// the cli surface (`cli-stdout`/`cli-stderr`) — the streaming-dotcmd
+    /// exts (`archive-cli`/`core-dotcmd`/`serialize-cli`/`sqlite-utils-maint`).
+    /// The fresh-store `wasm_component_invoke_cli` path uses a per-invoke
+    /// `ProviderCliState`; a RESIDENT provider persists its store, so its cli
+    /// output accumulates here and is drained by the caller per dot-invoke.
+    /// `cli-state` getters read an (empty for a `.load`ed provider) snapshot.
+    pub(crate) cli: CliCapture,
 }
 
 impl wasmtime_wasi::WasiView for ProviderState {
@@ -542,6 +550,36 @@ pub fn imports_sqlite_dns(component: &Component, engine: &Engine) -> bool {
         .component_type()
         .imports(engine)
         .any(|(name, _)| name.starts_with("sqlite:extension/dns"))
+}
+
+/// Task #220: true if `component` imports `sqlite:extension/wal-frames` — the
+/// WAL-introspection exts (`hookprobe`/`wal-archive`). Host-satisfied on the
+/// resident linker (deny-by-default capability, like http/dns).
+pub fn imports_sqlite_wal_frames(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/wal-frames"))
+}
+
+/// Task #220: true if `component` imports `sqlite:extension/s3-base` — the
+/// s3-backed exts. Host-satisfied on the resident linker (deny-by-default
+/// capability: instantiates, refused at call time unless granted).
+pub fn imports_sqlite_s3_base(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/s3-base"))
+}
+
+/// Task #220: true if `component` imports `sqlite:extension/cli-state` — a
+/// streaming-dotcmd ext that reads the cli key/value snapshot. (`cli-stdout`
+/// is covered by `imports_cli_stdout`.)
+pub fn imports_cli_state(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/cli-state"))
 }
 
 /// Task #220: `HasData` marker for wiring the `sqlite:extension/{http,dns}`
@@ -886,6 +924,7 @@ async fn wasm_component_invoke(
         // Fresh-store path carries no http/dns surface (resident-only, #220).
         http_policy: None,
         dns_policy: None,
+        cli: CliCapture::default(),
     };
     let mut store = wasmtime::Store::new(engine, state);
     store
@@ -944,8 +983,17 @@ async fn resident_wasm_component_invoke(
         // so they also force the async WASI linker.
         let imports_http = imports_sqlite_http(component, engine);
         let imports_dns = imports_sqlite_dns(component, engine);
+        // Task #220: the remaining capability/cli host surfaces, satisfied on
+        // the resident linker so the stateful/streaming exts instantiate
+        // provider-only. wal-frames + s3-base are CAPABILITY-gated
+        // (deny-by-default, exactly like http/dns — the provider instantiates,
+        // calls are refused unless granted). cli-stdout/-stderr/-state back the
+        // streaming-dotcmd exts. All async surfaces → force the async linker.
+        let imports_wal = imports_sqlite_wal_frames(component, engine);
+        let imports_s3 = imports_sqlite_s3_base(component, engine);
+        let imports_cli = imports_cli_stdout(component, engine) || imports_cli_state(component, engine);
         let mut linker: Linker<ProviderState> = Linker::new(engine);
-        if reentrant || imports_spi || imports_http || imports_dns {
+        if reentrant || imports_spi || imports_http || imports_dns || imports_wal || imports_s3 || imports_cli {
             wasmtime_wasi::p2::add_to_linker_async(&mut linker)
                 .map_err(|e| format!("wasi (async) linker: {e}"))?;
         } else {
@@ -989,6 +1037,37 @@ async fn resident_wasm_component_invoke(
             )
             .map_err(|e| format!("resident sqlite:extension/dns linker: {e}"))?;
         }
+        if imports_wal {
+            crate::loaded::sqlite::extension::wal_frames::add_to_linker::<_, ProviderNetData>(
+                &mut linker,
+                |state: &mut ProviderState| state,
+            )
+            .map_err(|e| format!("resident sqlite:extension/wal-frames linker: {e}"))?;
+        }
+        if imports_s3 {
+            crate::loaded::sqlite::extension::s3_base::add_to_linker::<_, ProviderNetData>(
+                &mut linker,
+                |state: &mut ProviderState| state,
+            )
+            .map_err(|e| format!("resident sqlite:extension/s3-base linker: {e}"))?;
+        }
+        if imports_cli {
+            cli_ext::cli_stdout::add_to_linker::<_, ProviderNetData>(
+                &mut linker,
+                |state: &mut ProviderState| state,
+            )
+            .map_err(|e| format!("resident sqlite:extension/cli-stdout linker: {e}"))?;
+            cli_ext::cli_stderr::add_to_linker::<_, ProviderNetData>(
+                &mut linker,
+                |state: &mut ProviderState| state,
+            )
+            .map_err(|e| format!("resident sqlite:extension/cli-stderr linker: {e}"))?;
+            cli_ext::cli_state::add_to_linker::<_, ProviderNetData>(
+                &mut linker,
+                |state: &mut ProviderState| state,
+            )
+            .map_err(|e| format!("resident sqlite:extension/cli-state linker: {e}"))?;
+        }
         let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
         wasi.inherit_stdio();
         let state = ProviderState {
@@ -1011,6 +1090,7 @@ async fn resident_wasm_component_invoke(
             // call time by check_http_policy/check_dns_policy.
             http_policy: None,
             dns_policy: None,
+            cli: CliCapture::default(),
         };
         let mut store = wasmtime::Store::new(engine, state);
         store
@@ -1069,6 +1149,19 @@ pub struct ProviderCliState {
     resources: wasmtime_wasi::ResourceTable,
     cli: CliCapture,
     state: CliStateSnapshot,
+    /// #220: the cli store's own spi connection, for a streaming-dotcmd ext
+    /// that ALSO imports `sqlite:extension/spi` (`archive-cli`/`core-dotcmd`/
+    /// `serialize-cli`). Lazy-opened like the resident `spi_conn` (empty
+    /// `spi_db_path` => `:memory:`). Threading the cli `--db` in is a follow-up.
+    spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
+    spi_db_path: String,
+}
+
+/// #220: `HasData` marker to wire `sqlite:extension/spi` onto the cli store's
+/// linker, reusing `ProviderSpiWrap` (built from `ProviderCliState`'s fields).
+pub struct ProviderCliSpiData;
+impl wasmtime::component::HasData for ProviderCliSpiData {
+    type Data<'a> = ProviderSpiWrap<'a>;
 }
 
 impl wasmtime_wasi::WasiView for ProviderCliState {
@@ -1144,6 +1237,52 @@ impl cli_ext::cli_state::Host for ProviderCliState {
     }
 }
 
+// Task #220: the SAME cli surface on the RESIDENT store type
+// (`ProviderState`), so a streaming-dotcmd ext loaded as a warm-once
+// resident provider (`archive-cli`/`core-dotcmd`/`serialize-cli`/
+// `sqlite-utils-maint`) satisfies its `cli-stdout`/`cli-stderr`/`cli-state`
+// imports. stdout/stderr accumulate into `self.cli` (drained by the caller
+// per dot-invoke); `cli-state` reads an empty snapshot (a `.load`ed resident
+// provider has no pre-seeded key/value state — a running dotcmd that needs a
+// live snapshot uses the fresh-store `wasm_component_invoke_cli` path). This
+// mirrors the `ProviderCliState` impls above verbatim.
+impl cli_ext::cli_stdout::Host for ProviderState {
+    async fn write(&mut self, text: String) {
+        self.cli.stdout.push_str(&text);
+    }
+    async fn flush(&mut self) {}
+    async fn row_end(&mut self) {
+        self.cli.stdout.push('\n');
+    }
+}
+
+impl cli_ext::cli_stderr::Host for ProviderState {
+    async fn write(&mut self, text: String) {
+        self.cli.stderr.push_str(&text);
+    }
+}
+
+impl cli_ext::cli_state::Host for ProviderState {
+    async fn get_text(&mut self, _key: String) -> String {
+        String::new()
+    }
+    async fn get_int(&mut self, _key: String) -> i64 {
+        0
+    }
+    async fn get_bool(&mut self, _key: String) -> bool {
+        false
+    }
+    async fn get_real(&mut self, _key: String) -> f64 {
+        0.0
+    }
+    async fn get_value(&mut self, _key: String) -> CliSqlValue {
+        CliSqlValue::Null
+    }
+    async fn list_keys(&mut self, _prefix: String) -> Vec<String> {
+        Vec::new()
+    }
+}
+
 /// True if `component` imports the streaming cli surface — i.e. it's a
 /// streaming dotcmd provider that needs `wasm_component_invoke_cli`.
 pub fn imports_cli_stdout(component: &Component, engine: &Engine) -> bool {
@@ -1186,6 +1325,19 @@ async fn wasm_component_invoke_cli(
         .map_err(|e| format!("cli-stderr linker: {e}"))?;
     cli_ext::cli_state::add_to_linker::<_, ProviderCliHostData>(&mut linker, |s| s)
         .map_err(|e| format!("cli-state linker: {e}"))?;
+    // #220: a streaming-dotcmd ext may ALSO import spi (archive-cli etc.);
+    // satisfy it on the cli store's linker with an isolated connection, exactly
+    // as the resident path does (the ext↔shape spi cycle isn't wac-composable).
+    if imports_sqlite_spi(component, engine) {
+        crate::bindings::sqlite::extension::spi::add_to_linker::<_, ProviderCliSpiData>(
+            &mut linker,
+            |s: &mut ProviderCliState| ProviderSpiWrap {
+                conn: &s.spi_conn,
+                db_path: &s.spi_db_path,
+            },
+        )
+        .map_err(|e| format!("cli sqlite:extension/spi linker: {e}"))?;
+    }
     let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
     wasi.inherit_stdio();
     let st = ProviderCliState {
@@ -1193,6 +1345,8 @@ async fn wasm_component_invoke_cli(
         resources: wasmtime_wasi::ResourceTable::new(),
         cli: CliCapture::default(),
         state,
+        spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
+        spi_db_path: String::new(),
     };
     let mut store = wasmtime::Store::new(engine, st);
     store
