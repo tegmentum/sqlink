@@ -74,47 +74,99 @@ echo "  wasmtime run will error on those imports; that's expected."
 #
 # PLAN-orchestration-integration.md asks for `composectl emit` to run
 # alongside `wac compose` for one release as a parallel cross-check,
-# then `wac` retires. The plan is in composition-plans/sqlink-runtime.plan.json.
+# then `wac` retires. The plan lives at
+# composition-plans/sqlink-runtime.plan.json and now carries
+# `explicit_exports` for sqlite-lib's dispatch-bridge + types (Gap 1
+# resolved upstream in webassembly-component-orchestration
+# 2e3ee85f + a7a5a809). Blob-store 1 GiB ceiling was raised in
+# 58ce66f0. Version-unification (Gap 2) rides along on the
+# wac-graph library emit path.
 #
-# The cross-check is GATED on two upstream gaps tracked in
-# docs/notes/orchestration-substrate-gaps.md:
-#
-#   - Gap 1: composectl emit cannot re-export non-root component
-#     instances. Our composed runtime re-exports sqlite-lib's
-#     dispatch-bridge + types (the load-bearing reason we use
-#     `wac compose` with an explicit recipe rather than `wac plug`).
-#   - Gap 2: composectl emit doesn't unify versioned WASI imports
-#     between cli (0.2.6) and sqlite-lib (0.2.4); wac compose does.
-#
-# When either gap closes upstream, flip ORCHESTRATION_CROSS_CHECK=1
-# below. Until then the block emits the plan-validate gate (which
-# confirms the plan still parses against the schema) but skips
-# the emit-side cross-check.
-ORCHESTRATION_CROSS_CHECK="${ORCHESTRATION_CROSS_CHECK:-0}"
+# Choose the composition tool via SQLINK_COMPOSE_TOOL:
+#   - `wac`       (default) — wac compose the recipe (preserves the
+#                 pre-substrate behavior; safe fallback).
+#   - `composectl` — emit from the declarative plan; wac still runs
+#                 first so the artifact is always produced even if
+#                 emit fails.
+#   - `both`      — run both, then diff WIT surfaces (parallel
+#                 cross-check per Tier 1.1.b).
+SQLINK_COMPOSE_TOOL="${SQLINK_COMPOSE_TOOL:-wac}"
+# Legacy alias: `ORCHESTRATION_CROSS_CHECK=1` maps to `both`.
+if [[ "${ORCHESTRATION_CROSS_CHECK:-0}" == "1" && "$SQLINK_COMPOSE_TOOL" == "wac" ]]; then
+    SQLINK_COMPOSE_TOOL="both"
+fi
 ORCH_ROOT="${SQLINK_ORCH_ROOT:-$REPO_ROOT/../webassembly-component-orchestration}"
 COMPOSECTL="${COMPOSECTL_BIN:-$ORCH_ROOT/target/release/composectl}"
 RUNTIME_PLAN="$REPO_ROOT/composition-plans/sqlink-runtime.plan.json"
 
-if [[ -x "$COMPOSECTL" && -f "$RUNTIME_PLAN" ]]; then
+emit_via_composectl() {
+    local out_path="$1"
+    local cli_path="$REPO_ROOT/target/wasm32-wasip2/release/sqlite_cli.component.wasm"
+    local lib_path="$SQLITE_WASM_ROOT/target/wasm32-wasip2/release/sqlite_lib.component.wasm"
+    local rendered_plan
+    rendered_plan="$(mktemp -t sqlink-runtime-plan.XXXXXX.json)"
+
+    # Stage inputs in the blob store and render the plan with current digests.
+    local cli_digest lib_digest
+    cli_digest="$("$COMPOSECTL" blob put "$cli_path" 2>/dev/null | awk '/Digest:/ {print $2}')"
+    lib_digest="$("$COMPOSECTL" blob put "$lib_path" 2>/dev/null | awk '/Digest:/ {print $2}')"
+    if [[ -z "$cli_digest" || -z "$lib_digest" ]]; then
+        echo "[orchestration] failed to stage inputs in composectl blob store" >&2
+        rm -f "$rendered_plan"
+        return 1
+    fi
+
+    # Render the plan template: swap sqlite-cli + sqlite-lib digests to
+    # the freshly computed hex-string values. Plan digests are encoded
+    # as byte arrays; convert hex -> JSON array via python3.
+    python3 - "$RUNTIME_PLAN" "$cli_digest" "$lib_digest" >"$rendered_plan" <<'PY'
+import json, sys
+plan_path, cli_hex, lib_hex = sys.argv[1], sys.argv[2], sys.argv[3]
+def hex_to_bytes(h):
+    return [int(h[i:i+2], 16) for i in range(0, len(h), 2)]
+plan = json.load(open(plan_path))
+mapping = {"sqlite-cli": hex_to_bytes(cli_hex), "sqlite-lib": hex_to_bytes(lib_hex)}
+for c in plan["components"]:
+    if c["id"] in mapping:
+        c["digest"] = mapping[c["id"]]
+json.dump(plan, sys.stdout, indent=2)
+PY
+
+    "$COMPOSECTL" emit build "$rendered_plan" --output "$out_path"
+    local rc=$?
+    rm -f "$rendered_plan"
+    return $rc
+}
+
+if [[ ! -x "$COMPOSECTL" || ! -f "$RUNTIME_PLAN" ]]; then
+    if [[ "$SQLINK_COMPOSE_TOOL" != "wac" ]]; then
+        echo "[orchestration] composectl not found at $COMPOSECTL; falling back to wac"
+        SQLINK_COMPOSE_TOOL="wac"
+    fi
+fi
+
+if [[ "$SQLINK_COMPOSE_TOOL" != "wac" ]]; then
     echo
     echo "[orchestration] validating composition-plans/sqlink-runtime.plan.json"
-    "$COMPOSECTL" plan validate "$RUNTIME_PLAN" || {
-        echo "[orchestration] WARNING: plan validation failed (non-fatal)"
-    }
+    "$COMPOSECTL" plan validate "$RUNTIME_PLAN"
 
-    if [[ "$ORCHESTRATION_CROSS_CHECK" == "1" ]]; then
-        echo "[orchestration] composectl emit parallel cross-check (Tier 1.1.b)"
-        # When upstream gaps close, this block:
-        #   1. Renders the plan with current cli + lib digests.
-        #   2. Runs `composectl emit build` to produce composectl-out.wasm.
-        #   3. Diffs the WIT surface against $OUT.
-        # Until gaps close, exporting ORCHESTRATION_CROSS_CHECK=1 should
-        # trigger the failure modes documented in
-        # docs/notes/orchestration-substrate-gaps.md, which is itself a
-        # useful canary for "is upstream there yet?".
-        echo "[orchestration] cross-check is gated on upstream gaps;"
-        echo "[orchestration] see docs/notes/orchestration-substrate-gaps.md"
+    COMPOSECTL_OUT="$REPO_ROOT/target/wasm32-wasip2/release/cli_with_sqlite.composectl.component.wasm"
+    echo "[orchestration] composectl emit -> $COMPOSECTL_OUT"
+    if emit_via_composectl "$COMPOSECTL_OUT"; then
+        if [[ "$SQLINK_COMPOSE_TOOL" == "both" ]]; then
+            echo "[orchestration] diffing wac vs composectl WIT surfaces"
+            diff -u \
+                <(wasm-tools component wit "$OUT"             | grep -E '^\s*(import|export) ' | sort -u) \
+                <(wasm-tools component wit "$COMPOSECTL_OUT"  | grep -E '^\s*(import|export) ' | sort -u) \
+                && echo "[orchestration] WIT surface parity: OK" \
+                || echo "[orchestration] WIT surface parity: DIFF (see above)"
+        elif [[ "$SQLINK_COMPOSE_TOOL" == "composectl" ]]; then
+            # Promote the composectl artifact to the canonical name so
+            # downstream steps pick it up.
+            cp "$COMPOSECTL_OUT" "$OUT"
+            echo "[orchestration] promoted composectl artifact to $OUT"
+        fi
     else
-        echo "[orchestration] cross-check disabled (set ORCHESTRATION_CROSS_CHECK=1 once upstream gaps close)"
+        echo "[orchestration] composectl emit failed; wac artifact remains authoritative"
     fi
 fi
