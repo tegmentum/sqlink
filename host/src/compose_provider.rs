@@ -459,6 +459,15 @@ pub struct ProviderState {
     /// output accumulates here and is drained by the caller per dot-invoke.
     /// `cli-state` getters read an (empty for a `.load`ed provider) snapshot.
     pub(crate) cli: CliCapture,
+    /// #220 full-port: the resident provider's own session-handle registry
+    /// (name -> `*mut sqlite3_session` as usize) for the
+    /// `sqlite:extension/session` host surface, present when the resident
+    /// provider wraps a session-importing ext (`session-cli`). Sessions are
+    /// created on this provider's own `spi_conn` (coherent with its
+    /// `spi.execute`), mirroring the bespoke loader's per-host
+    /// `session_handles` but isolated per resident provider. Retires the
+    /// `loaded::*` session residual for the provider path.
+    session_handles: Arc<Mutex<HashMap<String, usize>>>,
 }
 
 impl wasmtime_wasi::WasiView for ProviderState {
@@ -590,6 +599,17 @@ pub fn imports_sqlite_s3_base(component: &Component, engine: &Engine) -> bool {
         .component_type()
         .imports(engine)
         .any(|(name, _)| name.starts_with("sqlite:extension/s3-base"))
+}
+
+/// #220 full-port: true if `component` imports `sqlite:extension/session` —
+/// the changeset/session extension (`session-cli`). Host-satisfied on the
+/// resident linker against this provider's own `spi_conn` + `session_handles`
+/// (parity with the bespoke loader's per-host session surface).
+pub fn imports_sqlite_session(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/session"))
 }
 
 /// Task #220: true if `component` imports `sqlite:extension/cli-state` — a
@@ -920,6 +940,184 @@ impl<'a> crate::bindings::sqlite::extension::spi::Host for ProviderSpiWrap<'a> {
     }
 }
 
+/// #220 full-port: `HasData` marker for wiring `sqlite:extension/session`
+/// onto a resident `ProviderState`'s linker.
+pub struct ProviderSessionData;
+impl wasmtime::component::HasData for ProviderSessionData {
+    type Data<'a> = ProviderSessionWrap<'a>;
+}
+
+/// #220 full-port: the per-call view the generated `sqlite:extension/session`
+/// bindings drive. Borrows the resident provider's isolated spi connection
+/// (sessions record changes on the SAME db the ext's `spi.execute` mutates),
+/// its db path (for lazy-open), and its own session-handle registry. Mirrors
+/// the bespoke loader's `LoadedState` session surface, redirected to this
+/// provider's own state — giving parity for session-cli moved onto the
+/// compose:dynlink provider path.
+pub struct ProviderSessionWrap<'a> {
+    conn: &'a Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
+    db_path: &'a str,
+    handles: &'a Arc<Mutex<HashMap<String, usize>>>,
+}
+
+fn provider_session_err(msg: String) -> crate::loaded::sqlite::extension::types::SqliteError {
+    crate::loaded::sqlite::extension::types::SqliteError {
+        code: 1,
+        extended_code: 1,
+        message: msg,
+    }
+}
+
+impl<'a> ProviderSessionWrap<'a> {
+    /// Lazily open this provider's spi connection (shared with the spi
+    /// surface) and return its raw sqlite3* handle.
+    fn ensure_open(&self) -> std::result::Result<(), crate::loaded::sqlite::extension::types::SqliteError> {
+        provider_spi_ensure_open(self.conn, self.db_path).map_err(|e| provider_session_err(e.message))
+    }
+    fn lookup(
+        &self,
+        name: &str,
+    ) -> std::result::Result<*mut crate::session_ffi::sqlite3_session, crate::loaded::sqlite::extension::types::SqliteError>
+    {
+        self.handles
+            .lock()
+            .get(name)
+            .copied()
+            .map(|u| u as *mut crate::session_ffi::sqlite3_session)
+            .ok_or_else(|| provider_session_err(format!("no session named {name:?}")))
+    }
+}
+
+impl<'a> crate::loaded::sqlite::extension::session::Host for ProviderSessionWrap<'a> {
+    async fn session_create(
+        &mut self,
+        name: String,
+        db_name: String,
+    ) -> std::result::Result<(), crate::loaded::sqlite::extension::types::SqliteError> {
+        if self.handles.lock().contains_key(&name) {
+            return Err(provider_session_err(format!("session {name:?} already exists")));
+        }
+        self.ensure_open()?;
+        let db_c = std::ffi::CString::new(db_name.clone())
+            .map_err(|_| provider_session_err(format!("db name {db_name:?} has interior NUL")))?;
+        let raw_db = {
+            let g = self.conn.lock();
+            let r = g.borrow();
+            r.as_ref().expect("ensured open").raw_handle()
+        };
+        let mut sess: *mut crate::session_ffi::sqlite3_session = std::ptr::null_mut();
+        let rc = unsafe { crate::session_ffi::sqlite3session_create(raw_db, db_c.as_ptr(), &mut sess) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(provider_session_err(format!("sqlite3session_create returned {rc}")));
+        }
+        self.handles.lock().insert(name, sess as usize);
+        Ok(())
+    }
+
+    async fn session_attach(
+        &mut self,
+        name: String,
+        table: Option<String>,
+    ) -> std::result::Result<(), crate::loaded::sqlite::extension::types::SqliteError> {
+        let sess = self.lookup(&name)?;
+        let table_c = match table {
+            Some(t) if !t.is_empty() && t != "*" => Some(
+                std::ffi::CString::new(t.clone())
+                    .map_err(|_| provider_session_err(format!("table {t:?} has interior NUL")))?,
+            ),
+            _ => None,
+        };
+        let ptr = table_c.as_ref().map(|c| c.as_ptr()).unwrap_or(std::ptr::null());
+        let rc = unsafe { crate::session_ffi::sqlite3session_attach(sess, ptr) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(provider_session_err(format!("sqlite3session_attach returned {rc}")));
+        }
+        Ok(())
+    }
+
+    async fn session_enable(
+        &mut self,
+        name: String,
+        on: bool,
+    ) -> std::result::Result<(), crate::loaded::sqlite::extension::types::SqliteError> {
+        let sess = self.lookup(&name)?;
+        let _ = unsafe { crate::session_ffi::sqlite3session_enable(sess, if on { 1 } else { 0 }) };
+        Ok(())
+    }
+
+    async fn session_indirect(
+        &mut self,
+        name: String,
+        on: bool,
+    ) -> std::result::Result<(), crate::loaded::sqlite::extension::types::SqliteError> {
+        let sess = self.lookup(&name)?;
+        let _ = unsafe { crate::session_ffi::sqlite3session_indirect(sess, if on { 1 } else { 0 }) };
+        Ok(())
+    }
+
+    async fn session_isempty(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<bool, crate::loaded::sqlite::extension::types::SqliteError> {
+        let sess = self.lookup(&name)?;
+        let n = unsafe { crate::session_ffi::sqlite3session_isempty(sess) };
+        Ok(n != 0)
+    }
+
+    async fn session_changeset(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<Vec<u8>, crate::loaded::sqlite::extension::types::SqliteError> {
+        let sess = self.lookup(&name)?;
+        let mut n: std::os::raw::c_int = 0;
+        let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
+        let rc = unsafe { crate::session_ffi::sqlite3session_changeset(sess, &mut n, &mut p) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(provider_session_err(format!("sqlite3session_changeset returned {rc}")));
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
+        unsafe { libsqlite3_sys::sqlite3_free(p) };
+        Ok(bytes)
+    }
+
+    async fn session_patchset(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<Vec<u8>, crate::loaded::sqlite::extension::types::SqliteError> {
+        let sess = self.lookup(&name)?;
+        let mut n: std::os::raw::c_int = 0;
+        let mut p: *mut std::os::raw::c_void = std::ptr::null_mut();
+        let rc = unsafe { crate::session_ffi::sqlite3session_patchset(sess, &mut n, &mut p) };
+        if rc != libsqlite3_sys::SQLITE_OK {
+            return Err(provider_session_err(format!("sqlite3session_patchset returned {rc}")));
+        }
+        let bytes = unsafe { std::slice::from_raw_parts(p as *const u8, n as usize) }.to_vec();
+        unsafe { libsqlite3_sys::sqlite3_free(p) };
+        Ok(bytes)
+    }
+
+    async fn session_delete(
+        &mut self,
+        name: String,
+    ) -> std::result::Result<(), crate::loaded::sqlite::extension::types::SqliteError> {
+        let raw = self
+            .handles
+            .lock()
+            .remove(&name)
+            .ok_or_else(|| provider_session_err(format!("no session named {name:?}")))?;
+        unsafe {
+            crate::session_ffi::sqlite3session_delete(raw as *mut crate::session_ffi::sqlite3_session)
+        };
+        Ok(())
+    }
+
+    async fn session_list(&mut self) -> Vec<String> {
+        let mut names: Vec<String> = self.handles.lock().keys().cloned().collect();
+        names.sort();
+        names
+    }
+}
+
 async fn wasm_component_invoke(
     method: &str,
     payload: &[u8],
@@ -945,6 +1143,8 @@ async fn wasm_component_invoke(
         http_policy: None,
         dns_policy: None,
         cli: CliCapture::default(),
+        // Session is a resident-only surface (#220); empty slot here.
+        session_handles: Arc::new(Mutex::new(HashMap::new())),
     };
     let mut store = wasmtime::Store::new(engine, state);
     store
@@ -1012,8 +1212,13 @@ async fn resident_wasm_component_invoke(
         let imports_wal = imports_sqlite_wal_frames(component, engine);
         let imports_s3 = imports_sqlite_s3_base(component, engine);
         let imports_cli = imports_cli_stdout(component, engine) || imports_cli_state(component, engine);
+        // #220 full-port: the stateful `sqlite:extension/session` surface
+        // (session-cli), host-satisfied on the resident linker against this
+        // provider's own `spi_conn` + `session_handles`. Async → forces the
+        // async WASI linker.
+        let imports_session = imports_sqlite_session(component, engine);
         let mut linker: Linker<ProviderState> = Linker::new(engine);
-        if reentrant || imports_spi || imports_http || imports_dns || imports_wal || imports_s3 || imports_cli {
+        if reentrant || imports_spi || imports_http || imports_dns || imports_wal || imports_s3 || imports_cli || imports_session {
             wasmtime_wasi::p2::add_to_linker_async(&mut linker)
                 .map_err(|e| format!("wasi (async) linker: {e}"))?;
         } else {
@@ -1088,6 +1293,17 @@ async fn resident_wasm_component_invoke(
             )
             .map_err(|e| format!("resident sqlite:extension/cli-state linker: {e}"))?;
         }
+        if imports_session {
+            crate::loaded::sqlite::extension::session::add_to_linker::<_, ProviderSessionData>(
+                &mut linker,
+                |state: &mut ProviderState| ProviderSessionWrap {
+                    conn: &state.spi_conn,
+                    db_path: &state.spi_db_path,
+                    handles: &state.session_handles,
+                },
+            )
+            .map_err(|e| format!("resident sqlite:extension/session linker: {e}"))?;
+        }
         let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
         wasi.inherit_stdio();
         let state = ProviderState {
@@ -1111,6 +1327,8 @@ async fn resident_wasm_component_invoke(
             http_policy: None,
             dns_policy: None,
             cli: CliCapture::default(),
+            // #220 full-port: per-provider session registry (session-cli).
+            session_handles: Arc::new(Mutex::new(HashMap::new())),
         };
         let mut store = wasmtime::Store::new(engine, state);
         store
