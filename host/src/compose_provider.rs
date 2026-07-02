@@ -530,6 +530,26 @@ pub fn imports_sqlite_spi(component: &Component, engine: &Engine) -> bool {
         .any(|(name, _)| name.starts_with("sqlite:extension/spi"))
 }
 
+/// Task #220 (loader retirement): true if `component` imports any of the
+/// three stateful/reentrant interfaces that CANNOT be satisfied on the
+/// stateless resident provider linker and so genuinely require the bespoke
+/// `loaded::*` loader — `sqlite:extension/{session, authorizer, loader-bridge}`.
+/// These are tied to the full `LoadedState` host state (the 38-way session
+/// FFI over `session_handles`, the whole-world `loaded_authorizing` bindgen,
+/// and `loader_bridge` re-entering `host.load_extension_from_bytes`). Only the
+/// 3 meta/maintenance CLI tools (`session-cli`, `wal-archive`, `sqlink-meta-cli`)
+/// hit this; every data-extension tier runs provider-only. This gate makes the
+/// surviving bespoke path an EXPLICIT, narrow residual: a plain data extension
+/// reaching the bespoke loader (no `<ext>-provider.wasm` resolved) is treated as
+/// deprecated (warned), whereas a residual-tool import is the sanctioned path.
+pub fn needs_bespoke_residual(component: &Component, engine: &Engine) -> bool {
+    component.component_type().imports(engine).any(|(name, _)| {
+        name.starts_with("sqlite:extension/session")
+            || name.starts_with("sqlite:extension/authorizer")
+            || name.starts_with("sqlite:extension/loader-bridge")
+    })
+}
+
 /// Task #220: true if `component` imports `sqlite:extension/http` — e.g. the
 /// `http` extension. Like spi, the host satisfies this on the resident linker
 /// (`crate::loaded_minimal_http::sqlite::extension::http::add_to_linker`),

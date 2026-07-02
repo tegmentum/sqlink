@@ -9436,10 +9436,12 @@ impl Host {
         // vtab/hook/dotcmd tiers all dispatch through the provider with
         // cross-call store coherence (the retirement target). The bespoke
         // loader only sees plain extension components.
-        let is_provider = self
+        let resolved_component = self
             .component_for_digest(&bytes, &blake3::hash(&bytes).to_hex().to_string(), &hint)
-            .ok()
-            .map(|c| compose_provider::exports_endpoint(&c, &self.engine))
+            .ok();
+        let is_provider = resolved_component
+            .as_ref()
+            .map(|c| compose_provider::exports_endpoint(c, &self.engine))
             .unwrap_or(false);
         if is_provider {
             let provider = compose_provider::ProviderHandle::new_resident_wasm_component(
@@ -9469,6 +9471,28 @@ impl Host {
             };
             self.load_extension_as_provider(&ext_name, provider).await?;
             return Ok(ext_name);
+        }
+        // Task #220 (loader retirement): the bespoke `loaded::*` loader is being
+        // narrowed to a RESIDUAL for the stateful/reentrant meta-tools that
+        // import `sqlite:extension/{session,authorizer,loader-bridge}` — the
+        // interfaces tied to full `LoadedState` host state that the stateless
+        // resident provider can't satisfy (see `needs_bespoke_residual`). Those
+        // are the sanctioned bespoke path. A plain data extension reaching the
+        // bespoke loader (no `<ext>-provider.wasm` resolved) is DEPRECATED: warn
+        // so it gets provider-backed, but still load it so dev trees without
+        // staged provider artifacts keep working (no hard error).
+        let residual = resolved_component
+            .as_ref()
+            .map(|c| compose_provider::needs_bespoke_residual(c, &self.engine))
+            .unwrap_or(false);
+        if !residual {
+            tracing::warn!(
+                extension = %hint,
+                "loaded via the DEPRECATED bespoke loader (no <ext>-provider.wasm \
+                 resolved); the bespoke path is being retired to a narrow residual \
+                 for session/authorizer/loader-bridge tools — provider-back this \
+                 extension (see #220)."
+            );
         }
         self.load_extension_from_bytes(bytes, &hint, policy).await
     }
