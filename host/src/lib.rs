@@ -9114,6 +9114,9 @@ impl Host {
                 // provider importing `compose:dynlink/linker` (reentrant SPI)
                 // can re-enter the engine provider from its warm store.
                 Some(self.dynlink_bridge.clone()),
+                // Task #220: the cli's --db so an spi-importing ext's
+                // spi.execute hits the same database, not an isolated :memory:.
+                self.db_path(),
             )
             .map_err(|e| anyhow!("compile resident provider {}: {e}", resolved.display()))?;
             // The provider's own manifest names the extension; describe it
@@ -16292,6 +16295,9 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             // provider importing `compose:dynlink/linker` (reentrant SPI)
             // can re-enter the engine provider from its warm store.
             Some(self.host.dynlink_bridge.clone()),
+            // Task #220: the cli's --db so an spi-importing ext's spi.execute
+            // hits the same database, not an isolated :memory:.
+            self.host.db_path(),
         ) {
             Ok(p) => p,
             Err(e) => {

@@ -86,6 +86,11 @@ pub enum ProviderKind {
         /// tests that drive `Host` directly) — the linker then falls back
         /// to WASI-only, so a non-reentrant provider still instantiates.
         dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
+        /// Task #220: the cli's `--db` path, threaded so an spi-importing
+        /// extension's `spi.execute` sees the SAME database the cli /
+        /// `sqlite-runtime` provider use (not an isolated `:memory:`).
+        /// Empty string => `:memory:` (the loader's per-extension default).
+        spi_db_path: String,
     },
 }
 
@@ -135,6 +140,7 @@ impl ProviderHandle {
         engine: Engine,
         path: PathBuf,
         dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
+        spi_db_path: String,
     ) -> Result<Self, String> {
         let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
         let component = Component::from_binary(&engine, &bytes)
@@ -146,6 +152,7 @@ impl ProviderHandle {
                 path,
                 resident: Arc::new(AsyncMutex::new(None)),
                 dynlink_bridge,
+                spi_db_path,
             },
         })
     }
@@ -184,6 +191,7 @@ impl ProviderHandle {
                 component,
                 resident,
                 dynlink_bridge,
+                spi_db_path,
                 ..
             } => {
                 resident_wasm_component_invoke(
@@ -193,6 +201,7 @@ impl ProviderHandle {
                     component,
                     resident,
                     dynlink_bridge.as_ref(),
+                    spi_db_path,
                 )
                 .await
             }
@@ -865,6 +874,7 @@ async fn resident_wasm_component_invoke(
     component: &Component,
     resident: &Arc<AsyncMutex<Option<ResidentProvider>>>,
     dynlink_bridge: Option<&datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
+    spi_db_path: &str,
 ) -> Result<Vec<u8>, String> {
     let mut guard = resident.lock().await;
     if guard.is_none() {
@@ -926,12 +936,13 @@ async fn resident_wasm_component_invoke(
             } else {
                 None
             },
-            // Task #220: an isolated spi connection for spi-importing
-            // exts. First cut opens `:memory:` (empty db_path) lazily on
-            // first spi call — matches the loader's per-extension default;
-            // threading the cli's --db path here is the parity follow-up.
+            // Task #220: the spi connection for spi-importing exts, lazily
+            // opened by `provider_spi_ensure_open` on the first spi call.
+            // `spi_db_path` is the cli's `--db` (threaded from registration),
+            // so `spi.execute` sees the SAME database the cli uses; empty =>
+            // `:memory:` (the loader's per-extension default).
             spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
-            spi_db_path: String::new(),
+            spi_db_path: spi_db_path.to_string(),
         };
         let mut store = wasmtime::Store::new(engine, state);
         store
