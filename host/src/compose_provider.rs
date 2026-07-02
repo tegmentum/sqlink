@@ -91,6 +91,18 @@ pub enum ProviderKind {
         /// `sqlite-runtime` provider use (not an isolated `:memory:`).
         /// Empty string => `:memory:` (the loader's per-extension default).
         spi_db_path: String,
+        /// #220 full-port: a cheap clone of the loader `Host` (an Arc-based
+        /// handle), threaded so a resident provider wrapping a
+        /// `sqlite:extension/loader-bridge`-importing ext (`sqlink-meta-cli`)
+        /// can re-enter the loader (`load_extension_from_bytes` / list /
+        /// digest) — parity with the bespoke `LoadedState.host_ref`. `None`
+        /// off the real `.load` path (tests / non-loader-bridge exts); the
+        /// loader-bridge Host then reports "not wired". Loading a DIFFERENT
+        /// extension touches a different resident store, so this re-entry
+        /// does not deadlock the current dispatch (only a pathological
+        /// self-load would); the resulting Host↔provider Arc cycle is benign
+        /// (both are process-lived).
+        loader_host: Option<crate::Host>,
     },
 }
 
@@ -141,6 +153,7 @@ impl ProviderHandle {
         path: PathBuf,
         dynlink_bridge: Option<datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
         spi_db_path: String,
+        loader_host: Option<crate::Host>,
     ) -> Result<Self, String> {
         let bytes = std::fs::read(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
         let component = Component::from_binary(&engine, &bytes)
@@ -153,6 +166,7 @@ impl ProviderHandle {
                 resident: Arc::new(AsyncMutex::new(None)),
                 dynlink_bridge,
                 spi_db_path,
+                loader_host,
             },
         })
     }
@@ -192,6 +206,7 @@ impl ProviderHandle {
                 resident,
                 dynlink_bridge,
                 spi_db_path,
+                loader_host,
                 ..
             } => {
                 resident_wasm_component_invoke(
@@ -202,6 +217,7 @@ impl ProviderHandle {
                     resident,
                     dynlink_bridge.as_ref(),
                     spi_db_path,
+                    loader_host.as_ref(),
                 )
                 .await
             }
@@ -468,6 +484,14 @@ pub struct ProviderState {
     /// `session_handles` but isolated per resident provider. Retires the
     /// `loaded::*` session residual for the provider path.
     session_handles: Arc<Mutex<HashMap<String, usize>>>,
+    /// #220 full-port: a cheap `Host` handle for the `sqlite:extension/
+    /// loader-bridge` surface (`sqlink-meta-cli`), present when the resident
+    /// provider wraps a loader-bridge-importing ext AND the provider was
+    /// created on the real `.load` path. `None` => loader-bridge calls report
+    /// "not wired" (the provider still instantiates). Lets the ext re-enter
+    /// the loader (load/list/digest) provider-only — parity with the bespoke
+    /// `LoadedState.host_ref`. See the enum field docs re: re-entrancy safety.
+    loader_host: Option<crate::Host>,
 }
 
 impl wasmtime_wasi::WasiView for ProviderState {
@@ -610,6 +634,17 @@ pub fn imports_sqlite_session(component: &Component, engine: &Engine) -> bool {
         .component_type()
         .imports(engine)
         .any(|(name, _)| name.starts_with("sqlite:extension/session"))
+}
+
+/// #220 full-port: true if `component` imports `sqlite:extension/loader-bridge`
+/// — the loader-introspection ext (`sqlink-meta-cli`). Host-satisfied on the
+/// resident linker via the threaded `Host` handle (parity with the bespoke
+/// loader's `LoadedState.host_ref`).
+pub fn imports_sqlite_loader_bridge(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/loader-bridge"))
 }
 
 /// Task #220: true if `component` imports `sqlite:extension/cli-state` — a
@@ -1118,6 +1153,23 @@ impl<'a> crate::loaded::sqlite::extension::session::Host for ProviderSessionWrap
     }
 }
 
+/// #220 full-port: `HasData` marker for wiring `sqlite:extension/loader-bridge`
+/// onto a resident `ProviderState`'s linker.
+pub struct ProviderLoaderBridgeData;
+impl wasmtime::component::HasData for ProviderLoaderBridgeData {
+    type Data<'a> = ProviderLoaderBridgeWrap<'a>;
+}
+
+/// #220 full-port: the per-call view the generated `sqlite:extension/
+/// loader-bridge` bindings drive. Borrows the resident provider's optional
+/// `Host` handle; the `loader_bridge::Host` impl lives in `lib.rs` (where the
+/// `Host` internals it forwards to — `load_extension_from_bytes` / `components`
+/// — are reachable), and reports "not wired" when `host` is `None` (off the
+/// real `.load` path).
+pub struct ProviderLoaderBridgeWrap<'a> {
+    pub(crate) host: Option<&'a crate::Host>,
+}
+
 async fn wasm_component_invoke(
     method: &str,
     payload: &[u8],
@@ -1145,6 +1197,8 @@ async fn wasm_component_invoke(
         cli: CliCapture::default(),
         // Session is a resident-only surface (#220); empty slot here.
         session_handles: Arc::new(Mutex::new(HashMap::new())),
+        // loader-bridge is a resident-only surface (#220); none here.
+        loader_host: None,
     };
     let mut store = wasmtime::Store::new(engine, state);
     store
@@ -1178,6 +1232,7 @@ async fn resident_wasm_component_invoke(
     resident: &Arc<AsyncMutex<Option<ResidentProvider>>>,
     dynlink_bridge: Option<&datalink_dynlink::AsyncDynLinkBridge<HostWrapBackend>>,
     spi_db_path: &str,
+    loader_host: Option<&crate::Host>,
 ) -> Result<Vec<u8>, String> {
     let mut guard = resident.lock().await;
     if guard.is_none() {
@@ -1217,8 +1272,12 @@ async fn resident_wasm_component_invoke(
         // provider's own `spi_conn` + `session_handles`. Async → forces the
         // async WASI linker.
         let imports_session = imports_sqlite_session(component, engine);
+        // #220 full-port: the loader-bridge surface (sqlink-meta-cli) lets an
+        // ext re-enter the loader. Host-satisfied on the resident linker;
+        // async → forces the async WASI linker.
+        let imports_loader_bridge = imports_sqlite_loader_bridge(component, engine);
         let mut linker: Linker<ProviderState> = Linker::new(engine);
-        if reentrant || imports_spi || imports_http || imports_dns || imports_wal || imports_s3 || imports_cli || imports_session {
+        if reentrant || imports_spi || imports_http || imports_dns || imports_wal || imports_s3 || imports_cli || imports_session || imports_loader_bridge {
             wasmtime_wasi::p2::add_to_linker_async(&mut linker)
                 .map_err(|e| format!("wasi (async) linker: {e}"))?;
         } else {
@@ -1304,6 +1363,15 @@ async fn resident_wasm_component_invoke(
             )
             .map_err(|e| format!("resident sqlite:extension/session linker: {e}"))?;
         }
+        if imports_loader_bridge {
+            crate::loaded_dotcmd_aware::sqlite::extension::loader_bridge::add_to_linker::<
+                _,
+                ProviderLoaderBridgeData,
+            >(&mut linker, |state: &mut ProviderState| ProviderLoaderBridgeWrap {
+                host: state.loader_host.as_ref(),
+            })
+            .map_err(|e| format!("resident sqlite:extension/loader-bridge linker: {e}"))?;
+        }
         let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
         wasi.inherit_stdio();
         let state = ProviderState {
@@ -1329,6 +1397,9 @@ async fn resident_wasm_component_invoke(
             cli: CliCapture::default(),
             // #220 full-port: per-provider session registry (session-cli).
             session_handles: Arc::new(Mutex::new(HashMap::new())),
+            // #220 full-port: loader `Host` handle for loader-bridge
+            // (sqlink-meta-cli); None off the real .load path.
+            loader_host: loader_host.cloned(),
         };
         let mut store = wasmtime::Store::new(engine, state);
         store

@@ -7378,6 +7378,161 @@ impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host for LoadedState
     }
 }
 
+/// #220 full-port: the `sqlite:extension/loader-bridge` surface for a RESIDENT
+/// compose provider (`sqlink-meta-cli` run provider-only). Mirrors the bespoke
+/// `LoadedState` impl above but forwards through the threaded `Host` handle
+/// (`ProviderLoaderBridgeWrap.host`) instead of `self.host_ref`. Lives here so
+/// it can reach `Host`'s crate-private internals (`components`,
+/// `load_extension_from_bytes`). `apply_prefix_pin` is a bespoke-loader
+/// mechanism (it re-registers host-side scalar trampolines on the shared spi
+/// conn) that has no analog on the provider dispatch path, so it reports a
+/// clear error rather than silently succeeding — not a regression, the
+/// provider path never registers those trampolines.
+impl loaded_dotcmd_aware::sqlite::extension::loader_bridge::Host
+    for crate::compose_provider::ProviderLoaderBridgeWrap<'_>
+{
+    async fn load_extension_from_bytes(
+        &mut self,
+        name_hint: String,
+        bytes: Vec<u8>,
+        _extra_grants: Vec<String>,
+    ) -> std::result::Result<
+        loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest,
+        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
+    > {
+        let Some(host) = self.host else {
+            return Err(
+                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                    code: 1,
+                    message: "loader-bridge: host not wired on this provider".into(),
+                },
+            );
+        };
+        let policy = Policy::default();
+        match host
+            .load_extension_from_bytes(bytes, &name_hint, policy)
+            .await
+        {
+            Ok(name) => {
+                let components = host.components.read();
+                let Some(ext) = components.get(&name) else {
+                    return Err(
+                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                            code: 1,
+                            message: format!("loader-bridge: {name} vanished after load"),
+                        },
+                    );
+                };
+                let dot_commands = ext
+                    .dot_commands
+                    .iter()
+                    .map(|d| {
+                        loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedDotCommand {
+                            id: d.id,
+                            name: d.name.clone(),
+                            summary: d.summary.clone(),
+                            usage: d.usage.clone(),
+                            help: d.help.clone(),
+                            requires_write: d.requires_write,
+                        }
+                    })
+                    .collect();
+                Ok(
+                    loaded_dotcmd_aware::sqlite::extension::loader_bridge::BridgedManifest {
+                        name: ext.name.clone(),
+                        version: ext.version.clone(),
+                        dot_commands,
+                    },
+                )
+            }
+            Err(e) => Err(
+                loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                    code: 1,
+                    message: e.to_string(),
+                },
+            ),
+        }
+    }
+
+    async fn extension_digest(&mut self, name: String) -> String {
+        let Some(host) = self.host else {
+            return String::new();
+        };
+        let components = host.components.read();
+        components
+            .get(&name)
+            .map(|e| e.digest.clone())
+            .unwrap_or_default()
+    }
+
+    async fn list_loaded_extensions(
+        &mut self,
+    ) -> Vec<loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension> {
+        let Some(host) = self.host else {
+            return Vec::new();
+        };
+        let components = host.components.read();
+        let mut out: Vec<_> = components
+            .values()
+            .map(
+                |e| loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoadedExtension {
+                    name: e.name.clone(),
+                    digest: e.digest.clone(),
+                },
+            )
+            .collect();
+        out.sort_by(|a, b| a.name.cmp(&b.name));
+        out
+    }
+
+    async fn host_target_triple(&mut self) -> String {
+        let arch = std::env::consts::ARCH;
+        let os = std::env::consts::OS;
+        let family = std::env::consts::FAMILY;
+        match os {
+            "macos" => format!("{arch}-apple-darwin"),
+            "linux" => format!("{arch}-unknown-linux-gnu"),
+            "windows" => format!("{arch}-pc-windows-msvc"),
+            other => format!("{arch}-unknown-{other}-{family}"),
+        }
+    }
+
+    async fn env_var(&mut self, name: String) -> Option<String> {
+        if !ENV_VAR_ALLOWLIST.contains(&name.as_str()) {
+            tracing::warn!(
+                requested = %name,
+                allowed = ?ENV_VAR_ALLOWLIST,
+                "loader-bridge.env-var: extension requested a non-allowlisted host env var; returning None"
+            );
+            return None;
+        }
+        std::env::var(&name).ok().filter(|v| !v.is_empty())
+    }
+
+    async fn apply_prefix_pin(
+        &mut self,
+        _function_name: String,
+        _n_args: i32,
+    ) -> std::result::Result<
+        (),
+        loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError,
+    > {
+        // apply-prefix-pin re-registers a bare-name scalar trampoline on the
+        // bespoke loader's SHARED spi connection. The compose:dynlink provider
+        // dispatch path does not use host-registered scalar trampolines (scalars
+        // dispatch through the provider endpoint), so prefix-pinning has no
+        // analog here. Report clearly rather than pretend success.
+        Err(
+            loaded_dotcmd_aware::sqlite::extension::loader_bridge::LoaderError {
+                code: 1,
+                message: "loader-bridge.apply-prefix-pin is not applicable on the \
+                          compose:dynlink provider dispatch path (bespoke-loader only)"
+                    .into(),
+            },
+        )
+    }
+}
+
 /// Allowlist of host env vars an Spi-granted extension may read via
 /// `loader-bridge.env-var`. Adding here is a policy change  any new
 /// entry is readable by every extension with Spi.
@@ -9454,6 +9609,9 @@ impl Host {
                 // Task #220: the cli's --db so an spi-importing ext's
                 // spi.execute hits the same database, not an isolated :memory:.
                 self.db_path(),
+                // #220 full-port: thread the loader Host so a loader-bridge
+                // ext (sqlink-meta-cli) can re-enter the loader provider-only.
+                Some(self.clone()),
             )
             .map_err(|e| anyhow!("compile resident provider {}: {e}", resolved.display()))?;
             // The provider's own manifest names the extension; describe it
@@ -16657,6 +16815,8 @@ impl<'a> bindings::sqlink::wasm::extension_loader::Host for HostWrap<'a> {
             // Task #220: the cli's --db so an spi-importing ext's spi.execute
             // hits the same database, not an isolated :memory:.
             self.host.db_path(),
+            // #220 full-port: thread the loader Host for loader-bridge exts.
+            Some(self.host.clone()),
         ) {
             Ok(p) => p,
             Err(e) => {
