@@ -1,23 +1,31 @@
-# Orchestration substrate gaps (blocks Tier 1 cutover)
+# Orchestration substrate gaps (Tier 1 cutover)
 
 Tier 1 of [`PLAN-orchestration-integration.md`](../plans/PLAN-orchestration-integration.md)
 calls for `composectl emit` to run alongside `wac compose` /
 `wac plug` as a parallel cross-check, then retire wac after a
-soak. This document records the concrete substrate gaps surfaced
-when running that cross-check on real sqlink inputs at the
-current upstream tip (`~/git/webassembly-component-orchestration`,
-non-tegmentum). The gaps land upstream, not in sqlink, but until
-they're closed sqlink can't flip from `wac compose` to
-`composectl emit` without regressing functionality.
+soak. This document records the substrate gaps that originally
+blocked that cross-check on real sqlink inputs and links to the
+upstream fixes that closed them.
 
-The plan files in `composition-plans/` are written against the
-declarative spec the substrate would need to express — they ride
-ahead of the upstream work so we can swap in `composectl emit`
-the moment the gaps close.
+**Status: all three gaps resolved upstream** — see the fix
+references below each gap. The parallel cross-check is now wired
+into `scripts/build-composed-runtime.sh` and
+`scripts/build-composed-runtime-single-memory.sh` via
+`SQLINK_COMPOSE_TOOL={wac,composectl,both}` (default: `wac`).
+Setting `both` runs both emitters and diffs their WIT surfaces.
+
+The plan files in `composition-plans/` now carry
+`explicit_exports` (Gap 1's schema hook) so they emit the same
+outer-world exports as the `wac compose` recipe.
 
 ## Gap 1 — `composectl emit` cannot re-export non-root component instances
 
-**Hits A1 (sqlink composed runtime).** Blocks cutover.
+**Hits A1 (sqlink composed runtime).** **RESOLVED upstream** in
+webassembly-component-orchestration `a7a5a809`
+(`feat(sys:compose): extend PlanV1 schema with explicit-exports`)
++ `2e3ee85f` (`feat(compose-core/emit): re-export non-root
+instances via wac-graph library`). Plans that carry an
+`explicit_exports` list take the wac-graph library emit path.
 
 The composed runtime currently exports three instances:
 
@@ -82,7 +90,13 @@ composer backend (e.g. wac-graph as a library).
 
 ## Gap 2 — `composectl emit` doesn't unify versioned WASI imports across components
 
-**Hits A1 (sqlink composed runtime).** Blocks cutover.
+**Hits A1 (sqlink composed runtime).** **RESOLVED upstream**
+alongside Gap 1 (`2e3ee85f`): the wac-graph library emit path
+runs `TypeAggregator` before the outer world is encoded, which
+merges semver-compatible imports to the highest common name.
+Plans without `explicit_exports` still take the wasm-compose
+wrapper fallback for now; that path retains the duplication and
+is intentionally unused by sqlink.
 
 sqlite-lib is compiled against WASI 0.2.4. sqlite-cli is compiled
 against WASI 0.2.6. They're hosted by the same embedder; the
@@ -117,8 +131,14 @@ alone can't do it.
 
 ## Gap 3 — 100MB blob-store ceiling blocks postgis composition
 
-**Hits A2 (postgis + mobilitydb shim composition).** Blocks
-cutover.
+**Hits A2 (postgis + mobilitydb shim composition).** **RESOLVED
+upstream** in `58ce66f0`
+(`feat(composectl): add --max-blob-size flag +
+COMPOSECTL_MAX_BLOB_SIZE env`). Default raised to 1 GiB for the
+`composectl` build-tool; DOS hedge remains on the
+`compose-orchestrator-wasm` server tier. Verified locally:
+`composectl blob put ~/git/postgis-wasm/postgis-composed.wasm`
+(116 MiB) succeeds cleanly.
 
 `composectl blob put postgis-composed.wasm`:
 
@@ -200,28 +220,28 @@ diff <(wasm-tools component wit composectl-runtime.wasm | grep -E "^  (import|ex
 The diff reproduces gap 1 (missing re-exports) and gap 2
 (duplicate 0.2.4 + 0.2.6 imports) in a few lines.
 
-## Resolution path (out of sqlink's scope)
+## Resolution — done
 
-Per task #486 instructions ("if you hit a substrate blocker,
-STOP and report"), we land:
+All three gaps closed upstream (see per-gap references above).
+On the sqlink side:
 
-- The plan-file declaratives that the substrate would need to
-  emit from (so the work is ready the moment the gaps close).
-- The build-script parallel cross-check, currently no-op'd with a
-  comment pointing at this doc.
-- This document, so a future cutover knows exactly what upstream
-  capabilities to wait on.
+1. `composition-plans/sqlink-runtime.plan.json` now carries
+   `explicit_exports` for `sqlite:extension/types@1.0.0` +
+   `sqlink:wasm/dispatch-bridge@0.1.0` from the sqlite-lib
+   sub-component.
+2. `scripts/build-composed-runtime.sh` and
+   `scripts/build-composed-runtime-single-memory.sh` gained a
+   `SQLINK_COMPOSE_TOOL=composectl|both|wac` switch. In
+   `both` mode the two artifacts are produced and their WIT
+   surfaces diffed. In `composectl` mode the composectl artifact
+   is promoted to the canonical output path.
+3. The legacy `ORCHESTRATION_CROSS_CHECK=1` env-var is retained
+   as an alias for `SQLINK_COMPOSE_TOOL=both`.
 
-Sqlink does NOT attempt to fix upstream (per the task standing
-constraints) and does NOT carry a patched fork. When upstream
-gains explicit alias-export support + version unification + a
-configurable blob-size cap, we revisit:
+Next steps (per PLAN-orchestration-integration.md):
 
-1. Flip the build script to invoke `composectl emit` in parallel
-   with `wac compose`.
-2. Verify the two artifacts have identical world shapes via
-   `wasm-tools component wit | diff`.
-3. After one release of agreement, drop the wac path.
-
-The plan files in `composition-plans/` are the load-bearing
-deliverable that survives the wait.
+- One release of `SQLINK_COMPOSE_TOOL=both` in CI; then drop
+  wac.
+- Migrate the dep model from sibling-checkout to the
+  full-Cargo-path-dep or vendored-submodule variant once CI
+  hermeticity demands it.

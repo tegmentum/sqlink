@@ -271,9 +271,12 @@ follows everything (largest behavior change).
 
 ### Tier 1 (direct wac replacements)
 
-Status: **PLAN FILES SHIPPED, EMIT-SIDE CUTOVER BLOCKED ON
-UPSTREAM SUBSTRATE GAPS.** Per the standing constraint, we
-surface gaps rather than patch upstream.
+Status: **PLAN FILES SHIPPED, EMIT-SIDE CUTOVER UNBLOCKED.**
+All three upstream substrate gaps are resolved as of
+webassembly-component-orchestration `a7a5a809`, `2e3ee85f`, and
+`58ce66f0`. Build scripts wire in `composectl emit` behind
+`SQLINK_COMPOSE_TOOL={wac,composectl,both}` (default `wac` for
+safety; flip to `both` for one release soak, then `composectl`).
 
 - **1.1.a sqlink composed-runtime plan — DONE (file).**
   `composition-plans/sqlink-runtime.plan.json` declares

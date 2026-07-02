@@ -14,20 +14,24 @@ verifiable plan digest.
 - `sqlink-runtime.plan.json` — replaces
   `composition-cli-sqlite-lib.wac` (Tier 1 A1). Composes
   `sqlite-cli` + `sqlite-lib` into the runnable composed runtime
-  artifact (`cli_with_sqlite.component.wasm`). **Currently
-  blocked by substrate gaps; see
-  [docs/notes/orchestration-substrate-gaps.md](../docs/notes/orchestration-substrate-gaps.md).**
+  artifact (`cli_with_sqlite.component.wasm`). Carries
+  `explicit_exports` for `sqlite:extension/types@1.0.0` +
+  `sqlink:wasm/dispatch-bridge@0.1.0` (the wac recipe's
+  load-bearing non-root re-exports).
 - `postgis-shim.plan.json` — replaces the `wac plug` recipe in
   `postgis-sqlink-bridge` (Tier 1 A2). Composes
   `postgis-sqlink-bridge` + `postgis-composed` into
-  `postgis-sqlink-loadable.wasm`. **Currently blocked by the 100MB
-  blob-store limit (postgis-composed is 112MB); see
-  substrate-gaps doc.**
+  `postgis-sqlink-loadable.wasm`.
 - `mobilitydb-shim.plan.json` — replaces the `wac plug` recipe in
   `mobilitydb-sqlink-bridge` (Tier 1 A2). Composes
-  `mobilitydb-sqlink-bridge` + `mdb-temporal-wasm` +
-  `postgis-composed` into `mobilitydb-sqlink-loadable.wasm`.
-  **Blocked by the same blob-store limit.**
+  `mobilitydb-sqlink-bridge` + `mdb-temporal-wasm` into
+  `mobilitydb-sqlink-loadable.wasm`.
+
+Upstream substrate gaps that previously blocked emit-side
+cutover are all closed (see
+[docs/notes/orchestration-substrate-gaps.md](../docs/notes/orchestration-substrate-gaps.md)).
+The build scripts now honour `SQLINK_COMPOSE_TOOL=composectl|both|wac`
+to select the emitter; `both` runs the parallel cross-check.
 
 ## Lifecycle (parallel cross-check pattern, per
 [PLAN-orchestration-integration.md](../docs/plans/PLAN-orchestration-integration.md))
