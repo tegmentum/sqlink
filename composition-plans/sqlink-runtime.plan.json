@@ -80,9 +80,9 @@
   "bindings": [
     {
       "consumer_id": "sqlite-cli",
-      "import_name": "sqlite:extension/spi@0.1.0",
+      "import_name": "sqlite:extension/spi@1.0.0",
       "provider_id": "sqlite-lib",
-      "export_name": "sqlite:extension/spi@0.1.0"
+      "export_name": "sqlite:extension/spi@1.0.0"
     }
   ],
   "secrets": [],
@@ -90,5 +90,15 @@
     "determinism": "relaxed",
     "capabilities": [],
     "limits": {}
-  }
+  },
+  "explicit_exports": [
+    {
+      "source_instance": "sqlite-lib",
+      "interface_name": "sqlite:extension/types@1.0.0"
+    },
+    {
+      "source_instance": "sqlite-lib",
+      "interface_name": "sqlink:wasm/dispatch-bridge@0.1.0"
+    }
+  ]
 }
