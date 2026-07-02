@@ -10933,7 +10933,7 @@ impl Host {
         // short read lock so the async dispatch below doesn't hold it.
         let candidates: Vec<(String, u64)> = {
             let components = self.components.read();
-            components
+            let mut cands: Vec<(String, u64)> = components
                 .values()
                 .filter_map(|ext| {
                     ext.scalar_functions
@@ -10941,7 +10941,24 @@ impl Host {
                         .find(|f| f.name == PARSER_ENTRY_FN)
                         .map(|f| (ext.name.clone(), f.id))
                 })
-                .collect()
+                .collect();
+            // #220: provider-backed extensions live in `provider_manifests`,
+            // NOT `self.components` (that's the bespoke `register_component`
+            // path). Snapshot them too so a provider-backed parser extension's
+            // `__sqlink_parse` entrypoint fires — `dispatch_scalar` already
+            // routes provider-backed exts through the resident provider by
+            // (ext-name, func-id).
+            let manifests = self.provider_manifests.read();
+            for (ext_name, m) in manifests.iter() {
+                if let Some((_, id, _)) = m
+                    .scalar_specs
+                    .iter()
+                    .find(|(name, _, _)| name == PARSER_ENTRY_FN)
+                {
+                    cands.push((ext_name.clone(), *id));
+                }
+            }
+            cands
         };
         for (ext_name, func_id) in candidates {
             let args = vec![SqlValue::Text(query.to_string())];
