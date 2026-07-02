@@ -8145,6 +8145,12 @@ impl Host {
     pub fn new() -> Result<Self> {
         let mut config = Config::new();
         config.wasm_component_model(true);
+        // Enable wasm exception-handling (CGAL-in-sfcgal-wasm relies on
+        // C++ throws for invariant checks in Approx_offset_base_2 etc.).
+        // Guest-side EH still needs a wasi-sdk audit before throws unwind
+        // through static SFCGAL library frames, but enabling on the host
+        // side is a prerequisite. See #692.
+        config.wasm_exceptions(true);
         config.async_support(true);
         // Enables the concurrent canonical ABI used by the reactor's
         // bindgen (`imports/exports: { default: async | store }`) for
@@ -16660,6 +16666,7 @@ mod contract_guard_tests {
     fn engine() -> Engine {
         let mut cfg = Config::new();
         cfg.wasm_component_model(true);
+        cfg.wasm_exceptions(true);
         Engine::new(&cfg).expect("engine")
     }
 
