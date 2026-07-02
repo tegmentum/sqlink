@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Phase 1 (#227): build a compose:dynlink resident provider (<ext>-provider.wasm)
+# for every registry extension. Single-tier -> full provider (0 leftover imports);
+# multi-tier -> flagged (one-tier-per-artifact limit). Runs from the main tree
+# (which has the generated source a fresh worktree lacks).
+set -uo pipefail
+R=/Users/zacharywhitley/git/sqlink
+PROVSRC=/Users/zacharywhitley/git/woco-sqlite-ext-endpoint/sqlite-extension-endpoint/provider
+ROLLOUT="${PROVIDER_OUT:-$HOME/.cache/sqlink/provider-rollout}"
+mkdir -p "$ROLLOUT" /tmp/p1-shapes
+LOG="$ROLLOUT/rollout.log"; : > "$LOG"
+
+echo "building 7 provider shapes..." | tee -a "$LOG"
+for s in scalar aggregate collation vtab vtab-mut hooks dotcmd; do
+  ( cd "$PROVSRC" && cargo build --release --target wasm32-wasip2 --no-default-features --features "$s" >/dev/null 2>&1 \
+    && cp target/wasm32-wasip2/release/sqlite_extension_endpoint.wasm "/tmp/p1-shapes/$s.wasm" ) \
+    && echo "  shape $s ok" >>"$LOG" || echo "  shape $s FAIL" >>"$LOG"
+done
+
+iface_to_shape() {
+  case "$1" in
+    scalar-function) echo scalar;; aggregate-function) echo aggregate;;
+    collation) echo collation;; vtab|module) echo vtab;;
+    commit-hook|update-hook|rollback-hook) echo hooks;; dotcmd) echo dotcmd;;
+    *) echo "";; esac
+}
+
+NAMES=$(python3 -c "import json; d=json.load(open('$R/registry/index.json')); print('\n'.join(e['name'] for e in d['extensions'] if e.get('checksum','') not in ('sha256:builtin','sha256:unbuilt')))")
+total=$(echo "$NAMES" | grep -c .)
+echo "extensions to roll out: $total" | tee -a "$LOG"
+
+ok=0; multi=0; plugfail=0; buildfail=0; notier=0; i=0
+for name in $NAMES; do
+  i=$((i+1)); u=$(echo "$name" | tr - _)
+  extdir="$R/extensions/$name"
+  [ -d "$extdir" ] || { echo "[$i/$total] SKIP $name (no dir)" >>"$LOG"; continue; }
+  ( cd "$extdir" && timeout 300 cargo component build --release --target wasm32-wasip2 >/dev/null 2>&1 )
+  comp="$R/target/wasm32-wasip2/release/${u}_extension.wasm"
+  [ -f "$comp" ] || comp="$R/target/wasm32-wasip2/release/${u}_extension.component.wasm"
+  [ -f "$comp" ] || comp="$extdir/target/wasm32-wasip2/release/${u}_extension.wasm"
+  if [ ! -f "$comp" ]; then echo "[$i/$total] BUILDFAIL $name" >>"$LOG"; buildfail=$((buildfail+1)); continue; fi
+  ifaces=$(wasm-tools component wit "$comp" 2>/dev/null | grep -oE 'sqlite:extension/[a-z-]+' | sed 's#.*/##' | sort -u)
+  # shapes are hierarchical (each supersets scalar); pick the SUPERSET shape by precedence.
+  shape=""
+  echo "$ifaces" | grep -qx vtab-update && shape=vtab-mut
+  [ -z "$shape" ] && echo "$ifaces" | grep -qx vtab && shape=vtab
+  [ -z "$shape" ] && echo "$ifaces" | grep -qx dot-command && shape=dotcmd
+  [ -z "$shape" ] && echo "$ifaces" | grep -qE '^(authorizer|update-hook|commit-hook|wal-hook)$' && shape=hooks
+  [ -z "$shape" ] && echo "$ifaces" | grep -qx aggregate-function && shape=aggregate
+  [ -z "$shape" ] && echo "$ifaces" | grep -qx collation && shape=collation
+  [ -z "$shape" ] && echo "$ifaces" | grep -qx scalar-function && shape=scalar
+  if [ -z "$shape" ]; then echo "[$i/$total] NOTIER $name (ifaces: $(echo $ifaces))" >>"$LOG"; notier=$((notier+1)); continue; fi
+  wac plug --plug "$comp" "/tmp/p1-shapes/$shape.wasm" -o "$ROLLOUT/$name-provider.wasm" >/dev/null 2>&1
+  left=$(wasm-tools component wit "$ROLLOUT/$name-provider.wasm" 2>/dev/null | grep -E '^  import sqlite:extension/' | grep -vE 'types|policy|cli-' | wc -l | tr -d ' ')
+  if [ -f "$ROLLOUT/$name-provider.wasm" ] && [ "${left:-1}" = "0" ]; then
+    echo "[$i/$total] OK $name ($shape)" >>"$LOG"; ok=$((ok+1))
+  else
+    echo "[$i/$total] PLUGFAIL $name (shape=$shape leftover=${left:-?})" >>"$LOG"; plugfail=$((plugfail+1))
+  fi
+done
+echo "=== DONE: OK=$ok MULTITIER=$multi PLUGFAIL=$plugfail BUILDFAIL=$buildfail NOTIER=$notier of $total ===" | tee -a "$LOG"
