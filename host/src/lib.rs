@@ -2291,6 +2291,122 @@ fn check_http_policy(
 /// Empty markers for the type-only imports the minimal world declares.
 impl loaded::sqlite::extension::types::Host for LoadedState {}
 impl loaded::sqlite::extension::policy::Host for LoadedState {}
+/// Task #220: the http host surface for the compose:dynlink resident provider
+/// (`compose_provider::ProviderState`), parameterized by policy. Same policy
+/// gate + reqwest/http-resident dispatch as the bespoke loader's
+/// `LoadedState` impl below; the only change is the policy comes in as a param
+/// instead of `self.http_policy`. (Transitional: `LoadedState`'s impl still
+/// carries its own copy — fold it onto this fn when the `loaded::*` path is
+/// retired, to avoid touching the working loader in this additive change.)
+pub(crate) async fn net_http_handle(
+    http_policy: Option<&HttpPolicy>,
+    req: loaded::sqlite::extension::http::Request,
+) -> std::result::Result<
+    loaded::sqlite::extension::http::Response,
+    loaded::sqlite::extension::http::HttpError,
+> {
+    use loaded::sqlite::extension::http::{HttpError, Method, Scheme};
+    let scheme_str = match req.scheme.unwrap_or(Scheme::Https) {
+        Scheme::Http => "http",
+        Scheme::Https => "https",
+        Scheme::Other(s) => return Err(HttpError::InvalidUrl(format!("unsupported scheme {s}"))),
+    };
+    let authority = req
+        .authority
+        .ok_or_else(|| HttpError::InvalidUrl("missing authority".to_string()))?;
+    let path_q = req.path_with_query.unwrap_or_else(|| "/".to_string());
+    let url = format!("{scheme_str}://{authority}{path_q}");
+
+    let method = match req.method {
+        Method::Get => reqwest::Method::GET,
+        Method::Head => reqwest::Method::HEAD,
+        Method::Post => reqwest::Method::POST,
+        Method::Put => reqwest::Method::PUT,
+        Method::Delete => reqwest::Method::DELETE,
+        Method::Connect => reqwest::Method::CONNECT,
+        Method::Options => reqwest::Method::OPTIONS,
+        Method::Trace => reqwest::Method::TRACE,
+        Method::Patch => reqwest::Method::PATCH,
+        Method::Other(s) => reqwest::Method::from_bytes(s.as_bytes())
+            .map_err(|e| HttpError::Other(e.to_string()))?,
+    };
+
+    // Policy gate stays HOST-SIDE, BEFORE any dispatch (native or resident).
+    check_http_policy(http_policy, &authority, method.as_str())?;
+
+    #[cfg(feature = "native-http")]
+    {
+        let client = reqwest::blocking::Client::builder()
+            .timeout(
+                req.timeout_ms
+                    .map(|ms| std::time::Duration::from_millis(ms as u64))
+                    .unwrap_or(std::time::Duration::from_secs(30)),
+            )
+            .build()
+            .map_err(|e| HttpError::Other(e.to_string()))?;
+
+        let mut builder = client.request(method, &url);
+        for (k, v) in &req.headers {
+            builder = builder.header(k, v.as_slice());
+        }
+        if let Some(body) = req.body {
+            builder = builder.body(body);
+        }
+        let resp = match builder.send() {
+            Ok(r) => r,
+            Err(e) => {
+                let msg = e.to_string();
+                if e.is_timeout() {
+                    return Err(HttpError::TimedOut);
+                }
+                if e.is_connect() {
+                    return Err(HttpError::ConnectionError(msg));
+                }
+                return Err(HttpError::Other(msg));
+            }
+        };
+        let status = resp.status().as_u16();
+        let headers: Vec<(String, Vec<u8>)> = resp
+            .headers()
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.as_bytes().to_vec()))
+            .collect();
+        let body = resp
+            .bytes()
+            .map_err(|e| HttpError::Other(e.to_string()))?
+            .to_vec();
+        Ok(loaded::sqlite::extension::http::Response {
+            status,
+            headers,
+            body,
+        })
+    }
+    #[cfg(not(feature = "native-http"))]
+    {
+        let _ = &method; // used only for the policy check above.
+        crate::http_resident::request(
+            method.as_str().to_string(),
+            url,
+            req.headers,
+            req.body,
+            req.timeout_ms,
+        )
+        .await
+    }
+}
+
+impl loaded::sqlite::extension::http::Host for crate::compose_provider::ProviderState {
+    async fn handle(
+        &mut self,
+        req: loaded::sqlite::extension::http::Request,
+    ) -> std::result::Result<
+        loaded::sqlite::extension::http::Response,
+        loaded::sqlite::extension::http::HttpError,
+    > {
+        net_http_handle(self.http_policy.as_ref(), req).await
+    }
+}
+
 impl loaded::sqlite::extension::http::Host for LoadedState {
     async fn handle(
         &mut self,
@@ -2413,6 +2529,110 @@ fn check_dns_policy(
         .check_domain(name)
         .map_err(|e| DnsError::Refused(format!("dns policy denied: {e}")))?;
     Ok(())
+}
+
+/// Task #220: the dns host surface for the resident provider, parameterized by
+/// policy. Same policy gate + hickory resolve as the `LoadedState` impl below.
+/// (Transitional duplication — same rationale as `net_http_handle`.)
+pub(crate) async fn net_dns_resolve(
+    dns_policy: Option<&DnsPolicy>,
+    name: String,
+    record_type: loaded_minimal_dns::sqlite::extension::dns::RecordType,
+) -> std::result::Result<Vec<String>, loaded_minimal_dns::sqlite::extension::dns::DnsError> {
+    use hickory_resolver::config::{ResolverConfig, ResolverOpts};
+    use hickory_resolver::proto::rr::RecordType as HRecordType;
+    use hickory_resolver::TokioAsyncResolver;
+    use loaded_minimal_dns::sqlite::extension::dns::{DnsError, RecordType};
+
+    check_dns_policy(dns_policy, &name)?;
+
+    let rtype = match record_type {
+        RecordType::A => HRecordType::A,
+        RecordType::Aaaa => HRecordType::AAAA,
+        RecordType::Cname => HRecordType::CNAME,
+        RecordType::Mx => HRecordType::MX,
+        RecordType::Ns => HRecordType::NS,
+        RecordType::Txt => HRecordType::TXT,
+        RecordType::Ptr => HRecordType::PTR,
+        RecordType::Soa => HRecordType::SOA,
+        RecordType::Srv => HRecordType::SRV,
+        RecordType::Other(s) => match s.to_uppercase().parse::<HRecordType>() {
+            Ok(rt) => rt,
+            Err(_) => return Err(DnsError::Other(format!("unknown record type {s:?}"))),
+        },
+    };
+
+    let timeout = dns_policy
+        .and_then(|p| p.timeout_ms)
+        .map(|ms| std::time::Duration::from_millis(ms as u64))
+        .unwrap_or(std::time::Duration::from_secs(5));
+
+    let mut opts = ResolverOpts::default();
+    opts.timeout = timeout;
+    let resolver = TokioAsyncResolver::tokio(ResolverConfig::default(), opts);
+
+    let lookup = match resolver.lookup(name.as_str(), rtype).await {
+        Ok(l) => l,
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("NXDomain") || msg.contains("no record found") {
+                return Err(DnsError::Nxdomain);
+            }
+            if msg.contains("timed out") || msg.contains("timeout") {
+                return Err(DnsError::TimedOut);
+            }
+            return Err(DnsError::Other(msg));
+        }
+    };
+
+    let mut out: Vec<String> = Vec::with_capacity(lookup.record_iter().size_hint().0);
+    for record in lookup.iter() {
+        use hickory_resolver::proto::rr::RData;
+        let s = match record {
+            RData::A(ip) => ip.to_string(),
+            RData::AAAA(ip) => ip.to_string(),
+            RData::CNAME(name) => name.to_string(),
+            RData::NS(name) => name.to_string(),
+            RData::PTR(name) => name.to_string(),
+            RData::MX(mx) => format!("{} {}", mx.preference(), mx.exchange()),
+            RData::TXT(txt) => txt
+                .iter()
+                .map(|chunk| String::from_utf8_lossy(chunk).to_string())
+                .collect::<Vec<_>>()
+                .join(";"),
+            RData::SOA(soa) => format!(
+                "{} {} {} {} {} {} {}",
+                soa.mname(),
+                soa.rname(),
+                soa.serial(),
+                soa.refresh(),
+                soa.retry(),
+                soa.expire(),
+                soa.minimum()
+            ),
+            RData::SRV(srv) => format!(
+                "{} {} {} {}",
+                srv.priority(),
+                srv.weight(),
+                srv.port(),
+                srv.target()
+            ),
+            other => format!("{other:?}"),
+        };
+        out.push(s);
+    }
+    Ok(out)
+}
+
+impl loaded_minimal_dns::sqlite::extension::dns::Host for crate::compose_provider::ProviderState {
+    async fn resolve(
+        &mut self,
+        name: String,
+        record_type: loaded_minimal_dns::sqlite::extension::dns::RecordType,
+    ) -> std::result::Result<Vec<String>, loaded_minimal_dns::sqlite::extension::dns::DnsError>
+    {
+        net_dns_resolve(self.dns_policy.as_ref(), name, record_type).await
+    }
 }
 
 impl loaded_minimal_dns::sqlite::extension::dns::Host for LoadedState {

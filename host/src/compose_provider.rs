@@ -442,6 +442,15 @@ pub struct ProviderState {
     /// `spi_db_path` opens an isolated `:memory:` db (matches the loader).
     spi_conn: Arc<ReentrantMutex<RefCell<Option<db::Connection>>>>,
     spi_db_path: String,
+    /// #220: capability policies for the `sqlite:extension/{http,dns}` host
+    /// surfaces, present when the resident provider wraps an http/dns-importing
+    /// extension. `None` = deny-by-default (matches `check_http_policy` /
+    /// `check_dns_policy`: an ext not granted a policy at load time is refused
+    /// at CALL time — the provider still instantiates). Threading the manifest-
+    /// granted policy into resident registration is a follow-up; the deny
+    /// default is the safe first cut.
+    pub(crate) http_policy: Option<crate::HttpPolicy>,
+    pub(crate) dns_policy: Option<crate::DnsPolicy>,
 }
 
 impl wasmtime_wasi::WasiView for ProviderState {
@@ -511,6 +520,38 @@ pub fn imports_sqlite_spi(component: &Component, engine: &Engine) -> bool {
         .component_type()
         .imports(engine)
         .any(|(name, _)| name.starts_with("sqlite:extension/spi"))
+}
+
+/// Task #220: true if `component` imports `sqlite:extension/http` — e.g. the
+/// `http` extension. Like spi, the host satisfies this on the resident linker
+/// (`crate::loaded_minimal_http::sqlite::extension::http::add_to_linker`),
+/// forwarding to the same reqwest-backed surface + policy gate the bespoke
+/// loader uses. Deny-by-default policy (see `ProviderState.http_policy`).
+pub fn imports_sqlite_http(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/http"))
+}
+
+/// Task #220: true if `component` imports `sqlite:extension/dns` — e.g. the
+/// `dns` extension. Host-satisfied on the resident linker via
+/// `crate::loaded_minimal_dns::sqlite::extension::dns::add_to_linker`.
+pub fn imports_sqlite_dns(component: &Component, engine: &Engine) -> bool {
+    component
+        .component_type()
+        .imports(engine)
+        .any(|(name, _)| name.starts_with("sqlite:extension/dns"))
+}
+
+/// Task #220: `HasData` marker for wiring the `sqlite:extension/{http,dns}`
+/// host surfaces onto a resident `ProviderState` linker. The generated
+/// per-interface `add_to_linker` takes `&mut ProviderState` directly (the
+/// http/dns `Host` impls read only `self.{http,dns}_policy`), so — unlike spi
+/// — no borrow-splitting wrap is needed.
+pub struct ProviderNetData;
+impl wasmtime::component::HasData for ProviderNetData {
+    type Data<'a> = &'a mut ProviderState;
 }
 
 /// Task #220: `HasData` marker for wiring `sqlite:extension/spi` onto a
@@ -842,6 +883,9 @@ async fn wasm_component_invoke(
         // resident-only concern, task #220); an unused empty slot.
         spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
         spi_db_path: String::new(),
+        // Fresh-store path carries no http/dns surface (resident-only, #220).
+        http_policy: None,
+        dns_policy: None,
     };
     let mut store = wasmtime::Store::new(engine, state);
     store
@@ -895,8 +939,13 @@ async fn resident_wasm_component_invoke(
         // The spi Host surface is async, so it also forces the async WASI
         // linker.
         let imports_spi = imports_sqlite_spi(component, engine);
+        // Task #220: host/dns are host-satisfied on the resident linker too
+        // (the `http`/`dns` exts import them); their Host surfaces are async,
+        // so they also force the async WASI linker.
+        let imports_http = imports_sqlite_http(component, engine);
+        let imports_dns = imports_sqlite_dns(component, engine);
         let mut linker: Linker<ProviderState> = Linker::new(engine);
-        if reentrant || imports_spi {
+        if reentrant || imports_spi || imports_http || imports_dns {
             wasmtime_wasi::p2::add_to_linker_async(&mut linker)
                 .map_err(|e| format!("wasi (async) linker: {e}"))?;
         } else {
@@ -926,6 +975,20 @@ async fn resident_wasm_component_invoke(
             )
             .map_err(|e| format!("resident sqlite:extension/spi linker: {e}"))?;
         }
+        if imports_http {
+            crate::loaded_minimal_http::sqlite::extension::http::add_to_linker::<_, ProviderNetData>(
+                &mut linker,
+                |state: &mut ProviderState| state,
+            )
+            .map_err(|e| format!("resident sqlite:extension/http linker: {e}"))?;
+        }
+        if imports_dns {
+            crate::loaded_minimal_dns::sqlite::extension::dns::add_to_linker::<_, ProviderNetData>(
+                &mut linker,
+                |state: &mut ProviderState| state,
+            )
+            .map_err(|e| format!("resident sqlite:extension/dns linker: {e}"))?;
+        }
         let mut wasi = wasmtime_wasi::WasiCtxBuilder::new();
         wasi.inherit_stdio();
         let state = ProviderState {
@@ -943,6 +1006,11 @@ async fn resident_wasm_component_invoke(
             // `:memory:` (the loader's per-extension default).
             spi_conn: Arc::new(ReentrantMutex::new(RefCell::new(None))),
             spi_db_path: spi_db_path.to_string(),
+            // #220: deny-by-default http/dns policies (see the field docs).
+            // A resident http/dns provider instantiates; calls are gated at
+            // call time by check_http_policy/check_dns_policy.
+            http_policy: None,
+            dns_policy: None,
         };
         let mut store = wasmtime::Store::new(engine, state);
         store
