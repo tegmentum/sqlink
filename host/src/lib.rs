@@ -9639,17 +9639,36 @@ impl Host {
         // bespoke loader (no `<ext>-provider.wasm` resolved) is DEPRECATED: warn
         // so it gets provider-backed, but still load it so dev trees without
         // staged provider artifacts keep working (no hard error).
+        // #220 loader retirement — strict mode. With all buildable wasm
+        // extensions now provider-only (the full port: session/authorizer/
+        // loader-bridge all run through the resident provider), the bespoke
+        // `loaded::*` loader is retired. Setting `SQLINK_RETIRE_BESPOKE`
+        // enforces provider-only: a resolved artifact that does not export
+        // the compose:dynlink endpoint is a hard error. The default keeps the
+        // warn+fallback so the in-tree suites that still exercise the bespoke
+        // registration path (install_loaded_extension / with_shared_spi_conn_
+        // open: load, load_collision, auth_extension, sqlite_lib, parser,
+        // parser_dplyr) stay green until they are migrated to provider
+        // artifacts — at which point this becomes the unconditional default
+        // and the bespoke path can be physically removed.
+        let strict = std::env::var_os("SQLINK_RETIRE_BESPOKE").is_some();
         let residual = resolved_component
             .as_ref()
             .map(|c| compose_provider::needs_bespoke_residual(c, &self.engine))
             .unwrap_or(false);
+        if strict && !residual {
+            return Err(anyhow!(
+                "extension '{hint}': no <ext>-provider.wasm resolved; the bespoke \
+                 loader has been retired (#220, SQLINK_RETIRE_BESPOKE) — provider-back \
+                 this extension (build its <ext>-provider.wasm onto SQLINK_EXT_DIR)."
+            ));
+        }
         if !residual {
             tracing::warn!(
                 extension = %hint,
                 "loaded via the DEPRECATED bespoke loader (no <ext>-provider.wasm \
-                 resolved); the bespoke path is being retired to a narrow residual \
-                 for session/authorizer/loader-bridge tools — provider-back this \
-                 extension (see #220)."
+                 resolved); the bespoke path is being retired — provider-back this \
+                 extension (see #220; set SQLINK_RETIRE_BESPOKE to enforce)."
             );
         }
         self.load_extension_from_bytes(bytes, &hint, policy).await
