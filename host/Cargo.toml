@@ -36,7 +36,7 @@ datalink-contract = { git = "https://github.com/tegmentum/datalink.git", rev = "
 # resolution, multi-tenancy, the fresh-store WasmComponent path, and the
 # built-in SqliteRuntime shim live in our AsyncProviderBackend impls; the
 # bridge routes resolve/invoke/drop to them. datalink is PUBLIC.
-datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git", rev = "d1e5984b51dba1d6f40d6173c7ab26af4a905cf2" }
+datalink-dynlink = { git = "https://github.com/tegmentum/datalink.git", rev = "80010adf7c9ec3d07674bba12585c787328217f5" }
 
 # Shared, db-agnostic function-prefix namespacing (also consumed by the
 # ducklink host). The prefix__name resolution algorithm + the collision/pin
