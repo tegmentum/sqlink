@@ -9661,83 +9661,48 @@ impl Host {
         // C2 row on first run; later processes hit C2 from cold
         // start and skip the from_binary parse entirely.
         let component = self.component_for_digest(&bytes, &digest, name_hint)?;
-        // describe() runs with a default (empty) policy, so wasi:http
-        // stays unwired here regardless of what the extension
-        // eventually requests at load time.
-        let linker = make_loaded_stateful_linker(&self.engine, false)?;
-        let tmp_ext = LoadedExtension {
-            name: String::new(),
-            version: String::new(),
-            component: component.clone(),
-            policy: Policy::default(),
-            digest: digest.clone(),
-            scalar_functions: Vec::new(),
-            aggregate_functions: Vec::new(),
-            collations: Vec::new(),
-            vtabs: Vec::new(),
-            has_authorizer: false,
-            has_update_hook: false,
-            has_commit_hook: false,
-            has_wal_hook: false,
-            wal_hook_id: 0,
-            state: Arc::new(Mutex::new(HashMap::new())),
-            cache: Arc::new(Mutex::new(HashMap::new())),
-            spi_conn: self.shared_spi_conn.clone(),
-            cached_tabular: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_tabular_mutating: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_stateful: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal_http: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_minimal_dns: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_hooked: Arc::new(tokio::sync::Mutex::new(None)),
-            cached_authorizing: Arc::new(tokio::sync::Mutex::new(None)),
-
-            dot_commands: Vec::new(),
-            cached_dotcmd_aware: Arc::new(tokio::sync::Mutex::new(None)),
-            preferred_prefix: None,
-            prefix_expansion: None,
-        };
-        let mut store = build_loaded_store(&self.engine, &tmp_ext, self.db_path())?;
-        let instance = loaded::Minimal::instantiate_async(&mut store, &component, &linker)
+        // Contract-version guard (#220): reject an ABI-skewed component before
+        // instantiating (mirrors instantiate_provider_from_bytes).
+        let imported_major =
+            datalink_contract::component_contract_major(&self.engine, &component, CONTRACT_PACKAGE);
+        datalink_contract::check_component_contract(
+            imported_major,
+            CONTRACT_MAJOR,
+            CONTRACT_PACKAGE,
+            name_hint,
+        )?;
+        // #220: describe via the compose:dynlink provider. The bespoke
+        // Stateful-store describe was retired with LoadedState; the provider
+        // endpoint's `describe` returns the same manifest (name + declared
+        // capabilities as strings) via `provider_envelope::Manifest`.
+        if !compose_provider::exports_endpoint(&component, &self.engine) {
+            return Err(anyhow!(
+                "extension '{name_hint}': not a compose:dynlink provider (no \
+                 endpoint export); the bespoke loader has been retired (#220) \
+                 — provider-back this extension."
+            ));
+        }
+        let provider = compose_provider::ProviderHandle::new_resident_wasm_component_from_bytes(
+            self.engine.clone(),
+            &bytes,
+            PathBuf::from(format!("describe:{name_hint}")),
+            Some(self.dynlink_bridge.clone()),
+            self.db_path(),
+            Some(self.clone()),
+        )
+        .map_err(|e| anyhow!("compile resident provider {name_hint}: {e}"))?;
+        let (mbytes, _) = provider
+            .invoke_cli("describe", &[], std::collections::HashMap::new())
             .await
-            .map_err(|e| anyhow!("instantiate describe-only: {e}"))?;
-        let manifest = instance
-            .sqlite_extension_metadata()
-            .call_describe(&mut store)
-            .await
-            .map_err(|e| anyhow!("describe call: {e}"))?;
+            .map_err(|e| anyhow!("provider describe: {e}"))?;
+        let manifest = provider_envelope::decode_manifest(&mbytes)
+            .map_err(|e| anyhow!("decode manifest: {e}"))?;
         let name = if manifest.name.is_empty() {
             name_hint.to_string()
         } else {
-            manifest.name
+            manifest.name.clone()
         };
-        let declared_caps: Vec<String> = manifest
-            .declared_capabilities
-            .iter()
-            .map(|c| {
-                use loaded::sqlite::extension::policy::Capability as L;
-                match c {
-                    L::Spi => "Spi",
-                    L::Prepared => "Prepared",
-                    L::Transaction => "Transaction",
-                    L::Schema => "Schema",
-                    L::State => "State",
-                    L::Cache => "Cache",
-                    L::Random => "Random",
-                    L::Text => "Text",
-                    L::Hashing => "Hashing",
-                    L::Encoding => "Encoding",
-                    L::Http => "Http",
-                    L::Dns => "Dns",
-                    L::WalFrames => "WalFrames",
-                    L::S3 => "S3",
-                    L::SpawnBuild => "SpawnBuild",
-                    L::Bundles => "Bundles",
-                }
-                .to_string()
-            })
-            .collect();
-        Ok((name, digest, declared_caps))
+        Ok((name, digest, manifest.declared_capabilities.clone()))
     }
 
     /// As `load_extension` but takes bytes directly. Used by the
